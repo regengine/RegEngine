@@ -14,8 +14,7 @@ can prove ALL THREE prongs:
 import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
-from decimal import Decimal
-from typing import Optional, Dict, List, Any, Tuple
+from typing import Optional, Dict, List, Any
 from enum import Enum
 
 logger = structlog.get_logger(__name__)
