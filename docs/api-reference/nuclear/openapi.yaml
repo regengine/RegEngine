@@ -1,0 +1,659 @@
+openapi: 3.1.0
+info:
+  title: RegEngine Nuclear API
+  version: 1.0.0
+  description: |
+    NRC-aligned compliance evidence API for nuclear facilities.
+    
+    ## Safety Guarantees
+    
+    - **Immutability**: Records cannot be modified or deleted after creation
+    - **Cryptographic Integrity**: All records are SHA-256 hashed and chain-linked
+    - **Safety Mode**: Mutations blocked when integrity verification fails
+    - **Attribution**: Server-assigned, unforgeable principal tracking
+    - **Retention**: Policy-enforced with legal hold support
+    
+    ## Regulatory Alignment
+    
+    - 10 CFR 50 Appendix B (Criterion XVII) - Records integrity
+    - 10 CFR 73.54 - Cybersecurity documentation
+    - 10 CFR 72.174 - Decommissioning records
+    
+    ## Authentication
+    
+    API Key (service principals) or OAuth2 (human users).
+    
+    Include API key in `Authorization: Bearer YOUR_API_KEY` header.
+    
+  contact:
+    name: RegEngine Support
+    email: support@regengine.co
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.regengine.co/v1/nuclear
+    description: Production API
+  - url: https://api-staging.regengine.co/v1/nuclear
+    description: Staging API
+
+security:
+  - ApiKeyAuth: []
+  - OAuth2: [nuclear:read, nuclear:write, nuclear:export]
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.regengine.co/oauth/authorize
+          tokenUrl: https://auth.regengine.co/oauth/token
+          scopes:
+            nuclear:read: Read compliance records
+            nuclear:write: Create compliance records
+            nuclear:export: Export records for discovery
+            nuclear:hold: Manage legal holds
+
+  schemas:
+    RecordType:
+      type: string
+      enum:
+        - CYBER_SECURITY_PLAN
+        - CONFIG_ATTESTATION
+        - SYSTEM_MODIFICATION
+        - QUALITY_ASSURANCE
+        - INCIDENT_REPORT
+        - DECOMMISSIONING
+
+    Classification:
+      type: string
+      enum:
+        - STANDARD
+        - PROPRIETARY
+        - SAFEGUARDS
+      description: |
+        Classification level (server-validated):
+        - STANDARD: No classification
+        - PROPRIETARY: Company proprietary
+        - SAFEGUARDS: SGI/similar (requires explicit permission)
+
+    RegulatoryRef:
+      type: object
+      required: [cfr]
+      properties:
+        cfr:
+          type: string
+          example: "10-CFR-73.54"
+        note:
+          type: string
+          example: "Cybersecurity Program evidence"
+
+    Attribution:
+      type: object
+      required: [principalType, principalId, requestId, sourceIp]
+      properties:
+        principalType:
+          type: string
+          enum: [SERVICE, HUMAN, SYSTEM]
+        principalId:
+          type: string
+          example: "svc_01H..."
+        requestId:
+          type: string
+          example: "req_01H..."
+        sourceIp:
+          type: string
+          example: "203.0.113.10"
+        userEmail:
+          type: string
+          example: "operator@facility.com"
+
+    RetentionInfo:
+      type: object
+      required: [policyId, retentionUntil, legalHold]
+      properties:
+        policyId:
+          type: string
+          example: "NRC_73_54_LICENSE_LIFE_PLUS_3"
+        retentionUntil:
+          type: string
+          format: date-time
+          example: "2070-01-01T00:00:00Z"
+        legalHold:
+          type: boolean
+        legalHoldIds:
+          type: array
+          items:
+            type: string
+
+    IntegrityInfo:
+      type: object
+      required: [canonicalVersion, contentHash, signatureHash, sealed, chainStatus]
+      properties:
+        canonicalVersion:
+          type: string
+          example: "v1"
+        contentHash:
+          type: string
+          example: "sha256:abc123..."
+        signatureHash:
+          type: string
+          example: "sha256:def456..."
+        sealed:
+          type: boolean
+          description: "Whether record is cryptographically sealed"
+        chainStatus:
+          type: string
+          enum: [valid, broken, unknown]
+        previousRecordId:
+          type: string
+          example: "rec_0193ab..."
+
+    ComplianceRecord:
+      type: object
+      required:
+        - id
+        - facilityId
+        - reactorId
+        - docketNumber
+        - recordType
+        - classification
+        - content
+        - createdAt
+        - createdBy
+        - retention
+        - integrity
+      properties:
+        id:
+          type: string
+          example: "rec_0193abc..."
+        facilityId:
+          type: string
+          example: "NPP-UNIT-1"
+        reactorId:
+          type: string
+          example: "UNIT-1"
+        docketNumber:
+          type: string
+          example: "50-12345"
+        recordType:
+          $ref: '#/components/schemas/RecordType'
+        classification:
+          $ref: '#/components/schemas/Classification'
+        content:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          $ref: '#/components/schemas/Attribution'
+        regulatoryRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegulatoryRef'
+        retention:
+          schema:
+            $ref: '#/components/schemas/RetentionInfo'
+        integrity:
+          $ref: '#/components/schemas/IntegrityInfo'
+
+    RecordCreateInput:
+      type: object
+      required:
+        - facilityId
+        - reactorId
+        - docketNumber
+        - recordType
+        - classification
+        - content
+        - retentionPolicyId
+      properties:
+        facilityId:
+          type: string
+        reactorId:
+          type: string
+        docketNumber:
+          type: string
+        recordType:
+          $ref: '#/components/schemas/RecordType'
+        classification:
+          $ref: '#/components/schemas/Classification'
+        content:
+          type: object
+          additionalProperties: true
+        regulatoryRefs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegulatoryRef'
+        retentionPolicyId:
+          type: string
+        clientRequestId:
+          type: string
+          description: "Optional idempotency key"
+
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId, status]
+          properties:
+            code:
+              type: string
+              enum:
+                - AUTH_REQUIRED
+                - FORBIDDEN_SCOPE
+                - CLASSIFICATION_FORBIDDEN
+                - VALIDATION_ERROR
+                - SAFETY_MODE_ACTIVE
+                - INTEGRITY_VIOLATION
+                - LEGAL_HOLD_ACTIVE
+                - RETENTION_LOCKED
+                - RATE_LIMITED
+            message:
+              type: string
+            requestId:
+              type: string
+            status:
+              type: integer
+            details:
+              type: object
+              additionalProperties: true
+
+paths:
+  /records:
+    post:
+      summary: Create compliance record
+      operationId: createRecord
+      tags: [Records]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordCreateInput'
+      responses:
+        '201':
+          description: Record created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [record]
+                properties:
+                  record:
+                    $ref: '#/components/schemas/ComplianceRecord'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: Classification forbidden or scope denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Safety mode active - integrity verification failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                error:
+                  code: "SAFETY_MODE_ACTIVE"
+                  message: "System integrity cannot be verified. Mutations are disabled."
+                  requestId: "req_01H..."
+                  status: 503
+                  details:
+                    facilityId: "NPP-UNIT-1"
+                    verifyUrl: "/v1/nuclear/records/verify/latest?facilityId=NPP-UNIT-1"
+
+    get:
+      summary: List compliance records
+      operationId: listRecords
+      tags: [Records]
+      parameters:
+        - name: facilityId
+          in: query
+          schema:
+            type: string
+        - name: reactorId
+          in: query
+          schema:
+            type: string
+        - name: recordType
+          in: query
+          schema:
+            $ref: '#/components/schemas/RecordType'
+        - name: before
+          in: query
+          description: Pagination cursor
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: List of records (summary view)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, createdAt, recordType, classification, integrity]
+                      properties:
+                        id:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        recordType:
+                          $ref: '#/components/schemas/RecordType'
+                        classification:
+                          $ref: '#/components/schemas/Classification'
+                        integrity:
+                          type: object
+                          properties:
+                            sealed:
+                              type: boolean
+                            chainStatus:
+                              type: string
+                            contentHash:
+                              type: string
+                  page:
+                    type: object
+                    properties:
+                      nextCursor:
+                        type: string
+                      limit:
+                        type: integer
+
+  /records/{recordId}:
+    get:
+      summary: Get compliance record
+      operationId: getRecord
+      tags: [Records]
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full record details
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [record]
+                properties:
+                  record:
+                    $ref: '#/components/schemas/ComplianceRecord'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /records/{recordId}/verify:
+    get:
+      summary: Verify record integrity
+      operationId: verifyRecord
+      tags: [Records]
+      description: |
+        Independent cryptographic verification of record integrity.
+        
+        Recomputes content hash and signature hash, verifies chain linkage.
+        
+        Safe to call anytime - read-only operation.
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recordId, checkedAt, status, results, details]
+                properties:
+                  recordId:
+                    type: string
+                  checkedAt:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+                    enum: [valid, corrupted, unknown]
+                  results:
+                    type: object
+                    required: [contentHashValid, signatureValid, chainIntact, chainHeadValid]
+                    properties:
+                      contentHashValid:
+                        type: boolean
+                      signatureValid:
+                        type: boolean
+                      chainIntact:
+                        type: boolean
+                      chainHeadValid:
+                        type: boolean
+                  reason:
+                    type: string
+                    nullable: true
+                  details:
+                    type: object
+                    required: [expectedContentHash, computedContentHash, expectedSignatureHash, computedSignatureHash]
+                    properties:
+                      expectedContentHash:
+                        type: string
+                      computedContentHash:
+                        type: string
+                      expectedSignatureHash:
+                        type: string
+                      computedSignatureHash:
+                        type: string
+
+  /records/export:
+    post:
+      summary: Request record export
+      operationId: exportRecords
+      tags: [Records]
+      description: |
+        Request export of compliance records for discovery.
+        
+        Export is queued and processed asynchronously.
+        Poll /records/export/{exportId} for status and download URL.
+        
+        All exports are logged (who exported what, when).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [facilityId, format, includeVerification]
+              properties:
+                facilityId:
+                  type: string
+                reactorId:
+                  type: string
+                query:
+                  type: object
+                  properties:
+                    recordType:
+                      $ref: '#/components/schemas/RecordType'
+                    createdAfter:
+                      type: string
+                      format: date-time
+                    createdBefore:
+                      type: string
+                      format: date-time
+                format:
+                  type: string
+                  enum: [jsonl, json, csv]
+                includeVerification:
+                  type: boolean
+      responses:
+        '202':
+          description: Export queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [exportId, status, format, download]
+                properties:
+                  exportId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [queued, processing, ready, failed, expired]
+                  format:
+                    type: string
+                  download:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                        nullable: true
+                      expiresAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+
+  /records/export/{exportId}:
+    get:
+      summary: Get export status
+      operationId: getExport
+      tags: [Records]
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Export status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [exportId, status, download]
+                properties:
+                  exportId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [queued, processing, ready, failed, expired]
+                  download:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+
+  /holds:
+    post:
+      summary: Create legal hold
+      operationId: createHold
+      tags: [Legal Holds]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, caseNumber, issuingAuthority, scope]
+              properties:
+                name:
+                  type: string
+                caseNumber:
+                  type: string
+                issuingAuthority:
+                  type: string
+                scope:
+                  type: object
+                  required: [facilityId]
+                  properties:
+                    facilityId:
+                      type: string
+                    reactorId:
+                      type: string
+      responses:
+        '201':
+          description: Hold created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hold]
+                properties:
+                  hold:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      caseNumber:
+                        type: string
+                      issuingAuthority:
+                        type: string
+                      issuedAt:
+                        type: string
+                        format: date-time
+                      liftedAt:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      scope:
+                        type: object
+                      recordCount:
+                        type: integer
+
+tags:
+  - name: Records
+    description: Compliance records (immutable evidence)
+  - name: Legal Holds
+    description: Legal hold management
+  - name: Policies
+    description: Retention policies

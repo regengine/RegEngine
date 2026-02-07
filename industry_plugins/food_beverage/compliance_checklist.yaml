@@ -1,0 +1,119 @@
+# Food & Beverage Compliance Checklists (FSMA 204 Focus)
+
+industry: food_and_beverage
+version: "1.0"
+last_updated: "2024-04-20"
+
+checklists:
+  - id: fsma_204_traceability_plan
+    name: "FSMA 204 Traceability Plan Readiness"
+    description: "Validates critical traceability plan elements required under the Food Safety Modernization Act Section 204"
+    jurisdiction: "United States"
+    regulators:
+      - FDA (CFSAN)
+    applicable_entities:
+      - ready_to_eat_food_manufacturers
+      - seafood_processors
+      - fresh_cut_produce
+
+    items:
+      - id: fsma_001
+        requirement: "Traceability Lot Code Design"
+        regulation: "21 CFR § 1.1325"
+        description: "Traceability lot code assignment documented and linked to KDEs"
+        validation:
+          type: boolean
+          query: "Do you have a documented schema for traceability lot codes mapped to KDE capture points?"
+        remediation: "Document lot code format, ownership, and linkage to each critical tracking event."
+
+      - id: fsma_002
+        requirement: "Critical Tracking Event Coverage"
+        regulation: "21 CFR § 1.1350"
+        description: "Receiving, transformation, creation, and shipping events mapped for all Traceability List foods"
+        validation:
+          type: boolean
+          query: "Have you mapped every Traceability List product to the required FSMA Critical Tracking Events?"
+        remediation: "Build a process map that shows CTE ownership per product line and verify role assignments."
+
+      - id: fsma_003
+        requirement: "Key Data Elements Capture"
+        regulation: "21 CFR § 1.1340"
+        description: "Required KDEs captured at each CTE with responsible system owner"
+        validation:
+          type: boolean
+          query: "Do you capture and retain every KDE per FSMA event (lot code source, transformation references, quantities, recipients)?"
+        remediation: "Create KDE inventory, assign responsible systems, and implement automated validation rules."
+
+      - id: fsma_004
+        requirement: "Traceability Plan Governance"
+        regulation: "21 CFR § 1.1315"
+        description: "Plan maintained, reviewed annually, and owned by cross-functional team"
+        validation:
+          type: boolean
+          query: "Do you have an appointed traceability plan owner, annual review cadence, and documented escalation paths?"
+        remediation: "Assign executive owner, schedule annual review, and document plan distribution list."
+
+      - id: fsma_005
+        requirement: "Record Retrieval SLA"
+        regulation: "21 CFR § 1.1455"
+        description: "Traceability records retrievable electronically within 24 hours"
+        validation:
+          type: boolean
+          query: "Can you provide regulator-ready traceability records in < 24 hours, electronically readable?"
+        remediation: "Automate traceability reporting pack with export templates and 24/7 system access."
+
+  - id: fsma_204_operational_controls
+    name: "FSMA 204 Operational Control Readiness"
+    description: "Assesses supplier onboarding, digital traceability stack, and recall simulation maturity"
+    jurisdiction: "United States"
+    regulators:
+      - FDA (CFSAN)
+    applicable_entities:
+      - manufacturers
+      - importers
+
+    items:
+      - id: fsma_ops_001
+        requirement: "Supplier KDE Onboarding"
+        regulation: "21 CFR § 1.1360"
+        description: "Vendors required to supply KDE packages and integration test results"
+        validation:
+          type: boolean
+          query: "Do supplier contracts mandate KDE delivery formats and provide onboarding validation checklists?"
+        remediation: "Add KDE language to supplier quality agreements and capture onboarding artifacts."
+
+      - id: fsma_ops_002
+        requirement: "System Interoperability"
+        regulation: "21 CFR § 1.1450"
+        description: "Digital systems can exchange KDE data without manual re-entry"
+        validation:
+          type: boolean
+          query: "Does your tech stack provide APIs or EDI feeds so KDEs move system-to-system automatically?"
+        remediation: "Deploy middleware/ETL connectors for ERP ↔ MES ↔ WMS traceability data flows."
+
+      - id: fsma_ops_003
+        requirement: "Recall Simulation Cadence"
+        regulation: "FDA Traceability Rule Guidance"
+        description: "Recall simulations executed annually with documented findings"
+        validation:
+          type: boolean
+          query: "Have you performed at least one mock recall in the last 12 months covering FSMA Traceability List foods?"
+        remediation: "Run cross-functional recall simulation, log issues, and update plan accordingly."
+
+      - id: fsma_ops_004
+        requirement: "Training & Change Management"
+        regulation: "21 CFR § 1.1310"
+        description: "Operators trained on KDE capture roles and escalation"
+        validation:
+          type: boolean
+          query: "Is there role-based FSMA 204 training with completion tracking for all impacted associates?"
+        remediation: "Publish FSMA role curriculum in LMS and enforce completion SLAs."
+
+      - id: fsma_ops_005
+        requirement: "Exception Handling"
+        regulation: "21 CFR § 1.1410"
+        description: "Documented procedure for missing or incorrect KDE data"
+        validation:
+          type: boolean
+          query: "Do you have a documented playbook for addressing missing KDEs and communicating with regulators?"
+        remediation: "Create exception workflows with root-cause analysis templates and escalation guidance."

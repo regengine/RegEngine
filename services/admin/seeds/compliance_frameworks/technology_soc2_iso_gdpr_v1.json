@@ -1,0 +1,68 @@
+{
+    "rule_pack_id": "tech_soc2_iso_gdpr_v1",
+    "title": "Technology: Governance, Trust & Privacy",
+    "version": "1.0",
+    "frameworks": [
+        "SOC 2",
+        "ISO 27001",
+        "GDPR"
+    ],
+    "rules": [
+        {
+            "rule_id": "SOC2-TSC-01",
+            "domain": "SOC 2",
+            "requirement": "Trust Services Criteria",
+            "checklist_item": "Address the 'Common Criteria' (Security) through risk assessment, access control, and monitoring; add Availability/Privacy as needed.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "SOC2-EVI-01",
+            "domain": "SOC 2",
+            "requirement": "Evidence Collection",
+            "checklist_item": "Maintain detailed audit logs, access review records, and incident response reports in a central repository for auditor review.",
+            "severity": "MEDIUM",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "ISO-ISMS-01",
+            "domain": "ISO 27001:2022",
+            "requirement": "ISMS Scope",
+            "checklist_item": "Define the boundaries of the Information Security Management System; conduct a risk treatment plan and Statement of Applicability (SoA).",
+            "severity": "CRITICAL",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "ISO-ANN-01",
+            "domain": "ISO 27001:2022",
+            "requirement": "Annex A Controls",
+            "checklist_item": "Implement 93 consolidated controls across Organizational, People, Physical, and Technological themes.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "GDPR-MIN-01",
+            "domain": "GDPR",
+            "requirement": "Data Minimization",
+            "checklist_item": "Inventory all personal data; collect only what is necessary; implement clear retention and disposal schedules.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "GDPR-RIGHTS-01",
+            "domain": "GDPR",
+            "requirement": "Data Subject Rights",
+            "checklist_item": "Establish procedures for individuals to exercise rights (access, erasure, portability) within a 30-day window.",
+            "severity": "CRITICAL",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "GDPR-DPIA-01",
+            "domain": "GDPR",
+            "requirement": "DPIA",
+            "checklist_item": "Perform Data Protection Impact Assessments for high-risk processing, such as large-scale tracking or sensitive data usage.",
+            "severity": "HIGH",
+            "evidence_required": true
+        }
+    ]
+}

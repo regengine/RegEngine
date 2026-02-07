@@ -1,0 +1,76 @@
+# Prometheus Configuration for RegEngine
+# Scrapes all service health endpoints
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter (host metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  # PostgreSQL
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  # RegEngine Services - Health Checks
+  - job_name: 'regengine-admin-api'
+    metrics_path: /health
+    static_configs:
+      - targets: ['admin-api:8400']
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'up'
+        action: keep
+
+  - job_name: 'regengine-ingestion'
+    metrics_path: /health
+    static_configs:
+      - targets: ['ingestion-service:8000']
+
+  - job_name: 'regengine-nlp'
+    metrics_path: /health
+    static_configs:
+      - targets: ['nlp-service:8100']
+
+  - job_name: 'regengine-graph'
+    metrics_path: /health
+    static_configs:
+      - targets: ['graph-service:8200']
+
+  - job_name: 'regengine-opportunity'
+    metrics_path: /health
+    static_configs:
+      - targets: ['opportunity-api:8300']
+
+  - job_name: 'regengine-compliance'
+    metrics_path: /health
+    static_configs:
+      - targets: ['compliance-api:8500']
+
+  # Neo4j (if metrics endpoint available)
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['neo4j:7474']
+    metrics_path: /
+    scrape_interval: 30s

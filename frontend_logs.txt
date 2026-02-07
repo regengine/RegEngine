@@ -1,0 +1,30 @@
+
+> regengine-frontend@0.1.0 dev
+> next dev
+
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local
+
+ ✓ Ready in 1165ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 2.5s (1852 modules)
+ ✓ Compiled in 259ms (893 modules)
+ ✓ Compiled /login in 304ms (1839 modules)
+ ✓ Compiled / in 187ms (1871 modules)
+ ✓ Compiled /not-found in 93ms (1876 modules)
+ ○ Compiling /sysadmin ...
+ ✓ Compiled /sysadmin in 556ms (1888 modules)
+ ○ Compiling /compliance ...
+ ✓ Compiled /compliance in 528ms (1900 modules)
+ ✓ Compiled /verticals/entertainment in 228ms (1914 modules)
+ ✓ Compiled /pcos in 226ms (1968 modules)
+ ✓ Compiled / in 92ms (1032 modules)
+ ✓ Compiled /not-found in 236ms (1983 modules)
+ ○ Compiling /fsma ...
+ ✓ Compiled /fsma in 635ms (2017 modules)
+(node:4110) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ Compiled /fsma/market in 168ms (2013 modules)
+ ✓ Compiled /trace in 168ms (2024 modules)
+ ✓ Compiled /compliance in 118ms (1039 modules)

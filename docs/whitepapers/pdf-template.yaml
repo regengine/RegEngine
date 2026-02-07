@@ -1,0 +1,128 @@
+# RegEngine White Paper PDF Template
+# LaTeX configuration for Pandoc PDF export
+
+---
+# Metadata (override with command-line --metadata flags)
+title: "RegEngine White Paper"
+subtitle: "Competitive Positioning"
+author: "RegEngine"
+date: "January 2026"
+
+# PDF Engine
+pdf-engine: xelatex
+
+# Geometry and Layout
+geometry:
+  - margin=1in
+  - letterpaper
+papersize: letter
+fontsize: 11pt
+
+# Fonts
+mainfont: "Inter"
+sansfont: "Inter"
+monofont: "Fira Code"
+mathfont: "Latin Modern Math"
+
+# Typography
+linestretch: 1.15
+indent: false
+block-headings: true
+
+# Table of Contents
+toc: true
+toc-depth: 2
+toc-title: "Table of Contents"
+numbersections: true
+
+# Colors (RegEngine Brand)
+linkcolor: "#0066CC"
+urlcolor: "#0066CC"
+citecolor: "#666666"
+toccolor: "#333333"
+
+# Headers and Footers
+header-includes: |
+  \usepackage{fancyhdr}
+  \usepackage{graphicx}
+  \usepackage{xcolor}
+  \usepackage{hyperref}
+  \usepackage{bookmark}
+  \usepackage{array}
+  \usepackage{longtable}
+  \usepackage{booktabs}
+  \usepackage{caption}
+  
+  % Define RegEngine brand colors
+  \definecolor{regblue}{HTML}{0066CC}
+  \definecolor{regdark}{HTML}{1a1a1a}
+  \definecolor{reggray}{HTML}{666666}
+  
+  % Page headers and footers
+  \pagestyle{fancy}
+  \fancyhf{}
+  \fancyhead[L]{\small\textcolor{regdark}{\thetitle}}
+  \fancyhead[R]{\small\textcolor{reggray}{RegEngine}}
+  \fancyfoot[C]{\small\textcolor{reggray}{\thepage}}
+  \renewcommand{\headrulewidth}{0.5pt}
+  \renewcommand{\footrulewidth}{0pt}
+  
+  % Customize section headings
+  \usepackage{titlesec}
+  \titleformat{\section}{\Large\bfseries\color{regdark}}{\thesection}{1em}{}
+  \titleformat{\subsection}{\large\bfseries\color{regdark}}{\thesubsection}{1em}{}
+  \titleformat{\subsubsection}{\normalsize\bfseries\color{regdark}}{\thesubsubsection}{1em}{}
+  
+  % Customize links
+  \hypersetup{
+    colorlinks=true,
+    linkcolor=regblue,
+    urlcolor=regblue,
+    pdfborderstyle={/S/U/W 1}
+  }
+  
+  % Table styling
+  \captionsetup[table]{position=top,skip=5pt}
+  \captionsetup[figure]{position=bottom,skip=5pt}
+  
+  % Code block styling
+  \usepackage{listings}
+  \lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10}
+  }
+  
+  % Blockquote styling (for callouts)
+  \usepackage{mdframed}
+  \newmdenv[
+    leftmargin=20pt,
+    rightmargin=20pt,
+    backgroundcolor=gray!5,
+    linecolor=regblue,
+    linewidth=3pt,
+    topline=false,
+    bottomline=false,
+    rightline=false
+  ]{callout}
+  
+  % Cover page
+  \usepackage{tikz}
+  \newcommand{\makecover}{
+    \begin{titlepage}
+      \centering
+      \vspace*{2cm}
+      {\Huge\bfseries\color{regdark}\thetitle\par}
+      \vspace{0.5cm}
+      {\Large\thesubtitle\par}
+      \vspace{2cm}
+      {\large\theauthor\par}
+      \vspace{0.5cm}
+      {\large\thedate\par}
+      \vfill
+      {\small Tamper-Evident Compliance Evidence Platform\par}
+      {\small regengine.co | sales@regengine.co\par}
+    \end{titlepage}
+  }
+---

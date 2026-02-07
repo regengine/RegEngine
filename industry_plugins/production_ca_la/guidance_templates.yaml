@@ -1,0 +1,234 @@
+# PCOS Guidance Templates
+# How-to playbooks for production compliance requirements
+
+templates:
+  # ==========================================================================
+  # PERMITS & LOCATIONS
+  # ==========================================================================
+  
+  filmla_permit:
+    title: "FilmLA Permit Application"
+    category: permits
+    priority: high
+    estimated_time: "2-3 business days"
+    resource_url: "https://www.filmla.com/permits/"
+    documents_required:
+      - Certificate of Insurance (COI)
+      - Location agreement or owner consent
+      - Production company info
+    steps:
+      - text: "Create FilmLA account at filmla.com"
+        link: "https://www.filmla.com/permits/"
+      - text: "Complete online permit application"
+        details: "Include all shoot dates, locations, crew size, equipment"
+      - text: "Upload Certificate of Insurance"
+        details: "Must name FilmLA and property owners as additional insured"
+      - text: "Pay permit fee ($701+ based on location type)"
+      - text: "Await approval (typically 2-3 business days)"
+    triggers:
+      - has_permit_locations: true
+      - jurisdiction: la_city
+
+  burbank_permit:
+    title: "Burbank Film Permit"
+    category: permits
+    priority: high
+    estimated_time: "3-5 business days"
+    resource_url: "https://www.burbankca.gov/web/community-development/film-permits"
+    documents_required:
+      - Certificate of Insurance
+      - Location approval letter
+    steps:
+      - text: "Contact Burbank Film Office"
+        link: "https://www.burbankca.gov/web/community-development/film-permits"
+      - text: "Submit permit application"
+      - text: "Coordinate with affected city departments"
+      - text: "Receive permit approval"
+    triggers:
+      - jurisdiction: burbank
+
+  # ==========================================================================
+  # INSURANCE & LIABILITY
+  # ==========================================================================
+  
+  general_liability_coi:
+    title: "General Liability Certificate of Insurance"
+    category: insurance
+    priority: high
+    estimated_time: "1-2 days"
+    documents_required:
+      - GL Policy Declaration Page
+      - Additional Insured Endorsement
+    steps:
+      - text: "Obtain GL policy from entertainment insurance broker"
+        details: "Minimum $1M per occurrence / $2M aggregate recommended"
+      - text: "Request COI naming all required additional insureds"
+        details: "FilmLA, property owners, city entities"
+      - text: "Upload COI to evidence locker"
+    triggers:
+      - has_permit_locations: true
+
+  workers_comp:
+    title: "Workers' Compensation Verification"
+    category: insurance
+    priority: medium
+    estimated_time: "1 day"
+    documents_required:
+      - Workers' Comp Policy Declaration Page
+    steps:
+      - text: "Obtain WC policy from insurance broker"
+      - text: "Verify coverage includes all crew classifications"
+        details: "Check for any excluded job categories"
+      - text: "Upload policy to evidence locker"
+    triggers:
+      - has_employees: true
+
+  # ==========================================================================
+  # LABOR & CLASSIFICATION
+  # ==========================================================================
+  
+  classification_memo:
+    title: "Contractor Classification Memo (AB5)"
+    category: labor
+    priority: medium
+    estimated_time: "1-2 days"
+    resource_url: "https://www.dir.ca.gov/dlse/faq_independentcontractor.htm"
+    documents_required:
+      - Signed Classification Memo (per contractor)
+    steps:
+      - text: "Review AB5 ABC test requirements"
+        link: "https://www.dir.ca.gov/dlse/faq_independentcontractor.htm"
+      - text: "Generate classification memo for each contractor"
+        details: "Document how they pass A, B, and C prongs"
+      - text: "Have contractors sign and return"
+      - text: "Upload to evidence locker"
+    triggers:
+      - has_contractors: true
+
+  deal_memo:
+    title: "Crew Deal Memos"
+    category: labor
+    priority: medium
+    estimated_time: "Ongoing"
+    documents_required:
+      - Signed Deal Memo (per crew member)
+    steps:
+      - text: "Prepare deal memo with rate, dates, and role"
+      - text: "Send for signature before work begins"
+      - text: "File signed copy in production records"
+    triggers:
+      - engagement_count: "> 0"
+
+  # ==========================================================================
+  # MINORS
+  # ==========================================================================
+  
+  minor_work_permit:
+    title: "Minor Work Permit (Form B1-4)"
+    category: minors
+    priority: critical
+    estimated_time: "5-7 business days"
+    resource_url: "https://dir.ca.gov/dlse/permit.html"
+    documents_required:
+      - Birth certificate or passport
+      - School enrollment verification
+      - Parent/guardian consent
+    steps:
+      - text: "Parent/guardian completes Section A of Form B1-4"
+      - text: "Production company completes Section B"
+      - text: "Submit to CA Labor Commissioner"
+        link: "https://dir.ca.gov/dlse/permit.html"
+      - text: "Receive approved permit (5-7 days)"
+    triggers:
+      - minor_involved: true
+
+  studio_teacher:
+    title: "Studio Teacher Confirmation"
+    category: minors
+    priority: critical
+    estimated_time: "1-2 days"
+    documents_required:
+      - Studio teacher certification
+      - Deal memo
+    steps:
+      - text: "Identify certified studio teacher"
+        details: "Must hold valid California Studio Teacher credential"
+      - text: "Confirm availability for all minor shoot days"
+      - text: "Execute deal memo"
+      - text: "Verify welfare worker hours if applicable"
+    triggers:
+      - minor_involved: true
+
+  # ==========================================================================
+  # SAFETY
+  # ==========================================================================
+  
+  iipp_policy:
+    title: "Injury & Illness Prevention Program (IIPP)"
+    category: safety
+    priority: medium
+    estimated_time: "1-3 days"
+    resource_url: "https://www.dir.ca.gov/dosh/etools/09-031/index.htm"
+    documents_required:
+      - Written IIPP Policy Document
+    steps:
+      - text: "Obtain or create written IIPP document"
+        link: "https://www.dir.ca.gov/dosh/etools/09-031/index.htm"
+      - text: "Designate responsible person for safety"
+      - text: "Conduct hazard assessment for each location"
+      - text: "Train crew on safety procedures"
+      - text: "Document training attendance"
+    triggers:
+      - has_employees: true
+
+  covid_protocols:
+    title: "Health & Safety Protocols"
+    category: safety
+    priority: low
+    estimated_time: "Ongoing"
+    documents_required:
+      - Safety Plan Document
+    steps:
+      - text: "Review current CAL/OSHA requirements"
+      - text: "Prepare health & safety plan"
+      - text: "Designate COVID Compliance Officer if required"
+      - text: "Communicate protocols to all crew"
+
+  # ==========================================================================
+  # UNION
+  # ==========================================================================
+  
+  sag_signatory:
+    title: "SAG-AFTRA Signatory Agreement"
+    category: union
+    priority: high
+    estimated_time: "3-5 days"
+    resource_url: "https://www.sagaftra.org/production-center"
+    documents_required:
+      - Signatory Application
+      - Production Budget (if required)
+    steps:
+      - text: "Determine appropriate contract type"
+        details: "Short Project, Ultra Low Budget, Low Budget, or Standard"
+      - text: "Complete signatory application online"
+        link: "https://www.sagaftra.org/production-center"
+      - text: "Submit required documentation"
+      - text: "Receive approved signatory status"
+    triggers:
+      - uses_sag_talent: true
+
+  iatse_deal:
+    title: "IATSE Local Agreement"
+    category: union
+    priority: medium
+    estimated_time: "1-2 weeks"
+    documents_required:
+      - Local Agreement or Sidebar Letter
+    steps:
+      - text: "Contact appropriate IATSE local"
+        details: "Local 600 (Camera), 728 (Electric), 80 (Grip), etc."
+      - text: "Negotiate rates and terms"
+      - text: "Execute agreement"
+      - text: "Submit payroll reports as required"
+    triggers:
+      - uses_iatse_crew: true

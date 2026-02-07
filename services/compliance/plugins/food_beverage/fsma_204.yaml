@@ -1,0 +1,51 @@
+metadata:
+  rule_name: "FSMA 204"
+  regulator: "FDA"
+  effective_date: "2028-07-20"
+
+key_data_elements:
+  - id: "lot_code"
+  - id: "location_identifier"
+
+critical_tracking_events:
+  - id: "receiving"
+    name: "Receiving"
+    required_kdes: ["lot_code", "location_identifier"]
+  - id: "shipping"
+    name: "Shipping"
+    required_kdes: ["lot_code", "location_identifier"]
+  - id: "transformation"
+    name: "Transformation"
+    required_kdes: ["lot_code", "location_identifier"]
+
+control_dimensions:
+  traceability_plan:
+    name: "Traceability Plan"
+    weight: 0.2
+    required_fields: ["plan_owner", "product_scope"]
+  kde_capture:
+    name: "Key Data Elements"
+    weight: 0.25
+    event_requirements:
+      receiving:
+        minimum_percentage: 1.0
+      shipping:
+        minimum_percentage: 1.0
+  cte_coverage:
+    name: "Critical Tracking Events"
+    weight: 0.2
+    expected_events: ["receiving", "shipping"]
+  recordkeeping:
+    name: "Recordkeeping"
+    weight: 0.15
+    min_retention_years: 2
+    max_retrieval_hours: 24
+  technology_enablement:
+    name: "Technology"
+    weight: 0.15
+    required_capabilities: ["digital_records"]
+
+validation_rules:
+  - id: "invalid_tlc_format"
+    regex: "^\\d{14}[A-Za-z0-9\\-\\.]+$"
+    error_message: "Invalid TLC format. Must be GTIN-14 followed by lot code."

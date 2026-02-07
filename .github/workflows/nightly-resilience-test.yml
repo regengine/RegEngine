@@ -1,0 +1,205 @@
+name: Nightly Resilience Testing
+
+on:
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      rto_threshold:
+        description: 'Recovery time objective (seconds)'
+        required: false
+        default: '60'
+
+env:
+  PYTHON_VERSION: '3.11'
+  DOCKER_COMPOSE_VERSION: '2.20.0'
+
+jobs:
+  resilience-tests:
+    name: Run Chaos Engineering Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install docker requests pytest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start RegEngine stack
+        run: |
+          echo "Starting RegEngine services..."
+          docker-compose up -d
+
+          echo "Waiting for services to be healthy..."
+          sleep 30
+
+          # Check service health
+          docker-compose ps
+
+      - name: Run chaos engineering tests
+        id: chaos_tests
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+          RTO_THRESHOLD: ${{ github.event.inputs.rto_threshold || '60' }}
+        run: |
+          echo "Running chaos engineering test suite..."
+          python scripts/chaos_runner.py \
+            --environment $ENVIRONMENT \
+            --rto $RTO_THRESHOLD \
+            --test all
+        continue-on-error: true
+
+      - name: Data integrity validation
+        run: |
+          echo "Validating data integrity after chaos tests..."
+          python scripts/validate_data_integrity.py
+
+      - name: Collect service logs
+        if: always()
+        run: |
+          mkdir -p logs
+          docker-compose logs --no-color > logs/services.log
+          docker-compose logs admin-api > logs/admin-api.log
+          docker-compose logs ingestion-service > logs/ingestion.log
+          docker-compose logs nlp-service > logs/nlp.log
+          docker-compose logs graph-service > logs/graph.log
+          docker-compose logs neo4j > logs/neo4j.log
+          docker-compose logs redpanda > logs/kafka.log
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: chaos-test-results-${{ github.run_number }}
+          path: |
+            logs/
+            chaos_results.json
+          retention-days: 30
+
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "# Chaos Engineering Test Report" > $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**RTO Threshold:** ${{ github.event.inputs.rto_threshold || '60' }}s" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Add test results summary
+          if [ -f chaos_results.json ]; then
+            echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+            python scripts/format_chaos_results.py >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Cleanup Docker resources
+        if: always()
+        run: |
+          docker-compose down -v
+          docker system prune -af --volumes
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "❌ Nightly resilience tests FAILED",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *RegEngine Nightly Resilience Tests FAILED*\n\n*Repository:* ${{ github.repository }}\n*Branch:* ${{ github.ref_name }}\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|#${{ github.run_number }}>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  performance-benchmarks:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: resilience-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install locust requests
+
+      - name: Start RegEngine stack
+        run: |
+          docker-compose up -d
+          sleep 30
+
+      - name: Run performance benchmarks
+        run: |
+          echo "Running performance benchmarks..."
+          # TODO: Implement locust-based load testing
+          # locust -f scripts/locustfile.py --headless --users 100 --spawn-rate 10 --run-time 10m
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose down -v
+
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run secrets scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD

@@ -1,0 +1,171 @@
+orchestrator:
+  name: "regengine_launch_orchestrator"
+  version: "1.0.0"
+  description: >
+    Orchestrates public surface deployment, GTM asset generation, design partner
+    program activation, and investor readiness for RegEngine in minutes using AI agents.
+
+  modes:
+    - id: "full_launch"
+      description: "Run all modules: public, sales, design partners, investors, infra."
+    - id: "sales_only"
+      description: "Generate GTM assets and outbound campaigns only."
+    - id: "infra_only"
+      description: "Provision or update AWS-based environments only."
+    - id: "dry_run"
+      description: "Simulate orchestration, generate configs, but do not call external APIs."
+
+environment:
+  required_env_vars:
+    - "AWS_ACCESS_KEY_ID"
+    - "AWS_SECRET_ACCESS_KEY"
+    - "AWS_REGION"
+    - "CRM_API_TOKEN"
+    - "EMAIL_PROVIDER_API_KEY"
+    - "LINKEDIN_AUTOMATION_TOKEN"
+  secrets_management:
+    provider: "env_or_vault"
+    rotation_policy_days: 90
+
+public_surface:
+  marketing_site:
+    repo_slug: "regengine-marketing-site"
+    deploy_command: "npm run deploy"
+    target_url: "https://regengine.example.com"
+    features:
+      - landing_page
+      - pricing_page
+      - security_page
+      - contact_form
+      - request_demo_cta
+  api_docs:
+    repo_slug: "regengine-api-docs"
+    specification_format: "OpenAPI3"
+    target_url: "https://docs.regengine.example.com"
+    publish_command: "npm run publish-docs"
+  status_page:
+    provider: "statuspage_like"
+    public: true
+    components:
+      - name: "RegEngine API"
+        id: "api"
+      - name: "RegEngine UI"
+        id: "ui"
+      - name: "Neo4j Graph Backend"
+        id: "graph"
+      - name: "Kafka/Event Bus"
+        id: "kafka"
+
+sales:
+  personas:
+    - id: "fintech_compliance_lead"
+      title: "Head of Compliance / CCO (Fintech)"
+      pains:
+        - "Manual tracking of multi-jurisdiction regulation"
+        - "High cost of regulatory change management"
+        - "Weak audit trail from regulation to control"
+      desired_outcomes:
+        - "Automated regulatory change alerts"
+        - "Machine-readable obligations"
+        - "Auditable lineage"
+    - id: "regtech_cto"
+      title: "CTO / VP Engineering (RegTech Vendor)"
+      pains:
+        - "Time-to-market for new regulatory coverage"
+        - "Maintaining ingestion and NLP infrastructure"
+      desired_outcomes:
+        - "OEM ingestion/NLP/graph backbone"
+    - id: "enterprise_risk_officer"
+      title: "CRO / Head of Risk (Enterprise)"
+      pains:
+        - "Siloed regulatory obligations"
+        - "Inconsistent gap analysis across jurisdictions"
+        - "Board-level risk visibility gaps"
+      desired_outcomes:
+        - "Unified obligation map"
+        - "Gap reports by jurisdiction"
+        - "Board-ready reporting"
+
+  outbound_campaigns:
+    email_provider: "sendgrid_or_equivalent"
+    linkedin_enabled: true
+    sequences:
+      - id: "sequence_fintech_ccos"
+        persona: "fintech_compliance_lead"
+        steps:
+          - day_offset: 0
+            channel: "email"
+            template_ref: "templates/email/fintech_ccos_step1.md"
+          - day_offset: 2
+            channel: "email"
+            template_ref: "templates/email/fintech_ccos_step2.md"
+          - day_offset: 5
+            channel: "linkedin"
+            template_ref: "templates/linkedin/fintech_ccos_step3.txt"
+      - id: "sequence_regtech_ctos"
+        persona: "regtech_cto"
+        steps:
+          - day_offset: 0
+            channel: "email"
+            template_ref: "templates/email/regtech_ctos_step1.md"
+          - day_offset: 3
+            channel: "email"
+            template_ref: "templates/email/regtech_ctos_step2.md"
+
+design_partner_program:
+  program_name: "RegEngine Design Partner – Cohort Alpha"
+  max_partners: 5
+  duration_weeks: 8
+  legal_template_ref: "legal/design_partner_agreement.md"
+  sandbox:
+    environment: "sandbox"
+    max_docs_per_partner: 1000
+    jurisdictions:
+      default:
+        - "United States"
+        - "European Union"
+        - "United Kingdom"
+      optional:
+        - "Singapore"
+        - "Australia"
+    rate_limits:
+      rpm_per_api_key: 60
+      burst_limit: 120
+
+investor_readiness:
+  memo_template_ref: "investors/investor_memo.md"
+  slides_required:
+    - "vision_and_mission"
+    - "market_size"
+    - "product_architecture"
+    - "traction_and_pipeline"
+    - "financial_model"
+    - "risk_and_mitigation"
+
+infrastructure:
+  provider: "aws"
+  terraform:
+    root_module_path: "infra/terraform"
+    workspaces:
+      - "demo"
+      - "sandbox"
+      - "production"
+    modules:
+      vpc_module_path: "infra/terraform/modules/vpc"
+      ecs_module_path: "infra/terraform/modules/ecs"
+      rds_module_path: "infra/terraform/modules/rds"
+      neo4j_module_path: "infra/terraform/modules/neo4j"
+      redpanda_module_path: "infra/terraform/modules/redpanda"
+
+logging_and_audit:
+  log_level: "INFO"
+  sinks:
+    - "cloudwatch"
+    - "s3"
+  events_to_log:
+    - "deployment_started"
+    - "deployment_completed"
+    - "doc_generated"
+    - "outbound_campaign_initialized"
+    - "sandbox_provisioned"
+    - "error"

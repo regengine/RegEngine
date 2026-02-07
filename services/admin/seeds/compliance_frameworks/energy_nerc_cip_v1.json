@@ -1,0 +1,66 @@
+{
+    "rule_pack_id": "energy_nerc_cip_v1",
+    "title": "Energy: Critical Infrastructure Protection",
+    "version": "1.0",
+    "frameworks": [
+        "NERC CIP"
+    ],
+    "rules": [
+        {
+            "rule_id": "CIP-002-01",
+            "domain": "CIP-002",
+            "requirement": "Asset Categorization",
+            "checklist_item": "Identify every device (physical/virtual) impacting BES; document impact ratings and system boundaries.",
+            "severity": "CRITICAL",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "CIP-005-01",
+            "domain": "CIP-005",
+            "requirement": "ESP Management",
+            "checklist_item": "Define ESP boundaries; implement layered zones in control centers; monitor and control all ingress/egress points.",
+            "severity": "CRITICAL",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "CIP-007-01",
+            "domain": "CIP-007",
+            "requirement": "System Hardening",
+            "checklist_item": "Disable unnecessary services; change default credentials; enforce least-privilege on all BES devices.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "CIP-007-02",
+            "domain": "CIP-007",
+            "requirement": "Patch Management",
+            "checklist_item": "Document, test, and deploy vendor patches; implement mitigation plans for systems that cannot be patched (e.g., PLCs).",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "CIP-008-01",
+            "domain": "CIP-008",
+            "requirement": "Incident Response",
+            "checklist_item": "Develop response plans; coordinate with E-ISAC for threat intelligence; conduct annual drills and tabletop exercises.",
+            "severity": "MEDIUM",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "CIP-010-01",
+            "domain": "CIP-010",
+            "requirement": "Configuration Change Control",
+            "checklist_item": "Maintain baseline configurations; perform vulnerability assessments every 15 months; track all deviations with audit trails.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "CIP-013-01",
+            "domain": "CIP-013",
+            "requirement": "Supply Chain Risk",
+            "checklist_item": "Vet suppliers; validate software authenticity; mandate security notification clauses in vendor contracts.",
+            "severity": "HIGH",
+            "evidence_required": true
+        }
+    ]
+}

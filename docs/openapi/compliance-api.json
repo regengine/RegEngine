@@ -1,0 +1,1020 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "RegEngine Compliance API",
+        "description": "Multi-industry compliance checklist validation",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/health": {
+            "get": {
+                "summary": "Health Check",
+                "description": "Health check endpoint",
+                "operationId": "health_check_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/checklists": {
+            "get": {
+                "summary": "List Checklists",
+                "description": "List all available compliance checklists\n\n- **industry**: Optional filter by industry (e.g., \"finance\", \"healthcare\")\n\nReturns list of checklists with metadata (ID, name, industry, jurisdiction)",
+                "operationId": "list_checklists_checklists_get",
+                "parameters": [
+                    {
+                        "name": "industry",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Industry"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChecklistListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/checklists/{checklist_id}": {
+            "get": {
+                "summary": "Get Checklist",
+                "description": "Get full details of a specific compliance checklist\n\n- **checklist_id**: Checklist identifier (e.g., \"hipaa_compliance\", \"capital_requirements\")\n\nReturns full checklist definition including all items and validation rules",
+                "operationId": "get_checklist_checklists__checklist_id__get",
+                "parameters": [
+                    {
+                        "name": "checklist_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Checklist Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/validate": {
+            "post": {
+                "summary": "Validate Compliance",
+                "description": "Validate customer configuration against a compliance checklist\n\n**Returns yes/no pass/fail status with line-item results**\n\nRequest body:\n```json\n{\n  \"checklist_id\": \"hipaa_compliance\",\n  \"customer_config\": {\n    \"hipaa_001\": true,\n    \"hipaa_002\": true,\n    \"hipaa_003\": false\n  }\n}\n```\n\nResponse:\n```json\n{\n  \"overall_status\": \"FAIL\",\n  \"pass_rate\": 0.67,\n  \"items\": [\n    {\n      \"requirement_id\": \"hipaa_001\",\n      \"requirement\": \"Encrypt PHI at rest\",\n      \"status\": \"PASS\",\n      \"evidence\": \"Requirement met\"\n    },\n    {\n      \"requirement_id\": \"hipaa_003\",\n      \"requirement\": \"Role-Based Access Control\",\n      \"status\": \"FAIL\",\n      \"evidence\": \"Requirement not met\",\n      \"remediation\": \"Implement RBAC system...\"\n    }\n  ],\n  \"next_steps\": [\n    \"Address failed requirements before launching\",\n    \"\u2192 Implement RBAC for PHI access\"\n  ]\n}\n```",
+                "operationId": "validate_compliance_validate_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ValidationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/industries": {
+            "get": {
+                "summary": "List Industries",
+                "description": "List all supported industries\n\nReturns: List of industry names with checklist counts",
+                "operationId": "list_industries_industries_get",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/fsma-204/assess": {
+            "post": {
+                "summary": "Assess Fsma Readiness",
+                "description": "Run a FSMA 204 readiness assessment",
+                "operationId": "assess_fsma_readiness_fsma_204_assess_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FSMAAssessmentRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FSMAAssessmentResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/fsma/audit/spreadsheet": {
+            "get": {
+                "summary": "Get Fsma Audit Spreadsheet",
+                "description": "Generate FDA-compliant CSV spreadsheet for FSMA 204 audit.\n\nArgs:\n    tlc: Traceability Lot Code to trace\n    start_date: Start date filter (YYYY-MM-DD)\n    end_date: End date filter (YYYY-MM-DD)\n    \nReturns:\n    Downloadable CSV file",
+                "operationId": "get_fsma_audit_spreadsheet_fsma_audit_spreadsheet_get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Start Date"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "End Date"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/fsma/validate-tlc": {
+            "post": {
+                "summary": "Validate Tlc",
+                "description": "Validate a Traceability Lot Code format.\n\nArgs:\n    tlc: Traceability Lot Code to validate\n    \nReturns:\n    Validation result with error message if invalid",
+                "operationId": "validate_tlc_fsma_validate_tlc_post",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/examples/hipaa": {
+            "get": {
+                "summary": "Example Hipaa Validation",
+                "description": "Example: HIPAA compliance validation\n\nShows sample request/response for healthcare compliance check",
+                "operationId": "example_hipaa_validation_examples_hipaa_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/examples/finance": {
+            "get": {
+                "summary": "Example Finance Validation",
+                "description": "Example: Finance capital requirements validation\n\nShows sample request/response for financial compliance check",
+                "operationId": "example_finance_validation_examples_finance_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ChecklistListResponse": {
+                "properties": {
+                    "checklists": {
+                        "items": {
+                            "type": "object"
+                        },
+                        "type": "array",
+                        "title": "Checklists"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "title": "Total"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "checklists",
+                    "total"
+                ],
+                "title": "ChecklistListResponse",
+                "description": "List of available compliance checklists"
+            },
+            "DimensionScoreModel": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "weight": {
+                        "type": "number",
+                        "title": "Weight"
+                    },
+                    "score": {
+                        "type": "number",
+                        "title": "Score"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "title": "Rationale"
+                    },
+                    "gaps": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Gaps"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "name",
+                    "weight",
+                    "score",
+                    "status",
+                    "rationale",
+                    "gaps"
+                ],
+                "title": "DimensionScoreModel"
+            },
+            "FSMAAssessmentRequest": {
+                "properties": {
+                    "facility_name": {
+                        "type": "string",
+                        "title": "Facility Name",
+                        "description": "Facility under evaluation"
+                    },
+                    "facility_type": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Facility Type",
+                        "description": "e.g., RTE salads, seafood processor"
+                    },
+                    "products": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Products"
+                    },
+                    "traceability_plan": {
+                        "$ref": "#/components/schemas/TraceabilityPlanModel"
+                    },
+                    "kde_capture": {
+                        "$ref": "#/components/schemas/KDECaptureModel"
+                    },
+                    "critical_tracking_events": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Critical Tracking Events"
+                    },
+                    "recordkeeping": {
+                        "$ref": "#/components/schemas/RecordkeepingModel"
+                    },
+                    "technology": {
+                        "$ref": "#/components/schemas/TechnologyModel"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "facility_name"
+                ],
+                "title": "FSMAAssessmentRequest",
+                "description": "FSMA 204 facility profile input"
+            },
+            "FSMAAssessmentResponse": {
+                "properties": {
+                    "rule_name": {
+                        "type": "string",
+                        "title": "Rule Name"
+                    },
+                    "regulator": {
+                        "type": "string",
+                        "title": "Regulator"
+                    },
+                    "effective_date": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Effective Date"
+                    },
+                    "facility_name": {
+                        "type": "string",
+                        "title": "Facility Name"
+                    },
+                    "overall_score": {
+                        "type": "number",
+                        "title": "Overall Score"
+                    },
+                    "risk_level": {
+                        "type": "string",
+                        "title": "Risk Level"
+                    },
+                    "dimension_scores": {
+                        "items": {
+                            "$ref": "#/components/schemas/DimensionScoreModel"
+                        },
+                        "type": "array",
+                        "title": "Dimension Scores"
+                    },
+                    "remediation_actions": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Remediation Actions"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "rule_name",
+                    "regulator",
+                    "effective_date",
+                    "facility_name",
+                    "overall_score",
+                    "risk_level",
+                    "dimension_scores",
+                    "remediation_actions"
+                ],
+                "title": "FSMAAssessmentResponse"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "KDECaptureModel": {
+                "properties": {
+                    "receiving": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Receiving"
+                    },
+                    "transformation": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Transformation"
+                    },
+                    "shipping": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Shipping"
+                    },
+                    "cooling": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Cooling"
+                    }
+                },
+                "type": "object",
+                "title": "KDECaptureModel"
+            },
+            "RecordkeepingModel": {
+                "properties": {
+                    "retention_years": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Retention Years"
+                    },
+                    "retrieval_time_hours": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Retrieval Time Hours"
+                    },
+                    "digital_system": {
+                        "type": "boolean",
+                        "title": "Digital System",
+                        "default": false
+                    },
+                    "storage_format": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Storage Format"
+                    },
+                    "system_of_record": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "System Of Record"
+                    }
+                },
+                "type": "object",
+                "title": "RecordkeepingModel"
+            },
+            "TechnologyModel": {
+                "properties": {
+                    "capabilities": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Capabilities"
+                    },
+                    "integration_notes": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Integration Notes"
+                    }
+                },
+                "type": "object",
+                "title": "TechnologyModel"
+            },
+            "TraceabilityPlanModel": {
+                "properties": {
+                    "plan_document": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Plan Document"
+                    },
+                    "plan_owner": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Plan Owner"
+                    },
+                    "update_frequency_months": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Update Frequency Months"
+                    },
+                    "training_program": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Training Program"
+                    },
+                    "product_scope": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Product Scope"
+                    },
+                    "digital_workflow": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Digital Workflow"
+                    },
+                    "kpi_dashboard": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Kpi Dashboard"
+                    }
+                },
+                "type": "object",
+                "title": "TraceabilityPlanModel"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            },
+            "ValidationItemResponse": {
+                "properties": {
+                    "requirement_id": {
+                        "type": "string",
+                        "title": "Requirement Id"
+                    },
+                    "requirement": {
+                        "type": "string",
+                        "title": "Requirement"
+                    },
+                    "regulation": {
+                        "type": "string",
+                        "title": "Regulation"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "evidence": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Evidence"
+                    },
+                    "remediation": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Remediation"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "requirement_id",
+                    "requirement",
+                    "regulation",
+                    "status"
+                ],
+                "title": "ValidationItemResponse",
+                "description": "Validation result for a single checklist item"
+            },
+            "ValidationRequest": {
+                "properties": {
+                    "checklist_id": {
+                        "type": "string",
+                        "title": "Checklist Id",
+                        "description": "ID of the compliance checklist"
+                    },
+                    "customer_config": {
+                        "type": "object",
+                        "title": "Customer Config",
+                        "description": "Customer configuration/answers keyed by requirement ID",
+                        "example": {
+                            "hipaa_001": true,
+                            "hipaa_002": true,
+                            "hipaa_003": false
+                        }
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "checklist_id",
+                    "customer_config"
+                ],
+                "title": "ValidationRequest",
+                "description": "Request to validate compliance against a checklist"
+            },
+            "ValidationResponse": {
+                "properties": {
+                    "checklist_id": {
+                        "type": "string",
+                        "title": "Checklist Id"
+                    },
+                    "checklist_name": {
+                        "type": "string",
+                        "title": "Checklist Name"
+                    },
+                    "industry": {
+                        "type": "string",
+                        "title": "Industry"
+                    },
+                    "jurisdiction": {
+                        "type": "string",
+                        "title": "Jurisdiction"
+                    },
+                    "overall_status": {
+                        "type": "string",
+                        "title": "Overall Status"
+                    },
+                    "pass_rate": {
+                        "type": "number",
+                        "title": "Pass Rate",
+                        "description": "Pass rate as decimal (0.0-1.0)"
+                    },
+                    "items": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationItemResponse"
+                        },
+                        "type": "array",
+                        "title": "Items"
+                    },
+                    "next_steps": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Next Steps"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "checklist_id",
+                    "checklist_name",
+                    "industry",
+                    "jurisdiction",
+                    "overall_status",
+                    "pass_rate",
+                    "items",
+                    "next_steps"
+                ],
+                "title": "ValidationResponse",
+                "description": "Complete validation result"
+            }
+        }
+    }
+}

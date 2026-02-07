@@ -1,0 +1,29 @@
+industry: "food_beverage"
+checklists:
+  - id: "fsma_204_checklist"
+    name: "FSMA 204 Rule Compliance"
+    industry: "food_beverage"
+    jurisdiction: "US-FDA"
+    description: "Requirements for FSMA 204 Traceability Rule"
+    items:
+      - id: "traceability_plan"
+        requirement: "Establish a Traceability Plan"
+        regulation: "21 CFR 1.1315"
+        validation:
+          type: "boolean"
+          remediation: "Create a formal traceability plan document describing procedures for CTE/KDE capture."
+      - id: "record_retention"
+        requirement: "Retain records for 2 years"
+        regulation: "21 CFR 1.1455"
+        validation:
+          type: "numeric_threshold"
+          threshold:
+            min: 2
+            unit: "years"
+          remediation: "Extend record retention policy to minimum 24 months."
+      - id: "electronic_sortable"
+        requirement: "Maintain electronic sortable spreadsheet"
+        regulation: "21 CFR 1.1455(c)(3)"
+        validation:
+          type: "boolean"
+          remediation: "Implement digital recordkeeping system capable of exporting CSV data."

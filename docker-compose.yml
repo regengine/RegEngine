@@ -1,0 +1,421 @@
+# SEC-004: Required secrets MUST be set via environment or .env file
+# Do NOT use default values for sensitive credentials in production
+# Run ./scripts/check_required_secrets.sh to validate before starting
+
+x-env-common: &env_common
+  RAW_DATA_BUCKET: ${RAW_DATA_BUCKET:-reg-engine-raw-data-dev}
+  PROCESSED_DATA_BUCKET: ${PROCESSED_DATA_BUCKET:-reg-engine-processed-data-dev}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID must be set}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY must be set}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-http://localstack:4566}
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-redpanda:9092}
+  KAFKA_TOPIC_NORMALIZED: ${KAFKA_TOPIC_NORMALIZED:-ingest.normalized.v2}
+  KAFKA_TOPIC_NLP: ${KAFKA_TOPIC_NLP:-nlp.extracted}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+  NEO4J_USER: ${NEO4J_USER:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set - do not use default values}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://regengine:regengine@postgres:5432/regengine}
+  ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+  ENABLE_DB_API_KEYS: "true"
+  # Test API key bypass - allows 'admin' as a valid key for development
+  AUTH_TEST_BYPASS_TOKEN: ${AUTH_TEST_BYPASS_TOKEN:-admin}
+  AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+
+services:
+  gateway:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - admin-api
+      - ingestion-service
+
+  scheduler:
+    build:
+      context: ./services/scheduler
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://regengine:regengine@postgres:5432/regengine}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-redpanda:9092}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/1}
+      INGESTION_SERVICE_URL: http://ingestion-service:8000
+      SCHEDULER_API_KEY: ${ADMIN_MASTER_KEY}
+      WEBHOOK_URLS: ${WEBHOOK_URLS:-}
+      FDA_WARNING_LETTERS_INTERVAL: ${FDA_WARNING_LETTERS_INTERVAL:-60}
+      FDA_IMPORT_ALERTS_INTERVAL: ${FDA_IMPORT_ALERTS_INTERVAL:-120}
+      FDA_RECALLS_INTERVAL: ${FDA_RECALLS_INTERVAL:-30}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+      ingestion-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8600/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    ports:
+      - "8600:8600"
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: ./services/admin/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8400:8400"
+    environment:
+      <<: *env_common
+      LOG_LEVEL: INFO
+      ADMIN_MASTER_KEY: ${ADMIN_MASTER_KEY:?ADMIN_MASTER_KEY must be set - do not use default values}
+      REGENGINE_ENV: ${REGENGINE_ENV:-development}
+      # Override DATABASE_URL to use the async admin database
+      DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
+      # Entertainment DB for PCOS vertical (migrated Jan 31, 2026)
+      # Pointing to regengine_admin for now as migration applied there
+      ENTERTAINMENT_DATABASE_URL: ${ENTERTAINMENT_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8400/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: ./services/ingestion/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      <<: *env_common
+      # Override DATABASE_URL to use the async driver (required by shared.api_key_store)
+      DATABASE_URL: postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin
+      # CORS origins for frontend access (comma-separated)
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+      redpanda:
+        condition: service_started
+      admin-api:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  nlp-service:
+    build:
+      context: .
+      dockerfile: ./services/nlp/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_started
+      redpanda:
+        condition: service_started
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8100/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8100:8100"
+
+  graph-service:
+    build:
+      context: .
+      dockerfile: ./services/graph/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+      # Override for async API key store (requires asyncpg driver)
+      DATABASE_URL: postgresql+asyncpg://regengine:regengine@postgres:5432/regengine_admin
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      - neo4j
+      - redpanda
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8200/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8200:8200"
+
+  opportunity-api:
+    build:
+      context: .
+      dockerfile: ./services/opportunity/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      - neo4j
+      - admin-api
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8300/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8300:8300"
+
+  energy-api:
+    build:
+      context: ./services/energy
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8700:8700"
+    environment:
+      DATABASE_URL: "postgresql://regengine:regengine@postgres:5432/energy"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8700/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # volumes:
+    #   - ./services/energy/app:/app/app # Hot reload in dev - TEMPORARILY DISABLED for Phase 0 verification
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  compliance-api:
+    build:
+      context: .
+      dockerfile: ./services/compliance/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      - admin-api
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8500/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8500:8500"
+
+  compliance-worker:
+    build:
+      context: .
+      dockerfile: ./services/compliance/worker.Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+      # Worker needs schema registry URL explicit if not in common
+      SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      # Connect to Admin DB where tables reside
+      DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
+    depends_on:
+      - redpanda
+      - schema-registry
+      - postgres
+      - compliance-api
+    volumes:
+      - ./schemas:/app/schemas
+
+  localstack:
+    image: localstack/localstack:3
+    restart: unless-stopped
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+    ports:
+      - "4566:4566"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4566/_localstack/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.1.10
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --overprovisioned
+      - --node-id=0
+      - --kafka-addr=0.0.0.0:9092
+      - --advertise-kafka-addr=redpanda:9092
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: [ "CMD", "rpk", "cluster", "health" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    restart: unless-stopped
+    depends_on:
+      - redpanda
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: redpanda:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports:
+      - "8081:8081"
+
+  neo4j:
+    image: neo4j:5.24-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set}"
+      NEO4J_dbms_default__listen__address: "0.0.0.0"
+      NEO4J_server_memory_pagecache_size: 512m
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: regengine
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-regengine}
+      POSTGRES_DB: regengine
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U regengine" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:9092
+    depends_on:
+      - redpanda
+
+volumes:
+  neo4j_data:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,474 @@
+from __future__ import annotations
+
+import json
+import sys
+import threading
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+import structlog
+from jsonschema import Draft7Validator, ValidationError
+from kafka import KafkaConsumer, KafkaProducer
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import KafkaTimeoutError, TopicAlreadyExistsError
+from prometheus_client import Counter
+from structlog.contextvars import get_contextvars
+
+# Add parent directory to path for shared module import
+# Add parent directory to path for shared module import
+try:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+except IndexError:
+    pass
+
+from shared.schemas import (
+    ExtractionPayload,
+    GraphEvent,
+    ObligationType,
+    ReviewItem,
+    Threshold,
+)
+
+from .classification import SignalClassifier
+from .config import settings
+from .extractor import extract_entities
+from .resolution import EntityResolver
+from .s3_utils import get_bytes
+
+logger = structlog.get_logger("nlp-consumer")
+
+MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
+
+_shutdown_event = threading.Event()
+
+# Confidence threshold for automatic approval
+# Now using settings.extraction_confidence_high (SRP 11-7)
+
+# Topic names for routing
+TOPIC_GRAPH_UPDATE = "graph.update"
+TOPIC_NEEDS_REVIEW = "nlp.needs_review"
+
+RESOLVER = EntityResolver()
+CLASSIFIER = SignalClassifier()
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _convert_entities_to_extraction(
+    entities: list, doc_id: str, source_url: str
+) -> list[ExtractionPayload]:
+    """Convert legacy entity format to canonical ExtractionPayload format."""
+    extractions = []
+
+    # Group entities to form complete extractions
+    obligations = [e for e in entities if e.get("type") == "OBLIGATION"]
+    thresholds = [e for e in entities if e.get("type") == "THRESHOLD"]
+    jurisdictions = [e for e in entities if e.get("type") == "JURISDICTION"]
+
+    for obl in obligations:
+        text = obl.get("text", "")
+        start_offset = obl.get("start", 0)
+
+        # Simple subject/action parsing from text
+        # In production, this would use more sophisticated NLP
+        parts = text.split()
+        subject = " ".join(parts[: min(3, len(parts))])
+        action_words = ["shall", "must", "required to", "has to", "should", "may"]
+        action = next((w for w in action_words if w in text.lower()), "must")
+
+        # Determine obligation type
+        if (
+            "must" in text.lower()
+            or "shall" in text.lower()
+            or "required" in text.lower()
+        ):
+            obl_type = ObligationType.MUST
+        elif "should" in text.lower():
+            obl_type = ObligationType.SHOULD
+        elif "may" in text.lower():
+            obl_type = ObligationType.MAY
+        else:
+            obl_type = ObligationType.MUST
+
+        # Find associated thresholds (within proximity)
+        associated_thresholds = []
+        for thresh in thresholds:
+            if abs(thresh.get("start", 0) - start_offset) < 200:
+                attrs = thresh.get("attrs", {})
+                threshold = Threshold(
+                    value=attrs.get("value", 0),
+                    unit=attrs.get("unit_normalized", "units"),
+                    operator="gte",  # Default operator
+                    context=None,
+                )
+                associated_thresholds.append(threshold)
+
+        # Find jurisdiction
+        jurisdiction = None
+        for jur in jurisdictions:
+            if abs(jur.get("start", 0) - start_offset) < 500:
+                jurisdiction = jur.get("attrs", {}).get("name")
+                break
+
+        # Calculate simple confidence score
+        # In production, this would use ML model confidence
+        base_confidence = 0.75
+        if associated_thresholds:
+            base_confidence += 0.1
+        if jurisdiction:
+            base_confidence += 0.05
+        if len(text) > 50:
+            base_confidence += 0.05
+
+        # Check for related Organizations and resolve them
+        organizations = [e for e in entities if e.get("type") == "ORGANIZATION"]
+        resolved_entities = []
+        for org in organizations:
+            # Proximity check
+            if abs(org.get("start", 0) - start_offset) < 500:
+                raw_name = org.get("attrs", {}).get("name")
+                resolution = RESOLVER.resolve_organization(raw_name)
+                
+                entity_info = {
+                     "raw_name": raw_name,
+                     "type": "ORGANIZATION",
+                     "start": org.get("start"),
+                     "end": org.get("end")
+                }
+                
+                if resolution:
+                    entity_info["entity_id"] = resolution["id"]
+                    entity_info["normalized_name"] = resolution["name"]
+                    entity_info["entity_type"] = resolution["type"]
+                    # Boost confidence if we found a known entity
+                    base_confidence += 0.15
+                    
+                resolved_entities.append(entity_info)
+
+        confidence = min(base_confidence, 0.99)
+        
+        # Categorize Signal
+        category, risk, risk_conf = CLASSIFIER.classify_signal(text)
+        
+        attributes = {
+            "document_id": doc_id, 
+            "source_url": source_url,
+            "signal_category": category,
+            "risk_level": risk
+        }
+        if resolved_entities:
+            attributes["resolved_entities"] = resolved_entities
+
+        extraction = ExtractionPayload(
+            subject=subject,
+            action=action,
+            object=None,
+            obligation_type=obl_type,
+            thresholds=associated_thresholds,
+            jurisdiction=jurisdiction,
+            confidence_score=confidence,
+            source_text=text,
+            source_offset=start_offset,
+            attributes=attributes,
+        )
+        extractions.append(extraction)
+
+    # Handle FSMA Regulatory Dates (User Request)
+    reg_dates = [e for e in entities if e.get("type") == "REGULATORY_DATE"]
+    for rd in reg_dates:
+        attrs = rd.get("attrs", {})
+        date_value = attrs.get("value")
+        
+        extraction = ExtractionPayload(
+            subject="covered entities",
+            action="must comply by",
+            object="FSMA 204 requirements",
+            obligation_type=ObligationType.MUST,
+            effective_date=date_value,
+            confidence_score=0.99, # High confidence for explicit date matches
+            source_text=rd.get("text"),
+            source_offset=rd.get("start"),
+            attributes={
+                "document_id": doc_id,
+                "source_url": source_url,
+                "fact_type": "compliance_date",
+                "provenance": attrs.get("provenance"),
+                "signal_category": "regulatory_change",
+                "risk_level": "high" # Compliance Date changes are high impact
+            },
+            entities=[rd] # Pass raw entity for worker processing
+        )
+        extractions.append(extraction)
+
+    return extractions
+
+
+def _load_schema() -> Draft7Validator:
+    # Try to find data-schemas by walking up the tree
+    current = Path(__file__).resolve()
+    repo_root = None
+    
+    # Check up to 4 levels up
+    for i in range(5):
+        candidate = current.parents[i] if i < len(current.parents) else None
+        if candidate and (candidate / "data-schemas").exists():
+            repo_root = candidate
+            break
+            
+    if not repo_root:
+        # Fallback for Docker specific path if not found in parents
+        if Path("/app/data-schemas").exists():
+            repo_root = Path("/app")
+        else:
+             # Last ditch: try to use the hardcoded relative path that works locally
+             # even if exists() check failed for some reason (symlinks?)
+             try:
+                 repo_root = Path(__file__).resolve().parents[3]
+             except IndexError:
+                 pass
+
+    if not repo_root or not (repo_root / "data-schemas").exists():
+        logger.error("schema_not_found", search_start=str(current))
+        raise FileNotFoundError("Could not find data-schemas/events/nlp.extracted.schema.json")
+
+    schema_path = repo_root / "data-schemas" / "events" / "nlp.extracted.schema.json"
+    schema = json.loads(schema_path.read_text())
+    return Draft7Validator(schema)
+
+
+def _ensure_topic(topic: str) -> None:
+    admin = None
+    try:
+        admin = KafkaAdminClient(bootstrap_servers=settings.kafka_bootstrap)
+        admin.create_topics([NewTopic(topic, num_partitions=1, replication_factor=1)])
+    except TopicAlreadyExistsError:
+        pass
+    except Exception as exc:  # pragma: no cover - infra dependent
+        logger.warning("topic_creation_failed", topic=topic, error=str(exc))
+    finally:
+        if admin is not None:
+            try:
+                admin.close()
+            except Exception:  # pragma: no cover
+                pass
+
+
+def _route_extraction(
+    extraction: ExtractionPayload,
+    doc_id: str,
+    doc_hash: str,
+    source_url: str,
+    producer: KafkaProducer,
+    tenant_id: Optional[str],
+    reviewer_id: str = "nlp_model_v1",
+) -> None:
+    """Route extraction to appropriate topic based on confidence score."""
+    # Capture correlation id from structured logging context if present
+    ctx = get_contextvars()
+    request_id = ctx.get("request_id")
+    
+    # Use configurable high confidence threshold for auto-approval
+    threshold = settings.extraction_confidence_high
+    
+    if extraction.confidence_score >= threshold:
+        # High confidence: send directly to graph
+        graph_event = GraphEvent(
+            event_type="create_provision",
+            tenant_id=tenant_id,  # Phase 2 will add tenant routing
+            doc_hash=doc_hash,
+            document_id=doc_id,
+            text_clean=extraction.source_text,
+            extraction=extraction,
+            provenance={
+                "source_url": source_url,
+                "offset": extraction.source_offset,
+                "request_id": request_id,
+            },
+            embedding=None,  # Phase 2+ will add embeddings
+            status="APPROVED",
+            reviewer_id=reviewer_id,
+        )
+        # Send to graph update topic
+        payload = graph_event.model_dump(mode="json")
+        logger.info(f"Producing Graph Event with {len(payload.get('extraction', {}).get('entities', []))} entities")
+        producer.send(
+            TOPIC_GRAPH_UPDATE,
+            key=doc_id, # Ensure key is string
+            value=payload,
+            headers=[("X-Request-ID", str(request_id or "").encode("utf-8"))],
+        )
+        logger.info(
+            "high_confidence_extraction",
+            document_id=doc_id,
+            confidence=extraction.confidence_score,
+            routed_to="graph",
+        )
+    else:
+        # Low confidence: send to review queue
+        review_item = ReviewItem(
+            tenant_id=tenant_id,
+            document_id=doc_id,
+            extraction=extraction,
+            status="pending",
+        )
+        producer.send(
+            TOPIC_NEEDS_REVIEW,
+            key=doc_id,
+            value=review_item.model_dump(mode="json"),
+            headers=[("X-Request-ID", str(request_id or "").encode("utf-8"))],
+        )
+        logger.info(
+            "low_confidence_extraction",
+            document_id=doc_id,
+            confidence=extraction.confidence_score,
+            routed_to="review_queue",
+        )
+
+
+def stop_consumer() -> None:
+    _shutdown_event.set()
+
+
+def run_consumer() -> None:
+    # Ensure both output topics exist
+    _ensure_topic(TOPIC_GRAPH_UPDATE)
+    _ensure_topic(TOPIC_NEEDS_REVIEW)
+    _ensure_topic(settings.topic_out)  # Keep legacy topic for backward compat
+
+    def safe_json_deserializer(v):
+        try:
+            if v is None:
+                return None
+            return json.loads(v.decode("utf-8"))
+        except Exception:
+            # Return raw bytes or None to indicate failure, but don't crash loop
+            # We'll handle None/bytes in the loop
+            return None
+
+    consumer = KafkaConsumer(
+        settings.topic_in,
+        bootstrap_servers=settings.kafka_bootstrap,
+        value_deserializer=safe_json_deserializer,
+        enable_auto_commit=False,
+        auto_offset_reset="earliest",
+        group_id="nlp-service",
+    )
+    producer = KafkaProducer(
+        bootstrap_servers=settings.kafka_bootstrap,
+        key_serializer=lambda v: v.encode("utf-8"),
+        value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
+        linger_ms=50,
+        retries=5,
+        acks="all",
+    )
+
+    validator = _load_schema()
+
+    while not _shutdown_event.is_set():
+        message = consumer.poll(timeout_ms=500)
+        if not message:
+            continue
+        for records in message.values():
+            for record in records:
+                evt = record.value
+                if evt is None:
+                    continue
+                doc_id = (
+                    evt.get("document_id")
+                    or evt.get("doc_id")
+                    or evt.get("doc_hash")
+                    or evt.get("content_hash")
+                )
+                doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
+                norm_path = evt.get("normalized_s3_path")
+                inline_text = evt.get("text_clean")
+                tenant_id = evt.get("tenant_id")
+                provenance = evt.get("provenance") or {}
+
+                if not doc_id or (not norm_path and not inline_text):
+                    logger.warning("skipping_event_missing_keys", event=evt)
+                    MESSAGES_COUNTER.labels(status="skipped").inc()
+                    consumer.commit()
+                    continue
+
+                try:
+                    if inline_text:
+                        text = str(inline_text)[:2_000_000]
+                        source_url = provenance.get(
+                            "source_url", evt.get("source_url", "unknown")
+                        )
+                    else:
+                        _, _, bucket_key = norm_path.partition("s3://")
+                        bucket, _, key = bucket_key.partition("/")
+                        payload = json.loads(get_bytes(bucket, key))
+                        text = payload.get("text", "")[:2_000_000]
+                        source_url = payload.get("source_url", "unknown")
+
+                    # Extract entities using existing extractor
+                    entities = extract_entities(text)
+
+                    # Convert to canonical ExtractionPayload format
+                    extractions = _convert_entities_to_extraction(
+                        entities, doc_id, source_url
+                    )
+
+                    # Route each extraction based on confidence
+                    for extraction in extractions:
+                        _route_extraction(
+                            extraction,
+                            doc_id,
+                            doc_hash,
+                            source_url,
+                            producer,
+                            tenant_id,
+                        )
+
+                    # Also send to legacy topic for backward compatibility
+                    legacy_out = {
+                        "event_id": str(uuid.uuid4()),
+                        "document_id": doc_id,
+                        "tenant_id": tenant_id,
+                        "source_url": source_url,
+                        "timestamp": _now_iso(),
+                        "entities": entities,
+                    }
+                    validator.validate(legacy_out)
+                    producer.send(settings.topic_out, key=doc_id, value=legacy_out)
+
+                    producer.flush(timeout=1.0)
+
+
+                    logger.info(
+                        "nlp_extraction_complete",
+                        document_id=doc_id,
+                        extraction_count=len(extractions),
+                        high_confidence=sum(
+                            1
+                            for e in extractions
+                            if e.confidence_score >= settings.extraction_confidence_high
+                        ),
+                        needs_review=sum(
+                            1
+                            for e in extractions
+                            if e.confidence_score < settings.extraction_confidence_high
+                        ),
+                    )
+                    MESSAGES_COUNTER.labels(status="success").inc()
+                    consumer.commit()
+                except (ValidationError, KafkaTimeoutError) as exc:
+                    logger.error(
+                        "nlp_validation_or_kafka_error",
+                        document_id=doc_id,
+                        error=str(exc),
+                    )
+                    MESSAGES_COUNTER.labels(status="error").inc()
+                except Exception as exc:  # pragma: no cover - requires infra
+                    logger.exception(
+                        "nlp_processing_error", document_id=doc_id, error=str(exc)
+                    )
+                    MESSAGES_COUNTER.labels(status="error").inc()
+    consumer.close()
+    producer.close()

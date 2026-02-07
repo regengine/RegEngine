@@ -1,0 +1,291 @@
+ingestion-service-1  | INFO:     Started server process [1]
+ingestion-service-1  | INFO:     Waiting for application startup.
+ingestion-service-1  | 2026-02-01 08:46:45 [info     ] ingestion_service_starting     cors_origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:8080']
+ingestion-service-1  | INFO:     Application startup complete.
+ingestion-service-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+ingestion-service-1  | INFO:     140.82.114.6:63383 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:58668 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:65451 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:65451 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:65451 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:50986 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:28188 - "OPTIONS /ingest/url HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:47:03 [warning  ] redis_not_available            message='Install redis for distributed rate limiting'
+ingestion-service-1  | 2026-02-01 08:47:03 [warning  ] invalid_api_key                key_prefix=adminadmin path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:28188 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     127.0.0.1:55194 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17807 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17807 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:47:15 [warning  ] invalid_api_key                key_prefix=adminadmin path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:17807 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     140.82.114.6:17807 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:55332 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:27253 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:27253 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:47:24 [warning  ] invalid_api_key                key_prefix=adminadmin path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:27253 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     140.82.114.6:27253 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:39712 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:48668 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25878 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25878 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25878 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25878 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:49754 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:37587 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:37587 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:37587 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:33318 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:48:04 [warning  ] invalid_api_key                key_prefix=adminadmin path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:31914 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     127.0.0.1:44142 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:53069 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:53069 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:53069 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:53069 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:49026 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:57425 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:57425 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:57425 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:44424 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:48:37 [warning  ] invalid_api_key                key_prefix=adminadmin path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:58755 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     127.0.0.1:38814 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:42685 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:42685 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:42685 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:42685 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:42432 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:35713 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:35713 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:35713 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:40224 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:35713 - "OPTIONS /ingest/url HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:49:02 [warning  ] missing_api_key                path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:35713 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     127.0.0.1:47480 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:18938 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:18938 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:18938 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:18938 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:55386 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48465 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48465 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48465 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:49842 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:38548 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:43064 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:43064 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:43064 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:43064 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:42644 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:19833 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:19833 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:19833 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:60542 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:54354 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17649 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17649 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17649 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17649 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:41858 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62911 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62911 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62911 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:43500 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48139 - "OPTIONS /ingest/url HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:50:36 [warning  ] invalid_api_key                key_prefix=adminadmin path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:48139 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     127.0.0.1:51356 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16937 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16937 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16937 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16937 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:35910 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16170 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16170 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16170 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:42484 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:57036 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:60312 - "OPTIONS /ingest/url HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:51:10 [warning  ] missing_api_key                path=/ingest/url
+ingestion-service-1  | INFO:     140.82.114.6:60312 - "POST /ingest/url HTTP/1.1" 401 Unauthorized
+ingestion-service-1  | INFO:     140.82.114.6:60312 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:60312 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:60312 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:45820 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25837 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25837 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25837 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:45274 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:33996 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:42380 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:62151 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:57012 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:38018 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:37462 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:50288 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:40198 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:42260 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:43624 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61974 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:52588 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:52398 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16771 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16771 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:16771 - "OPTIONS /ingest/url HTTP/1.1" 200 OK
+ingestion-service-1  | 2026-02-01 08:53:14 [info     ] test_bypass_auth_used          path=/ingest/url
+ingestion-service-1  | 2026-02-01 08:53:21 [error    ] ingest_unexpected_error        error='KafkaError{code=_KEY_SERIALIZATION,val=-162,str="_serialize_key() takes 1 positional argument but 2 were given"}'
+ingestion-service-1  | Traceback (most recent call last):
+ingestion-service-1  |   File "/usr/local/lib/python3.11/site-packages/confluent_kafka/serializing_producer.py", line 142, in produce
+ingestion-service-1  |     key = self._key_serializer(key, ctx)
+ingestion-service-1  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ingestion-service-1  | TypeError: _serialize_key() takes 1 positional argument but 2 were given
+ingestion-service-1  | 
+ingestion-service-1  | During handling of the above exception, another exception occurred:
+ingestion-service-1  | 
+ingestion-service-1  | Traceback (most recent call last):
+ingestion-service-1  |   File "/app/app/routes.py", line 338, in ingest_url
+ingestion-service-1  |     send(
+ingestion-service-1  |   File "/app/app/kafka_utils.py", line 84, in send
+ingestion-service-1  |     producer.produce(topic=topic, key=key, value=payload)
+ingestion-service-1  |   File "/usr/local/lib/python3.11/site-packages/confluent_kafka/serializing_producer.py", line 144, in produce
+ingestion-service-1  |     raise KeySerializationError(se)
+ingestion-service-1  | confluent_kafka.error.KeySerializationError: KafkaError{code=_KEY_SERIALIZATION,val=-162,str="_serialize_key() takes 1 positional argument but 2 were given"}
+ingestion-service-1  | INFO:     140.82.114.6:16771 - "POST /ingest/url HTTP/1.1" 500 Internal Server Error
+ingestion-service-1  | INFO:     127.0.0.1:47084 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:20183 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:20183 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:20183 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:20183 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:20183 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:33836 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:60792 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25187 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:25187 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48684 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48684 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:59818 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48684 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48684 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:48684 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:60680 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:54092 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54258 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54258 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:51116 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:51116 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:37434 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:51116 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:51116 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:51116 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:43464 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:45056 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:52574 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:52574 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61003 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61003 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:47812 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61003 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61003 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61003 - "OPTIONS /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61003 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:39332 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:60572 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21438 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21438 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:49043 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:49043 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:46962 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:49043 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:49043 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:49043 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:56814 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:35354 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:52850 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:52850 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:29930 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:29930 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:52658 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:29930 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:29930 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:29930 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:47736 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:51378 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47435 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47435 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47543 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47543 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:58728 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47543 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47543 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47543 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:36520 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47543 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:61853 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:37346 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:40070 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:40070 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54894 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:35428 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54894 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54894 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54894 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54894 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54894 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:41172 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:40008 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:19959 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:19959 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:45270 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:21160 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:49814 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:55232 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:58286 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:58286 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:58286 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:37198 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:54841 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:53100 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:35608 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47216 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47216 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:47216 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17579 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     127.0.0.1:43570 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17579 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17579 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17579 - "GET /health HTTP/1.1" 200 OK
+ingestion-service-1  | INFO:     140.82.114.6:17579 - "GET /health HTTP/1.1" 200 OK

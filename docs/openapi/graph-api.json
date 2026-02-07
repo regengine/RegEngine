@@ -1,0 +1,3500 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Graph Interface",
+        "version": "0.2.0"
+    },
+    "paths": {
+        "/health": {
+            "get": {
+                "summary": "Health",
+                "description": "Health check endpoint with Neo4j verification.",
+                "operationId": "health_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics": {
+            "get": {
+                "summary": "Metrics",
+                "operationId": "metrics_metrics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/provisions/by-request": {
+            "get": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Provisions By Request Id",
+                "description": "Return provisions that have provenance.request_id equal to the given id.\n\nQuery param: `id` (UUID string)",
+                "operationId": "provisions_by_request_id_v1_provisions_by_request_get",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/trace/forward/{tlc}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Trace Forward Endpoint",
+                "description": "Trace forward from a lot to find all downstream facilities and products.\n\nGiven a raw material Traceability Lot Code (TLC), returns all facilities\nthe lot was shipped to and any downstream products created from it.\n\nPhysics Engine Enhancement:\n- Time Arrow: Only follows paths where events are in temporal order\n- Returns time_violations if any events violate causal ordering\n- Returns risk_flags accumulated from traversed events\n\nUse case: Recall scenario - find all customers who received contaminated product.",
+                "operationId": "trace_forward_endpoint_v1_fsma_trace_forward__tlc__get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "max_depth",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 20,
+                            "minimum": 1,
+                            "description": "Maximum hops in trace",
+                            "default": 10,
+                            "title": "Max Depth"
+                        },
+                        "description": "Maximum hops in trace"
+                    },
+                    {
+                        "name": "enforce_time_arrow",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Enforce temporal ordering (Physics Engine)",
+                            "default": true,
+                            "title": "Enforce Time Arrow"
+                        },
+                        "description": "Enforce temporal ordering (Physics Engine)"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Tenant filter",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant filter"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/trace/backward/{tlc}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Trace Backward Endpoint",
+                "description": "Trace backward from a lot to find all source materials and suppliers.\n\nGiven a finished goods Traceability Lot Code (TLC), returns all raw material\nlots and source facilities that contributed to the product.\n\nUse case: Root cause analysis - trace contamination back to source.",
+                "operationId": "trace_backward_endpoint_v1_fsma_trace_backward__tlc__get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "max_depth",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 20,
+                            "minimum": 1,
+                            "description": "Maximum hops in trace",
+                            "default": 10,
+                            "title": "Max Depth"
+                        },
+                        "description": "Maximum hops in trace"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Tenant filter",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant filter"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/timeline/{tlc}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Lot Timeline Endpoint",
+                "description": "Get chronological timeline of all events for a specific lot.\n\nReturns all Critical Tracking Events (CTEs) in chronological order\nwith associated facility information.",
+                "operationId": "lot_timeline_endpoint_v1_fsma_timeline__tlc__get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Tenant filter",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant filter"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/mass-balance/{tlc}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Mass Balance Endpoint",
+                "description": "Check mass balance for all transformation events involving a lot.\n\nPhysics Engine Feature: Validates mass conservation across supply chain.\n\nRule: sum(inputs.quantity) * (1 + tolerance) >= sum(outputs.quantity)\n\n- Allows for yield loss (less output than input)\n- Flags if output exceeds input by more than tolerance (default 10%)\n- Optionally tags TraceEvent nodes with risk_flag: \"MASS_IMBALANCE\"\n\nUse case: Detect fraudulent quantity inflation or data entry errors.",
+                "operationId": "mass_balance_endpoint_v1_fsma_mass_balance__tlc__get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "tolerance",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "description": "Allowed variance (0.10 = 10%)",
+                            "default": 0.1,
+                            "title": "Tolerance"
+                        },
+                        "description": "Allowed variance (0.10 = 10%)"
+                    },
+                    {
+                        "name": "tag_imbalance",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Tag events with MASS_IMBALANCE risk flag",
+                            "default": true,
+                            "title": "Tag Imbalance"
+                        },
+                        "description": "Tag events with MASS_IMBALANCE risk flag"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Tenant filter",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant filter"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/mass-balance/event/{event_id}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Mass Balance Event Endpoint",
+                "description": "Check mass balance for a single transformation event.\n\nPhysics Engine Feature: Validates mass conservation for one event.\n\nReturns detailed breakdown of:\n- Input lots and quantities consumed\n- Output lots and quantities produced\n- Imbalance ratio and balance status",
+                "operationId": "mass_balance_event_endpoint_v1_fsma_mass_balance_event__event_id__get",
+                "parameters": [
+                    {
+                        "name": "event_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Event Id"
+                        }
+                    },
+                    {
+                        "name": "tolerance",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "description": "Allowed variance (0.10 = 10%)",
+                            "default": 0.1,
+                            "title": "Tolerance"
+                        },
+                        "description": "Allowed variance (0.10 = 10%)"
+                    },
+                    {
+                        "name": "tag_imbalance",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Tag event with MASS_IMBALANCE risk flag",
+                            "default": true,
+                            "title": "Tag Imbalance"
+                        },
+                        "description": "Tag event with MASS_IMBALANCE risk flag"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Tenant filter",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant filter"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/export/trace/{tlc}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Export Trace Csv",
+                "description": "Export traceability data as FDA-compliant CSV spreadsheet.\n\nThe CSV format is designed for submission to FDA during recall events\nand follows the sortable spreadsheet format described in FSMA 204.\n\nColumns:\n- TLC (Traceability Lot Code)\n- Product Description\n- Quantity\n- Unit of Measure\n- Event Type (CTE)\n- Event Date\n- Event Time\n- Facility Name\n- Facility GLN\n- Facility Address",
+                "operationId": "export_trace_csv_v1_fsma_export_trace__tlc__get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "direction",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^(forward|backward)$",
+                            "default": "forward",
+                            "title": "Direction"
+                        }
+                    },
+                    {
+                        "name": "max_depth",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 20,
+                            "minimum": 1,
+                            "default": 10,
+                            "title": "Max Depth"
+                        }
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/export/recall-contacts/{tlc}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Export Recall Contacts",
+                "description": "Generate Recall Contact List CSV for FDA notification.\n\nLists all downstream facilities that received the lot, suitable for\ndirect notification during a recall event.\n\nColumns:\n- Facility Name\n- GLN\n- Address\n- Facility Type\n- Date Received\n- Quantity Received",
+                "operationId": "export_recall_contacts_v1_fsma_export_recall_contacts__tlc__get",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tlc"
+                        }
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/gaps": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Compliance Gaps",
+                "description": "Find TraceEvents with missing required Key Data Elements (KDEs).\n\nReturns events that are missing critical FSMA 204 required fields,\nenabling compliance officers to prioritize data collection.",
+                "operationId": "get_compliance_gaps_v1_fsma_gaps_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/export/gaps": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Export Gaps Csv",
+                "description": "Export compliance gaps as CSV for review and remediation tracking.",
+                "operationId": "export_gaps_csv_v1_fsma_export_gaps_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/gaps/orphans": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Orphaned Lots",
+                "description": "Find 'orphan' lots that have been created/received but never shipped or consumed.\n\nThese represent potential inventory issues or broken traceability chains:\n- Product received but never used or distributed\n- Transformation outputs that were never shipped\n- Data entry errors where outbound events were not recorded\n\nFSMA 204 requires complete chain of custody - orphan lots may indicate\ncompliance gaps requiring remediation.",
+                "operationId": "get_orphaned_lots_v1_fsma_gaps_orphans_get",
+                "parameters": [
+                    {
+                        "name": "days_stagnant",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 365,
+                            "minimum": 1,
+                            "description": "Days without outbound activity",
+                            "default": 30,
+                            "title": "Days Stagnant"
+                        },
+                        "description": "Days without outbound activity"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/metrics/quality": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Data Quality Metrics",
+                "description": "Get data quality drift metrics across all event types.\n\nMonitors KDE completeness rates to detect data quality degradation:\n- Missing date rates\n- Missing lot linkage rates\n- Low confidence extraction rates\n- Average confidence scores\n\nUse this to identify:\n- Supplier format changes requiring extractor updates\n- ML model drift requiring retraining\n- Data entry quality issues requiring training",
+                "operationId": "get_data_quality_metrics_v1_fsma_metrics_quality_get",
+                "parameters": [
+                    {
+                        "name": "confidence_threshold",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "number",
+                            "maximum": 1.0,
+                            "minimum": 0.0,
+                            "description": "Low confidence threshold",
+                            "default": 0.85,
+                            "title": "Confidence Threshold"
+                        },
+                        "description": "Low confidence threshold"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/health": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Fsma Health",
+                "description": "FSMA module health check with metrics summary.",
+                "operationId": "fsma_health_v1_fsma_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/metrics": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Fsma Metrics Endpoint",
+                "description": "Prometheus metrics endpoint for FSMA 204 compliance monitoring.\n\nExposes metrics including:\n- Trace query latency (fsma_trace_query_seconds)\n- Recall SLA compliance (fsma_recall_sla_seconds)\n- Data quality gauges (fsma_gaps_total, fsma_orphans_total)\n- KDE completeness (fsma_kde_completeness_rate)\n\nReturns: Prometheus text format metrics.",
+                "operationId": "fsma_metrics_endpoint_v1_fsma_metrics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/dashboard": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Fsma Dashboard",
+                "description": "FSMA compliance dashboard with aggregated health metrics.\n\nReturns a JSON summary of all FSMA compliance metrics suitable\nfor dashboard display.",
+                "operationId": "fsma_dashboard_v1_fsma_dashboard_get",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/audit/{target_id}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Audit Trail",
+                "description": "Get audit trail for a specific target (lot, event, facility).\n\nReturns all audit entries for the specified target ID, providing\na complete history of extractions, modifications, and approvals.\n\nPer FSMA 204 Section 7, every write to the Graph has a corresponding\nAudit Log entry with:\n- event_id: UUID\n- actor: User ID or \"System/AI\"\n- action: \"EXTRACTED\", \"MODIFIED\", \"APPROVED\"\n- diff: Previous Value vs. New Value\n- evidence_link: S3 URI to source PDF",
+                "operationId": "get_audit_trail_v1_fsma_audit__target_id__get",
+                "parameters": [
+                    {
+                        "name": "target_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Target Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/audit": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Full Audit Log",
+                "description": "Get full audit log with optional filtering.\n\nSupports FDA audit readiness by providing complete audit trail\nwith chain integrity verification.",
+                "operationId": "get_full_audit_log_v1_fsma_audit_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by tenant ID",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Filter by tenant ID"
+                    },
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by action type",
+                            "title": "Action"
+                        },
+                        "description": "Filter by action type"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/audit/verify": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Verify Audit Integrity",
+                "description": "Verify the integrity of the entire audit chain.\n\nChecks:\n- Checksum validity for each entry\n- Chain linkage between entries\n- Detection of any tampering\n\nReturns integrity status for FDA audit readiness.",
+                "operationId": "verify_audit_integrity_v1_fsma_audit_verify_get",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/drift/status": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Drift Monitoring Status",
+                "description": "Get current drift monitoring status.\n\nReturns summary of:\n- Overall health status (HEALTHY, WARNING, CRITICAL)\n- Active alert counts by severity\n- Known supplier count\n- Total snapshots recorded\n\nPer FSMA 204 Section 8.1: Monitor for supplier format changes.",
+                "operationId": "drift_monitoring_status_v1_fsma_drift_status_get",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/drift/analyze": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Analyze Drift",
+                "description": "Analyze drift by comparing recent data to historical baseline.\n\nDetects:\n- KDE completeness rate drops\n- Extraction confidence degradation\n- Supplier format changes\n\nReturns drift analysis result with any generated alerts.",
+                "operationId": "analyze_drift_v1_fsma_drift_analyze_get",
+                "parameters": [
+                    {
+                        "name": "window_hours",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 168,
+                            "minimum": 1,
+                            "description": "Analysis window in hours",
+                            "default": 24,
+                            "title": "Window Hours"
+                        },
+                        "description": "Analysis window in hours"
+                    },
+                    {
+                        "name": "supplier_gln",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by supplier GLN",
+                            "title": "Supplier Gln"
+                        },
+                        "description": "Filter by supplier GLN"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/drift/alerts": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Drift Alerts",
+                "description": "Get drift alerts with optional filtering.\n\nReturns list of alerts sorted by detection time (most recent first).",
+                "operationId": "get_drift_alerts_v1_fsma_drift_alerts_get",
+                "parameters": [
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED",
+                            "title": "Status"
+                        },
+                        "description": "Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"
+                    },
+                    {
+                        "name": "severity",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by severity: INFO, WARNING, CRITICAL",
+                            "title": "Severity"
+                        },
+                        "description": "Filter by severity: INFO, WARNING, CRITICAL"
+                    },
+                    {
+                        "name": "supplier_gln",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by supplier GLN",
+                            "title": "Supplier Gln"
+                        },
+                        "description": "Filter by supplier GLN"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1,
+                            "description": "Maximum alerts to return",
+                            "default": 100,
+                            "title": "Limit"
+                        },
+                        "description": "Maximum alerts to return"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/drift/suppliers": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Supplier Health",
+                "description": "Get health status per supplier.\n\nReturns list of suppliers with:\n- Latest completeness rate\n- Latest confidence score\n- Number of active alerts\n- Last activity timestamp\n\nSorted by alert count (most problematic suppliers first).",
+                "operationId": "get_supplier_health_v1_fsma_drift_suppliers_get",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/drift/alerts/{alert_id}/acknowledge": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Acknowledge Drift Alert",
+                "description": "Acknowledge a drift alert.",
+                "operationId": "acknowledge_drift_alert_v1_fsma_drift_alerts__alert_id__acknowledge_post",
+                "parameters": [
+                    {
+                        "name": "alert_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Alert Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/drift/alerts/{alert_id}/resolve": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Resolve Drift Alert",
+                "description": "Resolve a drift alert.",
+                "operationId": "resolve_drift_alert_v1_fsma_drift_alerts__alert_id__resolve_post",
+                "parameters": [
+                    {
+                        "name": "alert_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Alert Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/validate/tlc": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Validate Tlc Endpoint",
+                "description": "Validate a Traceability Lot Code (TLC).\n\nFSMA 204 allows flexible TLC formats. This validates:\n- Minimum/maximum length\n- No dangerous characters (security)\n- Pattern matching (optional in strict mode)\n\nReturns validation result with any warnings or errors.",
+                "operationId": "validate_tlc_endpoint_v1_fsma_validate_tlc_post",
+                "parameters": [
+                    {
+                        "name": "tlc",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "Traceability Lot Code to validate",
+                            "title": "Tlc"
+                        },
+                        "description": "Traceability Lot Code to validate"
+                    },
+                    {
+                        "name": "strict",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Apply strict pattern matching",
+                            "default": false,
+                            "title": "Strict"
+                        },
+                        "description": "Apply strict pattern matching"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/validate/gtin": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Validate Gtin Endpoint",
+                "description": "Validate a Global Trade Item Number (GTIN).\n\nValidates:\n- Correct length (8, 12, 13, or 14 digits)\n- Valid GS1 check digit\n\nReturns validation result with any errors.",
+                "operationId": "validate_gtin_endpoint_v1_fsma_validate_gtin_post",
+                "parameters": [
+                    {
+                        "name": "gtin",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "GTIN to validate (8, 12, 13, or 14 digits)",
+                            "title": "Gtin"
+                        },
+                        "description": "GTIN to validate (8, 12, 13, or 14 digits)"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/validate/gln": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Validate Gln Endpoint",
+                "description": "Validate a Global Location Number (GLN).\n\nValidates:\n- Exactly 13 digits\n- Valid GS1 check digit\n\nReturns validation result with any errors.",
+                "operationId": "validate_gln_endpoint_v1_fsma_validate_gln_post",
+                "parameters": [
+                    {
+                        "name": "gln",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "GLN to validate (13 digits)",
+                            "title": "Gln"
+                        },
+                        "description": "GLN to validate (13 digits)"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/validate/identifier": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Validate Identifier Endpoint",
+                "description": "Validate any identifier with optional auto-detection.\n\nIf identifier_type is not provided, the system will attempt to\nauto-detect based on the format (numeric vs alphanumeric, length).\n\nSupported types:\n- TLC: Traceability Lot Code (flexible alphanumeric)\n- GTIN: Global Trade Item Number (8, 12, 13, or 14 digits)\n- GLN: Global Location Number (13 digits)\n- SSCC: Serial Shipping Container Code (18 digits)",
+                "operationId": "validate_identifier_endpoint_v1_fsma_validate_identifier_post",
+                "parameters": [
+                    {
+                        "name": "value",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "Identifier value to validate",
+                            "title": "Value"
+                        },
+                        "description": "Identifier value to validate"
+                    },
+                    {
+                        "name": "identifier_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Expected type: TLC, GTIN, GLN, SSCC (auto-detect if not provided)",
+                            "title": "Identifier Type"
+                        },
+                        "description": "Expected type: TLC, GTIN, GLN, SSCC (auto-detect if not provided)"
+                    },
+                    {
+                        "name": "strict",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Apply strict validation",
+                            "default": false,
+                            "title": "Strict"
+                        },
+                        "description": "Apply strict validation"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/validate/batch": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Validate Batch Endpoint",
+                "description": "Validate multiple identifiers in a single request.\n\nUseful for validating all identifiers in a document or shipment\nbefore ingestion into the traceability system.\n\nReturns validation results for each identifier with summary statistics.",
+                "operationId": "validate_batch_endpoint_v1_fsma_validate_batch_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BatchValidationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/plan/generate": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Generate Traceability Plan",
+                "description": "Generate an FSMA 204 Traceability Plan.\n\nCreates a complete traceability plan document with:\n- Receiving procedures\n- Shipping procedures\n- Transformation procedures\n- TLC assignment procedures\n- 24-hour recall response procedures\n- Training requirements\n\nReturns plan in JSON or Markdown format.",
+                "operationId": "generate_traceability_plan_v1_fsma_plan_generate_post",
+                "parameters": [
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^(json|markdown)$",
+                            "default": "json",
+                            "title": "Format"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TraceabilityPlanRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/plan/template": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Plan Template",
+                "description": "Get a template/example traceability plan request.\n\nUse this to understand the structure needed for plan generation.",
+                "operationId": "get_plan_template_v1_fsma_plan_template_get",
+                "parameters": [
+                    {
+                        "name": "firm_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Type of firm",
+                            "default": "manufacturer",
+                            "title": "Firm Type"
+                        },
+                        "description": "Type of firm"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/drill": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Create Recall Drill",
+                "description": "Execute a mock recall drill.\n\nSimulates an FDA recall request and measures response time against\nthe 24-hour SLA mandate. Tracks all drill results for audit purposes.\n\nDrill Types:\n- forward_trace: From raw material to consumer\n- backward_trace: From consumer to source\n- full_trace: Both directions\n- targeted: Specific facility/lot\n- mass_balance: Quantity reconciliation\n\nReturns drill results with SLA metrics.",
+                "operationId": "create_recall_drill_v1_fsma_recall_drill_post",
+                "parameters": [
+                    {
+                        "name": "drill_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Type: forward_trace, backward_trace, full_trace, targeted, mass_balance",
+                            "default": "full_trace",
+                            "title": "Drill Type"
+                        },
+                        "description": "Type: forward_trace, backward_trace, full_trace, targeted, mass_balance"
+                    },
+                    {
+                        "name": "severity",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "FDA severity: class_i, class_ii, class_iii",
+                            "default": "class_ii",
+                            "title": "Severity"
+                        },
+                        "description": "FDA severity: class_i, class_ii, class_iii"
+                    },
+                    {
+                        "name": "target_lot",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Target lot code for trace",
+                            "title": "Target Lot"
+                        },
+                        "description": "Target lot code for trace"
+                    },
+                    {
+                        "name": "target_gtin",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Target product GTIN",
+                            "title": "Target Gtin"
+                        },
+                        "description": "Target product GTIN"
+                    },
+                    {
+                        "name": "target_facility_gln",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Target facility GLN",
+                            "title": "Target Facility Gln"
+                        },
+                        "description": "Target facility GLN"
+                    },
+                    {
+                        "name": "reason",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Reason for drill",
+                            "default": "manual_drill",
+                            "title": "Reason"
+                        },
+                        "description": "Reason for drill"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/history": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Recall Drill History",
+                "description": "Get recall drill history.\n\nReturns list of past mock recall drills with results and SLA metrics.\nUse for audit preparation and trend analysis.",
+                "operationId": "get_recall_drill_history_v1_fsma_recall_history_get",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1,
+                            "description": "Maximum results",
+                            "default": 20,
+                            "title": "Limit"
+                        },
+                        "description": "Maximum results"
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by status",
+                            "title": "Status"
+                        },
+                        "description": "Filter by status"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/drill/{drill_id}": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Recall Drill",
+                "description": "Get details of a specific recall drill.\n\nReturns full drill information including affected facilities,\ntrace metrics, and SLA compliance status.",
+                "operationId": "get_recall_drill_v1_fsma_recall_drill__drill_id__get",
+                "parameters": [
+                    {
+                        "name": "drill_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Drill Id"
+                        }
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Cancel Recall Drill",
+                "description": "Cancel a pending or in-progress recall drill.",
+                "operationId": "cancel_recall_drill_v1_fsma_recall_drill__drill_id__delete",
+                "parameters": [
+                    {
+                        "name": "drill_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Drill Id"
+                        }
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/readiness": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Recall Readiness Report",
+                "description": "Get FDA recall readiness report.\n\nComprehensive assessment of recall preparedness including:\n- SLA compliance rate\n- Drill frequency vs recommendations\n- Data quality metrics\n- Actionable recommendations\n\nUse for FDA audit preparation and compliance documentation.",
+                "operationId": "get_recall_readiness_report_v1_fsma_recall_readiness_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/sla": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Get Recall Sla Metrics",
+                "description": "Get SLA compliance metrics.\n\nReturns metrics on 24-hour recall response mandate compliance.",
+                "operationId": "get_recall_sla_metrics_v1_fsma_recall_sla_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/schedule": {
+            "post": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Create Recall Schedule",
+                "description": "Create a recurring recall drill schedule.\n\nPer FDA best practices, quarterly drills (90 days) are recommended.\n\nTarget Strategies:\n- random: System selects random active lot\n- rotating: Cycles through facility types\n- specific: Uses predefined target list",
+                "operationId": "create_recall_schedule_v1_fsma_recall_schedule_post",
+                "parameters": [
+                    {
+                        "name": "drill_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Type of drill to schedule",
+                            "default": "full_trace",
+                            "title": "Drill Type"
+                        },
+                        "description": "Type of drill to schedule"
+                    },
+                    {
+                        "name": "frequency_days",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 365,
+                            "minimum": 7,
+                            "description": "Days between drills",
+                            "default": 90,
+                            "title": "Frequency Days"
+                        },
+                        "description": "Days between drills"
+                    },
+                    {
+                        "name": "severity",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Simulated severity",
+                            "default": "class_ii",
+                            "title": "Severity"
+                        },
+                        "description": "Simulated severity"
+                    },
+                    {
+                        "name": "target_strategy",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Target selection: random, rotating, specific",
+                            "default": "random",
+                            "title": "Target Strategy"
+                        },
+                        "description": "Target selection: random, rotating, specific"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/schedules": {
+            "get": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "List Recall Schedules",
+                "description": "List all recall drill schedules.",
+                "operationId": "list_recall_schedules_v1_fsma_recall_schedules_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/fsma/recall/schedule/{schedule_id}": {
+            "patch": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Update Recall Schedule",
+                "description": "Update a recall drill schedule.",
+                "operationId": "update_recall_schedule_v1_fsma_recall_schedule__schedule_id__patch",
+                "parameters": [
+                    {
+                        "name": "schedule_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Schedule Id"
+                        }
+                    },
+                    {
+                        "name": "enabled",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "boolean"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Enable/disable schedule",
+                            "title": "Enabled"
+                        },
+                        "description": "Enable/disable schedule"
+                    },
+                    {
+                        "name": "frequency_days",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "integer",
+                                    "maximum": 365,
+                                    "minimum": 7
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Update frequency",
+                            "title": "Frequency Days"
+                        },
+                        "description": "Update frequency"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "FSMA 204"
+                ],
+                "summary": "Delete Recall Schedule",
+                "description": "Delete a recall drill schedule.",
+                "operationId": "delete_recall_schedule_v1_fsma_recall_schedule__schedule_id__delete",
+                "parameters": [
+                    {
+                        "name": "schedule_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Schedule Id"
+                        }
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Tenant identifier",
+                            "default": "default",
+                            "title": "Tenant Id"
+                        },
+                        "description": "Tenant identifier"
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/labels/health": {
+            "get": {
+                "tags": [
+                    "Traceability Labels"
+                ],
+                "summary": "Health Check",
+                "description": "Preserved: Monitoring endpoint.",
+                "operationId": "health_check_v1_labels_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/labels/batch/init": {
+            "post": {
+                "tags": [
+                    "Traceability Labels"
+                ],
+                "summary": "Initialize Label Batch",
+                "operationId": "initialize_label_batch_v1_labels_batch_init_post",
+                "parameters": [
+                    {
+                        "name": "X-Tenant-ID",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "X-Tenant-Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LabelBatchInitRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LabelBatchInitResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "BatchValidationItem": {
+                "properties": {
+                    "value": {
+                        "type": "string",
+                        "title": "Value"
+                    },
+                    "identifier_type": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Identifier Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "value"
+                ],
+                "title": "BatchValidationItem"
+            },
+            "BatchValidationRequest": {
+                "properties": {
+                    "identifiers": {
+                        "items": {
+                            "$ref": "#/components/schemas/BatchValidationItem"
+                        },
+                        "type": "array",
+                        "title": "Identifiers"
+                    },
+                    "strict": {
+                        "type": "boolean",
+                        "title": "Strict",
+                        "default": false
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "identifiers"
+                ],
+                "title": "BatchValidationRequest"
+            },
+            "CommodityRequest": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "category": {
+                        "type": "string",
+                        "title": "Category"
+                    },
+                    "cte_types": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Cte Types",
+                        "default": []
+                    },
+                    "tlc_assignment_method": {
+                        "type": "string",
+                        "title": "Tlc Assignment Method",
+                        "default": ""
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "category"
+                ],
+                "title": "CommodityRequest"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "LabelBatchInitRequest": {
+                "properties": {
+                    "packer_gln": {
+                        "type": "string",
+                        "title": "Packer Gln"
+                    },
+                    "product": {
+                        "$ref": "#/components/schemas/ProductInfo"
+                    },
+                    "traceability": {
+                        "$ref": "#/components/schemas/TraceabilityInfo"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "maximum": 10000.0,
+                        "exclusiveMinimum": 0.0,
+                        "title": "Quantity"
+                    },
+                    "unit_of_measure": {
+                        "$ref": "#/components/schemas/UnitOfMeasure",
+                        "default": "EA"
+                    },
+                    "packaging_level": {
+                        "$ref": "#/components/schemas/PackagingLevel",
+                        "default": "item"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "packer_gln",
+                    "product",
+                    "traceability",
+                    "quantity"
+                ],
+                "title": "LabelBatchInitRequest"
+            },
+            "LabelBatchInitResponse": {
+                "properties": {
+                    "batch_id": {
+                        "type": "string",
+                        "title": "Batch Id"
+                    },
+                    "tlc": {
+                        "type": "string",
+                        "title": "Tlc"
+                    },
+                    "reserved_range": {
+                        "additionalProperties": {
+                            "type": "integer"
+                        },
+                        "type": "object",
+                        "title": "Reserved Range"
+                    },
+                    "labels": {
+                        "items": {
+                            "$ref": "#/components/schemas/LabelData"
+                        },
+                        "type": "array",
+                        "title": "Labels"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "batch_id",
+                    "tlc",
+                    "reserved_range",
+                    "labels"
+                ],
+                "title": "LabelBatchInitResponse"
+            },
+            "LabelData": {
+                "properties": {
+                    "serial": {
+                        "type": "string",
+                        "title": "Serial"
+                    },
+                    "qr_payload": {
+                        "type": "string",
+                        "title": "Qr Payload"
+                    },
+                    "zpl_code": {
+                        "type": "string",
+                        "title": "Zpl Code"
+                    },
+                    "packaging_level": {
+                        "type": "string",
+                        "title": "Packaging Level"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "serial",
+                    "qr_payload",
+                    "zpl_code",
+                    "packaging_level"
+                ],
+                "title": "LabelData"
+            },
+            "PackagingLevel": {
+                "type": "string",
+                "enum": [
+                    "item",
+                    "case",
+                    "pallet"
+                ],
+                "title": "PackagingLevel"
+            },
+            "ProductInfo": {
+                "properties": {
+                    "gtin": {
+                        "type": "string",
+                        "maxLength": 14,
+                        "minLength": 14,
+                        "title": "Gtin",
+                        "description": "GS1 GTIN-14"
+                    },
+                    "description": {
+                        "type": "string",
+                        "title": "Description"
+                    },
+                    "plu": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Plu"
+                    },
+                    "expected_units": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0.0,
+                        "title": "Expected Units"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "gtin",
+                    "description",
+                    "expected_units"
+                ],
+                "title": "ProductInfo"
+            },
+            "RecordLocationRequest": {
+                "properties": {
+                    "location_type": {
+                        "type": "string",
+                        "title": "Location Type"
+                    },
+                    "system_name": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "System Name"
+                    },
+                    "physical_address": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Physical Address"
+                    },
+                    "backup_procedure": {
+                        "type": "string",
+                        "title": "Backup Procedure",
+                        "default": ""
+                    },
+                    "retention_period": {
+                        "type": "string",
+                        "title": "Retention Period",
+                        "default": "2_years"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "location_type"
+                ],
+                "title": "RecordLocationRequest"
+            },
+            "TraceabilityInfo": {
+                "properties": {
+                    "lot_number": {
+                        "type": "string",
+                        "title": "Lot Number"
+                    },
+                    "pack_date": {
+                        "type": "string",
+                        "title": "Pack Date"
+                    },
+                    "grower_gln": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Grower Gln"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "lot_number",
+                    "pack_date"
+                ],
+                "title": "TraceabilityInfo"
+            },
+            "TraceabilityPlanRequest": {
+                "properties": {
+                    "firm_name": {
+                        "type": "string",
+                        "title": "Firm Name"
+                    },
+                    "firm_address": {
+                        "type": "string",
+                        "title": "Firm Address"
+                    },
+                    "firm_type": {
+                        "type": "string",
+                        "title": "Firm Type"
+                    },
+                    "gln": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Gln"
+                    },
+                    "fda_registration": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Fda Registration"
+                    },
+                    "contact_name": {
+                        "type": "string",
+                        "title": "Contact Name",
+                        "default": ""
+                    },
+                    "contact_email": {
+                        "type": "string",
+                        "title": "Contact Email",
+                        "default": ""
+                    },
+                    "contact_phone": {
+                        "type": "string",
+                        "title": "Contact Phone",
+                        "default": ""
+                    },
+                    "commodities": {
+                        "items": {
+                            "$ref": "#/components/schemas/CommodityRequest"
+                        },
+                        "type": "array",
+                        "title": "Commodities",
+                        "default": []
+                    },
+                    "record_locations": {
+                        "items": {
+                            "$ref": "#/components/schemas/RecordLocationRequest"
+                        },
+                        "type": "array",
+                        "title": "Record Locations",
+                        "default": []
+                    },
+                    "tlc_format": {
+                        "type": "string",
+                        "title": "Tlc Format",
+                        "default": ""
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "firm_name",
+                    "firm_address",
+                    "firm_type"
+                ],
+                "title": "TraceabilityPlanRequest"
+            },
+            "UnitOfMeasure": {
+                "type": "string",
+                "enum": [
+                    "EA",
+                    "LBS",
+                    "CASE"
+                ],
+                "title": "UnitOfMeasure"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    }
+}

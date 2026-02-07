@@ -1,0 +1,37 @@
+{
+    "AuthorityDocuments": {
+        "description": "Laws, regulations and standards that define requirements",
+        "sourceType": "Government statute/regulation or Standards body publication",
+        "accessMethod": "Public (e.g., published law or regulation); membership or purchase required for some standards",
+        "parsingApproach": "Text extraction from HTML/PDF (preserve structure, sections)",
+        "priorityWeight": 5
+    },
+    "InterpretationDocuments": {
+        "description": "Guidance and interpretative materials clarifying requirements",
+        "sourceType": "Regulatory agency guidance, policy memoranda; industry guidelines/white papers",
+        "accessMethod": "Public if issued by authorities; sometimes member-only or internal for industry analyses",
+        "parsingApproach": "Text extraction with reference linking (connect to relevant Authority docs)",
+        "priorityWeight": 4
+    },
+    "ImplementationArtifacts": {
+        "description": "Internal policies, procedures, and controls implementing compliance",
+        "sourceType": "Company SOPs, compliance manuals, process documents, training materials",
+        "accessMethod": "Confidential (internal use); shared with regulators or partners under NDA if required",
+        "parsingApproach": "Unstructured text or OCR if scanned (often not standardized format)",
+        "priorityWeight": 3
+    },
+    "VerificationEvidence": {
+        "description": "Records and reports evidencing compliance in practice (audits, inspections, tests)",
+        "sourceType": "Audit reports, inspection checklists, test results, certifications from third parties or regulators",
+        "accessMethod": "Internal or regulator-issued (not broadly public unless via FOIA or summary data releases)",
+        "parsingApproach": "OCR for scanned reports; structured data extraction for forms and quantitative results",
+        "priorityWeight": 4
+    },
+    "EnforcementSignals": {
+        "description": "Indicators and records of enforcement actions or compliance failures",
+        "sourceType": "Regulatory enforcement databases, legal notices, penalty orders, incident reports/press releases",
+        "accessMethod": "Public in many cases (regulator press releases, court records); some internal incident reports are confidential",
+        "parsingApproach": "Scrape text from web sources or legal docs; use NLP to identify entities (violations, penalties, dates)",
+        "priorityWeight": 5
+    }
+}

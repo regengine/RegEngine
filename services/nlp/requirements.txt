@@ -1,0 +1,15 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+structlog==23.2.0
+python-json-logger==2.0.7
+spacy==3.7.2
+requests==2.31.0
+pytest==7.4.3
+httpx==0.25.2
+regex>=2023.10.3
+jsonschema>=4.17.0
+kafka-python>=2.0.2
+prometheus_client>=0.17.0
+boto3>=1.28.0

@@ -1,0 +1,492 @@
+# Production Compliance OS — Task Templates
+# Version: 1.0.0
+# 
+# Defines reusable task templates referenced by production_compliance.yaml rules
+
+metadata:
+  version: "1.0.0"
+  rule_pack_id: production_ca_la
+
+# ==============================================================================
+# PERMIT TASKS
+# ==============================================================================
+
+task_templates:
+
+  # --- Permit Related ---
+  
+  filmla_permit_packet:
+    id: filmla_permit_packet
+    title: "FilmLA Permit Application"
+    description: |
+      Complete FilmLA permit application for filming on public rights-of-way
+      or other permitted locations in Los Angeles.
+      
+      Steps:
+      1. Create account at filmla.com
+      2. Submit project details and location information
+      3. Upload Certificate of Insurance (COI)
+      4. Pay permit fees
+      5. Await approval (typically 5-7 business days)
+    category: permits
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 14
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - permit_approved
+      - coi
+    checklist:
+      - item: "Create/login to FilmLA account"
+        required: true
+      - item: "Enter project details"
+        required: true
+      - item: "Add all filming locations"
+        required: true
+      - item: "Upload COI naming FilmLA as additional insured"
+        required: true
+      - item: "Submit application"
+        required: true
+      - item: "Pay permit fees"
+        required: true
+      - item: "Upload approved permit"
+        required: true
+
+  studio_notification:
+    id: studio_notification
+    title: "FilmLA Studio Notification"
+    description: "Submit simplified notification for filming at certified studio"
+    category: permits
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 3
+    is_blocking: false
+    requires_evidence: false
+
+  residential_filming_checklist:
+    id: residential_filming_checklist
+    title: "Residential Filming Preparation"
+    description: |
+      Complete requirements for filming at residential locations.
+    category: permits
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 7
+    is_blocking: false
+    checklist:
+      - item: "Confirm parking plan"
+        required: true
+      - item: "Document noise mitigation measures"
+        required: true
+      - item: "Plan for equipment staging"
+        required: false
+      - item: "Arrange security if needed"
+        required: false
+
+  neighbor_notification:
+    id: neighbor_notification
+    title: "Neighbor Notification (72-hour)"
+    description: "Notify neighbors within 500 feet at least 72 hours before filming"
+    category: permits
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 3
+    is_blocking: false
+    checklist:
+      - item: "Prepare notification letter"
+        required: true
+      - item: "Distribute to all addresses within 500 feet"
+        required: true
+      - item: "Include production contact information"
+        required: true
+
+  county_permit_review:
+    id: county_permit_review
+    title: "LA County Permit Requirements Review"
+    description: "Determine if LA County permit is required for unincorporated areas"
+    category: permits
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 14
+    is_blocking: false
+
+  # ==============================================================================
+  # CLASSIFICATION & ONBOARDING TASKS
+  # ==============================================================================
+
+  classification_memo:
+    id: classification_memo
+    title: "Worker Classification Analysis (AB5)"
+    description: |
+      Document the classification analysis for independent contractor engagements
+      under California AB5 and the ABC test.
+      
+      The ABC test requires ALL of the following:
+      A) Worker is free from control and direction
+      B) Worker performs work outside usual course of business
+      C) Worker is engaged in an independently established trade/occupation
+      
+      Entertainment industry has specific exemptions - document basis.
+    category: classification
+    default_assigned_role: pcos_legal_admin
+    default_due_days: 0
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - classification_memo_signed
+    checklist:
+      - item: "Analyze ABC test factor A - control"
+        required: true
+      - item: "Analyze ABC test factor B - usual course"
+        required: true
+      - item: "Analyze ABC test factor C - independent trade"
+        required: true
+      - item: "Document any applicable exemption"
+        required: true
+      - item: "Have worker acknowledge classification"
+        required: true
+      - item: "Upload signed classification memo"
+        required: true
+
+  vendor_onboarding:
+    id: vendor_onboarding
+    title: "Contractor Document Collection"
+    description: "Collect required documents from independent contractor"
+    category: onboarding
+    default_assigned_role: pcos_production_admin
+    default_due_days: 0
+    is_blocking: false
+    requires_evidence: true
+    required_evidence_types:
+      - w9
+    checklist:
+      - item: "Collect completed W-9"
+        required: true
+      - item: "Verify W-9 information"
+        required: true
+      - item: "Request COI if applicable"
+        required: false
+      - item: "Verify contractor business license if applicable"
+        required: false
+
+  loan_out_verification:
+    id: loan_out_verification
+    title: "Loan-Out Corporation Verification"
+    description: "Verify loan-out corporation status and documentation"
+    category: onboarding
+    default_assigned_role: pcos_production_admin
+    default_due_days: 0
+    is_blocking: false
+    requires_evidence: true
+    required_evidence_types:
+      - vendor_coi
+    checklist:
+      - item: "Verify corporate status with CA SOS"
+        required: true
+      - item: "Collect completed W-9 in corporate name"
+        required: true
+      - item: "Collect workers' comp waiver if sole shareholder"
+        required: false
+      - item: "Collect COI from loan-out"
+        required: false
+
+  employee_onboarding:
+    id: employee_onboarding
+    title: "Employee Onboarding Documents"
+    description: |
+      Complete required documentation for new employee hires.
+      I-9 Section 2 must be completed within 3 business days of hire.
+    category: onboarding
+    default_assigned_role: pcos_payroll_admin
+    default_due_days: 3
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - i9
+      - w4
+    checklist:
+      - item: "Complete I-9 Section 1 (employee)"
+        required: true
+      - item: "Complete I-9 Section 2 (employer verification)"
+        required: true
+      - item: "Complete W-4 federal withholding"
+        required: true
+      - item: "Complete DE-4 California withholding"
+        required: true
+      - item: "Provide required workplace posters/notices"
+        required: true
+
+  # ==============================================================================
+  # SAFETY & COMPLIANCE TASKS
+  # ==============================================================================
+
+  workers_comp_verification:
+    id: workers_comp_verification
+    title: "Workers' Compensation Verification"
+    description: "Verify active workers' compensation insurance coverage"
+    category: employment
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 0
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - workers_comp_policy
+    checklist:
+      - item: "Obtain workers' comp policy declaration page"
+        required: true
+      - item: "Verify coverage effective dates"
+        required: true
+      - item: "Confirm policy covers all employees"
+        required: true
+      - item: "Upload policy evidence"
+        required: true
+
+  safety_policy_iipp:
+    id: safety_policy_iipp
+    title: "IIPP - Injury & Illness Prevention Program"
+    description: |
+      Create or upload written Injury and Illness Prevention Program.
+      Required for all California employers.
+    category: safety
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 30
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - iipp_policy
+    checklist:
+      - item: "Identify responsible person for program"
+        required: true
+      - item: "Document hazard identification procedures"
+        required: true
+      - item: "Document employee communication methods"
+        required: true
+      - item: "Document accident investigation procedures"
+        required: true
+      - item: "Document training program"
+        required: true
+      - item: "Upload signed IIPP document"
+        required: true
+
+  safety_policy_wvpp:
+    id: safety_policy_wvpp
+    title: "WVPP - Workplace Violence Prevention Plan"
+    description: |
+      Create or upload Workplace Violence Prevention Plan.
+      Required for California employers effective July 2024 (SB 553).
+    category: safety
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 30
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - wvpp_policy
+    checklist:
+      - item: "Conduct workplace violence hazard assessment"
+        required: true
+      - item: "Document procedures to respond to reports"
+        required: true
+      - item: "Document emergency response procedures"
+        required: true
+      - item: "Plan employee training"
+        required: true
+      - item: "Upload signed WVPP document"
+        required: true
+
+  calsavers_verification:
+    id: calsavers_verification
+    title: "CalSavers Compliance Verification"
+    description: "Verify registration with CalSavers or alternative retirement plan"
+    category: employment
+    default_assigned_role: pcos_payroll_admin
+    default_due_days: 90
+    is_blocking: false
+    checklist:
+      - item: "Determine if CalSavers applies (5+ employees)"
+        required: true
+      - item: "Register at calsavers.com OR document alternative plan"
+        required: true
+      - item: "Enroll eligible employees if using CalSavers"
+        required: false
+
+  edd_registration:
+    id: edd_registration
+    title: "CA EDD Employer Registration"
+    description: "Register with California EDD for payroll tax purposes"
+    category: employment
+    default_assigned_role: pcos_payroll_admin
+    default_due_days: 20
+    is_blocking: true
+    checklist:
+      - item: "Complete EDD e-Services registration"
+        required: true
+      - item: "Obtain Employer Account Number"
+        required: true
+      - item: "Set up payroll tax deposits"
+        required: true
+
+  new_hire_report:
+    id: new_hire_report
+    title: "New Hire Report to EDD"
+    description: "Submit new hire report within 20 days of start"
+    category: employment
+    default_assigned_role: pcos_payroll_admin
+    default_due_days: 20
+    is_blocking: false
+    checklist:
+      - item: "Complete DE 34 New Employee Report"
+        required: true
+      - item: "Submit via EDD e-Services"
+        required: true
+
+  # ==============================================================================
+  # MINOR PERFORMER TASKS
+  # ==============================================================================
+
+  minor_permit_verification:
+    id: minor_permit_verification
+    title: "Minor Entertainment Work Permit Verification"
+    description: "Verify valid entertainment work permit for minor performers"
+    category: minors
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 7
+    is_blocking: true
+    requires_evidence: true
+    required_evidence_types:
+      - minor_work_permit
+    checklist:
+      - item: "Request copy of entertainment work permit"
+        required: true
+      - item: "Verify permit is current and not expired"
+        required: true
+      - item: "Confirm permit covers work dates"
+        required: true
+      - item: "Upload permit to evidence"
+        required: true
+
+  studio_teacher_confirmation:
+    id: studio_teacher_confirmation
+    title: "Studio Teacher Confirmation"
+    description: "Confirm on-set studio teacher/welfare worker for minor performers"
+    category: minors
+    default_assigned_role: pcos_production_admin
+    default_due_before_shoot_days: 3
+    is_blocking: true
+    checklist:
+      - item: "Identify and engage qualified studio teacher"
+        required: true
+      - item: "Verify studio teacher credentials"
+        required: true
+      - item: "Confirm availability for all minor shoot days"
+        required: true
+      - item: "Communicate work hours limits to AD"
+        required: true
+
+  coogan_account_verification:
+    id: coogan_account_verification
+    title: "Coogan Trust Account Verification"
+    description: "Verify minor performer has blocked Coogan trust account"
+    category: minors
+    default_assigned_role: pcos_payroll_admin
+    default_due_days: 0
+    is_blocking: false
+    checklist:
+      - item: "Request Coogan account information from parent/guardian"
+        required: true
+      - item: "Verify account is proper blocked trust"
+        required: true
+      - item: "Set up payroll to deposit 15% to trust"
+        required: true
+
+  # ==============================================================================
+  # REGISTRATION TASKS
+  # ==============================================================================
+
+  btrc_registration:
+    id: btrc_registration
+    title: "LA Business Tax Registration"
+    description: "Register for LA City Business Tax Registration Certificate"
+    category: registration
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 30
+    is_blocking: true
+    checklist:
+      - item: "Complete registration at latax.lacity.org"
+        required: true
+      - item: "Obtain BTRC number"
+        required: true
+      - item: "Upload certificate"
+        required: true
+
+  sos_statement_reminder:
+    id: sos_statement_reminder
+    title: "File Statement of Information"
+    description: "Annual/biennial Statement of Information filing with CA SOS"
+    category: registration
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 0
+    is_blocking: false
+    recurring: true
+    recurrence:
+      type: annual
+    checklist:
+      - item: "File SI-100/SI-200/SI-550 at bizfile.sos.ca.gov"
+        required: true
+      - item: "Pay filing fee"
+        required: true
+
+  home_occupation_checklist:
+    id: home_occupation_checklist
+    title: "Home Occupation Compliance Review"
+    description: "Review requirements for operating business from residence"
+    category: registration
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 30
+    is_blocking: false
+    checklist:
+      - item: "Review LA City home occupation rules"
+        required: true
+      - item: "Confirm no prohibited uses"
+        required: true
+      - item: "Determine if permit required"
+        required: true
+
+  # ==============================================================================
+  # INSURANCE TASKS
+  # ==============================================================================
+
+  insurance_renewal:
+    id: insurance_renewal
+    title: "Insurance Policy Renewal"
+    description: "Renew expiring insurance policy"
+    category: insurance
+    default_assigned_role: pcos_owner_admin
+    default_due_days: 0
+    is_blocking: false
+    checklist:
+      - item: "Contact insurance broker/carrier"
+        required: true
+      - item: "Review coverage needs"
+        required: true
+      - item: "Renew or replace policy"
+        required: true
+      - item: "Upload new policy document"
+        required: true
+
+  # ==============================================================================
+  # WAGE & HOUR TASKS
+  # ==============================================================================
+
+  wage_floor_violation:
+    id: wage_floor_violation
+    title: "Pay Rate Below Minimum Wage"
+    description: |
+      The proposed pay rate is below the applicable minimum wage.
+      Update the engagement pay rate before work begins.
+    category: wage
+    default_assigned_role: pcos_payroll_admin
+    default_due_days: 0
+    is_blocking: true
+    checklist:
+      - item: "Review applicable minimum wage for jurisdiction"
+        required: true
+      - item: "Update engagement pay rate to meet minimum"
+        required: true
+      - item: "Communicate updated rate to worker"
+        required: true

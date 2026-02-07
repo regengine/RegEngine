@@ -1,0 +1,201 @@
+{
+  "metadata": {
+    "substation_id": "DEMO-SUBSTATION-ALPHA",
+    "export_time": "2026-01-30T07:58:59.506906+00:00",
+    "total_snapshots": 3,
+    "verification_sdk_version": "1.0.0",
+    "from_time": "2026-01-30T00:00:00+00:00",
+    "to_time": "2026-01-30T02:00:00+00:00"
+  },
+  "snapshots": [
+    {
+      "id": "01936d4e-0000-7000-8000-000000000001",
+      "snapshot_time": "2026-01-30T00:00:00+00:00",
+      "substation_id": "DEMO-SUBSTATION-ALPHA",
+      "facility_name": "Alpha Substation - North Grid",
+      "system_status": "NOMINAL",
+      "asset_states": {
+        "summary": {
+          "total_assets": 12,
+          "verified_count": 12,
+          "mismatch_count": 0,
+          "unknown_count": 0
+        },
+        "assets": [
+          {
+            "asset_id": "RTU-001",
+            "asset_type": "Remote Terminal Unit",
+            "manufacturer": "Schweitzer Engineering",
+            "model": "SEL-3505",
+            "firmware_version": "R124",
+            "last_verified": "2026-01-29T23:45:00+00:00",
+            "verification_method": "AUTOMATED_SCAN"
+          },
+          {
+            "asset_id": "FIREWALL-001",
+            "asset_type": "Industrial Firewall",
+            "manufacturer": "Fortinet",
+            "model": "FortiGate 200F",
+            "firmware_version": "7.4.1",
+            "last_verified": "2026-01-29T23:50:00+00:00",
+            "verification_method": "AUTOMATED_SCAN"
+          }
+        ]
+      },
+      "esp_config": {
+        "perimeter_devices": [
+          {
+            "device_id": "FIREWALL-001",
+            "zone": "DMZ",
+            "inbound_rules": 12,
+            "outbound_rules": 8
+          }
+        ],
+        "access_points": [
+          {
+            "name": "VPN Gateway",
+            "type": "Remote Access",
+            "authentication": "MFA Required"
+          }
+        ]
+      },
+      "patch_metrics": {
+        "total_vulnerabilities": 0,
+        "critical_unpatched": 0,
+        "high_unpatched": 0,
+        "avg_patch_hours": 8.2,
+        "compliance_status": "COMPLIANT"
+      },
+      "active_mismatches": [],
+      "previous_snapshot_id": null,
+      "content_hash": "e6f5ea91a792685adcd92b55c06aea433c2428832699a2e3fbeb287a53802dfa",
+      "signature_hash": "98eb570240ea2b79f6bb121553c5c855b7b16891ab2f0eaae62d05a998024851"
+    },
+    {
+      "id": "01936d4e-0001-7000-8000-000000000002",
+      "snapshot_time": "2026-01-30T01:00:00+00:00",
+      "substation_id": "DEMO-SUBSTATION-ALPHA",
+      "facility_name": "Alpha Substation - North Grid",
+      "system_status": "NOMINAL",
+      "asset_states": {
+        "summary": {
+          "total_assets": 12,
+          "verified_count": 12,
+          "mismatch_count": 0,
+          "unknown_count": 0
+        },
+        "assets": [
+          {
+            "asset_id": "RTU-001",
+            "asset_type": "Remote Terminal Unit",
+            "manufacturer": "Schweitzer Engineering",
+            "model": "SEL-3505",
+            "firmware_version": "R124",
+            "last_verified": "2026-01-30T00:45:00+00:00",
+            "verification_method": "AUTOMATED_SCAN"
+          },
+          {
+            "asset_id": "FIREWALL-001",
+            "asset_type": "Industrial Firewall",
+            "manufacturer": "Fortinet",
+            "model": "FortiGate 200F",
+            "firmware_version": "7.4.1",
+            "last_verified": "2026-01-30T00:50:00+00:00",
+            "verification_method": "AUTOMATED_SCAN"
+          }
+        ]
+      },
+      "esp_config": {
+        "perimeter_devices": [
+          {
+            "device_id": "FIREWALL-001",
+            "zone": "DMZ",
+            "inbound_rules": 12,
+            "outbound_rules": 8
+          }
+        ],
+        "access_points": [
+          {
+            "name": "VPN Gateway",
+            "type": "Remote Access",
+            "authentication": "MFA Required"
+          }
+        ]
+      },
+      "patch_metrics": {
+        "total_vulnerabilities": 0,
+        "critical_unpatched": 0,
+        "high_unpatched": 0,
+        "avg_patch_hours": 8.299999999999999,
+        "compliance_status": "COMPLIANT"
+      },
+      "active_mismatches": [],
+      "previous_snapshot_id": "01936d4e-0000-7000-8000-000000000001",
+      "content_hash": "8923821f947713855b31cc90be01ce07dd35cad0a6bc0afdbb0dc0734292ba8c",
+      "signature_hash": "49fbbad8d5b470857552704d1c39718bd326e795c195e87e4e8e1c759833a411"
+    },
+    {
+      "id": "01936d4e-0002-7000-8000-000000000003",
+      "snapshot_time": "2026-01-30T02:00:00+00:00",
+      "substation_id": "DEMO-SUBSTATION-ALPHA",
+      "facility_name": "Alpha Substation - North Grid",
+      "system_status": "NOMINAL",
+      "asset_states": {
+        "summary": {
+          "total_assets": 12,
+          "verified_count": 12,
+          "mismatch_count": 0,
+          "unknown_count": 0
+        },
+        "assets": [
+          {
+            "asset_id": "RTU-001",
+            "asset_type": "Remote Terminal Unit",
+            "manufacturer": "Schweitzer Engineering",
+            "model": "SEL-3505",
+            "firmware_version": "R124",
+            "last_verified": "2026-01-30T01:45:00+00:00",
+            "verification_method": "AUTOMATED_SCAN"
+          },
+          {
+            "asset_id": "FIREWALL-001",
+            "asset_type": "Industrial Firewall",
+            "manufacturer": "Fortinet",
+            "model": "FortiGate 200F",
+            "firmware_version": "7.4.1",
+            "last_verified": "2026-01-30T01:50:00+00:00",
+            "verification_method": "AUTOMATED_SCAN"
+          }
+        ]
+      },
+      "esp_config": {
+        "perimeter_devices": [
+          {
+            "device_id": "FIREWALL-001",
+            "zone": "DMZ",
+            "inbound_rules": 12,
+            "outbound_rules": 8
+          }
+        ],
+        "access_points": [
+          {
+            "name": "VPN Gateway",
+            "type": "Remote Access",
+            "authentication": "MFA Required"
+          }
+        ]
+      },
+      "patch_metrics": {
+        "total_vulnerabilities": 0,
+        "critical_unpatched": 0,
+        "high_unpatched": 0,
+        "avg_patch_hours": 8.399999999999999,
+        "compliance_status": "COMPLIANT"
+      },
+      "active_mismatches": [],
+      "previous_snapshot_id": "01936d4e-0001-7000-8000-000000000002",
+      "content_hash": "07333540f3b6e183e9cbbbc1c565f4c1f01dd1037c9ef67aa41c93bca58b7100",
+      "signature_hash": "abf928cfe9d771cef93a69bdcf116c6cd32eaa0fc98716007eb08da0ddabbb2c"
+    }
+  ]
+}

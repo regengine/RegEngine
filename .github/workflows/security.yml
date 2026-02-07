@@ -1,0 +1,254 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Weekly: Monday 06:00 UTC
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Secrets Scan (gitleaks)
+  # ──────────────────────────────────────────────
+  secrets:
+    name: Secrets Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────
+  # 2. SAST (Semgrep — CLI, not deprecated action)
+  # ──────────────────────────────────────────────
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install and run Semgrep
+        run: |
+          pip install semgrep
+          semgrep \
+            --config p/owasp-top-ten \
+            --config p/security-audit \
+            --json --output semgrep-results.json \
+            --error
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 90
+
+  # ──────────────────────────────────────────────
+  # 3. Dependency Audit (pip-audit / npm audit)
+  # ──────────────────────────────────────────────
+  deps:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Node (if present) ----
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: npm audit
+        run: |
+          if [ -f package-lock.json ] || [ -f package.json ]; then
+            npm ci || npm install
+            npm audit --audit-level=moderate --json > npm-audit-results.json || true
+            # Fail on moderate+ but capture full report first
+            npm audit --audit-level=moderate
+          else
+            echo "No Node project detected."
+            echo '{"info": "no node project"}' > npm-audit-results.json
+          fi
+
+      # ---- Python (if present) ----
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: pip-audit
+        run: |
+          python -m pip install -U pip pip-audit
+          if [ -f requirements.txt ]; then
+            pip-audit -r requirements.txt --format json --output pip-audit-results.json
+            pip-audit -r requirements.txt
+          elif [ -f pyproject.toml ]; then
+            pip-audit --format json --output pip-audit-results.json
+            pip-audit
+          else
+            echo "No Python deps detected."
+            echo '{"info": "no python project"}' > pip-audit-results.json
+          fi
+
+      - name: Upload dependency audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit
+          path: |
+            npm-audit-results.json
+            pip-audit-results.json
+          retention-days: 90
+
+  # ──────────────────────────────────────────────
+  # 4. Tenant Isolation Tests
+  # ──────────────────────────────────────────────
+  tenant-isolation:
+    name: Tenant Isolation & Auth Tests
+    runs-on: ubuntu-latest
+    needs: [secrets, sast, deps]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt || true
+          pip install pytest httpx pytest-json-report
+
+      - name: Run tenant isolation tests
+        run: |
+          bash scripts/security/tenant_isolation_test.sh
+        env:
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          TEST_API_BASE: ${{ secrets.TEST_API_BASE }}
+
+      - name: Upload isolation test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-isolation-results
+          path: artifacts/tenant-isolation/
+          retention-days: 90
+
+  # ──────────────────────────────────────────────
+  # 5. DAST (OWASP ZAP baseline)
+  # ──────────────────────────────────────────────
+  dast:
+    name: DAST (OWASP ZAP baseline)
+    runs-on: ubuntu-latest
+    needs: [secrets, sast, deps, tenant-isolation]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ZAP baseline scan
+        run: bash scripts/security/zap_baseline.sh
+        env:
+          ZAP_TARGET: ${{ secrets.ZAP_TARGET }}
+
+      - name: Upload ZAP reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports
+          path: artifacts/zap/
+          retention-days: 90
+
+  # ──────────────────────────────────────────────
+  # 6. security.txt Expiry Check
+  # ──────────────────────────────────────────────
+  security-txt-expiry:
+    name: security.txt Expiry Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check security.txt expiration
+        run: |
+          EXPIRES=$(grep -i "^Expires:" frontend/public/.well-known/security.txt | awk '{print $2}')
+          if [ -z "$EXPIRES" ]; then
+            echo "WARNING: No Expires field in security.txt"
+            exit 1
+          fi
+          EXPIRES_EPOCH=$(date -d "$EXPIRES" +%s 2>/dev/null || date -jf "%Y-%m-%dT%H:%M:%SZ" "$EXPIRES" +%s)
+          NOW_EPOCH=$(date +%s)
+          DAYS_LEFT=$(( (EXPIRES_EPOCH - NOW_EPOCH) / 86400 ))
+          echo "security.txt expires in $DAYS_LEFT days ($EXPIRES)"
+          if [ "$DAYS_LEFT" -lt 30 ]; then
+            echo "CRITICAL: security.txt expires in less than 30 days. Update immediately."
+            exit 1
+          elif [ "$DAYS_LEFT" -lt 90 ]; then
+            echo "WARNING: security.txt expires in less than 90 days. Plan rotation."
+          fi
+
+  # ──────────────────────────────────────────────
+  # 7. Container Scan (Trivy) — enable when using Docker
+  # ──────────────────────────────────────────────
+  # Uncomment this job if you build/push Docker images in CI.
+  # If deploying via Vercel serverless, skip this job entirely.
+  #
+  # container-scan:
+  #   name: Container Scan (Trivy)
+  #   runs-on: ubuntu-latest
+  #   needs: [secrets, sast, deps]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Build image
+  #       run: docker build -t regengine:ci .
+  #
+  #     - name: Run Trivy
+  #       uses: aquasecurity/trivy-action@master
+  #       with:
+  #         image-ref: "regengine:ci"
+  #         format: "json"
+  #         output: "trivy-results.json"
+  #         severity: "CRITICAL,HIGH"
+  #         exit-code: "1"
+  #
+  #     - name: Upload Trivy results
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: trivy-results
+  #         path: trivy-results.json
+  #         retention-days: 90
+
+  # ──────────────────────────────────────────────
+  # 8. Audit Chain Integrity (ISO 27001 12.7.1)
+  # ──────────────────────────────────────────────
+  audit-integrity:
+    name: Audit Chain Integrity
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run audit chain check
+        env:
+          AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
+          AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
+        run: |
+          chmod +x scripts/security/verify_audit_chain.sh
+          bash scripts/security/verify_audit_chain.sh

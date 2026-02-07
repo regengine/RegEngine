@@ -1,0 +1,8 @@
+Hi {FIRST_NAME}, I'm working with RegEngine, which turns unstructured regulations into machine-readable obligations and gap analyses.
+
+We're helping compliance leaders reduce manual regulatory review by 30–50% by:
+- Ingesting and normalizing regulatory documents
+- Extracting obligations/thresholds/jurisdictions
+- Highlighting gaps vs internal policies
+
+I'd like to share a 2-page overview and see if this is relevant for your team. Open to a quick look?

@@ -1,0 +1,21 @@
+identity_and_tenant_isolation:
+  - test_id: ID-001
+    agent_role: Auth Agent
+    objective: JWT claim enforcement
+    method: Forge JWT with altered tenant_id
+    pass_condition: Request rejected
+  - test_id: ID-002
+    agent_role: API Agent
+    objective: Cross-tenant read attempt
+    method: Tenant A token queries Tenant B resource
+    pass_condition: 403 + audit log
+  - test_id: ID-003
+    agent_role: DB Agent
+    objective: RLS enforcement
+    method: Direct SQL query bypass attempt
+    pass_condition: 0 rows returned
+  - test_id: ID-004
+    agent_role: Chaos Agent
+    objective: Middleware failure
+    method: Disable app-layer guard
+    pass_condition: RLS still blocks

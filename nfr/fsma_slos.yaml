@@ -1,0 +1,28 @@
+service: fsma-graph
+slos:
+  trace_latency:
+    description: "Forward/backward trace query response time"
+    target: 
+      p50: 500ms
+      p95: 2000ms
+      p99: 5000ms
+    measurement: prometheus_histogram
+    alert_threshold: p95 > 3000ms for 5m
+    
+  availability:
+    description: "Service availability during business hours (6am-10pm PT)"
+    target: 99.9%
+    measurement: uptime_checks
+    window: rolling_30d
+    
+  ingestion_throughput:
+    description: "Kafka event processing rate"
+    target: 10000 events/minute sustained
+    burst: 50000 events/minute for 5 minutes
+    measurement: kafka_consumer_lag
+    alert_threshold: lag > 100000 messages
+
+  recall_drill_completion:
+    description: "Full trace completion for recall drill"
+    target: < 4 hours (FDA 24-hour mandate with safety margin)
+    measurement: drill_completion_time

@@ -1,0 +1,4 @@
+HIPAA Requirement,Mapped System Feature
+164.502(a),PHI Scrubbing + RLS
+164.530(c),Audit Logs
+164.308(a),Access Management Policies

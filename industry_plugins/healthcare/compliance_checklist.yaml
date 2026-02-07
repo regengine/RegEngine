@@ -1,0 +1,269 @@
+# Healthcare & Pharmaceuticals Compliance Checklist
+
+industry: healthcare
+version: "1.0"
+last_updated: "2025-11-19"
+
+checklists:
+  # ============================================================================
+  # CHECKLIST 1: HIPAA Privacy & Security Rule
+  # ============================================================================
+  - id: hipaa_compliance
+    name: "HIPAA Privacy & Security Compliance"
+    description: "Verify patient privacy, data security, and breach notification compliance"
+    jurisdiction: "United States"
+    regulators:
+      - HHS (Office for Civil Rights)
+    applicable_entities:
+      - covered_entities
+      - business_associates
+
+    items:
+      - id: hipaa_001
+        requirement: "Encrypt PHI at Rest"
+        regulation: "45 CFR § 164.312(a)(2)(iv)"
+        description: "Encrypt protected health information (PHI) stored in databases using AES-256 or equivalent"
+        validation:
+          type: boolean
+          query: "Do you encrypt PHI at rest using AES-256 or stronger encryption?"
+        remediation: "Enable database encryption (TDE for SQL Server, encryption at rest for AWS RDS)"
+
+      - id: hipaa_002
+        requirement: "Encrypt PHI in Transit"
+        regulation: "45 CFR § 164.312(e)(1)"
+        description: "Use TLS 1.2+ for all PHI transmission over networks"
+        validation:
+          type: boolean
+          query: "Do you use TLS 1.2 or higher for all PHI transmissions?"
+        remediation: "Upgrade to TLS 1.2+, disable TLS 1.0/1.1 and SSLv3"
+
+      - id: hipaa_003
+        requirement: "Role-Based Access Control (RBAC)"
+        regulation: "45 CFR § 164.312(a)(1)"
+        description: "Implement unique user IDs and role-based access to PHI"
+        validation:
+          type: boolean
+          query: "Do you enforce unique user IDs and role-based access controls?"
+        remediation: "Implement RBAC system, assign users to roles (doctor, nurse, admin), audit access logs"
+
+      - id: hipaa_004
+        requirement: "Audit Logs"
+        regulation: "45 CFR § 164.312(b)"
+        description: "Log all access to PHI with user ID, timestamp, and action"
+        validation:
+          type: boolean
+          query: "Do you log all PHI access events and retain logs for 6 years?"
+        remediation: "Enable audit logging, retain logs for 6 years, implement SIEM for monitoring"
+
+      - id: hipaa_005
+        requirement: "Breach Notification (< 500 affected)"
+        regulation: "45 CFR § 164.404"
+        description: "Notify affected individuals within 60 days of breach discovery"
+        validation:
+          type: boolean
+          query: "Do you have a process to notify individuals within 60 days of a breach?"
+        remediation: "Document breach notification procedure, assign incident response team"
+
+      - id: hipaa_006
+        requirement: "Breach Notification (>= 500 affected)"
+        regulation: "45 CFR § 164.408"
+        description: "Notify HHS and media within 60 days if breach affects 500+ individuals"
+        validation:
+          type: boolean
+          query: "Do you notify HHS and media within 60 days if breach affects 500+ people?"
+        remediation: "Add HHS notification to breach response plan, pre-draft media statement template"
+
+      - id: hipaa_007
+        requirement: "Business Associate Agreement (BAA)"
+        regulation: "45 CFR § 164.308(b)(1)"
+        description: "Execute BAAs with all vendors who access PHI"
+        validation:
+          type: boolean
+          query: "Do you have signed BAAs with all vendors who access PHI?"
+        remediation: "Audit vendor list, execute BAAs with all who access PHI (cloud providers, billing companies, etc.)"
+
+      - id: hipaa_008
+        requirement: "Annual HIPAA Risk Assessment"
+        regulation: "45 CFR § 164.308(a)(1)(ii)(A)"
+        description: "Conduct annual risk assessment of PHI security"
+        validation:
+          type: boolean
+          query: "Do you conduct an annual HIPAA risk assessment?"
+        remediation: "Schedule annual risk assessment, document findings, remediate identified risks"
+
+  # ============================================================================
+  # CHECKLIST 2: FDA Medical Device Compliance (Class II/III)
+  # ============================================================================
+  - id: fda_medical_device
+    name: "FDA Medical Device Compliance"
+    description: "Verify 510(k) clearance, QSR compliance, and adverse event reporting"
+    jurisdiction: "United States"
+    regulators:
+      - FDA (CDRH)
+    applicable_entities:
+      - medical_device_manufacturers
+
+    items:
+      - id: fda_001
+        requirement: "Device Classification"
+        regulation: "21 CFR § 860"
+        description: "Determine if device is Class I, II, or III"
+        validation:
+          type: conditional
+          query: "What is your device classification?"
+          conditions:
+            - if: "value == 'Class I'"
+              requirement: "Exempt from 510(k), but must register with FDA"
+            - if: "value == 'Class II'"
+              requirement: "510(k) premarket notification required"
+            - if: "value == 'Class III'"
+              requirement: "PMA (Premarket Approval) required"
+        remediation: "Consult FDA product code database to determine classification"
+
+      - id: fda_002
+        requirement: "510(k) Premarket Notification (Class II)"
+        regulation: "21 CFR § 807.87"
+        description: "Submit 510(k) to FDA demonstrating substantial equivalence to predicate device"
+        validation:
+          type: boolean
+          query: "Have you received 510(k) clearance for this Class II device?"
+        remediation: "Prepare 510(k) submission: identify predicate, conduct testing, submit to FDA"
+
+      - id: fda_003
+        requirement: "Quality System Regulation (QSR)"
+        regulation: "21 CFR § 820"
+        description: "Implement quality management system for design, manufacturing, and servicing"
+        validation:
+          type: boolean
+          query: "Do you have a QSR-compliant quality management system?"
+        remediation: "Implement QMS per ISO 13485 (aligns with QSR), document all procedures"
+
+      - id: fda_004
+        requirement: "Design Controls"
+        regulation: "21 CFR § 820.30"
+        description: "Document design inputs, outputs, verification, validation, and changes"
+        validation:
+          type: boolean
+          query: "Do you maintain design history files (DHF) with V&V records?"
+        remediation: "Create DHF template, document design requirements, verification tests, validation studies"
+
+      - id: fda_005
+        requirement: "Medical Device Reporting (MDR)"
+        regulation: "21 CFR § 803"
+        description: "Report deaths, serious injuries, and malfunctions to FDA within 30 days"
+        validation:
+          type: boolean
+          query: "Do you report device-related deaths/injuries to FDA within 30 days?"
+        remediation: "Establish MDR procedure, assign complaint handler, train on FDA reporting timelines"
+
+      - id: fda_006
+        requirement: "Device Labeling"
+        regulation: "21 CFR § 801"
+        description: "Label must include: device name, manufacturer, intended use, warnings"
+        validation:
+          type: boolean
+          query: "Does your device label include name, manufacturer, intended use, and warnings?"
+        remediation: "Review label against 21 CFR § 801 requirements, add missing elements"
+
+  # ============================================================================
+  # CHECKLIST 3: Clinical Trial Compliance (ICH-GCP)
+  # ============================================================================
+  - id: clinical_trials
+    name: "Clinical Trial Compliance (Good Clinical Practice)"
+    description: "Verify informed consent, IRB approval, and adverse event reporting"
+    jurisdiction: "International"
+    regulators:
+      - FDA
+      - EMA
+      - ICH
+    applicable_entities:
+      - clinical_trial_sponsors
+      - contract_research_organizations
+
+    items:
+      - id: trial_001
+        requirement: "IRB/IEC Approval"
+        regulation: "21 CFR § 56 (FDA), ICH E6(R2)"
+        description: "Obtain Institutional Review Board approval before starting trial"
+        validation:
+          type: boolean
+          query: "Did you receive IRB approval before enrolling first patient?"
+        remediation: "Submit protocol to IRB, address feedback, obtain approval letter"
+
+      - id: trial_002
+        requirement: "Informed Consent"
+        regulation: "21 CFR § 50.25, ICH E6(R2) 4.8"
+        description: "Obtain written informed consent from all participants before enrollment"
+        validation:
+          type: boolean
+          query: "Do you obtain written informed consent from all participants?"
+        remediation: "Create informed consent form (ICF) approved by IRB, train study coordinators"
+
+      - id: trial_003
+        requirement: "Adverse Event Reporting (Serious)"
+        regulation: "21 CFR § 312.32, ICH E2A"
+        description: "Report serious adverse events (SAEs) to FDA/IRB within 7 days"
+        validation:
+          type: boolean
+          query: "Do you report SAEs to FDA and IRB within 7 days?"
+        remediation: "Establish SAE reporting procedure, assign safety officer, use MedWatch form"
+
+      - id: trial_004
+        requirement: "Source Data Verification"
+        regulation: "ICH E6(R2) 5.5.3"
+        description: "Monitor can verify data in case report forms (CRFs) against source documents"
+        validation:
+          type: boolean
+          query: "Do you retain source documents for monitoring and audit?"
+        remediation: "Train sites on source documentation requirements, conduct monitoring visits"
+
+      - id: trial_005
+        requirement: "Investigational New Drug (IND) Application"
+        regulation: "21 CFR § 312"
+        description: "Submit IND to FDA before starting clinical trial with unapproved drug"
+        validation:
+          type: boolean
+          query: "Did you submit IND to FDA and receive safe-to-proceed letter?"
+        remediation: "Prepare IND: protocol, investigator brochure, CMC data, submit to FDA"
+
+# ==============================================================================
+# CMS Medicare/Medicaid Reimbursement Compliance
+# ==============================================================================
+  - id: cms_reimbursement
+    name: "CMS Reimbursement Compliance"
+    description: "Verify CPT coding, billing, and anti-kickback compliance"
+    jurisdiction: "United States"
+    regulators:
+      - CMS
+      - OIG
+    applicable_entities:
+      - healthcare_providers
+      - medical_billing_companies
+
+    items:
+      - id: cms_001
+        requirement: "CPT Code Accuracy"
+        regulation: "42 CFR § 424.24"
+        description: "Use correct CPT codes for procedures and services"
+        validation:
+          type: boolean
+          query: "Do you verify CPT codes against current CPT codebook before billing?"
+        remediation: "Train billing staff on CPT coding, use coding software with annual updates"
+
+      - id: cms_002
+        requirement: "Anti-Kickback Statute Compliance"
+        regulation: "42 U.S.C. § 1320a-7b(b)"
+        description: "Do not offer/receive remuneration in exchange for referrals"
+        validation:
+          type: boolean
+          query: "Do you prohibit kickbacks and document all financial relationships?"
+        remediation: "Adopt anti-kickback policy, review all referral arrangements with legal counsel"
+
+      - id: cms_003
+        requirement: "Stark Law Compliance"
+        regulation: "42 U.S.C. § 1395nn"
+        description: "Physicians cannot refer Medicare patients to entities they have financial interest in"
+        validation:
+          type: boolean
+          query: "Do you track physician financial interests and block prohibited referrals?"
+        remediation: "Conduct annual Stark Law compliance review, identify financial relationships"

@@ -1,0 +1,7 @@
+Contact: mailto:security@regengine.co
+Expires: 2026-12-31T23:59:59Z
+Preferred-Languages: en
+Policy: https://regengine.co/legal/vulnerability-disclosure
+Acknowledgments: https://regengine.co/security/acknowledgments
+# REMINDER: Set a calendar event or CI check to rotate Expires before 2026-12-31.
+# An expired security.txt signals abandonment to researchers and enterprise buyers.

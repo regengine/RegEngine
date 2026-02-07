@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PCOS Budget Analysis - Compliance checks and tax credit eligibility">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Budget Analysis | Production Compliance OS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel/CSV parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --dark: #0f172a;
+            --dark-secondary: #1e293b;
+            --dark-tertiary: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --glass-bg: rgba(30, 41, 59, 0.8);
+            --glass-border: rgba(148, 163, 184, 0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            font-size: 1.5rem;
+        }
+
+        .logo-text {
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-tab {
+            padding: 0.5rem 1rem;
+            background: var(--dark-tertiary);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        .nav-tab:hover {
+            background: var(--dark-secondary);
+            color: var(--text-primary);
+        }
+
+        .nav-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 2rem 0 1rem;
+        }
+
+        .hero h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .hero p {
+            color: var(--text-secondary);
+        }
+
+        .card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        .card-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--dark-tertiary);
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .upload-zone:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .upload-zone input {
+            display: none;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--dark-tertiary);
+            color: var(--text-secondary);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--text-primary);
+        }
+
+        /* Analysis Output Styles */
+        .analysis-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .analysis-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .top-sheet {
+            background: linear-gradient(135deg, var(--dark-secondary), var(--dark-tertiary));
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .top-sheet-header {
+            margin-bottom: 1rem;
+        }
+
+        .top-sheet-header h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .top-sheet-header p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .budget-total {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, var(--success), var(--primary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .budget-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .budget-row:last-child {
+            border-bottom: none;
+            font-weight: 600;
+        }
+
+        .budget-row .label {
+            color: var(--text-secondary);
+        }
+
+        .risk-meter {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--dark);
+            border-radius: 8px;
+        }
+
+        .risk-score {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+
+        .risk-low {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .risk-medium {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .risk-high {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .findings-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .finding-item {
+            padding: 1rem;
+            background: var(--dark);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid transparent;
+        }
+
+        .finding-item.critical {
+            border-left-color: var(--danger);
+        }
+
+        .finding-item.warning {
+            border-left-color: var(--warning);
+        }
+
+        .finding-item.info {
+            border-left-color: var(--info);
+        }
+
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+
+        .finding-title {
+            font-weight: 600;
+        }
+
+        .finding-badge {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .badge-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .badge-info {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--info);
+        }
+
+        .badge-optimization {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        .finding-message {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .finding-action {
+            font-size: 0.875rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .finding-action a {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+
+        .tax-credits {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .tax-credits {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .tax-card {
+            background: var(--dark);
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .tax-card.eligible {
+            border: 2px solid var(--success);
+        }
+
+        .tax-card.maybe {
+            border: 2px solid var(--warning);
+        }
+
+        .tax-card.ineligible {
+            border: 2px solid var(--dark-tertiary);
+            opacity: 0.7;
+        }
+
+        .tax-state {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .tax-credit {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .tax-requirements {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+            text-align: left;
+        }
+
+        .tax-requirements li {
+            margin-bottom: 0.25rem;
+        }
+
+        .closeout-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        @media (max-width: 768px) {
+            .closeout-list {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .closeout-category {
+            background: var(--dark);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .closeout-category h4 {
+            margin-bottom: 0.75rem;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .closeout-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            font-size: 0.875rem;
+        }
+
+        .closeout-item.complete {
+            color: var(--success);
+        }
+
+        .closeout-item.pending {
+            color: var(--text-secondary);
+        }
+
+        .dept-breakdown {
+            margin-top: 1rem;
+        }
+
+        .dept-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--dark);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+
+        .dept-name {
+            font-weight: 500;
+        }
+
+        .dept-amount {
+            font-weight: 600;
+        }
+
+        .dept-bar {
+            height: 4px;
+            background: var(--dark-tertiary);
+            border-radius: 2px;
+            margin-top: 0.5rem;
+            overflow: hidden;
+        }
+
+        .dept-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--dark-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            max-width: 400px;
+        }
+
+        .toast.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .toast.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .toast.info {
+            border-left: 4px solid var(--primary);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Screen reader only */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🎬</div>
+            <span class="logo-text">Production Compliance OS</span>
+        </div>
+        <div class="nav-tabs">
+            <a href="http://localhost:3000" class="nav-tab">← RegEngine</a>
+            <a href="pcos-assessment.html" class="nav-tab">Assessment</a>
+            <a href="pcos-crew-import.html" class="nav-tab">Crew Import</a>
+            <button class="nav-tab active">Budget Analysis</button>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <h1>📊 Production Budget Analysis</h1>
+            <p>Upload your budget to get compliance checks, optimization opportunities, and tax credit eligibility</p>
+        </section>
+
+        <!-- Upload Section -->
+        <div class="card" id="uploadCard">
+            <div class="card-header">
+                <div class="card-icon">📥</div>
+                <h2>Upload Production Budget</h2>
+            </div>
+
+            <div class="upload-zone" id="dropZone" role="button" tabindex="0"
+                aria-label="Upload budget spreadsheet. Accepts CSV, Excel XLS, XLSX, and Apple Numbers files. Supports AICP-style budgets, cost reports, and production top sheets. Click to browse or drag and drop files here."
+                aria-describedby="budget-help">
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.numbers">
+                <div class="upload-icon">📄</div>
+                <h3>Drop your budget spreadsheet here</h3>
+                <p style="color: var(--text-secondary); margin: 0.5rem 0;">or click to browse</p>
+                <p id="budget-help" style="font-size: 0.875rem; color: var(--text-secondary);">Supports AICP-style
+                    budgets, cost reports,
+                    and production top sheets</p>
+            </div>
+        </div>
+
+        <!-- Analysis Results -->
+        <div id="analysisResults" style="display: none;">
+            <!-- Top Sheet Snapshot -->
+            <div class="card" id="reportContainer">
+                <div class="card-header">
+                    <div class="card-icon">📋</div>
+                    <h2>Top Sheet Snapshot</h2>
+                    <div style="margin-left: auto; display: flex; gap: 0.5rem;">
+                        <button class="btn btn-primary" id="exportPdfBtn">📄 Export PDF</button>
+                        <button class="btn btn-outline" id="resetBtn">↩️ Start Over</button>
+                    </div>
+                </div>
+
+                <div class="analysis-grid">
+                    <div class="top-sheet" id="topSheet">
+                        <!-- Filled by JS -->
+                    </div>
+                    <div>
+                        <h3 style="margin-bottom: 1rem;">Department Breakdown</h3>
+                        <div class="dept-breakdown" id="deptBreakdown">
+                            <!-- Filled by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compliance & Optimization Findings -->
+            <div class="analysis-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">⚠️</div>
+                        <h2>Compliance Findings</h2>
+                        <span id="complianceCount" style="margin-left: auto; color: var(--warning);"></span>
+                    </div>
+                    <div class="findings-list" id="complianceList">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">💡</div>
+                        <h2>Optimization Opportunities</h2>
+                        <span id="optimizationCount" style="margin-left: auto; color: var(--success);"></span>
+                    </div>
+                    <div class="findings-list" id="optimizationList">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tax Credit Eligibility -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🎯</div>
+                    <h2>Tax Credit Pre-Screening</h2>
+                </div>
+                <div class="tax-credits" id="taxCredits">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+
+            <!-- Closeout Checklist -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">✅</div>
+                    <h2>Closeout Checklist</h2>
+                </div>
+                <div class="closeout-list" id="closeoutList">
+                    <!-- Filled by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen Reader Announcements (Pattern 48: ARIA Live Regions) -->
+        <div id="sr-announcements" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+        <div id="sr-alerts" role="alert" aria-live="assertive" aria-atomic="true" class="sr-only"></div>
+    </main>
+
+    <script>
+        // ============================================
+        // BUDGET SCHEMA & CONSTANTS
+        // ============================================
+        const COST_CODE_CATEGORIES = {
+            '100': 'Above The Line (ATL)',
+            '200': 'Production',
+            '300': 'Camera/Grip/Electric',
+            '400': 'Art Department',
+            '500': 'Post Production',
+            '600': 'General Expenses',
+            '700': 'Insurance & Legal',
+            '800': 'Talent/Cast',
+            '900': 'Miscellaneous',
+        };
+
+        const UNION_RATE_MINIMUMS = {
+            // SAG-AFTRA
+            'principal': 1082, 'day_player': 1082, 'weekly_player': 3756, 'background': 216,
+            'stand_in': 253, 'stunt_performer': 1082, 'stunt_coordinator': 1500,
+            // DGA
+            'director_theatrical': 19143, 'director_tv': 25685, 'director_streaming': 22878,
+            'first_ad': 5847, 'second_ad': 4237, 'upm': 5847, 'key_second_ad': 4584,
+            // WGA
+            'screenwriter_original': 78702, 'tv_writer_story': 28826, 'staff_writer_weekly': 5373,
+            // IATSE Camera 600
+            'dp': 850, 'camera_operator': 650, 'first_ac': 475, 'second_ac': 350, 'dit': 550,
+            // IATSE Lighting 728
+            'gaffer': 550, 'best_boy_electric': 475, 'electrician': 375, 'rigging_gaffer': 575,
+            // IATSE Grip 80
+            'key_grip': 550, 'best_boy_grip': 475, 'grip': 375, 'dolly_grip': 400,
+            // IATSE Props 44
+            'prop_master': 475, 'assistant_prop_master': 400,
+            // IATSE Costume 705
+            'costume_designer': 650, 'costume_supervisor': 475, 'costumer': 375,
+            // IATSE Makeup 706
+            'makeup_dept_head': 550, 'makeup_artist': 400, 'hair_dept_head': 550, 'hairstylist': 400,
+            // IATSE Script 871
+            'script_supervisor': 475, 'production_coordinator': 400,
+            // IATSE Editorial 700
+            'editor': 575, 'assistant_editor': 400, 'post_supervisor': 525,
+            // IATSE Sound 695
+            'production_sound_mixer': 650, 'boom_operator': 450, 'sound_utility': 350,
+            // Teamsters 399 Transportation
+            'transportation_coordinator': 550, 'transportation_captain': 475, 'driver': 375,
+            // Teamsters 399 Locations
+            'location_manager': 575, 'assistant_location_manager': 425, 'location_scout': 350,
+            // Non-Union
+            'production_assistant': 200, 'coordinator': 350, 'office_pa': 175, 'set_pa': 200,
+        };
+
+        const POSITION_KEYWORDS = {
+            // SAG-AFTRA
+            'principal': ['principal', 'lead', 'star', 'series regular'],
+            'day_player': ['day player', 'guest star', 'guest', 'co-star'],
+            'background': ['background', 'extra', 'bg', 'atmosphere'],
+            'stunt_performer': ['stunt', 'stunt performer'],
+            'stunt_coordinator': ['stunt coordinator'],
+            // DGA
+            'director_theatrical': ['director', 'feature director'],
+            'first_ad': ['1st ad', 'first ad', 'first assistant director'],
+            'second_ad': ['2nd ad', 'second ad', 'second assistant director'],
+            'upm': ['upm', 'unit production manager', 'line producer'],
+            // WGA
+            'screenwriter_original': ['writer', 'screenwriter', 'screenplay by'],
+            // Camera
+            'dp': ['dp', 'director of photography', 'cinematographer', 'dop'],
+            'camera_operator': ['camera operator', 'camera op', 'operator', 'a camera', 'b camera'],
+            'first_ac': ['1st ac', 'first ac', 'focus puller'],
+            'second_ac': ['2nd ac', 'second ac', 'clapper'],
+            'dit': ['dit', 'digital imaging tech'],
+            // Lighting
+            'gaffer': ['gaffer', 'chief lighting'],
+            'best_boy_electric': ['best boy electric', 'bbe', 'bb electric'],
+            'electrician': ['electrician', 'electric', 'lamp op'],
+            // Grip
+            'key_grip': ['key grip'],
+            'best_boy_grip': ['best boy grip', 'bbg', 'bb grip'],
+            'grip': ['grip', 'dolly grip', 'company grip'],
+            // Props/Art
+            'prop_master': ['prop master', 'props', 'property master'],
+            // Costume
+            'costume_designer': ['costume designer'],
+            'costumer': ['costumer', 'wardrobe'],
+            // Makeup/Hair
+            'makeup_dept_head': ['makeup department head', 'key makeup'],
+            'makeup_artist': ['makeup artist', 'makeup', 'mua'],
+            'hairstylist': ['hairstylist', 'hair stylist', 'hair'],
+            // Script/Coordination
+            'script_supervisor': ['script supervisor', 'scripty'],
+            'production_coordinator': ['poc', 'production coordinator', 'coordinator'],
+            // Editorial
+            'editor': ['editor', 'picture editor'],
+            'assistant_editor': ['assistant editor', 'ae'],
+            // Sound
+            'production_sound_mixer': ['sound mixer', 'production sound'],
+            'boom_operator': ['boom op', 'boom operator'],
+            // Transportation
+            'transportation_coordinator': ['transportation coordinator', 'transpo coord'],
+            'driver': ['driver', 'teamster'],
+            // Locations
+            'location_manager': ['location manager', 'lm'],
+            'location_scout': ['location scout', 'scout'],
+            // General
+            'production_assistant': ['pa', 'production assistant', 'set pa', 'office pa'],
+        };
+
+        let currentBudget = null;
+        let currentAnalysis = null;
+
+        // DEBUG flag for development logging
+        window.DEBUG = window.location.hostname === 'localhost';
+
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Pattern 48: Screen reader announcement system
+        function announce(message, isAlert = false) {
+            const container = document.getElementById(isAlert ? 'sr-alerts' : 'sr-announcements');
+            if (container) {
+                container.textContent = message;
+                setTimeout(() => { container.textContent = ''; }, 1000);
+            }
+        }
+
+        // ============================================
+        // FILE HANDLING
+        // ============================================
+        const dropZone = document.getElementById('dropZone');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // Find the BEST sheet to use (prefer summary/topsheet)
+                    let detectedLocation = 'CA'; // Default to California
+                    let detectedGrandTotal = 0;
+                    let bestSheetData = null;
+                    let bestSheetName = '';
+
+                    if (DEBUG) console.log(`📋 Found ${workbook.SheetNames.length} sheets:`, workbook.SheetNames);
+
+                    // First pass: scan all sheets for location and grand total
+                    for (const sheetName of workbook.SheetNames) {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+                        if (sheetData.length === 0) continue;
+
+                        if (DEBUG) console.log(`  📄 Sheet "${sheetName}": ${sheetData.length} rows`);
+
+                        // Check for location indicators and grand total in this sheet
+                        for (const row of sheetData.slice(0, 50)) {
+                            const text = row?.map(c => String(c || '').toLowerCase()).join(' ') || '';
+                            if (text.includes('california') || text.includes('los angeles') || text.includes('la city') || text.includes(' ca ')) {
+                                detectedLocation = 'CA';
+                            } else if (text.includes('georgia') || text.includes('atlanta') || text.includes(' ga ')) {
+                                detectedLocation = 'GA';
+                            } else if (text.includes('new mexico') || text.includes('albuquerque') || text.includes(' nm ')) {
+                                detectedLocation = 'NM';
+                            } else if (text.includes('louisiana') || text.includes('new orleans')) {
+                                detectedLocation = 'LA';
+                            }
+
+                            // Look for grand total
+                            if (text.includes('grand total') || text.includes('total budget') || text.includes('project total')) {
+                                for (const cell of row) {
+                                    const num = parseFloat(String(cell || '').replace(/[$,\s]/g, ''));
+                                    if (!isNaN(num) && num > detectedGrandTotal && num > 1000) {
+                                        detectedGrandTotal = num;
+                                        if (DEBUG) console.log(`  💰 Found grand total: $${num.toLocaleString()} in "${sheetName}"`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Second pass: pick the BEST sheet (prefer summary/detail/budget sheets)
+                    const sheetPriority = ['summary', 'topsheet', 'top sheet', 'budget', 'detail', 'master'];
+                    for (const keyword of sheetPriority) {
+                        for (const sheetName of workbook.SheetNames) {
+                            if (sheetName.toLowerCase().includes(keyword)) {
+                                const worksheet = workbook.Sheets[sheetName];
+                                bestSheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                                bestSheetName = sheetName;
+                                if (DEBUG) console.log(`  ✅ Using sheet "${sheetName}" (matched: ${keyword})`);
+                                break;
+                            }
+                        }
+                        if (bestSheetData) break;
+                    }
+
+                    // Fall back to first sheet with data
+                    if (!bestSheetData) {
+                        for (const sheetName of workbook.SheetNames) {
+                            const worksheet = workbook.Sheets[sheetName];
+                            const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                            if (sheetData.length > 10) {
+                                bestSheetData = sheetData;
+                                bestSheetName = sheetName;
+                                if (DEBUG) console.log(`  ✅ Using first sheet with data: "${sheetName}"`);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!bestSheetData || bestSheetData.length === 0) {
+                        showToast('❌ No data found in spreadsheet', 'error');
+                        return;
+                    }
+
+                    if (DEBUG) {
+                        console.log(`📊 Using ${bestSheetData.length} rows from "${bestSheetName}"`);
+                        console.log(`📍 Detected location: ${detectedLocation}`);
+                        if (detectedGrandTotal > 0) {
+                            console.log(`💵 Detected grand total: $${detectedGrandTotal.toLocaleString()}`);
+                        }
+                    }
+
+                    // Parse budget from best sheet
+                    currentBudget = parseBudget(bestSheetData, file.name);
+
+                    // Use detected grand total as authoritative if found
+                    if (detectedGrandTotal > 0 && Math.abs(detectedGrandTotal - currentBudget.grandTotal) > 1000) {
+                        if (DEBUG) console.log(`⚡ Using detected grand total ($${detectedGrandTotal.toLocaleString()}) as authoritative`);
+                        currentBudget.grandTotal = detectedGrandTotal;
+                        // Recalculate subtotal based on contingency
+                        currentBudget.subtotal = detectedGrandTotal - currentBudget.contingency;
+                    }
+
+                    currentBudget.location = detectedLocation;
+                    if (DEBUG) console.log('📊 Final budget:', currentBudget);
+
+                    // Run analysis
+                    currentAnalysis = analyzeBudget(currentBudget);
+                    if (DEBUG) console.log('🔍 Analysis results:', currentAnalysis);
+
+                    // Render results
+                    renderResults();
+
+                } catch (error) {
+                    console.error('Parse error:', error);
+                    showToast('❌ Error parsing file: ' + error.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function findBudgetSheet(sheetNames) {
+            const keywords = ['budget', 'topsheet', 'top sheet', 'summary', 'detail'];
+            for (const name of sheetNames) {
+                if (keywords.some(kw => name.toLowerCase().includes(kw))) return name;
+            }
+            return sheetNames[0];
+        }
+
+        // ============================================
+        // BUDGET PARSER
+        // ============================================
+        function parseBudget(rawData, fileName) {
+            const headerRowIndex = findHeaderRow(rawData);
+            const headers = rawData[headerRowIndex] || [];
+            const dataRows = rawData.slice(headerRowIndex + 1);
+
+            const lineItems = [];
+            for (let i = 0; i < dataRows.length; i++) {
+                const row = dataRows[i];
+                if (!row || row.every(c => !c)) continue;
+
+                const costCode = extractCostCode(row);
+                const description = findDescription(row);
+                const rate = findRate(row);
+                const qty = findNumber(row, ['qty', 'quantity', 'days']);
+                const extension = findNumber(row, ['total', 'extension', 'budget', 'amount']) || (rate * qty);
+
+                if (!description || isSubtotalRow(description)) continue;
+                if (!extension && !rate) continue;
+
+                lineItems.push({
+                    id: `line-${i}`,
+                    costCode: costCode || inferCostCode(description),
+                    description,
+                    rate: rate || 0,
+                    quantity: qty || 1,
+                    extension,
+                    classification: detectClassification(row),
+                    dealMemoStatus: detectDealMemoStatus(row),
+                });
+            }
+
+            // Group by department
+            const deptMap = new Map();
+            for (const item of lineItems) {
+                const deptCode = item.costCode.charAt(0) + '00';
+                if (!deptMap.has(deptCode)) deptMap.set(deptCode, []);
+                deptMap.get(deptCode).push(item);
+            }
+
+            const departments = Array.from(deptMap.entries()).map(([code, items]) => ({
+                code,
+                name: COST_CODE_CATEGORIES[code] || `Category ${code}`,
+                lineItems: items,
+                subtotal: items.reduce((sum, i) => sum + i.extension, 0),
+            })).sort((a, b) => a.code.localeCompare(b.code));
+
+            const subtotal = departments.reduce((sum, d) => sum + d.subtotal, 0);
+            const contingency = extractContingency(rawData, subtotal);
+
+            return {
+                projectName: extractProjectName(rawData, fileName),
+                departments,
+                subtotal,
+                contingency,
+                contingencyPercent: subtotal > 0 ? (contingency / subtotal) * 100 : 10,
+                grandTotal: subtotal + contingency,
+            };
+        }
+
+        function findHeaderRow(data) {
+            const keywords = ['description', 'item', 'cost', 'rate', 'qty', 'total', 'budget', 'account'];
+            for (let i = 0; i < Math.min(20, data.length); i++) {
+                const row = data[i];
+                if (!row) continue;
+                const text = row.map(c => String(c || '').toLowerCase()).join(' ');
+                if (keywords.filter(kw => text.includes(kw)).length >= 2) return i;
+            }
+            return 0;
+        }
+
+        function extractCostCode(row) {
+            for (const cell of row) {
+                const str = String(cell || '').trim();
+                const match = str.match(/^(\d{3})(\.\d+)?$/);
+                if (match) return str;
+            }
+            return null;
+        }
+
+        function inferCostCode(desc) {
+            const lower = desc.toLowerCase();
+            const map = {
+                'producer': '101', 'director': '102', 'writer': '103', 'camera': '301',
+                'dp': '301', 'gaffer': '302', 'grip': '303', 'art': '401', 'edit': '502',
+                'post': '502', 'vfx': '503', 'sound': '501', 'music': '504',
+                'insurance': '701', 'legal': '702', 'location': '601', 'catering': '603',
+            };
+            for (const [kw, code] of Object.entries(map)) {
+                if (lower.includes(kw)) return code;
+            }
+            return '900';
+        }
+
+        function findDescription(row) {
+            for (const cell of row) {
+                const str = String(cell || '').trim();
+                if (str.length > 3 && isNaN(str.replace(/[$,]/g, ''))) return str;
+            }
+            return '';
+        }
+
+        function findNumber(row, keywords) {
+            // Look for clean numbers first (avoid rate/qty formatted cells like "$350/10")
+            for (let i = 0; i < row.length; i++) {
+                const val = row[i];
+                if (typeof val === 'number' && val > 0) return val;
+                const str = String(val || '').trim();
+                // Skip cells that look like rate/qty combinations
+                if (str.includes('/')) continue;
+                const cleaned = str.replace(/[$,\s]/g, '');
+                const num = parseFloat(cleaned);
+                if (!isNaN(num) && num > 0) return num;
+            }
+            return 0;
+        }
+
+        // Parse rate from cells like "$350/10" -> returns 350
+        function findRate(row) {
+            for (const cell of row) {
+                const str = String(cell || '').trim();
+                // Check for rate/qty format like "$350/10" or "350/10"
+                const rateMatch = str.match(/\$?([\d,.]+)\s*\/\s*\d+/);
+                if (rateMatch) {
+                    return parseFloat(rateMatch[1].replace(/,/g, ''));
+                }
+            }
+            return findNumber(row, ['rate', 'cost']);
+        }
+
+        function isSubtotalRow(desc) {
+            const lower = desc.toLowerCase();
+            return ['total', 'subtotal', 'grand total', 'sum'].some(kw => lower.includes(kw));
+        }
+
+        function detectClassification(row) {
+            const text = row.map(c => String(c || '').toLowerCase()).join(' ');
+            if (text.includes('1099') || text.includes('contractor')) return '1099';
+            if (text.includes('w-2') || text.includes('w2')) return 'W-2';
+            return null;
+        }
+
+        function detectDealMemoStatus(row) {
+            const text = row.map(c => String(c || '').toLowerCase()).join(' ');
+            if (text.includes('need') || text.includes('pending')) return 'need_to_send';
+            if (text.includes('sent') && !text.includes('signed')) return 'sent';
+            if (text.includes('signed') || text.includes('complete')) return 'complete';
+            return null;
+        }
+
+        function extractContingency(data, subtotal) {
+            for (const row of data) {
+                const text = row?.map(c => String(c || '').toLowerCase()).join(' ') || '';
+                if (text.includes('contingency')) {
+                    for (const cell of row) {
+                        const num = parseFloat(String(cell || '').replace(/[$,%\s]/g, ''));
+                        if (num > 0) return num < 100 ? subtotal * (num / 100) : num;
+                    }
+                }
+            }
+            return subtotal * 0.10;
+        }
+
+        function extractProjectName(data, fileName) {
+            for (const row of data.slice(0, 10)) {
+                const text = row?.map(c => String(c || '')).join(' ').toLowerCase() || '';
+                if (text.includes('project') || text.includes('show') || text.includes('title')) {
+                    for (const cell of row) {
+                        const str = String(cell || '').trim();
+                        if (str.length > 3 && !str.toLowerCase().includes('project')) return str;
+                    }
+                }
+            }
+            return fileName.replace(/\.(xlsx|xls|csv|numbers)$/i, '').replace(/[_\-|]+/g, ' ').trim();
+        }
+
+        // ============================================
+        // RULES ENGINE
+        // ============================================
+        function analyzeBudget(budget) {
+            const complianceIssues = [];
+            const optimizationOpportunities = [];
+
+            // Union rate checks
+            for (const dept of budget.departments) {
+                for (const item of dept.lineItems) {
+                    const position = detectPosition(item.description);
+                    if (position && UNION_RATE_MINIMUMS[position] && item.rate > 0) {
+                        if (item.rate < UNION_RATE_MINIMUMS[position]) {
+                            complianceIssues.push({
+                                severity: 'warning',
+                                category: 'compliance',
+                                title: 'Below Union Minimum',
+                                message: `${item.description}: $${item.rate}/day is below ${position.replace(/_/g, ' ')} minimum ($${UNION_RATE_MINIMUMS[position]}/day)`,
+                                recommendation: `Adjust to at least $${UNION_RATE_MINIMUMS[position]}/day`,
+                                url: 'https://www.iatse.net/wage-scales',
+                            });
+                        }
+                    }
+
+                    // Worker classification
+                    if (item.classification === '1099') {
+                        const w2Roles = ['pa', 'production_assistant', 'electrician', 'grip'];
+                        if (position && w2Roles.includes(position)) {
+                            complianceIssues.push({
+                                severity: 'critical',
+                                category: 'compliance',
+                                title: 'Misclassification Risk',
+                                message: `${item.description}: 1099 but likely should be W-2 under CA AB5`,
+                                recommendation: 'Review classification - this role typically fails ABC test',
+                                url: 'https://www.dir.ca.gov/dlse/faq_independentcontractor.htm',
+                            });
+                        }
+                    }
+
+                    // Deal memo status
+                    if (item.dealMemoStatus === 'need_to_send') {
+                        complianceIssues.push({
+                            severity: 'warning',
+                            category: 'paperwork',
+                            title: 'Deal Memo Missing',
+                            message: `${item.description}: Deal memo needs to be sent`,
+                            recommendation: 'Send immediately to avoid payment disputes',
+                        });
+                    }
+                }
+            }
+
+            // Contingency check
+            if (budget.contingencyPercent < 5) {
+                complianceIssues.push({
+                    severity: 'warning',
+                    category: 'compliance',
+                    title: 'Low Contingency',
+                    message: `Contingency at ${budget.contingencyPercent.toFixed(1)}% (typically 10%)`,
+                    recommendation: 'Consider increasing for unexpected costs',
+                });
+            }
+
+            // Misc bucket
+            const miscDept = budget.departments.find(d => d.code === '900');
+            if (miscDept && (miscDept.subtotal / budget.grandTotal) > 0.05) {
+                optimizationOpportunities.push({
+                    severity: 'info',
+                    category: 'optimization',
+                    title: 'Large Misc Bucket',
+                    message: `$${miscDept.subtotal.toLocaleString()} in Misc (${((miscDept.subtotal / budget.grandTotal) * 100).toFixed(1)}%)`,
+                    recommendation: 'Reclass to proper categories for audit clarity',
+                });
+            }
+
+            // Deposit recovery
+            const rentalItems = budget.departments.flatMap(d => d.lineItems)
+                .filter(i => ['rental', 'camera', 'lighting', 'vehicle'].some(kw => i.description.toLowerCase().includes(kw)));
+            if (rentalItems.length > 0) {
+                optimizationOpportunities.push({
+                    severity: 'info',
+                    category: 'optimization',
+                    title: 'Deposit Recovery',
+                    message: `${rentalItems.length} rental items likely have deposits`,
+                    recommendation: 'Generate deposit recovery checklist before wrap',
+                });
+            }
+
+            // Camera package
+            const cameraItems = budget.departments.flatMap(d => d.lineItems)
+                .filter(i => i.description.toLowerCase().includes('camera') && i.extension > 3000);
+            if (cameraItems.length > 0) {
+                optimizationOpportunities.push({
+                    severity: 'info',
+                    category: 'optimization',
+                    title: 'Camera Package Economics',
+                    message: 'High camera package cost detected',
+                    recommendation: 'Negotiate weekly rates, check pickup/return day comp',
+                    url: 'https://www.sharegrid.com',
+                });
+            }
+
+            // ============================================
+            // OVERTIME CALCULATION WARNINGS
+            // ============================================
+            // Check for items that might have overtime implications
+            const crewItems = budget.departments.flatMap(d => d.lineItems)
+                .filter(i => {
+                    const lower = i.description.toLowerCase();
+                    return ['crew', 'gaffer', 'grip', 'electric', 'camera', 'sound', 'art', 'makeup', 'hair', 'wardrobe', 'pa', 'coordinator']
+                        .some(kw => lower.includes(kw));
+                });
+
+            if (crewItems.length > 0) {
+                // Check if any items appear to use flat rates (no OT built in)
+                const flatRateItems = crewItems.filter(i =>
+                    i.rate > 0 && i.quantity > 3 && !i.description.toLowerCase().includes('overtime') && !i.description.toLowerCase().includes('ot')
+                );
+
+                if (flatRateItems.length > 3) {
+                    complianceIssues.push({
+                        severity: 'warning',
+                        category: 'compliance',
+                        title: 'Overtime Not Budgeted',
+                        message: `${flatRateItems.length} crew positions appear to use flat day rates without OT`,
+                        recommendation: 'CA law requires 1.5x after 8hrs, 2x after 12hrs. Build 10-15% OT buffer for 10+ hour days',
+                        url: 'https://www.dir.ca.gov/dlse/faq_overtime.htm',
+                    });
+                }
+            }
+
+            // ============================================
+            // MEAL PENALTY DETECTION
+            // ============================================
+            // Look for meal/catering budget to check if penalties are accounted for
+            const cateringItems = budget.departments.flatMap(d => d.lineItems)
+                .filter(i => {
+                    const lower = i.description.toLowerCase();
+                    return ['catering', 'meal', 'craft', 'lunch', 'breakfast', 'dinner', 'food'].some(kw => lower.includes(kw));
+                });
+
+            const mealPenaltyLine = budget.departments.flatMap(d => d.lineItems)
+                .find(i => i.description.toLowerCase().includes('meal penalty') || i.description.toLowerCase().includes('mp'));
+
+            if (cateringItems.length > 0 && !mealPenaltyLine) {
+                complianceIssues.push({
+                    severity: 'info',
+                    category: 'compliance',
+                    title: 'Meal Penalty Allowance',
+                    message: 'No meal penalty line item detected in budget',
+                    recommendation: 'SAG/IATSE require 6-hour meal breaks. Budget $100-300/day for potential MP on 12+ hour days',
+                    url: 'https://www.sagaftra.org/meal-periods',
+                });
+            }
+
+            // ============================================
+            // FRINGE CALCULATIONS
+            // ============================================
+            // Estimate fringes for crew items
+            const totalCrewLabor = crewItems.reduce((sum, i) => sum + i.extension, 0);
+            const atl = budget.departments.find(d => d.code === '100');
+            const totalATL = atl ? atl.subtotal : 0;
+
+            // Check if fringes appear to be budgeted (look for P&W, fringes, taxes lines)
+            const fringeItems = budget.departments.flatMap(d => d.lineItems)
+                .filter(i => {
+                    const lower = i.description.toLowerCase();
+                    return ['fringe', 'p&w', 'pension', 'health', 'payroll tax', 'fica', 'futa', 'suta', 'workers comp'].some(kw => lower.includes(kw));
+                });
+
+            const totalFringes = fringeItems.reduce((sum, i) => sum + i.extension, 0);
+            const expectedFringes = (totalCrewLabor + totalATL) * 0.25; // ~25% for union fringes + payroll taxes
+
+            if (totalFringes < expectedFringes * 0.5 && totalCrewLabor > 10000) {
+                complianceIssues.push({
+                    severity: 'warning',
+                    category: 'compliance',
+                    title: 'Fringes May Be Under-Budgeted',
+                    message: `Current fringes: $${totalFringes.toLocaleString()} vs expected ~$${expectedFringes.toLocaleString()} (25% of labor)`,
+                    recommendation: 'Union P&W typically 18-22%, plus ~7% payroll taxes (FICA, FUTA, SUI) and workers comp',
+                });
+            }
+
+            // ============================================
+            // SALES TAX OPPORTUNITIES
+            // ============================================
+            const rentalVendorCount = budget.departments.flatMap(d => d.lineItems)
+                .filter(i => {
+                    const lower = i.description.toLowerCase();
+                    return ['rental', 'rent', 'equipment', 'package', 'vehicle', 'truck', 'van', 'generator'].some(kw => lower.includes(kw));
+                }).length;
+
+            if (rentalVendorCount > 3) {
+                optimizationOpportunities.push({
+                    severity: 'info',
+                    category: 'optimization',
+                    title: 'Sales Tax Review',
+                    message: `${rentalVendorCount} rental/equipment items may include avoidable sales tax`,
+                    recommendation: 'Verify production company tax exemption status. In CA, some production rentals qualify for exemption',
+                });
+            }
+
+            // Tax credits - filter based on detected location
+            const projectLocation = budget.location || 'CA';
+
+            const allTaxCredits = [
+                {
+                    jurisdiction: 'CA', name: 'California Film Tax Credit 4.0',
+                    eligible: budget.grandTotal >= 1000000 ? 'maybe' : false,
+                    estimatedCredit: budget.grandTotal >= 1000000 ? budget.grandTotal * 0.7 * 0.25 : 0,
+                    requirements: ['$1M minimum budget', '75% CA filming', 'Lottery application'],
+                    phone: '(323) 860-2960', url: 'https://film.ca.gov/tax-credit/',
+                    relevantFor: ['CA'],
+                },
+                {
+                    jurisdiction: 'GA', name: 'Georgia Entertainment Credit',
+                    eligible: budget.grandTotal >= 500000 ? 'maybe' : false,
+                    estimatedCredit: budget.grandTotal >= 500000 ? budget.grandTotal * 0.8 * 0.30 : 0,
+                    requirements: ['$500K GA spend', 'Include GA logo +10%', 'Transferable credits'],
+                    phone: '(404) 962-4052', url: 'https://www.georgia.org/georgia-film-tv-production',
+                    relevantFor: ['GA'],
+                },
+                {
+                    jurisdiction: 'NM', name: 'New Mexico Film Credit',
+                    eligible: 'maybe',
+                    estimatedCredit: budget.grandTotal * 0.75 * 0.25,
+                    requirements: ['No minimum spend', '25% base + 5% rural', 'Refundable credit'],
+                    phone: '(505) 476-5600', url: 'https://nmfilm.com/film-incentives/',
+                    relevantFor: ['NM'],
+                },
+                {
+                    jurisdiction: 'LA', name: 'Louisiana Entertainment Credit',
+                    eligible: budget.grandTotal >= 300000 ? 'maybe' : false,
+                    estimatedCredit: budget.grandTotal >= 300000 ? budget.grandTotal * 0.65 * 0.25 : 0,
+                    requirements: ['$300K minimum', '25% base credit', 'Transferable'],
+                    phone: '(225) 342-5403', url: 'https://www.opportunitylouisiana.com/entertainment',
+                    relevantFor: ['LA'],
+                },
+            ];
+
+            // Only show tax credits relevant to the detected location
+            // Plus always show CA as an option for comparison
+            const taxCredits = allTaxCredits.filter(tc =>
+                tc.relevantFor.includes(projectLocation) || tc.jurisdiction === 'CA'
+            );
+
+            // Sort to put the project's location first
+            taxCredits.sort((a, b) => {
+                if (a.relevantFor.includes(projectLocation) && !b.relevantFor.includes(projectLocation)) return -1;
+                if (!a.relevantFor.includes(projectLocation) && b.relevantFor.includes(projectLocation)) return 1;
+                return 0;
+            });
+
+            // Closeout checklist
+            const closeoutChecklist = [
+                { category: 'paperwork', item: 'All deal memos executed', status: 'pending' },
+                { category: 'paperwork', item: 'I-9/W-4 complete for payrolled crew', status: 'pending' },
+                { category: 'paperwork', item: 'W-9s from all 1099 vendors', status: 'pending' },
+                { category: 'paperwork', item: 'COIs on file for vendors', status: 'pending' },
+                { category: 'vendor', item: 'All rental deposits recovered', status: 'pending' },
+                { category: 'vendor', item: 'Final invoices reconciled', status: 'pending' },
+                { category: 'vendor', item: 'Duplicate payment check', status: 'pending' },
+                { category: 'compliance', item: 'Worker classification review', status: 'pending' },
+                { category: 'compliance', item: 'Union fringe reports (if applicable)', status: 'pending' },
+                { category: 'compliance', item: 'Tax incentive documentation', status: 'pending' },
+                { category: 'deliverable', item: 'Final cost report', status: 'pending' },
+                { category: 'deliverable', item: 'Wrap book assembled', status: 'pending' },
+            ];
+
+            const riskScore = Math.min(100,
+                complianceIssues.filter(w => w.severity === 'critical').length * 25 +
+                complianceIssues.filter(w => w.severity === 'warning').length * 5
+            );
+
+            return {
+                riskScore,
+                complianceIssues,
+                optimizationOpportunities,
+                taxCredits,
+                closeoutChecklist,
+            };
+        }
+
+        function detectPosition(description) {
+            const lower = description.toLowerCase();
+            for (const [pos, keywords] of Object.entries(POSITION_KEYWORDS)) {
+                if (keywords.some(kw => lower.includes(kw))) return pos;
+            }
+            return null;
+        }
+
+        // ============================================
+        // RENDER RESULTS
+        // ============================================
+        function renderResults() {
+            document.getElementById('uploadCard').style.display = 'none';
+            document.getElementById('analysisResults').style.display = 'block';
+
+            // Top Sheet
+            const riskClass = currentAnalysis.riskScore < 25 ? 'risk-low' :
+                currentAnalysis.riskScore < 60 ? 'risk-medium' : 'risk-high';
+
+            document.getElementById('topSheet').innerHTML = `
+                <div class="top-sheet-header">
+                    <h3>${currentBudget.projectName}</h3>
+                    <p>Budget Analysis Report</p>
+                </div>
+                <div class="budget-total">$${currentBudget.grandTotal.toLocaleString()}</div>
+                <div style="margin-top: 1rem;">
+                    <div class="budget-row"><span class="label">Subtotal</span><span>$${currentBudget.subtotal.toLocaleString()}</span></div>
+                    <div class="budget-row"><span class="label">Contingency (${currentBudget.contingencyPercent.toFixed(1)}%)</span><span>$${currentBudget.contingency.toLocaleString()}</span></div>
+                    <div class="budget-row"><span class="label">Grand Total</span><span>$${currentBudget.grandTotal.toLocaleString()}</span></div>
+                </div>
+                <div class="risk-meter">
+                    <div class="risk-score ${riskClass}">${currentAnalysis.riskScore}</div>
+                    <div>
+                        <strong>Risk Score</strong><br>
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">
+                            ${currentAnalysis.riskScore < 25 ? 'Low risk - minor issues' :
+                    currentAnalysis.riskScore < 60 ? 'Medium risk - review findings' : 'High risk - action required'}
+                        </span>
+                    </div>
+                </div>
+            `;
+
+            // Department breakdown
+            const maxDept = Math.max(...currentBudget.departments.map(d => d.subtotal));
+            document.getElementById('deptBreakdown').innerHTML = currentBudget.departments.map(dept => `
+                <div class="dept-row">
+                    <span class="dept-name">${dept.name}</span>
+                    <span class="dept-amount">$${dept.subtotal.toLocaleString()}</span>
+                </div>
+                <div class="dept-bar"><div class="dept-bar-fill" style="width: ${(dept.subtotal / maxDept * 100)}%"></div></div>
+            `).join('');
+
+            // Compliance findings
+            document.getElementById('complianceCount').textContent = `${currentAnalysis.complianceIssues.length} issues`;
+            document.getElementById('complianceList').innerHTML = currentAnalysis.complianceIssues.length > 0 ?
+                currentAnalysis.complianceIssues.map(f => renderFinding(f)).join('') :
+                '<p style="color: var(--success); text-align: center; padding: 2rem;">✅ No compliance issues found</p>';
+
+            // Optimization opportunities
+            document.getElementById('optimizationCount').textContent = `${currentAnalysis.optimizationOpportunities.length} opportunities`;
+            document.getElementById('optimizationList').innerHTML = currentAnalysis.optimizationOpportunities.length > 0 ?
+                currentAnalysis.optimizationOpportunities.map(f => renderFinding(f, true)).join('') :
+                '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No optimization suggestions</p>';
+
+            // Tax credits
+            document.getElementById('taxCredits').innerHTML = currentAnalysis.taxCredits.map(tc => `
+                <div class="tax-card ${tc.eligible === 'maybe' ? 'maybe' : tc.eligible ? 'eligible' : 'ineligible'}">
+                    <div class="tax-state">${tc.jurisdiction}</div>
+                    <div style="font-size: 0.875rem; color: var(--text-secondary);">${tc.name}</div>
+                    ${tc.estimatedCredit > 0 ? `<div class="tax-credit">~$${tc.estimatedCredit.toLocaleString()}</div>` : '<div style="color: var(--text-secondary);">Not eligible</div>'}
+                    <ul class="tax-requirements">${tc.requirements.map(r => `<li>${r}</li>`).join('')}</ul>
+                    ${tc.url ? `<a href="${tc.url}" target="_blank" style="color: var(--primary); font-size: 0.75rem;">More info →</a>` : ''}
+                    ${tc.phone ? `<div style="font-size: 0.75rem; color: var(--text-secondary);">📞 ${tc.phone}</div>` : ''}
+                </div>
+            `).join('');
+
+            // Closeout checklist
+            const grouped = {};
+            for (const item of currentAnalysis.closeoutChecklist) {
+                if (!grouped[item.category]) grouped[item.category] = [];
+                grouped[item.category].push(item);
+            }
+            document.getElementById('closeoutList').innerHTML = Object.entries(grouped).map(([cat, items]) => `
+                <div class="closeout-category">
+                    <h4>${cat}</h4>
+                    ${items.map(i => `
+                        <div class="closeout-item ${i.status}">
+                            <span>${i.status === 'complete' ? '✅' : '⬜'}</span>
+                            <span>${i.item}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+        }
+
+        function renderFinding(f, isOptimization = false) {
+            const badgeClass = f.severity === 'critical' ? 'badge-critical' :
+                f.severity === 'warning' ? 'badge-warning' :
+                    isOptimization ? 'badge-optimization' : 'badge-info';
+            return `
+                <div class="finding-item ${f.severity}">
+                    <div class="finding-header">
+                        <span class="finding-title">${f.title}</span>
+                        <span class="finding-badge ${badgeClass}">${f.severity.toUpperCase()}</span>
+                    </div>
+                    <div class="finding-message">${f.message}</div>
+                    ${f.recommendation ? `<div class="finding-action">💡 ${f.recommendation}${f.url ? ` <a href="${f.url}" target="_blank">Learn more</a>` : ''}</div>` : ''}
+                </div>
+            `;
+        }
+
+        function resetAnalysis() {
+            currentBudget = null;
+            currentAnalysis = null;
+            document.getElementById('uploadCard').style.display = 'block';
+            document.getElementById('analysisResults').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+        }
+
+        // ============================================
+        // PDF EXPORT
+        // ============================================
+        function exportPDF() {
+            if (!currentBudget || !currentAnalysis) {
+                showToast('No analysis to export', 'error');
+                return;
+            }
+
+            const printWindow = window.open('', '_blank');
+            const date = new Date().toLocaleDateString();
+
+            const criticalCount = currentAnalysis.complianceIssues.filter(i => i.severity === 'critical').length;
+            const warningCount = currentAnalysis.complianceIssues.filter(i => i.severity === 'warning').length;
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Budget Analysis Report - ${currentBudget.projectName}</title>
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1a1a1a; line-height: 1.5; }
+                        h1 { font-size: 24px; margin-bottom: 5px; }
+                        h2 { font-size: 16px; color: #666; border-bottom: 2px solid #6366f1; padding-bottom: 8px; margin: 24px 0 12px; }
+                        h3 { font-size: 14px; margin-bottom: 8px; }
+                        .header { margin-bottom: 24px; }
+                        .date { color: #666; font-size: 12px; }
+                        .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+                        .summary-box { background: #f5f5f5; padding: 12px; border-radius: 8px; text-align: center; }
+                        .summary-value { font-size: 20px; font-weight: 700; }
+                        .summary-label { font-size: 11px; color: #666; text-transform: uppercase; }
+                        .total { font-size: 28px; font-weight: 700; color: #10b981; }
+                        .dept-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+                        .dept-table th, .dept-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e5e5; }
+                        .dept-table th { background: #f5f5f5; font-size: 11px; text-transform: uppercase; }
+                        .finding { padding: 12px; margin-bottom: 8px; border-radius: 6px; border-left: 4px solid; }
+                        .finding.critical { border-left-color: #ef4444; background: #fef2f2; }
+                        .finding.warning { border-left-color: #f59e0b; background: #fffbeb; }
+                        .finding.info { border-left-color: #3b82f6; background: #eff6ff; }
+                        .finding-title { font-weight: 600; }
+                        .finding-msg { font-size: 12px; color: #666; margin-top: 4px; }
+                        .tax-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+                        .tax-card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px; text-align: center; }
+                        .tax-card.maybe { border-color: #f59e0b; }
+                        .tax-state { font-size: 18px; font-weight: 700; }
+                        .tax-credit { color: #10b981; font-weight: 600; }
+                        .closeout-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+                        .closeout-cat { margin-bottom: 12px; }
+                        .closeout-cat h4 { font-size: 11px; text-transform: uppercase; color: #666; margin-bottom: 4px; }
+                        .closeout-item { font-size: 12px; padding: 4px 0; }
+                        .risk-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 600; margin-left: 8px; }
+                        .risk-low { background: #d1fae5; color: #065f46; }
+                        .risk-medium { background: #fef3c7; color: #92400e; }
+                        .risk-high { background: #fee2e2; color: #991b1b; }
+                        .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e5e5; font-size: 11px; color: #666; text-align: center; }
+                        @media print { body { padding: 20px; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1>📊 ${currentBudget.projectName}
+                            <span class="risk-badge ${currentAnalysis.riskScore < 25 ? 'risk-low' : currentAnalysis.riskScore < 60 ? 'risk-medium' : 'risk-high'}">
+                                Risk: ${currentAnalysis.riskScore}
+                            </span>
+                        </h1>
+                        <div class="date">Budget Analysis Report | Generated ${date} | Production Compliance OS</div>
+                    </div>
+
+                    <div class="summary-grid">
+                        <div class="summary-box">
+                            <div class="summary-value total">$${currentBudget.grandTotal.toLocaleString()}</div>
+                            <div class="summary-label">Grand Total</div>
+                        </div>
+                        <div class="summary-box">
+                            <div class="summary-value">${currentBudget.contingencyPercent.toFixed(1)}%</div>
+                            <div class="summary-label">Contingency</div>
+                        </div>
+                        <div class="summary-box">
+                            <div class="summary-value" style="color: #f59e0b;">${criticalCount + warningCount}</div>
+                            <div class="summary-label">Issues Found</div>
+                        </div>
+                        <div class="summary-box">
+                            <div class="summary-value" style="color: #10b981;">${currentAnalysis.optimizationOpportunities.length}</div>
+                            <div class="summary-label">Optimizations</div>
+                        </div>
+                    </div>
+
+                    <h2>Department Breakdown</h2>
+                    <table class="dept-table">
+                        <thead><tr><th>Department</th><th style="text-align:right;">Amount</th><th style="text-align:right;">% of Total</th></tr></thead>
+                        <tbody>
+                            ${currentBudget.departments.map(d => `
+                                <tr>
+                                    <td>${d.name}</td>
+                                    <td style="text-align:right;">$${d.subtotal.toLocaleString()}</td>
+                                    <td style="text-align:right;">${((d.subtotal / currentBudget.grandTotal) * 100).toFixed(1)}%</td>
+                                </tr>
+                            `).join('')}
+                            <tr style="font-weight:600; background:#f5f5f5;">
+                                <td>Subtotal</td>
+                                <td style="text-align:right;">$${currentBudget.subtotal.toLocaleString()}</td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>Contingency (${currentBudget.contingencyPercent.toFixed(1)}%)</td>
+                                <td style="text-align:right;">$${currentBudget.contingency.toLocaleString()}</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    ${currentAnalysis.complianceIssues.length > 0 ? `
+                        <h2>⚠️ Compliance Findings (${currentAnalysis.complianceIssues.length})</h2>
+                        ${currentAnalysis.complianceIssues.map(f => `
+                            <div class="finding ${f.severity}">
+                                <div class="finding-title">${f.title}</div>
+                                <div class="finding-msg">${f.message}</div>
+                                ${f.recommendation ? `<div class="finding-msg">💡 ${f.recommendation}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    ` : ''}
+
+                    ${currentAnalysis.optimizationOpportunities.length > 0 ? `
+                        <h2>💡 Optimization Opportunities (${currentAnalysis.optimizationOpportunities.length})</h2>
+                        ${currentAnalysis.optimizationOpportunities.map(f => `
+                            <div class="finding info">
+                                <div class="finding-title">${f.title}</div>
+                                <div class="finding-msg">${f.message}</div>
+                                ${f.recommendation ? `<div class="finding-msg">💡 ${f.recommendation}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    ` : ''}
+
+                    <h2>🎯 Tax Credit Pre-Screening</h2>
+                    <div class="tax-grid">
+                        ${currentAnalysis.taxCredits.map(tc => `
+                            <div class="tax-card ${tc.eligible === 'maybe' ? 'maybe' : ''}">
+                                <div class="tax-state">${tc.jurisdiction}</div>
+                                <div style="font-size:12px;color:#666;">${tc.name}</div>
+                                ${tc.estimatedCredit > 0 ? `<div class="tax-credit">~$${tc.estimatedCredit.toLocaleString()}</div>` : '<div style="color:#999;">Not eligible</div>'}
+                                ${tc.phone ? `<div style="font-size:11px;color:#666;">📞 ${tc.phone}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <h2>✅ Closeout Checklist</h2>
+                    <div class="closeout-grid">
+                        ${Object.entries(
+                currentAnalysis.closeoutChecklist.reduce((acc, item) => {
+                    if (!acc[item.category]) acc[item.category] = [];
+                    acc[item.category].push(item);
+                    return acc;
+                }, {})
+            ).map(([cat, items]) => `
+                            <div class="closeout-cat">
+                                <h4>${cat}</h4>
+                                ${items.map(i => `<div class="closeout-item">☐ ${i.item}</div>`).join('')}
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="footer">
+                        Generated by Production Compliance OS (Regulatory Engine) | This report is for informational purposes only. Consult qualified professionals for compliance decisions.
+                    </div>
+                </body>
+                </html>
+            `);
+
+            printWindow.document.close();
+            printWindow.focus();
+
+            // Give browser time to render before print dialog
+            setTimeout(() => {
+                printWindow.print();
+            }, 250);
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Upload zone click to trigger file input
+            document.getElementById('dropZone')?.addEventListener('click', () => {
+                document.getElementById('fileInput')?.click();
+            });
+
+            // Upload zone keyboard support
+            document.getElementById('dropZone')?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    document.getElementById('fileInput')?.click();
+                }
+            });
+
+            // File input change handler
+            document.getElementById('fileInput')?.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+
+            // Export PDF button
+            document.getElementById('exportPdfBtn')?.addEventListener('click', exportPDF);
+
+            // Reset button
+            document.getElementById('resetBtn')?.addEventListener('click', resetAnalysis);
+        });
+    </script>
+</body>
+
+</html>

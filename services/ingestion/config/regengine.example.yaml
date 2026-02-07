@@ -1,0 +1,52 @@
+# RegEngine Ingestion Framework Configuration
+
+# Database settings
+database:
+  host: localhost
+  port: 5432
+  database: regengine
+  user: regengine
+  password: ""  # Set via environment variable
+  schema: ingestion
+
+# Storage settings
+storage:
+  backend: filesystem  # or "s3"
+  filesystem_path: ./data
+  # s3_bucket: regengine-prod-documents
+  # s3_prefix: documents
+
+# Regulatory verticals
+verticals:
+  fsma:
+    cfr_titles: [21]
+    agencies: [FDA]
+    keywords: [traceability, food, safety, FSMA]
+    enabled: true
+  
+  energy:
+    cfr_titles: [10, 18]
+    agencies: [DOE, FERC]
+    keywords: [energy, grid, compliance]
+    enabled: true
+  
+  nuclear:
+    cfr_titles: [10]
+    agencies: [NRC]
+    keywords: [nuclear, reactor, safety]
+    enabled: true
+  
+  healthcare:
+    cfr_titles: [42, 45]
+    agencies: [HHS, CMS]
+    keywords: [healthcare, HIPAA, medicare]
+    enabled: true
+  
+  gaming:
+    cfr_titles: []
+    agencies: []
+    keywords: [gaming, gambling, casino]
+    enabled: false
+
+# FDA API key (optional but recommended for higher rate limits)
+# fda_api_key: YOUR_API_KEY_HERE

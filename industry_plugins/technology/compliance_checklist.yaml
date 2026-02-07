@@ -1,0 +1,328 @@
+# Technology (Data Security, Privacy, Cybersecurity) Compliance Checklist
+
+industry: technology
+version: "1.0"
+last_updated: "2025-11-19"
+
+checklists:
+  # ============================================================================
+  # CHECKLIST 1: GDPR (EU General Data Protection Regulation)
+  # ============================================================================
+  - id: gdpr_compliance
+    name: "GDPR Compliance"
+    description: "Verify EU data protection compliance for personal data processing"
+    jurisdiction: "European Union"
+    regulators:
+      - EDPB (European Data Protection Board)
+      - National DPAs (Data Protection Authorities)
+    applicable_entities:
+      - companies_processing_eu_personal_data
+
+    items:
+      - id: gdpr_001
+        requirement: "Lawful Basis for Processing"
+        regulation: "GDPR Article 6"
+        description: "Establish lawful basis: consent, contract, legal obligation, vital interests, public task, or legitimate interest"
+        validation:
+          type: boolean
+          query: "Do you have a documented lawful basis for processing personal data?"
+        remediation: "Document lawful basis (e.g., consent form, contract terms, legitimate interest assessment)"
+
+      - id: gdpr_002
+        requirement: "Privacy Notice"
+        regulation: "GDPR Article 13"
+        description: "Provide privacy notice at time of collection: what data, why, who it's shared with, retention period, rights"
+        validation:
+          type: boolean
+          query: "Do you provide a privacy notice at data collection with all required elements?"
+        remediation: "Create privacy notice covering: data categories, purposes, recipients, retention, data subject rights"
+
+      - id: gdpr_003
+        requirement: "Data Subject Rights (Access, Erasure, Portability)"
+        regulation: "GDPR Articles 15, 17, 20"
+        description: "Respond to data subject requests (access, erasure, portability) within 30 days"
+        validation:
+          type: boolean
+          query: "Do you have a process to respond to DSAR (data subject access requests) within 30 days?"
+        remediation: "Create DSAR process, assign data protection officer (DPO), implement self-service portal"
+
+      - id: gdpr_004
+        requirement: "Data Breach Notification (72 hours)"
+        regulation: "GDPR Article 33"
+        description: "Notify supervisory authority within 72 hours of discovering a personal data breach"
+        validation:
+          type: boolean
+          query: "Do you notify the DPA within 72 hours of discovering a breach?"
+        remediation: "Establish breach notification procedure, assign incident response team, pre-draft notification template"
+
+      - id: gdpr_005
+        requirement: "Data Processing Agreement (DPA)"
+        regulation: "GDPR Article 28"
+        description: "Execute DPAs with all processors (vendors) who process personal data on your behalf"
+        validation:
+          type: boolean
+          query: "Do you have signed DPAs with all data processors (cloud providers, analytics vendors, etc.)?"
+        remediation: "Audit vendor list, execute GDPR-compliant DPAs with all processors"
+
+      - id: gdpr_006
+        requirement: "Data Protection Impact Assessment (DPIA)"
+        regulation: "GDPR Article 35"
+        description: "Conduct DPIA for high-risk processing (e.g., automated decision-making, large-scale special category data)"
+        validation:
+          type: boolean
+          query: "Have you conducted a DPIA for high-risk processing activities?"
+        remediation: "Identify high-risk processing, conduct DPIA using ICO or CNIL template, document mitigations"
+
+      - id: gdpr_007
+        requirement: "Cookie Consent"
+        regulation: "GDPR Article 6 + ePrivacy Directive"
+        description: "Obtain explicit consent before placing non-essential cookies"
+        validation:
+          type: boolean
+          query: "Do you obtain consent before placing analytics/marketing cookies?"
+        remediation: "Implement cookie consent banner (e.g., OneTrust, Cookiebot), block cookies until consent given"
+
+      - id: gdpr_008
+        requirement: "Data Retention Policy"
+        regulation: "GDPR Article 5(1)(e)"
+        description: "Delete or anonymize personal data when no longer needed for original purpose"
+        validation:
+          type: boolean
+          query: "Do you have a documented data retention policy with deletion schedules?"
+        remediation: "Document retention policy (e.g., user data deleted 2 years after account closure), automate deletion"
+
+      - id: gdpr_009
+        requirement: "Data Minimization"
+        regulation: "GDPR Article 5(1)(c)"
+        description: "Collect only data necessary for the specified purpose"
+        validation:
+          type: boolean
+          query: "Do you review forms/APIs to ensure you're not collecting excessive data?"
+        remediation: "Audit data collection points, remove unnecessary fields (e.g., don't ask for SSN if not needed)"
+
+      - id: gdpr_010
+        requirement: "Encryption of Personal Data"
+        regulation: "GDPR Article 32"
+        description: "Encrypt personal data at rest and in transit"
+        validation:
+          type: boolean
+          query: "Do you encrypt personal data using AES-256 (at rest) and TLS 1.2+ (in transit)?"
+        remediation: "Enable database encryption, enforce TLS 1.2+ for all web traffic"
+
+  # ============================================================================
+  # CHECKLIST 2: CCPA / CPRA (California Privacy Rights Act)
+  # ============================================================================
+  - id: ccpa_compliance
+    name: "CCPA/CPRA Compliance"
+    description: "Verify California privacy law compliance for consumer data"
+    jurisdiction: "California, United States"
+    regulators:
+      - California Privacy Protection Agency (CPPA)
+    applicable_entities:
+      - companies_with_california_consumers
+
+    items:
+      - id: ccpa_001
+        requirement: "Privacy Notice (At Collection)"
+        regulation: "CCPA § 1798.100(b)"
+        description: "Inform consumers of categories of personal information collected and purposes"
+        validation:
+          type: boolean
+          query: "Do you provide a privacy notice at or before collection?"
+        remediation: "Add privacy notice at collection points (signup forms, checkout, etc.)"
+
+      - id: ccpa_002
+        requirement: "Right to Know"
+        regulation: "CCPA § 1798.110"
+        description: "Respond to consumer requests for data categories, sources, purposes, and third parties within 45 days"
+        validation:
+          type: boolean
+          query: "Do you respond to 'right to know' requests within 45 days?"
+        remediation: "Create self-service portal or manual process for right to know requests"
+
+      - id: ccpa_003
+        requirement: "Right to Delete"
+        regulation: "CCPA § 1798.105"
+        description: "Delete consumer data upon request (with exceptions for legal obligations)"
+        validation:
+          type: boolean
+          query: "Do you delete consumer data upon request within 45 days?"
+        remediation: "Implement data deletion workflow, verify deletion across all systems (backups, logs, analytics)"
+
+      - id: ccpa_004
+        requirement: "Do Not Sell My Personal Information"
+        regulation: "CCPA § 1798.120"
+        description: "Provide 'Do Not Sell' link if you sell personal information to third parties"
+        validation:
+          type: conditional
+          query: "Do you sell personal information to third parties?"
+          conditions:
+            - if: "value == 'yes'"
+              requirement: "Provide 'Do Not Sell My Personal Information' link on homepage"
+            - if: "value == 'no'"
+              requirement: "No action needed (but document that you don't sell data)"
+        remediation: "Add 'Do Not Sell' link to homepage footer, implement opt-out mechanism"
+
+      - id: ccpa_005
+        requirement: "Non-Discrimination"
+        regulation: "CCPA § 1798.125"
+        description: "Cannot discriminate against consumers who exercise CCPA rights (deny service, different price)"
+        validation:
+          type: boolean
+          query: "Do you treat consumers the same regardless of whether they exercise CCPA rights?"
+        remediation: "Train customer support on non-discrimination, monitor for differential treatment"
+
+  # ============================================================================
+  # CHECKLIST 3: SOC 2 (Security, Availability, Confidentiality)
+  # ============================================================================
+  - id: soc2_compliance
+    name: "SOC 2 Compliance"
+    description: "Verify security controls for service providers (required by many enterprise customers)"
+    jurisdiction: "United States (industry standard)"
+    regulators:
+      - AICPA (American Institute of CPAs)
+    applicable_entities:
+      - saas_companies
+      - cloud_service_providers
+
+    items:
+      - id: soc2_001
+        requirement: "Access Control (Unique User IDs)"
+        regulation: "SOC 2 - CC6.1"
+        description: "Assign unique user IDs and enforce authentication"
+        validation:
+          type: boolean
+          query: "Do all users have unique IDs and passwords (no shared accounts)?"
+        remediation: "Eliminate shared accounts, enforce unique credentials for all users"
+
+      - id: soc2_002
+        requirement: "Multi-Factor Authentication (MFA)"
+        regulation: "SOC 2 - CC6.1"
+        description: "Require MFA for access to production systems and sensitive data"
+        validation:
+          type: boolean
+          query: "Do you require MFA for all production access?"
+        remediation: "Enable MFA for all production systems (use Okta, Auth0, or native MFA)"
+
+      - id: soc2_003
+        requirement: "Encryption in Transit (TLS)"
+        regulation: "SOC 2 - CC6.7"
+        description: "Use TLS 1.2+ for all data transmission"
+        validation:
+          type: boolean
+          query: "Do you enforce TLS 1.2+ for all web/API traffic?"
+        remediation: "Disable TLS 1.0/1.1, enforce TLS 1.2+ in load balancer/web server config"
+
+      - id: soc2_004
+        requirement: "Encryption at Rest"
+        regulation: "SOC 2 - CC6.7"
+        description: "Encrypt sensitive data at rest using AES-256 or equivalent"
+        validation:
+          type: boolean
+          query: "Do you encrypt sensitive data at rest using AES-256?"
+        remediation: "Enable database encryption (TDE, AWS RDS encryption, etc.)"
+
+      - id: soc2_005
+        requirement: "Logging and Monitoring"
+        regulation: "SOC 2 - CC7.2"
+        description: "Log security events, monitor for anomalies, retain logs for 90+ days"
+        validation:
+          type: boolean
+          query: "Do you log security events and retain logs for 90+ days?"
+        remediation: "Enable audit logging, ship logs to SIEM (Splunk, DataDog), set up alerts"
+
+      - id: soc2_006
+        requirement: "Incident Response Plan"
+        regulation: "SOC 2 - CC7.3"
+        description: "Document incident response procedures, assign response team, conduct annual drill"
+        validation:
+          type: boolean
+          query: "Do you have a documented incident response plan tested annually?"
+        remediation: "Document IR plan, assign on-call rotation, conduct annual tabletop exercise"
+
+      - id: soc2_007
+        requirement: "Vulnerability Management"
+        regulation: "SOC 2 - CC7.1"
+        description: "Scan for vulnerabilities quarterly, patch critical vulns within 30 days"
+        validation:
+          type: boolean
+          query: "Do you scan for vulnerabilities quarterly and patch critical issues within 30 days?"
+        remediation: "Use vulnerability scanner (Nessus, Qualys), establish patching SLA"
+
+      - id: soc2_008
+        requirement: "Change Management"
+        regulation: "SOC 2 - CC8.1"
+        description: "Document and approve changes to production systems"
+        validation:
+          type: boolean
+          query: "Do you document and approve all production changes?"
+        remediation: "Implement change request process (tickets, approvals), use CI/CD with approvals"
+
+      - id: soc2_009
+        requirement: "Backup and Recovery"
+        regulation: "SOC 2 - A1.2"
+        description: "Backup data daily, test recovery quarterly, retain backups for 30+ days"
+        validation:
+          type: boolean
+          query: "Do you backup data daily and test recovery quarterly?"
+        remediation: "Enable automated backups, document RPO/RTO, conduct quarterly restore tests"
+
+  # ============================================================================
+  # CHECKLIST 4: NIST Cybersecurity Framework
+  # ============================================================================
+  - id: nist_csf
+    name: "NIST Cybersecurity Framework"
+    description: "Federal standard for managing cybersecurity risk"
+    jurisdiction: "United States (federal contractors, critical infrastructure)"
+    regulators:
+      - NIST
+      - CISA
+    applicable_entities:
+      - federal_contractors
+      - critical_infrastructure
+
+    items:
+      - id: nist_001
+        requirement: "Asset Inventory"
+        regulation: "NIST CSF - ID.AM-1"
+        description: "Maintain inventory of physical and software assets"
+        validation:
+          type: boolean
+          query: "Do you maintain an up-to-date asset inventory (hardware, software, data)?"
+        remediation: "Create asset inventory spreadsheet or use tool (Snipe-IT, ServiceNow), update quarterly"
+
+      - id: nist_002
+        requirement: "Risk Assessment"
+        regulation: "NIST CSF - ID.RA-1"
+        description: "Conduct annual risk assessment identifying threats and vulnerabilities"
+        validation:
+          type: boolean
+          query: "Do you conduct an annual cybersecurity risk assessment?"
+        remediation: "Use NIST 800-30 risk assessment template, document threats/vulnerabilities/likelihood/impact"
+
+      - id: nist_003
+        requirement: "Access Control Policy"
+        regulation: "NIST CSF - PR.AC-1"
+        description: "Document access control policy (who can access what, and why)"
+        validation:
+          type: boolean
+          query: "Do you have a documented access control policy?"
+        remediation: "Document access control policy, define roles/permissions, review quarterly"
+
+      - id: nist_004
+        requirement: "Security Awareness Training"
+        regulation: "NIST CSF - PR.AT-1"
+        description: "Train all users on cybersecurity annually (phishing, password security, etc.)"
+        validation:
+          type: boolean
+          query: "Do all employees complete annual security awareness training?"
+        remediation: "Deploy training platform (KnowBe4, Proofpoint), require annual completion, test with phishing sims"
+
+      - id: nist_005
+        requirement: "Anomaly Detection"
+        regulation: "NIST CSF - DE.AE-1"
+        description: "Monitor network traffic and user behavior for anomalies"
+        validation:
+          type: boolean
+          query: "Do you monitor for anomalous network traffic and user behavior?"
+        remediation: "Deploy SIEM (Splunk, ELK) or endpoint detection (CrowdStrike, SentinelOne)"

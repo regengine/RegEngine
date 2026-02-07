@@ -1,0 +1,25 @@
+service: fsma-graph
+slos:
+  trace_latency:
+    description: "Time to complete a full graph traversal (forward/backward)"
+    p50: 500ms
+    p95: 2000ms
+    p99: 5000ms
+    
+  availability:
+    description: "Percentage of non-5xx responses"
+    target: 99.9%
+    window: rolling_30d
+    
+  ingestion_throughput:
+    description: "Event processing capacity per minute"
+    sustained: 10000 events/minute
+    burst: 50000 events/minute
+
+  recall_drill_creation:
+    description: "Time to initiate a new drill and notify stakeholders"
+    p95: 3000ms
+
+  export_generation:
+    description: "Time to generate and start streaming CSV export"
+    p95: 5000ms

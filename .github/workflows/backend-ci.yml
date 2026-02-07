@@ -1,0 +1,157 @@
+name: Backend Services CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  # Test matrix for all services
+  test:
+    name: Test ${{matrix.service}}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [admin, energy, ingestion, opportunity, compliance, graph, internal, scheduler]
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd services/${{ matrix.service }}
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+      
+      - name: Run linting
+        run: |
+          cd services/${{ matrix.service }}
+          pip install flake8 black
+          flake8 app/ --max-line-length=100 --extend-ignore=E203,W503
+          black --check app/
+        continue-on-error: true
+      
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: test-secret-key-for-ci
+        run: |
+          cd services/${{ matrix.service }}
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./services/${{ matrix.service }}/coverage.xml
+          flags: ${{ matrix.service }}
+          name: ${{ matrix.service }}-coverage
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [admin, energy, ingestion, opportunity]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install safety
+        run: pip install safety
+      
+      - name: Check dependencies for vulnerabilities
+        run: |
+          cd services/${{ matrix.service }}
+          safety check -r requirements.txt
+        continue-on-error: true
+
+  # Docker build check
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [admin, energy, ingestion, opportunity]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        run: |
+          cd services/${{ matrix.service }}
+          docker build -t regengine-${{ matrix.service }}:test .
+      
+      - name: Test Docker image
+        run: |
+          docker run --rm regengine-${{ matrix.service }}:test python -c "import app; print('OK')"
+
+  # Integration tests (requires all services)
+  integration:
+    name: Integration Tests
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Start services with Docker Compose
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 10
+      
+      - name: Run integration tests
+        run: |
+          docker-compose -f docker-compose.test.yml exec -T admin \
+            pytest tests/integration/ -v
+      
+      - name: Stop services
+        if: always()
+        run: docker-compose -f docker-compose.test.yml down

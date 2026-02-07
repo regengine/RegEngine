@@ -1,0 +1,234 @@
+# Union Fringe & Payroll Tax Tables
+# Entertainment production rates for California
+# Effective: 2024-2025
+
+# =============================================================================
+# FRINGE RATES BY UNION
+# P&W = Pension & Welfare, H&W = Health & Welfare
+# =============================================================================
+
+fringe_rates:
+  SAG-AFTRA:
+    description: "Screen Actors Guild - AFTRA"
+    pension_contribution_pct: 17.0  # Producer contribution
+    health_welfare_pct: 0.0  # Included in pension
+    vacation_pay_pct: 0.0
+    total_fringe_pct: 17.0
+    notes: "17% contribution to SAG-AFTRA Pension & Health"
+    
+  DGA:
+    description: "Directors Guild of America"
+    pension_contribution_pct: 8.5
+    health_welfare_pct: 7.5
+    vacation_pay_pct: 0.0
+    total_fringe_pct: 16.0
+    notes: "8.5% pension + 7.5% health"
+    
+  WGA:
+    description: "Writers Guild of America"
+    pension_contribution_pct: 8.5
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 0.0
+    total_fringe_pct: 16.5
+    notes: "8.5% pension + 8% health"
+    
+  IATSE_LOCAL_600:
+    description: "International Cinematographers Guild"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719  # Hourly rate based
+    total_fringe_pct: 24.719
+    notes: "Vacation pay calculated separately"
+    vacation_hourly_rate: 3.64
+    
+  IATSE_LOCAL_728:
+    description: "Studio Electrical Lighting Technicians"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Same structure as Local 600"
+    
+  IATSE_LOCAL_80:
+    description: "Studio Grips"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Same structure as Local 600"
+    
+  IATSE_LOCAL_44:
+    description: "Prop, Set Dressers, Greens"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Standard IATSE fringe package"
+    
+  IATSE_LOCAL_705:
+    description: "Costume Designers Guild"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Standard IATSE fringe package"
+    
+  IATSE_LOCAL_706:
+    description: "Makeup Artists & Hair Stylists"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Standard IATSE fringe package"
+    
+  IATSE_LOCAL_871:
+    description: "Script Supervisors"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Standard IATSE fringe package"
+    
+  IATSE_LOCAL_695:
+    description: "Production Sound Mixers"
+    pension_contribution_pct: 9.0
+    health_welfare_pct: 8.0
+    vacation_pay_pct: 7.719
+    total_fringe_pct: 24.719
+    notes: "Standard IATSE fringe package"
+    
+  TEAMSTERS_399:
+    description: "Teamsters Local 399 (Drivers)"
+    pension_contribution_pct: 10.0
+    health_welfare_pct: 9.5
+    vacation_pay_pct: 8.0
+    total_fringe_pct: 27.5
+    notes: "Higher fringe package for Teamsters"
+    
+  NON_UNION:
+    description: "Non-Union Production Staff"
+    pension_contribution_pct: 0.0
+    health_welfare_pct: 0.0
+    vacation_pay_pct: 0.0
+    total_fringe_pct: 0.0
+    notes: "No union fringes; only statutory payroll taxes apply"
+
+# =============================================================================
+# CALIFORNIA PAYROLL TAXES (Employer Side)
+# =============================================================================
+
+payroll_taxes:
+  # Federal Taxes
+  FICA_SS:
+    name: "Social Security (OASDI)"
+    rate_pct: 6.2
+    wage_base_limit: 168600  # 2024 limit
+    applies_to: "employee"
+    notes: "Employer matches employee contribution"
+    
+  FICA_MED:
+    name: "Medicare (HI)"
+    rate_pct: 1.45
+    wage_base_limit: null  # No limit
+    applies_to: "employee"
+    notes: "No wage base limit; additional 0.9% on employee side over $200k"
+    
+  FUTA:
+    name: "Federal Unemployment Tax"
+    rate_pct: 0.6  # After SUTA credit
+    wage_base_limit: 7000
+    applies_to: "employee"
+    notes: "6% gross rate, 5.4% credit for SUTA compliance"
+    
+  # California State Taxes
+  CA_SUI:
+    name: "CA State Unemployment Insurance"
+    rate_pct: 3.4  # New employer rate; varies by experience
+    wage_base_limit: 7000
+    applies_to: "employee"
+    notes: "Rate varies 1.5% - 6.2% based on experience rating"
+    min_rate: 1.5
+    max_rate: 6.2
+    
+  CA_ETT:
+    name: "CA Employment Training Tax"
+    rate_pct: 0.1
+    wage_base_limit: 7000
+    applies_to: "employee"
+    notes: "Funds California Employment Training Panel"
+    
+  CA_SDI:
+    name: "CA State Disability Insurance"
+    rate_pct: 1.1  # 2024 rate, employee-paid but often employer-covered
+    wage_base_limit: 153164  # 2024 limit
+    applies_to: "employee"
+    notes: "Technically employee-paid; some employers cover it"
+    employer_covers: false
+    
+# =============================================================================
+# WORKERS COMPENSATION RATES BY CLASSIFICATION
+# California rates per $100 of payroll
+# =============================================================================
+
+workers_comp:
+  default_rate_per_100: 2.50  # Average for office/clerical
+  
+  classifications:
+    # Entertainment Industry Codes
+    MOTION_PICTURE_PRODUCTION:
+      code: "9812"
+      description: "Motion Picture - Production Staff, Directors, Actors"
+      rate_per_100: 2.87
+      
+    MOTION_PICTURE_TECHNICAL:
+      code: "9813"
+      description: "Motion Picture - Camera, Lighting, Grip, Electric"
+      rate_per_100: 4.92
+      
+    MOTION_PICTURE_STUNTS:
+      code: "9817"
+      description: "Motion Picture - Stunt Performers"
+      rate_per_100: 28.55
+      
+    DRIVERS_COMMERCIAL:
+      code: "7380"
+      description: "Drivers - Commercial"
+      rate_per_100: 8.15
+      
+    CLERICAL_OFFICE:
+      code: "8810"
+      description: "Clerical Office Employees"
+      rate_per_100: 0.35
+      
+    CONSTRUCTION_CARPENTRY:
+      code: "5403"
+      description: "Carpentry - Set Construction"
+      rate_per_100: 5.62
+
+# =============================================================================
+# SUMMARY CALCULATIONS
+# =============================================================================
+
+summary:
+  # Total employer burden for typical W-2 employee in CA
+  statutory_employer_costs:
+    fica_ss_pct: 6.2
+    fica_med_pct: 1.45
+    futa_pct: 0.6
+    ca_sui_pct: 3.4  # Average
+    ca_ett_pct: 0.1
+    total_statutory_pct: 11.75
+    
+  # Estimate for production worker (IATSE + statutory)
+  typical_production_worker:
+    union_fringe_pct: 24.719  # IATSE
+    statutory_pct: 11.75
+    workers_comp_pct: 4.92  # Technical
+    total_employer_burden_pct: 41.389
+    
+  # Estimate for above-the-line (SAG + statutory)
+  typical_atl_performer:
+    union_fringe_pct: 17.0  # SAG
+    statutory_pct: 11.75
+    workers_comp_pct: 2.87  # Production
+    total_employer_burden_pct: 31.62
