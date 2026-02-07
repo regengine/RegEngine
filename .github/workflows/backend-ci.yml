@@ -75,6 +75,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           JWT_SECRET: test-secret-key-for-ci
         run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)
           cd services/${{ matrix.service }}
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=term
       
