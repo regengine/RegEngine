@@ -20,7 +20,9 @@ pytest-cov==4.1.0
 
 # Kafka (existing FSMA functionality)
 aiokafka==0.8.1
+
 kafka-python==2.0.2
+confluent-kafka>=2.2.0
 
 # Utilities
 python-dotenv==1.0.0
