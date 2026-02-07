@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # Add app to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.pcos_models import (
+from services.admin.app.pcos_models import (
     PCOSCompanyModel,
     PCOSProjectModel,
     PCOSLocationModel,
@@ -57,8 +57,8 @@ def engine():
 @pytest.fixture(scope="session")
 def tables(engine):
     """Create all tables for testing."""
-    from app.sqlalchemy_models import Base
-    from app.pcos_models import PCOSCompanyModel  # Import to register models
+    from services.admin.app.sqlalchemy_models import Base
+    from services.admin.app.pcos_models import PCOSCompanyModel  # Import to register models
     
     # Create tenant table first (mock)
     engine.execute(text("""
@@ -397,7 +397,7 @@ def create_test_evidence(
 def client():
     """Provide a FastAPI TestClient for API testing."""
     from fastapi.testclient import TestClient
-    from main import app
+    from services.admin.main import app
     
     with TestClient(app) as test_client:
         yield test_client
