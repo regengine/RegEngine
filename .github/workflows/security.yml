@@ -138,7 +138,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt || true
-          pip install pytest httpx pytest-json-report
+          pip install pytest httpx pytest-json-report pytest-asyncio
 
       - name: Run tenant isolation tests
         run: |
@@ -166,7 +166,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: ZAP baseline scan
-        run: bash scripts/security/zap_baseline.sh
+        run: |
+          if [ -z "${ZAP_TARGET:-}" ]; then
+            echo "SKIP: ZAP_TARGET not configured. Set it in GitHub Secrets to enable DAST."
+            exit 0
+          fi
+          bash scripts/security/zap_baseline.sh
         env:
           ZAP_TARGET: ${{ secrets.ZAP_TARGET }}
 
