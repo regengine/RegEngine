@@ -20,9 +20,15 @@ DB_URL = os.getenv("TEST_DB_URL", "postgresql://regengine:regengine@localhost:54
 
 @pytest.fixture(scope="session")
 def db_engine():
-    engine = create_engine(DB_URL)
-    yield engine
-    engine.dispose()
+    try:
+        engine = create_engine(DB_URL)
+        # Test connection
+        with engine.connect() as conn:
+            pass
+        yield engine
+        engine.dispose()
+    except Exception as e:
+        pytest.skip(f"Database unavailable: {e}")
 
 @pytest.fixture(scope="function")
 def db(db_engine):
@@ -35,8 +41,16 @@ def db(db_engine):
 
 @pytest.fixture
 async def async_client():
-    async with AsyncClient(base_url="http://localhost:8400", timeout=30.0) as client:
-        yield client
+    try:
+        async with AsyncClient(base_url="http://localhost:8400", timeout=30.0) as client:
+             # Simple check
+            try:
+                await client.get("/docs")
+            except Exception:
+                pytest.skip("Admin API unavailable")
+            yield client
+    except Exception:
+        pytest.skip("Admin API unavailable")
 
 @pytest.fixture
 def admin_user(db: Session):
