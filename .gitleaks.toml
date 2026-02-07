@@ -1,0 +1,54 @@
+title = "RegEngine Gitleaks Config"
+
+# ─── Allowlist ────────────────────────────────────────────────────
+# Items here are known non-secrets: test fixtures, example configs,
+# demo data, and documentation samples.
+
+[allowlist]
+description = "Known non-secrets: test fixtures, examples, docs"
+
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.production$''',
+  '''test_data/''',
+  '''tests/''',
+  '''demo/''',
+  '''seeds/''',
+  '''SECRETS\.md$''',
+  '''AUTHENTICATION\.md$''',
+  '''LOCAL_SETUP_GUIDE\.md$''',
+  '''DEPLOYMENT\.md$''',
+  '''docs/''',
+  '''sales/''',
+  '''sales_enablement/''',
+  '''launch_orchestrator/''',
+  '''runbooks/''',
+  '''nfr/''',
+  '''\.audit/''',
+  '''scripts/regctl/''',
+  '''tools/''',
+  '''sdk/''',
+  '''sdks/''',
+  '''production_bundle/''',
+  '''frontend_logs\.txt$''',
+  '''ingest_logs.*\.txt$''',
+  '''login_resp\.json$''',
+  '''fix_password\.sql$''',
+  '''db_test\.py$''',
+  '''diag_db\.py$''',
+  '''verify_phi\.py$''',
+  '''\.github/copilot-instructions\.md$''',
+  '''AGENTS\.md$''',
+  '''.*_SUMMARY\.md$''',
+  '''.*_STATUS\.md$''',
+  '''.*_REPORT\.md$''',
+  '''CHANGELOG\.md$''',
+  '''portfolio_case_study\.md$''',
+  '''SOC2_CONTROL_MATRIX\.md$''',
+  '''MODEL_GOVERNANCE\.md$''',
+  '''DISASTER_RECOVERY\.md$''',
+  '''industry_plugins/''',
+  '''migrations/''',
+  '''schemas/''',
+  '''data-schemas/''',
+]
