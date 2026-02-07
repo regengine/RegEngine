@@ -15,7 +15,8 @@ import uuid
 import sys
 
 # Add shared utilities
-sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
+# Add shared utilities
+# sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services') # Removed for CI/CD compatibility
 from shared.middleware import get_current_tenant_id
 from shared.auth import require_api_key
 
@@ -157,7 +158,9 @@ async def initialize_label_batch(
 
     logger.info("batch_init_start", tenant_id=tenant_id_str, tlc=tlc)
 
+
     # ✅ ATOMICITY FIX: Single Transaction for Create + Reserve
+    cypher = """
     MERGE (tenant:Tenant {id: $tenant_id})
     MERGE (packer:Facility {gln: $packer_gln, tenant_id: $tenant_id})
 
