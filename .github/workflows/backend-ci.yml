@@ -126,8 +126,7 @@ jobs:
       
       - name: Build Docker image
         run: |
-          cd services/${{ matrix.service }}
-          docker build -t regengine-${{ matrix.service }}:test .
+          docker build -t regengine-${{ matrix.service }}:test -f services/${{ matrix.service }}/Dockerfile .
       
       - name: Test Docker image
         run: |
