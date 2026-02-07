@@ -1,0 +1,59 @@
+{
+  "type": "record",
+  "name": "NormalizedDocumentEvent",
+  "namespace": "com.regengine.ingestion",
+  "doc": "Event emitted when a regulatory document is ingested and normalized",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "Unique identifier for the event"
+    },
+    {
+      "name": "document_id",
+      "type": "string",
+      "doc": "Unique ID of the document"
+    },
+    {
+      "name": "document_hash",
+      "type": "string",
+      "doc": "Hash of the document content for deduplication"
+    },
+    {
+      "name": "tenant_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Tenant ID for multi-tenancy"
+    },
+    {
+      "name": "source_system",
+      "type": "string",
+      "doc": "Source system (e.g. eur-lex, sec)"
+    },
+    {
+      "name": "source_url",
+      "type": "string",
+      "doc": "Original URL of the document"
+    },
+    {
+      "name": "raw_s3_path",
+      "type": "string",
+      "doc": "S3 path to the raw file"
+    },
+    {
+      "name": "normalized_s3_path",
+      "type": "string",
+      "doc": "S3 path to the normalized JSON"
+    },
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "Event timestamp (ISO8601)"
+    },
+    {
+      "name": "content_sha256",
+      "type": "string",
+      "doc": "SHA256 of the content"
+    }
+  ]
+}

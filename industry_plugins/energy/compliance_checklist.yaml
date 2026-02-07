@@ -1,0 +1,304 @@
+# Energy and Utilities Compliance Checklist
+
+industry: energy
+version: "1.0"
+last_updated: "2025-11-19"
+
+checklists:
+  # ============================================================================
+  # CHECKLIST 1: NERC CIP (Critical Infrastructure Protection) for Power Grid
+  # ============================================================================
+  - id: nerc_cip_cyber security
+    name: "NERC CIP Cybersecurity Compliance"
+    description: "Bulk electric system cybersecurity standards"
+    jurisdiction: "United States + Canada"
+    regulators:
+      - NERC (North American Electric Reliability Corporation)
+      - FERC (Federal Energy Regulatory Commission)
+    applicable_entities:
+      - bulk_electric_system_owners
+      - generation_operators
+      - transmission_operators
+
+    items:
+      - id: cip_001
+        requirement: "Identify BES Cyber Systems"
+        regulation: "NERC CIP-002-5.1"
+        description: "Identify and categorize all BES Cyber Systems (High, Medium, Low impact)"
+        validation:
+          type: boolean
+          query: "Have you identified and categorized all BES Cyber Systems?"
+        remediation: "Conduct asset inventory, apply categorization criteria per CIP-002, document in asset list"
+
+      - id: cip_002
+        requirement: "Electronic Security Perimeters (ESP)"
+        regulation: "NERC CIP-005-6"
+        description: "Establish Electronic Security Perimeter (firewall) around BES Cyber Systems"
+        validation:
+          type: boolean
+          query: "Do you have documented Electronic Security Perimeters with firewall rules?"
+        remediation: "Deploy firewalls around BES Cyber Systems, document ESP boundaries, restrict inbound/outbound traffic"
+
+      - id: cip_003
+        requirement: "Physical Security Perimeters (PSP)"
+        regulation: "NERC CIP-006-6"
+        description: "Control physical access to BES Cyber Systems with badge readers, cameras, guards"
+        validation:
+          type: boolean
+          query: "Do you control physical access with badges, cameras, and access logs?"
+        remediation: "Install badge readers, CCTV cameras, maintain visitor logs, conduct quarterly access reviews"
+
+      - id: cip_004
+        requirement: "Personnel Risk Assessment"
+        regulation: "NERC CIP-004-6"
+        description: "Conduct background checks (criminal, credit, employment) for personnel with access to BES Cyber Systems"
+        validation:
+          type: boolean
+          query: "Do you conduct background checks (7-year criminal, credit, employment) before granting access?"
+        remediation: "Establish background check policy, conduct checks for all new hires/contractors with BES access"
+
+      - id: cip_005
+        requirement: "Cyber Security Training"
+        regulation: "NERC CIP-004-6 R2"
+        description: "Train all personnel with BES Cyber System access annually on cybersecurity"
+        validation:
+          type: boolean
+          query: "Do all personnel complete annual CIP cybersecurity training?"
+        remediation: "Deploy training program (phishing, password security, physical security), track completion, re-train annually"
+
+      - id: cip_006
+        requirement: "Interactive Remote Access (IRA)"
+        regulation: "NERC CIP-005-6 R2"
+        description: "Use multi-factor authentication for all Interactive Remote Access to BES Cyber Systems"
+        validation:
+          type: boolean
+          query: "Do you require MFA for all Interactive Remote Access?"
+        remediation: "Enable MFA (RSA token, Duo, Okta) for VPN/remote desktop, disable single-factor access"
+
+      - id: cip_007
+        requirement: "Patch Management"
+        regulation: "NERC CIP-007-6 R2"
+        description: "Track security patches, assess applicability, install within 35 days"
+        validation:
+          type: boolean
+          query: "Do you install security patches within 35 days of release?"
+        remediation: "Establish patch management process: track patches, test in lab, deploy within 35 days, document exceptions"
+
+      - id: cip_008
+        requirement: "Malicious Code Prevention"
+        regulation: "NERC CIP-007-6 R3"
+        description: "Deploy antivirus/anti-malware on all BES Cyber Assets, update signatures weekly"
+        validation:
+          type: boolean
+          query: "Do you deploy antivirus with weekly signature updates on all BES Cyber Assets?"
+        remediation: "Install endpoint protection (CrowdStrike, SentinelOne, Symantec), enable auto-updates"
+
+      - id: cip_009
+        requirement: "Security Event Monitoring"
+        regulation: "NERC CIP-007-6 R4"
+        description: "Log security events (logins, privilege escalations, malware detection), review logs every 15 days"
+        validation:
+          type: boolean
+          query: "Do you log security events and review logs every 15 days?"
+        remediation: "Enable audit logging (Windows Event Log, syslog), ship to SIEM, review every 15 days, document review"
+
+      - id: cip_010
+        requirement: "Ports and Services"
+        regulation: "NERC CIP-007-6 R1"
+        description: "Disable unnecessary ports and services on BES Cyber Assets"
+        validation:
+          type: boolean
+          query: "Do you maintain documentation of enabled ports/services and justify business need?"
+        remediation: "Conduct port scan, disable unnecessary services (FTP, Telnet), document enabled ports/services with justification"
+
+      - id: cip_011
+        requirement: "Configuration Change Management"
+        regulation: "NERC CIP-010-3 R1"
+        description: "Document baseline configuration, track changes, require approval for changes"
+        validation:
+          type: boolean
+          query: "Do you maintain baseline configurations and require approval for changes?"
+        remediation: "Document baseline configs, use change management system (ServiceNow, Jira), require manager approval for changes"
+
+      - id: cip_012
+        requirement: "Recovery Plans"
+        regulation: "NERC CIP-009-6"
+        description: "Document recovery plans for BES Cyber Systems, test annually"
+        validation:
+          type: boolean
+          query: "Do you have documented recovery plans tested annually?"
+        remediation: "Document recovery procedures (backup restoration, failover), test annually, update based on results"
+
+      - id: cip_013
+        requirement: "Incident Reporting to NERC"
+        regulation: "NERC CIP-008-6"
+        description: "Report cybersecurity incidents to NERC E-ISAC within 1 hour of determination"
+        validation:
+          type: boolean
+          query: "Do you report cybersecurity incidents to E-ISAC within 1 hour?"
+        remediation: "Document incident response plan, assign on-call team, establish E-ISAC reporting process"
+
+      - id: cip_014
+        requirement: "Transient Cyber Assets"
+        regulation: "NERC CIP-010-3 R2"
+        description: "Control use of transient devices (laptops, USB drives) on BES Cyber Systems"
+        validation:
+          type: boolean
+          query: "Do you scan transient devices for malware before connecting to BES Cyber Systems?"
+        remediation: "Require malware scan for all transient devices, document authorized devices, maintain log of connections"
+
+  # ============================================================================
+  # CHECKLIST 2: EPA Environmental Compliance (Emissions, Waste)
+  # ============================================================================
+  - id: epa_environmental
+    name: "EPA Environmental Compliance"
+    description: "Air emissions, water discharge, and waste disposal compliance"
+    jurisdiction: "United States"
+    regulators:
+      - EPA (Environmental Protection Agency)
+      - State environmental agencies
+    applicable_entities:
+      - power_plants
+      - refineries
+      - manufacturing_facilities
+
+    items:
+      - id: epa_001
+        requirement: "Clean Air Act - Emissions Reporting"
+        regulation: "40 CFR Part 75 (Acid Rain Program)"
+        description: "Monitor and report SO2, NOx, and CO2 emissions quarterly"
+        validation:
+          type: boolean
+          query: "Do you monitor emissions with CEMS (Continuous Emissions Monitoring System) and report quarterly?"
+        remediation: "Install CEMS, calibrate quarterly, submit emissions reports via EPA's Clean Air Markets Program"
+
+      - id: epa_002
+        requirement: "Clean Air Act - Emissions Limits"
+        regulation: "40 CFR Part 60 (New Source Performance Standards)"
+        description: "Ensure emissions do not exceed NSPS limits for your source category"
+        validation:
+          type: boolean
+          query: "Are your emissions below NSPS limits for your source category?"
+        remediation: "Install emissions controls (scrubbers, electrostatic precipitators), optimize combustion, conduct stack testing"
+
+      - id: epa_003
+        requirement: "Clean Water Act - NPDES Permit"
+        regulation: "33 U.S.C. § 1342 (Clean Water Act)"
+        description: "Obtain NPDES permit for discharge of pollutants into surface water"
+        validation:
+          type: boolean
+          query: "Do you have a valid NPDES permit for water discharges?"
+        remediation: "Apply for NPDES permit from EPA or state agency, monitor discharge, submit DMRs (Discharge Monitoring Reports) monthly"
+
+      - id: epa_004
+        requirement: "Clean Water Act - Discharge Limits"
+        regulation: "40 CFR Part 423 (Steam Electric Power Generating Point Source Category)"
+        description: "Ensure wastewater discharge meets effluent limitation guidelines"
+        validation:
+          type: boolean
+          query: "Do your discharges meet ELG limits for pH, TSS, oil/grease, metals?"
+        remediation: "Treat wastewater (sedimentation, filtration, chemical treatment), test discharge monthly, adjust treatment as needed"
+
+      - id: epa_005
+        requirement: "RCRA Hazardous Waste Management"
+        regulation: "42 U.S.C. § 6901 (Resource Conservation and Recovery Act)"
+        description: "Properly store, transport, and dispose of hazardous waste"
+        validation:
+          type: boolean
+          query: "Do you have an EPA ID number for hazardous waste generation?"
+        remediation: "Obtain EPA ID, label hazardous waste containers, use licensed disposal facilities, submit biennial reports"
+
+      - id: epa_006
+        requirement: "SPCC Plan (Spill Prevention)"
+        regulation: "40 CFR Part 112"
+        description: "Maintain Spill Prevention, Control, and Countermeasure (SPCC) plan if oil storage > 1,320 gallons"
+        validation:
+          type: boolean
+          query: "Do you have an SPCC plan certified by a PE (Professional Engineer)?"
+        remediation: "Hire PE to prepare SPCC plan, install secondary containment around oil tanks, train staff on spill response"
+
+  # ============================================================================
+  # CHECKLIST 3: State Renewable Energy Standards
+  # ============================================================================
+  - id: renewable_energy_standards
+    name: "State Renewable Energy Standards (RPS)"
+    description: "Compliance with state mandates for renewable energy generation"
+    jurisdiction: "United States (state-specific)"
+    regulators:
+      - State Public Utility Commissions
+    applicable_entities:
+      - electric_utilities
+      - renewable_energy_generators
+
+    items:
+      - id: rps_001
+        requirement: "RPS Compliance (California)"
+        regulation: "California SB 100"
+        description: "Utilities must procure 60% renewable energy by 2030, 100% by 2045"
+        validation:
+          type: percentage_threshold
+          query: "What percentage of your energy portfolio is renewable?"
+          threshold:
+            min: 60.0  # 60% by 2030
+            unit: "percent"
+          pass_criteria: "value >= threshold (year == 2030)"
+        remediation: "Procure RECs (Renewable Energy Certificates), sign PPAs (Power Purchase Agreements) with solar/wind farms"
+
+      - id: rps_002
+        requirement: "REC Tracking"
+        regulation: "State RPS rules (varies by state)"
+        description: "Track Renewable Energy Credits (RECs) in state registry"
+        validation:
+          type: boolean
+          query: "Do you track RECs in the state registry (e.g., WREGIS, NEPOOL GIS)?"
+        remediation: "Register with state REC tracking system (WREGIS for Western US, M-RETS for Midwest), submit generation data monthly"
+
+      - id: rps_003
+        requirement: "RPS Compliance Report"
+        regulation: "State PUC regulations"
+        description: "Submit annual RPS compliance report to state PUC"
+        validation:
+          type: boolean
+          query: "Do you submit annual RPS compliance report to your state PUC?"
+        remediation: "Compile renewable energy procurement data, calculate compliance percentage, submit report by deadline (typically March/April)"
+
+  # ============================================================================
+  # CHECKLIST 4: FERC Wholesale Electricity Market Compliance
+  # ============================================================================
+  - id: ferc_wholesale_markets
+    name: "FERC Wholesale Market Compliance"
+    description: "Compliance with federal wholesale electricity market rules"
+    jurisdiction: "United States"
+    regulators:
+      - FERC (Federal Energy Regulatory Commission)
+    applicable_entities:
+      - wholesale_power_marketers
+      - transmission_owners
+
+    items:
+      - id: ferc_001
+        requirement: "Market-Based Rate Authorization"
+        regulation: "FERC Order No. 816"
+        description: "Obtain market-based rate authority to sell power at market prices"
+        validation:
+          type: boolean
+          query: "Do you have FERC market-based rate authorization?"
+        remediation: "File application for market-based rate authority (MBR) with FERC, demonstrate lack of market power"
+
+      - id: ferc_002
+        requirement: "Electric Quarterly Reports (EQR)"
+        regulation: "18 CFR § 35.10b"
+        description: "File EQR within 30 days of end of quarter, reporting all wholesale sales"
+        validation:
+          type: boolean
+          query: "Do you file EQR within 30 days of quarter-end?"
+        remediation: "Compile wholesale transaction data, submit via FERC's EQR system, include: buyer, price, volume, delivery point"
+
+      - id: ferc_003
+        requirement: "Anti-Manipulation Rules"
+        regulation: "18 CFR § 1c (FERC Order No. 670)"
+        description: "Prohibit fraudulent or manipulative practices in wholesale power/natural gas markets"
+        validation:
+          type: boolean
+          query: "Do you have compliance program to prevent market manipulation?"
+        remediation: "Adopt anti-manipulation policy, train traders, monitor for wash trades/false reporting, designate compliance officer"

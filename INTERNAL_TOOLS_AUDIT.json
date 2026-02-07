@@ -1,0 +1,754 @@
+{
+  "summary": {
+    "total_internal_tools_identified": 15,
+    "total_incomplete_internal_tools": 12,
+    "high_priority_tools": [
+      "State Registry Scrapers",
+      "Chaos Engineering Data Validator",
+      "Provenance Replay Auditor",
+      "Tenant CLI Tool",
+      "Scheduler/Auto-Ingestion"
+    ],
+    "notes": [
+      "The RegEngine repository has a mature architecture with well-defined service boundaries and shared security modules.",
+      "Several internal tools have placeholder implementations, especially scrapers returning empty bytes.",
+      "Missing scheduled job infrastructure - no scheduler service exists for automated ingestion.",
+      "Incomplete data validation in chaos testing tools.",
+      "The codebase follows good patterns (Pydantic schemas, structured logging, Kafka event-driven architecture).",
+      "Key gaps require build-out of operational tooling to be production-ready.",
+      "Demo data loader references non-existent overlay writer methods."
+    ]
+  },
+  "tools": [
+    {
+      "name": "State Registry Scrapers",
+      "type": "data ingestion pipeline",
+      "location": [
+        "services/ingestion/app/scrapers/state_adaptors/cppa.py",
+        "services/ingestion/app/scrapers/state_adaptors/fl_rss.py",
+        "services/ingestion/app/scrapers/state_adaptors/nj_gaming.py",
+        "services/ingestion/app/scrapers/state_adaptors/nv_gaming.py",
+        "services/ingestion/app/scrapers/state_adaptors/tx_rss.py"
+      ],
+      "inferred_purpose": "Fetch regulatory documents from state government websites (CPPA California Privacy, Florida Legislature RSS, New Jersey/Nevada Gaming, Texas Legislature) and normalize them for downstream NLP extraction. These scrapers are the entry points for the regulatory document ingestion pipeline.",
+      "current_state": {
+        "implemented_features": [
+          "Base class interface (StateRegistryScraper) with list_sources() and fetch() methods",
+          "Source URLs and jurisdiction codes defined for each scraper",
+          "Content-type detection (RSS/XML vs HTML)"
+        ],
+        "integration_points": [
+          "services/ingestion/app/scrapers/state_adaptors/base.py defines contract",
+          "Ingestion service routes would call these scrapers",
+          "Normalized output goes to Kafka topic ingest.normalized"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "All 5 scrapers return b'' (empty bytes) - NO actual HTTP fetching implemented",
+          "No requests/BeautifulSoup parsing logic despite being imported in nydfs.py",
+          "No retry/backoff logic for transient failures",
+          "No rate limiting or polite crawling delays",
+          "No error handling for HTTP failures"
+        ],
+        "nice_to_have": [
+          "RSS/XML feed parsing for FL and TX scrapers",
+          "PDF document detection and download",
+          "Last-modified / ETag caching to avoid re-fetching",
+          "Metrics for scraper health (success rate, latency)",
+          "Configurable User-Agent strings"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Copy the working implementation pattern from nydfs.py (which has requests + BeautifulSoup logic) to all stub scrapers",
+        "Step 2: Implement RSS feed parsing for fl_rss.py and tx_rss.py using feedparser library",
+        "Step 3: Add retry logic with exponential backoff (use tenacity library already in project)",
+        "Step 4: Add rate limiting (e.g., 1 request per second per domain)",
+        "Step 5: Add integration tests that mock HTTP responses",
+        "Step 6: Add Prometheus metrics for scraper operations"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Adaptive polling based on update frequency",
+          "rationale": "Legislative sites update at different rates - RSS feeds may update daily while gaming regulations quarterly. Track last-seen content hash and poll frequency to optimize resource usage.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "LLM-assisted content extraction for complex HTML",
+          "rationale": "Some regulatory sites have non-standard layouts. Use existing Ollama/LLM infrastructure to extract clean text from messy HTML when standard parsing fails.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Scraper health dashboard",
+          "rationale": "A simple admin UI showing last successful scrape time, failure counts, and document counts per jurisdiction would help ops teams monitor data freshness.",
+          "approx_effort": "low"
+        }
+      ],
+      "risk_if_ignored": "The entire ingestion pipeline will receive no regulatory documents from 5 of 7 configured jurisdictions. The platform will only work with NYDFS documents, severely limiting its regulatory coverage and demo value."
+    },
+    {
+      "name": "Chaos Engineering Data Validator",
+      "type": "resilience testing tool",
+      "location": [
+        "scripts/chaos_runner.py"
+      ],
+      "inferred_purpose": "Automate chaos engineering tests to validate system resilience and recovery mechanisms. Tests include killing containers, simulating database failures, and measuring recovery time objectives (RTO).",
+      "current_state": {
+        "implemented_features": [
+          "ChaosRunner class with Docker integration",
+          "Test definitions for Neo4j, Kafka, PostgreSQL, and microservice failures",
+          "RTO measurement and reporting",
+          "Comprehensive logging and metrics",
+          "CLI with argparse for test selection"
+        ],
+        "integration_points": [
+          "Docker API for container lifecycle management",
+          "scripts/chaos/ shell scripts for individual component tests"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "_validate_data_integrity() method is a stub with TODO comment - returns True always",
+          "No actual verification that data wasn't lost during chaos events",
+          "No Kafka consumer offset verification",
+          "No Neo4j node/relationship count verification",
+          "No PostgreSQL row count verification"
+        ],
+        "nice_to_have": [
+          "Network partition simulation (latency injection, packet loss)",
+          "Gradual degradation tests (CPU throttling, memory pressure)",
+          "Automated chaos test scheduling (chaos monkey style)",
+          "Test result persistence and trend analysis"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Implement _validate_data_integrity() with Neo4j query to verify expected node/relationship counts before/after chaos",
+        "Step 2: Add PostgreSQL verification using SQLAlchemy to check admin tables (api_keys, review_items)",
+        "Step 3: Add Kafka consumer group offset verification to ensure no messages were lost",
+        "Step 4: Create baseline fixtures that seed known data before chaos tests",
+        "Step 5: Add integration with CI/CD to run chaos tests on staging environment"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Golden dataset verification with content hashing",
+          "rationale": "Create a known golden dataset with precomputed hashes. After chaos, verify hashes match. This catches data corruption, not just missing data.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Automated remediation suggestions",
+          "rationale": "When a chaos test fails, use the test context to suggest fixes (e.g., 'Neo4j recovery slow - consider increasing heap size').",
+          "approx_effort": "low"
+        },
+        {
+          "idea": "Chaos test library with parameterized scenarios",
+          "rationale": "Define chaos scenarios in YAML (duration, target, expected behavior) so non-engineers can add new tests without code changes.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "False confidence in system resilience. The chaos tests will report 'data integrity OK' even when data loss occurs, leading to production incidents where data is silently lost during failures."
+    },
+    {
+      "name": "Provenance Replay Auditor",
+      "type": "audit/compliance tool",
+      "location": [
+        "services/internal/provenance_replay.py",
+        "scripts/audit/verify_provenance.py"
+      ],
+      "inferred_purpose": "Deterministic verification tool for regulatory audits. Re-runs the NLP extraction pipeline on original documents and compares output hashes against stored graph records to prove extraction provenance hasn't been tampered with.",
+      "current_state": {
+        "implemented_features": [
+          "ProvenanceVerifier class with tenant database routing",
+          "Hash-based verification of extraction outputs",
+          "Version mismatch detection between model versions",
+          "CLI tool for running audits (verify_provenance.py)",
+          "Support for multiple extractor frameworks (NYDFS, DORA, SEC SCI)"
+        ],
+        "integration_points": [
+          "Neo4j graph database for stored provision records",
+          "NLP extractors via EXTRACTOR_REGISTRY",
+          "Tenant isolation via database routing"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "No batch audit capability - can only verify one provision at a time",
+          "No audit trail logging of verification attempts",
+          "Limited extractor framework mapping (only 3 frameworks)",
+          "No handling of schema evolution in stored records"
+        ],
+        "nice_to_have": [
+          "Audit report generation (PDF/HTML) for regulators",
+          "Scheduled automated audits with alerting on failures",
+          "Visualization of provenance chain in admin UI",
+          "Support for auditing partial documents (section-level)"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Add batch verification method that processes all provisions for a document/tenant",
+        "Step 2: Integrate with audit_logging module from shared/ to log all verification attempts",
+        "Step 3: Add support for remaining extractors (LLM extractor, generic extractor)",
+        "Step 4: Create schema migration path for handling version changes in stored records",
+        "Step 5: Add unit tests mocking Neo4j responses"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Cryptographic audit chain with blockchain anchoring",
+          "rationale": "Hash verification results and anchor to a public blockchain (e.g., Ethereum) to provide immutable proof of audit timing. Valuable for regulatory demonstrating 'we audited on date X'.",
+          "approx_effort": "high"
+        },
+        {
+          "idea": "Differential provenance analysis",
+          "rationale": "When verification fails, show exactly what changed: model drift, text preprocessing changes, or actual tampering. Uses semantic diff rather than just hash mismatch.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Self-healing re-extraction",
+          "rationale": "When version mismatch detected, automatically queue document for re-extraction with current model and mark old provision as superseded rather than failing the audit.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "Regulatory audits will be manual, time-consuming, and error-prone. Unable to scale audits as document volume grows. Risk of compliance failures during actual regulatory examination."
+    },
+    {
+      "name": "Tenant CLI Tool (regctl)",
+      "type": "CLI admin tool",
+      "location": [
+        "scripts/regctl/tenant.py"
+      ],
+      "inferred_purpose": "Command-line interface for managing RegEngine tenants - creating, listing, deleting, and resetting tenant environments including database schemas, Neo4j databases, API keys, and demo data loading.",
+      "current_state": {
+        "implemented_features": [
+          "Click-based CLI with create/list/delete/reset commands",
+          "TenantManager class with full lifecycle management",
+          "API key generation using secure random",
+          "Local JSON file-based tenant registry",
+          "Neo4j database creation (with Enterprise fallback)",
+          "Demo data loading with framework selection (NIST, SOC2, ISO27001)"
+        ],
+        "integration_points": [
+          "Neo4j for tenant database creation",
+          "scripts/demo/load_demo_data.py for seeding",
+          ".tenants.db local file for registry"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "_create_postgres_schema() is a stub with 'pass' - no actual SQL execution",
+          "_delete_postgres_schema() is a stub with 'pass'",
+          "Demo data loader references non-existent scripts/demo/load_demo_data.py subprocess (path mismatch)",
+          "No validation that tenant ID is unique before creation",
+          "API keys not stored in admin service database, only in local file"
+        ],
+        "nice_to_have": [
+          "Interactive mode for guided tenant creation",
+          "Tenant status/health check command",
+          "Export/import tenant data for migration",
+          "Resource quota management per tenant"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Implement _create_postgres_schema() using SQLAlchemy to CREATE SCHEMA tenant_{id}",
+        "Step 2: Fix demo data loader path or create missing script at correct location",
+        "Step 3: Add duplicate tenant name/ID validation",
+        "Step 4: Persist API keys to admin service database via POST /v1/keys endpoint",
+        "Step 5: Add unit tests with mocked database connections"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Tenant provisioning webhooks",
+          "rationale": "Trigger external systems (Slack notification, billing system, CRM) when tenant is created/deleted. Enables sales/ops automation.",
+          "approx_effort": "low"
+        },
+        {
+          "idea": "Tenant resource dashboard",
+          "rationale": "Add 'regctl status <tenant-id>' command that shows document count, API call volume, storage usage. Helps size customer plans.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Dry-run mode with diff preview",
+          "rationale": "Show exactly what will be created/deleted before executing, similar to terraform plan. Prevents accidental data loss.",
+          "approx_effort": "low"
+        }
+      ],
+      "risk_if_ignored": "Tenant onboarding is incomplete - PostgreSQL schemas won't be created, leaving tenant data in a broken state. Sales demos will fail when trying to create new tenant environments."
+    },
+    {
+      "name": "Scheduler/Auto-Ingestion Service",
+      "type": "background job scheduler",
+      "location": [],
+      "status": "NOT_IMPLEMENTED",
+      "expected_location": "services/scheduler/",
+      "inferred_purpose": "Automatically trigger regulatory document ingestion on a schedule. The README explicitly calls this out as missing: 'No auto-ingestion trigger exists'.",
+      "current_state": {
+        "implemented_features": [],
+        "integration_points": [
+          "Would call scrapers and emit to ingest.normalized Kafka topic",
+          "Would use APScheduler or cron according to README"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "ENTIRE SERVICE DOES NOT EXIST",
+          "No scheduled job framework",
+          "No scraper orchestration",
+          "No backfill capability for missed runs"
+        ],
+        "nice_to_have": [
+          "Configurable schedules per jurisdiction",
+          "Job status dashboard",
+          "Manual trigger endpoint"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Create services/scheduler/ directory with FastAPI service",
+        "Step 2: Add APScheduler with PostgreSQL job store for persistence",
+        "Step 3: Create IngestionJob class that iterates scrapers and posts to ingestion service",
+        "Step 4: Add /jobs endpoint to list scheduled jobs and their last run status",
+        "Step 5: Add to docker-compose.yml as new service",
+        "Step 6: Create health check and metrics endpoints"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Smart scheduling based on regulatory calendar",
+          "rationale": "Many regulations have known effective dates and comment periods. Pre-schedule intensive scraping around these dates rather than fixed intervals.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Webhook-triggered ingestion",
+          "rationale": "Allow customers or monitoring services to trigger ingestion when they detect changes, rather than relying solely on polling.",
+          "approx_effort": "low"
+        },
+        {
+          "idea": "Federated scraping with customer-provided sources",
+          "rationale": "Let tenants add their own regulatory sources (internal policies, industry group regulations) to the scraper pool.",
+          "approx_effort": "high"
+        }
+      ],
+      "risk_if_ignored": "The platform cannot automatically ingest new regulations. Manual ingestion is required for every document, making the product operationally unusable at scale."
+    },
+    {
+      "name": "Demo Data Loader",
+      "type": "dev tooling / demo setup",
+      "location": [
+        "scripts/demo/load_demo_data.py"
+      ],
+      "inferred_purpose": "Load complete demo datasets for investor demonstrations and tenant onboarding, including regulatory documents, provisions, tenant controls, products, and control-to-provision mappings.",
+      "current_state": {
+        "implemented_features": [
+          "DemoDataLoader class with NIST CSF, SOC2, and ISO 27001 control frameworks",
+          "Product catalog with crypto trading platform, wallet, lending protocol",
+          "Control-to-provision mapping with confidence scores",
+          "Product-to-control linking"
+        ],
+        "integration_points": [
+          "services/graph/app/overlay_writer.py for persistence",
+          "services/graph/app/neo4j_utils.py for database access",
+          "Called by regctl tenant.py during tenant creation"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "Imports non-existent modules: TenantControl, CustomerProduct, ControlMapping from services/graph/app/models/tenant_nodes (file doesn't exist)",
+          "Imports non-existent OverlayWriter from services/graph/app/overlay_writer.py",
+          "Hard-coded path '/home/user/RegEngine' in sys.path.insert",
+          "Sample provision hashes are placeholders, not linked to real provisions"
+        ],
+        "nice_to_have": [
+          "Realistic demo documents from public regulatory sources",
+          "Industry-specific demo datasets (healthcare, finance, gaming)",
+          "Randomized but realistic data for load testing"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Create services/graph/app/models/tenant_nodes.py with Pydantic models for TenantControl, CustomerProduct, etc.",
+        "Step 2: Create services/graph/app/overlay_writer.py with Neo4j write operations",
+        "Step 3: Fix sys.path to use relative imports",
+        "Step 4: Link demo provisions to real ingested NYDFS/SEC SCI documents",
+        "Step 5: Add integration test that loads demo data and verifies graph state"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Scenario-based demo datasets",
+          "rationale": "Create pre-packaged scenarios ('bank launching crypto product', 'healthcare startup seeking SOC2') that tell a story during demos.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Live demo mode with simulated events",
+          "rationale": "A 'demo mode' that simulates regulatory changes arriving in real-time, triggering the full pipeline visibly during investor demos.",
+          "approx_effort": "high"
+        },
+        {
+          "idea": "One-click demo reset",
+          "rationale": "A single command that tears down and rebuilds the entire demo environment to known state, enabling rapid successive demos.",
+          "approx_effort": "low"
+        }
+      ],
+      "risk_if_ignored": "Demo data loading will fail completely due to import errors. Investor demos and sales POCs cannot be conducted without manual data setup."
+    },
+    {
+      "name": "Secrets Rotation Tool",
+      "type": "ops/security tooling",
+      "location": [
+        "scripts/rotate_secrets_to_aws.py",
+        "scripts/sync_prod_secrets.py"
+      ],
+      "inferred_purpose": "Migrate secrets from local .env files to AWS Secrets Manager and synchronize production secrets for secure credential management.",
+      "current_state": {
+        "implemented_features": [
+          "Comprehensive secret rotation for DB, Neo4j, Kafka, S3, Admin",
+          "Create-or-update logic with boto3",
+          "Dry-run mode for safe testing",
+          "CLI with argparse for environment selection",
+          "Validation warnings for empty credentials"
+        ],
+        "integration_points": [
+          "AWS Secrets Manager via boto3",
+          "python-dotenv for local .env loading"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "No secret rotation/renewal - only initial upload",
+          "No integration with services to pull secrets from Secrets Manager",
+          "sync_prod_secrets.py has hardcoded 'GOLDMAN_API_KEY' placeholder"
+        ],
+        "nice_to_have": [
+          "Automatic rotation schedule",
+          "Secret versioning and rollback",
+          "Audit logging of secret access",
+          "Integration with HashiCorp Vault as alternative"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Add shared/secrets_manager.py client that services use to fetch secrets",
+        "Step 2: Remove hardcoded placeholders like GOLDMAN_API_KEY",
+        "Step 3: Add secret rotation with versioning (generate new password, update service, then update secret)",
+        "Step 4: Add --verify flag to test that services can read rotated secrets",
+        "Step 5: Document USE_AWS_SECRETS environment variable in all services"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Automatic credential rotation with zero-downtime",
+          "rationale": "Implement dual-credential pattern where services accept both old and new credentials during rotation window.",
+          "approx_effort": "high"
+        },
+        {
+          "idea": "Secret dependency graph",
+          "rationale": "Track which services use which secrets. When rotating, automatically identify all affected services and restart them in correct order.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Emergency credential revocation",
+          "rationale": "One command to revoke all credentials and generate new ones across all services for breach response.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "Secrets remain in .env files which may be committed to git. Production deployments lack proper credential management. Compliance audits will flag insecure secret handling."
+    },
+    {
+      "name": "Launch Orchestrator",
+      "type": "deployment/GTM automation",
+      "location": [
+        "launch_orchestrator/orchestrator.py",
+        "launch_orchestrator/launch_orchestrator_spec.yaml"
+      ],
+      "inferred_purpose": "Coordinate public surface deployment, GTM asset generation, design partner program activation, and investor readiness in a deterministic, auditable manner for product launch.",
+      "current_state": {
+        "implemented_features": [
+          "LaunchOrchestrator class with configurable modes (full_launch, sales_only, infra_only, dry_run)",
+          "Phase-based execution with audit trail",
+          "One-pager generation for sales personas",
+          "Design partner sandbox provisioning (stubbed)",
+          "Terraform workspace deployment (stubbed)",
+          "Result persistence to JSON"
+        ],
+        "integration_points": [
+          "launch_orchestrator_spec.yaml for configuration",
+          "Would integrate with Terraform for infrastructure",
+          "Would integrate with email/CRM for outbound campaigns"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "_execute_deployment() doesn't actually run deploy commands - just logs them",
+          "_provision_sandbox() doesn't create real tenant environments - just logs events",
+          "_deploy_terraform_workspace() skips actual terraform commands",
+          "No integration with actual marketing site deployment (Vercel, Netlify, etc.)"
+        ],
+        "nice_to_have": [
+          "Rollback capability for failed deployments",
+          "Slack/email notifications on phase completion",
+          "Integration with GitHub Actions for CI/CD triggered launches"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Implement _execute_deployment() with subprocess.run for shell commands",
+        "Step 2: Integrate _provision_sandbox() with regctl tenant.py create command",
+        "Step 3: Add actual Terraform invocation with subprocess and output capture",
+        "Step 4: Add --confirm flag to require human approval before destructive actions",
+        "Step 5: Add notification hooks for Slack/email on phase completion"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Feature flag-driven launch",
+          "rationale": "Instead of binary launch, use feature flags to gradually expose features to design partners, then public. Orchestrator manages flag state.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Launch readiness scoring",
+          "rationale": "Automatically assess readiness (test coverage, documentation completeness, performance benchmarks) and block launch if score below threshold.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Automated investor demo environment",
+          "rationale": "One command to spin up isolated demo environment with pre-loaded data, accessible via unique URL, with automatic teardown after demo.",
+          "approx_effort": "high"
+        }
+      ],
+      "risk_if_ignored": "Product launch requires manual coordination across multiple systems. High risk of misconfiguration, inconsistent environments, and missed steps during critical launch phase."
+    },
+    {
+      "name": "Compliance Checklist Engine",
+      "type": "domain-specific rules engine",
+      "location": [
+        "services/compliance/checklist_engine.py",
+        "services/compliance/main.py",
+        "industry_plugins/*/compliance_checklist.yaml"
+      ],
+      "inferred_purpose": "Load YAML compliance checklist definitions and validate customer configurations against regulatory requirements, returning pass/fail status for each item across multiple industries.",
+      "current_state": {
+        "implemented_features": [
+          "ComplianceChecklistEngine with YAML loading from industry plugins",
+          "Multiple validation types: boolean, numeric_threshold, percentage_threshold, conditional",
+          "Safe condition evaluator without eval()",
+          "Pass rate calculation and next steps generation",
+          "FastAPI endpoints for checklist validation",
+          "HIPAA, FDA, clinical trials, and CMS checklists defined"
+        ],
+        "integration_points": [
+          "industry_plugins/*/compliance_checklist.yaml for definitions",
+          "FastAPI service on port 8500",
+          "Shared auth for API key validation"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "Service NOT included in docker-compose.yml (noted in README)",
+          "No test coverage for validation logic",
+          "FSMA engine references non-existent food_beverage/fsma_204.yaml file"
+        ],
+        "nice_to_have": [
+          "Evidence attachment upload for audit trails",
+          "Historical validation results tracking",
+          "Remediation task assignment and tracking",
+          "Integration with ticketing systems (Jira, Linear)"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Add compliance service to docker-compose.yml",
+        "Step 2: Create industry_plugins/food_beverage/fsma_204.yaml definition file",
+        "Step 3: Add unit tests for each validation type",
+        "Step 4: Add /history endpoint to track validation over time",
+        "Step 5: Add integration tests with real checklist files"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "AI-assisted evidence analysis",
+          "rationale": "When user uploads evidence (screenshot, PDF), use LLM to assess if it satisfies the requirement and auto-fill validation.",
+          "approx_effort": "high"
+        },
+        {
+          "idea": "Compliance score trending",
+          "rationale": "Track compliance scores over time and alert when trending downward. Enables proactive remediation before audit.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Cross-framework mapping",
+          "rationale": "Auto-map controls between frameworks (SOC2 CC6.1 -> ISO 27001 A.9.2.3) so satisfying one partially satisfies another.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "Compliance validation service is inaccessible - cannot be deployed. A core product feature is missing from the stack."
+    },
+    {
+      "name": "Document Ingestion CLI",
+      "type": "CLI tool",
+      "location": [
+        "scripts/ingest_document.py"
+      ],
+      "inferred_purpose": "Command-line tool for ingesting regulatory documents (PDF, HTML) into RegEngine with optional immediate NLP extraction.",
+      "current_state": {
+        "implemented_features": [
+          "Argparse CLI with file/URL source options",
+          "Content hash calculation",
+          "Extractor selection (NYDFS, DORA, SEC SCI)",
+          "Basic extraction result display"
+        ],
+        "integration_points": [
+          "NLP extractors from services/nlp/app/extractors",
+          "Would store to S3 and emit to Kafka (not implemented)"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "_extract_pdf_text() returns placeholder text instead of actual PDF extraction",
+          "No integration with ingestion service API - runs locally only",
+          "No S3 storage of ingested documents",
+          "No Kafka emission to ingest.normalized topic"
+        ],
+        "nice_to_have": [
+          "Batch ingestion from directory",
+          "Progress bar for large files",
+          "Deduplication check against existing documents"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Implement PDF extraction using PyPDF2 or pdfplumber (already mentioned in comments)",
+        "Step 2: Add HTTP client to POST to ingestion service /ingest/url endpoint",
+        "Step 3: Remove local-only execution path",
+        "Step 4: Add deduplication check using content hash against graph",
+        "Step 5: Add integration test with sample PDF"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Watch mode for directory monitoring",
+          "rationale": "Monitor a directory for new files and automatically ingest them. Useful for customers with regulatory file shares.",
+          "approx_effort": "low"
+        },
+        {
+          "idea": "OCR fallback for scanned PDFs",
+          "rationale": "Some regulatory PDFs are scanned images. Use Tesseract OCR when text extraction fails.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Smart chunking for large documents",
+          "rationale": "Large regulations (100+ pages) should be chunked into logical sections for better extraction and retrieval.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "Manual document ingestion fails for PDFs - the most common regulatory document format. Users cannot add new regulations to the system."
+    },
+    {
+      "name": "FSMA 204 Compliance Engine",
+      "type": "domain-specific rules engine",
+      "location": [
+        "services/compliance/fsma_engine.py"
+      ],
+      "inferred_purpose": "FDA FSMA 204 (Food Traceability) compliance assessment engine that evaluates facility profiles against traceability requirements for food safety.",
+      "current_state": {
+        "implemented_features": [
+          "FSMA204ComplianceEngine with dimension-based scoring",
+          "Five evaluation dimensions: traceability plan, KDE capture, CTE coverage, recordkeeping, technology",
+          "Risk level calculation (LOW to CRITICAL)",
+          "Remediation action generation",
+          "JSON-serializable output"
+        ],
+        "integration_points": [
+          "industry_plugins/food_beverage/fsma_204.yaml for rule definitions",
+          "services/compliance/main.py exposes /fsma-204/assess endpoint"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "References industry_plugins/food_beverage/fsma_204.yaml which does not exist",
+          "FileNotFoundError will be raised on initialization"
+        ],
+        "nice_to_have": [
+          "KDE field validation against FDA FTL",
+          "CTE event timestamp validation",
+          "Integration with supply chain systems for automated data pull"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Create industry_plugins/food_beverage/ directory and fsma_204.yaml file",
+        "Step 2: Define control_dimensions, key_data_elements, critical_tracking_events in YAML",
+        "Step 3: Add unit tests for each dimension evaluator",
+        "Step 4: Add sample facility profiles for testing",
+        "Step 5: Document FDA Food Traceability List requirements in YAML comments"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Supply chain data connector",
+          "rationale": "Pull traceability data directly from ERP/WMS systems to auto-populate facility profiles rather than manual entry.",
+          "approx_effort": "high"
+        },
+        {
+          "idea": "Mock recall simulation",
+          "rationale": "Simulate a recall scenario and measure how quickly the system can trace affected products. Validates 24-hour response requirement.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "FDA inspection prep report",
+          "rationale": "Generate formatted report matching FDA inspection expectations, with all required documentation pre-assembled.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "Food & beverage industry compliance feature is completely broken. Cannot demo to food industry customers."
+    },
+    {
+      "name": "Seed Audit Record Tool",
+      "type": "testing/demo tooling",
+      "location": [
+        "scripts/demo/seed_audit_record.py"
+      ],
+      "inferred_purpose": "Seed a deterministic 'golden record' into Neo4j for CI provenance audit testing, ensuring reproducible verification tests.",
+      "current_state": {
+        "implemented_features": [
+          "Creates known provision with fixed hash for testing",
+          "Writes local fixture file for audit source",
+          "Uses Neo4j client for graph operations",
+          "Deterministic content hash generation"
+        ],
+        "integration_points": [
+          "Neo4j graph database",
+          "tests/fixtures/audit_source.txt output file",
+          "services/graph/app/neo4j_utils.py"
+        ],
+        "tests_present": []
+      },
+      "missing_pieces": {
+        "critical": [
+          "Hard-coded path '/home/user/RegEngine' won't work in CI/deployment",
+          "No idempotency check - running twice may create duplicates",
+          "No cleanup/teardown functionality"
+        ],
+        "nice_to_have": [
+          "Multiple golden records for different frameworks",
+          "CI integration with pytest fixture",
+          "Configurable fixture content"
+        ]
+      },
+      "build_out_plan": [
+        "Step 1: Fix sys.path to use relative path from script location",
+        "Step 2: Add check for existing record before insertion",
+        "Step 3: Add --cleanup flag to remove test data",
+        "Step 4: Create pytest fixture that calls this script",
+        "Step 5: Add golden records for DORA and NYDFS frameworks"
+      ],
+      "innovative_upgrades": [
+        {
+          "idea": "Fixture generation from real documents",
+          "rationale": "Instead of hardcoded text, generate golden records from actual regulatory PDFs so tests use realistic content.",
+          "approx_effort": "medium"
+        },
+        {
+          "idea": "Automated CI fixture refresh",
+          "rationale": "When extractors change version, automatically regenerate golden records and update expected hashes.",
+          "approx_effort": "medium"
+        }
+      ],
+      "risk_if_ignored": "CI provenance audit tests will fail due to path issues. Manual test setup required, reducing test reliability."
+    }
+  ]
+}

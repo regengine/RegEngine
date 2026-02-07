@@ -1,0 +1,609 @@
+# Production Compliance OS — California / Los Angeles
+# RulePack for small film/TV production companies
+#
+# Version: 1.0.0
+# Effective Date: 2026-01-21
+# Jurisdiction: California, City of Los Angeles
+
+metadata:
+  rule_pack_id: production_ca_la
+  rule_name: "Production Compliance OS — California / Los Angeles"
+  version: "1.0.0"
+  regulator: "FilmLA, CA DIR, CA EDD, LA City Finance"
+  effective_date: "2026-01-21"
+  description: |
+    Comprehensive compliance rules for small film/TV production companies
+    operating in California with focus on Los Angeles city and county.
+    
+    Covers: entity registration, employment law, worker classification,
+    filming permits, insurance requirements, safety compliance, and payroll.
+
+# ==============================================================================
+# RULE CATEGORIES
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. PERMIT RULES — Location-based filming permit requirements
+# ------------------------------------------------------------------------------
+
+permit_rules:
+
+  - id: permit_public_row_filmla
+    name: "FilmLA Permit Required - Public ROW"
+    description: "Filming on public rights-of-way in LA City requires FilmLA permit"
+    trigger:
+      conditions:
+        - field: location.location_type
+          equals: public_row
+        - field: location.jurisdiction
+          equals: la_city
+    action:
+      create_task:
+        template: filmla_permit_packet
+        title: "FilmLA Permit Application Required"
+        due_before_first_shoot: 14  # days
+        is_blocking: true
+      require_evidence:
+        - permit_approved
+        - coi
+    severity: blocking
+    regulation_reference: "FilmLA Permit Ordinance, LAMC 103.111"
+
+  - id: permit_certified_studio
+    name: "Certified Studio Permit"
+    description: "Certified film studios require simplified FilmLA notification"
+    trigger:
+      conditions:
+        - field: location.location_type
+          equals: certified_studio
+        - field: location.jurisdiction
+          in: [la_city, la_county]
+    action:
+      create_task:
+        template: studio_notification
+        title: "FilmLA Studio Notification"
+        due_before_first_shoot: 3
+        is_blocking: false
+      require_evidence:
+        - coi
+    severity: warning
+    regulation_reference: "FilmLA Certified Studio Program"
+
+  - id: permit_residential_checklist
+    name: "Residential Filming Requirements"
+    description: "Residential locations require neighborhood notification and mitigation plan"
+    trigger:
+      conditions:
+        - field: location.location_type
+          equals: residential
+        - field: location.jurisdiction
+          in: [la_city, la_county]
+    action:
+      create_task:
+        template: residential_filming_checklist
+        title: "Residential Filming Checklist"
+        due_before_first_shoot: 7
+        is_blocking: false
+      create_task:
+        template: neighbor_notification
+        title: "Neighbor Notification (72-hour advance)"
+        due_before_first_shoot: 3
+        is_blocking: false
+    severity: warning
+    regulation_reference: "LAMC 103.111.1"
+
+  - id: permit_la_county_unincorporated
+    name: "LA County Unincorporated Permit"
+    description: "Unincorporated LA County areas may require county permit"
+    trigger:
+      conditions:
+        - field: location.jurisdiction
+          equals: la_county
+        - field: location.location_type
+          in: [public_row, private_property]
+    action:
+      create_task:
+        template: county_permit_review
+        title: "Review LA County Permit Requirements"
+        due_before_first_shoot: 14
+        is_blocking: false
+    severity: info
+
+# ------------------------------------------------------------------------------
+# 2. WORKER CLASSIFICATION RULES — AB5 / ABC Test compliance
+# ------------------------------------------------------------------------------
+
+classification_rules:
+
+  - id: contractor_classification_memo_required
+    name: "Contractor Classification Documentation Required"
+    description: |
+      When engaging someone as an independent contractor, California AB5 requires
+      satisfaction of the ABC test. Document the classification basis.
+    trigger:
+      conditions:
+        - field: engagement.classification
+          equals: contractor
+    action:
+      create_task:
+        template: classification_memo
+        title: "Complete Classification Memo (AB5 Analysis)"
+        due_days: 0  # Before work begins
+        is_blocking: true
+      require_evidence:
+        - classification_memo_signed
+    severity: blocking
+    regulation_reference: "California AB5, Labor Code §2750.3"
+
+  - id: contractor_vendor_documents
+    name: "Contractor Vendor Documentation"
+    description: "Contractors must provide W-9 and may need to provide COI"
+    trigger:
+      conditions:
+        - field: engagement.classification
+          equals: contractor
+    action:
+      create_task:
+        template: vendor_onboarding
+        title: "Collect Contractor Documents (W-9, Insurance)"
+        due_days: 0
+        is_blocking: false
+      require_evidence:
+        - w9
+    severity: warning
+    regulation_reference: "IRS Information Reporting Requirements"
+
+  - id: contractor_loan_out_verification
+    name: "Loan-Out Corporation Verification"
+    description: "Loan-out corporations must provide proof of corporate status"
+    trigger:
+      conditions:
+        - field: engagement.classification
+          equals: contractor
+        - field: person.is_loan_out
+          equals: true
+    action:
+      create_task:
+        template: loan_out_verification
+        title: "Verify Loan-Out Corporation Status"
+        due_days: 0
+        is_blocking: false
+      require_evidence:
+        - vendor_coi
+    severity: info
+
+  - id: employee_onboarding_documents
+    name: "Employee Onboarding Documents"
+    description: "Employees require I-9 and W-4 to be completed"
+    trigger:
+      conditions:
+        - field: engagement.classification
+          equals: employee
+    action:
+      create_task:
+        template: employee_onboarding
+        title: "Complete Employee Onboarding (I-9, W-4)"
+        due_days: 3  # I-9 Section 2 due within 3 days of hire
+        is_blocking: true
+      require_evidence:
+        - i9
+        - w4
+    severity: blocking
+    regulation_reference: "8 CFR 274a.2, IRS Form W-4"
+
+# ------------------------------------------------------------------------------
+# 3. EMPLOYMENT & LABOR RULES — Triggered when employees exist
+# ------------------------------------------------------------------------------
+
+employment_rules:
+
+  - id: employees_workers_comp_required
+    name: "Workers' Compensation Insurance Required"
+    description: "California requires workers' comp for all employers with employees"
+    trigger:
+      conditions:
+        - field: company.has_employees
+          equals: true
+    action:
+      create_task:
+        template: workers_comp_verification
+        title: "Verify Workers' Compensation Coverage"
+        due_days: 0
+        is_blocking: true
+      require_evidence:
+        - workers_comp_policy
+    severity: blocking
+    regulation_reference: "California Labor Code §3700"
+
+  - id: employees_safety_iipp_required
+    name: "Injury and Illness Prevention Program (IIPP)"
+    description: "All California employers must have written IIPP"
+    trigger:
+      conditions:
+        - field: company.has_employees
+          equals: true
+    action:
+      create_task:
+        template: safety_policy_iipp
+        title: "Create/Upload IIPP Safety Policy"
+        due_days: 30
+        is_blocking: true
+      require_evidence:
+        - iipp_policy
+    severity: blocking
+    regulation_reference: "8 CCR 3203"
+
+  - id: employees_safety_wvpp_required
+    name: "Workplace Violence Prevention Plan (WVPP)"
+    description: "Effective July 2024, California employers must have WVPP"
+    trigger:
+      conditions:
+        - field: company.has_employees
+          equals: true
+    action:
+      create_task:
+        template: safety_policy_wvpp
+        title: "Create/Upload WVPP Safety Policy"
+        due_days: 30
+        is_blocking: true
+      require_evidence:
+        - wvpp_policy
+    severity: blocking
+    regulation_reference: "SB 553, Labor Code §6401.9"
+
+  - id: employees_calsavers_registration
+    name: "CalSavers Registration"
+    description: "Employers must register for CalSavers or offer alternative retirement plan"
+    trigger:
+      conditions:
+        - field: company.has_employees
+          equals: true
+    action:
+      create_task:
+        template: calsavers_verification
+        title: "Verify CalSavers Compliance"
+        due_days: 90
+        is_blocking: false
+    severity: warning
+    regulation_reference: "California Government Code §100032"
+
+  - id: employees_edd_registration
+    name: "EDD Employer Registration"
+    description: "Register with EDD for payroll tax purposes"
+    trigger:
+      conditions:
+        - field: company.has_employees
+          equals: true
+        - field: company.registration_edd_complete
+          equals: false
+    action:
+      create_task:
+        template: edd_registration
+        title: "Register with CA EDD as Employer"
+        due_days: 20  # Within 20 days of first wages paid
+        is_blocking: true
+    severity: blocking
+    regulation_reference: "CUIC §1086"
+
+  - id: employees_new_hire_report
+    name: "New Hire Reporting"
+    description: "Report new hires to EDD within 20 days"
+    trigger:
+      event: engagement_created
+      conditions:
+        - field: engagement.classification
+          equals: employee
+    action:
+      create_task:
+        template: new_hire_report
+        title: "Submit New Hire Report to EDD"
+        due_days: 20
+        is_blocking: false
+    severity: warning
+    regulation_reference: "42 USC 653a"
+
+# ------------------------------------------------------------------------------
+# 4. WAGE & HOUR RULES — Minimum wage and overtime compliance
+# ------------------------------------------------------------------------------
+
+wage_rules:
+
+  - id: la_city_minimum_wage_2026
+    name: "LA City Minimum Wage (2026)"
+    description: "LA City minimum wage: $17.28/hour effective July 1, 2025"
+    trigger:
+      conditions:
+        - field: engagement.jurisdiction
+          equals: la_city
+        - field: engagement.classification
+          equals: employee
+        - field: engagement.pay_type
+          equals: hourly
+    validation:
+      type: numeric_threshold
+      field: engagement.pay_rate
+      operator: ">="
+      threshold: 17.28
+      unit: USD/hour
+    action:
+      on_fail:
+        create_task:
+          template: wage_floor_violation
+          title: "Pay rate below LA City minimum wage"
+          is_blocking: true
+    severity: critical
+    regulation_reference: "LAMC 187.00 et seq."
+
+  - id: ca_state_minimum_wage_2026
+    name: "California State Minimum Wage (2026)"
+    description: "California minimum wage: $16.50/hour effective January 1, 2026"
+    trigger:
+      conditions:
+        - field: engagement.jurisdiction
+          in: [la_county, ca_other]
+        - field: engagement.classification
+          equals: employee
+        - field: engagement.pay_type
+          equals: hourly
+    validation:
+      type: numeric_threshold
+      field: engagement.pay_rate
+      operator: ">="
+      threshold: 16.50
+      unit: USD/hour
+    action:
+      on_fail:
+        create_task:
+          template: wage_floor_violation
+          title: "Pay rate below CA state minimum wage"
+          is_blocking: true
+    severity: critical
+    regulation_reference: "Labor Code §1182.12"
+
+  - id: meal_break_required
+    name: "Meal Break Required"
+    description: "30-minute meal break required for shifts over 5 hours"
+    trigger:
+      conditions:
+        - field: engagement.classification
+          equals: employee
+        - field: timecard.total_hours
+          operator: ">"
+          value: 5
+    validation:
+      type: boolean
+      field: timecard.meal_break_taken
+      expected: true
+    action:
+      on_fail:
+        flag_meal_penalty: true
+    severity: warning
+    regulation_reference: "Labor Code §512"
+
+  - id: daily_overtime
+    name: "Daily Overtime Calculation"
+    description: "California overtime: 1.5x after 8 hours, 2x after 12 hours"
+    trigger:
+      conditions:
+        - field: engagement.classification
+          equals: employee
+        - field: engagement.overtime_eligible
+          equals: true
+    validation:
+      type: overtime_calculation
+      regular_hours: 8
+      overtime_multiplier: 1.5
+      double_time_hours: 12
+      double_time_multiplier: 2.0
+    severity: info
+    regulation_reference: "Labor Code §510"
+
+# ------------------------------------------------------------------------------
+# 5. MINOR RULES — Child performer protections
+# ------------------------------------------------------------------------------
+
+minor_rules:
+
+  - id: minor_work_permit_required
+    name: "Minor Entertainment Work Permit"
+    description: "Minors require valid entertainment work permit from CA DLSE"
+    trigger:
+      conditions:
+        - field: project.minor_involved
+          equals: true
+    action:
+      create_task:
+        template: minor_permit_verification
+        title: "Verify Minor Entertainment Work Permit"
+        due_before_first_shoot: 7
+        is_blocking: true
+      require_evidence:
+        - minor_work_permit
+    severity: blocking
+    regulation_reference: "Labor Code §1308.5"
+
+  - id: minor_studio_teacher_required
+    name: "Studio Teacher Required"
+    description: "On-set studio teacher/welfare worker required for minors"
+    trigger:
+      conditions:
+        - field: project.minor_involved
+          equals: true
+    action:
+      create_task:
+        template: studio_teacher_confirmation
+        title: "Confirm On-Set Studio Teacher"
+        due_before_first_shoot: 3
+        is_blocking: true
+    severity: blocking
+    regulation_reference: "Labor Code §1308.7"
+
+  - id: minor_coogan_account
+    name: "Coogan Account Verification"
+    description: "Minor performer earnings must go into blocked trust account"
+    trigger:
+      conditions:
+        - field: engagement.person.is_minor
+          equals: true
+        - field: engagement.department
+          equals: talent
+    action:
+      create_task:
+        template: coogan_account_verification
+        title: "Verify Coogan Trust Account"
+        due_days: 0
+        is_blocking: false
+    severity: warning
+    regulation_reference: "Family Code §6752"
+
+# ------------------------------------------------------------------------------
+# 6. COMPANY REGISTRATION RULES — Business entity compliance
+# ------------------------------------------------------------------------------
+
+registration_rules:
+
+  - id: la_btrc_required
+    name: "LA Business Tax Registration Required"
+    description: "Businesses operating in LA City must register with BTRC"
+    trigger:
+      conditions:
+        - field: company.has_la_city_presence
+          equals: true
+        - field: company.registration_btrc_complete
+          equals: false
+    action:
+      create_task:
+        template: btrc_registration
+        title: "Register for LA Business Tax Registration Certificate"
+        due_days: 30
+        is_blocking: true
+    severity: blocking
+    regulation_reference: "LAMC Article 1, Chapter II"
+
+  - id: ca_sos_statement_of_information
+    name: "Statement of Information Due"
+    description: "LLCs and corps must file Statement of Information with CA SOS"
+    trigger:
+      conditions:
+        - field: company.entity_type
+          in: [llc_single_member, llc_multi_member, s_corp, c_corp]
+    action:
+      create_task:
+        template: sos_statement_reminder
+        title: "File Statement of Information with CA SOS"
+        recurring: annual
+        is_blocking: false
+    severity: warning
+    regulation_reference: "Corp Code §1502 / LLC Act §17702.09"
+
+  - id: home_occupation_checklist
+    name: "Home Occupation Compliance"
+    description: "Using residence as business base may require home occupation permit"
+    trigger:
+      conditions:
+        - field: company.business_from_residence
+          equals: true
+        - field: company.jurisdiction
+          equals: la_city
+    action:
+      create_task:
+        template: home_occupation_checklist
+        title: "Review Home Occupation Requirements"
+        due_days: 30
+        is_blocking: false
+    severity: info
+    regulation_reference: "LAMC 12.05"
+
+# ------------------------------------------------------------------------------
+# 7. INSURANCE RULES — Coverage requirements
+# ------------------------------------------------------------------------------
+
+insurance_rules:
+
+  - id: general_liability_required
+    name: "General Liability Insurance"
+    description: "Most locations and clients require GL coverage"
+    trigger:
+      conditions:
+        - field: project.gate_state
+          in: [ready_for_review, greenlit]
+    action:
+      require_evidence:
+        - coi
+    severity: warning
+
+  - id: workers_comp_expiry_warning
+    name: "Workers' Comp Expiration Warning"
+    description: "Alert when workers' comp policy approaching expiration"
+    trigger:
+      conditions:
+        - field: company.workers_comp_expiration_days
+          operator: "<="
+          value: 30
+    action:
+      create_task:
+        template: insurance_renewal
+        title: "Renew Workers' Compensation Policy"
+        due_days: 0
+        is_blocking: false
+    severity: warning
+
+# ==============================================================================
+# GATE STATE REQUIREMENTS
+# ==============================================================================
+
+gate_requirements:
+
+  # Transition: draft -> ready_for_review
+  ready_for_review:
+    required_tasks_complete:
+      - filmla_permit_packet
+      - classification_memo
+    required_evidence: []
+    blocking_tasks_zero: false
+    description: "Project can be reviewed when permit applications are submitted"
+
+  # Transition: ready_for_review -> greenlit
+  greenlit:
+    blocking_tasks_zero: true
+    required_evidence:
+      conditional:
+        - if: has_permit_locations
+          require:
+            - permit_approved
+            - coi
+        - if: has_employees
+          require:
+            - workers_comp_policy
+            - iipp_policy
+            - wvpp_policy
+        - if: has_contractors
+          require:
+            - classification_memo_signed
+        - if: minor_involved
+          require:
+            - minor_work_permit
+    days_before_shoot_minimum: 0
+    description: "Project greenlit when all blocking tasks complete and evidence present"
+
+  # Transition: greenlit -> in_production
+  in_production:
+    blocking_tasks_zero: true
+    first_shoot_date_reached: true
+    description: "Production status activated on first shoot day"
+
+  # Transition: in_production -> wrap
+  wrap:
+    all_timecards_approved: true
+    all_pay_runs_complete: false  # Optional in v1
+    description: "Wrap when shooting complete and timecards approved"
+
+  # Transition: wrap -> archived
+  archived:
+    evidence_audit_complete: false  # Optional
+    description: "Archive project after final deliverables"
+
+# ==============================================================================
+# TASK TEMPLATES
+# ==============================================================================
+# Reference templates defined in task_templates.yaml

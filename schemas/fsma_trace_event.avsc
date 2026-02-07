@@ -1,0 +1,24 @@
+{
+  "type": "record",
+  "name": "FSMATraceEvent",
+  "namespace": "com.regengine.fsma",
+  "doc": "Critical Tracking Event for FSMA 204 Compliance",
+  "fields": [
+    {"name": "event_id", "type": "string", "doc": "Unique UUID for the event"},
+    {"name": "lot_code", "type": "string", "aliases": ["tlc"], "doc": "Traceability Lot Code (TLC)"},
+    {"name": "event_date", "type": "string", "doc": "ISO-8601 Timestamp of the physical event"},
+    {
+      "name": "event_type",
+      "type": {
+        "type": "enum",
+        "name": "EventType",
+        "symbols": ["RECEIVE", "TRANSFORM", "SHIP", "DISPOSE", "CREATE"]
+      }
+    },
+    {"name": "quantity", "type": ["null", "double"], "default": null},
+    {"name": "unit", "type": ["null", "string"], "default": null},
+    {"name": "location_gln", "type": "string", "doc": "Global Location Number of the event location"},
+    {"name": "source_doc_id", "type": ["null", "string"], "default": null},
+    {"name": "schema_version", "type": "int", "default": 1}
+  ]
+}

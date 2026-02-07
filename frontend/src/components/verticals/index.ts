@@ -1,0 +1,14 @@
+// Shared vertical dashboard components
+export { ComplianceMetricsGrid, type MetricConfig } from './ComplianceMetricsGrid';
+export { RealTimeMonitor, type HealthStatus, type SystemHealth } from './RealTimeMonitor';
+export { ComplianceTimeline, type TimelineEvent } from './ComplianceTimeline';
+export { AlertsWidget, type Alert, type AlertSeverity } from './AlertsWidget';
+export { ExportButton } from './ExportButton';
+export { QuickActionsPanel, type QuickAction } from './QuickActionsPanel';
+export { ComplianceScoreGauge } from './ComplianceScoreGauge';
+export { VerticalDashboardLayout } from './VerticalDashboardLayout';
+
+// Existing components
+export { VerticalTabs, type VerticalTab } from './VerticalTabs';
+export { IndustryOverviewSection } from './IndustryOverviewSection';
+export { ApiReferenceSection } from './ApiReferenceSection';

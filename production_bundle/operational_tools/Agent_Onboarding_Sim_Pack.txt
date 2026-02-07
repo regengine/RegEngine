@@ -1,0 +1,4 @@
+Test Steps for New Agents:
+- Run NLP extraction review queue
+- Simulate ingestion changes to test drift
+- Launch adversary agent using synthetic compliance gaps

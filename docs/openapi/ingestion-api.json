@@ -1,0 +1,945 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Ingestion Service",
+        "version": "0.2.0"
+    },
+    "paths": {
+        "/v1/scrape/nydfs": {
+            "post": {
+                "summary": "Scrape Nydfs",
+                "operationId": "scrape_nydfs_v1_scrape_nydfs_post",
+                "parameters": [
+                    {
+                        "name": "url",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Url"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/scrape/cppa": {
+            "post": {
+                "summary": "Scrape Cppa",
+                "operationId": "scrape_cppa_v1_scrape_cppa_post",
+                "parameters": [
+                    {
+                        "name": "url",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Url"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "summary": "Health",
+                "description": "Health-check endpoint.",
+                "operationId": "health_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "additionalProperties": {
+                                        "type": "string"
+                                    },
+                                    "type": "object",
+                                    "title": "Response Health Health Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics": {
+            "get": {
+                "summary": "Metrics",
+                "operationId": "metrics_metrics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/scrape/{adaptor}": {
+            "post": {
+                "summary": "Scrape Registry",
+                "description": "Run a state registry adaptor and enqueue normalized events.\n\nPlaceholder implementation: lists sources and returns their metadata without network fetch.",
+                "operationId": "scrape_registry_scrape__adaptor__post",
+                "parameters": [
+                    {
+                        "name": "adaptor",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Adaptor"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Scrape Registry Scrape  Adaptor  Post"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/ingest/url": {
+            "post": {
+                "summary": "Ingest Url",
+                "description": "Fetch content from the given URL, normalize it, and emit an event.\n\nArgs:\n    payload: Ingestion request with URL and source system\n    api_key: Validated API key (includes tenant_id)\n\nReturns:\n    Normalized event with tenant_id for multi-tenant routing",
+                "operationId": "ingest_url_ingest_url_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/IngestRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NormalizedEvent"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/kyc/basic": {
+            "post": {
+                "tags": [
+                    "domain"
+                ],
+                "summary": "Kyc Basic Validate",
+                "operationId": "kyc_basic_validate_api_kyc_basic_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/KYCValidationRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/KYCValidationResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/aml/watchlist": {
+            "post": {
+                "tags": [
+                    "domain"
+                ],
+                "summary": "Aml Watchlist Check",
+                "operationId": "aml_watchlist_check_api_aml_watchlist_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AMLWatchlistRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AMLWatchlistResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/privacy/rule-lookup": {
+            "post": {
+                "tags": [
+                    "domain"
+                ],
+                "summary": "Privacy Rule Lookup",
+                "operationId": "privacy_rule_lookup_api_privacy_rule_lookup_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PrivacyRuleLookupRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PrivacyRuleLookupResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/filings/schema-check": {
+            "post": {
+                "tags": [
+                    "domain"
+                ],
+                "summary": "Filings Schema Check",
+                "operationId": "filings_schema_check_api_filings_schema_check_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FilingsSchemaCheckRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FilingsSchemaCheckResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AMLWatchlistRequest": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "minLength": 2,
+                        "title": "Name"
+                    },
+                    "country_hint": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "maxLength": 2,
+                                "minLength": 2
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Country Hint"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "AMLWatchlistRequest"
+            },
+            "AMLWatchlistResponse": {
+                "properties": {
+                    "candidate_count": {
+                        "type": "integer",
+                        "title": "Candidate Count"
+                    },
+                    "max_confidence": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Max Confidence"
+                    },
+                    "disclaimer": {
+                        "type": "string",
+                        "title": "Disclaimer",
+                        "default": "Outputs are regulatory references and citations only, not legal advice. Customer remains responsible for compliance decisions."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "candidate_count",
+                    "max_confidence"
+                ],
+                "title": "AMLWatchlistResponse"
+            },
+            "FilingsSchemaCheckRequest": {
+                "properties": {
+                    "form_type": {
+                        "type": "string",
+                        "enum": [
+                            "SAR",
+                            "STR",
+                            "CTR",
+                            "Custom"
+                        ],
+                        "title": "Form Type"
+                    },
+                    "payload_schema": {
+                        "type": "object",
+                        "title": "Payload Schema"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "form_type",
+                    "payload_schema"
+                ],
+                "title": "FilingsSchemaCheckRequest"
+            },
+            "FilingsSchemaCheckResponse": {
+                "properties": {
+                    "conforms": {
+                        "type": "boolean",
+                        "title": "Conforms"
+                    },
+                    "issues": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Issues"
+                    },
+                    "disclaimer": {
+                        "type": "string",
+                        "title": "Disclaimer",
+                        "default": "Outputs are regulatory references and citations only, not legal advice. Customer remains responsible for compliance decisions."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "conforms",
+                    "issues"
+                ],
+                "title": "FilingsSchemaCheckResponse"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "IngestRequest": {
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "maxLength": 2083,
+                        "minLength": 1,
+                        "format": "uri",
+                        "title": "Url"
+                    },
+                    "source_system": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "title": "Source System"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "url",
+                    "source_system"
+                ],
+                "title": "IngestRequest",
+                "description": "Request payload for URL ingestion."
+            },
+            "KYCValidationRequest": {
+                "properties": {
+                    "id_type": {
+                        "type": "string",
+                        "enum": [
+                            "SSN",
+                            "EIN",
+                            "VAT",
+                            "TIN",
+                            "Passport",
+                            "NationalID"
+                        ],
+                        "title": "Id Type"
+                    },
+                    "id_value": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 3,
+                        "title": "Id Value"
+                    },
+                    "country_code": {
+                        "type": "string",
+                        "maxLength": 2,
+                        "minLength": 2,
+                        "title": "Country Code",
+                        "description": "ISO 3166-1 alpha-2"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id_type",
+                    "id_value",
+                    "country_code"
+                ],
+                "title": "KYCValidationRequest"
+            },
+            "KYCValidationResponse": {
+                "properties": {
+                    "valid_format": {
+                        "type": "boolean",
+                        "title": "Valid Format"
+                    },
+                    "issuer_pattern_match": {
+                        "type": "boolean",
+                        "title": "Issuer Pattern Match"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Confidence"
+                    },
+                    "disclaimer": {
+                        "type": "string",
+                        "title": "Disclaimer",
+                        "default": "Outputs are regulatory references and citations only, not legal advice. Customer remains responsible for compliance decisions."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "valid_format",
+                    "issuer_pattern_match",
+                    "confidence"
+                ],
+                "title": "KYCValidationResponse"
+            },
+            "NormalizedEvent": {
+                "properties": {
+                    "event_id": {
+                        "type": "string",
+                        "title": "Event Id"
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "title": "Document Id"
+                    },
+                    "document_hash": {
+                        "type": "string",
+                        "title": "Document Hash"
+                    },
+                    "tenant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tenant Id"
+                    },
+                    "source_system": {
+                        "type": "string",
+                        "title": "Source System"
+                    },
+                    "source_url": {
+                        "type": "string",
+                        "maxLength": 2083,
+                        "minLength": 1,
+                        "format": "uri",
+                        "title": "Source Url"
+                    },
+                    "raw_s3_path": {
+                        "type": "string",
+                        "title": "Raw S3 Path"
+                    },
+                    "normalized_s3_path": {
+                        "type": "string",
+                        "title": "Normalized S3 Path"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Timestamp"
+                    },
+                    "content_sha256": {
+                        "type": "string",
+                        "title": "Content Sha256"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "event_id",
+                    "document_id",
+                    "document_hash",
+                    "source_system",
+                    "source_url",
+                    "raw_s3_path",
+                    "normalized_s3_path",
+                    "timestamp",
+                    "content_sha256"
+                ],
+                "title": "NormalizedEvent",
+                "description": "Kafka event emitted after normalization."
+            },
+            "PrivacyRuleLookupRequest": {
+                "properties": {
+                    "data_category": {
+                        "type": "string",
+                        "enum": [
+                            "PII",
+                            "SensitivePII",
+                            "Financial",
+                            "Health",
+                            "Biometric"
+                        ],
+                        "title": "Data Category"
+                    },
+                    "subject_region": {
+                        "type": "string",
+                        "maxLength": 2,
+                        "minLength": 2,
+                        "title": "Subject Region"
+                    },
+                    "processing_purpose": {
+                        "type": "string",
+                        "enum": [
+                            "Marketing",
+                            "Analytics",
+                            "Identity",
+                            "Fraud",
+                            "Operations"
+                        ],
+                        "title": "Processing Purpose"
+                    },
+                    "jurisdiction_code": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Jurisdiction Code",
+                        "description": "e.g., US-CA, EU"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "data_category",
+                    "subject_region",
+                    "processing_purpose"
+                ],
+                "title": "PrivacyRuleLookupRequest"
+            },
+            "PrivacyRuleLookupResponse": {
+                "properties": {
+                    "references": {
+                        "items": {
+                            "$ref": "#/components/schemas/PrivacyRuleReference"
+                        },
+                        "type": "array",
+                        "title": "References"
+                    },
+                    "disclaimer": {
+                        "type": "string",
+                        "title": "Disclaimer",
+                        "default": "Outputs are regulatory references and citations only, not legal advice. Customer remains responsible for compliance decisions."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "references"
+                ],
+                "title": "PrivacyRuleLookupResponse"
+            },
+            "PrivacyRuleReference": {
+                "properties": {
+                    "citation": {
+                        "type": "string",
+                        "title": "Citation"
+                    },
+                    "rule_version": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Rule Version"
+                    },
+                    "effective_date": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Effective Date"
+                    },
+                    "source_uri": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Source Uri"
+                    },
+                    "jurisdiction_code": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Jurisdiction Code"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "citation"
+                ],
+                "title": "PrivacyRuleReference"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    }
+}

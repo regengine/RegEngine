@@ -1,0 +1,150 @@
+metadata:
+  rule_name: "Food Safety Modernization Act Section 204"
+  regulator: "U.S. Food and Drug Administration (FDA)"
+  effective_date: "2028-07-20"
+  description: "Enhanced traceability for foods on the Traceability List"
+
+traceability_list_focus:
+  - product_category: "Ready-to-eat deli salads"
+    risk_driver: "Multiple ingredients with post-lethality exposure"
+  - product_category: "Soft cheeses"
+    risk_driver: "Cold-chain dependency and Listeria risk"
+  - product_category: "Fresh-cut fruits"
+    risk_driver: "Short shelf-life and distributed supply chain"
+
+key_data_elements:
+  - id: lot_code_source
+    description: "Traceability lot code source reference"
+    required_at_events:
+      - receiving
+      - creation
+      - transformation
+  - id: product_description
+    description: "Commodity, brand, and package size"
+    required_at_events:
+      - receiving
+      - shipping
+  - id: quantity_uom
+    description: "Quantity and unit of measure"
+    required_at_events:
+      - receiving
+      - shipping
+      - transformation
+  - id: location_identifier
+    description: "FDA food facility registration number or GS1 GLN"
+    required_at_events:
+      - receiving
+      - shipping
+      - cooling
+  - id: linked_lot_code
+    description: "Upstream or downstream lot code reference for transformations"
+    required_at_events:
+      - transformation
+      - creation
+
+critical_tracking_events:
+  - id: receiving
+    description: "Accepting food on the Traceability List from a supplier"
+    required_kdes:
+      - lot_code_source
+      - product_description
+      - quantity_uom
+      - location_identifier
+  - id: transformation
+    description: "Manufacturing step that changes the food (e.g., mixing, cooking)"
+    required_kdes:
+      - linked_lot_code
+      - quantity_uom
+      - product_description
+  - id: shipping
+    description: "Sending food to a customer"
+    required_kdes:
+      - lot_code_source
+      - product_description
+      - quantity_uom
+      - location_identifier
+  - id: cooling
+    description: "Cooling for certain fish and seafood"
+    required_kdes:
+      - location_identifier
+      - quantity_uom
+
+control_dimensions:
+  traceability_plan:
+    name: "Traceability Plan Governance"
+    weight: 0.25
+    required_fields:
+      - plan_document
+      - plan_owner
+      - update_frequency_months
+      - training_program
+      - product_scope
+    premium_fields:
+      - digital_workflow
+      - kpi_dashboard
+  kde_capture:
+    name: "Key Data Element Coverage"
+    weight: 0.25
+    event_requirements:
+      receiving:
+        minimum_percentage: 0.9
+      transformation:
+        minimum_percentage: 0.85
+      shipping:
+        minimum_percentage: 0.9
+      cooling:
+        minimum_percentage: 0.75
+  cte_coverage:
+    name: "Critical Tracking Event Readiness"
+    weight: 0.2
+    expected_events:
+      - receiving
+      - transformation
+      - shipping
+      - cooling
+  recordkeeping:
+    name: "Recordkeeping & Retrieval"
+    weight: 0.15
+    min_retention_years: 2
+    max_retrieval_hours: 24
+  technology_enablement:
+    name: "Digital Traceability Stack"
+    weight: 0.15
+    required_capabilities:
+      - serialization
+      - api_access
+      - data_validation_rules
+      - audit_log_export
+    bonus_capabilities:
+      - streaming_events
+      - anomaly_detection
+
+# Validation rules for data quality enforcement
+validation_rules:
+  - id: invalid_tlc_format
+    name: "Invalid TLC Format"
+    description: "Traceability Lot Code must follow GTIN-14 + variable lot format"
+    regex: "^\\d{14}[A-Za-z0-9\\-\\.]+$"
+    severity: "critical"
+    applies_to:
+      - traceability_lot_code
+      - lot_code_source
+    error_message: "TLC format is invalid. Expected: GTIN-14 (14 digits) followed by alphanumeric lot code."
+  - id: missing_tlc
+    name: "Missing TLC"
+    description: "Traceability Lot Code is required for all CTEs"
+    check: "required"
+    severity: "critical"
+    applies_to:
+      - traceability_lot_code
+    error_message: "Traceability Lot Code is missing. This is a critical FSMA 204 requirement."
+  - id: invalid_gln_format
+    name: "Invalid GLN Format"
+    description: "GLN must be exactly 13 digits with valid GS1 checksum"
+    regex: "^\\d{13}$"
+    severity: "warning"
+    applies_to:
+      - location_identifier
+      - ship_from_gln
+      - ship_to_gln
+    error_message: "GLN format is invalid. Expected: 13-digit GS1 Global Location Number."

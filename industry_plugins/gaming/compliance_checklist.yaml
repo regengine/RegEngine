@@ -1,0 +1,291 @@
+# Gaming and Sports Betting Compliance Checklist
+
+industry: gaming
+version: "1.0"
+last_updated: "2025-11-19"
+
+checklists:
+  # ============================================================================
+  # CHECKLIST 1: Gaming License Application (Nevada example)
+  # ============================================================================
+  - id: gaming_license_nevada
+    name: "Nevada Gaming License Application"
+    description: "Requirements for online/sports betting license in Nevada"
+    jurisdiction: "Nevada, United States"
+    regulators:
+      - Nevada Gaming Control Board
+      - Nevada Gaming Commission
+    applicable_entities:
+      - online_gaming_operators
+      - sports_betting_operators
+
+    items:
+      - id: nv_lic_001
+        requirement: "Financial Solvency"
+        regulation: "Nevada Gaming Regulation 5.010"
+        description: "Demonstrate financial stability with minimum $1M in liquid assets"
+        validation:
+          type: numeric_threshold
+          query: "What are your current liquid assets?"
+          threshold:
+            min: 1000000  # $1M
+            unit: "USD"
+          pass_criteria: "value >= threshold"
+        remediation: "Increase liquid assets to $1M+ (cash, marketable securities), provide audited financials"
+
+      - id: nv_lic_002
+        requirement: "Background Investigation"
+        regulation: "Nevada Gaming Regulation 3"
+        description: "All principals, directors, and key employees must pass background check"
+        validation:
+          type: boolean
+          query: "Have all principals/directors submitted fingerprints and personal history forms?"
+        remediation: "Submit fingerprint cards, personal history disclosure forms for all key personnel to Nevada Gaming Control Board"
+
+      - id: nv_lic_003
+        requirement: "Server Location"
+        regulation: "Nevada Gaming Regulation 5A"
+        description: "Gaming servers must be physically located in Nevada"
+        validation:
+          type: boolean
+          query: "Are your gaming servers physically located in Nevada?"
+        remediation: "Migrate servers to Nevada data center, provide attestation of physical location"
+
+      - id: nv_lic_004
+        requirement: "Game Fairness Testing"
+        regulation: "Nevada Gaming Regulation 14"
+        description: "RNG (Random Number Generator) must be tested and certified by approved lab"
+        validation:
+          type: boolean
+          query: "Has your RNG been certified by GLI, eCOGRA, or iTech Labs?"
+        remediation: "Submit RNG to approved testing lab (Gaming Laboratories International, eCOGRA, iTech Labs)"
+
+      - id: nv_lic_005
+        requirement: "Responsible Gaming Features"
+        regulation: "Nevada Gaming Regulation 5.225"
+        description: "Provide self-exclusion, deposit limits, and reality checks"
+        validation:
+          type: boolean
+          query: "Do you offer self-exclusion, deposit limits, time limits, and reality checks?"
+        remediation: "Implement responsible gaming tools: self-exclusion list, deposit/loss limits, session time limits, pop-up reminders"
+
+      - id: nv_lic_006
+        requirement: "Age Verification"
+        regulation: "Nevada Gaming Regulation 5.110"
+        description: "Verify all players are 21+ before allowing real-money play"
+        validation:
+          type: boolean
+          query: "Do you verify age via ID document + third-party database (e.g., Experian, LexisNexis)?"
+        remediation: "Integrate age verification provider (Jumio, Onfido, IDology), block accounts until verified 21+"
+
+      - id: nv_lic_007
+        requirement: "Geolocation"
+        regulation: "Nevada Gaming Regulation 5A.050"
+        description: "Verify player is physically in Nevada before accepting wagers"
+        validation:
+          type: boolean
+          query: "Do you use geolocation technology to verify player is in Nevada?"
+        remediation: "Integrate geolocation provider (GeoComply, Locify), block wagers if player outside Nevada"
+
+      - id: nv_lic_008
+        requirement: "AML/KYC Compliance"
+        regulation: "31 CFR § 1021.210 (Bank Secrecy Act)"
+        description: "Verify customer identity, monitor transactions, file CTRs/SARs"
+        validation:
+          type: boolean
+          query: "Do you have AML program with customer ID, transaction monitoring, and SAR filing?"
+        remediation: "Implement AML program: collect ID at signup, monitor transactions for patterns, file CTRs for $10k+ transactions, file SARs for suspicious activity"
+
+      - id: nv_lic_009
+        requirement: "Game History Retention"
+        regulation: "Nevada Gaming Regulation 5.170"
+        description: "Retain game history (bets, outcomes, payouts) for 5 years"
+        validation:
+          type: boolean
+          query: "Do you retain game history for 5 years?"
+        remediation: "Configure database retention policy to keep all bets/outcomes/payouts for 5 years, implement archival to S3 Glacier"
+
+  # ============================================================================
+  # CHECKLIST 2: UK Gambling Commission License
+  # ============================================================================
+  - id: gaming_license_uk
+    name: "UK Gambling Commission License"
+    description: "Requirements for online gambling license in United Kingdom"
+    jurisdiction: "United Kingdom"
+    regulators:
+      - UK Gambling Commission
+    applicable_entities:
+      - online_gambling_operators
+
+    items:
+      - id: uk_lic_001
+        requirement: "Operating License Application"
+        regulation: "UK Gambling Act 2005"
+        description: "Apply for appropriate license type: remote betting, remote casino, remote bingo, etc."
+        validation:
+          type: boolean
+          query: "Have you submitted operating license application to UK Gambling Commission?"
+        remediation: "Complete application via UK Gambling Commission portal, pay £15,000+ application fee"
+
+      - id: uk_lic_002
+        requirement: "Personal Management License (PML)"
+        regulation: "UK Gambling Act 2005, Section 75"
+        description: "Key personnel must hold Personal Management Licenses"
+        validation:
+          type: boolean
+          query: "Do all key personnel (CEO, CFO, compliance officer) hold PMsL?"
+        remediation: "Submit PML applications for all key personnel, expect 6-12 month review process"
+
+      - id: uk_lic_003
+        requirement: "Social Responsibility Code"
+        regulation: "UK Gambling Commission LCCP (License Conditions and Codes of Practice)"
+        description: "Implement customer interaction framework, deposit limits, and reality checks"
+        validation:
+          type: boolean
+          query: "Do you have documented social responsibility policies and customer interaction procedures?"
+        remediation: "Document customer interaction framework: identify at-risk players, intervene, offer support resources (GamCare, BeGambleAware)"
+
+      - id: uk_lic_004
+        requirement: "Advertising Standards"
+        regulation: "UK CAP Code (Committee of Advertising Practice)"
+        description: "Gambling ads must not target children or be socially irresponsible"
+        validation:
+          type: boolean
+          query: "Do you review all ads for compliance with CAP Code before publishing?"
+        remediation: "Establish ad review process, prohibit: ads during kids' TV, appeals to under-18s, misleading claims"
+
+      - id: uk_lic_005
+        requirement: "Game Fairness Testing"
+        regulation: "UK Gambling Commission Technical Standards"
+        description: "RNG and game outcomes must be tested by approved testing facility"
+        validation:
+          type: boolean
+          query: "Has your RNG been certified by GLI, eCOGRA, or iTech Labs?"
+        remediation: "Submit games for testing, obtain certification, renew annually"
+
+      - id: uk_lic_006
+        requirement: "Player Funds Segregation"
+        regulation: "UK Gambling Commission LCCP 3.2"
+        description: "Segregate player funds from operational funds in separate bank account"
+        validation:
+          type: boolean
+          query: "Do you segregate player deposits in separate bank account?"
+        remediation: "Open separate bank account for player funds, transfer deposits daily, maintain audit trail"
+
+      - id: uk_lic_007
+        requirement: "AML Compliance"
+        regulation: "UK Money Laundering Regulations 2017"
+        description: "Verify customer identity (enhanced due diligence for £2000+ deposits)"
+        validation:
+          type: boolean
+          query: "Do you conduct enhanced due diligence for deposits >= £2000?"
+        remediation: "Implement tiered KYC: basic ID for < £2000, enhanced DD (source of funds) for >= £2000"
+
+      - id: uk_lic_008
+        requirement: "Self-Exclusion Scheme (GAMSTOP)"
+        regulation: "UK Gambling Commission LCCP 3.5.3"
+        description: "Integrate with GAMSTOP national self-exclusion database"
+        validation:
+          type: boolean
+          query: "Do you check all signups against GAMSTOP database and block self-excluded individuals?"
+        remediation: "Integrate GAMSTOP API, check at registration and daily, immediately close accounts of self-excluded players"
+
+  # ============================================================================
+  # CHECKLIST 3: Sports Betting Integrity Monitoring
+  # ============================================================================
+  - id: sports_betting_integrity
+    name: "Sports Betting Integrity Monitoring"
+    description: "Detect and prevent match-fixing and suspicious betting patterns"
+    jurisdiction: "International"
+    regulators:
+      - IBIA (International Betting Integrity Association)
+      - Sports governing bodies (FIFA, UEFA, NBA, etc.)
+    applicable_entities:
+      - sports_betting_operators
+
+    items:
+      - id: integ_001
+        requirement: "Suspicious Betting Monitoring"
+        regulation: "IBIA Monitoring Protocol"
+        description: "Monitor for unusual betting patterns that may indicate match-fixing"
+        validation:
+          type: boolean
+          query: "Do you monitor betting patterns for anomalies (unusual volumes, odds movements)?"
+        remediation: "Implement betting pattern analysis, flag: unusual volume, late large bets, reverse line movements"
+
+      - id: integ_002
+        requirement: "Alert Reporting to IBIA"
+        regulation: "IBIA Reporting Protocol"
+        description: "Report suspicious alerts to IBIA within 24 hours"
+        validation:
+          type: boolean
+          query: "Do you report suspicious betting alerts to IBIA within 24 hours?"
+        remediation: "Establish IBIA reporting process, assign integrity officer, use IBIA reporting portal"
+
+      - id: integ_003
+        requirement: "Insider Betting Prevention"
+        regulation: "Sports governing body rules (varies by sport)"
+        description: "Prohibit athletes, coaches, officials from betting on their sport"
+        validation:
+          type: boolean
+          query: "Do you screen bettors against lists of athletes/coaches/officials and block their bets?"
+        remediation: "Obtain athlete/official lists from sports leagues, cross-check accounts, block bets from insiders"
+
+      - id: integ_004
+        requirement: "Void Market Procedures"
+        regulation: "Operator integrity policies"
+        description: "Void markets and refund bets if match-fixing suspected"
+        validation:
+          type: boolean
+          query: "Do you have documented procedures to void markets and refund bets if match-fixing occurs?"
+        remediation: "Document void market policy, train traders on when to void, communicate refunds to customers"
+
+  # ============================================================================
+  # CHECKLIST 4: Payment Processing (Gambling)
+  # ============================================================================
+  - id: payment_processing
+    name: "Payment Processing for Gambling"
+    description: "Ensure compliant payment methods and prevent fraud"
+    jurisdiction: "International"
+    regulators:
+      - Card networks (Visa, Mastercard)
+      - Payment processors
+    applicable_entities:
+      - all_gambling_operators
+
+    items:
+      - id: pay_001
+        requirement: "MCC Code 7995 (Gambling)"
+        regulation: "Visa/Mastercard Operating Regulations"
+        description: "Use MCC 7995 for all gambling transactions"
+        validation:
+          type: boolean
+          query: "Do you use MCC 7995 for all gambling-related charges?"
+        remediation: "Configure payment processor to use MCC 7995, verify on statements"
+
+      - id: pay_002
+        requirement: "Age Verification Before First Deposit"
+        regulation: "Card network requirements + local laws"
+        description: "Verify age before accepting first deposit"
+        validation:
+          type: boolean
+          query: "Do you verify age before processing first deposit?"
+        remediation: "Block deposits until age verified via ID + database check"
+
+      - id: pay_003
+        requirement: "Fraud Prevention"
+        regulation: "PCI DSS + operator policies"
+        description: "Monitor for stolen cards, chargebacks, multiple accounts"
+        validation:
+          type: boolean
+          query: "Do you use fraud detection tools (e.g., Sift, Forter, Kount) for deposits?"
+        remediation: "Integrate fraud detection provider, flag: unusual deposit patterns, multiple failed attempts, high-risk cards"
+
+      - id: pay_004
+        requirement: "Chargeback Management"
+        regulation: "Card network operating rules"
+        description: "Maintain chargeback rate < 1% to avoid penalties"
+        validation:
+          type: boolean
+          query: "Is your chargeback rate < 1%?"
+        remediation: "Improve customer service to reduce chargebacks, fight invalid chargebacks, use 3DS authentication"

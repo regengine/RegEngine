@@ -1,0 +1,191 @@
+version: '3.8'
+
+# Production Docker Compose configuration for RegEngine
+# SEC-004: All secrets MUST be provided via environment variables
+# CRITICAL: Never use default values for sensitive credentials in production
+
+x-env-prod: &env_prod
+  REGENGINE_ENV: production
+  RAW_DATA_BUCKET: ${RAW_DATA_BUCKET:?error}
+  PROCESSED_DATA_BUCKET: ${PROCESSED_DATA_BUCKET:?error}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?error}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?error}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?error}
+  KAFKA_TOPIC_NORMALIZED: ${KAFKA_TOPIC_NORMALIZED:-ingest.normalized}
+  KAFKA_TOPIC_NLP: ${KAFKA_TOPIC_NLP:-nlp.extracted}
+  LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+  NEO4J_URI: ${NEO4J_URI:?error}
+  NEO4J_USER: ${NEO4J_USER:?error}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:?error}
+  DATABASE_URL: ${DATABASE_URL:?error}
+  ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:?error}
+  REDIS_URL: ${REDIS_URL:?error}
+  OLLAMA_HOST: ${OLLAMA_HOST:?error}
+  ENABLE_DB_API_KEYS: "true"
+  RATE_LIMIT_BACKEND: redis
+
+x-deploy-defaults: &deploy_defaults
+  restart_policy:
+    condition: on-failure
+    delay: 5s
+    max_attempts: 3
+
+services:
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./gateway/ssl:/etc/nginx/ssl:ro
+    environment:
+      REGENGINE_ENV: production
+    depends_on:
+      - admin-api
+      - ingestion-service
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  admin-api:
+    build:
+      context: .
+      dockerfile: ./services/admin/Dockerfile
+    image: ghcr.io/regengine/admin-api:latest
+    environment:
+      <<: *env_prod
+      ADMIN_MASTER_KEY: ${ADMIN_MASTER_KEY:?error}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8400/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: ./services/ingestion/Dockerfile
+    image: ghcr.io/regengine/ingestion-service:latest
+    environment:
+      <<: *env_prod
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  nlp-service:
+    build:
+      context: .
+      dockerfile: ./services/nlp/Dockerfile
+    image: ghcr.io/regengine/nlp-service:latest
+    environment:
+      <<: *env_prod
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8100/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+
+  graph-service:
+    build:
+      context: .
+      dockerfile: ./services/graph/Dockerfile
+    image: ghcr.io/regengine/graph-service:latest
+    environment:
+      <<: *env_prod
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8200/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+
+  opportunity-api:
+    build:
+      context: .
+      dockerfile: ./services/opportunity/Dockerfile
+    image: ghcr.io/regengine/opportunity-api:latest
+    environment:
+      <<: *env_prod
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8300/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  compliance-api:
+    build:
+      context: .
+      dockerfile: ./services/compliance/Dockerfile
+    image: ghcr.io/regengine/compliance-api:latest
+    environment:
+      <<: *env_prod
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8500/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  scheduler:
+    build:
+      context: ./services/scheduler
+    image: ghcr.io/regengine/scheduler:latest
+    environment:
+      INGESTION_SERVICE_URL: http://ingestion-service:8000
+      SCHEDULER_API_KEY: ${ADMIN_MASTER_KEY:?error}
+      REGENGINE_ENV: production
+    depends_on:
+      - ingestion-service
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M

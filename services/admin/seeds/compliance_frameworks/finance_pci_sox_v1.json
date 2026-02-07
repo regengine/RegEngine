@@ -1,0 +1,92 @@
+{
+    "rule_pack_id": "finance_pci_sox_v1",
+    "title": "Finance: Transactional Integrity & Market Stability",
+    "version": "1.0",
+    "frameworks": [
+        "PCI DSS 4.0",
+        "SOX",
+        "GLBA"
+    ],
+    "rules": [
+        {
+            "rule_id": "PCI-NET-01",
+            "domain": "PCI DSS 4.0",
+            "requirement": "Network Security",
+            "checklist_item": "Install firewalls; deny unauthorized traffic; change all vendor defaults; encrypt card data in transit.",
+            "severity": "CRITICAL",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "PCI-DAT-01",
+            "domain": "PCI DSS 4.0",
+            "requirement": "Data Protection",
+            "checklist_item": "Protect stored cardholder data (primary account numbers); use strong cryptography and key management.",
+            "severity": "CRITICAL",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "PCI-VULN-01",
+            "domain": "PCI DSS 4.0",
+            "requirement": "Vulnerability Management",
+            "checklist_item": "Update antivirus regularly; develop secure software; perform quarterly scans and annual pen tests.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "PCI-ACC-01",
+            "domain": "PCI DSS 4.0",
+            "requirement": "Access Control",
+            "checklist_item": "Restrict access to a business 'need-to-know'; assign unique IDs; implement mandatory MFA for all access.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "SOX-CHG-01",
+            "domain": "SOX Section 404",
+            "requirement": "Change Management",
+            "checklist_item": "Implement formal approval workflows for software updates or infrastructure changes affecting financial systems.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "SOX-REV-01",
+            "domain": "SOX Section 404",
+            "requirement": "Access Reviews",
+            "checklist_item": "Conduct periodic reviews of account privileges to ensure separation of duties and prevent internal fraud.",
+            "severity": "MEDIUM",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "SOX-AUD-01",
+            "domain": "SOX Section 404",
+            "requirement": "Audit Trails",
+            "checklist_item": "Maintain immutable logs of system activity; ensure all financial data entries are timestamped and traceable.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "GLBA-MGT-01",
+            "domain": "GLBA Safeguards",
+            "requirement": "Qualified Individual",
+            "checklist_item": "Designate a person responsible for the info-sec program; report annually to the board of directors.",
+            "severity": "MEDIUM",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "GLBA-ENC-01",
+            "domain": "GLBA Safeguards",
+            "requirement": "Encryption",
+            "checklist_item": "Encrypt NPI at rest and in transit; implement session management to prevent hijacking.",
+            "severity": "HIGH",
+            "evidence_required": true
+        },
+        {
+            "rule_id": "GLBA-VND-01",
+            "domain": "GLBA Safeguards",
+            "requirement": "Vendor Oversight",
+            "checklist_item": "Select service providers capable of maintaining safeguards; mandate security clauses in all contracts.",
+            "severity": "MEDIUM",
+            "evidence_required": true
+        }
+    ]
+}

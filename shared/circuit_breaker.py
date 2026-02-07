@@ -1,0 +1,231 @@
+"""Circuit breaker pattern implementation for RegEngine services.
+
+Prevents cascading failures by failing fast when downstream services are unhealthy.
+
+Usage:
+    from shared.circuit_breaker import CircuitBreaker, CircuitOpenError
+
+    neo4j_breaker = CircuitBreaker(
+        name="neo4j",
+        failure_threshold=5,
+        recovery_timeout=30,
+        half_open_max_calls=3,
+    )
+
+    @neo4j_breaker
+    async def query_neo4j(query: str):
+        # If circuit is open, raises CircuitOpenError immediately
+        return await neo4j_client.run(query)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import functools
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Callable, Optional, TypeVar
+
+import structlog
+
+logger = structlog.get_logger("circuit_breaker")
+
+T = TypeVar("T")
+
+
+class CircuitState(str, Enum):
+    """Circuit breaker states."""
+    CLOSED = "CLOSED"      # Normal operation, requests flow through
+    OPEN = "OPEN"          # Failing fast, no requests allowed
+    HALF_OPEN = "HALF_OPEN"  # Testing if service recovered
+
+
+class CircuitOpenError(Exception):
+    """Raised when circuit is open and request is rejected."""
+
+    def __init__(self, name: str, retry_after: float):
+        self.name = name
+        self.retry_after = retry_after
+        super().__init__(f"Circuit '{name}' is OPEN. Retry after {retry_after:.1f}s")
+
+
+@dataclass
+class CircuitBreaker:
+    """Circuit breaker for protecting against cascading failures.
+    
+    Attributes:
+        name: Identifier for this circuit (e.g., "neo4j", "redis")
+        failure_threshold: Number of failures before opening circuit
+        recovery_timeout: Seconds to wait before testing recovery
+        half_open_max_calls: Max calls to attempt in half-open state
+        exceptions: Exception types that trigger failure count
+    """
+    name: str
+    failure_threshold: int = 5
+    recovery_timeout: float = 30.0
+    half_open_max_calls: int = 3
+    exceptions: tuple = (Exception,)
+    
+    # Internal state
+    _state: CircuitState = field(default=CircuitState.CLOSED, init=False)
+    _failure_count: int = field(default=0, init=False)
+    _last_failure_time: float = field(default=0.0, init=False)
+    _half_open_calls: int = field(default=0, init=False)
+    _success_count: int = field(default=0, init=False)
+    _total_calls: int = field(default=0, init=False)
+
+    @property
+    def state(self) -> CircuitState:
+        """Get current circuit state, transitioning if needed."""
+        if self._state == CircuitState.OPEN:
+            # Check if recovery timeout has passed
+            if time.monotonic() - self._last_failure_time >= self.recovery_timeout:
+                self._transition_to(CircuitState.HALF_OPEN)
+        return self._state
+
+    def _transition_to(self, new_state: CircuitState) -> None:
+        """Transition to a new state with logging."""
+        old_state = self._state
+        self._state = new_state
+        if new_state == CircuitState.HALF_OPEN:
+            self._half_open_calls = 0
+        elif new_state == CircuitState.CLOSED:
+            self._failure_count = 0
+        logger.info(
+            "circuit_state_changed",
+            circuit=self.name,
+            old_state=old_state.value,
+            new_state=new_state.value,
+        )
+
+    def _record_success(self) -> None:
+        """Record a successful call."""
+        self._success_count += 1
+        if self._state == CircuitState.HALF_OPEN:
+            self._half_open_calls += 1
+            if self._half_open_calls >= self.half_open_max_calls:
+                # Recovered!
+                self._transition_to(CircuitState.CLOSED)
+        elif self._state == CircuitState.CLOSED:
+            # Reset failure count on success
+            self._failure_count = 0
+
+    def _record_failure(self, exc: Exception) -> None:
+        """Record a failed call."""
+        self._failure_count += 1
+        self._last_failure_time = time.monotonic()
+        
+        logger.warning(
+            "circuit_failure_recorded",
+            circuit=self.name,
+            failure_count=self._failure_count,
+            threshold=self.failure_threshold,
+            error=str(exc),
+        )
+        
+        if self._state == CircuitState.HALF_OPEN:
+            # Failed during recovery test, reopen
+            self._transition_to(CircuitState.OPEN)
+        elif self._failure_count >= self.failure_threshold:
+            self._transition_to(CircuitState.OPEN)
+
+    def _check_state(self) -> None:
+        """Check if requests are allowed, raise if circuit is open."""
+        state = self.state  # Triggers state check
+        if state == CircuitState.OPEN:
+            retry_after = self.recovery_timeout - (time.monotonic() - self._last_failure_time)
+            raise CircuitOpenError(self.name, max(0, retry_after))
+
+    def __call__(self, func: Callable[..., T]) -> Callable[..., T]:
+        """Decorator for protecting a function with circuit breaker."""
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> T:
+                self._total_calls += 1
+                self._check_state()
+                try:
+                    result = await func(*args, **kwargs)
+                    self._record_success()
+                    return result
+                except self.exceptions as exc:
+                    self._record_failure(exc)
+                    raise
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> T:
+                self._total_calls += 1
+                self._check_state()
+                try:
+                    result = func(*args, **kwargs)
+                    self._record_success()
+                    return result
+                except self.exceptions as exc:
+                    self._record_failure(exc)
+                    raise
+            return sync_wrapper
+
+    def call(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+        """Execute a function with circuit breaker protection."""
+        wrapped = self(func)
+        return wrapped(*args, **kwargs)
+
+    def reset(self) -> None:
+        """Manually reset the circuit breaker to closed state."""
+        self._transition_to(CircuitState.CLOSED)
+        self._failure_count = 0
+        self._last_failure_time = 0
+        logger.info("circuit_manually_reset", circuit=self.name)
+
+    def get_metrics(self) -> dict:
+        """Get circuit breaker metrics for monitoring."""
+        return {
+            "name": self.name,
+            "state": self.state.value,
+            "failure_count": self._failure_count,
+            "success_count": self._success_count,
+            "total_calls": self._total_calls,
+            "failure_threshold": self.failure_threshold,
+            "recovery_timeout": self.recovery_timeout,
+        }
+
+
+# Pre-configured circuit breakers for common services
+neo4j_circuit = CircuitBreaker(
+    name="neo4j",
+    failure_threshold=5,
+    recovery_timeout=30.0,
+    exceptions=(Exception,),
+)
+
+redis_circuit = CircuitBreaker(
+    name="redis",
+    failure_threshold=10,
+    recovery_timeout=15.0,
+    exceptions=(Exception,),
+)
+
+postgres_circuit = CircuitBreaker(
+    name="postgres",
+    failure_threshold=5,
+    recovery_timeout=30.0,
+    exceptions=(Exception,),
+)
+
+kafka_circuit = CircuitBreaker(
+    name="kafka",
+    failure_threshold=5,
+    recovery_timeout=60.0,
+    exceptions=(Exception,),
+)
+
+
+def get_all_circuit_metrics() -> list[dict]:
+    """Get metrics for all pre-configured circuit breakers."""
+    return [
+        neo4j_circuit.get_metrics(),
+        redis_circuit.get_metrics(),
+        postgres_circuit.get_metrics(),
+        kafka_circuit.get_metrics(),
+    ]

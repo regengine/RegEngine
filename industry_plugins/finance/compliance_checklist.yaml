@@ -1,0 +1,208 @@
+# Finance & Banking Compliance Checklist
+
+industry: finance
+version: "1.0"
+last_updated: "2025-11-19"
+
+checklists:
+  # ============================================================================
+  # CHECKLIST 1: Capital Requirements (Basel III / Dodd-Frank)
+  # ============================================================================
+  - id: capital_requirements
+    name: "Capital Requirements Compliance"
+    description: "Verify minimum capital, leverage ratio, and capital adequacy per Basel III / Dodd-Frank"
+    jurisdiction: "United States"
+    regulators:
+      - SEC
+      - FINRA
+      - OCC
+    applicable_entities:
+      - broker_dealers
+      - banks
+      - investment_advisors
+
+    items:
+      - id: cap_001
+        requirement: "Minimum Net Capital"
+        regulation: "17 CFR § 240.15c3-1 (SEC Rule 15c3-1)"
+        description: "Broker-dealers must maintain minimum net capital"
+        validation:
+          type: numeric_threshold
+          query: "What is your current net capital?"
+          threshold:
+            min: 250000  # $250k for most broker-dealers
+            unit: "USD"
+          pass_criteria: "value >= threshold"
+        remediation: "Increase capital reserves or reduce liabilities to meet $250k minimum"
+
+      - id: cap_002
+        requirement: "Capital Adequacy Ratio"
+        regulation: "Basel III - Tier 1 Capital"
+        description: "Banks must maintain Tier 1 capital ratio >= 6%"
+        validation:
+          type: percentage_threshold
+          query: "What is your Tier 1 capital ratio?"
+          threshold:
+            min: 6.0  # 6% minimum
+            unit: "percent"
+          pass_criteria: "value >= threshold"
+        remediation: "Raise additional capital or reduce risk-weighted assets"
+
+      - id: cap_003
+        requirement: "Liquidity Coverage Ratio (LCR)"
+        regulation: "Basel III - LCR"
+        description: "Banks must maintain LCR >= 100%"
+        validation:
+          type: percentage_threshold
+          query: "What is your Liquidity Coverage Ratio?"
+          threshold:
+            min: 100.0  # 100% minimum
+            unit: "percent"
+          pass_criteria: "value >= threshold"
+        remediation: "Increase high-quality liquid assets (HQLA) or reduce net cash outflows"
+
+  # ============================================================================
+  # CHECKLIST 2: Anti-Money Laundering (AML) / Know Your Customer (KYC)
+  # ============================================================================
+  - id: aml_kyc
+    name: "AML/KYC Compliance"
+    description: "Verify customer identification, transaction monitoring, and SAR filing"
+    jurisdiction: "United States"
+    regulators:
+      - FinCEN
+      - FDIC
+      - OCC
+    applicable_entities:
+      - all_financial_institutions
+
+    items:
+      - id: aml_001
+        requirement: "Customer Identification Program (CIP)"
+        regulation: "31 CFR § 1020.220 (Bank Secrecy Act)"
+        description: "Collect and verify customer name, DOB, address, SSN/TIN"
+        validation:
+          type: boolean
+          query: "Do you collect name, DOB, address, and SSN/TIN for all customers?"
+        remediation: "Implement CIP procedures: collect and verify 4 required data points"
+
+      - id: aml_002
+        requirement: "Transaction Monitoring System"
+        regulation: "31 CFR § 1020.210"
+        description: "Monitor transactions for suspicious activity patterns"
+        validation:
+          type: boolean
+          query: "Do you have an automated transaction monitoring system?"
+        remediation: "Deploy transaction monitoring software (e.g., AML360, NICE Actimize)"
+
+      - id: aml_003
+        requirement: "Suspicious Activity Reports (SARs)"
+        regulation: "31 CFR § 1020.320"
+        description: "File SARs within 30 days of detecting suspicious activity"
+        validation:
+          type: boolean
+          query: "Do you file SARs within 30 days of detection?"
+        remediation: "Establish SAR filing process with designated compliance officer"
+
+      - id: aml_004
+        requirement: "Currency Transaction Reports (CTRs)"
+        regulation: "31 CFR § 1010.311"
+        description: "File CTRs for cash transactions > $10,000"
+        validation:
+          type: boolean
+          query: "Do you file CTRs for transactions exceeding $10,000?"
+        remediation: "Implement CTR filing automation for transactions > $10k"
+
+  # ============================================================================
+  # CHECKLIST 3: Consumer Protection (CFPB / Dodd-Frank)
+  # ============================================================================
+  - id: consumer_protection
+    name: "Consumer Protection Compliance"
+    description: "Verify fair lending, disclosure, and consumer rights"
+    jurisdiction: "United States"
+    regulators:
+      - CFPB
+      - FTC
+    applicable_entities:
+      - lenders
+      - credit_card_issuers
+      - mortgage_servicers
+
+    items:
+      - id: cons_001
+        requirement: "Truth in Lending Act (TILA) Disclosure"
+        regulation: "15 U.S.C. § 1601 (TILA)"
+        description: "Disclose APR, finance charges, and payment schedule"
+        validation:
+          type: boolean
+          query: "Do you disclose APR, finance charges, and payment schedule to borrowers?"
+        remediation: "Add TILA disclosure box to all loan agreements"
+
+      - id: cons_002
+        requirement: "Fair Credit Reporting Act (FCRA) Compliance"
+        regulation: "15 U.S.C. § 1681"
+        description: "Provide adverse action notices when denying credit based on credit report"
+        validation:
+          type: boolean
+          query: "Do you send adverse action notices when denying credit?"
+        remediation: "Implement automated adverse action notice generation"
+
+      - id: cons_003
+        requirement: "Equal Credit Opportunity Act (ECOA)"
+        regulation: "15 U.S.C. § 1691 (Regulation B)"
+        description: "Do not discriminate based on race, gender, marital status, etc."
+        validation:
+          type: boolean
+          query: "Do you train underwriters on prohibited discrimination factors?"
+        remediation: "Conduct annual ECOA training for all underwriting staff"
+
+  # ============================================================================
+  # CHECKLIST 4: Investment Advisor Compliance (SEC / FINRA)
+  # ============================================================================
+  - id: investment_advisor
+    name: "Investment Advisor Compliance"
+    description: "Verify registration, fiduciary duty, and disclosure"
+    jurisdiction: "United States"
+    regulators:
+      - SEC
+      - FINRA
+    applicable_entities:
+      - investment_advisors
+      - registered_representatives
+
+    items:
+      - id: inv_001
+        requirement: "Form ADV Registration"
+        regulation: "Investment Advisers Act of 1940"
+        description: "Register with SEC if AUM > $110M, or with state if < $110M"
+        validation:
+          type: conditional
+          query: "What is your Assets Under Management (AUM)?"
+          conditions:
+            - if: "value > 110000000"  # $110M
+              requirement: "Register with SEC via Form ADV"
+            - if: "value <= 110000000"
+              requirement: "Register with state securities regulator"
+        remediation: "File Form ADV with SEC (if AUM > $110M) or state regulator"
+
+      - id: inv_002
+        requirement: "Fiduciary Duty Disclosure"
+        regulation: "SEC Release IA-5248"
+        description: "Disclose fiduciary duty to clients in Form CRS"
+        validation:
+          type: boolean
+          query: "Do you provide Form CRS to retail clients disclosing fiduciary duty?"
+        remediation: "Create and deliver Form CRS to all retail clients"
+
+      - id: inv_003
+        requirement: "Code of Ethics"
+        regulation: "17 CFR § 275.204A-1"
+        description: "Adopt code of ethics addressing conflicts of interest"
+        validation:
+          type: boolean
+          query: "Do you have a written code of ethics approved by the board?"
+        remediation: "Draft code of ethics, get board approval, distribute to employees"
+
+# ==============================================================================
+# Validation Rules (Python)
+# ==============================================================================
+# These would be implemented in services/compliance/validators/finance.py

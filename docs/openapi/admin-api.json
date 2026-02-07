@@ -1,0 +1,3655 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "RegEngine Admin API",
+        "description": "\nRegEngine Admin API provides tenant self-service capabilities for regulatory compliance management.\n\n## Features\n\n* **API Key Management**: Create and manage API keys for authentication\n* **Content Graph Overlay**: Build custom control frameworks mapped to regulatory provisions\n* **Tenant Controls**: Define internal controls (NIST CSF, SOC2, ISO27001, etc.)\n* **Product Catalog**: Manage products requiring regulatory compliance\n* **Compliance Gap Analysis**: Identify unmapped regulatory requirements\n* **Provision Mapping**: Link controls to specific regulatory provisions\n\n## Authentication\n\nAll endpoints require an API key in the `X-RegEngine-API-Key` header:\n\n```\nX-RegEngine-API-Key: your_api_key_here\n```\n\nAPI keys are tenant-specific and provide automatic tenant isolation.\n\n## Quick Start\n\n1. Obtain an API key from your administrator\n2. Create tenant controls: `POST /overlay/controls`\n3. Create products: `POST /overlay/products`\n4. Map controls to provisions: `POST /overlay/mappings`\n5. Link controls to products: `POST /overlay/products/link-control`\n6. View compliance coverage: `GET /overlay/products/{id}/requirements`\n\n## Rate Limiting\n\nAPI requests are rate-limited to prevent abuse. See response headers:\n* `X-RateLimit-Limit`: Maximum requests per window\n* `X-RateLimit-Remaining`: Requests remaining\n* `X-RateLimit-Reset`: When the limit resets\n\n## Support\n\nFor API support, consult the documentation at `/docs` (this page) or `/redoc`.\n    ",
+        "contact": {
+            "name": "RegEngine Support",
+            "url": "https://github.com/regengine/regengine"
+        },
+        "license": {
+            "name": "Apache 2.0",
+            "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+        },
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/health": {
+            "get": {
+                "summary": "Health",
+                "description": "Deep health check endpoint with dependency verification.",
+                "operationId": "health_health_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health/consumer": {
+            "get": {
+                "summary": "Consumer Health",
+                "description": "Health check endpoint for the Kafka review consumer.",
+                "operationId": "consumer_health_health_consumer_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/metrics": {
+            "get": {
+                "summary": "Metrics",
+                "description": "Prometheus metrics endpoint.",
+                "operationId": "metrics_metrics_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/keys": {
+            "post": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Create Api Key",
+                "description": "Create a new API key (requires admin authentication).",
+                "operationId": "create_api_key_v1_admin_keys_post",
+                "parameters": [
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateKeyRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateKeyResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "List Api Keys",
+                "description": "List all API keys (requires admin authentication).",
+                "operationId": "list_api_keys_v1_admin_keys_get",
+                "parameters": [
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/APIKeyInfo"
+                                    },
+                                    "title": "Response List Api Keys V1 Admin Keys Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/keys/{key_id}": {
+            "delete": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Revoke Api Key",
+                "description": "Revoke an API key (requires admin authentication).",
+                "operationId": "revoke_api_key_v1_admin_keys__key_id__delete",
+                "parameters": [
+                    {
+                        "name": "key_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Key Id"
+                        }
+                    },
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/review/flagged-extractions": {
+            "post": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Create Flagged Extraction Record",
+                "description": "Persist a hallucination review item and update tracker state.",
+                "operationId": "create_flagged_extraction_record_v1_admin_review_flagged_extractions_post",
+                "parameters": [
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/HallucinationCreateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReviewItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "List Flagged Extraction Records",
+                "description": "Return hallucination review items for reviewers with cursor-based pagination.",
+                "operationId": "list_flagged_extraction_records_v1_admin_review_flagged_extractions_get",
+                "parameters": [
+                    {
+                        "name": "status_filter",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Status filter: PENDING/APPROVED/REJECTED",
+                            "default": "PENDING",
+                            "title": "Status Filter"
+                        },
+                        "description": "Status filter: PENDING/APPROVED/REJECTED"
+                    },
+                    {
+                        "name": "tenant_id",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1,
+                            "default": 50,
+                            "title": "Limit"
+                        }
+                    },
+                    {
+                        "name": "cursor",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Pagination cursor from previous response",
+                            "title": "Cursor"
+                        },
+                        "description": "Pagination cursor from previous response"
+                    },
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/tenants": {
+            "post": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Create Tenant",
+                "description": "Create a tenant identifier for onboarding flows.",
+                "operationId": "create_tenant_v1_admin_tenants_post",
+                "parameters": [
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TenantCreateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TenantCreateResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/review/flagged-extractions/{review_id}": {
+            "get": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Get Flagged Extraction Record",
+                "description": "Fetch a single hallucination review item.",
+                "operationId": "get_flagged_extraction_record_v1_admin_review_flagged_extractions__review_id__get",
+                "parameters": [
+                    {
+                        "name": "review_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Review Id"
+                        }
+                    },
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReviewItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/review/flagged-extractions/{review_id}/approve": {
+            "post": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Approve Flagged Extraction",
+                "description": "Approve a hallucination after human review.",
+                "operationId": "approve_flagged_extraction_v1_admin_review_flagged_extractions__review_id__approve_post",
+                "parameters": [
+                    {
+                        "name": "review_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Review Id"
+                        }
+                    },
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReviewActionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReviewItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/review/flagged-extractions/{review_id}/reject": {
+            "post": {
+                "tags": [
+                    "v1"
+                ],
+                "summary": "Reject Flagged Extraction",
+                "description": "Reject a hallucination and capture reviewer notes.",
+                "operationId": "reject_flagged_extraction_v1_admin_review_flagged_extractions__review_id__reject_post",
+                "parameters": [
+                    {
+                        "name": "review_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Review Id"
+                        }
+                    },
+                    {
+                        "name": "X-Admin-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Admin-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReviewActionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReviewItemResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/controls": {
+            "post": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Create Control",
+                "description": "Create a new tenant control.\n\nArgs:\n    request: Control creation request\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Created control data",
+                "operationId": "create_control_v1_overlay_controls_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateControlRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "List Controls",
+                "description": "List all tenant controls, optionally filtered by framework.\n\nArgs:\n    framework: Optional framework filter\n    api_key: Validated API key with tenant_id\n\nReturns:\n    List of controls",
+                "operationId": "list_controls_v1_overlay_controls_get",
+                "parameters": [
+                    {
+                        "name": "framework",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Framework"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/controls/{control_id}": {
+            "get": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Get Control Details",
+                "description": "Get detailed information about a control.\n\nArgs:\n    control_id: Control UUID\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Control details with mappings and products",
+                "operationId": "get_control_details_v1_overlay_controls__control_id__get",
+                "parameters": [
+                    {
+                        "name": "control_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Control Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Update Control",
+                "description": "Update an existing tenant control.\n\nArgs:\n    control_id: Control UUID to update\n    request: Updated control data\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Updated control data",
+                "operationId": "update_control_v1_overlay_controls__control_id__put",
+                "parameters": [
+                    {
+                        "name": "control_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Control Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateControlRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Delete Control",
+                "description": "Delete a tenant control and all its mappings.\n\nArgs:\n    control_id: Control UUID to delete\n    api_key: Validated API key with tenant_id\n\nReturns:\n    No content on success",
+                "operationId": "delete_control_v1_overlay_controls__control_id__delete",
+                "parameters": [
+                    {
+                        "name": "control_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Control Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/products": {
+            "post": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Create Product",
+                "description": "Create a new customer product.\n\nArgs:\n    request: Product creation request\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Created product data",
+                "operationId": "create_product_v1_overlay_products_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateProductRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "List Products",
+                "description": "List all customer products, optionally filtered by type.\n\nArgs:\n    product_type: Optional product type filter\n    api_key: Validated API key with tenant_id\n\nReturns:\n    List of products",
+                "operationId": "list_products_v1_overlay_products_get",
+                "parameters": [
+                    {
+                        "name": "product_type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Product Type"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/products/{product_id}/requirements": {
+            "get": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Get Product Requirements",
+                "description": "Get all regulatory requirements for a customer product.\n\nThis endpoint merges tenant controls with global regulatory provisions.\n\nArgs:\n    product_id: Product UUID\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Product requirements with controls and provisions",
+                "operationId": "get_product_requirements_v1_overlay_products__product_id__requirements_get",
+                "parameters": [
+                    {
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Product Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/products/{product_id}/compliance-gaps": {
+            "get": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Get Compliance Gaps",
+                "description": "Identify regulatory provisions not yet mapped for a product.\n\nArgs:\n    product_id: Product UUID\n    jurisdiction: Jurisdiction to check (e.g., \"US\", \"EU\")\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Compliance gap analysis",
+                "operationId": "get_compliance_gaps_v1_overlay_products__product_id__compliance_gaps_get",
+                "parameters": [
+                    {
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Product Id"
+                        }
+                    },
+                    {
+                        "name": "jurisdiction",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Jurisdiction"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/products/{product_id}": {
+            "delete": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Delete Product",
+                "description": "Delete a customer product and all its control links.\n\nArgs:\n    product_id: Product UUID to delete\n    api_key: Validated API key with tenant_id\n\nReturns:\n    No content on success",
+                "operationId": "delete_product_v1_overlay_products__product_id__delete",
+                "parameters": [
+                    {
+                        "name": "product_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Product Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/mappings": {
+            "post": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Create Mapping",
+                "description": "Map a tenant control to a regulatory provision.\n\nArgs:\n    request: Mapping creation request\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Created mapping data",
+                "operationId": "create_mapping_v1_overlay_mappings_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateMappingRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/products/link-control": {
+            "post": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Link Control To Product",
+                "description": "Link a tenant control to a customer product.\n\nArgs:\n    request: Link creation request\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Link confirmation",
+                "operationId": "link_control_to_product_v1_overlay_products_link_control_post",
+                "parameters": [
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LinkControlToProductRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/mappings/{mapping_id}": {
+            "delete": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Delete Mapping",
+                "description": "Delete a control-to-provision mapping.\n\nArgs:\n    mapping_id: Mapping UUID to delete\n    api_key: Validated API key with tenant_id\n\nReturns:\n    No content on success",
+                "operationId": "delete_mapping_v1_overlay_mappings__mapping_id__delete",
+                "parameters": [
+                    {
+                        "name": "mapping_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Mapping Id"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/overlay/provisions/{provision_hash}/overlays": {
+            "get": {
+                "tags": [
+                    "overlay"
+                ],
+                "summary": "Get Provision Overlays",
+                "description": "Get a provision with tenant-specific control mappings.\n\nArgs:\n    provision_hash: Hash of the provision\n    api_key: Validated API key with tenant_id\n\nReturns:\n    Provision with tenant overlays",
+                "operationId": "get_provision_overlays_v1_overlay_provisions__provision_hash__overlays_get",
+                "parameters": [
+                    {
+                        "name": "provision_hash",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Provision Hash"
+                        }
+                    },
+                    {
+                        "name": "X-RegEngine-API-Key",
+                        "in": "header",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "X-Regengine-Api-Key"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/status/{tenant_id}": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Get Compliance Status",
+                "description": "Get current compliance status for a tenant.\n\nThis is the \"big status widget\" that shows:\n- \u2705 COMPLIANT / \u26a0\ufe0f AT_RISK / \ud83d\udea8 NON_COMPLIANT\n- Active alert count\n- Countdown to next deadline\n- List of active alerts\n\nThis is what an executive looks at to answer:\n\"Are we safe right now?\"",
+                "operationId": "get_compliance_status_v1_compliance_status__tenant_id__get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ComplianceStatusResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/alerts/{tenant_id}": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "List Alerts",
+                "description": "List alerts for a tenant.\n\nReturns alerts ordered by creation date (newest first).\nFilter by status to see only active alerts.",
+                "operationId": "list_alerts_v1_compliance_alerts__tenant_id__get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "description": "Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED",
+                            "title": "Status"
+                        },
+                        "description": "Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1,
+                            "default": 50,
+                            "title": "Limit"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/AlertResponse"
+                                    },
+                                    "title": "Response List Alerts V1 Compliance Alerts  Tenant Id  Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/alerts/{tenant_id}/{alert_id}": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Get Alert",
+                "description": "Get a single alert by ID.",
+                "operationId": "get_alert_v1_compliance_alerts__tenant_id___alert_id__get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "alert_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Alert Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AlertResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/alerts/{tenant_id}/{alert_id}/acknowledge": {
+            "post": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Acknowledge Alert",
+                "description": "Mark an alert as acknowledged.\n\nThis indicates the user has seen the alert but hasn't completed\nthe required action yet. The countdown continues.",
+                "operationId": "acknowledge_alert_v1_compliance_alerts__tenant_id___alert_id__acknowledge_post",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "alert_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Alert Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AlertActionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AlertResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/alerts/{tenant_id}/{alert_id}/resolve": {
+            "post": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Resolve Alert",
+                "description": "Resolve an alert.\n\nThis indicates the required action has been completed.\nThe alert is marked as resolved and the tenant's status is recalculated.",
+                "operationId": "resolve_alert_v1_compliance_alerts__tenant_id___alert_id__resolve_post",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "alert_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Alert Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AlertActionRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AlertResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/alerts": {
+            "post": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Create Alert",
+                "description": "Manually create a compliance alert.\n\nTypically alerts are created automatically by the scheduler\nwhen external events are detected. This endpoint allows manual\nalert creation for testing or ad-hoc situations.",
+                "operationId": "create_alert_v1_compliance_alerts_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateAlertRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AlertResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/profile/{tenant_id}": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Get Product Profile",
+                "description": "Get tenant's product profile for alert matching.\n\nThe product profile determines which external events\n(recalls, warnings, etc.) apply to this tenant.",
+                "operationId": "get_product_profile_v1_compliance_profile__tenant_id__get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Get Product Profile V1 Compliance Profile  Tenant Id  Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Update Product Profile",
+                "description": "Update tenant's product profile.\n\nSet the product categories, supply regions, and other\nattributes used to match external alerts to this tenant.\n\nExample:\n```json\n{\n    \"product_categories\": [\"leafy_greens\", \"romaine_lettuce\"],\n    \"supply_regions\": [\"CA\", \"AZ\"],\n    \"retailer_relationships\": [\"walmart\", \"costco\"]\n}\n```",
+                "operationId": "update_product_profile_v1_compliance_profile__tenant_id__put",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProductProfileRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Update Product Profile V1 Compliance Profile  Tenant Id  Put"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}": {
+            "post": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Create Snapshot",
+                "description": "Create a point-in-time compliance snapshot.\n\nCaptures the current compliance state with cryptographic hash.\nUse before audits to freeze what was true at a specific moment.\n\nThe content_hash ensures the snapshot cannot be tampered with.",
+                "operationId": "create_snapshot_v1_compliance_snapshots__tenant_id__post",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateSnapshotRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Create Snapshot V1 Compliance Snapshots  Tenant Id  Post"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "List Snapshots",
+                "description": "List compliance snapshots for a tenant.\n\nReturns snapshots in reverse chronological order (newest first).\nUse to view snapshot history and select one for verification/export.",
+                "operationId": "list_snapshots_v1_compliance_snapshots__tenant_id__get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1,
+                            "default": 50,
+                            "title": "Limit"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object"
+                                    },
+                                    "title": "Response List Snapshots V1 Compliance Snapshots  Tenant Id  Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/diff": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Diff Snapshots",
+                "description": "Compare two snapshots and return the differences.\n\nShows what changed between two compliance states:\n- Status changes (COMPLIANT \u2192 NON_COMPLIANT)\n- Alert count changes\n- New alerts added\n- Alerts resolved\n\nUseful for audit reporting and timeline reconstruction.",
+                "operationId": "diff_snapshots_v1_compliance_snapshots__tenant_id__diff_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_a",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of first (older) snapshot",
+                            "title": "Snapshot A"
+                        },
+                        "description": "ID of first (older) snapshot"
+                    },
+                    {
+                        "name": "snapshot_b",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of second (newer) snapshot",
+                            "title": "Snapshot B"
+                        },
+                        "description": "ID of second (newer) snapshot"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Diff Snapshots V1 Compliance Snapshots  Tenant Id  Diff Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Get Snapshot",
+                "description": "Get a single snapshot with full details.\n\nIncludes all captured data: status, alerts, profile.",
+                "operationId": "get_snapshot_v1_compliance_snapshots__tenant_id___snapshot_id__get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Snapshot Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Get Snapshot V1 Compliance Snapshots  Tenant Id   Snapshot Id  Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/verify": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Verify Snapshot",
+                "description": "Verify snapshot integrity.\n\nRecomputes the SHA-256 hash and compares to stored hash.\nIf valid, marks the snapshot as verified with timestamp.\n\nReturns:\n- is_valid: whether the hash matches\n- stored_hash: the original hash\n- computed_hash: the recomputed hash",
+                "operationId": "verify_snapshot_v1_compliance_snapshots__tenant_id___snapshot_id__verify_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Snapshot Id"
+                        }
+                    },
+                    {
+                        "name": "verified_by",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "User ID performing verification",
+                            "title": "Verified By"
+                        },
+                        "description": "User ID performing verification"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Verify Snapshot V1 Compliance Snapshots  Tenant Id   Snapshot Id  Verify Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/export": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Export Snapshot",
+                "description": "Export snapshot in audit-ready format.\n\nReturns a complete export package with:\n- Snapshot metadata\n- Compliance state at time of capture\n- All captured data (status, alerts, profile)\n- Integrity verification with hash",
+                "operationId": "export_snapshot_v1_compliance_snapshots__tenant_id___snapshot_id__export_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Snapshot Id"
+                        }
+                    },
+                    {
+                        "name": "format",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "description": "Export format: json",
+                            "default": "json",
+                            "title": "Format"
+                        },
+                        "description": "Export format: json"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Export Snapshot V1 Compliance Snapshots  Tenant Id   Snapshot Id  Export Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/attest": {
+            "post": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Attest Snapshot",
+                "description": "Attest to a snapshot, taking owner accountability.\n\nThis creates a legal binding between the person and the compliance state.\nOnce attested:\n- The snapshot becomes a commitment\n- The user's name is permanently attached\n- Alerts bound to this snapshot can be resolved\n\nUse this ONLY when ready to take personal responsibility for the\ncompliance state at the time of capture.",
+                "operationId": "attest_snapshot_v1_compliance_snapshots__tenant_id___snapshot_id__attest_post",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Snapshot Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AttestSnapshotRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Attest Snapshot V1 Compliance Snapshots  Tenant Id   Snapshot Id  Attest Post"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/refreeze": {
+            "post": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Refreeze Snapshot",
+                "description": "Re-freeze a stale or invalid snapshot.\n\nCreates a fresh snapshot with current compliance state,\ninheriting the original's trigger alert and regulatory citation.\nUse when a snapshot has degraded but you need fresh evidence.",
+                "operationId": "refreeze_snapshot_v1_compliance_snapshots__tenant_id___snapshot_id__refreeze_post",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Snapshot Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RefreezeRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Refreeze Snapshot V1 Compliance Snapshots  Tenant Id   Snapshot Id  Refreeze Post"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/fda-response": {
+            "get": {
+                "tags": [
+                    "compliance"
+                ],
+                "summary": "Get Fda Response",
+                "description": "Generate a regulator-grade explanation for FDA response.\n\nReturns pre-formatted text that can be directly copied\ninto a regulatory response document.\n\nIncludes:\n- Formal header with snapshot ID and hash\n- Compliance status at time of capture\n- Alert details\n- Attestation information (if attested)\n- Cryptographic verification statement",
+                "operationId": "get_fda_response_v1_compliance_snapshots__tenant_id___snapshot_id__fda_response_get",
+                "parameters": [
+                    {
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Tenant Id"
+                        }
+                    },
+                    {
+                        "name": "snapshot_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Snapshot Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "title": "Response Get Fda Response V1 Compliance Snapshots  Tenant Id   Snapshot Id  Fda Response Get"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "APIKeyInfo": {
+                "properties": {
+                    "key_id": {
+                        "type": "string",
+                        "title": "Key Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "tenant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tenant Id"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "expires_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Expires At"
+                    },
+                    "rate_limit_per_minute": {
+                        "type": "integer",
+                        "title": "Rate Limit Per Minute"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "title": "Enabled"
+                    },
+                    "scopes": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Scopes"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "key_id",
+                    "name",
+                    "created_at",
+                    "expires_at",
+                    "rate_limit_per_minute",
+                    "enabled",
+                    "scopes"
+                ],
+                "title": "APIKeyInfo",
+                "description": "API key information (without the raw key)."
+            },
+            "AlertActionRequest": {
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "title": "User Id",
+                        "description": "ID of user performing action"
+                    },
+                    "notes": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Notes",
+                        "description": "Optional notes"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "user_id"
+                ],
+                "title": "AlertActionRequest",
+                "description": "Request for alert actions (acknowledge/resolve)."
+            },
+            "AlertResponse": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id"
+                    },
+                    "tenant_id": {
+                        "type": "string",
+                        "title": "Tenant Id"
+                    },
+                    "source_type": {
+                        "type": "string",
+                        "title": "Source Type"
+                    },
+                    "source_id": {
+                        "type": "string",
+                        "title": "Source Id"
+                    },
+                    "title": {
+                        "type": "string",
+                        "title": "Title"
+                    },
+                    "summary": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Summary"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "title": "Severity"
+                    },
+                    "severity_emoji": {
+                        "type": "string",
+                        "title": "Severity Emoji"
+                    },
+                    "countdown_start": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Countdown Start"
+                    },
+                    "countdown_end": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Countdown End"
+                    },
+                    "countdown_hours": {
+                        "type": "integer",
+                        "title": "Countdown Hours"
+                    },
+                    "countdown_seconds": {
+                        "type": "integer",
+                        "title": "Countdown Seconds"
+                    },
+                    "countdown_display": {
+                        "type": "string",
+                        "title": "Countdown Display"
+                    },
+                    "is_expired": {
+                        "type": "boolean",
+                        "title": "Is Expired"
+                    },
+                    "required_actions": {
+                        "items": {
+                            "type": "object"
+                        },
+                        "type": "array",
+                        "title": "Required Actions"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "acknowledged_at": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Acknowledged At"
+                    },
+                    "acknowledged_by": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Acknowledged By"
+                    },
+                    "resolved_at": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Resolved At"
+                    },
+                    "resolved_by": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Resolved By"
+                    },
+                    "match_reason": {
+                        "anyOf": [
+                            {
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Match Reason"
+                    },
+                    "created_at": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Created At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "tenant_id",
+                    "source_type",
+                    "source_id",
+                    "title",
+                    "summary",
+                    "severity",
+                    "severity_emoji",
+                    "countdown_start",
+                    "countdown_end",
+                    "countdown_hours",
+                    "countdown_seconds",
+                    "countdown_display",
+                    "is_expired",
+                    "required_actions",
+                    "status",
+                    "acknowledged_at",
+                    "acknowledged_by",
+                    "resolved_at",
+                    "resolved_by",
+                    "match_reason",
+                    "created_at"
+                ],
+                "title": "AlertResponse",
+                "description": "Response for a single alert."
+            },
+            "AttestSnapshotRequest": {
+                "properties": {
+                    "attested_by": {
+                        "type": "string",
+                        "title": "Attested By",
+                        "description": "Full name of the person attesting (e.g., 'Jane Smith')"
+                    },
+                    "attestation_title": {
+                        "type": "string",
+                        "title": "Attestation Title",
+                        "description": "Title/role of the attesting person (e.g., 'VP Operations')"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "attested_by",
+                    "attestation_title"
+                ],
+                "title": "AttestSnapshotRequest",
+                "description": "Request to attest to a compliance snapshot."
+            },
+            "ComplianceStatusResponse": {
+                "properties": {
+                    "tenant_id": {
+                        "type": "string",
+                        "title": "Tenant Id"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "status_emoji": {
+                        "type": "string",
+                        "title": "Status Emoji"
+                    },
+                    "status_label": {
+                        "type": "string",
+                        "title": "Status Label"
+                    },
+                    "last_status_change": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Last Status Change"
+                    },
+                    "active_alert_count": {
+                        "type": "integer",
+                        "title": "Active Alert Count"
+                    },
+                    "critical_alert_count": {
+                        "type": "integer",
+                        "title": "Critical Alert Count"
+                    },
+                    "completeness_score": {
+                        "anyOf": [
+                            {
+                                "type": "number"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Completeness Score"
+                    },
+                    "next_deadline": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Next Deadline"
+                    },
+                    "next_deadline_description": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Next Deadline Description"
+                    },
+                    "countdown_seconds": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Countdown Seconds"
+                    },
+                    "countdown_display": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Countdown Display"
+                    },
+                    "active_alerts": {
+                        "items": {
+                            "type": "object"
+                        },
+                        "type": "array",
+                        "title": "Active Alerts"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "tenant_id",
+                    "status",
+                    "status_emoji",
+                    "status_label",
+                    "last_status_change",
+                    "active_alert_count",
+                    "critical_alert_count",
+                    "completeness_score",
+                    "next_deadline",
+                    "next_deadline_description",
+                    "countdown_seconds",
+                    "countdown_display"
+                ],
+                "title": "ComplianceStatusResponse",
+                "description": "Response for compliance status endpoint."
+            },
+            "CreateAlertRequest": {
+                "properties": {
+                    "tenant_id": {
+                        "type": "string",
+                        "title": "Tenant Id"
+                    },
+                    "source_type": {
+                        "type": "string",
+                        "title": "Source Type",
+                        "default": "MANUAL"
+                    },
+                    "source_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Source Id"
+                    },
+                    "title": {
+                        "type": "string",
+                        "title": "Title"
+                    },
+                    "summary": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Summary"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "title": "Severity",
+                        "default": "MEDIUM"
+                    },
+                    "countdown_hours": {
+                        "type": "integer",
+                        "title": "Countdown Hours",
+                        "default": 24
+                    },
+                    "required_actions": {
+                        "items": {
+                            "type": "object"
+                        },
+                        "type": "array",
+                        "title": "Required Actions"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "tenant_id",
+                    "title"
+                ],
+                "title": "CreateAlertRequest",
+                "description": "Request to manually create an alert."
+            },
+            "CreateControlRequest": {
+                "properties": {
+                    "control_id": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 1,
+                        "title": "Control Id"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "minLength": 1,
+                        "title": "Title"
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "Description"
+                    },
+                    "framework": {
+                        "type": "string",
+                        "title": "Framework",
+                        "description": "e.g., NIST CSF, SOC2, ISO27001"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "control_id",
+                    "title",
+                    "description",
+                    "framework"
+                ],
+                "title": "CreateControlRequest",
+                "description": "Request to create a tenant control."
+            },
+            "CreateKeyRequest": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "tenant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tenant Id"
+                    },
+                    "rate_limit_per_minute": {
+                        "type": "integer",
+                        "title": "Rate Limit Per Minute",
+                        "default": 60
+                    },
+                    "expires_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Expires At"
+                    },
+                    "scopes": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Scopes",
+                        "default": [
+                            "read",
+                            "ingest"
+                        ]
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "CreateKeyRequest",
+                "description": "Request model for creating an API key."
+            },
+            "CreateKeyResponse": {
+                "properties": {
+                    "api_key": {
+                        "type": "string",
+                        "title": "Api Key"
+                    },
+                    "key_id": {
+                        "type": "string",
+                        "title": "Key Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "tenant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tenant Id"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "expires_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Expires At"
+                    },
+                    "rate_limit_per_minute": {
+                        "type": "integer",
+                        "title": "Rate Limit Per Minute"
+                    },
+                    "scopes": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Scopes"
+                    },
+                    "warning": {
+                        "type": "string",
+                        "title": "Warning",
+                        "default": "Store this key securely. It will not be shown again."
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "api_key",
+                    "key_id",
+                    "name",
+                    "created_at",
+                    "expires_at",
+                    "rate_limit_per_minute",
+                    "scopes"
+                ],
+                "title": "CreateKeyResponse",
+                "description": "Response model for API key creation."
+            },
+            "CreateMappingRequest": {
+                "properties": {
+                    "control_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Control Id"
+                    },
+                    "provision_hash": {
+                        "type": "string",
+                        "title": "Provision Hash"
+                    },
+                    "mapping_type": {
+                        "$ref": "#/components/schemas/MappingType"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Confidence"
+                    },
+                    "notes": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Notes"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "control_id",
+                    "provision_hash",
+                    "mapping_type",
+                    "confidence"
+                ],
+                "title": "CreateMappingRequest",
+                "description": "Request to map a control to a provision."
+            },
+            "CreateProductRequest": {
+                "properties": {
+                    "product_name": {
+                        "type": "string",
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "title": "Product Name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "title": "Description"
+                    },
+                    "product_type": {
+                        "$ref": "#/components/schemas/ProductType"
+                    },
+                    "jurisdictions": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "minItems": 1,
+                        "title": "Jurisdictions"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "product_name",
+                    "description",
+                    "product_type",
+                    "jurisdictions"
+                ],
+                "title": "CreateProductRequest",
+                "description": "Request to create a customer product."
+            },
+            "CreateSnapshotRequest": {
+                "properties": {
+                    "snapshot_name": {
+                        "type": "string",
+                        "title": "Snapshot Name",
+                        "description": "Name for this snapshot (e.g., 'Pre-Audit Q1 2026')"
+                    },
+                    "snapshot_reason": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Snapshot Reason",
+                        "description": "Reason for creating snapshot"
+                    },
+                    "created_by": {
+                        "type": "string",
+                        "title": "Created By",
+                        "description": "User ID creating the snapshot"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "snapshot_name",
+                    "created_by"
+                ],
+                "title": "CreateSnapshotRequest",
+                "description": "Request to create a compliance snapshot."
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "HallucinationCreateRequest": {
+                "properties": {
+                    "tenant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tenant Id",
+                        "description": "Tenant UUID that owns the document"
+                    },
+                    "document_id": {
+                        "type": "string",
+                        "title": "Document Id"
+                    },
+                    "doc_hash": {
+                        "type": "string",
+                        "title": "Doc Hash"
+                    },
+                    "extractor": {
+                        "type": "string",
+                        "title": "Extractor"
+                    },
+                    "confidence_score": {
+                        "type": "number",
+                        "maximum": 1.0,
+                        "minimum": 0.0,
+                        "title": "Confidence Score"
+                    },
+                    "extraction": {
+                        "type": "object",
+                        "title": "Extraction"
+                    },
+                    "provenance": {
+                        "anyOf": [
+                            {
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Provenance"
+                    },
+                    "text_raw": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Text Raw"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "document_id",
+                    "doc_hash",
+                    "extractor",
+                    "confidence_score",
+                    "extraction"
+                ],
+                "title": "HallucinationCreateRequest",
+                "description": "Payload for recording a hallucination that requires review."
+            },
+            "LinkControlToProductRequest": {
+                "properties": {
+                    "control_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Control Id"
+                    },
+                    "product_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Product Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "control_id",
+                    "product_id"
+                ],
+                "title": "LinkControlToProductRequest",
+                "description": "Request to link a control to a product."
+            },
+            "MappingType": {
+                "type": "string",
+                "enum": [
+                    "IMPLEMENTS",
+                    "PARTIALLY_IMPLEMENTS",
+                    "ADDRESSES",
+                    "REFERENCES"
+                ],
+                "title": "MappingType",
+                "description": "Types of control-to-provision mappings."
+            },
+            "ProductProfileRequest": {
+                "properties": {
+                    "product_categories": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Product Categories"
+                    },
+                    "supply_regions": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Supply Regions"
+                    },
+                    "supplier_identifiers": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Supplier Identifiers"
+                    },
+                    "fda_product_codes": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Fda Product Codes"
+                    },
+                    "retailer_relationships": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Retailer Relationships"
+                    }
+                },
+                "type": "object",
+                "title": "ProductProfileRequest",
+                "description": "Request to update product profile."
+            },
+            "ProductType": {
+                "type": "string",
+                "enum": [
+                    "TRADING",
+                    "LENDING",
+                    "CUSTODY",
+                    "PAYMENTS",
+                    "DERIVATIVES",
+                    "OTHER"
+                ],
+                "title": "ProductType",
+                "description": "Types of customer products."
+            },
+            "RefreezeRequest": {
+                "properties": {
+                    "created_by": {
+                        "type": "string",
+                        "title": "Created By",
+                        "description": "User email performing the re-freeze"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "created_by"
+                ],
+                "title": "RefreezeRequest",
+                "description": "Request to re-freeze a stale/invalid snapshot."
+            },
+            "ReviewActionRequest": {
+                "properties": {
+                    "reviewer_id": {
+                        "type": "string",
+                        "title": "Reviewer Id"
+                    },
+                    "notes": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Notes"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "reviewer_id"
+                ],
+                "title": "ReviewActionRequest",
+                "description": "Reviewer action payload for approve/reject."
+            },
+            "ReviewItemResponse": {
+                "properties": {
+                    "review_id": {
+                        "type": "string",
+                        "title": "Review Id"
+                    },
+                    "tenant_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Tenant Id"
+                    },
+                    "document_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Document Id"
+                    },
+                    "doc_hash": {
+                        "type": "string",
+                        "title": "Doc Hash"
+                    },
+                    "extractor": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Extractor"
+                    },
+                    "confidence_score": {
+                        "type": "number",
+                        "title": "Confidence Score"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "updated_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Updated At"
+                    },
+                    "reviewer_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Reviewer Id"
+                    },
+                    "extraction": {
+                        "type": "object",
+                        "title": "Extraction"
+                    },
+                    "provenance": {
+                        "anyOf": [
+                            {
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Provenance"
+                    },
+                    "text_raw": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Text Raw"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "review_id",
+                    "tenant_id",
+                    "document_id",
+                    "doc_hash",
+                    "extractor",
+                    "confidence_score",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "reviewer_id",
+                    "extraction",
+                    "provenance",
+                    "text_raw"
+                ],
+                "title": "ReviewItemResponse",
+                "description": "Response model for review queue items."
+            },
+            "TenantCreateRequest": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "title": "Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "TenantCreateRequest",
+                "description": "Request to create a new tenant for onboarding."
+            },
+            "TenantCreateResponse": {
+                "properties": {
+                    "tenant_id": {
+                        "type": "string",
+                        "title": "Tenant Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "status": {
+                        "type": "string",
+                        "title": "Status",
+                        "default": "active"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "tenant_id",
+                    "name"
+                ],
+                "title": "TenantCreateResponse",
+                "description": "Response for tenant creation."
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    }
+}

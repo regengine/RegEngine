@@ -1,0 +1,9 @@
+{
+    "widgets": [
+        {
+            "type": "line_chart",
+            "title": "Compliance Drift",
+            "data_source": "obligation_delta_over_time"
+        }
+    ]
+}

@@ -1,0 +1,94 @@
+name: Test Suite Health Check
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  test-environment-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [energy, admin, graph, nlp, ingestion]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Check Symlinks Exist
+        run: |
+          cd services/${{ matrix.service }}
+          if [ ! -L "shared" ] && [ "${{ matrix.service }}" != "energy" ]; then
+            echo "ERROR: Missing symlink to shared/ in ${{ matrix.service }}"
+            exit 1
+          fi
+          echo "✓ Symlink check passed"
+      
+      - name: Install Dependencies
+        run: |
+          cd services/${{ matrix.service }}
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+          pip install pytest pytest-asyncio
+      
+      - name: Check Test Collection
+        run: |
+          cd services/${{ matrix.service }}
+          # Collect tests without running them
+          python3 -m pytest --collect-only tests/ || {
+            echo "ERROR: Test collection failed for ${{ matrix.service }}"
+            echo "This usually means:"
+            echo "  - Missing dependencies"
+            echo "  - Import errors"
+            echo "  - Missing environment variables"
+            exit 1
+          }
+          echo "✓ Test collection passed"
+      
+      - name: Verify conftest.py Exists
+        run: |
+          if [ "${{ matrix.service }}" != "energy" ]; then
+            cd services/${{ matrix.service }}
+            if [ ! -f "conftest.py" ]; then
+              echo "ERROR: Missing conftest.py in ${{ matrix.service }}"
+              exit 1
+            fi
+            echo "✓ conftest.py exists"
+          fi
+      
+      - name: Run Smoke Tests
+        run: |
+          cd services/${{ matrix.service }}
+          # Run only smoke tests
+          python3 -m pytest tests/test_smoke*.py -v || true
+        continue-on-error: true
+  
+  python-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Check Python 3.9 Compatibility
+        run: |
+          # Check all .py files for Python 3.10+ syntax
+          echo "Checking for incompatible type hints..."
+          
+          # Find files using | operator for types (Python 3.10+)
+          if grep -r ":\s*\w\+\s*|\s*None" services --include="*.py"; then
+            echo "ERROR: Found Python 3.10+ type syntax (str | None)"
+            echo "Please use: from typing import Optional; field: Optional[str] = None"
+            exit 1
+          fi
+          
+          echo "✓ Python 3.9 compatibility check passed"

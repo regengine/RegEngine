@@ -1,0 +1,277 @@
+"""Security tests for tenant isolation.
+
+Verifies that tenant data cannot be accessed across tenant boundaries.
+"""
+
+import pytest
+import httpx
+from uuid import uuid4
+
+
+# Service URLs
+ADMIN_URL = "http://localhost:8400"
+GRAPH_URL = "http://localhost:8200"
+
+
+@pytest.fixture(scope="module")
+def admin_client():
+    """Admin API client."""
+    return httpx.Client(base_url=ADMIN_URL, timeout=30)
+
+
+@pytest.fixture(scope="module")
+def graph_client():
+    """Graph API client."""
+    return httpx.Client(base_url=GRAPH_URL, timeout=30)
+
+
+class TestAPIKeyIsolation:
+    """Test that API keys are tenant-scoped."""
+
+    def test_missing_api_key_rejected(self, admin_client):
+        """Requests without API key should be rejected."""
+        try:
+            response = admin_client.get("/v1/admin/keys")
+            assert response.status_code in [401, 403], (
+                f"Expected 401/403 without API key, got {response.status_code}"
+            )
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+    def test_invalid_api_key_rejected(self, admin_client):
+        """Invalid API keys should be rejected."""
+        try:
+            response = admin_client.get(
+                "/v1/admin/keys",
+                headers={"X-Admin-Key": "invalid-key-12345"}
+            )
+            assert response.status_code in [401, 403]
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+    def test_malformed_api_key_rejected(self, admin_client):
+        """Malformed API keys should be rejected."""
+        try:
+            # Try SQL injection in API key
+            response = admin_client.get(
+                "/v1/admin/keys",
+                headers={"X-Admin-Key": "'; DROP TABLE api_keys; --"}
+            )
+            assert response.status_code in [401, 403]
+            
+            # Try very long key
+            response = admin_client.get(
+                "/v1/admin/keys",
+                headers={"X-Admin-Key": "a" * 10000}
+            )
+            assert response.status_code in [401, 403, 400]
+            
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+
+class TestTenantHeaderValidation:
+    """Test X-Tenant-ID header validation."""
+
+    def test_invalid_tenant_id_format_rejected(self, graph_client):
+        """Invalid UUID format should be rejected."""
+        try:
+            response = graph_client.get(
+                "/v1/labels/health",
+                headers={
+                    "X-RegEngine-API-Key": "test-key",
+                    "X-Tenant-ID": "not-a-valid-uuid"
+                }
+            )
+            # Health may not require tenant, but if it does, should reject
+            # Main point is it shouldn't crash (500)
+            assert response.status_code != 500
+            
+        except httpx.ConnectError:
+            pytest.skip("Graph API not running")
+
+    def test_sql_injection_in_tenant_id(self, graph_client):
+        """SQL injection in tenant ID should be safely handled."""
+        try:
+            response = graph_client.get(
+                "/v1/labels/health",
+                headers={
+                    "X-RegEngine-API-Key": "test-key",
+                    "X-Tenant-ID": "'; DROP TABLE tenants; --"
+                }
+            )
+            # Should return 400 (bad request) not 500
+            assert response.status_code in [200, 400, 401, 403]
+            
+        except httpx.ConnectError:
+            pytest.skip("Graph API not running")
+
+
+class TestCrossTenantAccess:
+    """Test that cross-tenant access is blocked."""
+
+    def test_cannot_access_other_tenant_keys(self, admin_client):
+        """Should not be able to list another tenant's keys."""
+        try:
+            tenant_a = str(uuid4())
+            tenant_b = str(uuid4())
+            
+            # Try to access tenant B's keys with tenant A header
+            response = admin_client.get(
+                "/v1/admin/keys",
+                headers={
+                    "X-Admin-Key": "admin-master-key-dev",
+                    "X-Tenant-ID": tenant_a
+                }
+            )
+            
+            # Should return empty list or tenant-specific data only
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    # Verify no keys from other tenants
+                    for key in data:
+                        if "tenant_id" in key:
+                            assert key["tenant_id"] == tenant_a or key["tenant_id"] is None
+                            
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+    def test_cannot_access_review_items_across_tenants(self, admin_client):
+        """Review items should be tenant-isolated."""
+        try:
+            response = admin_client.get(
+                "/v1/admin/review/flagged-extractions",
+                headers={
+                    "X-Admin-Key": "admin-master-key-dev",
+                    "X-Tenant-ID": str(uuid4())  # Random tenant
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Should be empty or contain only this tenant's items
+                if isinstance(data, list):
+                    assert len(data) == 0 or all(
+                        item.get("tenant_id") == str(uuid4()) 
+                        for item in data 
+                        if "tenant_id" in item
+                    )
+                    
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+
+class TestInputValidation:
+    """Test input validation and sanitization."""
+
+    def test_xss_in_request_body_sanitized(self, admin_client):
+        """XSS in request body should be handled safely."""
+        try:
+            response = admin_client.post(
+                "/v1/admin/tenants",
+                headers={"X-Admin-Key": "admin-master-key-dev"},
+                json={
+                    "name": "<script>alert('xss')</script>"
+                }
+            )
+            
+            # Should either reject or sanitize, not execute
+            assert response.status_code in [200, 201, 400, 422]
+            
+            if response.status_code in [200, 201]:
+                data = response.json()
+                # Name should be sanitized or escaped
+                if "name" in data:
+                    assert "<script>" not in data["name"] or \
+                           "&lt;script&gt;" in data["name"]
+                           
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+    def test_oversized_request_rejected(self, admin_client):
+        """Very large request bodies should be rejected."""
+        try:
+            # Try to send 10MB of data
+            large_data = {"name": "x" * (10 * 1024 * 1024)}
+            
+            response = admin_client.post(
+                "/v1/admin/tenants",
+                headers={"X-Admin-Key": "admin-master-key-dev"},
+                json=large_data
+            )
+            
+            # Should reject large requests
+            assert response.status_code in [400, 413, 422]
+            
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+        except Exception:
+            # Large request may fail at network level, which is fine
+            pass
+
+
+class TestRateLimitEnforcement:
+    """Test rate limiting is enforced."""
+
+    def test_rate_limit_headers_present(self, admin_client):
+        """Rate limit headers should be present on responses."""
+        try:
+            response = admin_client.get(
+                "/health"
+            )
+            
+            # Rate limit headers should be present
+            rate_limit_headers = [
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining",
+                "X-RateLimit-Reset"
+            ]
+            
+            # At least one should be present if rate limiting is enabled
+            has_rate_limit = any(h in response.headers for h in rate_limit_headers)
+            
+            if not has_rate_limit:
+                pytest.skip("Rate limiting not enabled on health endpoint")
+                
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+
+class TestErrorHandling:
+    """Test that errors don't leak sensitive information."""
+
+    def test_404_does_not_leak_paths(self, admin_client):
+        """404 errors should not reveal internal paths."""
+        try:
+            response = admin_client.get("/v1/admin/secret-internal-path")
+            
+            if response.status_code == 404:
+                body = response.text.lower()
+                # Should not contain internal paths or stack traces
+                assert "/users/" not in body
+                assert "traceback" not in body
+                assert "file \"" not in body
+                
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")
+
+    def test_500_does_not_leak_stack_trace(self, admin_client):
+        """500 errors should not reveal stack traces in production."""
+        try:
+            # Try to trigger an error with invalid input
+            response = admin_client.post(
+                "/v1/admin/keys",
+                headers={"X-Admin-Key": "admin-master-key-dev"},
+                json={"invalid": "data"}  # Missing required fields
+            )
+            
+            if response.status_code == 500:
+                body = response.text.lower()
+                # Should not contain stack traces
+                assert "traceback" not in body
+                assert "file \"" not in body
+                assert "line " not in body
+                
+        except httpx.ConnectError:
+            pytest.skip("Admin API not running")

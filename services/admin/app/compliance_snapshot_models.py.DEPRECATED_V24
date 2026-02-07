@@ -1,0 +1,317 @@
+"""SQLAlchemy model for compliance snapshots.
+
+Point-in-time compliance state capture with cryptographic integrity.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import uuid as uuid_module
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, Boolean
+from sqlalchemy.dialects.postgresql import JSONB
+
+from .sqlalchemy_models import Base, GUID, JSONType
+
+
+# Snapshot degradation thresholds (in hours)
+SNAPSHOT_INVALID_AGE_HOURS = 72  # Snapshot becomes INVALID after this many hours
+SNAPSHOT_STALE_AGE_HOURS = 24    # Snapshot becomes STALE after this many hours
+SNAPSHOT_DEADLINE_WARNING_SECONDS = 3600  # Warn when less than 1 hour until deadline
+
+
+class ComplianceSnapshotModel(Base):
+    """Immutable point-in-time compliance state capture.
+    
+    Used for audit defense - proves what was true at a specific moment.
+    Now bound to alerts with attestation requirements.
+    """
+
+    __tablename__ = "compliance_snapshots"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    tenant_id = Column(GUID(), nullable=False)
+
+    # Snapshot metadata
+    snapshot_name = Column(String(255), nullable=False)
+    snapshot_reason = Column(Text, nullable=True)
+    created_by = Column(String(255), nullable=False)
+
+    # Trigger binding (links to alert that caused this snapshot)
+    trigger_alert_id = Column(GUID(), nullable=True)
+    is_auto_created = Column(Boolean, default=False)
+    
+    # Deadline + regulatory citation
+    deadline = Column(DateTime(timezone=True), nullable=True)
+    regulatory_citation = Column(String(255), nullable=True)
+
+    # Attestation (owner accountability)
+    attested_by = Column(String(255), nullable=True)
+    attested_at = Column(DateTime(timezone=True), nullable=True)
+    attestation_title = Column(String(255), nullable=True)
+
+    # Point-in-time state
+    compliance_status = Column(String(50), nullable=False)
+    active_alert_count = Column(Integer, nullable=False, default=0)
+    critical_alert_count = Column(Integer, nullable=False, default=0)
+    completeness_score = Column(Float, default=1.0)
+
+    # Full state capture (JSONB)
+    alerts_snapshot = Column(JSONType(), nullable=False, default=list)
+    profile_snapshot = Column(JSONType(), nullable=False, default=dict)
+    status_snapshot = Column(JSONType(), nullable=False, default=dict)
+
+    # Cryptographic integrity
+    content_hash = Column(String(64), nullable=False)
+    hash_algorithm = Column(String(20), nullable=False, default="SHA-256")
+
+    # Verification
+    is_verified = Column(Boolean, default=False)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    verified_by = Column(String(255), nullable=True)
+
+    # Degradation state
+    snapshot_state = Column(String(20), default="VALID")  # VALID, STALE, INVALID
+    last_state_check = Column(DateTime(timezone=True), nullable=True)
+    degradation_reason = Column(Text, nullable=True)
+
+    # Timestamps
+    captured_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    def __repr__(self) -> str:
+        return f"ComplianceSnapshot(id={self.id}, tenant={self.tenant_id}, status={self.compliance_status})"
+
+    @property
+    def is_attested(self) -> bool:
+        """Check if snapshot has been attested by an owner."""
+        return self.attested_by is not None and self.attested_at is not None
+
+    @property
+    def countdown_seconds(self) -> Optional[int]:
+        """Get countdown to deadline in seconds."""
+        if not self.deadline:
+            return None
+        delta = self.deadline - datetime.now(timezone.utc)
+        return max(0, int(delta.total_seconds()))
+
+    @property
+    def countdown_display(self) -> Optional[str]:
+        """Get human-readable countdown display."""
+        seconds = self.countdown_seconds
+        if seconds is None:
+            return None
+        if seconds <= 0:
+            return "EXPIRED"
+        hours, remainder = divmod(seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+        return f"{hours}h {minutes}m"
+
+    @property
+    def age_hours(self) -> float:
+        """Get age of snapshot in hours."""
+        if not self.captured_at:
+            return 0
+        delta = datetime.now(timezone.utc) - self.captured_at
+        return delta.total_seconds() / 3600
+
+    @property
+    def state_emoji(self) -> str:
+        """Get emoji for snapshot state."""
+        return {
+            "VALID": "🟢",
+            "STALE": "🟠",
+            "INVALID": "🔴",
+        }.get(self.snapshot_state or "VALID", "⚪")
+
+    def calculate_degradation(self, current_alert_count: int = 0, current_critical_count: int = 0) -> tuple:
+        """Calculate if snapshot has degraded.
+        
+        Returns: (new_state, reason)
+        
+        Degradation rules:
+        - VALID: < SNAPSHOT_STALE_AGE_HOURS old and no new alerts since capture
+        - STALE: SNAPSHOT_STALE_AGE_HOURS-SNAPSHOT_INVALID_AGE_HOURS old OR new alerts detected
+        - INVALID: > SNAPSHOT_INVALID_AGE_HOURS old OR critical changes
+        """
+        age = self.age_hours
+        new_state = "VALID"
+        reason = None
+        
+        # Age-based degradation
+        if age > SNAPSHOT_INVALID_AGE_HOURS:
+            new_state = "INVALID"
+            reason = f"Snapshot is {int(age)}h old (>{SNAPSHOT_INVALID_AGE_HOURS}h threshold)"
+        elif age > SNAPSHOT_STALE_AGE_HOURS:
+            new_state = "STALE"
+            reason = f"Snapshot is {int(age)}h old (>{SNAPSHOT_STALE_AGE_HOURS}h, may need refresh)"
+        
+        # Alert-based degradation
+        if current_critical_count > self.critical_alert_count:
+            new_state = "INVALID"
+            reason = f"New critical alerts detected since snapshot ({current_critical_count} vs {self.critical_alert_count})"
+        elif current_alert_count > self.active_alert_count:
+            if new_state != "INVALID":
+                new_state = "STALE"
+                reason = f"New alerts detected since snapshot ({current_alert_count} vs {self.active_alert_count})"
+        
+        # Deadline-based degradation
+        if self.deadline:
+            countdown = self.countdown_seconds or 0
+            if countdown <= 0:
+                new_state = "INVALID"
+                reason = "Deadline has expired"
+            elif countdown < SNAPSHOT_DEADLINE_WARNING_SECONDS:
+                if new_state == "VALID":
+                    new_state = "STALE"
+                    reason = f"Less than 1 hour until deadline ({self.countdown_display})"
+        
+        return new_state, reason
+
+    @staticmethod
+    def compute_hash(
+        status_snapshot: Dict[str, Any],
+        alerts_snapshot: list,
+        profile_snapshot: Dict[str, Any],
+    ) -> str:
+        """Compute SHA-256 hash of snapshot content.
+        
+        This hash proves the snapshot hasn't been modified.
+        """
+        # Canonical JSON serialization (sorted keys for consistency)
+        content = json.dumps({
+            "status": status_snapshot,
+            "alerts": alerts_snapshot,
+            "profile": profile_snapshot,
+        }, sort_keys=True, default=str)
+        
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def verify_integrity(self) -> bool:
+        """Verify the snapshot hasn't been tampered with."""
+        computed_hash = self.compute_hash(
+            self.status_snapshot or {},
+            self.alerts_snapshot or [],
+            self.profile_snapshot or {},
+        )
+        return computed_hash == self.content_hash
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to API response dict."""
+        return {
+            "id": str(self.id),
+            "tenant_id": str(self.tenant_id),
+            "snapshot_name": self.snapshot_name,
+            "snapshot_reason": self.snapshot_reason,
+            "created_by": self.created_by,
+            # Trigger binding
+            "trigger_alert_id": str(self.trigger_alert_id) if self.trigger_alert_id else None,
+            "is_auto_created": self.is_auto_created or False,
+            # Deadline
+            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "countdown_seconds": self.countdown_seconds,
+            "countdown_display": self.countdown_display,
+            "regulatory_citation": self.regulatory_citation,
+            # Attestation
+            "is_attested": self.is_attested,
+            "attested_by": self.attested_by,
+            "attested_at": self.attested_at.isoformat() if self.attested_at else None,
+            "attestation_title": self.attestation_title,
+            # Status
+            "compliance_status": self.compliance_status,
+            "compliance_status_emoji": self._get_status_emoji(),
+            "active_alert_count": self.active_alert_count,
+            "critical_alert_count": self.critical_alert_count,
+            "completeness_score": self.completeness_score,
+            "content_hash": self.content_hash,
+            "hash_algorithm": self.hash_algorithm,
+            "integrity_verified": self.verify_integrity(),
+            "is_verified": self.is_verified,
+            "verified_at": self.verified_at.isoformat() if self.verified_at else None,
+            "verified_by": self.verified_by,
+            # Degradation
+            "snapshot_state": self.snapshot_state or "VALID",
+            "state_emoji": self.state_emoji,
+            "age_hours": round(self.age_hours, 1),
+            "degradation_reason": self.degradation_reason,
+            "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            # Include snapshots for detail view
+            "alerts_snapshot": self.alerts_snapshot or [],
+            "profile_snapshot": self.profile_snapshot or {},
+            "status_snapshot": self.status_snapshot or {},
+        }
+
+    def to_summary_dict(self) -> Dict[str, Any]:
+        """Convert to compact summary for list view."""
+        return {
+            "id": str(self.id),
+            "tenant_id": str(self.tenant_id),
+            "snapshot_name": self.snapshot_name,
+            # Trigger + deadline
+            "trigger_alert_id": str(self.trigger_alert_id) if self.trigger_alert_id else None,
+            "is_auto_created": self.is_auto_created or False,
+            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "countdown_seconds": self.countdown_seconds,
+            "countdown_display": self.countdown_display,
+            "regulatory_citation": self.regulatory_citation,
+            # Attestation
+            "is_attested": self.is_attested,
+            "attested_by": self.attested_by,
+            # Status
+            "compliance_status": self.compliance_status,
+            "compliance_status_emoji": self._get_status_emoji(),
+            "active_alert_count": self.active_alert_count,
+            "critical_alert_count": self.critical_alert_count,
+            "content_hash": self.content_hash[:16] + "...",  # Truncated for display
+            "integrity_verified": self.verify_integrity(),
+            # Degradation
+            "snapshot_state": self.snapshot_state or "VALID",
+            "state_emoji": self.state_emoji,
+            "age_hours": round(self.age_hours, 1),
+            "degradation_reason": self.degradation_reason,
+            "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+            "created_by": self.created_by,
+        }
+
+    def to_export_dict(self) -> Dict[str, Any]:
+        """Full export format for audit submission."""
+        return {
+            "export_version": "1.0",
+            "export_timestamp": datetime.now(timezone.utc).isoformat(),
+            "snapshot": {
+                "id": str(self.id),
+                "tenant_id": str(self.tenant_id),
+                "name": self.snapshot_name,
+                "reason": self.snapshot_reason,
+                "captured_at": self.captured_at.isoformat() if self.captured_at else None,
+                "created_by": self.created_by,
+            },
+            "compliance_state": {
+                "status": self.compliance_status,
+                "active_alerts": self.active_alert_count,
+                "critical_alerts": self.critical_alert_count,
+                "completeness_score": self.completeness_score,
+            },
+            "captured_data": {
+                "status": self.status_snapshot,
+                "alerts": self.alerts_snapshot,
+                "profile": self.profile_snapshot,
+            },
+            "integrity": {
+                "hash": self.content_hash,
+                "algorithm": self.hash_algorithm,
+                "verified": self.verify_integrity(),
+                "verification_timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        }
+
+    def _get_status_emoji(self) -> str:
+        return {
+            "COMPLIANT": "✅",
+            "AT_RISK": "⚠️",
+            "NON_COMPLIANT": "🚨",
+        }.get(self.compliance_status, "❓")
