@@ -158,9 +158,6 @@ async def initialize_label_batch(
     logger.info("batch_init_start", tenant_id=tenant_id_str, tlc=tlc)
 
     # ✅ ATOMICITY FIX: Single Transaction for Create + Reserve
-    cypher = """
-    MERGE (tenant:Tenant {id: $tenant_id})
-    cypher = """
     MERGE (tenant:Tenant {id: $tenant_id})
     MERGE (packer:Facility {gln: $packer_gln, tenant_id: $tenant_id})
 
