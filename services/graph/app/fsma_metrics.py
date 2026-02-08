@@ -15,34 +15,73 @@ from functools import wraps
 from typing import Optional
 
 from prometheus_client import Counter, Gauge, Histogram, Info
+from prometheus_client import REGISTRY
+
+
+# ============================================================================
+# SAFE METRIC CREATION HELPERS
+# ============================================================================
+# These prevent ValueError: Duplicated timeseries when modules are
+# re-imported during test collection.
+
+def _get_or_create_histogram(name, documentation, labelnames=(), **kwargs):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Histogram(name, documentation, labelnames, **kwargs)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]
+
+
+def _get_or_create_counter(name, documentation, labelnames=()):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Counter(name, documentation, labelnames)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]
+
+
+def _get_or_create_gauge(name, documentation, labelnames=()):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Gauge(name, documentation, labelnames)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]
+
+
+def _get_or_create_info(name, documentation):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
+    try:
+        return Info(name, documentation)
+    except ValueError:
+        return REGISTRY._names_to_collectors[name]
+
 
 # ============================================================================
 # TRACE QUERY METRICS
 # ============================================================================
 
-# Histogram for trace query latency (buckets optimized for recall SLA)
-# FDA requires 24-hour response, but we target < 30 seconds
-TRACE_QUERY_LATENCY = Histogram(
+TRACE_QUERY_LATENCY = _get_or_create_histogram(
     "fsma_trace_query_seconds",
     "Time spent executing trace queries",
-    ["direction", "status"],  # direction: forward/backward, status: success/error
+    ["direction", "status"],
     buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
 )
 
-# Counter for trace queries
-TRACE_QUERIES_TOTAL = Counter(
+TRACE_QUERIES_TOTAL = _get_or_create_counter(
     "fsma_trace_queries_total",
     "Total number of trace queries executed",
     ["direction", "status"],
 )
 
-# Gauge for trace query depth (how many hops in the supply chain)
-TRACE_MAX_DEPTH = Gauge(
+TRACE_MAX_DEPTH = _get_or_create_gauge(
     "fsma_trace_max_depth", "Maximum depth reached in trace queries", ["direction"]
 )
 
-# Counter for facilities found in traces
-TRACE_FACILITIES_FOUND = Counter(
+TRACE_FACILITIES_FOUND = _get_or_create_counter(
     "fsma_trace_facilities_total",
     "Total facilities found in trace queries",
     ["direction"],
@@ -52,35 +91,19 @@ TRACE_FACILITIES_FOUND = Counter(
 # RECALL SLA METRICS (24-Hour Mandate)
 # ============================================================================
 
-# Histogram for recall response time (FDA 24-hour mandate)
-RECALL_SLA_SECONDS = Histogram(
+RECALL_SLA_SECONDS = _get_or_create_histogram(
     "fsma_recall_sla_seconds",
     "Time to generate complete recall package",
-    ["export_type"],  # csv, contacts, full_package
-    buckets=[
-        1,
-        5,
-        10,
-        30,
-        60,
-        300,
-        900,
-        3600,
-        7200,
-        21600,
-        43200,
-        86400,
-    ],  # Up to 24 hours
+    ["export_type"],
+    buckets=[1, 5, 10, 30, 60, 300, 900, 3600, 7200, 21600, 43200, 86400],
 )
 
-# Gauge for current recall SLA compliance rate
-RECALL_SLA_COMPLIANCE_RATE = Gauge(
+RECALL_SLA_COMPLIANCE_RATE = _get_or_create_gauge(
     "fsma_recall_sla_compliance_rate",
     "Percentage of recalls meeting 24-hour SLA",
 )
 
-# Counter for recall exports
-RECALL_EXPORTS_TOTAL = Counter(
+RECALL_EXPORTS_TOTAL = _get_or_create_counter(
     "fsma_recall_exports_total",
     "Total recall exports generated",
     ["export_type", "status"],
@@ -90,33 +113,28 @@ RECALL_EXPORTS_TOTAL = Counter(
 # DATA QUALITY METRICS
 # ============================================================================
 
-# Gauge for total gaps (missing KDEs)
-GAPS_TOTAL = Gauge(
+GAPS_TOTAL = _get_or_create_gauge(
     "fsma_gaps_total",
     "Total events with missing required KDEs",
-    ["gap_type"],  # missing_date, missing_lot, missing_tlc
+    ["gap_type"],
 )
 
-# Gauge for gap rate (percentage of events with gaps)
-GAP_RATE = Gauge(
+GAP_RATE = _get_or_create_gauge(
     "fsma_gap_rate", "Percentage of events with missing KDEs", ["event_type"]
 )
 
-# Gauge for orphaned lots
-ORPHANS_TOTAL = Gauge(
+ORPHANS_TOTAL = _get_or_create_gauge(
     "fsma_orphans_total",
     "Total orphaned lots (created but never shipped/consumed)",
 )
 
-# Gauge for orphan quantity at risk
-ORPHAN_QUANTITY_AT_RISK = Gauge(
+ORPHAN_QUANTITY_AT_RISK = _get_or_create_gauge(
     "fsma_orphan_quantity_at_risk",
     "Total quantity in orphaned lots",
     ["unit_of_measure"],
 )
 
-# Gauge for average stagnant days
-ORPHAN_AVG_STAGNANT_DAYS = Gauge(
+ORPHAN_AVG_STAGNANT_DAYS = _get_or_create_gauge(
     "fsma_orphan_avg_stagnant_days",
     "Average days orphaned lots have been stagnant",
 )
@@ -125,28 +143,24 @@ ORPHAN_AVG_STAGNANT_DAYS = Gauge(
 # KDE COMPLETENESS METRICS
 # ============================================================================
 
-# Gauge for overall completeness rate
-KDE_COMPLETENESS_RATE = Gauge(
+KDE_COMPLETENESS_RATE = _get_or_create_gauge(
     "fsma_kde_completeness_rate",
     "Overall KDE completeness rate (0.0 to 1.0)",
 )
 
-# Gauge for completeness by event type
-KDE_COMPLETENESS_BY_TYPE = Gauge(
+KDE_COMPLETENESS_BY_TYPE = _get_or_create_gauge(
     "fsma_kde_completeness_by_type",
     "KDE completeness rate by event type",
     ["event_type"],
 )
 
-# Gauge for average extraction confidence
-EXTRACTION_CONFIDENCE_AVG = Gauge(
+EXTRACTION_CONFIDENCE_AVG = _get_or_create_gauge(
     "fsma_extraction_confidence_avg",
     "Average extraction confidence score",
     ["event_type"],
 )
 
-# Counter for low confidence extractions
-LOW_CONFIDENCE_EXTRACTIONS = Counter(
+LOW_CONFIDENCE_EXTRACTIONS = _get_or_create_counter(
     "fsma_low_confidence_extractions_total",
     "Total extractions below confidence threshold",
     ["event_type"],
@@ -156,24 +170,20 @@ LOW_CONFIDENCE_EXTRACTIONS = Counter(
 # GRAPH STATISTICS
 # ============================================================================
 
-# Gauge for total lots in graph
-LOTS_TOTAL = Gauge(
+LOTS_TOTAL = _get_or_create_gauge(
     "fsma_lots_total",
     "Total lots in the traceability graph",
 )
 
-# Gauge for total events in graph
-EVENTS_TOTAL = Gauge(
+EVENTS_TOTAL = _get_or_create_gauge(
     "fsma_events_total", "Total trace events in the graph", ["event_type"]
 )
 
-# Gauge for total facilities
-FACILITIES_TOTAL = Gauge(
+FACILITIES_TOTAL = _get_or_create_gauge(
     "fsma_facilities_total", "Total facilities in the graph", ["facility_type"]
 )
 
-# Gauge for broken chains (SHIPPING without origin)
-BROKEN_CHAINS_TOTAL = Gauge(
+BROKEN_CHAINS_TOTAL = _get_or_create_gauge(
     "fsma_broken_chains_total",
     "Total broken chain violations",
 )
@@ -182,13 +192,11 @@ BROKEN_CHAINS_TOTAL = Gauge(
 # API METRICS
 # ============================================================================
 
-# Counter for API calls by endpoint
-FSMA_API_CALLS = Counter(
+FSMA_API_CALLS = _get_or_create_counter(
     "fsma_api_calls_total", "Total FSMA API calls", ["endpoint", "method", "status"]
 )
 
-# Histogram for API latency
-FSMA_API_LATENCY = Histogram(
+FSMA_API_LATENCY = _get_or_create_histogram(
     "fsma_api_latency_seconds",
     "FSMA API endpoint latency",
     ["endpoint"],
@@ -199,27 +207,25 @@ FSMA_API_LATENCY = Histogram(
 # VALIDATION METRICS
 # ============================================================================
 
-# Counter for TLC validations
-TLC_VALIDATIONS_TOTAL = Counter(
+TLC_VALIDATIONS_TOTAL = _get_or_create_counter(
     "fsma_tlc_validations_total",
     "Total TLC validations performed",
-    ["result"],  # valid, invalid
+    ["result"],
 )
 
-# Counter for GTIN/GLN validations
-GS1_VALIDATIONS_TOTAL = Counter(
+GS1_VALIDATIONS_TOTAL = _get_or_create_counter(
     "fsma_gs1_validations_total",
     "Total GS1 identifier validations",
-    ["identifier_type", "result"],  # GTIN/GLN/SSCC, valid/invalid
+    ["identifier_type", "result"],
 )
 
 # ============================================================================
 # SYSTEM INFO
 # ============================================================================
 
-FSMA_MODULE_INFO = Info("fsma_module", "FSMA 204 module information")
+FSMA_MODULE_INFO = _get_or_create_info("fsma_module", "FSMA 204 module information")
 
-# Set module info on import
+# Set module info on import (safe to call repeatedly)
 FSMA_MODULE_INFO.info(
     {
         "version": "1.0.0",

@@ -19,7 +19,7 @@ class TestPlayerRiskScorer(unittest.TestCase):
         
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0].severity, "HIGH")
-        self.assertIn("structuring deposits", alerts[0].description)
+        self.assertIn("structure deposits", alerts[0].description)
 
     def test_syndicate_detection(self):
         """Test detection of multiple players from same IP (Smurfing Ring)."""

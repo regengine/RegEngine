@@ -16,9 +16,17 @@ from prometheus_client import Counter
 from structlog.contextvars import get_contextvars
 
 # Add parent directory to path for shared module import
-# Add parent directory to path for shared module import
 try:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    _parent_dir = str(Path(__file__).resolve().parents[3])
+    sys.path.insert(0, _parent_dir)
+    # Clear any cached 'shared' module from graph/compliance services to avoid shadowing
+    _stale = [k for k in sys.modules if k == 'shared' or k.startswith('shared.')]
+    for k in _stale:
+        # Only clear if it points to a different shared package (not repo root)
+        mod = sys.modules[k]
+        mod_file = getattr(mod, '__file__', '') or ''
+        if mod_file and _parent_dir not in mod_file:
+            del sys.modules[k]
 except IndexError:
     pass
 
@@ -38,12 +46,20 @@ from .s3_utils import get_bytes
 
 logger = structlog.get_logger("nlp-consumer")
 
-MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
+try:
+    MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
+except ValueError:
+    # Metric already registered (happens during test re-imports)
+    from prometheus_client import REGISTRY
+    MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("nlp_messages_total")
+    if MESSAGES_COUNTER is None:
+        MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("nlp_messages")
 
 _shutdown_event = threading.Event()
 
 # Confidence threshold for automatic approval
-# Now using settings.extraction_confidence_high (SRP 11-7)
+# Using settings.extraction_confidence_high (SRP 11-7) with fallback
+CONFIDENCE_THRESHOLD = getattr(settings, 'extraction_confidence_high', 0.85) if settings else 0.85
 
 # Topic names for routing
 TOPIC_GRAPH_UPDATE = "graph.update"
@@ -271,7 +287,7 @@ def _route_extraction(
     request_id = ctx.get("request_id")
     
     # Use configurable high confidence threshold for auto-approval
-    threshold = settings.extraction_confidence_high
+    threshold = CONFIDENCE_THRESHOLD
     
     if extraction.confidence_score >= threshold:
         # High confidence: send directly to graph

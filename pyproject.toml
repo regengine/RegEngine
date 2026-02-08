@@ -29,12 +29,16 @@ line_length = 88
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q --asyncio-mode=auto"
+addopts = "-ra -q --asyncio-mode=auto --import-mode=importlib"
 testpaths = [
     "tests",
-    "services/ingestion/tests",
+    "services/admin/tests",
+    "services/automotive/tests",
+    "services/energy/tests",
     "services/graph/tests",
+    "services/ingestion/tests",
     "services/nlp/tests",
     "services/compliance/tests",
+    "services/opportunity/tests",
 ]
 asyncio_mode = "auto"

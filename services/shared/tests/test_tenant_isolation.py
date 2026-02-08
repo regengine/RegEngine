@@ -5,6 +5,38 @@ This module tests the TenantValidator and TenantContextMiddleware
 to ensure proper multi-tenant data isolation.
 """
 
+import sys
+import importlib.util
+from pathlib import Path
+
+# ---- Direct-load services/shared packages to avoid repo-root 'shared/' collision ----
+_shared_dir = Path(__file__).resolve().parent.parent
+
+def _load_module(name, filepath):
+    """Load a module from an absolute file path."""
+    spec = importlib.util.spec_from_file_location(name, filepath)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+# Pre-load the validators and middleware subpackages
+_validators_init = _shared_dir / "validators" / "__init__.py"
+_middleware_init = _shared_dir / "middleware" / "__init__.py"
+
+# We need to load the concrete modules first, then the __init__ packages
+_tenant_validator_mod = _load_module(
+    "shared.validators.tenant_validator",
+    _shared_dir / "validators" / "tenant_validator.py",
+)
+_validators_pkg = _load_module("shared.validators", _validators_init)
+
+_tenant_context_mod = _load_module(
+    "shared.middleware.tenant_context",
+    _shared_dir / "middleware" / "tenant_context.py",
+)
+_middleware_pkg = _load_module("shared.middleware", _middleware_init)
+
 import pytest
 import uuid
 from unittest.mock import Mock, AsyncMock
@@ -24,8 +56,6 @@ class TestTenantValidator:
     @pytest.fixture
     def validator(self, mock_db_connection):
         """Create TenantValidator instance."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.validators import TenantValidator
         return TenantValidator(mock_db_connection)
     
@@ -96,8 +126,6 @@ class TestTenantDependencies:
     @pytest.mark.asyncio
     async def test_get_current_tenant_id_success(self):
         """Test getting tenant_id when available."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.middleware import get_current_tenant_id
         
         tenant_id = uuid.uuid4()
@@ -110,8 +138,6 @@ class TestTenantDependencies:
     @pytest.mark.asyncio
     async def test_get_current_tenant_id_missing(self):
         """Test error when tenant_id is missing."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.middleware import get_current_tenant_id
         
         request = SimpleNamespace(state=SimpleNamespace(tenant_id=None))
@@ -125,8 +151,6 @@ class TestTenantDependencies:
     @pytest.mark.asyncio
     async def test_get_optional_tenant_id_present(self):
         """Test optional tenant_id when present."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.middleware import get_optional_tenant_id
         
         tenant_id = uuid.uuid4()
@@ -139,8 +163,6 @@ class TestTenantDependencies:
     @pytest.mark.asyncio
     async def test_get_optional_tenant_id_missing(self):
         """Test optional tenant_id when missing (should return None)."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.middleware import get_optional_tenant_id
         
         # Use SimpleNamespace without tenant_id attribute
@@ -153,8 +175,6 @@ class TestTenantDependencies:
     @pytest.mark.asyncio
     async def test_validate_tenant_access_success(self):
         """Test tenant access validation when IDs match."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.middleware import validate_tenant_access
         
         tenant_id = uuid.uuid4()
@@ -167,8 +187,6 @@ class TestTenantDependencies:
     @pytest.mark.asyncio
     async def test_validate_tenant_access_mismatch(self):
         """Test tenant access validation when IDs don't match."""
-        import sys
-        sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
         from shared.middleware import validate_tenant_access
         
         user_tenant_id = uuid.uuid4()

@@ -60,28 +60,38 @@ def tables(engine):
     from services.admin.app.sqlalchemy_models import Base
     from services.admin.app.pcos_models import PCOSCompanyModel  # Import to register models
     
-    # Create tenant table first (mock)
-    engine.execute(text("""
-        CREATE TABLE IF NOT EXISTS tenants (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL
-        )
-    """))
-    
-    # Create a test tenant
-    engine.execute(text("""
-        INSERT OR IGNORE INTO tenants (id, name) VALUES ('test-tenant-id', 'Test Tenant')
-    """))
+    # Create tenant and user tables first (mock)
+    with engine.connect() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS tenants (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+        """))
+        connection.execute(text("""
+            INSERT OR IGNORE INTO tenants (id, name) VALUES ('test-tenant-id', 'Test Tenant')
+        """))
+        connection.commit()
     
     try:
         Base.metadata.create_all(engine)
     except Exception:
         # Tables might already exist or have SQLite incompatibilities
+        # (e.g., ARRAY columns not supported in SQLite)
         pass
     
     yield
     
-    Base.metadata.drop_all(engine)
+    try:
+        Base.metadata.drop_all(engine)
+    except Exception:
+        pass
 
 
 @pytest.fixture

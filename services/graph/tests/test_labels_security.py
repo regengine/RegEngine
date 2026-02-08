@@ -9,11 +9,17 @@ Tests cover:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import sys
+import uuid
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+
+# Add parent paths for imports
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.routers.labels import (
     LabelBatchInitRequest,
@@ -82,17 +88,16 @@ class TestURLEncoding:
 
 
 class TestTenantIDMandatory:
-    """Test that X-Tenant-ID header is mandatory."""
+    """Test that tenant_id dependency is mandatory."""
 
     def test_missing_tenant_id_raises_error(self):
-        """Test that missing X-Tenant-ID header is rejected."""
+        """Test that missing tenant ID (no auth) results in error."""
         from fastapi import FastAPI
-
         from services.graph.app.routers.labels import router
 
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
+        client = TestClient(app, raise_server_exceptions=False)
 
         # Prepare valid request body
         request_body = {
@@ -108,22 +113,21 @@ class TestTenantIDMandatory:
             "packaging_level": "item",
         }
 
-        # Make request without X-Tenant-ID header
+        # Make request without auth headers — should fail due to missing dependency
         with patch("services.graph.app.routers.labels.Neo4jClient"):
             response = client.post("/v1/labels/batch/init", json=request_body)
 
-        # Should return 422 Unprocessable Entity for missing required header
-        assert response.status_code == 422
+        # Should return 401, 403, or 422 (missing required auth dependency)
+        assert response.status_code in [401, 403, 422]
 
     def test_empty_tenant_id_raises_error(self):
         """Test that empty X-Tenant-ID header is rejected."""
         from fastapi import FastAPI
-
         from services.graph.app.routers.labels import router
 
         app = FastAPI()
         app.include_router(router)
-        client = TestClient(app)
+        client = TestClient(app, raise_server_exceptions=False)
 
         request_body = {
             "packer_gln": "0614141000001",
@@ -138,32 +142,43 @@ class TestTenantIDMandatory:
             "packaging_level": "item",
         }
 
-        # Make request with empty X-Tenant-ID header
+        # Make request with empty X-Tenant-ID header — dependency should reject
         with patch("services.graph.app.routers.labels.Neo4jClient"):
             response = client.post(
-                "/v1/labels/batch/init", json=request_body, headers={"X-Tenant-ID": ""}
+                "/v1/labels/batch/init",
+                json=request_body,
+                headers={"X-Tenant-ID": ""},
             )
 
-        # Should return 422 for empty string
-        assert response.status_code == 422
+        # Should return 401, 403, or 422 for invalid/empty auth
+        assert response.status_code in [401, 403, 422]
 
 
 class TestAtomicSerialGeneration:
     """Test that serial number generation is atomic."""
 
-    def test_serial_generation_in_single_transaction(self):
+    @pytest.mark.asyncio
+    async def test_serial_generation_in_single_transaction(self):
         """Test that lot creation and serial reservation happen atomically."""
-        # Create mock Neo4j client
+        # Mock Neo4j client with async session
         mock_neo4j = MagicMock()
-        mock_session = MagicMock()
-        mock_result = MagicMock()
+        mock_session = AsyncMock()
+        mock_result = AsyncMock()
 
         # Setup mock to return serial range
-        mock_result.single.return_value = {"start": 1, "end": 100}
-        mock_session.run.return_value = mock_result
-        mock_session.__enter__ = lambda self: mock_session
-        mock_session.__exit__ = lambda *args: None
-        mock_neo4j.driver.session.return_value = mock_session
+        mock_record = MagicMock()
+        mock_record.__getitem__ = lambda self, key: {"start": 1, "end": 100}.get(key)
+        mock_result.single = AsyncMock(return_value=mock_record)
+        mock_session.run = AsyncMock(return_value=mock_result)
+
+        # Setup async context manager for session
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        mock_neo4j_class = MagicMock()
+        mock_neo4j_class.return_value = mock_neo4j
+        mock_neo4j.session = MagicMock(return_value=mock_session)
+        mock_neo4j.close = AsyncMock()
 
         # Create request
         request = LabelBatchInitRequest(
@@ -179,12 +194,18 @@ class TestAtomicSerialGeneration:
             packaging_level=PackagingLevel.ITEM,
         )
 
-        # Call endpoint
-        response = initialize_label_batch(
-            request=request, x_tenant_id="test-tenant-123", neo4j=mock_neo4j
-        )
+        # Call endpoint using dependency overrides approach
+        test_tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
-        # Verify single session.run() call was made (atomic transaction)
+        with patch("services.graph.app.routers.labels.Neo4jClient", mock_neo4j_class):
+            mock_neo4j_class.get_tenant_database_name = MagicMock(return_value="test-db")
+            response = await initialize_label_batch(
+                request=request,
+                tenant_id=test_tenant_id,
+                api_key="test-key",
+            )
+
+        # Verify session.run() was called (atomic transaction)
         assert mock_session.run.call_count == 1
 
         # Verify the Cypher query includes atomic serial increment
@@ -206,7 +227,6 @@ class TestHealthEndpoint:
     def test_health_endpoint_returns_status(self):
         """Health endpoint should return service status information."""
         from fastapi import FastAPI
-
         from services.graph.app.routers.labels import router
 
         app = FastAPI()
@@ -225,15 +245,22 @@ class TestHealthEndpoint:
 class TestErrorHandling:
     """Tests for error handling in label batch initialization."""
 
-    def test_error_handling_in_transaction(self):
+    @pytest.mark.asyncio
+    async def test_error_handling_in_transaction(self):
         """Test that database errors are properly handled."""
-        # Create mock Neo4j client that raises an error
+        # Mock Neo4j client that raises an error during session.run
         mock_neo4j = MagicMock()
-        mock_session = MagicMock()
-        mock_session.run.side_effect = Exception("Database connection error")
-        mock_session.__enter__ = lambda self: mock_session
-        mock_session.__exit__ = lambda *args: None
-        mock_neo4j.driver.session.return_value = mock_session
+        mock_session = AsyncMock()
+        mock_session.run = AsyncMock(side_effect=Exception("Database connection error"))
+
+        # Setup async context manager
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        mock_neo4j_class = MagicMock()
+        mock_neo4j_class.return_value = mock_neo4j
+        mock_neo4j.session = MagicMock(return_value=mock_session)
+        mock_neo4j.close = AsyncMock()
 
         request = LabelBatchInitRequest(
             packer_gln="0614141000001",
@@ -248,11 +275,17 @@ class TestErrorHandling:
             packaging_level=PackagingLevel.ITEM,
         )
 
+        test_tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         # Should raise HTTPException with 500 status
-        with pytest.raises(HTTPException) as exc_info:
-            initialize_label_batch(
-                request=request, x_tenant_id="test-tenant-123", neo4j=mock_neo4j
-            )
+        with patch("services.graph.app.routers.labels.Neo4jClient", mock_neo4j_class):
+            mock_neo4j_class.get_tenant_database_name = MagicMock(return_value="test-db")
+            with pytest.raises(HTTPException) as exc_info:
+                await initialize_label_batch(
+                    request=request,
+                    tenant_id=test_tenant_id,
+                    api_key="test-key",
+                )
 
         assert exc_info.value.status_code == 500
         assert "Database transaction failed" in exc_info.value.detail

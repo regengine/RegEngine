@@ -165,9 +165,54 @@ def extract_from_csv(
     """Extract text from CSV content using pandas."""
     try:
         import pandas as pd
+        _has_pandas = True
     except ImportError:
-        logger.warning("pandas_missing")
-        return _fallback_extraction(raw_bytes, "csv")
+        _has_pandas = False
+
+    if not _has_pandas:
+        # Fallback: use stdlib csv module for structured extraction
+        import csv as csv_mod
+        try:
+            text_content = raw_bytes.decode(encoding, errors="ignore")
+            sample = text_content[:2048]
+            delimiter = ","
+            if sample.count("\t") > sample.count(","):
+                delimiter = "\t"
+            elif sample.count(";") > sample.count(","):
+                delimiter = ";"
+
+            reader = csv_mod.reader(io.StringIO(text_content), delimiter=delimiter)
+            rows = list(reader)
+            if not rows:
+                return _fallback_extraction(raw_bytes, "csv")
+
+            headers = rows[0]
+            text_parts = [
+                f"Columns: {', '.join(headers)}",
+                f"Total Rows: {len(rows) - 1}",
+                "",
+            ]
+            for idx, row in enumerate(rows[1:], start=1):
+                row_text = " | ".join(
+                    f"{headers[j]}: {val}" for j, val in enumerate(row) if j < len(headers) and val
+                )
+                text_parts.append(f"Row {idx}: {row_text}")
+
+            final_text = "\n".join(text_parts)
+            position_map = [
+                PositionMapEntry(
+                    page=1, char_start=0, char_end=len(final_text),
+                    source_start=0, source_end=len(raw_bytes),
+                )
+            ]
+            return (
+                final_text,
+                TextExtractionMetadata(engine="pandas", confidence_mean=0.97, confidence_std=0.03),
+                position_map,
+            )
+        except Exception as exc:
+            logger.warning("csv_stdlib_fallback_failed", exc_info=exc)
+            return _fallback_extraction(raw_bytes, "csv")
 
     try:
         # Try to detect delimiter

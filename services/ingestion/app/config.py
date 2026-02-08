@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     google_cx: Optional[str] = None
     discovery_query: str = "site:gov filetype:pdf financial regulation"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
     processed_bucket: str = Field(
