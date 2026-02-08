@@ -1,7 +1,7 @@
 
 import unittest
 from datetime import datetime
-from services.admin.app.verticals.healthcare.breach_calculator import BreachRiskCalculator, AccessLogEntry
+from services.admin.app.verticals.healthcare_enterprise.breach_calculator import BreachRiskCalculator, AccessLogEntry
 
 class TestBreachRiskCalculator(unittest.TestCase):
     def setUp(self):

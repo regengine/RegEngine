@@ -570,14 +570,15 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
         ct = content_type.lower()
         if "html" in ct:
             return "html"
-        elif "xml" in ct and "html" not in ct:
-            return "xml"
-        elif "csv" in ct or "comma-separated" in ct:
-            return "csv"
+        # Check specific XML-based formats BEFORE generic XML
         elif "spreadsheet" in ct or "excel" in ct or "xlsx" in ct or "xls" in ct:
             return "excel"
         elif "wordprocessing" in ct or "msword" in ct or "docx" in ct:
             return "docx"
+        elif "xml" in ct and "html" not in ct:
+            return "xml"
+        elif "csv" in ct or "comma-separated" in ct:
+            return "csv"
         elif "pdf" in ct:
             return "pdf"
         elif "json" in ct:
