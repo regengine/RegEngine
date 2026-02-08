@@ -3,13 +3,24 @@ PCOS API Endpoint Tests
 
 Comprehensive test suite for all Production Compliance OS API endpoints.
 Tests cover budget, classification, compliance snapshots, audit packs, and more.
+
+These are integration tests that require a live PostgreSQL database with
+the full PCOS schema, including tenant and user tables.
 """
 
+import os
 import pytest
 import uuid
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
+
+# These tests require a live PostgreSQL database with the full PCOS schema.
+# Skip when running in unit test / CI environments without the database.
+pytestmark = pytest.mark.skipif(
+    not os.getenv("PCOS_INTEGRATION_DB_URL"),
+    reason="PCOS integration tests require PCOS_INTEGRATION_DB_URL to be set"
+)
 
 
 # =============================================================================

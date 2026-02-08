@@ -252,7 +252,8 @@ class TestMockRecallEngine:
         assert drill.target_lot == "LOT-2024-001"
         assert drill.status == RecallStatus.PENDING
 
-    def test_execute_drill_forward_trace(self):
+    @pytest.mark.asyncio
+    async def test_execute_drill_forward_trace(self):
         """Test executing a forward trace drill."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -260,7 +261,7 @@ class TestMockRecallEngine:
             target_lot="LOT-001",
         )
 
-        result = self.engine.execute_drill(drill)
+        result = await self.engine.execute_drill(drill)
 
         assert result.success is True
         assert result.lots_traced > 0
@@ -268,7 +269,8 @@ class TestMockRecallEngine:
         assert drill.started_at is not None
         assert drill.completed_at is not None
 
-    def test_execute_drill_backward_trace(self):
+    @pytest.mark.asyncio
+    async def test_execute_drill_backward_trace(self):
         """Test executing a backward trace drill."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -276,12 +278,13 @@ class TestMockRecallEngine:
             target_lot="FINISHED-001",
         )
 
-        result = self.engine.execute_drill(drill)
+        result = await self.engine.execute_drill(drill)
 
         assert result.success is True
         assert result.max_depth_backward > 0
 
-    def test_execute_drill_full_trace(self):
+    @pytest.mark.asyncio
+    async def test_execute_drill_full_trace(self):
         """Test executing a full (bidirectional) trace drill."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -289,13 +292,14 @@ class TestMockRecallEngine:
             target_lot="MID-LOT-001",
         )
 
-        result = self.engine.execute_drill(drill)
+        result = await self.engine.execute_drill(drill)
 
         assert result.success is True
         assert result.max_depth_forward > 0
         assert result.max_depth_backward > 0
 
-    def test_execute_drill_mass_balance(self):
+    @pytest.mark.asyncio
+    async def test_execute_drill_mass_balance(self):
         """Test executing a mass balance drill."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -303,12 +307,13 @@ class TestMockRecallEngine:
             target_lot="LOT-001",
         )
 
-        result = self.engine.execute_drill(drill)
+        result = await self.engine.execute_drill(drill)
 
         assert result.success is True
         assert len(result.warnings) > 0  # Should have mass balance warning
 
-    def test_execute_drill_targeted(self):
+    @pytest.mark.asyncio
+    async def test_execute_drill_targeted(self):
         """Test executing a targeted facility drill."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -317,12 +322,13 @@ class TestMockRecallEngine:
             target_lot="LOT-001",
         )
 
-        result = self.engine.execute_drill(drill)
+        result = await self.engine.execute_drill(drill)
 
         assert result.success is True
         assert any(f.gln == "1234567890123" for f in result.affected_facilities)
 
-    def test_drill_sla_compliance(self):
+    @pytest.mark.asyncio
+    async def test_drill_sla_compliance(self):
         """Test that drill correctly tracks SLA compliance."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -330,13 +336,14 @@ class TestMockRecallEngine:
             target_lot="LOT-001",
         )
 
-        result = self.engine.execute_drill(drill)
+        result = await self.engine.execute_drill(drill)
 
         # Drill execution should be fast (well under 24 hours)
         assert result.sla_compliant is True
         assert result.total_time_seconds < 60  # Should complete in under a minute
 
-    def test_get_drill_history(self):
+    @pytest.mark.asyncio
+    async def test_get_drill_history(self):
         """Test retrieving drill history."""
         # Create and execute multiple drills
         for i in range(5):
@@ -345,7 +352,7 @@ class TestMockRecallEngine:
                 drill_type=RecallType.FORWARD_TRACE,
                 target_lot=f"LOT-{i}",
             )
-            self.engine.execute_drill(drill)
+            await self.engine.execute_drill(drill)
 
         history = self.engine.get_drill_history("tenant_1")
 
@@ -353,26 +360,28 @@ class TestMockRecallEngine:
         # Should be sorted by creation time (most recent first)
         assert history[0].target_lot == "LOT-4"
 
-    def test_get_drill_history_with_limit(self):
+    @pytest.mark.asyncio
+    async def test_get_drill_history_with_limit(self):
         """Test history with result limit."""
         for i in range(10):
             drill = self.engine.create_drill(
                 tenant_id="tenant_1",
                 drill_type=RecallType.FORWARD_TRACE,
             )
-            self.engine.execute_drill(drill)
+            await self.engine.execute_drill(drill)
 
         history = self.engine.get_drill_history("tenant_1", limit=3)
 
         assert len(history) == 3
 
-    def test_get_drill_history_status_filter(self):
+    @pytest.mark.asyncio
+    async def test_get_drill_history_status_filter(self):
         """Test history filtering by status."""
         drill1 = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
         )
-        self.engine.execute_drill(drill1)
+        await self.engine.execute_drill(drill1)
 
         drill2 = self.engine.create_drill(
             tenant_id="tenant_1",
@@ -416,13 +425,14 @@ class TestMockRecallEngine:
         assert success is True
         assert drill.status == RecallStatus.CANCELLED
 
-    def test_cancel_completed_drill_fails(self):
+    @pytest.mark.asyncio
+    async def test_cancel_completed_drill_fails(self):
         """Test that cancelling a completed drill fails."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
         )
-        self.engine.execute_drill(drill)
+        await self.engine.execute_drill(drill)
 
         success = self.engine.cancel_drill(drill)
 
@@ -450,13 +460,14 @@ class TestSLAMetrics:
         assert metrics["total_drills"] == 0
         assert metrics["sla_compliance_rate"] == 100.0
 
-    def test_sla_metrics_after_drill(self):
+    @pytest.mark.asyncio
+    async def test_sla_metrics_after_drill(self):
         """Test SLA metrics update after drill execution."""
         drill = self.engine.create_drill(
             tenant_id="tenant_1",
             drill_type=RecallType.FORWARD_TRACE,
         )
-        self.engine.execute_drill(drill)
+        await self.engine.execute_drill(drill)
 
         metrics = self.engine.get_sla_metrics("tenant_1")
 
@@ -465,14 +476,15 @@ class TestSLAMetrics:
         assert metrics["sla_compliant_drills"] == 1
         assert metrics["sla_compliance_rate"] == 100.0
 
-    def test_sla_metrics_accumulation(self):
+    @pytest.mark.asyncio
+    async def test_sla_metrics_accumulation(self):
         """Test SLA metrics accumulate across multiple drills."""
         for _ in range(5):
             drill = self.engine.create_drill(
                 tenant_id="tenant_1",
                 drill_type=RecallType.FORWARD_TRACE,
             )
-            self.engine.execute_drill(drill)
+            await self.engine.execute_drill(drill)
 
         metrics = self.engine.get_sla_metrics("tenant_1")
 
@@ -602,7 +614,8 @@ class TestRecallScheduling:
         assert len(due) == 1
         assert due[0].schedule_id == schedule.schedule_id
 
-    def test_execute_scheduled_drill(self):
+    @pytest.mark.asyncio
+    async def test_execute_scheduled_drill(self):
         """Test executing a drill from schedule."""
         schedule = self.engine.create_schedule(
             tenant_id="tenant_1",
@@ -610,7 +623,7 @@ class TestRecallScheduling:
             frequency_days=90,
         )
 
-        drill = self.engine.execute_scheduled_drill(schedule)
+        drill = await self.engine.execute_scheduled_drill(schedule)
 
         assert drill.status == RecallStatus.COMPLETED
         assert drill.reason == "scheduled_drill"
@@ -640,7 +653,8 @@ class TestReadinessReport:
         assert "drill_metrics" in report
         assert "recommendations" in report
 
-    def test_readiness_report_with_drills(self):
+    @pytest.mark.asyncio
+    async def test_readiness_report_with_drills(self):
         """Test readiness report after executing drills."""
         # Execute some drills
         for _ in range(3):
@@ -648,7 +662,7 @@ class TestReadinessReport:
                 tenant_id="tenant_1",
                 drill_type=RecallType.FULL_TRACE,
             )
-            self.engine.execute_drill(drill)
+            await self.engine.execute_drill(drill)
 
         report = self.engine.get_readiness_report("tenant_1")
 
@@ -662,7 +676,8 @@ class TestReadinessReport:
 
         assert len(report["recommendations"]) > 0
 
-    def test_readiness_report_compliant_status(self):
+    @pytest.mark.asyncio
+    async def test_readiness_report_compliant_status(self):
         """Test readiness status when compliant."""
         # Execute drills to establish compliance
         for _ in range(5):
@@ -670,7 +685,7 @@ class TestReadinessReport:
                 tenant_id="tenant_1",
                 drill_type=RecallType.FULL_TRACE,
             )
-            self.engine.execute_drill(drill)
+            await self.engine.execute_drill(drill)
 
         report = self.engine.get_readiness_report("tenant_1")
 
@@ -704,9 +719,10 @@ class TestConvenienceFunctions:
 
         assert engine1 is not engine2
 
-    def test_create_mock_recall(self):
+    @pytest.mark.asyncio
+    async def test_create_mock_recall(self):
         """Test convenience function for creating and executing drill."""
-        result = create_mock_recall(
+        result = await create_mock_recall(
             tenant_id="tenant_1",
             drill_type="forward_trace",
             severity="class_ii",
@@ -717,10 +733,11 @@ class TestConvenienceFunctions:
         assert result["status"] == "completed"
         assert "result" in result
 
-    def test_get_recall_history_function(self):
+    @pytest.mark.asyncio
+    async def test_get_recall_history_function(self):
         """Test convenience function for getting history."""
         # Create a drill first
-        create_mock_recall(
+        await create_mock_recall(
             tenant_id="tenant_1",
             drill_type="full_trace",
         )

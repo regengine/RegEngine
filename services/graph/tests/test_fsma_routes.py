@@ -5,7 +5,7 @@ Tests for FSMA 204 API Routes.
 # Mock shared.auth before importing routes
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,33 +13,31 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 
 
-@pytest.fixture
-def mock_auth():
-    """Mock API key authentication."""
-    with patch("shared.auth.require_api_key") as mock:
-        mock.return_value = {"tenant_id": "test-tenant", "key_id": "test-key"}
-        yield mock
 
 
 @pytest.fixture
 def mock_neo4j_client():
-    """Mock Neo4j client."""
-    with patch("services.graph.app.neo4j_utils.Neo4jClient") as mock:
+    """Mock Neo4j client at all route module locations."""
+    with patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock_trace, \
+         patch("services.graph.app.routers.fsma.compliance.Neo4jClient") as mock_comp, \
+         patch("services.graph.app.routers.fsma.science.Neo4jClient") as mock_sci:
         mock_instance = MagicMock()
-        mock_instance.session.return_value.__enter__ = MagicMock()
-        mock_instance.session.return_value.__exit__ = MagicMock()
-        mock.return_value = mock_instance
-        mock.get_global_database_name.return_value = "test-db"
+        mock_instance.close = AsyncMock()
+        for m in [mock_trace, mock_comp, mock_sci]:
+            m.return_value = mock_instance
+            m.get_tenant_database_name.return_value = "test-db"
+            m.get_global_database_name.return_value = "test-db"
         yield mock_instance
 
 
 @pytest.fixture
 def mock_trace_forward():
     """Mock trace_forward function."""
-    with patch("services.graph.app.fsma_utils.trace_forward") as mock:
+    with patch("services.graph.app.routers.fsma.traceability.trace_forward", new_callable=AsyncMock) as mock_t, \
+         patch("services.graph.app.routers.fsma.compliance.trace_forward", new_callable=AsyncMock) as mock_c:
         from services.graph.app.fsma_utils import TraceResult
 
-        mock.return_value = TraceResult(
+        result = TraceResult(
             lot_id="LOT-2024-001",
             direction="forward",
             facilities=[
@@ -73,16 +71,19 @@ def mock_trace_forward():
             time_violations=None,
             risk_flags=None,
         )
-        yield mock
+        mock_t.return_value = result
+        mock_c.return_value = result
+        yield mock_t
 
 
 @pytest.fixture
 def mock_trace_backward():
     """Mock trace_backward function."""
-    with patch("services.graph.app.fsma_utils.trace_backward") as mock:
+    with patch("services.graph.app.routers.fsma.traceability.trace_backward", new_callable=AsyncMock) as mock_t, \
+         patch("services.graph.app.routers.fsma.compliance.trace_backward", new_callable=AsyncMock) as mock_c:
         from services.graph.app.fsma_utils import TraceResult
 
-        mock.return_value = TraceResult(
+        result = TraceResult(
             lot_id="LOT-2024-002",
             direction="backward",
             facilities=[
@@ -116,13 +117,15 @@ def mock_trace_backward():
             time_violations=None,
             risk_flags=None,
         )
-        yield mock
+        mock_t.return_value = result
+        mock_c.return_value = result
+        yield mock_t
 
 
 @pytest.fixture
 def mock_find_gaps():
     """Mock find_gaps function."""
-    with patch("services.graph.app.fsma_utils.find_gaps") as mock:
+    with patch("services.graph.app.routers.fsma.compliance.find_gaps", new_callable=AsyncMock) as mock:
         mock.return_value = [
             {
                 "event_id": "evt-003",
@@ -138,7 +141,7 @@ def mock_find_gaps():
 @pytest.fixture
 def mock_get_lot_timeline():
     """Mock get_lot_timeline function."""
-    with patch("services.graph.app.fsma_utils.get_lot_timeline") as mock:
+    with patch("services.graph.app.routers.fsma.traceability.get_lot_timeline", new_callable=AsyncMock) as mock:
         mock.return_value = [
             {
                 "event_id": "evt-001",
@@ -172,15 +175,25 @@ class TestTraceForwardEndpoint:
     """Tests for /v1/fsma/trace/forward/{tlc}"""
 
     def test_trace_forward_success(
-        self, mock_auth, mock_neo4j_client, mock_trace_forward
+        self, mock_neo4j_client, mock_trace_forward
     ):
         """Test successful forward trace."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -197,15 +210,25 @@ class TestTraceForwardEndpoint:
         assert data["hop_count"] == 2
 
     def test_trace_forward_with_max_depth(
-        self, mock_auth, mock_neo4j_client, mock_trace_forward
+        self, mock_neo4j_client, mock_trace_forward
     ):
         """Test forward trace with custom max_depth."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -221,15 +244,25 @@ class TestTraceBackwardEndpoint:
     """Tests for /v1/fsma/trace/backward/{tlc}"""
 
     def test_trace_backward_success(
-        self, mock_auth, mock_neo4j_client, mock_trace_backward
+        self, mock_neo4j_client, mock_trace_backward
     ):
         """Test successful backward trace."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -248,15 +281,25 @@ class TestTimelineEndpoint:
     """Tests for /v1/fsma/timeline/{tlc}"""
 
     def test_timeline_success(
-        self, mock_auth, mock_neo4j_client, mock_get_lot_timeline
+        self, mock_neo4j_client, mock_get_lot_timeline
     ):
         """Test lot timeline retrieval."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -276,14 +319,24 @@ class TestTimelineEndpoint:
 class TestExportEndpoints:
     """Tests for CSV export endpoints."""
 
-    def test_export_trace_csv(self, mock_auth, mock_neo4j_client, mock_trace_forward):
+    def test_export_trace_csv(self, mock_neo4j_client, mock_trace_forward):
         """Test trace CSV export."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -304,15 +357,25 @@ class TestExportEndpoints:
         assert "Traceability Lot Code" in lines[0]
 
     def test_export_recall_contacts(
-        self, mock_auth, mock_neo4j_client, mock_trace_forward
+        self, mock_neo4j_client, mock_trace_forward
     ):
         """Test recall contacts CSV export."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -332,14 +395,24 @@ class TestExportEndpoints:
 class TestGapAnalysisEndpoints:
     """Tests for gap analysis endpoints."""
 
-    def test_get_gaps(self, mock_auth, mock_neo4j_client, mock_find_gaps):
+    def test_get_gaps(self, mock_neo4j_client, mock_find_gaps):
         """Test gap analysis retrieval."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -352,14 +425,24 @@ class TestGapAnalysisEndpoints:
         assert data["total_gaps"] == 1
         assert data["summary"]["missing_date"] == 1
 
-    def test_export_gaps_csv(self, mock_auth, mock_neo4j_client, mock_find_gaps):
+    def test_export_gaps_csv(self, mock_neo4j_client, mock_find_gaps):
         """Test gaps CSV export."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
+
+        from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
+        app.dependency_overrides[require_api_key] = lambda: {
+            "tenant_id": "test-tenant",
+            "key_id": "test-key",
+        }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
+
         client = TestClient(app)
 
         response = client.get(
@@ -382,10 +465,10 @@ class TestHealthEndpoint:
         """Test FSMA health endpoint (no auth required)."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
         client = TestClient(app)
 
         response = client.get("/v1/fsma/health")

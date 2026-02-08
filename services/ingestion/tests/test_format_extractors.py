@@ -4,6 +4,17 @@ Unit tests for format extractors.
 Tests cover: HTML, XML, CSV, Excel, DOCX, EDI (X12/EDIFACT)
 """
 
+import sys
+from pathlib import Path
+
+# Ensure ingestion service's 'app' package is resolved first
+_ingestion_dir = Path(__file__).resolve().parent.parent
+# Clear any cached 'app' modules from other services
+_to_remove = [key for key in sys.modules if key == 'app' or key.startswith('app.')]
+for key in _to_remove:
+    del sys.modules[key]
+sys.path.insert(0, str(_ingestion_dir))
+
 import pytest
 from app.format_extractors import (
     extract_from_html,

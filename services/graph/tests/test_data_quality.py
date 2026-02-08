@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -30,6 +30,21 @@ from services.graph.app.fsma_utils import (
     analyze_kde_completeness,
     find_orphaned_lots,
 )
+
+
+class AsyncIteratorMock:
+    """Helper to create a proper async iterator from a list of items."""
+    def __init__(self, items):
+        self._items = iter(items)
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._items)
+        except StopIteration:
+            raise StopAsyncIteration
 
 # ============================================================================
 # ORPHAN LOT DATACLASS TESTS
@@ -242,31 +257,33 @@ class TestDataQualityReport:
 class TestOrphanDetectionLogic:
     """Tests for orphan detection logic with mocked Neo4j."""
 
-    def test_orphan_detection_returns_list(self):
+    @pytest.mark.asyncio
+    async def test_orphan_detection_returns_list(self):
         """find_orphaned_lots returns a list of OrphanLot objects."""
-        # Mock the Neo4j client
+        # Mock the Neo4j client with async context manager
         mock_client = MagicMock()
-        mock_session = MagicMock()
-        mock_client.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client.session.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session = AsyncMock()
 
-        # Mock empty result
-        mock_session.run.return_value = []
+        # Mock empty async iterator result
+        mock_result = AsyncMock()
+        mock_result.__aiter__ = lambda self: self
+        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_session.run = AsyncMock(return_value=mock_result)
 
-        result = find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
+        # Setup async context manager
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        result = await find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
 
         assert isinstance(result, list)
 
-    def test_orphan_detection_with_results(self):
+    @pytest.mark.asyncio
+    async def test_orphan_detection_with_results(self):
         """find_orphaned_lots parses results correctly."""
         mock_client = MagicMock()
-        mock_session = MagicMock()
-        mock_client.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client.session.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session = AsyncMock()
 
         # Mock a result with one orphan lot
         mock_record = MagicMock()
@@ -280,25 +297,39 @@ class TestOrphanDetectionLogic:
             "last_event_date": "2025-01-05",
         }.get(key)
 
-        mock_session.run.return_value = [mock_record]
+        # Mock async iterator that yields one record
+        mock_result = AsyncIteratorMock([mock_record])
+        mock_session.run = AsyncMock(return_value=mock_result)
 
-        result = find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
+        # Setup async context manager
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        result = await find_orphaned_lots(mock_client, tenant_id=None, days_stagnant=30)
 
         assert len(result) == 1
         assert result[0].tlc == "ORPHAN-001"
         assert result[0].product_description == "Test Product"
 
-    def test_orphan_detection_tenant_filter(self):
+    @pytest.mark.asyncio
+    async def test_orphan_detection_tenant_filter(self):
         """find_orphaned_lots passes tenant_id to query."""
         mock_client = MagicMock()
-        mock_session = MagicMock()
-        mock_client.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client.session.return_value.__exit__ = MagicMock(return_value=False)
-        mock_session.run.return_value = []
+        mock_session = AsyncMock()
 
-        find_orphaned_lots(mock_client, tenant_id="tenant-123", days_stagnant=45)
+        # Mock empty async iterator result
+        mock_result = AsyncMock()
+        mock_result.__aiter__ = lambda self: self
+        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_session.run = AsyncMock(return_value=mock_result)
+
+        # Setup async context manager
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        await find_orphaned_lots(mock_client, tenant_id="tenant-123", days_stagnant=45)
 
         # Verify query was called with tenant_id parameter
         mock_session.run.assert_called()
@@ -317,28 +348,33 @@ class TestOrphanDetectionLogic:
 class TestKDECompletenessAnalysisLogic:
     """Tests for KDE completeness analysis logic with mocked Neo4j."""
 
-    def test_analysis_returns_report(self):
+    @pytest.mark.asyncio
+    async def test_analysis_returns_report(self):
         """analyze_kde_completeness returns a DataQualityReport."""
         mock_client = MagicMock()
-        mock_session = MagicMock()
-        mock_client.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client.session.return_value.__exit__ = MagicMock(return_value=False)
-        mock_session.run.return_value = []
+        mock_session = AsyncMock()
 
-        result = analyze_kde_completeness(mock_client, tenant_id=None)
+        # Mock empty async iterator result
+        mock_result = AsyncMock()
+        mock_result.__aiter__ = lambda self: self
+        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_session.run = AsyncMock(return_value=mock_result)
+
+        # Note: analyze_kde_completeness uses `with client.session()` (sync context manager)
+        # but awaits session.run() and uses async for
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+
+        result = await analyze_kde_completeness(mock_client, tenant_id=None)
 
         assert isinstance(result, DataQualityReport)
 
-    def test_analysis_with_event_data(self):
+    @pytest.mark.asyncio
+    async def test_analysis_with_event_data(self):
         """analyze_kde_completeness parses event metrics correctly."""
         mock_client = MagicMock()
-        mock_session = MagicMock()
-        mock_client.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client.session.return_value.__exit__ = MagicMock(return_value=False)
+        mock_session = AsyncMock()
 
         # Mock result with metrics for one event type
         mock_record = MagicMock()
@@ -351,27 +387,41 @@ class TestKDECompletenessAnalysisLogic:
             "avg_confidence": 0.92,
         }.get(key)
 
-        mock_session.run.return_value = [mock_record]
+        # Mock async iterator that yields one record
+        mock_result = AsyncIteratorMock([mock_record])
+        mock_session.run = AsyncMock(return_value=mock_result)
 
-        result = analyze_kde_completeness(mock_client, tenant_id=None)
+        # analyze_kde_completeness uses sync context manager `with client.session()`
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
+
+        result = await analyze_kde_completeness(mock_client, tenant_id=None)
 
         assert result.total_events == 100
         assert len(result.metrics_by_type) == 1
         assert result.metrics_by_type[0].event_type == "SHIPPING"
         assert result.metrics_by_type[0].missing_date_count == 5
 
-    def test_analysis_confidence_threshold(self):
+    @pytest.mark.asyncio
+    async def test_analysis_confidence_threshold(self):
         """analyze_kde_completeness uses custom confidence threshold."""
         mock_client = MagicMock()
-        mock_session = MagicMock()
-        mock_client.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client.session.return_value.__exit__ = MagicMock(return_value=False)
-        mock_session.run.return_value = []
+        mock_session = AsyncMock()
+
+        # Mock empty async iterator result
+        mock_result = AsyncMock()
+        mock_result.__aiter__ = lambda self: self
+        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_session.run = AsyncMock(return_value=mock_result)
+
+        # analyze_kde_completeness uses sync context manager `with client.session()`
+        mock_client.session = MagicMock(return_value=mock_session)
+        mock_session.__enter__ = MagicMock(return_value=mock_session)
+        mock_session.__exit__ = MagicMock(return_value=False)
 
         # Call with custom threshold
-        analyze_kde_completeness(mock_client, tenant_id=None, confidence_threshold=0.90)
+        await analyze_kde_completeness(mock_client, tenant_id=None, confidence_threshold=0.90)
 
         # Verify threshold was passed
         call_kwargs = mock_session.run.call_args

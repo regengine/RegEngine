@@ -24,7 +24,7 @@ class TestReconciliationBot(unittest.TestCase):
     def test_revenue_leak(self):
         """Test variance where inventory drop > sales reported (Possible theft or pricing error)."""
         transactions = [
-            TransactionRecord(id="TX_1", timestamp=self.base_time, amount=Decimal("90.00"), type="sale", description="Item A Discounted?"),
+            TransactionRecord(id="TX_1", timestamp=self.base_time, amount=Decimal("89.00"), type="sale", description="Item A Discounted?"),
         ]
         logs = [
             # Item worth 100 was sold

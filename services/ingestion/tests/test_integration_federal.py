@@ -1,9 +1,16 @@
 """Integration tests for Federal API sources."""
 
+import sys
+from pathlib import Path
+
+# Ensure ingestion service is on the path
+_ingestion_dir = Path(__file__).resolve().parent.parent
+if str(_ingestion_dir) not in sys.path:
+    sys.path.insert(0, str(_ingestion_dir))
+
 import pytest
 from unittest.mock import MagicMock, patch
 from regengine_ingestion.sources import FederalRegisterAdapter, ECFRAdapter
-from app.routes import _process_and_emit
 
 class TestFederalIntegration:
     @patch("regengine_ingestion.sources.FederalRegisterAdapter.fetch_documents")

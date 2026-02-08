@@ -47,6 +47,10 @@ class FakeSession:
     def add(self, item):
         self._pending = item
 
+    def execute(self, stmt):
+        """No-op: absorbs SET LOCAL tenant context in tests."""
+        return None
+
     def flush(self):
         return None
 
@@ -198,6 +202,10 @@ def test_list_hallucinations_pagination_format(tracker_fixture):
     
     # Create a fake query method on FakeSession
     class QueryableFakeSession(FakeSession):
+        def execute(self, stmt):
+            """No-op: absorbs SET LOCAL tenant context in tests."""
+            return None
+
         def query(self, model):
             return FakeQuery(self.storage)
     

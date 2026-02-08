@@ -7,8 +7,19 @@ to use a custom TypeDecorator that works with SQLite.
 """
 import pytest
 import uuid as uuid_module
+import sys
+from pathlib import Path
 from sqlalchemy import create_engine, TypeDecorator, CHAR
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+# Ensure energy service is on the path and clear any conflicting 'app' modules
+_energy_dir = Path(__file__).resolve().parent.parent
+# Remove any previously-cached 'app' module from other services to avoid cross-contamination
+_to_remove = [key for key in sys.modules if key == 'app' or key.startswith('app.')]
+for key in _to_remove:
+    del sys.modules[key]
+sys.path.insert(0, str(_energy_dir))
 
 # First, create the custom UUID type for SQLite
 class SqliteUUID(TypeDecorator):
@@ -38,14 +49,23 @@ import sqlalchemy.dialects.postgresql as postgresql
 postgresql.UUID = SqliteUUID
 
 # NOW we can import the database models
-from app.database import Base
-from app.idempotency import SnapshotIdempotencyModel  # Import idempotency model too
+try:
+    from app.database import Base
+    from app.idempotency import SnapshotIdempotencyModel  # Import idempotency model too
+except ImportError:
+    from services.energy.app.database import Base
+    from services.energy.app.idempotency import SnapshotIdempotencyModel
 
 
 @pytest.fixture(scope="session")
 def test_db_engine():
     """Create test database engine with patched UUID support."""
-    engine = create_engine("sqlite:///:memory:", echo=False)
+    engine = create_engine(
+        "sqlite:///:memory:",
+        echo=False,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     
     # Enable foreign key constraints in SQLite
     from sqlalchemy import event
@@ -66,21 +86,44 @@ def test_db_engine():
 
 @pytest.fixture(scope="function")
 def db_session(test_db_engine):
-    """Create isolated database session for each test."""
+    """Create isolated database session for each test.
+
+    After each test, all rows are deleted from all tables to ensure
+    complete data isolation. This approach is simpler than nested
+    transactions and compatible with code that calls commit/rollback
+    internally.
+    """
     Session = sessionmaker(bind=test_db_engine)
     session = Session()
     try:
         yield session
     except Exception:
-        # Exception during test execution
         session.rollback()
         raise
-    else:
-        # Test completed successfully, try to commit
-        try:
-            session.commit()
-        except Exception:
-            # Commit failed (expected in some tests like constraint violation tests)
-            session.rollback()
     finally:
+        # Clean up: rollback any pending transaction, then delete all data
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        # Delete all rows from all tables (order matters for FK constraints)
+        cleanup_session = Session()
+        try:
+            for table in reversed(Base.metadata.sorted_tables):
+                cleanup_session.execute(table.delete())
+            cleanup_session.commit()
+        except Exception:
+            cleanup_session.rollback()
+        finally:
+            cleanup_session.close()
         session.close()
+
+
+@pytest.fixture(scope="function")
+def test_session_factory(test_db_engine):
+    """Provide a sessionmaker bound to the test engine.
+
+    Used by tests that need to create additional sessions (e.g. concurrency tests)
+    instead of importing the production SessionLocal which points at PostgreSQL.
+    """
+    return sessionmaker(bind=test_db_engine)

@@ -8,7 +8,7 @@ Tests for temporal ordering validation and mass conservation checks.
 import sys
 from dataclasses import asdict
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -102,20 +102,27 @@ class TestTimeArrowInTraceForward:
 
     @pytest.fixture
     def mock_neo4j_session(self):
-        """Create a mock Neo4j session."""
+        """Create a mock Neo4j async session."""
         session = MagicMock()
-        session.__enter__ = MagicMock(return_value=session)
-        session.__exit__ = MagicMock(return_value=False)
+        # run() returns a result whose single() is also async
+        mock_run_result = MagicMock()
+        mock_run_result.__aiter__ = MagicMock(return_value=iter([]))
+        session.run = AsyncMock(return_value=mock_run_result)
         return session
 
     @pytest.fixture
     def mock_neo4j_client(self, mock_neo4j_session):
-        """Create a mock Neo4j client."""
+        """Create a mock Neo4j client with async context manager."""
         client = MagicMock()
-        client.session.return_value = mock_neo4j_session
+        # client.session() returns an async context manager
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_neo4j_session)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        client.session.return_value = ctx
         return client
 
-    def test_trace_forward_includes_time_violations(
+    @pytest.mark.asyncio
+    async def test_trace_forward_includes_time_violations(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """trace_forward should include time_violations in result."""
@@ -149,7 +156,7 @@ class TestTimeArrowInTraceForward:
         )
         mock_neo4j_session.run.return_value = mock_result
 
-        result = trace_forward(
+        result = await trace_forward(
             mock_neo4j_client, "LOT-001", max_depth=10, enforce_time_arrow=True
         )
 
@@ -157,7 +164,8 @@ class TestTimeArrowInTraceForward:
         assert hasattr(result, "time_violations")
         assert hasattr(result, "risk_flags")
 
-    def test_trace_forward_default_enforces_time_arrow(
+    @pytest.mark.asyncio
+    async def test_trace_forward_default_enforces_time_arrow(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """trace_forward should enforce time arrow by default."""
@@ -167,7 +175,7 @@ class TestTimeArrowInTraceForward:
         mock_result.__iter__ = MagicMock(return_value=iter([]))
         mock_neo4j_session.run.return_value = mock_result
 
-        result = trace_forward(mock_neo4j_client, "LOT-001")
+        result = await trace_forward(mock_neo4j_client, "LOT-001")
 
         # The query should be called with temporal filtering
         assert mock_neo4j_session.run.called
@@ -210,20 +218,23 @@ class TestMassBalanceValidation:
 
     @pytest.fixture
     def mock_neo4j_session(self):
-        """Create a mock Neo4j session."""
+        """Create a mock Neo4j async session."""
         session = MagicMock()
-        session.__enter__ = MagicMock(return_value=session)
-        session.__exit__ = MagicMock(return_value=False)
+        session.run = AsyncMock()
         return session
 
     @pytest.fixture
     def mock_neo4j_client(self, mock_neo4j_session):
-        """Create a mock Neo4j client."""
+        """Create a mock Neo4j client with async context manager."""
         client = MagicMock()
-        client.session.return_value = mock_neo4j_session
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_neo4j_session)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        client.session.return_value = ctx
         return client
 
-    def test_check_mass_balance_balanced_with_loss(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_balanced_with_loss(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Mass balance with yield loss (output < input) should pass."""
@@ -231,17 +242,17 @@ class TestMassBalanceValidation:
 
         # Setup: 100 lbs in, 90 lbs out (10% loss - acceptable)
         mock_result = MagicMock()
-        mock_result.single.return_value = {
+        mock_result.single = AsyncMock(return_value={
             "event_id": "evt-001",
             "event_type": "TRANSFORMATION",
             "event_date": "2024-01-15",
             "existing_risk_flag": None,
             "inputs": [{"tlc": "LOT-001", "quantity": 100, "unit": "lbs"}],
             "outputs": [{"tlc": "LOT-002", "quantity": 90, "unit": "lbs"}],
-        }
+        })
         mock_neo4j_session.run.return_value = mock_result
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client, "evt-001", tolerance=0.10, tag_imbalance=False
         )
 
@@ -249,7 +260,8 @@ class TestMassBalanceValidation:
         assert result.imbalance_ratio < 0  # Loss is negative
         assert result.risk_flag is None
 
-    def test_check_mass_balance_balanced_within_tolerance(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_balanced_within_tolerance(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Mass balance with small gain within tolerance should pass."""
@@ -257,17 +269,17 @@ class TestMassBalanceValidation:
 
         # Setup: 100 lbs in, 105 lbs out (5% gain - within 10% tolerance)
         mock_result = MagicMock()
-        mock_result.single.return_value = {
+        mock_result.single = AsyncMock(return_value={
             "event_id": "evt-001",
             "event_type": "TRANSFORMATION",
             "event_date": "2024-01-15",
             "existing_risk_flag": None,
             "inputs": [{"tlc": "LOT-001", "quantity": 100, "unit": "lbs"}],
             "outputs": [{"tlc": "LOT-002", "quantity": 105, "unit": "lbs"}],
-        }
+        })
         mock_neo4j_session.run.return_value = mock_result
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client, "evt-001", tolerance=0.10, tag_imbalance=False
         )
 
@@ -275,7 +287,8 @@ class TestMassBalanceValidation:
         assert result.imbalance_ratio == 0.05
         assert result.risk_flag is None
 
-    def test_check_mass_balance_imbalanced_exceeds_tolerance(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_imbalanced_exceeds_tolerance(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Mass balance with gain exceeding tolerance should fail."""
@@ -283,17 +296,17 @@ class TestMassBalanceValidation:
 
         # Setup: 100 lbs in, 120 lbs out (20% gain - exceeds 10% tolerance)
         mock_result = MagicMock()
-        mock_result.single.return_value = {
+        mock_result.single = AsyncMock(return_value={
             "event_id": "evt-001",
             "event_type": "TRANSFORMATION",
             "event_date": "2024-01-15",
             "existing_risk_flag": None,
             "inputs": [{"tlc": "LOT-001", "quantity": 100, "unit": "lbs"}],
             "outputs": [{"tlc": "LOT-002", "quantity": 120, "unit": "lbs"}],
-        }
+        })
         mock_neo4j_session.run.return_value = mock_result
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client,
             "evt-001",
             tolerance=0.10,
@@ -304,7 +317,8 @@ class TestMassBalanceValidation:
         assert result.imbalance_ratio == 0.2
         assert result.risk_flag == "MASS_IMBALANCE"
 
-    def test_check_mass_balance_multiple_inputs_outputs(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_multiple_inputs_outputs(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Mass balance should sum multiple inputs and outputs."""
@@ -312,7 +326,7 @@ class TestMassBalanceValidation:
 
         # Setup: 50 + 50 = 100 lbs in, 45 + 50 = 95 lbs out
         mock_result = MagicMock()
-        mock_result.single.return_value = {
+        mock_result.single = AsyncMock(return_value={
             "event_id": "evt-001",
             "event_type": "TRANSFORMATION",
             "event_date": "2024-01-15",
@@ -325,10 +339,10 @@ class TestMassBalanceValidation:
                 {"tlc": "LOT-003", "quantity": 45, "unit": "lbs"},
                 {"tlc": "LOT-004", "quantity": 50, "unit": "lbs"},
             ],
-        }
+        })
         mock_neo4j_session.run.return_value = mock_result
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client, "evt-001", tolerance=0.10, tag_imbalance=False
         )
 
@@ -336,24 +350,25 @@ class TestMassBalanceValidation:
         assert result.output_quantity == 95.0
         assert result.is_balanced is True
 
-    def test_check_mass_balance_zero_inputs(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_zero_inputs(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Mass balance with zero inputs should handle gracefully."""
         from services.graph.app.fsma_utils import check_mass_balance
 
         mock_result = MagicMock()
-        mock_result.single.return_value = {
+        mock_result.single = AsyncMock(return_value={
             "event_id": "evt-001",
             "event_type": "CREATION",
             "event_date": "2024-01-15",
             "existing_risk_flag": None,
             "inputs": [],
             "outputs": [{"tlc": "LOT-001", "quantity": 100, "unit": "lbs"}],
-        }
+        })
         mock_neo4j_session.run.return_value = mock_result
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client, "evt-001", tolerance=0.10, tag_imbalance=False
         )
 
@@ -361,17 +376,18 @@ class TestMassBalanceValidation:
         assert result.input_quantity == 0.0
         assert result.output_quantity == 100.0
 
-    def test_check_mass_balance_event_not_found(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_event_not_found(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Missing event should return empty result."""
         from services.graph.app.fsma_utils import check_mass_balance
 
         mock_result = MagicMock()
-        mock_result.single.return_value = None
+        mock_result.single = AsyncMock(return_value=None)
         mock_neo4j_session.run.return_value = mock_result
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client, "nonexistent-evt", tolerance=0.10, tag_imbalance=False
         )
 
@@ -385,35 +401,39 @@ class TestMassBalanceRiskFlagTagging:
 
     @pytest.fixture
     def mock_neo4j_session(self):
-        """Create a mock Neo4j session."""
+        """Create a mock Neo4j async session."""
         session = MagicMock()
-        session.__enter__ = MagicMock(return_value=session)
-        session.__exit__ = MagicMock(return_value=False)
+        session.run = AsyncMock()
         return session
 
     @pytest.fixture
     def mock_neo4j_client(self, mock_neo4j_session):
-        """Create a mock Neo4j client."""
+        """Create a mock Neo4j client with async context manager."""
         client = MagicMock()
-        client.session.return_value = mock_neo4j_session
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_neo4j_session)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        client.session.return_value = ctx
         return client
 
-    def test_tag_event_risk_flag_success(self, mock_neo4j_client, mock_neo4j_session):
+    @pytest.mark.asyncio
+    async def test_tag_event_risk_flag_success(self, mock_neo4j_client, mock_neo4j_session):
         """Risk flag should be set on event node."""
         from services.graph.app.fsma_utils import _tag_event_risk_flag
 
         mock_result = MagicMock()
-        mock_result.single.return_value = {"tagged_id": "evt-001"}
+        mock_result.single = AsyncMock(return_value={"tagged_id": "evt-001"})
         mock_neo4j_session.run.return_value = mock_result
 
-        success = _tag_event_risk_flag(mock_neo4j_client, "evt-001", "MASS_IMBALANCE")
+        success = await _tag_event_risk_flag(mock_neo4j_client, "evt-001", "MASS_IMBALANCE")
 
         assert success is True
         mock_neo4j_session.run.assert_called_once()
         call_args = mock_neo4j_session.run.call_args
         assert "SET e.risk_flag" in call_args[0][0]
 
-    def test_check_mass_balance_tags_imbalanced_event(
+    @pytest.mark.asyncio
+    async def test_check_mass_balance_tags_imbalanced_event(
         self, mock_neo4j_client, mock_neo4j_session
     ):
         """Imbalanced event should be tagged with risk_flag."""
@@ -421,22 +441,22 @@ class TestMassBalanceRiskFlagTagging:
 
         # First call returns the imbalanced event
         check_result = MagicMock()
-        check_result.single.return_value = {
+        check_result.single = AsyncMock(return_value={
             "event_id": "evt-001",
             "event_type": "TRANSFORMATION",
             "event_date": "2024-01-15",
             "existing_risk_flag": None,
             "inputs": [{"tlc": "LOT-001", "quantity": 100, "unit": "lbs"}],
             "outputs": [{"tlc": "LOT-002", "quantity": 150, "unit": "lbs"}],
-        }
+        })
 
         # Second call is the tag operation
         tag_result = MagicMock()
-        tag_result.single.return_value = {"tagged_id": "evt-001"}
+        tag_result.single = AsyncMock(return_value={"tagged_id": "evt-001"})
 
-        mock_neo4j_session.run.side_effect = [check_result, tag_result]
+        mock_neo4j_session.run = AsyncMock(side_effect=[check_result, tag_result])
 
-        result = check_mass_balance(
+        result = await check_mass_balance(
             mock_neo4j_client,
             "evt-001",
             tolerance=0.10,
@@ -497,25 +517,24 @@ class TestMassBalanceEndpoint:
     @pytest.fixture
     def mock_auth(self):
         """Mock API key authentication."""
-        with patch("services.graph.app.fsma_routes.require_api_key") as mock:
+        with patch("services.graph.app.routers.fsma.science.require_api_key") as mock:
             mock.return_value = {"tenant_id": "test-tenant", "key_id": "test-key"}
             yield mock
 
     @pytest.fixture
     def mock_neo4j_client(self):
         """Mock Neo4j client."""
-        with patch("services.graph.app.fsma_routes.Neo4jClient") as mock:
+        with patch("services.graph.app.routers.fsma.science.Neo4jClient") as mock:
             mock_instance = MagicMock()
-            mock_instance.session.return_value.__enter__ = MagicMock()
-            mock_instance.session.return_value.__exit__ = MagicMock()
+            mock_instance.close = AsyncMock()
             mock.return_value = mock_instance
-            mock.get_global_database_name.return_value = "test-db"
+            mock.get_tenant_database_name.return_value = "test-db"
             yield mock_instance
 
     @pytest.fixture
     def mock_check_mass_balance_for_lot(self):
         """Mock check_mass_balance_for_lot function."""
-        with patch("services.graph.app.fsma_routes.check_mass_balance_for_lot") as mock:
+        with patch("services.graph.app.routers.fsma.science.check_mass_balance_for_lot", new_callable=AsyncMock) as mock:
             from services.graph.app.fsma_utils import (
                 MassBalanceReport,
                 MassBalanceResult,
@@ -568,18 +587,21 @@ class TestMassBalanceEndpoint:
         # Import inside test while mocks are active
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
 
         # Override the dependency for this test
         from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
         }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
 
@@ -603,17 +625,20 @@ class TestMassBalanceEndpoint:
         """Mass balance endpoint should accept custom tolerance."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
 
         from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
         }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
 
@@ -635,25 +660,24 @@ class TestTraceForwardWithPhysicsEngine:
     @pytest.fixture
     def mock_auth(self):
         """Mock API key authentication."""
-        with patch("services.graph.app.fsma_routes.require_api_key") as mock:
+        with patch("services.graph.app.routers.fsma.traceability.require_api_key") as mock:
             mock.return_value = {"tenant_id": "test-tenant", "key_id": "test-key"}
             yield mock
 
     @pytest.fixture
     def mock_neo4j_client(self):
         """Mock Neo4j client."""
-        with patch("services.graph.app.fsma_routes.Neo4jClient") as mock:
+        with patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock:
             mock_instance = MagicMock()
-            mock_instance.session.return_value.__enter__ = MagicMock()
-            mock_instance.session.return_value.__exit__ = MagicMock()
+            mock_instance.close = AsyncMock()
             mock.return_value = mock_instance
-            mock.get_global_database_name.return_value = "test-db"
+            mock.get_tenant_database_name.return_value = "test-db"
             yield mock_instance
 
     @pytest.fixture
     def mock_trace_forward(self):
         """Mock trace_forward function with physics engine fields."""
-        with patch("services.graph.app.fsma_routes.trace_forward") as mock:
+        with patch("services.graph.app.routers.fsma.traceability.trace_forward", new_callable=AsyncMock) as mock:
             from services.graph.app.fsma_utils import TraceResult
 
             mock.return_value = TraceResult(
@@ -689,17 +713,20 @@ class TestTraceForwardWithPhysicsEngine:
         """Trace forward should include risk_flags in response."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
 
         from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
         }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
 
@@ -720,17 +747,20 @@ class TestTraceForwardWithPhysicsEngine:
         """Trace forward should include time_violations in response."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
 
         from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
         }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
 
@@ -750,17 +780,20 @@ class TestTraceForwardWithPhysicsEngine:
         """Trace forward should accept enforce_time_arrow parameter."""
         from fastapi import FastAPI
 
-        from services.graph.app.fsma_routes import router
+        from services.graph.app.fsma_routes import fsma_router
 
         app = FastAPI()
-        app.include_router(router)
+        app.include_router(fsma_router)
 
         from shared.auth import require_api_key
+        from shared.middleware import get_current_tenant_id
+        import uuid
 
         app.dependency_overrides[require_api_key] = lambda: {
             "tenant_id": "test-tenant",
             "key_id": "test-key",
         }
+        app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
 

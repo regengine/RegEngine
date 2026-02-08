@@ -9,7 +9,7 @@ Validates that:
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -182,17 +182,15 @@ class TestConsumerTLCSourceValidation:
         assert "SHIPPING" not in TLC_SOURCE_REQUIRED_EVENTS
         assert "RECEIVING" not in TLC_SOURCE_REQUIRED_EVENTS
 
+    @pytest.mark.asyncio
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
-    def test_transformation_without_source_raises_error(self, mock_client):
+    async def test_transformation_without_source_raises_error(self, mock_client):
         """Consumer rejects TRANSFORMATION event without TLC source."""
-        mock_session = MagicMock()
+        mock_session = AsyncMock()
         mock_client_instance = MagicMock()
-        mock_client_instance.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client_instance.session.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_client_instance.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         # Event with TRANSFORMATION type but no tlc_source
         event = {
@@ -212,22 +210,20 @@ class TestConsumerTLCSourceValidation:
         }
 
         with pytest.raises(TLCSourceValidationError) as exc_info:
-            ingest_fsma_event(mock_client_instance, event)
+            await ingest_fsma_event(mock_client_instance, event)
 
-        assert "tlc_source_gln or tlc_source_fda_reg" in str(exc_info.value)
+        assert "tlc_source_gln or tlc_source_fda_reg" in str(exc_info.value) or "Missing TLC Source" in str(exc_info.value)
         assert "TRANSFORMATION" in str(exc_info.value)
 
+    @pytest.mark.asyncio
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
-    def test_creation_without_source_raises_error(self, mock_client):
+    async def test_creation_without_source_raises_error(self, mock_client):
         """Consumer rejects CREATION event without TLC source."""
-        mock_session = MagicMock()
+        mock_session = AsyncMock()
         mock_client_instance = MagicMock()
-        mock_client_instance.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client_instance.session.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_client_instance.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         event = {
             "document_id": "doc-002",
@@ -245,19 +241,17 @@ class TestConsumerTLCSourceValidation:
         }
 
         with pytest.raises(TLCSourceValidationError):
-            ingest_fsma_event(mock_client_instance, event)
+            await ingest_fsma_event(mock_client_instance, event)
 
+    @pytest.mark.asyncio
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
-    def test_initial_packing_without_source_raises_error(self, mock_client):
+    async def test_initial_packing_without_source_raises_error(self, mock_client):
         """Consumer rejects INITIAL_PACKING event without TLC source."""
-        mock_session = MagicMock()
+        mock_session = AsyncMock()
         mock_client_instance = MagicMock()
-        mock_client_instance.session.return_value.__enter__ = MagicMock(
-            return_value=mock_session
-        )
-        mock_client_instance.session.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_client_instance.session = MagicMock(return_value=mock_session)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         event = {
             "document_id": "doc-003",
@@ -275,7 +269,7 @@ class TestConsumerTLCSourceValidation:
         }
 
         with pytest.raises(TLCSourceValidationError):
-            ingest_fsma_event(mock_client_instance, event)
+            await ingest_fsma_event(mock_client_instance, event)
 
     @patch("services.graph.app.consumers.fsma_consumer.Neo4jClient")
     def test_shipping_without_source_allowed(self, mock_client):

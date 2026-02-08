@@ -1,6 +1,10 @@
 """
 Integration tests for Healthcare evidence export endpoint.
+
+These tests require a shared database between the test session and the API client.
+They should be run with a real database configured via HEALTHCARE_INTEGRATION_DB_URL.
 """
+import os
 import pytest
 from fastapi.testclient import TestClient
 from uuid import uuid4
@@ -8,9 +12,14 @@ from datetime import datetime
 import io
 import csv
 
+pytestmark = pytest.mark.skipif(
+    not os.getenv("HEALTHCARE_INTEGRATION_DB_URL"),
+    reason="Healthcare export integration tests require HEALTHCARE_INTEGRATION_DB_URL"
+)
+
 
 @pytest.mark.asyncio
-async def test_evidence_export_success(test_client: TestClient, test_db_session, test_tenant_id):
+async def test_evidence_export_success(client: TestClient, db_session, tenant_id):
     """Test successful evidence export returns CSV file."""
     from app.sqlalchemy_models import EvidenceLogModel, VerticalProjectModel
     
@@ -18,17 +27,17 @@ async def test_evidence_export_success(test_client: TestClient, test_db_session,
     project_id = uuid4()
     project = VerticalProjectModel(
         id=project_id,
-        tenant_id=test_tenant_id,
+        tenant_id=tenant_id,
         name="Test Clinic",
         vertical="healthcare",
         vertical_metadata={}
     )
-    test_db_session.add(project)
+    db_session.add(project)
     
     # Create test evidence logs
     evidence1 = EvidenceLogModel(
         id=uuid4(),
-        tenant_id=test_tenant_id,
+        tenant_id=tenant_id,
         project_id=project_id,
         rule_id="CLIN-01",
         evidence_type="document",
@@ -38,7 +47,7 @@ async def test_evidence_export_success(test_client: TestClient, test_db_session,
     )
     evidence2 = EvidenceLogModel(
         id=uuid4(),
-        tenant_id=test_tenant_id,
+        tenant_id=tenant_id,
         project_id=project_id,
         rule_id="CLIN-02",
         evidence_type="approval",
@@ -46,12 +55,12 @@ async def test_evidence_export_success(test_client: TestClient, test_db_session,
         content_hash="def456",
         created_at=datetime.utcnow()
     )
-    test_db_session.add(evidence1)
-    test_db_session.add(evidence2)
-    test_db_session.commit()
+    db_session.add(evidence1)
+    db_session.add(evidence2)
+    db_session.commit()
     
     # Test the export endpoint
-    response = test_client.get(
+    response = client.get(
         f"/verticals/healthcare/export/evidence?project_id={project_id}",
         headers={"X-RegEngine-API-Key": "test-api-key"}
     )
@@ -72,7 +81,7 @@ async def test_evidence_export_success(test_client: TestClient, test_db_session,
 
 
 @pytest.mark.asyncio
-async def test_evidence_export_no_logs(test_client: TestClient, test_db_session, test_tenant_id):
+async def test_evidence_export_no_logs(client: TestClient, db_session, tenant_id):
     """Test that export returns 404 when no evidence exists."""
     from app.sqlalchemy_models import VerticalProjectModel
     
@@ -80,15 +89,15 @@ async def test_evidence_export_no_logs(test_client: TestClient, test_db_session,
     project_id = uuid4()
     project = VerticalProjectModel(
         id=project_id,
-        tenant_id=test_tenant_id,
+        tenant_id=tenant_id,
         name="Empty Clinic",
         vertical="healthcare",
         vertical_metadata={}
     )
-    test_db_session.add(project)
-    test_db_session.commit()
+    db_session.add(project)
+    db_session.commit()
     
-    response = test_client.get(
+    response = client.get(
         f"/verticals/healthcare/export/evidence?project_id={project_id}",
         headers={"X-RegEngine-API-Key": "test-api-key"}
     )
@@ -98,7 +107,7 @@ async def test_evidence_export_no_logs(test_client: TestClient, test_db_session,
 
 
 @pytest.mark.asyncio
-async def test_evidence_export_tenant_isolation(test_client: TestClient, test_db_session):
+async def test_evidence_export_tenant_isolation(client: TestClient, db_session):
     """Test that evidence export respects tenant isolation."""
     from app.sqlalchemy_models import EvidenceLogModel, VerticalProjectModel
     
@@ -110,8 +119,8 @@ async def test_evidence_export_tenant_isolation(test_client: TestClient, test_db
     # Create projects for different tenants
     proj_a = VerticalProjectModel(id=project_a, tenant_id=tenant_a, name="Tenant A", vertical="healthcare", vertical_metadata={})
     proj_b = VerticalProjectModel(id=project_b, tenant_id=tenant_b, name="Tenant B", vertical="healthcare", vertical_metadata={})
-    test_db_session.add(proj_a)
-    test_db_session.add(proj_b)
+    db_session.add(proj_a)
+    db_session.add(proj_b)
     
     # Create evidence for both tenants
     evidence_a = EvidenceLogModel(
@@ -122,14 +131,14 @@ async def test_evidence_export_tenant_isolation(test_client: TestClient, test_db
         tenant_id=tenant_b, project_id=project_b, rule_id="RULE-B",
         evidence_type="test", data={}, content_hash="hash-b"
     )
-    test_db_session.add(evidence_a)
-    test_db_session.add(evidence_b)
-    test_db_session.commit()
+    db_session.add(evidence_a)
+    db_session.add(evidence_b)
+    db_session.commit()
     
     # Tenant A should only see their evidence
     # Note: In real implementation, tenant_id comes from JWT
     # For this test, we're assuming the middleware works correctly
-    response = test_client.get(
+    response = client.get(
         f"/verticals/healthcare/export/evidence?project_id={project_a}",
         headers={"X-RegEngine-API-Key": "test-api-key"}
     )
@@ -140,18 +149,18 @@ async def test_evidence_export_tenant_isolation(test_client: TestClient, test_db
 
 
 @pytest.mark.asyncio
-async def test_evidence_export_csv_format(test_client: TestClient, test_db_session, test_tenant_id):
+async def test_evidence_export_csv_format(client: TestClient, db_session, tenant_id):
     """Test that CSV has correct headers and formatting."""
     from app.sqlalchemy_models import EvidenceLogModel, VerticalProjectModel
     
     project_id = uuid4()
     project = VerticalProjectModel(
-        id=project_id, tenant_id=test_tenant_id, name="Test", vertical="healthcare", vertical_metadata={}
+        id=project_id, tenant_id=tenant_id, name="Test", vertical="healthcare", vertical_metadata={}
     )
-    test_db_session.add(project)
+    db_session.add(project)
     
     evidence = EvidenceLogModel(
-        tenant_id=test_tenant_id,
+        tenant_id=tenant_id,
         project_id=project_id,
         rule_id="TEST-01",
         evidence_type="manual_check",
@@ -159,10 +168,10 @@ async def test_evidence_export_csv_format(test_client: TestClient, test_db_sessi
         content_hash="xyz789",
         created_by=uuid4()
     )
-    test_db_session.add(evidence)
-    test_db_session.commit()
+    db_session.add(evidence)
+    db_session.commit()
     
-    response = test_client.get(
+    response = client.get(
         f"/verticals/healthcare/export/evidence?project_id={project_id}",
         headers={"X-RegEngine-API-Key": "test-api-key"}
     )
