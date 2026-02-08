@@ -70,10 +70,11 @@ async function proxyRequest(
 
         return NextResponse.json(data);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Opportunities proxy error:', error);
+        const message = error instanceof Error ? error.message : 'Opportunity request failed';
         return NextResponse.json(
-            { error: error.message || 'Opportunity request failed', items: [] },
+            { error: message, items: [] },
             { status: 500 }
         );
     }

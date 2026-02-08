@@ -97,10 +97,11 @@ async function proxyRequest(
 
         return NextResponse.json(data);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Review proxy error:', error);
+        const message = error instanceof Error ? error.message : 'Review request failed';
         return NextResponse.json(
-            { error: error.message || 'Review request failed' },
+            { error: message },
             { status: 500 }
         );
     }

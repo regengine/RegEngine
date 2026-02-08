@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
 from typing import List, Optional
+from pathlib import Path
 from pydantic import BaseModel, Field
 import hashlib
 import json
+import os
 
 from .models import PPAPSubmission, PPAPElement, LPAAudit
 from .db_session import get_db
@@ -19,7 +21,7 @@ from .auth import require_api_key
 import sys
 import uuid
 # Add shared utilities
-sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from shared.middleware import get_current_tenant_id
 
 router = APIRouter(prefix="/v1/automotive", tags=["automotive"])
@@ -199,9 +201,24 @@ async def upload_ppap_element(
     db.commit()
     db.refresh(element)
     
-    # TODO: Actually store file to S3 or local storage
-    # For now, we just track metadata
-    
+    # Store file to local vault (S3-backed in production)
+    storage_root = os.environ.get("PPAP_STORAGE_ROOT", "/var/lib/regengine/ppap_vault")
+    storage_dir = os.path.join(
+        storage_root, str(tenant_id), str(submission_id)
+    )
+    os.makedirs(storage_dir, exist_ok=True)
+    safe_name = f"{element_type}_v{version}"
+    storage_path = os.path.join(storage_dir, safe_name)
+    with open(storage_path, "wb") as f:
+        f.write(content)
+
+    # Verify write integrity
+    with open(storage_path, "rb") as f:
+        verify_hash = hashlib.sha256(f.read()).hexdigest()
+    if verify_hash != content_hash:
+        os.remove(storage_path)
+        raise HTTPException(status_code=500, detail="File integrity check failed after write")
+
     return PPAPElementResponse(
         id=element.id,
         element_type=element.element_type,

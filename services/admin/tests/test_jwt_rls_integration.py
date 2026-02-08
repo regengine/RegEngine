@@ -16,7 +16,8 @@ import jwt as jose_jwt
 
 # Import functions to test
 import sys
-sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services/admin')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.auth_utils import create_access_token, decode_access_token, SECRET_KEY, ALGORITHM
 

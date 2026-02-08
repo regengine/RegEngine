@@ -69,10 +69,11 @@ async function proxyRequest(
 
         return NextResponse.json(data);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Compliance proxy error:', error);
+        const message = error instanceof Error ? error.message : 'Compliance request failed';
         return NextResponse.json(
-            { error: error.message || 'Compliance request failed' },
+            { error: message },
             { status: 500 }
         );
     }

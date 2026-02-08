@@ -80,10 +80,11 @@ export async function POST() {
             tenantId: tenantId,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Demo setup failed:', error);
+        const message = error instanceof Error ? error.message : 'Failed to setup demo';
         return NextResponse.json(
-            { error: error.message || 'Failed to setup demo' },
+            { error: message },
             { status: 500 }
         );
     }

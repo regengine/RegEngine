@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export interface ExportData {
     title: string;
@@ -104,7 +104,7 @@ export function ExportButton({
                     headStyles: { fillColor: [66, 139, 202] },
                 });
 
-                yPosition = (doc as any).lastAutoTable.finalY + 15;
+                yPosition = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable).finalY + 15;
             }
 
             // Tables
@@ -128,7 +128,7 @@ export function ExportButton({
                         headStyles: { fillColor: [66, 139, 202] },
                     });
 
-                    yPosition = (doc as any).lastAutoTable.finalY + 15;
+                    yPosition = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable).finalY + 15;
                 }
             }
 
@@ -158,37 +158,47 @@ export function ExportButton({
     const exportToExcel = async () => {
         try {
             setIsExporting(true);
-            const workbook = XLSX.utils.book_new();
+            const workbook = new ExcelJS.Workbook();
+            workbook.created = new Date();
 
             // Summary Sheet
-            const summaryData: any[][] = [
-                [data.title],
-                data.subtitle ? [data.subtitle] : [],
-                [`Generated: ${new Date().toLocaleString()}`],
-                [],
-            ];
+            const summary = workbook.addWorksheet('Summary');
+            summary.addRow([data.title]);
+            if (data.subtitle) summary.addRow([data.subtitle]);
+            summary.addRow([`Generated: ${new Date().toLocaleString()}`]);
+            summary.addRow([]);
 
             if (data.metrics && data.metrics.length > 0) {
-                summaryData.push(['Key Metrics'], ['Metric', 'Value', 'Description']);
+                summary.addRow(['Key Metrics']);
+                summary.addRow(['Metric', 'Value', 'Description']);
                 data.metrics.forEach((m) => {
-                    summaryData.push([m.label, String(m.value), m.helpText || '']);
+                    summary.addRow([m.label, String(m.value), m.helpText || '']);
                 });
             }
-
-            const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-            XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
 
             // Table Sheets
             if (data.tables && data.tables.length > 0) {
-                data.tables.forEach((table, idx) => {
-                    const tableData = [table.headers, ...table.rows];
-                    const tableSheet = XLSX.utils.aoa_to_sheet(tableData);
-                    const sheetName = table.title.substring(0, 30); // Excel limit
-                    XLSX.utils.book_append_sheet(workbook, tableSheet, sheetName);
+                data.tables.forEach((table) => {
+                    const sheetName = table.title.substring(0, 31); // Excel limit
+                    const ws = workbook.addWorksheet(sheetName);
+                    ws.addRow(table.headers);
+                    table.rows.forEach((row) => ws.addRow(row));
                 });
             }
 
-            XLSX.writeFile(workbook, `${sanitizeFilename(filename)}.xlsx`);
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `${sanitizeFilename(filename)}.xlsx`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Excel export failed:', error);
         } finally {

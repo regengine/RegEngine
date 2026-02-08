@@ -75,8 +75,12 @@ export default function EntertainmentDashboardPage() {
                             <CardDescription>Current pay period validation</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="h-48 flex items-center justify-center border-2 border-dashed rounded text-muted-foreground">
-                                SAG-AFTRA & IATSE Payroll Visualization Placeholder
+                            <div className="h-48 flex flex-col items-center justify-center border-2 border-dashed rounded text-muted-foreground gap-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                                    Demo Preview
+                                </span>
+                                <span>SAG-AFTRA &amp; IATSE Payroll Visualization</span>
+                                <span className="text-xs text-muted-foreground/60">Connect production payroll system to enable</span>
                             </div>
                         </CardContent>
                     </Card>

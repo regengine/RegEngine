@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { ComplianceStatusWidget, type ComplianceAlert } from "@/components/dashboard/compliance-status-widget";
 import { AlertDetailDialog } from "@/components/dashboard/alert-detail-dialog";
 import { useTenantContext } from "@/lib/tenant-context";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Clock, Shield, Settings } from "lucide-react";
@@ -14,12 +15,13 @@ import Link from "next/link";
 
 export default function ComplianceStatusPage() {
     const { selectedTenant } = useTenantContext();
+    const { user } = useAuth();
     const [selectedAlert, setSelectedAlert] = useState<ComplianceAlert | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
 
     // Use selected tenant or demo
     const tenantId = selectedTenant?.id || "demo-tenant";
-    const userId = "current-user"; // TODO: Get from auth context
+    const userId = user?.id || user?.email || "anonymous";
 
     const handleAlertClick = (alert: ComplianceAlert) => {
         setSelectedAlert(alert);

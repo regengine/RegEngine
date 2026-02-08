@@ -13,9 +13,10 @@ import hashlib
 import json
 import sys
 import uuid
+from pathlib import Path
 
-# Add shared utilities
-sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
+# Add shared utilities (portable path resolution)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id, get_optional_tenant_id
 
 from .models import FAIReport, ConfigurationBaseline, NADCAPEvidence
