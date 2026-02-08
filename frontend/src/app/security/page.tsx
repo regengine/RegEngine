@@ -75,8 +75,8 @@ const securityFeatures = [
         icon: <ShieldIcon />,
         title: "Immutable Audit Trail",
         status: "verified",
-        description: "Database triggers prevent mutation of core fact fields after creation. Updates create new versioned records with lineage links (supersedes_document_id, previous_fact_id).",
-        evidence: "Enforced via prevent_content_mutation trigger. Version chain verified from V1 through V16.",
+        description: "Database triggers block all updates and deletes on compliance tables (extracted facts, rule evaluations, audit events). Corrections must create new versioned records with lineage links (supersedes_document_id, previous_fact_id).",
+        evidence: "Enforced via prevent_mutation trigger (V20). Append-only audit_logs enforced via prevent_audit_modification (V30). Version chain verified from V1 through V16.",
         regulation: "21 CFR Part 11 alignment",
     },
     {
@@ -84,7 +84,7 @@ const securityFeatures = [
         title: "Independent Verification",
         status: "verified",
         description: "Our open-source verify_chain.py script lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Zero trust required.",
-        evidence: "Output: 5 hashes verified, 0 failed. 4 lineage links verified, 0 broken. 0 consistency errors.",
+        evidence: "Output: 430 record hashes verified, 0 failed across 7 Critical Tracking Events (Rizo Lopez, Cs-137 Shrimp, Cucumber recall chains).",
         regulation: "Third-party auditability",
     },
 ];
@@ -94,12 +94,12 @@ const roadmapItems = [
     { item: "Data encryption at rest (AES-256)", status: "implemented", timeline: "Current" },
     { item: "TLS 1.3 in transit", status: "implemented", timeline: "Current" },
     { item: "Branch protection (required reviews, no force-push)", status: "implemented", timeline: "Current" },
-    // Shipping Tonight
-    { item: "CI security scanning (SAST, secrets, deps, DAST)", status: "implementing", timeline: "Tonight" },
-    { item: "Vulnerability Disclosure Policy + security.txt", status: "implementing", timeline: "Tonight" },
-    { item: "Audit log export (tamper-evident)", status: "implementing", timeline: "Tonight" },
-    { item: "Hardening gates: auth + tenant isolation in CI", status: "implementing", timeline: "Tonight" },
-    { item: "Incident response plan (internal)", status: "implementing", timeline: "Tonight" },
+    // Shipped
+    { item: "CI security scanning (SAST, secrets, deps, DAST)", status: "implemented", timeline: "Current" },
+    { item: "Vulnerability Disclosure Policy + security.txt", status: "implemented", timeline: "Current" },
+    { item: "Audit log export (tamper-evident)", status: "implemented", timeline: "Current" },
+    { item: "Hardening gates: auth + tenant isolation in CI", status: "implemented", timeline: "Current" },
+    { item: "Incident response plan (internal)", status: "implemented", timeline: "Current" },
     // Next (Q2 2026)
     { item: "OWASP ZAP authenticated scans (full flows)", status: "planned", timeline: "Q2 2026" },
     { item: "Penetration testing (third-party)", status: "planned", timeline: "Q2 2026" },
