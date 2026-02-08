@@ -1,13 +1,16 @@
 # RegEngine – Regulatory Intelligence Platform
 
-[![Glass Box Audit](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/provenance_audit.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions)
+[![Backend CI](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/frontend-ci.yml)
+[![Security](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/security.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Neo4j](https://img.shields.io/badge/Neo4j-5.x-green.svg)](https://neo4j.com/)
 
 **A multi-tenant, audit-grade regulatory intelligence platform** that transforms regulatory documents into actionable compliance intelligence through ML-powered extraction, human-in-the-loop validation, and knowledge graph technology.
 
-> 🥬 **NEW: FDA FSMA 204 Food Traceability** – Complete supply chain compliance with 24-hour recall capability. [See demo →](#-fsma-204-food-traceability)
+🌐 **Live:** [regengine.co](https://regengine.co)
+
+> 🥬 **FSMA 204 Food Traceability** – Complete supply chain compliance with 24-hour recall capability, 23 FDA food category coverage, and tamper-proof audit chains. [See details →](#-fsma-204-food-traceability)
 
 ---
 
@@ -17,118 +20,105 @@
 |---------|-------------|
 | 🔍 **Smart Extraction** | ML-powered document analysis with LLM fallback (OpenAI/Ollama) |
 | 🕸️ **Knowledge Graph** | Neo4j-backed regulatory relationships and obligations |
-| 🏢 **Multi-Tenant** | Complete data isolation with Row-Level Security |
+| 🏢 **Multi-Tenant** | Complete data isolation with Row-Level Security (Double-Lock model) |
 | 🥬 **FSMA 204** | FDA food traceability with forward/backward supply chain queries |
-| 📊 **Audit-Grade** | Full provenance tracking and "Glass Box" transparency |
-| 🔐 **Enterprise Security** | API key auth, rate limiting, PII encryption |
+| 📊 **Audit-Grade** | Deterministic cryptographic hashing and immutable evidence chains |
+| 🔐 **Enterprise Security** | API key auth, JWT-RLS, rate limiting, PII encryption |
+| ⚡ **15 Industry Verticals** | Food Safety, Energy, Healthcare, Aerospace, Automotive, and more |
+| 🎯 **FTL Checker** | Instant FDA Food Traceability List category compliance checks |
 
 ---
 
-## 📚 **Documentation Hub**
+## 🏗️ Architecture
 
-**Start Here:**
-- **[PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)** – Complete engineering roadmap for production deployment
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** – AWS deployment and infrastructure guide
-- **[AUTHENTICATION.md](AUTHENTICATION.md)** – API key management and security
-- **[COMMERCIALIZATION_SUMMARY.md](COMMERCIALIZATION_SUMMARY.md)** – Business model and go-to-market strategy
+### Core Services (Python / FastAPI)
 
-**Launch & Sales:**
-- **[launch_orchestrator/](launch_orchestrator/)** – Complete go-to-market bundle (investors, design partners, legal)
-- **[docs/ROADMAP.md](docs/ROADMAP.md)** – Business roadmap (18-month planning horizon)
-- **[docs/POSITIONING.md](docs/POSITIONING.md)** – Market positioning and messaging
+| Service | Port | Description |
+|---------|------|-------------|
+| **Admin API** | 8400 | Tenant management, API keys, RLS-enabled database access |
+| **Ingestion** | 8300 | URL/file intake, format extraction (PDF, CSV, HTML, XML), S3 storage |
+| **NLP** | 8100 | LLM extraction, confidence routing, regulatory entity recognition |
+| **Graph** | 8200 | Neo4j interaction, FSMA traceability queries, supply chain analysis |
+| **Energy** | 8500 | Energy market compliance, snapshot engine, mismatch detection |
+| **Opportunity** | 8600 | Regulatory arbitrage and gap analysis |
+| **Compliance** | — | Industry-specific checklist evaluation engine |
+| **Scheduler** | — | Background job orchestration |
 
-**For Developers & AI Agents:**
-- **[AGENTS.md](AGENTS.md)** – Guidelines for AI coding agents (GitHub Copilot)
-- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** – Repository-specific coding conventions and patterns
+### Industry Verticals
 
-## 🟢 Verified Implementation Status (December 2025)
+Aerospace · Automotive · Construction · Energy · Entertainment · Food Safety · Gaming · Healthcare · Manufacturing
 
-> This section describes the **currently running and verified** capabilities of the codebase.
+### Frontend (Next.js / React)
 
-| Component | Status | Verified Capability |
-| --- | --- | --- |
-| **Infrastructure** | 🟢 **Healthy** | Full Docker Compose stack (Postgres, Redis, Neo4j, Redpanda, LocalStack, Ollama) boots successfully. Services communicate via internal network. |
-| **Admin API** | 🟢 **Live** | Running on port 8400. Database migrations (including RLS) apply automatically on startup. Healthchecks passing. |
-| **Frontend** | 🟢 **Live** | Next.js 15.5.6 Dashboard running on port 3000. Developer Portal accessible. Verified compatible with React 18.3 and all installed plugins. |
-| **CLI Tool** | 🟢 **Live** | `regctl` Python CLI installed and verified. Supports system management and ingestion triggers. |
-| **Ingestion** | 🟢 **Live** | `POST /ingest/url` accepts URLs, fetches content (SSRF protected), normalizes to text, and emits to Kafka. |
-| **NLP Pipeline** | 🟢 **Live** | Service is healthy (Port 8100). LLM extraction configured for OpenAI/Ollama fallback. FSMA 204 extractor implemented. |
-| **Graph DB** | 🟢 **Live** | Neo4j (Port 7474) running. Graph service (Port 8200) consuming events. FSMA traceability queries supported. |
-| **FSMA 204** | 🟢 **Complete** | Full FDA Food Safety compliance: TLC validation, forward/backward tracing, FDA spreadsheet export, plan builder. |
-| **Kafka UI** | 🟢 **Live** | Management UI running on port 8080 for inspecting topics (`ingest.normalized`, `graph.update`). |
+A modern dashboard at [regengine.co](https://regengine.co) with:
+- Vertical-specific compliance dashboards
+- FTL Checker with 23 FDA food categories
+- Document ingestion UI (URL + file upload)
+- Executive owner dashboard with analytics
+- Developer API console
+
+### Data Infrastructure
+
+| Component | Technology |
+|-----------|-----------|
+| **Event Streaming** | Redpanda (Kafka-compatible) |
+| **Knowledge Graph** | Neo4j Community Edition |
+| **Relational DB** | PostgreSQL 15 with Row-Level Security |
+| **Object Storage** | S3 (LocalStack for development) |
+| **Cache** | Redis 7 |
+| **LLM Inference** | Ollama (local) or OpenAI API |
+
+---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
 - Python 3.11+
-- Node.js 18+ (for Frontend)
+- Node.js 18+ (for frontend)
 
-### 1. Configure Environment Variables
+### 1. Configure Environment
+
 ```bash
-# Copy the environment template
 cp .env.example .env
-
-# Edit .env and set REQUIRED secrets:
-# - NEO4J_PASSWORD: Generate with `openssl rand -base64 32`
-# - ADMIN_MASTER_KEY: Generate with `openssl rand -hex 32`
-# - AWS credentials are pre-set to "test" for LocalStack (local development)
+# Edit .env and set required secrets:
+#   NEO4J_PASSWORD     – openssl rand -base64 32
+#   ADMIN_MASTER_KEY   – openssl rand -hex 32
 ```
 
-### 2. Start the Stack
+### 2. Start Backend Services
+
 ```bash
-# Start all backend services and infrastructure
-make up
+docker-compose up -d
+# Wait ~30-60s for services to become healthy
+docker-compose ps   # verify all containers are healthy
 ```
-*Wait for services to become healthy (approx 30-60s).*
 
 ### 3. Start the Frontend
+
 ```bash
 cd frontend
 npm ci
 npm run dev
 ```
+
 Access the dashboard at **http://localhost:3000**.
 
-### 4. Use the CLI
-To manage tenants and trigger ingestion, set up the `regctl` CLI tool:
-
-```bash
-# 1. Install CLI-specific dependencies
-pip install -r scripts/regctl/requirements.txt
-
-# 2. Run the CLI
-# Ensure you are in the root directory
-python scripts/regctl/tenant.py --help
-
-# Example: Create a demo tenant
-python scripts/regctl/tenant.py create "Demo Corp" --demo-mode
-```
-
-## 🎯 System Capabilities
-
-The repo currently supports a concrete ingestion → extraction → graph workflow:
-
-1. **API-key gated access** – Every FastAPI service depends on `shared.auth.require_api_key`.
-2. **Document ingestion** – `POST /ingest/url` validates external URLs, downloads the bytes with SSRF guards, normalizes PDFs/JSON, writes artifacts to S3 (LocalStack), and emits a `NormalizedEvent` to Kafka.
-3. **LLM or heuristic extraction** – `services/nlp` produces `ExtractionPayload` items using configured LLMs (Ollama/OpenAI) or rule-based fallbacks.
-4. **Confidence-aware routing** – High-confidence extractions (≥0.85) route to `graph.update`; low-confidence items route to `nlp.needs_review`.
-5. **Graph + overlay writes** – `services/graph` consumes events and upserts tenant-scoped data into Neo4j.
-6. **Analytics + checklist APIs** – Opportunity and Compliance services provide analysis endpoints against the graph and industry checklists.
+---
 
 ## 🥬 FSMA 204 Food Traceability
 
 RegEngine includes a complete **FDA FSMA 204 compliance module** for food supply chain traceability:
 
-**Features:**
 - **Document Extraction** – Extract CTEs (Critical Tracking Events) and KDEs (Key Data Elements) from BOLs, invoices, and production logs
 - **One-Up/One-Down Tracing** – Forward and backward supply chain queries in Neo4j
 - **TLC Validation** – GTIN/GLN/SSCC check digit verification and pattern matching
-- **FDA Export** – Sortable CSV spreadsheets for 24-hour recall compliance
-- **Plan Builder** – Generate FSMA 204 traceability plans from templates
+- **FDA Export** – Sortable CSV spreadsheets for 24-hour recall compliance (21 CFR 1.1455)
+- **23 FDA Categories** – Full FTL coverage including Leafy Greens, Finfish, Fresh-Cut Fruits, Cheeses, and more
+- **Tamper-Proof Audit Chain** – Deterministic hashing with cryptographic proof envelopes
 
 **API Endpoints:**
-```bash
+```
 GET  /v1/fsma/trace/forward/{tlc}      # Find downstream customers
 GET  /v1/fsma/trace/backward/{tlc}     # Find upstream suppliers
 GET  /v1/fsma/export/trace/{tlc}       # FDA-compliant CSV export
@@ -136,38 +126,76 @@ POST /v1/fsma/validate/gtin            # GTIN validation with check digit
 POST /v1/fsma/plan/generate            # Generate traceability plan
 ```
 
-**Run the Demo:**
-```bash
-./scripts/demo/fsma_mock_recall.sh     # Run mock recall demonstration
-```
-
 📄 **Spec:** [docs/specs/FSMA_204_MVP_SPEC.md](docs/specs/FSMA_204_MVP_SPEC.md)
 
-## 🏗️ **Architecture Overview**
+---
 
-### **Core Services (Python/FastAPI)**
+## 🔐 Security
 
-- **Admin API** (`services/admin/`) – Tenant management, API keys, and RLS-enabled database access.
-- **Ingestion Service** (`services/ingestion/`) – URL fetching, PDF normalization, S3 storage.
-- **NLP Service** (`services/nlp/`) – LLM extraction and confidence routing.
-- **Graph Service** (`services/graph/`) – Neo4j interaction and graph projection.
-- **Opportunity API** (`services/opportunity/`) – Regulatory arbitrage and gap analysis.
-- **Compliance Engine** (`services/compliance/`) – Industry-specific checklist evaluation.
+- **Double-Lock Tenant Isolation** – Application-layer validation + PostgreSQL Row-Level Security
+- **JWT-RLS Integration** – Database sessions automatically scoped to authenticated tenant
+- **Immutable Audit Chains** – Cryptographically linked evidence records
+- **API Key Authentication** – Per-tenant keys with rate limiting
+- **PII Encryption** – At-rest encryption for sensitive regulatory data
+- **OWASP Scanning** – Semgrep SAST, Gitleaks secrets scanning, dependency auditing
 
-### **Frontend (Next.js/React)**
+---
 
-- **Dashboard UI** (`frontend/`) – Modern React-based interface for compliance officers.
-- **Developer Portal** – Integrated documentation and API exploration.
+## 📚 Documentation
 
-### **Data Infrastructure**
+| Document | Description |
+|----------|-------------|
+| [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) | Engineering roadmap |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Infrastructure & deployment guide |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture deep-dive |
+| [docs/SOC2_CONTROL_MATRIX.md](docs/SOC2_CONTROL_MATRIX.md) | SOC 2 compliance controls |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Business roadmap (18-month horizon) |
+| [docs/specs/FSMA_204_MVP_SPEC.md](docs/specs/FSMA_204_MVP_SPEC.md) | FSMA 204 specification |
 
-- **Event Streaming** – Redpanda (Kafka compatible) on port 9092.
-- **Knowledge Graph** – Neo4j Community Edition on ports 7474/7687.
-- **Relational DB** – PostgreSQL 15 with Row-Level Security (RLS).
-- **Object Storage** – LocalStack (S3 compatible).
-- **LLM Inference** – Ollama (local Llama 3) or OpenAI API.
+---
 
-### **Shared Components**
+## 🧪 Testing
 
-- **Auth & Rate Limiting** (`shared/auth.py`) – Centralized API key enforcement.
-- **Security Modules** (`shared/`) – Comprehensive security hardening (Input validation, PII encryption, Audit logging).
+```bash
+# Run all backend tests (622 passing)
+cd services/<service-name>
+PYTHONPATH=$(pwd)/../.. python -m pytest tests/ -v
+
+# Frontend
+cd frontend
+npm run test
+```
+
+**Test coverage across 11 services:** Admin, Energy, Ingestion, Graph, NLP, Shared, Automotive, Opportunity, Internal, Compliance, Scheduler.
+
+---
+
+## 📁 Repository Structure
+
+```
+RegEngine/
+├── frontend/              # Next.js dashboard & developer portal
+├── services/
+│   ├── admin/             # Tenant management & API keys
+│   ├── ingestion/         # Document intake & format extraction
+│   ├── nlp/               # ML extraction & confidence routing
+│   ├── graph/             # Neo4j & supply chain queries
+│   ├── energy/            # Energy market compliance
+│   ├── compliance/        # Checklist evaluation engine
+│   ├── opportunity/       # Regulatory gap analysis
+│   ├── scheduler/         # Background job orchestration
+│   └── shared/            # Cross-service utilities
+├── shared/                # Auth, validators, security modules
+├── gateway/               # API gateway configuration
+├── scripts/               # CLI tools & utilities
+├── docs/                  # Architecture & compliance docs
+├── schemas/               # Avro & data schemas
+├── docker-compose.yml     # Development stack
+└── docker-compose.prod.yml # Production configuration
+```
+
+---
+
+## License
+
+MIT – see [LICENSE](LICENSE) for details.
