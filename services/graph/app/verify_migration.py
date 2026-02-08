@@ -55,11 +55,15 @@ sys.modules["fastapi"].Query = Mock(return_value=None)
 sys.modules["fastapi"].Header = Mock(return_value=None)
 sys.modules["fastapi"].Body = Mock(return_value=None)
 
-# Mock env vars
-os.environ["NEO4J_URI"] = "bolt://localhost:7687"
-os.environ["NEO4J_USER"] = "neo4j"
-os.environ["NEO4J_PASSWORD"] = "password"
-os.environ["NEO4J_DATABASE"] = "neo4j"
+# Set env vars from environment (no hardcoded credentials)
+os.environ.setdefault("NEO4J_URI", os.getenv("NEO4J_URI", "bolt://neo4j:7687"))
+os.environ.setdefault("NEO4J_USER", os.getenv("NEO4J_USER", "neo4j"))
+os.environ.setdefault("NEO4J_PASSWORD", os.getenv("NEO4J_PASSWORD", ""))
+os.environ.setdefault("NEO4J_DATABASE", os.getenv("NEO4J_DATABASE", "neo4j"))
+
+if not os.environ.get("NEO4J_PASSWORD"):
+    print("WARNING: NEO4J_PASSWORD not set. Set via environment variable before running.")
+    print("  export NEO4J_PASSWORD=your_password")
 
 def check_async(name, func):
     if not func:

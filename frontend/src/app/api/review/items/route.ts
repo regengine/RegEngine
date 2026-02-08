@@ -55,7 +55,18 @@ export async function GET() {
         const data = await res.json();
 
         // Transform to match frontend expected format
-        const items = (data.items || []).map((item: any) => ({
+        interface ReviewItemRaw {
+            review_id: string;
+            doc_hash: string;
+            confidence_score: number;
+            created_at: string;
+            updated_at?: string;
+            status?: string;
+            tenant_id?: string;
+            text_raw?: string;
+            extraction?: Record<string, unknown>;
+        }
+        const items = (data.items || []).map((item: ReviewItemRaw) => ({
             id: item.review_id,
             doc_hash: item.doc_hash,
             confidence_score: item.confidence_score,
@@ -69,10 +80,11 @@ export async function GET() {
 
         return NextResponse.json(items);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Review queue fetch failed:', error);
+        const message = error instanceof Error ? error.message : 'Failed to load review queue';
         return NextResponse.json(
-            { error: error.message || 'Failed to load review queue' },
+            { error: message },
             { status: 500 }
         );
     }

@@ -378,8 +378,8 @@ def _process_and_emit(
     if "json" in content_type.lower():
         try:
             raw_json = json.loads(raw_bytes)
-        except:
-            pass
+        except Exception:
+            logger.debug("json_parse_skipped", url=url_str)
             
     normalized, document_id, _ = normalize_document(
         raw_json, raw_bytes, url_str, content_type

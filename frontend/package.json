@@ -45,6 +45,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "driver.js": "^1.4.0",
+    "exceljs": "^4.4.0",
     "framer-motion": "^11.0.0",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
@@ -59,8 +60,7 @@
     "remark-gfm": "^4.0.1",
     "sharp": "^0.34.5",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7",
-    "xlsx": "^0.18.5"
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
@@ -82,5 +82,8 @@
     "tailwindcss": "^3.3.0",
     "typescript": "^5.0.0",
     "vitest": "^4.0.17"
+  },
+  "overrides": {
+    "tar": ">=7.5.7"
   }
 }

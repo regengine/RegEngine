@@ -16,8 +16,10 @@ from .auth import require_api_key
 
 import sys
 import uuid
-# Add shared utilities
-sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
+from pathlib import Path
+
+# Add shared utilities (portable path resolution)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id
 
 router = APIRouter(prefix="/v1/manufacturing", tags=["manufacturing"])

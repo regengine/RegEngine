@@ -28,8 +28,8 @@ export async function GET(
             const data = await response.json();
             return NextResponse.json(data);
         }
-    } catch (e) {
-        console.log('Compliance service not available, using demo mode');
+    } catch {
+        // Compliance service unavailable — fall back to demo response
     }
 
     // Demo response - COMPLIANT status with no active alerts

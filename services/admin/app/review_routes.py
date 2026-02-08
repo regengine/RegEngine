@@ -2,6 +2,11 @@
 
 This module provides endpoints for the human-in-the-loop review workflow,
 allowing curators to approve or reject low-confidence NLP extractions.
+
+These endpoints delegate to the hallucination tracker which provides
+database-backed persistence of review items. The v1/admin/review/flagged-extractions
+endpoints in routes.py provide the full implementation — these endpoints serve
+as a convenience alias for the frontend review UI.
 """
 
 from typing import List, Optional
@@ -33,6 +38,12 @@ class ReviewItemsResponse(BaseModel):
     limit: int
 
 
+def _get_tracker():
+    """Get the hallucination tracker for review queue operations."""
+    from .metrics import get_hallucination_tracker
+    return get_hallucination_tracker()
+
+
 @router.get("/review/hallucinations", response_model=ReviewItemsResponse)
 async def get_review_queue(
     status_filter: Optional[str] = Query("PENDING", description="Filter by status"),
@@ -45,17 +56,47 @@ async def get_review_queue(
     Returns low-confidence NLP extractions that require human validation.
     Items can be approved or rejected through the curator interface.
     
-    **Note**: This is currently a stub endpoint. The full review workflow
-    will be implemented as part of the NLP integration phase.
+    Powered by the hallucination tracker database backend.
     """
-    # TODO: Implement actual database query for review items
-    # For now, return empty list to prevent frontend errors
-    return ReviewItemsResponse(
-        items=[],
-        total=0,
-        page=page,
-        limit=limit
-    )
+    tracker = _get_tracker()
+    try:
+        result = tracker.list_hallucinations(
+            status=status_filter,
+            tenant_id=api_key.tenant_id,
+            limit=limit,
+            cursor=None,
+        )
+        
+        items = [
+            ReviewItem(
+                review_id=item["review_id"],
+                doc_hash=item.get("doc_hash", ""),
+                confidence_score=item.get("confidence_score", 0.0),
+                source_text=item.get("text_raw", ""),
+                extracted_data=item.get("extraction", {}),
+                created_at=item.get("created_at", datetime.utcnow()),
+                status=item.get("status", "PENDING"),
+            )
+            for item in result.get("items", [])
+        ]
+        
+        return ReviewItemsResponse(
+            items=items,
+            total=len(items),
+            page=page,
+            limit=limit,
+        )
+    except Exception as e:
+        # If tracker is not initialized or DB is unavailable, return empty
+        import structlog
+        logger = structlog.get_logger("review")
+        logger.warning("review_queue_query_failed", error=str(e))
+        return ReviewItemsResponse(
+            items=[],
+            total=0,
+            page=page,
+            limit=limit,
+        )
 
 
 @router.post("/review/{review_id}/approve")
@@ -63,12 +104,20 @@ async def approve_review_item(
     review_id: str,
     api_key: APIKey = Depends(require_api_key),
 ):
-    """Approve a review item, marking the extraction as validated.
-    
-    **Note**: Stub endpoint - implementation pending.
-    """
-    # TODO: Update review item status to APPROVED
-    return {"status": "approved", "review_id": review_id}
+    """Approve a review item, marking the extraction as validated."""
+    tracker = _get_tracker()
+    try:
+        updated = tracker.resolve_hallucination(
+            review_id,
+            new_status="APPROVED",
+            reviewer_id=api_key.key_id,
+            notes=f"Approved via curator review API by key {api_key.key_id}",
+        )
+        return {"status": "approved", "review_id": review_id, "updated": updated}
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Review item not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/review/{review_id}/reject")
@@ -76,9 +125,17 @@ async def reject_review_item(
     review_id: str,
     api_key: APIKey = Depends(require_api_key),
 ):
-    """Reject a review item, marking the extraction as invalid.
-    
-    **Note**: Stub endpoint - implementation pending.
-    """
-    # TODO: Update review item status to REJECTED
-    return {"status": "rejected", "review_id": review_id}
+    """Reject a review item, marking the extraction as invalid."""
+    tracker = _get_tracker()
+    try:
+        updated = tracker.resolve_hallucination(
+            review_id,
+            new_status="REJECTED",
+            reviewer_id=api_key.key_id,
+            notes=f"Rejected via curator review API by key {api_key.key_id}",
+        )
+        return {"status": "rejected", "review_id": review_id, "updated": updated}
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Review item not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

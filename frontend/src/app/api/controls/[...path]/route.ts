@@ -86,10 +86,11 @@ async function proxyRequest(
 
         return NextResponse.json(data);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Controls proxy error:', error);
+        const message = error instanceof Error ? error.message : 'Controls request failed';
         return NextResponse.json(
-            { error: error.message || 'Controls request failed' },
+            { error: message },
             { status: 500 }
         );
     }

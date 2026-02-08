@@ -4,7 +4,7 @@ import pg from 'pg';
 const { Client } = pg;
 
 // Mock data as fallback
-const MOCK_SNAPSHOTS: Record<string, any> = {
+const MOCK_SNAPSHOTS: Record<string, Record<string, unknown>> = {
     '00000000-0000-0000-0000-000000000001': {
         id: '00000000-0000-0000-0000-000000000001',
         substation_id: 'TEST-ALPHA',
@@ -114,8 +114,9 @@ export async function GET(
                 headers: { 'X-Data-Source': 'DATABASE' }
             });
         }
-    } catch (dbError: any) {
-        console.log('Database query failed, using mock data:', dbError.message);
+    } catch (dbError: unknown) {
+        const msg = dbError instanceof Error ? dbError.message : String(dbError);
+        console.warn('Database query failed, using mock data:', msg);
     } finally {
         try { await client.end(); } catch { }
     }

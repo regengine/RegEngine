@@ -17,8 +17,10 @@ from shared.auth import require_api_key
 
 import uuid
 import sys
-# Add shared utilities
-sys.path.insert(0, '/Users/christophersellers/Desktop/RegEngine/services')
+from pathlib import Path
+
+# Add shared utilities (portable path resolution)
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 from shared.middleware import get_current_tenant_id
 from shared.fsma_plan_builder import (
     FirmInfo,

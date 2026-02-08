@@ -18,7 +18,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, energy, ingestion, opportunity, graph, internal, scheduler]
+        service:
+          - admin
+          - aerospace
+          - automotive
+          - compliance
+          - construction
+          - energy
+          - entertainment
+          - gaming
+          - graph
+          - ingestion
+          - internal
+          - manufacturing
+          - nlp
+          - opportunity
+          - scheduler
     
     services:
       postgres:
@@ -92,7 +107,22 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [admin, energy, ingestion, opportunity]
+        service:
+          - admin
+          - aerospace
+          - automotive
+          - compliance
+          - construction
+          - energy
+          - entertainment
+          - gaming
+          - graph
+          - ingestion
+          - internal
+          - manufacturing
+          - nlp
+          - opportunity
+          - scheduler
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -117,7 +147,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [admin, energy, ingestion, opportunity]
+        service:
+          - admin
+          - energy
+          - ingestion
+          - opportunity
+          - graph
+          - nlp
+          - scheduler
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

@@ -64,6 +64,11 @@ CONFIDENCE_THRESHOLD = getattr(settings, 'extraction_confidence_high', 0.85) if 
 # Topic names for routing
 TOPIC_GRAPH_UPDATE = "graph.update"
 TOPIC_NEEDS_REVIEW = "nlp.needs_review"
+TOPIC_DLQ = "nlp.extracted.dlq"
+
+# Max retries before sending to DLQ
+MAX_RETRIES = 3
+_retry_counts: dict[str, int] = {}
 
 RESOLVER = EntityResolver()
 CLASSIFIER = SignalClassifier()
@@ -344,14 +349,41 @@ def _route_extraction(
         )
 
 
+def _send_to_dlq(
+    producer: KafkaProducer,
+    event: dict,
+    error: str,
+    doc_id: str | None = None,
+) -> None:
+    """Send a failed message to the dead letter queue for manual inspection."""
+    try:
+        dlq_payload = {
+            "original_event": event,
+            "error": error,
+            "failed_at": _now_iso(),
+            "source_topic": settings.topic_in if settings else "ingest.normalized",
+            "retry_count": _retry_counts.get(doc_id or "unknown", 0),
+        }
+        producer.send(
+            TOPIC_DLQ,
+            key=doc_id or "unknown",
+            value=dlq_payload,
+        )
+        producer.flush(timeout=1.0)
+        logger.info("message_sent_to_dlq", document_id=doc_id, error=error)
+    except Exception as dlq_exc:
+        logger.error("dlq_send_failed", document_id=doc_id, error=str(dlq_exc))
+
+
 def stop_consumer() -> None:
     _shutdown_event.set()
 
 
 def run_consumer() -> None:
-    # Ensure both output topics exist
+    # Ensure all output topics exist (including DLQ)
     _ensure_topic(TOPIC_GRAPH_UPDATE)
     _ensure_topic(TOPIC_NEEDS_REVIEW)
+    _ensure_topic(TOPIC_DLQ)
     _ensure_topic(settings.topic_out)  # Keep legacy topic for backward compat
 
     def safe_json_deserializer(v):
@@ -475,16 +507,36 @@ def run_consumer() -> None:
                     MESSAGES_COUNTER.labels(status="success").inc()
                     consumer.commit()
                 except (ValidationError, KafkaTimeoutError) as exc:
-                    logger.error(
-                        "nlp_validation_or_kafka_error",
-                        document_id=doc_id,
-                        error=str(exc),
-                    )
+                    # Track retries per document
+                    retry_key = doc_id or "unknown"
+                    _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
+
+                    if _retry_counts[retry_key] >= MAX_RETRIES:
+                        logger.error(
+                            "nlp_max_retries_exceeded_sending_to_dlq",
+                            document_id=doc_id,
+                            retries=_retry_counts[retry_key],
+                            error=str(exc),
+                        )
+                        _send_to_dlq(producer, evt, str(exc), doc_id)
+                        _retry_counts.pop(retry_key, None)
+                        consumer.commit()  # Don't re-process
+                    else:
+                        logger.warning(
+                            "nlp_validation_or_kafka_error_will_retry",
+                            document_id=doc_id,
+                            retry=_retry_counts[retry_key],
+                            error=str(exc),
+                        )
                     MESSAGES_COUNTER.labels(status="error").inc()
                 except Exception as exc:  # pragma: no cover - requires infra
                     logger.exception(
-                        "nlp_processing_error", document_id=doc_id, error=str(exc)
+                        "nlp_processing_error_sending_to_dlq",
+                        document_id=doc_id,
+                        error=str(exc),
                     )
+                    _send_to_dlq(producer, evt, str(exc), doc_id)
+                    consumer.commit()  # Don't re-process unexpected failures
                     MESSAGES_COUNTER.labels(status="error").inc()
     consumer.close()
     producer.close()

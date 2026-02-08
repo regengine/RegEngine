@@ -1,0 +1,269 @@
+"""
+Shared Kafka consumer utilities for RegEngine services.
+
+Consolidates common patterns across admin, graph, and NLP consumers:
+- Topic creation (idempotent)
+- Dead Letter Queue (DLQ) producer management
+- Graceful shutdown coordination
+- Consumer health monitoring
+- Prometheus metric patterns
+
+Usage:
+    from shared.kafka_consumer_base import (
+        ensure_topic,
+        DLQManager,
+        ConsumerHealthMonitor,
+        graceful_shutdown,
+    )
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Optional
+
+import structlog
+
+logger = structlog.get_logger("kafka-consumer-base")
+
+
+# ---------------------------------------------------------------------------
+# Topic management
+# ---------------------------------------------------------------------------
+
+def ensure_topic(
+    topic: str,
+    bootstrap_servers: str,
+    num_partitions: int = 1,
+    replication_factor: int = 1,
+    *,
+    kafka_library: str = "kafka-python",
+) -> None:
+    """Create a Kafka topic idempotently.
+
+    Supports both ``kafka-python`` and ``confluent-kafka`` admin clients.
+    If the topic already exists, this is a no-op.
+    """
+    if kafka_library == "confluent-kafka":
+        _ensure_topic_confluent(topic, bootstrap_servers, num_partitions, replication_factor)
+    else:
+        _ensure_topic_kafka_python(topic, bootstrap_servers, num_partitions, replication_factor)
+
+
+def _ensure_topic_kafka_python(
+    topic: str, bootstrap: str, partitions: int, replication: int
+) -> None:
+    """kafka-python based topic creation."""
+    try:
+        from kafka.admin import KafkaAdminClient, NewTopic
+        from kafka.errors import TopicAlreadyExistsError
+
+        admin = KafkaAdminClient(bootstrap_servers=bootstrap)
+        try:
+            admin.create_topics([NewTopic(topic, num_partitions=partitions, replication_factor=replication)])
+            logger.info("topic_created", topic=topic)
+        except TopicAlreadyExistsError:
+            pass
+        except Exception as exc:
+            logger.warning("topic_creation_failed", topic=topic, error=str(exc))
+        finally:
+            admin.close()
+    except ImportError:
+        logger.warning("kafka_python_not_installed", topic=topic)
+
+
+def _ensure_topic_confluent(
+    topic: str, bootstrap: str, partitions: int, replication: int
+) -> None:
+    """confluent-kafka based topic creation."""
+    try:
+        from confluent_kafka.admin import AdminClient, NewTopic
+
+        admin = AdminClient({"bootstrap.servers": bootstrap})
+        futures = admin.create_topics([NewTopic(topic, num_partitions=partitions, replication_factor=replication)])
+        for t, f in futures.items():
+            try:
+                f.result()
+                logger.info("topic_created", topic=t)
+            except Exception as exc:
+                if "TOPIC_ALREADY_EXISTS" in str(exc):
+                    pass
+                else:
+                    logger.warning("topic_creation_failed", topic=t, error=str(exc))
+    except ImportError:
+        logger.warning("confluent_kafka_not_installed", topic=topic)
+
+
+# ---------------------------------------------------------------------------
+# Dead Letter Queue (DLQ) manager
+# ---------------------------------------------------------------------------
+
+class DLQManager:
+    """Thread-safe DLQ producer with lazy initialization.
+
+    Example::
+
+        dlq = DLQManager(
+            bootstrap_servers="redpanda:9092",
+            dlq_topic="nlp.extracted.dlq",
+            source_topic="nlp.extracted",
+        )
+        dlq.send(original_event, error="Validation failed")
+        dlq.close()
+    """
+
+    def __init__(
+        self,
+        bootstrap_servers: str,
+        dlq_topic: str,
+        source_topic: str = "unknown",
+    ) -> None:
+        self._bootstrap = bootstrap_servers
+        self._dlq_topic = dlq_topic
+        self._source_topic = source_topic
+        self._producer = None
+        self._lock = threading.Lock()
+        self._retry_counts: Dict[str, int] = {}
+
+    def _get_producer(self):
+        """Lazy, thread-safe producer initialization."""
+        if self._producer is None:
+            with self._lock:
+                if self._producer is None:
+                    from kafka import KafkaProducer
+                    self._producer = KafkaProducer(
+                        bootstrap_servers=self._bootstrap,
+                        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                    )
+        return self._producer
+
+    def send(
+        self,
+        event: Dict[str, Any],
+        error: str,
+        doc_id: Optional[str] = None,
+    ) -> None:
+        """Send a failed message to the DLQ with error metadata."""
+        try:
+            producer = self._get_producer()
+            retry_key = doc_id or "unknown"
+            dlq_payload = {
+                "original_event": event,
+                "error": error,
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "source_topic": self._source_topic,
+                "retry_count": self._retry_counts.get(retry_key, 0),
+            }
+            producer.send(self._dlq_topic, value=dlq_payload)
+            producer.flush(timeout=5.0)
+            logger.info("message_sent_to_dlq", topic=self._dlq_topic, error=error)
+        except Exception as exc:
+            logger.error("dlq_send_failed", topic=self._dlq_topic, error=str(exc))
+
+    def track_retry(self, doc_id: str) -> int:
+        """Increment and return the retry count for a document."""
+        self._retry_counts[doc_id] = self._retry_counts.get(doc_id, 0) + 1
+        return self._retry_counts[doc_id]
+
+    def clear_retries(self, doc_id: str) -> None:
+        """Clear retry count after successful processing or DLQ send."""
+        self._retry_counts.pop(doc_id, None)
+
+    def close(self) -> None:
+        """Flush and close the DLQ producer."""
+        with self._lock:
+            if self._producer is not None:
+                try:
+                    self._producer.close(timeout=2.0)
+                except Exception as exc:
+                    logger.debug("dlq_producer_close_failed", error=str(exc))
+                self._producer = None
+
+
+# ---------------------------------------------------------------------------
+# Consumer health monitor
+# ---------------------------------------------------------------------------
+
+class ConsumerHealthMonitor:
+    """Tracks consumer liveness for health check endpoints.
+
+    Example::
+
+        health = ConsumerHealthMonitor(stale_threshold_seconds=30)
+        health.mark_started()
+        # In consumer loop:
+        health.mark_poll()
+        # From health endpoint:
+        return health.get_status()
+    """
+
+    def __init__(self, stale_threshold_seconds: int = 30) -> None:
+        self._stale_threshold = stale_threshold_seconds
+        self._shutdown_event = threading.Event()
+        self._last_poll: Optional[datetime] = None
+        self._started_at: Optional[datetime] = None
+
+    def mark_started(self) -> None:
+        self._started_at = datetime.now(timezone.utc)
+
+    def mark_poll(self) -> None:
+        self._last_poll = datetime.now(timezone.utc)
+
+    @property
+    def shutdown_event(self) -> threading.Event:
+        return self._shutdown_event
+
+    def stop(self) -> None:
+        """Signal graceful shutdown."""
+        self._shutdown_event.set()
+
+    def is_shutting_down(self) -> bool:
+        return self._shutdown_event.is_set()
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return health status dict for HTTP endpoints."""
+        now = datetime.now(timezone.utc)
+        is_alive = not self._shutdown_event.is_set()
+
+        seconds_since_poll = None
+        poll_stale = False
+        if self._last_poll and is_alive:
+            seconds_since_poll = (now - self._last_poll).total_seconds()
+            poll_stale = seconds_since_poll > self._stale_threshold
+
+        return {
+            "alive": is_alive,
+            "started_at": self._started_at.isoformat() if self._started_at else None,
+            "last_poll_at": self._last_poll.isoformat() if self._last_poll else None,
+            "seconds_since_poll": seconds_since_poll,
+            "poll_stale": poll_stale,
+            "healthy": is_alive and not poll_stale,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown helper
+# ---------------------------------------------------------------------------
+
+def graceful_shutdown(
+    consumer: Any,
+    dlq_manager: Optional[DLQManager] = None,
+    health_monitor: Optional[ConsumerHealthMonitor] = None,
+    logger_name: str = "consumer",
+) -> None:
+    """Standard cleanup sequence for consumer shutdown."""
+    _logger = structlog.get_logger(logger_name)
+
+    if dlq_manager:
+        dlq_manager.close()
+
+    try:
+        consumer.close()
+    except Exception as exc:
+        _logger.warning("consumer_close_error", error=str(exc))
+
+    _logger.info("consumer_stopped")

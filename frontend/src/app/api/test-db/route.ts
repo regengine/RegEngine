@@ -46,9 +46,10 @@ export async function GET(request: NextRequest) {
       `);
             await client.query('ROLLBACK');
             writeTest = 'SUCCESS (rolled back)';
-        } catch (e: any) {
+        } catch (e: unknown) {
             await client.query('ROLLBACK');
-            writeTest = `FAILED: ${e.message}`;
+            const msg = e instanceof Error ? e.message : String(e);
+            writeTest = `FAILED: ${msg}`;
         }
 
         return NextResponse.json({
@@ -59,9 +60,11 @@ export async function GET(request: NextRequest) {
             write_test: writeTest,
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as Record<string, unknown>)?.code;
         return NextResponse.json(
-            { error: error.message, code: error.code },
+            { error: msg, code },
             { status: 500 }
         );
     } finally {

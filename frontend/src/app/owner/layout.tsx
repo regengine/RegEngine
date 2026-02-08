@@ -37,10 +37,33 @@ export default function OwnerLayout({ children }: OwnerLayoutProps) {
         setCurrentPath(window.location.pathname);
     }, []);
 
-    // Check auth state but don't block - dashboard works in demo mode
+    // Check auth state — require admin key for owner dashboard access
     useEffect(() => {
         setIsAuthenticated(!!adminKey);
     }, [adminKey]);
+
+    // Auth gate: show locked screen if no admin key
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+                <div className="text-center max-w-md p-8">
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 inline-flex mb-6">
+                        <Shield className="h-10 w-10 text-amber-400" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-white mb-3">Owner Console Access Required</h1>
+                    <p className="text-white/60 mb-6">
+                        This dashboard requires an Admin Master Key. Please authenticate via the
+                        Settings page or contact the system administrator.
+                    </p>
+                    <Link href="/settings">
+                        <button className="px-6 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white font-medium hover:from-amber-600 hover:to-orange-700 transition-all">
+                            Go to Settings
+                        </button>
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     return (
 

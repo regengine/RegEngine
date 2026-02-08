@@ -5,8 +5,17 @@ import uuid
 from sqlalchemy import text
 from shared.api_key_store import DatabaseAPIKeyStore
 
-# Configure to verify against the running DB
-os.environ["DATABASE_URL"] = "postgresql+psycopg://app_user:app_password@postgres:5432/regengine_admin"
+# Read DATABASE_URL from environment — do NOT hardcode credentials
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get(
+    "ADMIN_DATABASE_URL",
+    ""
+)
+if not DATABASE_URL:
+    print("❌ DATABASE_URL or ADMIN_DATABASE_URL must be set in the environment.")
+    print("   Example: export DATABASE_URL='postgresql+psycopg://app_user:password@postgres:5432/regengine_admin'")
+    exit(1)
+
+os.environ["DATABASE_URL"] = DATABASE_URL
 
 async def debug_rls():
     print("Initializing Store...")
