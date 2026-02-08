@@ -26,8 +26,10 @@ from requests import Response
 
 # Add shared module to path
 # In Docker: shared is at /app/shared/, service is at /app/
-sys.path.insert(0, "/app/shared")
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+# Add shared module to path
+# In Docker: shared is at /app/shared/, service is at /app/
+# sys.path.insert(0, "/app/shared")
+# sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
 
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 

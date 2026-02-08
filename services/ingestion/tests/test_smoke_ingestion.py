@@ -16,8 +16,14 @@ from fastapi.testclient import TestClient
 from main import app
 
 
-def test_health() -> None:
-    client = TestClient(app)
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+from unittest.mock import patch, MagicMock
+
+@patch("app.routes.AdminClient")
+def test_health(mock_admin_client) -> None:
+    # Mock list_topics to return successfully
+    mock_admin_client.return_value.list_topics.return_value = {}
+    
+    with TestClient(app) as client:
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "healthy", "kafka": "available"}
