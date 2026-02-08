@@ -7,7 +7,7 @@ These tests verify that critical security issues have been resolved:
 """
 import pytest
 from fastapi.testclient import TestClient
-from admin.app.routes import app as admin_app
+from services.admin.main import app as admin_app
 
 admin_client = TestClient(admin_app)
 
