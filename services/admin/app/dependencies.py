@@ -5,7 +5,7 @@ from sqlalchemy import select, text
 from uuid import UUID
 from typing import List, Optional
 import structlog
-from jose import JWTError
+from jwt.exceptions import PyJWTError as JWTError
 import os
 
 from app.database import get_session

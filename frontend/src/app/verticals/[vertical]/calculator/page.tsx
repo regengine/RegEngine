@@ -8,9 +8,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 interface CalculatorPageProps {
-    params: {
+    params: Promise<{
         vertical: string;
-    };
+    }>;
 }
 
 const verticalNames: Record<string, string> = {
@@ -33,15 +33,16 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: CalculatorPageProps) {
-    const verticalName = verticalNames[params.vertical];
+    const { vertical } = await params;
+    const verticalName = verticalNames[vertical];
     return {
         title: `${verticalName} TCO Calculator | RegEngine`,
         description: `Calculate your 3-year ROI with RegEngine for ${verticalName} compliance.`,
     };
 }
 
-export default function CalculatorPage({ params }: CalculatorPageProps) {
-    const { vertical } = params;
+export default async function CalculatorPage({ params }: CalculatorPageProps) {
+    const { vertical } = await params;
     const verticalName = verticalNames[vertical];
 
     if (!verticalName) {

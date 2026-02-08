@@ -12,7 +12,7 @@ Run with: pytest test_jwt_rls_integration.py -v
 import pytest
 from unittest.mock import Mock, patch
 from uuid import UUID, uuid4
-from jose import jwt as jose_jwt
+import jwt as jose_jwt
 
 # Import functions to test
 import sys
