@@ -587,7 +587,7 @@ export default function RegEngineLanding() {
             {[
               {
                 title: "FTL Coverage Checker",
-                description: "Check if your products are on the FDA Food Traceability List. Includes all 19 categories with exclusion notes and CFR citations.",
+                description: "Check if your products are on the FDA Food Traceability List. Includes all 23 categories with exclusion notes and CFR citations.",
                 icon: <FileCheck size={20} />,
                 href: "/ftl-checker",
                 cta: "Check Your Products →",
@@ -991,14 +991,13 @@ export default function RegEngineLanding() {
               >
                 <span style={{ color: "#475569" }}>$ </span>
                 <span style={{ color: "#c8d1dc" }}>curl</span>
-                {" "}<span style={{ color: "#10b981" }}>api.regengine.co/v1/verify</span>
+                {" "}<span style={{ color: "#10b981" }}>api.regengine.co/v1/verify/doc_a1b2c3</span>
                 {"\n\n"}
                 <span style={{ color: "#475569" }}>{"{"}</span>
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"authority"</span>: <span style={{ color: "#fbbf24" }}>"FSMA-204"</span>,
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"facts_verified"</span>: <span style={{ color: "#10b981" }}>5</span>,
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"hashes_valid"</span>: <span style={{ color: "#10b981" }}>true</span>,
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"lineage_intact"</span>: <span style={{ color: "#10b981" }}>true</span>,
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"algorithm"</span>: <span style={{ color: "#fbbf24" }}>"SHA-256"</span>
+                {"\n  "}<span style={{ color: "#60a5fa" }}>"document_id"</span>: <span style={{ color: "#fbbf24" }}>"doc_a1b2c3"</span>,
+                {"\n  "}<span style={{ color: "#60a5fa" }}>"status"</span>: <span style={{ color: "#fbbf24" }}>"verified"</span>,
+                {"\n  "}<span style={{ color: "#60a5fa" }}>"hashes"</span>: {"{ "}<span style={{ color: "#60a5fa" }}>"content_sha256"</span>: <span style={{ color: "#fbbf24" }}>"a3f2..."</span>{" }"},
+                {"\n  "}<span style={{ color: "#60a5fa" }}>"verified_at"</span>: <span style={{ color: "#fbbf24" }}>"2026-02-08T20:15:00Z"</span>
                 {"\n"}<span style={{ color: "#475569" }}>{"}"}</span>
               </pre>
             </div>
