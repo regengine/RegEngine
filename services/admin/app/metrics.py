@@ -13,7 +13,7 @@ from uuid import UUID
 
 import httpx
 import structlog
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, REGISTRY
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -37,25 +37,41 @@ except ImportError:  # pragma: no cover
 
 logger = structlog.get_logger("hallucination-tracker")
 
-hallucination_events_total = Counter(
+def _get_or_create_counter(name, documentation, labelnames):
+    try:
+        return Counter(name, documentation, labelnames)
+    except ValueError:
+        if name in REGISTRY._names_to_collectors:
+            REGISTRY.unregister(REGISTRY._names_to_collectors[name])
+        return Counter(name, documentation, labelnames)
+
+def _get_or_create_gauge(name, documentation, labelnames):
+    try:
+        return Gauge(name, documentation, labelnames)
+    except ValueError:
+        if name in REGISTRY._names_to_collectors:
+            REGISTRY.unregister(REGISTRY._names_to_collectors[name])
+        return Gauge(name, documentation, labelnames)
+
+hallucination_events_total = _get_or_create_counter(
     "hallucination_events_total",
     "Total hallucinations routed to human review",
     ["tenant_id", "extractor"],
 )
 
-hallucination_active_reviews = Gauge(
+hallucination_active_reviews = _get_or_create_gauge(
     "hallucination_active_reviews",
     "Active hallucination review items awaiting decision",
     ["tenant_id"],
 )
 
-hallucination_duplicates_total = Counter(
+hallucination_duplicates_total = _get_or_create_counter(
     "hallucination_duplicates_total",
     "Duplicate hallucination submissions detected",
     ["tenant_id"],
 )
 
-hallucination_webhook_calls_total = Counter(
+hallucination_webhook_calls_total = _get_or_create_counter(
     "hallucination_webhook_calls_total",
     "Webhook notifications sent on resolution",
     ["status"],
