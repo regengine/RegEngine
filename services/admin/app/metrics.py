@@ -38,20 +38,20 @@ except ImportError:  # pragma: no cover
 logger = structlog.get_logger("hallucination-tracker")
 
 def _get_or_create_counter(name, documentation, labelnames):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
     try:
         return Counter(name, documentation, labelnames)
     except ValueError:
-        if name in REGISTRY._names_to_collectors:
-            REGISTRY.unregister(REGISTRY._names_to_collectors[name])
-        return Counter(name, documentation, labelnames)
+        return REGISTRY._names_to_collectors[name]
 
 def _get_or_create_gauge(name, documentation, labelnames):
+    if name in REGISTRY._names_to_collectors:
+        return REGISTRY._names_to_collectors[name]
     try:
         return Gauge(name, documentation, labelnames)
     except ValueError:
-        if name in REGISTRY._names_to_collectors:
-            REGISTRY.unregister(REGISTRY._names_to_collectors[name])
-        return Gauge(name, documentation, labelnames)
+        return REGISTRY._names_to_collectors[name]
 
 hallucination_events_total = _get_or_create_counter(
     "hallucination_events_total",
