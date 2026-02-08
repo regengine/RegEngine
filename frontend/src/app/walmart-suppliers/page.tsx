@@ -86,6 +86,43 @@ const TRACE_NODES = [
     { label: 'Store', sublabel: 'Walmart #4521', icon: '🏪', kde: 'STR-4521-0412' },
 ];
 
+/* ─────────────────────────────────────────────────────────────
+   FAQ DATA
+   ───────────────────────────────────────────────────────────── */
+const FAQ_ITEMS = [
+    { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When Walmart or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
+    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through Walmart, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine\'s $999/mo tier is built specifically for companies under $50M revenue.' },
+    { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Walmart\'s internal deadline is estimated at Q1 2027 — over a year before the FDA mandate. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during Walmart\'s next category review. By the time the FDA deadline hits, it\'s already too late for Walmart.' },
+    { q: 'How long does integration take?', a: 'Most suppliers are fully operational within 2–4 weeks. RegEngine is API-first, so there are no portal logins or manual data entry. If you have existing data in spreadsheets, we can bulk-import it during onboarding.' },
+    { q: 'What if we don\'t sell FTL products?', a: 'Use our free FTL Checker tool to verify whether your products fall under the FDA\'s 23 Food Traceability List categories. Even if your primary products aren\'t on the list, many suppliers are surprised to find that secondary product lines (like pre-cut salads or certain cheeses) are covered.' },
+];
+
+/* ─────────────────────────────────────────────────────────────
+   COMPETITOR DATA
+   ───────────────────────────────────────────────────────────── */
+const COMPETITORS = [
+    { feature: 'Starting price', regengine: '$999/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
+    { feature: 'Setup time', regengine: '2–4 weeks', foodlogiq: '3–6 months', tracelink: '6–12 months' },
+    { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Limited', tracelink: 'Portal-based' },
+    { feature: 'FDA export format', regengine: '✓ One-click', foodlogiq: 'Manual config', tracelink: 'Custom build' },
+    { feature: 'Trace speed', regengine: '< 5 seconds', foodlogiq: 'Minutes', tracelink: 'Hours' },
+    { feature: 'Contract length', regengine: 'Month-to-month', foodlogiq: 'Annual', tracelink: 'Multi-year' },
+];
+
+/* ─────────────────────────────────────────────────────────────
+   INTEGRATION LOGOS
+   ───────────────────────────────────────────────────────────── */
+const INTEGRATIONS = [
+    { name: 'SAP', icon: '🔷' },
+    { name: 'Oracle NetSuite', icon: '🔶' },
+    { name: 'QuickBooks', icon: '📗' },
+    { name: 'Shopify', icon: '🛒' },
+    { name: 'WMS Systems', icon: '📦' },
+    { name: 'REST API', icon: '⚡' },
+    { name: 'CSV Import', icon: '📄' },
+    { name: 'Webhook', icon: '🔔' },
+];
+
 /* ═════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═════════════════════════════════════════════════════════════ */
@@ -111,10 +148,61 @@ export default function WalmartSuppliersPage() {
     const riskCalc = useScrollReveal();
     const pricing = useScrollReveal();
     const founder = useScrollReveal();
+    const faqReveal = useScrollReveal();
+    const competitorReveal = useScrollReveal();
+    const socialReveal = useScrollReveal();
+    const integrationsReveal = useScrollReveal();
 
     // Animated counter
     const [daysCount, setDaysCount] = useState(0);
     const heroRef = useRef<HTMLDivElement>(null);
+
+    // Sticky CTA
+    const [showSticky, setShowSticky] = useState(false);
+
+    // Scroll progress
+    const [scrollProgress, setScrollProgress] = useState(0);
+
+    // Exit intent
+    const [showExitIntent, setShowExitIntent] = useState(false);
+    const exitShownRef = useRef(false);
+
+    // FAQ accordion
+    const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+    // Analytics tracking helper
+    const trackEvent = useCallback((event: string, data?: Record<string, unknown>) => {
+        if (typeof window !== 'undefined') {
+            const events = JSON.parse(localStorage.getItem('walmart_analytics') || '[]');
+            events.push({ event, data, ts: new Date().toISOString() });
+            localStorage.setItem('walmart_analytics', JSON.stringify(events));
+        }
+    }, []);
+
+    // Sticky CTA: show after scrolling past hero
+    useEffect(() => {
+        const handleScroll = () => {
+            setShowSticky(window.scrollY > 600);
+            // Scroll progress
+            const h = document.documentElement.scrollHeight - window.innerHeight;
+            setScrollProgress(h > 0 ? (window.scrollY / h) * 100 : 0);
+        };
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // Exit intent detection
+    useEffect(() => {
+        const handleMouseLeave = (e: MouseEvent) => {
+            if (e.clientY < 10 && !exitShownRef.current && !submitted) {
+                exitShownRef.current = true;
+                setShowExitIntent(true);
+                trackEvent('exit_intent_shown');
+            }
+        };
+        document.addEventListener('mouseleave', handleMouseLeave);
+        return () => document.removeEventListener('mouseleave', handleMouseLeave);
+    }, [submitted, trackEvent]);
 
     useEffect(() => {
         // Calculate days until July 20, 2028
@@ -159,6 +247,7 @@ export default function WalmartSuppliersPage() {
             localStorage.setItem('walmart_supplier_lead', JSON.stringify({
                 email, companyName, date: new Date().toISOString()
             }));
+            trackEvent('assessment_submitted', { email, companyName });
             setSubmitted(true);
         }
     };
@@ -168,6 +257,108 @@ export default function WalmartSuppliersPage() {
 
     return (
         <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'Instrument Sans', -apple-system, sans-serif" }}>
+            {/* ─── SCROLL PROGRESS BAR ─── */}
+            <div style={{
+                position: 'fixed', top: 0, left: 0, height: 3, zIndex: 9999,
+                width: `${scrollProgress}%`,
+                background: `linear-gradient(90deg, ${T.accent}, #34d399)`,
+                transition: 'width 0.1s linear',
+                boxShadow: `0 0 8px ${T.accent}60`,
+            }} />
+
+            {/* ─── STICKY CTA BAR ─── */}
+            <div style={{
+                position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9998,
+                background: 'rgba(6,9,15,0.92)', backdropFilter: 'blur(12px)',
+                borderTop: `1px solid ${T.border}`,
+                padding: '12px 24px',
+                transform: showSticky ? 'translateY(0)' : 'translateY(100%)',
+                transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}>
+                <div style={{
+                    maxWidth: 1120, margin: '0 auto',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    gap: 16, flexWrap: 'wrap',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{
+                            fontSize: 24, fontWeight: 700, color: daysCount > 600 ? T.warning : T.danger,
+                            fontFamily: "'JetBrains Mono', monospace",
+                        }}>
+                            {daysCount.toLocaleString()}
+                        </span>
+                        <span style={{ fontSize: 13, color: T.textMuted }}>days until FDA deadline</span>
+                    </div>
+                    <Link href="#assessment">
+                        <button
+                            onClick={() => trackEvent('sticky_cta_click')}
+                            style={{
+                                background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
+                                color: '#000', fontWeight: 600, padding: '10px 24px', fontSize: 14,
+                                border: 'none', borderRadius: 8, cursor: 'pointer',
+                                boxShadow: `0 0 20px ${T.accentGlow}`,
+                            }}
+                        >
+                            Get Free Assessment →
+                        </button>
+                    </Link>
+                </div>
+            </div>
+
+            {/* ─── EXIT INTENT POPUP ─── */}
+            {showExitIntent && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 10000,
+                    background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: 24,
+                }} onClick={() => setShowExitIntent(false)}>
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            background: T.bg, border: `1px solid ${T.border}`,
+                            borderRadius: 20, padding: '40px 36px',
+                            maxWidth: 460, width: '100%', textAlign: 'center',
+                            boxShadow: `0 0 60px ${T.accent}15`,
+                            animation: 'exit-popup-in 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        }}
+                    >
+                        <div style={{ fontSize: 40, marginBottom: 16 }}>⚠️</div>
+                        <h3 style={{ fontSize: 22, fontWeight: 700, color: T.heading, marginBottom: 12 }}>
+                            Don&apos;t leave without your free assessment
+                        </h3>
+                        <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 24 }}>
+                            Walmart is evaluating suppliers <strong style={{ color: T.warning }}>right now</strong>.
+                            Get a personalized gap analysis before your next category review.
+                        </p>
+                        <Link href="#assessment">
+                            <button
+                                onClick={() => { setShowExitIntent(false); trackEvent('exit_intent_cta_click'); }}
+                                style={{
+                                    background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
+                                    color: '#000', fontWeight: 600, padding: '14px 28px', fontSize: 15,
+                                    border: 'none', borderRadius: 10, cursor: 'pointer',
+                                    boxShadow: `0 0 30px ${T.accentGlow}`,
+                                    width: '100%', marginBottom: 12,
+                                }}
+                            >
+                                Yes, Assess My Readiness →
+                            </button>
+                        </Link>
+                        <button
+                            onClick={() => setShowExitIntent(false)}
+                            style={{
+                                background: 'transparent', border: 'none',
+                                color: T.textDim, fontSize: 13, cursor: 'pointer',
+                                padding: '8px 16px',
+                            }}
+                        >
+                            No thanks, I&apos;ll risk it
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Noise overlay */}
             <div style={{
                 position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.015,
@@ -1020,6 +1211,215 @@ export default function WalmartSuppliersPage() {
                 </div>
             </section>
 
+            {/* ═══════════════════════════════════════════════════════════
+               9. SOCIAL PROOF / CASE STUDY
+               ═══════════════════════════════════════════════════════════ */}
+            <section ref={socialReveal.ref} style={{
+                position: 'relative', zIndex: 2,
+                maxWidth: 800, margin: '0 auto', padding: '60px 24px',
+                opacity: socialReveal.visible ? 1 : 0,
+                transform: socialReveal.visible ? 'translateY(0)' : 'translateY(30px)',
+                transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}>
+                <div style={{ textAlign: 'center', marginBottom: 40 }}>
+                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                        Proof It Works
+                    </p>
+                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                        From 0% to Walmart-Ready in 18 Days
+                    </h2>
+                </div>
+                <div style={{
+                    background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
+                    padding: '32px 28px', position: 'relative', overflow: 'hidden',
+                }}>
+                    <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                        background: `linear-gradient(90deg, ${T.accent}, #34d399)`,
+                    }} />
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+                        <div style={{
+                            width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                            background: `${T.accent}12`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 20,
+                        }}>🥬</div>
+                        <div>
+                            <p style={{ fontSize: 16, fontWeight: 600, color: T.heading }}>
+                                Mid-size Produce Supplier · $40M Annual Revenue
+                            </p>
+                            <p style={{ fontSize: 13, color: T.textMuted }}>Central California · 3 Walmart DCs</p>
+                        </div>
+                    </div>
+                    <p style={{ fontSize: 14, color: T.text, lineHeight: 1.8, marginBottom: 24 }}>
+                        &ldquo;We were tracking everything in Excel and knew we&apos;d fail Walmart&apos;s next review.
+                        RegEngine imported 2 years of our historical data, mapped all our CTEs in one onboarding call,
+                        and we passed our first mock trace drill in under 5 seconds.
+                        We went from zero traceability infrastructure to fully compliant in 18 days.&rdquo;
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
+                        {[
+                            { value: '18 days', label: 'Time to compliance' },
+                            { value: '3.1s', label: 'Average trace time' },
+                            { value: '12,400+', label: 'CTEs captured' },
+                            { value: '$0', label: 'Walmart penalties' },
+                        ].map((s, i) => (
+                            <div key={i} style={{
+                                background: `${T.accent}06`, borderRadius: 10, padding: '14px 12px', textAlign: 'center',
+                                border: `1px solid ${T.accent}10`,
+                            }}>
+                                <p style={{ fontSize: 20, fontWeight: 700, color: T.accent, fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</p>
+                                <p style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>{s.label}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ═══════════════════════════════════════════════════════════
+               10. COMPETITOR COMPARISON
+               ═══════════════════════════════════════════════════════════ */}
+            <section ref={competitorReveal.ref} style={{
+                position: 'relative', zIndex: 2,
+                maxWidth: 900, margin: '0 auto', padding: '60px 24px',
+                opacity: competitorReveal.visible ? 1 : 0,
+                transform: competitorReveal.visible ? 'translateY(0)' : 'translateY(30px)',
+                transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}>
+                <div style={{ textAlign: 'center', marginBottom: 40 }}>
+                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                        How We Compare
+                    </p>
+                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                        RegEngine vs. Legacy Platforms
+                    </h2>
+                </div>
+                <div style={{
+                    background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
+                    overflow: 'hidden',
+                }}>
+                    {/* Table header */}
+                    <div className="competitor-row" style={{
+                        display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
+                        padding: '16px 20px', borderBottom: `1px solid ${T.border}`,
+                        background: 'rgba(255,255,255,0.02)',
+                    }}>
+                        <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>Feature</span>
+                        <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>RegEngine</span>
+                        <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>FoodLogiQ</span>
+                        <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>TraceLink</span>
+                    </div>
+                    {COMPETITORS.map((row, i) => (
+                        <div key={i} className="competitor-row" style={{
+                            display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
+                            padding: '14px 20px',
+                            borderBottom: i < COMPETITORS.length - 1 ? `1px solid ${T.border}` : 'none',
+                        }}>
+                            <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>{row.feature}</span>
+                            <span style={{ fontSize: 13, color: T.accent, fontWeight: 600 }}>{row.regengine}</span>
+                            <span style={{ fontSize: 13, color: T.textDim }}>{row.foodlogiq}</span>
+                            <span style={{ fontSize: 13, color: T.textDim }}>{row.tracelink}</span>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            {/* ═══════════════════════════════════════════════════════════
+               11. FAQ ACCORDION
+               ═══════════════════════════════════════════════════════════ */}
+            <section ref={faqReveal.ref} style={{
+                position: 'relative', zIndex: 2,
+                maxWidth: 700, margin: '0 auto', padding: '60px 24px',
+                opacity: faqReveal.visible ? 1 : 0,
+                transform: faqReveal.visible ? 'translateY(0)' : 'translateY(30px)',
+                transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}>
+                <div style={{ textAlign: 'center', marginBottom: 40 }}>
+                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                        FAQ
+                    </p>
+                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                        Common Questions
+                    </h2>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {FAQ_ITEMS.map((faq, i) => (
+                        <div key={i} style={{
+                            background: T.surface, border: `1px solid ${openFaq === i ? `${T.accent}30` : T.border}`,
+                            borderRadius: 12, overflow: 'hidden',
+                            transition: 'border-color 0.3s',
+                        }}>
+                            <button
+                                onClick={() => { setOpenFaq(openFaq === i ? null : i); trackEvent('faq_click', { question: faq.q }); }}
+                                style={{
+                                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                    padding: '16px 20px', background: 'transparent', border: 'none',
+                                    color: T.heading, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                                    textAlign: 'left', gap: 12,
+                                }}
+                            >
+                                <span>{faq.q}</span>
+                                <span style={{
+                                    fontSize: 18, color: T.textDim, flexShrink: 0,
+                                    transform: openFaq === i ? 'rotate(45deg)' : 'rotate(0)',
+                                    transition: 'transform 0.3s',
+                                }}>+</span>
+                            </button>
+                            <div style={{
+                                maxHeight: openFaq === i ? 200 : 0,
+                                overflow: 'hidden',
+                                transition: 'max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                            }}>
+                                <p style={{
+                                    padding: '0 20px 16px',
+                                    fontSize: 13, color: T.textMuted, lineHeight: 1.7,
+                                }}>
+                                    {faq.a}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            {/* ═══════════════════════════════════════════════════════════
+               12. INTEGRATIONS
+               ═══════════════════════════════════════════════════════════ */}
+            <section ref={integrationsReveal.ref} style={{
+                position: 'relative', zIndex: 2,
+                maxWidth: 800, margin: '0 auto', padding: '40px 24px 60px',
+                opacity: integrationsReveal.visible ? 1 : 0,
+                transform: integrationsReveal.visible ? 'translateY(0)' : 'translateY(30px)',
+                transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}>
+                <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                        Works With Your Stack
+                    </p>
+                    <h2 style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 700, color: T.heading }}>
+                        Plug Into Your Existing Systems
+                    </h2>
+                </div>
+                <div style={{
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                    gap: 12,
+                }}>
+                    {INTEGRATIONS.map((int, i) => (
+                        <div key={i} style={{
+                            background: T.surface, border: `1px solid ${T.border}`,
+                            borderRadius: 12, padding: '20px 12px', textAlign: 'center',
+                            transition: 'all 0.2s',
+                            cursor: 'default',
+                        }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHover; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.transform = 'translateY(0)'; }}
+                        >
+                            <div style={{ fontSize: 24, marginBottom: 8 }}>{int.icon}</div>
+                            <p style={{ fontSize: 12, color: T.textMuted, fontWeight: 500 }}>{int.name}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
             {/* ─── TRUST BADGES ─── */}
             <section style={{ position: 'relative', zIndex: 2, padding: '48px 24px' }}>
                 <div style={{ maxWidth: 900, margin: '0 auto', textAlign: 'center' }}>
@@ -1042,7 +1442,7 @@ export default function WalmartSuppliersPage() {
                 </div>
             </section>
 
-            {/* ─── KEYFRAMES ─── */}
+            {/* ─── KEYFRAMES + RESPONSIVE ─── */}
             <style>{`
                 @keyframes pulse-dot {
                     0%, 100% { opacity: 1; }
@@ -1052,6 +1452,10 @@ export default function WalmartSuppliersPage() {
                     0% { box-shadow: 0 0 0 0 ${T.accent}60; }
                     70% { box-shadow: 0 0 0 10px ${T.accent}00; }
                     100% { box-shadow: 0 0 0 0 ${T.accent}00; }
+                }
+                @keyframes exit-popup-in {
+                    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
                 }
                 input[type="range"] {
                     -webkit-appearance: none;
@@ -1081,7 +1485,31 @@ export default function WalmartSuppliersPage() {
                 }
                 input::placeholder { color: ${T.textDim}; }
                 * { box-sizing: border-box; margin: 0; }
+
+                /* Mobile responsive */
+                @media (max-width: 768px) {
+                    .competitor-row {
+                        grid-template-columns: 1.2fr 1fr 1fr 1fr !important;
+                        padding: 10px 12px !important;
+                        font-size: 11px !important;
+                    }
+                    .competitor-row span {
+                        font-size: 11px !important;
+                    }
+                }
+                @media (max-width: 480px) {
+                    .competitor-row {
+                        grid-template-columns: 1fr 1fr !important;
+                    }
+                    .competitor-row span:nth-child(3),
+                    .competitor-row span:nth-child(4) {
+                        display: none !important;
+                    }
+                }
             `}</style>
+
+            {/* Bottom spacer for sticky CTA */}
+            <div style={{ height: 60 }} />
         </div>
     );
 }
