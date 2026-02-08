@@ -41,16 +41,6 @@ const T = {
     fontMono: "'JetBrains Mono', monospace",
 };
 
-const COMPLIANCE_CHECKLIST = [
-    { id: 'cte-harvest', label: 'Harvest CTEs captured', description: 'Growing and harvesting events with lot codes' },
-    { id: 'cte-ship', label: 'Shipping CTEs captured', description: 'All shipments with TLCs linked' },
-    { id: 'cte-receive', label: 'Receiving CTEs captured', description: 'Inbound receiving with supplier data' },
-    { id: 'cte-transform', label: 'Transformation CTEs captured', description: 'Processing, packing, repacking events' },
-    { id: 'kde-complete', label: 'All KDEs populated', description: 'Key Data Elements for each CTE type' },
-    { id: 'tlc-linked', label: 'TLCs linked across events', description: 'Traceability Lot Codes connected end-to-end' },
-    { id: '24hr-response', label: '24-hour response capability', description: 'Can provide FDA data within 24 hours' },
-    { id: 'electronic-records', label: 'Electronic recordkeeping', description: 'Sortable, searchable electronic records' },
-];
 
 const PRICING_TIERS = [
     {
@@ -535,7 +525,7 @@ export default function WalmartSuppliersPage() {
                     >
                         {[
                             { icon: Package, label: 'FSMA 204 Compliant' },
-                            { icon: Shield, label: '19 FDA Categories' },
+                            { icon: Shield, label: '23 FDA Categories' },
                             { icon: FileCheck, label: 'SHA-256 Audit Trail' },
                             { icon: Zap, label: '24-Hour FDA Response' },
                         ].map((item, i) => (
