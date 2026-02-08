@@ -31,6 +31,7 @@ ENV/
 node_modules/
 dist/
 .env
+.env.*
 .DS_Store
 .idea/
 .vscode/
@@ -40,10 +41,20 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*_logs.txt
+*_logs_*.txt
+
+# Build artifacts
+.next/
+frontend/out/
 
 # RegEngine Specific
 *.db
 *.sqlite3
 data/
 secrets.md
-.next/
+
+# Artifacts that should never be tracked
+*.zip
+login_resp.json
+frontend/build_log.txt
