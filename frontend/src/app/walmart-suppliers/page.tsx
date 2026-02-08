@@ -78,12 +78,20 @@ const PRICING_TIERS = [
 /* ─────────────────────────────────────────────────────────────
    TRACE ANIMATION NODES
    ───────────────────────────────────────────────────────────── */
-const TRACE_NODES = [
+const TRACE_NODES_FORWARD = [
     { label: 'Harvest', sublabel: 'Farm • Salinas, CA', icon: '🌱', kde: 'TLC-2026-0412' },
     { label: 'Cool & Pack', sublabel: 'Cooler • Salinas, CA', icon: '❄️', kde: 'TLC-2026-0412-P' },
     { label: 'Ship', sublabel: 'Truck → DC', icon: '🚛', kde: 'BOL-88421' },
     { label: 'Receive', sublabel: 'Walmart DC #7218', icon: '📦', kde: 'RCV-7218-0412' },
     { label: 'Store', sublabel: 'Walmart #4521', icon: '🏪', kde: 'STR-4521-0412' },
+];
+
+const TRACE_NODES_BACKWARD = [
+    { label: 'Recall Alert', sublabel: 'Walmart #4521 • Shelf Pull', icon: '🚨', kde: 'RCL-4521-0412' },
+    { label: 'Receiving Log', sublabel: 'Walmart DC #7218', icon: '📦', kde: 'RCV-7218-0412' },
+    { label: 'Shipment', sublabel: 'BOL Lookup → Carrier', icon: '🚛', kde: 'BOL-88421-REV' },
+    { label: 'Packing Record', sublabel: 'Cooler • Salinas, CA', icon: '❄️', kde: 'PKG-2026-0412' },
+    { label: 'Source Identified', sublabel: 'Farm • Salinas, CA • Lot #0412', icon: '🎯', kde: 'SRC-FARM-0412' },
 ];
 
 /* ─────────────────────────────────────────────────────────────
@@ -139,7 +147,9 @@ export default function WalmartSuppliersPage() {
     const [traceStep, setTraceStep] = useState(-1);
     const [traceComplete, setTraceComplete] = useState(false);
     const [traceStarted, setTraceStarted] = useState(false);
+    const [traceDirection, setTraceDirection] = useState<'forward' | 'backward'>('forward');
     const traceRef = useRef<HTMLDivElement>(null);
+    const traceNodes = traceDirection === 'forward' ? TRACE_NODES_FORWARD : TRACE_NODES_BACKWARD;
 
     // Scroll reveals
     const timeline = useScrollReveal();
@@ -227,15 +237,16 @@ export default function WalmartSuppliersPage() {
         setTraceStep(-1);
         setTraceComplete(false);
 
-        TRACE_NODES.forEach((_, i) => {
+        const nodes = traceDirection === 'forward' ? TRACE_NODES_FORWARD : TRACE_NODES_BACKWARD;
+        nodes.forEach((_, i) => {
             setTimeout(() => {
                 setTraceStep(i);
-                if (i === TRACE_NODES.length - 1) {
+                if (i === nodes.length - 1) {
                     setTimeout(() => setTraceComplete(true), 600);
                 }
             }, (i + 1) * 700);
         });
-    }, [traceStarted]);
+    }, [traceStarted, traceDirection]);
 
     useEffect(() => {
         if (trace.visible) startTrace();
@@ -608,11 +619,43 @@ export default function WalmartSuppliersPage() {
                         Live Trace Demo
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
-                        5-Second Trace. Farm to Store.
+                        {traceDirection === 'forward' ? '5-Second Trace. Farm to Store.' : '5-Second Trace. Store to Farm.'}
                     </h2>
-                    <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 480, margin: '0 auto' }}>
-                        Watch a romaine lettuce lot trace across the entire supply chain in real time.
+                    <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 520, margin: '0 auto', marginBottom: 24 }}>
+                        {traceDirection === 'forward'
+                            ? 'Watch a romaine lettuce lot trace across the entire supply chain in real time.'
+                            : 'Simulate a recall investigation — trace a contaminated product back to its source in seconds.'}
                     </p>
+
+                    {/* Direction toggle */}
+                    <div style={{
+                        display: 'inline-flex', background: 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${T.border}`, borderRadius: 10, padding: 3,
+                    }}>
+                        {(['forward', 'backward'] as const).map((dir) => (
+                            <button
+                                key={dir}
+                                onClick={() => {
+                                    if (dir !== traceDirection) {
+                                        setTraceDirection(dir);
+                                        setTraceStarted(false);
+                                        setTraceStep(-1);
+                                        setTraceComplete(false);
+                                        trackEvent('trace_direction_switch', { direction: dir });
+                                    }
+                                }}
+                                style={{
+                                    padding: '8px 20px', fontSize: 13, fontWeight: 600,
+                                    border: 'none', borderRadius: 8, cursor: 'pointer',
+                                    background: traceDirection === dir ? `${T.accent}15` : 'transparent',
+                                    color: traceDirection === dir ? T.accent : T.textDim,
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                {dir === 'forward' ? '🌱 → 🏪  Forward' : '🚨 → 🎯  Backward'}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div ref={traceRef} style={{
@@ -631,13 +674,13 @@ export default function WalmartSuppliersPage() {
                             marginLeft: 12, fontSize: 12, color: T.textDim,
                             fontFamily: "'JetBrains Mono', monospace",
                         }}>
-                            regengine trace --lot TLC-2026-0412 --direction forward
+                            regengine trace --lot TLC-2026-0412 --direction {traceDirection}
                         </span>
                     </div>
 
                     {/* Trace nodes */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                        {TRACE_NODES.map((node, i) => {
+                        {traceNodes.map((node, i) => {
                             const active = i <= traceStep;
                             const current = i === traceStep && !traceComplete;
                             return (
@@ -697,7 +740,7 @@ export default function WalmartSuppliersPage() {
                                     </div>
 
                                     {/* Connector line */}
-                                    {i < TRACE_NODES.length - 1 && (
+                                    {i < traceNodes.length - 1 && (
                                         <div style={{
                                             width: 2, height: 16, marginLeft: 33,
                                             background: active ? `${T.accent}40` : 'rgba(255,255,255,0.04)',
@@ -721,20 +764,22 @@ export default function WalmartSuppliersPage() {
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 16 }}>⚡</span>
-                                <span style={{ fontSize: 14, fontWeight: 600, color: T.accent }}>
-                                    Full trace complete
+                                <span style={{ fontSize: 16 }}>{traceDirection === 'forward' ? '⚡' : '🎯'}</span>
+                                <span style={{ fontSize: 14, fontWeight: 600, color: traceDirection === 'forward' ? T.accent : T.warning }}>
+                                    {traceDirection === 'forward' ? 'Full trace complete' : 'Source identified'}
                                 </span>
                             </div>
                             <div style={{
                                 fontFamily: "'JetBrains Mono', monospace",
                                 fontSize: 13, color: T.heading, fontWeight: 600,
                             }}>
-                                3.2 seconds
+                                {traceDirection === 'forward' ? '3.2 seconds' : '2.8 seconds'}
                             </div>
                         </div>
                         <p style={{ fontSize: 12, color: T.textMuted, marginTop: 6, marginLeft: 26 }}>
-                            5 CTEs verified · All KDEs captured · SHA-256 hash chain intact
+                            {traceDirection === 'forward'
+                                ? '5 CTEs verified · All KDEs captured · SHA-256 hash chain intact'
+                                : 'Source farm isolated · Lot #0412 flagged · All affected shipments identified'}
                         </p>
                     </div>
 
@@ -755,7 +800,7 @@ export default function WalmartSuppliersPage() {
                         onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHover; e.currentTarget.style.color = T.text; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textMuted; }}
                     >
-                        ↻ Replay trace
+                        ↻ Replay {traceDirection} trace
                     </button>
                 </div>
             </section>
