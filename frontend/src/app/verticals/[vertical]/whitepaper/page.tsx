@@ -62,9 +62,9 @@ const wpStyles = {
 };
 
 interface WhitePaperPageProps {
-    params: {
+    params: Promise<{
         vertical: string;
-    };
+    }>;
 }
 
 const verticalNames: Record<string, string> = {
@@ -87,15 +87,16 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: WhitePaperPageProps) {
-    const verticalName = verticalNames[params.vertical];
+    const { vertical } = await params;
+    const verticalName = verticalNames[vertical];
     return {
         title: `Why RegEngine for ${verticalName}? | White Paper`,
         description: `Comprehensive white paper on RegEngine's ${verticalName} compliance solutions.`,
     };
 }
 
-export default function WhitePaperPage({ params }: WhitePaperPageProps) {
-    const { vertical } = params;
+export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
+    const { vertical } = await params;
     const verticalName = verticalNames[vertical];
 
     if (!verticalName) {

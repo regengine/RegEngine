@@ -12,10 +12,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 interface DocPageProps {
-    params: {
+    params: Promise<{
         vertical: string;
         doc: string;
-    };
+    }>;
 }
 
 const verticalNames: Record<string, string> = {
@@ -57,8 +57,9 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: DocPageProps) {
-    const verticalName = verticalNames[params.vertical] || params.vertical;
-    const docType = docTypes[params.doc];
+    const { vertical, doc } = await params;
+    const verticalName = verticalNames[vertical] || vertical;
+    const docType = docTypes[doc];
     const title = docType?.title || 'White Paper';
 
     return {
@@ -67,8 +68,8 @@ export async function generateMetadata({ params }: DocPageProps) {
     };
 }
 
-export default function WhitePaperDocPage({ params }: DocPageProps) {
-    const { vertical, doc } = params;
+export default async function WhitePaperDocPage({ params }: DocPageProps) {
+    const { vertical, doc } = await params;
     const verticalName = verticalNames[vertical];
     const docType = docTypes[doc];
 

@@ -11,9 +11,9 @@ export function generateStaticParams() {
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { tenantId: string } }
+    { params }: { params: Promise<{ tenantId: string }> }
 ) {
-    const tenantId = params.tenantId;
+    const { tenantId } = await params;
 
     // Try to fetch from compliance service first
     try {
