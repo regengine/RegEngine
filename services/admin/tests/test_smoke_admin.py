@@ -5,7 +5,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
-from main import app
+from services.admin.main import app
 
 
 def test_health():
