@@ -47,6 +47,8 @@ yarn-error.log*
 # Build artifacts
 .next/
 frontend/out/
+.pytest_cache/
+.audit/
 
 # RegEngine Specific
 *.db
