@@ -14,10 +14,11 @@ import sys
 from pathlib import Path
 
 # Add shared module to path
+# Add shared module to path
 from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_SERVICES_DIR / "shared"))
-sys.path.insert(0, str(_SERVICES_DIR))
+# sys.path.insert(0, str(_SERVICES_DIR / "shared"))
+# sys.path.insert(0, str(_SERVICES_DIR))
 
 from shared.middleware import TenantContextMiddleware
 from shared.observability import setup_telemetry
