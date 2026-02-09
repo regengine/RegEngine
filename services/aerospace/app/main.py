@@ -12,6 +12,7 @@ from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
 from shared.middleware import TenantContextMiddleware
+from shared.cors import get_allowed_origins, should_allow_credentials
 
 from .config import settings
 from .fai_vault import router as fai_router
@@ -56,6 +57,45 @@ async def health_check():
         "service": settings.SERVICE_NAME,
         "version": settings.SERVICE_VERSION
     }
+
+
+@app.get("/ready")
+async def ready_check():
+    """Readiness check endpoint that validates DB connectivity.
+    
+    Returns 503 if database is unreachable.
+    """
+    from fastapi import Depends, status
+    from fastapi.responses import JSONResponse
+    from sqlalchemy.orm import Session
+    from sqlalchemy import text
+    from .db_session import get_db
+    
+    try:
+        # Get a database session
+        db = next(get_db())
+        try:
+            # Execute a simple query to check connectivity
+            db.execute(text("SELECT 1"))
+            return {
+                "status": "ready",
+                "service": settings.SERVICE_NAME,
+                "version": settings.SERVICE_VERSION,
+                "database": "connected"
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "not_ready",
+                "service": settings.SERVICE_NAME,
+                "version": settings.SERVICE_VERSION,
+                "database": "disconnected",
+                "error": str(e)
+            }
+        )
 
 
 @app.get("/")

@@ -30,7 +30,49 @@ app.include_router(bim_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": settings.SERVICE_NAME}
+    return {
+        "status": "healthy",
+        "service": settings.SERVICE_NAME,
+        "version": settings.SERVICE_VERSION
+    }
+
+
+@app.get("/ready")
+async def ready_check():
+    """Readiness check endpoint that validates DB connectivity.
+    
+    Returns 503 if database is unreachable.
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+    from .db_session import get_db
+    
+    try:
+        # Get a database session
+        db = next(get_db())
+        try:
+            # Execute a simple query to check connectivity
+            db.execute(text("SELECT 1"))
+            return {
+                "status": "ready",
+                "service": settings.SERVICE_NAME,
+                "version": settings.SERVICE_VERSION,
+                "database": "connected"
+            }
+        finally:
+            db.close()
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "not_ready",
+                "service": settings.SERVICE_NAME,
+                "version": settings.SERVICE_VERSION,
+                "database": "disconnected",
+                "error": str(e)
+            }
+        )
 
 
 if __name__ == "__main__":
