@@ -47,8 +47,8 @@ export function TenantSwitcher() {
     const [open, setOpen] = React.useState(false);
 
     const selectedTenant = MOCK_TENANTS.find((t) => t.id === tenantId) || MOCK_TENANTS[0];
-    const selectedConfig = INDUSTRY_CONFIG[selectedTenant.industry];
-    const selectedTierBadge = TIER_BADGES[selectedTenant.subscriptionTier];
+    const selectedConfig = INDUSTRY_CONFIG[selectedTenant.industry ?? 'administration'];
+    const selectedTierBadge = selectedTenant.subscriptionTier ? TIER_BADGES[selectedTenant.subscriptionTier] : undefined;
 
     // Categorize Tenants using type field
     const retailers = MOCK_TENANTS.filter(t => t.type === 'retailer');
@@ -59,7 +59,7 @@ export function TenantSwitcher() {
     const suppliersByIndustry = React.useMemo(() => {
         const groups: Record<string, typeof suppliers> = {};
         suppliers.forEach(s => {
-            const industry = s.industry;
+            const industry = s.industry ?? 'administration';
             if (!groups[industry]) groups[industry] = [];
             groups[industry].push(s);
         });
@@ -99,7 +99,7 @@ export function TenantSwitcher() {
 
                         <CommandGroup heading="System">
                             {admins.map((tenant) => {
-                                const config = INDUSTRY_CONFIG[tenant.industry];
+                                const config = INDUSTRY_CONFIG[tenant.industry ?? 'administration'];
                                 return (
                                     <CommandItem
                                         key={tenant.id}
@@ -126,8 +126,8 @@ export function TenantSwitcher() {
 
                         <CommandGroup heading="Retailers">
                             {retailers.map((tenant) => {
-                                const config = INDUSTRY_CONFIG[tenant.industry];
-                                const tierBadge = TIER_BADGES[tenant.subscriptionTier];
+                                const config = INDUSTRY_CONFIG[tenant.industry ?? 'grocery'];
+                                const tierBadge = tenant.subscriptionTier ? TIER_BADGES[tenant.subscriptionTier] : undefined;
                                 return (
                                     <CommandItem
                                         key={tenant.id}
@@ -165,7 +165,7 @@ export function TenantSwitcher() {
                                 <React.Fragment key={industry}>
                                     <CommandGroup heading={`${industryConfig.icon} ${industryLabel}`}>
                                         {tenants.map((tenant) => {
-                                            const tierBadge = TIER_BADGES[tenant.subscriptionTier];
+                                            const tierBadge = tenant.subscriptionTier ? TIER_BADGES[tenant.subscriptionTier] : undefined;
                                             return (
                                                 <CommandItem
                                                     key={tenant.id}

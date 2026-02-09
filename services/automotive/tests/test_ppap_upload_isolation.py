@@ -3,6 +3,9 @@ import unittest
 from unittest.mock import MagicMock, ANY
 from pathlib import Path
 import uuid
+import tempfile
+import shutil
+import os
 from datetime import datetime
 
 # Add services directory to path so we can import 'shared'
@@ -21,6 +24,9 @@ from services.automotive.app.models import PPAPSubmission, PPAPElement
 class TestPPAPUploadIsolation(unittest.TestCase):
     def setUp(self):
         self.mock_db = MagicMock()
+        # Use a temp directory for file storage
+        self._tmpdir = tempfile.mkdtemp()
+        os.environ['PPAP_STORAGE_ROOT'] = self._tmpdir
         self.client = TestClient(app)
         self.tenant_id = uuid.uuid4()
         
@@ -37,6 +43,8 @@ class TestPPAPUploadIsolation(unittest.TestCase):
 
     def tearDown(self):
         app.dependency_overrides = {}
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+        os.environ.pop('PPAP_STORAGE_ROOT', None)
 
     def test_upload_enforces_tenant_id(self):
         """Verify that uploaded elements are associated with the current tenant."""

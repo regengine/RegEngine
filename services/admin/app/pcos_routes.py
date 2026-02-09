@@ -24,5 +24,7 @@ from __future__ import annotations
 
 # Re-export the unified router from the pcos package
 from .pcos import router  # noqa: F401
+# Re-export shared dependency so test patches against app.pcos_routes still work
+from .pcos._shared import get_pcos_tenant_context  # noqa: F401
 
-__all__ = ["router"]
+__all__ = ["router", "get_pcos_tenant_context"]

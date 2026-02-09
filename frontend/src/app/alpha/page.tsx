@@ -76,18 +76,37 @@ export default function AlphaPage() {
     const [role, setRole] = useState('');
     const [submitted, setSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [spotCount] = useState(Math.floor(Math.random() * 6) + 7); // 7-12 spots
+    const [spotCount] = useState(Math.floor(Math.random() * 6) + 7);
+    const [error, setError] = useState('');
     const formRef = useRef<HTMLFormElement>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!email) return;
         setIsSubmitting(true);
+        setError('');
 
-        // Simulate submission delay
-        await new Promise(r => setTimeout(r, 1200));
-        setSubmitted(true);
-        setIsSubmitting(false);
+        try {
+            const res = await fetch('/api/alpha-signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, company, role }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setError(data.error || 'Something went wrong. Please try again.');
+                setIsSubmitting(false);
+                return;
+            }
+
+            setSubmitted(true);
+        } catch {
+            setError('Network error. Please check your connection and try again.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -399,6 +418,11 @@ export default function AlphaPage() {
                             </button>
                         </div>
 
+                        {error && (
+                            <p style={{ fontSize: '13px', color: '#ef4444', marginTop: '12px', textAlign: 'center' }}>
+                                {error}
+                            </p>
+                        )}
                         <p style={{ fontSize: '11px', color: T.textDim, marginTop: '16px', lineHeight: 1.5 }}>
                             No spam. We&apos;ll reach out within 48 hours if you&apos;re a fit.
                             <br />

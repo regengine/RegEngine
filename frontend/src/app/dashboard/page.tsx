@@ -180,7 +180,7 @@ export default function DashboardPage() {
 
     const quickActions = useMemo(() => {
         if (!dashboardData) return getQuickActions('retailer');
-        return getQuickActions(dashboardData.tenant.type);
+        return getQuickActions((dashboardData.tenant.type as 'retailer' | 'supplier' | 'system') || 'retailer');
     }, [dashboardData]);
 
     // Use real metrics from backend when available, fall back to mock data

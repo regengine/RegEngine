@@ -1,7 +1,7 @@
 """Configuration for the Compliance Service."""
 
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Environment-driven configuration values."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # Service Info
     service_name: str = Field(default="RegEngine Compliance API", alias="SERVICE_NAME")
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     )
 
     # Database / Graph
-    neo4j_uri: str | None = Field(default=None, alias="NEO4J_URI")
+    neo4j_uri: Optional[str] = Field(default=None, alias="NEO4J_URI")
     neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
     neo4j_password: str = Field(default="", alias="NEO4J_PASSWORD")
 
