@@ -23,6 +23,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def get_allowed_origins():
+    """Get allowed CORS origins from environment."""
+    import os
+    origins = os.getenv("CORS_ORIGINS", "*")
+    return origins.split(",") if "," in origins else [origins]
+
+
+def should_allow_credentials():
+    """Determine if credentials should be allowed."""
+    return True
+
+
 # Create FastAPI app
 app = FastAPI(
     title="RegEngine Aerospace Compliance Service",
