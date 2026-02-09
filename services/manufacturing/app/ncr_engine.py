@@ -28,60 +28,60 @@ router = APIRouter(prefix="/v1/manufacturing", tags=["manufacturing"])
 # Request/Response Models
 class NCRCreate(BaseModel):
     """Request body for creating NCR."""
-    ncr_number: str = Field(..., min_length=1, max_length=100)
-    detected_date: datetime
-    detected_by: str = Field(..., min_length=1, max_length=255)
-    detection_source: str = Field(..., pattern="^(INTERNAL_AUDIT|CUSTOMER_COMPLAINT|PROCESS_MONITORING|SUPPLIER_ISSUE)$")
-    part_number: Optional[str] = Field(None, max_length=100)
-    lot_number: Optional[str] = Field(None, max_length=100)
-    quantity_affected: Optional[int] = None
-    description: str = Field(..., min_length=1)
-    severity: str = Field(..., pattern="^(CRITICAL|MAJOR|MINOR)$")
-    containment_action: Optional[str] = None
-    iso_9001_relevant: bool = True
-    iso_14001_relevant: bool = False
-    iso_45001_relevant: bool = False
+    ncr_number: str = Field(..., min_length=1, max_length=100, description="Unique NCR identifier")
+    detected_date: datetime = Field(..., description="Date when non-conformance was detected")
+    detected_by: str = Field(..., min_length=1, max_length=255, description="Person who detected the non-conformance")
+    detection_source: str = Field(..., pattern="^(INTERNAL_AUDIT|CUSTOMER_COMPLAINT|PROCESS_MONITORING|SUPPLIER_ISSUE)$", description="Source of detection: INTERNAL_AUDIT, CUSTOMER_COMPLAINT, PROCESS_MONITORING, or SUPPLIER_ISSUE")
+    part_number: Optional[str] = Field(None, max_length=100, description="Affected part number (if applicable)")
+    lot_number: Optional[str] = Field(None, max_length=100, description="Affected lot/batch number (if applicable)")
+    quantity_affected: Optional[int] = Field(None, description="Number of units affected")
+    description: str = Field(..., min_length=1, description="Detailed description of the non-conformance")
+    severity: str = Field(..., pattern="^(CRITICAL|MAJOR|MINOR)$", description="Severity level: CRITICAL, MAJOR, or MINOR")
+    containment_action: Optional[str] = Field(None, description="Immediate containment action taken")
+    iso_9001_relevant: bool = Field(True, description="Whether this NCR is relevant to ISO 9001 (Quality)")
+    iso_14001_relevant: bool = Field(False, description="Whether this NCR is relevant to ISO 14001 (Environment)")
+    iso_45001_relevant: bool = Field(False, description="Whether this NCR is relevant to ISO 45001 (Safety)")
 
 
 class CAPACreate(BaseModel):
     """Request body for creating CAPA."""
-    ncr_id: int
-    action_type: str = Field(..., pattern="^(CORRECTIVE|PREVENTIVE)$")
-    description: str = Field(..., min_length=1)
-    assigned_to: str = Field(..., min_length=1, max_length=255)
-    due_date: datetime
-    verification_required: bool = True
+    ncr_id: int = Field(..., description="ID of the associated NCR")
+    action_type: str = Field(..., pattern="^(CORRECTIVE|PREVENTIVE)$", description="Action type: CORRECTIVE (fix existing) or PREVENTIVE (prevent recurrence)")
+    description: str = Field(..., min_length=1, description="Detailed description of the action to be taken")
+    assigned_to: str = Field(..., min_length=1, max_length=255, description="Person or team responsible for implementing the action")
+    due_date: datetime = Field(..., description="Target completion date")
+    verification_required: bool = Field(True, description="Whether effectiveness verification is required (ISO requirement)")
 
 
 class SupplierIssueCreate(BaseModel):
     """Request body for supplier quality issue (8D)."""
-    supplier_name: str = Field(..., min_length=1, max_length=255)
-    supplier_code: Optional[str] = Field(None, max_length=100)
-    issue_date: datetime
-    part_number: str = Field(..., min_length=1, max_length=100)
-    lot_number: Optional[str] = Field(None, max_length=100)
-    defect_description: str = Field(..., min_length=1)
+    supplier_name: str = Field(..., min_length=1, max_length=255, description="Supplier company name")
+    supplier_code: Optional[str] = Field(None, max_length=100, description="Supplier code/identifier")
+    issue_date: datetime = Field(..., description="Date when issue was identified")
+    part_number: str = Field(..., min_length=1, max_length=100, description="Part number with quality issue")
+    lot_number: Optional[str] = Field(None, max_length=100, description="Lot/batch number")
+    defect_description: str = Field(..., min_length=1, description="Description of the defect or quality issue")
 
 
 class AuditFindingCreate(BaseModel):
     """Request body for audit finding."""
-    audit_type: str = Field(..., pattern="^(INTERNAL|EXTERNAL_ISO_9001|EXTERNAL_ISO_14001|EXTERNAL_ISO_45001|CUSTOMER)$")
-    audit_date: datetime
-    auditor_name: str = Field(..., min_length=1, max_length=255)
-    finding_number: str = Field(..., min_length=1, max_length=100)
-    clause_reference: Optional[str] = Field(None, max_length=100)
-    finding_type: str = Field(..., pattern="^(MAJOR_NC|MINOR_NC|OFI)$")
-    description: str = Field(..., min_length=1)
-    target_closure_date: Optional[datetime] = None
+    audit_type: str = Field(..., pattern="^(INTERNAL|EXTERNAL_ISO_9001|EXTERNAL_ISO_14001|EXTERNAL_ISO_45001|CUSTOMER)$", description="Audit type: INTERNAL, EXTERNAL_ISO_9001/14001/45001, or CUSTOMER")
+    audit_date: datetime = Field(..., description="Date of the audit")
+    auditor_name: str = Field(..., min_length=1, max_length=255, description="Name of the auditor")
+    finding_number: str = Field(..., min_length=1, max_length=100, description="Unique finding identifier")
+    clause_reference: Optional[str] = Field(None, max_length=100, description="ISO clause reference (e.g., '8.5.1')")
+    finding_type: str = Field(..., pattern="^(MAJOR_NC|MINOR_NC|OFI)$", description="Finding type: MAJOR_NC (major non-conformance), MINOR_NC (minor), or OFI (opportunity for improvement)")
+    description: str = Field(..., min_length=1, description="Detailed description of the finding")
+    target_closure_date: Optional[datetime] = Field(None, description="Target date for closing the finding")
 
 
 class DashboardMetrics(BaseModel):
     """Dashboard metrics for Manufacturing compliance."""
-    total_ncrs: int
-    open_ncrs: int
-    overdue_capas: int
-    open_audit_findings: int
-    capa_effectiveness_rate: float
+    total_ncrs: int = Field(..., description="Total number of NCRs created")
+    open_ncrs: int = Field(..., description="Number of NCRs currently open or in CAPA phase")
+    overdue_capas: int = Field(..., description="Number of CAPAs past their due date")
+    open_audit_findings: int = Field(..., description="Number of open audit findings")
+    capa_effectiveness_rate: float = Field(..., description="Percentage of CAPAs verified as effective")
 
 
 # NCR Endpoints

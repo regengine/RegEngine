@@ -4,11 +4,14 @@ SEC-009: Implements configurable password strength requirements.
 
 Usage:
     from app.password_policy import validate_password, PasswordPolicyError
-
+    import structlog
+    
+    logger = structlog.get_logger(__name__)
+    
     try:
         validate_password("MyP@ssw0rd!")
     except PasswordPolicyError as e:
-        print(e.message)  # List of policy violations
+        logger.error("password_validation_failed", violations=e.message)
 """
 
 import re
