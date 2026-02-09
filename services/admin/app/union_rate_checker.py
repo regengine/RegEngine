@@ -15,6 +15,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 import yaml
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 class UnionCode(str, Enum):
@@ -167,7 +170,10 @@ class UnionRateChecker:
             budget_total=500000
         )
         if not result.is_compliant:
-            print(f"Below minimum by ${result.shortfall_amount}")
+            logger.warning(
+                "rate_below_union_minimum",
+                shortfall_amount=result.shortfall_amount
+            )
     """
     
     def __init__(self, rate_tables_path: Optional[str] = None):

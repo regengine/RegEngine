@@ -30,7 +30,7 @@ class TransactionLog(Base):
     jurisdiction = Column(String(100), nullable=False)  # "NEVADA" | "NEW_JERSEY" | "TRIBAL"
     timestamp = Column(DateTime, nullable=False, index=True)
     content_hash = Column(String(64), nullable=False, unique=True)  # SHA-256 for immutability
-    metadata = Column(JSON, nullable=True)  # Additional jurisdiction-specific fields
+    metadata_ = Column("metadata", JSON, nullable=True)  # Additional jurisdiction-specific fields
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     
     __table_args__ = (
