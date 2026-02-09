@@ -49,7 +49,7 @@ class BIMChangeRecord(Base):
     # ISO 19650 compliance
     cde_level = Column(String(50), nullable=True)  # WIP | SHARED | PUBLISHED | ARCHIVED (Common Data Environment)
     
-    metadata_ = Column("metadata", JSON, nullable=True)
+    metadata_ = Column('metadata', JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -102,7 +102,7 @@ class OSHASafetyInspection(Base):
     # Status
     status = Column(String(50), nullable=False, default="OPEN")  # OPEN | CORRECTIVE_ACTION | CLOSED
     
-    metadata_ = Column("metadata", JSON, nullable=True)
+    metadata_ = Column('metadata', JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
