@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     SERVICE_NAME: str = "gaming"
     SERVICE_VERSION: str = "1.0.0"
     PORT: int = int(os.getenv("GAMING_PORT", "8007"))
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
     # Compliance
     DEFAULT_RETENTION_DAYS: int = 1825  # 5 years (typical minimum)

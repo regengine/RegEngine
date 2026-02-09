@@ -2,9 +2,10 @@
 Gaming Compliance Service - Main FastAPI application.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
+import structlog
 import sys
 
 from pathlib import Path
@@ -15,13 +16,28 @@ from shared.cors import get_allowed_origins, should_allow_credentials
 
 from .config import settings
 from .transaction_vault import router as transaction_router
+from .logging_config import configure_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Configure structured logging
+configure_logging(level=settings.LOG_LEVEL)
+logger = structlog.get_logger("gaming_service")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
+    logger.info(
+        "gaming_service_startup",
+        service=settings.SERVICE_NAME,
+        version=settings.SERVICE_VERSION
+    )
+    
+    yield
+    
+    # Shutdown
+    logger.info("gaming_service_shutdown")
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -29,7 +45,8 @@ app = FastAPI(
     description="Immutable transaction logs and responsible gaming monitoring for casino regulatory compliance",
     version=settings.SERVICE_VERSION,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -51,6 +68,7 @@ app.include_router(transaction_router)
 @app.get("/health")
 async def health_check():
     """Health check endpoint for load balancers."""
+    logger.debug("health_check_requested")
     return {
         "status": "healthy",
         "service": settings.SERVICE_NAME,
@@ -61,6 +79,7 @@ async def health_check():
 @app.get("/")
 async def root():
     """Root endpoint with service information."""
+    logger.debug("root_endpoint_accessed")
     return {
         "service": "RegEngine Gaming Compliance Service",
         "version": settings.SERVICE_VERSION,
