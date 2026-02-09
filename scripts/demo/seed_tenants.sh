@@ -33,11 +33,11 @@ echo "    { id: '00000000-0000-0000-0000-000000000001', name: 'System Admin' },"
 
 # Define Retailers and Suppliers
 declare -a RETAILERS=(
-    "Costco Wholesale Corp"
-    "Walmart Inc"
-    "Kroger Co"
-    "Whole Foods Market"
-    "Target Corp"
+    "National Foods Corp"
+    "MegaMart Inc"
+    "Premier Grocery Co"
+    "Fresh Market Group"
+    "ValueMart Corp"
 )
 
 declare -a SUPPLIERS=(

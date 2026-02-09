@@ -52,8 +52,8 @@ const US_STATES = [
 ];
 
 const MAJOR_RETAILERS = [
-    "Walmart", "Costco", "Kroger", "Albertsons", "Publix",
-    "Whole Foods", "Target", "Trader Joe's", "Safeway", "Aldi",
+    "National Retailer A", "Wholesale Club", "Regional Grocery Chain", "Multi-Banner Group", "Southeast Grocer",
+    "Whole Foods", "Mass Merchant", "Specialty Grocer", "West Coast Chain", "Discount Grocer",
 ];
 
 export default function ProductProfilePage() {

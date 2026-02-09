@@ -504,7 +504,7 @@ export default function IngestPage() {
               <CardContent className="pt-6">
                 <h3 className="font-semibold mb-2">Graph Storage</h3>
                 <p className="text-sm text-muted-foreground">
-                  Store in Neo4j with bitemporal modeling for compliance tracking
+                  Store in a graph database with bitemporal modeling for compliance tracking
                 </p>
               </CardContent>
             </Card>

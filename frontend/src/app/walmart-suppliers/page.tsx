@@ -82,13 +82,13 @@ const TRACE_NODES_FORWARD = [
     { label: 'Harvest', sublabel: 'Farm • Salinas, CA', icon: '🌱', kde: 'TLC-2026-0412' },
     { label: 'Cool & Pack', sublabel: 'Cooler • Salinas, CA', icon: '❄️', kde: 'TLC-2026-0412-P' },
     { label: 'Ship', sublabel: 'Truck → DC', icon: '🚛', kde: 'BOL-88421' },
-    { label: 'Receive', sublabel: 'Walmart DC #7218', icon: '📦', kde: 'RCV-7218-0412' },
-    { label: 'Store', sublabel: 'Walmart #4521', icon: '🏪', kde: 'STR-4521-0412' },
+    { label: 'Receive', sublabel: 'Retailer DC #7218', icon: '📦', kde: 'RCV-7218-0412' },
+    { label: 'Store', sublabel: 'Retail Store #4521', icon: '🏪', kde: 'STR-4521-0412' },
 ];
 
 const TRACE_NODES_BACKWARD = [
-    { label: 'Recall Alert', sublabel: 'Walmart #4521 • Shelf Pull', icon: '🚨', kde: 'RCL-4521-0412' },
-    { label: 'Receiving Log', sublabel: 'Walmart DC #7218', icon: '📦', kde: 'RCV-7218-0412' },
+    { label: 'Recall Alert', sublabel: 'Store #4521 • Shelf Pull', icon: '🚨', kde: 'RCL-4521-0412' },
+    { label: 'Receiving Log', sublabel: 'Retailer DC #7218', icon: '📦', kde: 'RCV-7218-0412' },
     { label: 'Shipment', sublabel: 'BOL Lookup → Carrier', icon: '🚛', kde: 'BOL-88421-REV' },
     { label: 'Packing Record', sublabel: 'Cooler • Salinas, CA', icon: '❄️', kde: 'PKG-2026-0412' },
     { label: 'Source Identified', sublabel: 'Farm • Salinas, CA • Lot #0412', icon: '🎯', kde: 'SRC-FARM-0412' },
@@ -98,9 +98,9 @@ const TRACE_NODES_BACKWARD = [
    FAQ DATA
    ───────────────────────────────────────────────────────────── */
 const FAQ_ITEMS = [
-    { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When Walmart or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
-    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through Walmart, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine\'s $999/mo tier is built specifically for companies under $50M revenue.' },
-    { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Walmart\'s internal deadline is estimated at Q1 2027 — over a year before the FDA mandate. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during Walmart\'s next category review. By the time the FDA deadline hits, it\'s already too late for Walmart.' },
+    { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When a major retailer or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
+    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine\'s $999/mo tier is built specifically for companies under $50M revenue.' },
+    { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Major retailers\' internal deadlines are estimated at Q1 2027 — over a year before the FDA mandate. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during the next category review. By the time the FDA deadline hits, it\'s already too late.' },
     { q: 'How long does integration take?', a: 'Most suppliers are fully operational within 2–4 weeks. RegEngine is API-first, so there are no portal logins or manual data entry. If you have existing data in spreadsheets, we can bulk-import it during onboarding.' },
     { q: 'What if we don\'t sell FTL products?', a: 'Use our free FTL Checker tool to verify whether your products fall under the FDA\'s 23 Food Traceability List categories. Even if your primary products aren\'t on the list, many suppliers are surprised to find that secondary product lines (like pre-cut salads or certain cheeses) are covered.' },
 ];
@@ -134,14 +134,14 @@ const INTEGRATIONS = [
 /* ═════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═════════════════════════════════════════════════════════════ */
-export default function WalmartSuppliersPage() {
+export default function RetailerSuppliersPage() {
     const [email, setEmail] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [submitted, setSubmitted] = useState(false);
 
     // Risk calculator state
     const [annualRevenue, setAnnualRevenue] = useState(25);
-    const [walmartPercent, setWalmartPercent] = useState(30);
+    const [retailerPercent, setRetailerPercent] = useState(30);
 
     // Trace animation
     const [traceStep, setTraceStep] = useState(-1);
@@ -263,7 +263,7 @@ export default function WalmartSuppliersPage() {
         }
     };
 
-    const atRisk = ((annualRevenue * 1_000_000) * (walmartPercent / 100));
+    const atRisk = ((annualRevenue * 1_000_000) * (retailerPercent / 100));
     const monthlyRisk = Math.round(atRisk / 12);
 
     return (
@@ -339,7 +339,7 @@ export default function WalmartSuppliersPage() {
                             Don&apos;t leave without your free assessment
                         </h3>
                         <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 24 }}>
-                            Walmart is evaluating suppliers <strong style={{ color: T.warning }}>right now</strong>.
+                            Major retailers are evaluating suppliers <strong style={{ color: T.warning }}>right now</strong>.
                             Get a personalized gap analysis before your next category review.
                         </p>
                         <Link href="#assessment">
@@ -389,7 +389,7 @@ export default function WalmartSuppliersPage() {
                 }}>
                     <span style={{ fontSize: 16 }}>⚠️</span>
                     <span style={{ fontSize: 14, color: T.warning, fontWeight: 500 }}>
-                        Walmart is evaluating suppliers <strong>now</strong>. Their internal deadline is earlier than FDA's July 2028.
+                        Major retailers are evaluating suppliers <strong>now</strong>. Their internal deadlines are earlier than FDA's July 2028.
                     </span>
                 </div>
             </div>
@@ -414,7 +414,7 @@ export default function WalmartSuppliersPage() {
                     borderRadius: 9999, padding: '6px 16px', marginBottom: 24, fontSize: 13, color: T.warning,
                 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.warning, animation: 'pulse-dot 2s infinite' }} />
-                    Walmart Supplier Compliance
+                    Retailer Supplier Compliance
                 </div>
 
                 <h1 style={{
@@ -422,7 +422,7 @@ export default function WalmartSuppliersPage() {
                     color: T.heading, lineHeight: 1.08, margin: '0 0 20px',
                     letterSpacing: '-0.02em',
                 }}>
-                    Walmart-Ready<br />
+                    Retailer-Ready<br />
                     <span style={{
                         background: `linear-gradient(135deg, ${T.accent}, #34d399)`,
                         WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
@@ -433,7 +433,7 @@ export default function WalmartSuppliersPage() {
                     fontSize: 18, color: T.textMuted,
                     maxWidth: 540, margin: '0 auto 16px', lineHeight: 1.7,
                 }}>
-                    Meet Walmart's internal traceability requirements before you lose your spot on the shelf.
+                    Meet major retailer traceability requirements before you lose your spot on the shelf.
                     API-first. No portal logins. No spreadsheets.
                 </p>
 
@@ -508,7 +508,7 @@ export default function WalmartSuppliersPage() {
                         The Clock Is Already Running
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 500, margin: '0 auto' }}>
-                        Walmart's internal deadline comes <strong style={{ color: T.warning }}>before</strong> the FDA mandate.
+                        Major retailer internal deadlines come <strong style={{ color: T.warning }}>before</strong> the FDA mandate.
                         Suppliers who wait will be too late.
                     </p>
                 </div>
@@ -546,7 +546,7 @@ export default function WalmartSuppliersPage() {
                             </div>
                         </div>
 
-                        {/* Walmart deadline */}
+                        {/* Retailer deadline */}
                         <div style={{
                             position: 'absolute', left: '55%', top: '50%', transform: 'translate(-50%, -50%)',
                             width: 14, height: 14, borderRadius: '50%',
@@ -556,7 +556,7 @@ export default function WalmartSuppliersPage() {
                                 position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
                                 textAlign: 'center', whiteSpace: 'nowrap',
                             }}>
-                                <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Walmart Internal</p>
+                                <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Retailer Internal</p>
                                 <p style={{ fontSize: 11, color: T.textDim }}>~Q1 2027 (est.)</p>
                             </div>
                         </div>
@@ -593,10 +593,10 @@ export default function WalmartSuppliersPage() {
                         <span style={{ fontSize: 18, marginTop: 1 }}>💡</span>
                         <div>
                             <p style={{ fontSize: 14, color: T.heading, fontWeight: 600, marginBottom: 4 }}>
-                                Why is Walmart's deadline earlier?
+                                Why are retailer deadlines earlier?
                             </p>
                             <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>
-                                Walmart is requiring suppliers to demonstrate traceability capability as a condition for continued shelf placement — well ahead of the FDA mandate.
+                                Major retailers are requiring suppliers to demonstrate traceability capability as a condition for continued shelf placement — well ahead of the FDA mandate.
                                 Suppliers who can't show readiness risk deprioritization during the next category review.
                             </p>
                         </div>
@@ -906,7 +906,7 @@ export default function WalmartSuppliersPage() {
                         Risk Calculator
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
-                        What Does Losing Walmart Cost You?
+                        What Does Losing a Major Retailer Cost You?
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted }}>
                         Drag the sliders. See the math. Then look at the pricing below.
@@ -936,18 +936,18 @@ export default function WalmartSuppliersPage() {
                         </div>
                     </div>
 
-                    {/* Walmart % slider */}
+                    {/* Retailer % slider */}
                     <div style={{ marginBottom: 32 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                            <label style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>% Revenue from Walmart</label>
+                            <label style={{ fontSize: 14, color: T.text, fontWeight: 500 }}>% Revenue from Top Retailer</label>
                             <span style={{ fontSize: 14, fontWeight: 600, color: T.heading, fontFamily: "'JetBrains Mono', monospace" }}>
-                                {walmartPercent}%
+                                {retailerPercent}%
                             </span>
                         </div>
                         <input
                             type="range" min={5} max={80} step={5}
-                            value={walmartPercent}
-                            onChange={e => setWalmartPercent(Number(e.target.value))}
+                            value={retailerPercent}
+                            onChange={e => setRetailerPercent(Number(e.target.value))}
                             style={{ width: '100%', accentColor: T.warning }}
                         />
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: T.textDim, marginTop: 4 }}>
@@ -1166,7 +1166,7 @@ export default function WalmartSuppliersPage() {
                         margin: '0 auto 20px', fontSize: 22,
                     }}>📋</div>
                     <h2 style={{ fontSize: 28, fontWeight: 700, color: T.heading, marginBottom: 12 }}>
-                        Free Walmart-Readiness Assessment
+                        Free Retailer-Readiness Assessment
                     </h2>
                     <p style={{ color: T.textMuted, fontSize: 15, marginBottom: 36, lineHeight: 1.7 }}>
                         I'll personally review your traceability setup and provide a detailed gap analysis — free of charge.
@@ -1240,7 +1240,7 @@ export default function WalmartSuppliersPage() {
                                 Assessment Requested!
                             </h3>
                             <p style={{ color: T.textMuted, fontSize: 14, marginBottom: 20 }}>
-                                I'll send your Walmart-readiness assessment to {email} within 24 hours.
+                                I'll send your retailer-readiness assessment to {email} within 24 hours.
                             </p>
                             <Link href="/ftl-checker">
                                 <button style={{
@@ -1271,7 +1271,7 @@ export default function WalmartSuppliersPage() {
                         Proof It Works
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
-                        From 0% to Walmart-Ready in 18 Days
+                        From 0% to Retailer-Ready in 18 Days
                     </h2>
                 </div>
                 <div style={{
@@ -1292,11 +1292,11 @@ export default function WalmartSuppliersPage() {
                             <p style={{ fontSize: 16, fontWeight: 600, color: T.heading }}>
                                 Mid-size Produce Supplier · $40M Annual Revenue
                             </p>
-                            <p style={{ fontSize: 13, color: T.textMuted }}>Central California · 3 Walmart DCs</p>
+                            <p style={{ fontSize: 13, color: T.textMuted }}>Central California · 3 Major Retailer DCs</p>
                         </div>
                     </div>
                     <p style={{ fontSize: 14, color: T.text, lineHeight: 1.8, marginBottom: 24 }}>
-                        &ldquo;We were tracking everything in Excel and knew we&apos;d fail Walmart&apos;s next review.
+                        &ldquo;We were tracking everything in Excel and knew we&apos;d fail our retailer&apos;s next review.
                         RegEngine imported 2 years of our historical data, mapped all our CTEs in one onboarding call,
                         and we passed our first mock trace drill in under 5 seconds.
                         We went from zero traceability infrastructure to fully compliant in 18 days.&rdquo;
@@ -1306,7 +1306,7 @@ export default function WalmartSuppliersPage() {
                             { value: '18 days', label: 'Time to compliance' },
                             { value: '3.1s', label: 'Average trace time' },
                             { value: '12,400+', label: 'CTEs captured' },
-                            { value: '$0', label: 'Walmart penalties' },
+                            { value: '$0', label: 'Retailer penalties' },
                         ].map((s, i) => (
                             <div key={i} style={{
                                 background: `${T.accent}06`, borderRadius: 10, padding: '14px 12px', textAlign: 'center',

@@ -436,6 +436,7 @@ def main():
         help="UUID of tenant to load data for"
     )
     parser.add_argument(
+        "--framework",
         type=str,
         default="nist",
         choices=["nist", "soc2", "iso27001"],

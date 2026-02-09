@@ -84,7 +84,7 @@ const securityFeatures = [
         title: "Independent Verification",
         status: "verified",
         description: "Our open-source verify_chain.py script lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Zero trust required.",
-        evidence: "Output: 430 record hashes verified, 0 failed across 7 Critical Tracking Events (Rizo Lopez, Cs-137 Shrimp, Cucumber recall chains).",
+        evidence: "Output: 430 record hashes verified, 0 failed across 7 Critical Tracking Events (Dairy, Imported Seafood, Produce recall chains).",
         regulation: "Third-party auditability",
     },
 ];

@@ -11,7 +11,7 @@ const footerLinks = {
         { label: 'FSMA 204 Dashboard', href: '/fsma' },
     ],
     solutions: [
-        { label: 'Walmart Suppliers', href: '/walmart-suppliers' },
+        { label: 'Retailer Readiness', href: '/walmart-suppliers' },
         { label: 'Partner Program', href: '/partners' },
         { label: 'Sales Resources', href: '/resources' },
     ],

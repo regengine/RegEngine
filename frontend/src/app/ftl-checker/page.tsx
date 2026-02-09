@@ -925,7 +925,7 @@ export default function FTLCheckerPage() {
                                             <AlertTriangle size={28} style={{ marginBottom: '12px' }} />
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>Action Required</h3>
                                             <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 8px' }}>You have <strong>{results.coveredCount} product categories</strong> that require FSMA 204 compliance by <strong>July 2028</strong>.</p>
-                                            <p style={{ fontSize: '13px', opacity: 0.8, margin: '0 0 20px' }}>But major retailers (Walmart, Kroger, Target) are requiring traceability NOW.</p>
+                                            <p style={{ fontSize: '13px', opacity: 0.8, margin: '0 0 20px' }}>But major retailers are already requiring traceability NOW.</p>
                                             {!emailSubmitted ? (
                                                 <form onSubmit={handleEmailSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                                     <p style={{ fontWeight: 600, margin: 0 }}>Get Your Full Compliance Report</p>

@@ -166,7 +166,7 @@ export default function FSMAChecklist() {
                     }}
                 >
                     <h2 className="text-3xl font-bold text-[#f8fafc] mb-3">
-                        Are You Walmart-Ready?
+                        Are You Retailer-Ready?
                     </h2>
                     <p className="text-base text-[#64748b]">
                         Check off each FSMA 204 requirement your company currently meets.
@@ -293,7 +293,7 @@ export default function FSMAChecklist() {
                                     <ShieldIcon />
                                 </div>
                                 <h3 className="text-[22px] font-bold text-[#059669] mb-2">
-                                    You're Walmart-Ready
+                                    You're Retailer-Ready
                                 </h3>
                                 <p className="text-sm text-[#64748b] mb-6 leading-relaxed">
                                     All 8 FSMA 204 requirements met. Want to automate your compliance
@@ -337,9 +337,9 @@ export default function FSMAChecklist() {
                                     </div>
                                     <p className="text-sm text-[#94a3b8] mb-4 leading-relaxed">
                                         {checkedCount <= 3
-                                            ? "Your traceability infrastructure needs significant work before you're Walmart-ready. The good news: these are solvable problems."
+                                            ? "Your traceability infrastructure needs significant work before you're retailer-ready. The good news: these are solvable problems."
                                             : checkedCount <= 5
-                                                ? "You've got a foundation, but critical gaps remain. Walmart is actively evaluating suppliers on these exact requirements."
+                                                ? "You've got a foundation, but critical gaps remain. Major retailers are actively evaluating suppliers on these exact requirements."
                                                 : "You're close. A few targeted fixes will get you to full compliance."}
                                     </p>
 
