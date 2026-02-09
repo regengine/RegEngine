@@ -592,7 +592,7 @@ class TestTenantIsolation:
         mock_tenant.return_value = tenant1_id
         headers1 = {
             "X-RegEngine-API-Key": "test-key",
-            "X-Tenant-ID": tenant1_id
+            "X-RegEngine-Tenant-ID": tenant1_id
         }
         
         create_response = client.post(
@@ -607,7 +607,7 @@ class TestTenantIsolation:
         mock_tenant.return_value = tenant2_id
         headers2 = {
             "X-RegEngine-API-Key": "test-key",
-            "X-Tenant-ID": tenant2_id
+            "X-RegEngine-Tenant-ID": tenant2_id
         }
         
         get_response = client.get(
