@@ -34,10 +34,13 @@ class TestComplianceConfig:
 
     def test_neo4j_uri_optional(self):
         """Neo4j URI should default to None (optional dependency)."""
-        from app.config import Settings
-
-        settings = Settings()
-        assert settings.neo4j_uri is None
+        import os
+        from unittest.mock import patch as mpatch
+        with mpatch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NEO4J_URI", None)
+            from app.config import Settings
+            settings = Settings(_env_file=None)
+            assert settings.neo4j_uri is None
 
     def test_get_settings_cached(self):
         """get_settings should return the same cached instance."""

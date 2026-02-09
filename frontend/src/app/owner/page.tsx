@@ -19,6 +19,8 @@ import {
     Eye,
     Settings,
     Trash2,
+    Sparkles,
+    Mail,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -326,6 +328,83 @@ export default function OwnerDashboard() {
                     </motion.div>
                 </div>
             </div>
+
+            {/* Alpha Waitlist Pipeline */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+                className="mt-8"
+            >
+                <Card className="bg-white/5 backdrop-blur-xl border-white/10">
+                    <CardHeader className="border-b border-white/10">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-white flex items-center gap-2">
+                                    <Sparkles className="h-5 w-5 text-purple-400" />
+                                    Alpha Waitlist Pipeline
+                                </CardTitle>
+                                <CardDescription className="text-white/60">Track signups from /alpha</CardDescription>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 border">
+                                    12 total signups
+                                </Badge>
+                                <Button variant="ghost" size="sm" className="text-amber-400 hover:text-amber-300 hover:bg-white/5">
+                                    Export CSV <ArrowUpRight className="h-4 w-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-6">
+                        {/* Pipeline Stats */}
+                        <div className="grid grid-cols-4 gap-4 mb-6">
+                            {[
+                                { label: 'Pending', count: 7, color: 'text-blue-400', bg: 'bg-blue-500/20' },
+                                { label: 'Contacted', count: 3, color: 'text-amber-400', bg: 'bg-amber-500/20' },
+                                { label: 'Accepted', count: 2, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+                                { label: 'Declined', count: 0, color: 'text-red-400', bg: 'bg-red-500/20' },
+                            ].map((stage) => (
+                                <div key={stage.label} className="text-center">
+                                    <div className={cn('text-2xl font-bold', stage.color)}>{stage.count}</div>
+                                    <div className="text-xs text-white/40 mt-1">{stage.label}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Recent Signups */}
+                        <div className="divide-y divide-white/10 border border-white/10 rounded-lg overflow-hidden">
+                            {[
+                                { email: 'sarah@freshleaf.co', company: 'FreshLeaf Produce', role: 'VP Compliance', time: '2 hours ago', status: 'pending' },
+                                { email: 'michael@seastar.com', company: 'SeaStar Foods', role: 'Quality Manager', time: '5 hours ago', status: 'contacted' },
+                                { email: 'james@puremart.io', company: 'PureMart Inc.', role: 'Supply Chain Director', time: '1 day ago', status: 'accepted' },
+                                { email: 'ana@greenvalley.com', company: 'Green Valley Farms', role: 'Operations', time: '1 day ago', status: 'pending' },
+                                { email: 'david@oceancatch.net', company: 'OceanCatch Seafood', role: 'Founder / CEO', time: '2 days ago', status: 'accepted' },
+                            ].map((signup, i) => (
+                                <div key={i} className="p-3 flex items-center justify-between hover:bg-white/5 transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                                            <Mail className="h-4 w-4 text-purple-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-white font-medium">{signup.email}</p>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-xs text-white/40">{signup.company}</span>
+                                                <span className="text-xs text-white/20">·</span>
+                                                <span className="text-xs text-white/40">{signup.role}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xs text-white/40">{signup.time}</span>
+                                        <StatusBadge status={signup.status === 'pending' ? 'trial' : signup.status === 'accepted' ? 'active' : 'warning'} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
         </div>
     );
 }
