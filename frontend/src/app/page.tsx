@@ -583,7 +583,7 @@ export default function RegEngineLanding() {
             </span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
             {[
               {
                 title: "FTL Coverage Checker",
@@ -592,6 +592,14 @@ export default function RegEngineLanding() {
                 href: "/ftl-checker",
                 cta: "Check Your Products →",
                 badge: "Free",
+              },
+              {
+                title: "Supply Chain Explorer",
+                description: "Explore 3 real-world recall scenarios with 430 cryptographically verified traceability records across dairy, seafood, and produce supply chains.",
+                icon: <Database size={20} />,
+                href: "/demo/supply-chains",
+                cta: "Explore Supply Chains →",
+                badge: "New",
               },
               {
                 title: "Retailer Readiness Assessment",

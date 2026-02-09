@@ -8,6 +8,7 @@ const footerLinks = {
         { label: 'FTL Coverage Checker', href: '/ftl-checker', badge: 'Free' },
         { label: 'Pricing', href: '/pricing' },
         { label: 'Mock Recall Demo', href: '/demo/mock-recall' },
+        { label: 'Supply Chain Explorer', href: '/demo/supply-chains', badge: 'New' },
         { label: 'FSMA 204 Dashboard', href: '/fsma' },
     ],
     solutions: [
