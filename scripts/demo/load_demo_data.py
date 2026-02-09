@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -54,7 +55,7 @@ class DemoDataLoader:
         self.created_products = []
         self.created_mappings = []
 
-    def load_all(self, framework: str = "nist", profile: str = "retailer"):
+    async def load_all(self, framework: str = "nist", profile: str = "retailer"):
         """
         Load complete demo dataset.
 
@@ -69,29 +70,29 @@ class DemoDataLoader:
 
         # Load tenant controls
         print("[1/4] Loading tenant controls...")
-        self.load_controls(framework)
+        await self.load_controls(framework)
         print(f"      ✓ Created {len(self.created_controls)} controls")
 
         # Load customer products
         print("[2/4] Loading customer products...")
-        self.load_products(profile)
+        await self.load_products(profile)
         print(f"      ✓ Created {len(self.created_products)} products")
 
         # Map controls to provisions
         print("[3/4] Creating control-to-provision mappings...")
-        self.create_control_mappings()
+        await self.create_control_mappings()
         print(f"      ✓ Created {len(self.created_mappings)} mappings")
 
         # Link controls to products
         print("[4/4] Linking controls to products...")
-        self.link_controls_to_products()
+        await self.link_controls_to_products()
         print(f"      ✓ Linked controls to products")
 
         print()
         print("✅ Demo data loaded successfully!")
         self._print_summary()
 
-    def load_controls(self, framework: str = "nist"):
+    async def load_controls(self, framework: str = "nist"):
         """
         Load tenant controls based on specified framework.
 
@@ -117,10 +118,10 @@ class DemoDataLoader:
                 framework=control_data["framework"],
             )
 
-            created = self.writer.create_tenant_control(control)
+            created = await self.writer.create_tenant_control(control)
             self.created_controls.append(created)
 
-    def load_products(self, profile: str = "retailer"):
+    async def load_products(self, profile: str = "retailer"):
         """Load customer products catalog based on profile."""
         
         if profile == "retailer":
@@ -173,10 +174,10 @@ class DemoDataLoader:
                 **product_data
             )
 
-            created = self.writer.create_customer_product(product)
+            created = await self.writer.create_customer_product(product)
             self.created_products.append(created)
 
-    def create_control_mappings(self):
+    async def create_control_mappings(self):
         """
         Create mappings between tenant controls and regulatory provisions.
 
@@ -206,10 +207,10 @@ class DemoDataLoader:
                     created_by=self.tenant_id,  # Using tenant_id as creator
                 )
 
-                created = self.writer.map_control_to_provision(mapping)
+                created = await self.writer.map_control_to_provision(mapping)
                 self.created_mappings.append(created)
 
-    def link_controls_to_products(self):
+    async def link_controls_to_products(self):
         """Link tenant controls to customer products."""
         if not self.created_products or not self.created_controls:
             return
@@ -222,7 +223,7 @@ class DemoDataLoader:
                 control_id=control.id,
                 tenant_id=self.tenant_id,
             )
-            self.writer.link_control_to_product(link)
+            await self.writer.link_control_to_product(link)
 
         # Digital Wallet gets controls 3-8
         if len(self.created_products) > 1:
@@ -233,7 +234,7 @@ class DemoDataLoader:
                     control_id=control.id,
                     tenant_id=self.tenant_id,
                 )
-                self.writer.link_control_to_product(link)
+                await self.writer.link_control_to_product(link)
 
         # Lending Protocol gets controls 5-10
         if len(self.created_products) > 2 and len(self.created_controls) >= 10:
@@ -244,7 +245,7 @@ class DemoDataLoader:
                     control_id=control.id,
                     tenant_id=self.tenant_id,
                 )
-                self.writer.link_control_to_product(link)
+                await self.writer.link_control_to_product(link)
 
     def _print_summary(self):
         """Print summary of loaded data."""
@@ -460,7 +461,7 @@ def main():
 
     try:
         loader = DemoDataLoader(tenant_id)
-        loader.load_all(framework=args.framework, profile=args.profile)
+        asyncio.run(loader.load_all(framework=args.framework, profile=args.profile))
     except Exception as e:
         print(f"\n❌ Error loading demo data: {e}")
         import traceback

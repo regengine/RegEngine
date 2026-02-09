@@ -68,7 +68,7 @@ echo -e "${NC}"
 echo ""
 echo -e "${GREEN}Configuration:${NC}"
 echo "  Tenant Name: $TENANT_NAME"
-echo "  Framework:   ${FRAMEWORK^^}"
+echo "  Framework:   $(echo "$FRAMEWORK" | tr '[:lower:]' '[:upper:]')"
 echo "  Skip Docker: $SKIP_DOCKER"
 echo ""
 
@@ -150,7 +150,7 @@ if [ -n "$API_KEY" ] && [ -n "$TENANT_ID" ]; then
     echo "   Name:       $TENANT_NAME"
     echo "   Tenant ID:  $TENANT_ID"
     echo "   API Key:    $API_KEY"
-    echo "   Framework:  ${FRAMEWORK^^}"
+    echo "   Framework:  $(echo "$FRAMEWORK" | tr '[:lower:]' '[:upper:]')"
     echo ""
 
     echo -e "${GREEN}🌐 Access URLs:${NC}"
