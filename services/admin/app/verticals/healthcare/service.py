@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional
 from uuid import UUID
 from datetime import datetime
 import textwrap
+import structlog
 
 from .schemas import HealthcareProjectMetadata, HealthcareRuleStatus
 # from services.graph.app.neo4j_utils import Neo4jClient
@@ -10,6 +11,8 @@ from .schemas import HealthcareProjectMetadata, HealthcareRuleStatus
 # from services.admin.app.models import VerticalProject, VerticalRuleInstance
 
 from sqlalchemy.orm import Session
+
+logger = structlog.get_logger(__name__)
 
 class HealthcareVerticalService:
     def __init__(self, db_session: Session):
@@ -193,7 +196,11 @@ class HealthcareVerticalService:
         self.db.add(evidence_entry)
         self.db.commit()
         
-        print(f"🔒 [Immutable Vault] Evidence Persisted: {rule_id} | Hash: {content_hash}")
+        logger.info(
+            "immutable_vault_evidence_persisted",
+            rule_id=rule_id,
+            content_hash=content_hash
+        )
         return content_hash
 
     async def generate_lifeboat_archive(self, tenant_id: UUID, project_id: UUID) -> bytes:
