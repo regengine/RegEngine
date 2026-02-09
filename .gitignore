@@ -60,3 +60,6 @@ secrets.md
 *.zip
 login_resp.json
 frontend/build_log.txt
+
+# MCP / Gemini settings (contains tokens)
+.gemini/settings.json
