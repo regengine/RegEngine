@@ -53,7 +53,7 @@ frontend/out/
 # RegEngine Specific
 *.db
 *.sqlite3
-data/
+/data/
 secrets.md
 
 # Artifacts that should never be tracked
