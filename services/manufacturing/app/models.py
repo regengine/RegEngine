@@ -66,7 +66,7 @@ class NonConformanceReport(Base):
     closed_date = Column(DateTime, nullable=True)
     closed_by = Column(String(255), nullable=True)
     
-    metadata = Column(JSON, nullable=True)
+    additional_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -155,7 +155,7 @@ class SupplierQualityIssue(Base):
     
     8D (Eight Disciplines) problem solving for supplier issues.
     """
-    __tablename__ = "supplier_qual ity_issues"
+    __tablename__ = "supplier_quality_issues"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(UUID(as_uuid=True), nullable=False, index=True)  # Multi-tenant isolation
