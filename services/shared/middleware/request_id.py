@@ -23,17 +23,18 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         # Add to structlog context
         structlog.contextvars.bind_contextvars(request_id=request_id)
         
-        # Process request
-        response = await call_next(request)
-        
-        # Add header to response
-        response.headers["X-Request-ID"] = request_id
-        
-        # Reset context var
-        request_id_ctx.reset(token)
-        structlog.contextvars.unbind_contextvars("request_id")
-        
-        return response
+        try:
+            # Process request
+            response = await call_next(request)
+            
+            # Add header to response
+            response.headers["X-Request-ID"] = request_id
+            
+            return response
+        finally:
+            # Always reset context, even on exceptions
+            request_id_ctx.reset(token)
+            structlog.contextvars.unbind_contextvars("request_id")
 
 def get_current_request_id() -> str:
     """Get the current request ID from context."""

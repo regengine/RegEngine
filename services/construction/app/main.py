@@ -86,6 +86,7 @@ async def ready_check():
         finally:
             db.close()
     except Exception as e:
+        logger.error("readiness_check_failed", error=str(e))
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -93,7 +94,7 @@ async def ready_check():
                 "service": settings.SERVICE_NAME,
                 "version": settings.SERVICE_VERSION,
                 "database": "disconnected",
-                "error": str(e)
+                "error": type(e).__name__
             }
         )
 
