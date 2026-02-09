@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -11,6 +10,7 @@ from typing import AsyncIterator
 import structlog
 from app.api_overlay import router as overlay_router
 from app.config import get_settings
+from app.logging_config import configure_logging
 from app.routes import router, v1_router
 from app.compliance_routes import router as compliance_router
 from fastapi import FastAPI
@@ -18,24 +18,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-def _configure_logging(level: str) -> None:
-    structlog.configure(
-        processors=[
-            structlog.contextvars.merge_contextvars,
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.add_log_level,
-            structlog.processors.JSONRenderer(),
-        ],
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, level.upper(), logging.INFO)
-        ),
-        cache_logger_on_first_use=True,
-    )
-    logging.basicConfig(level=getattr(logging, level.upper(), logging.INFO))
-
-
 settings = get_settings()
-_configure_logging(settings.log_level)
+configure_logging(settings.log_level)
 
 
 @asynccontextmanager

@@ -4,6 +4,7 @@ Construction Compliance Service - Main application.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 import sys
 
 from pathlib import Path
@@ -15,7 +16,21 @@ from shared.cors import get_allowed_origins, should_allow_credentials
 from .config import settings
 from .bim_tracking import router as bim_router
 
-app = FastAPI(title="Construction API", version="1.0.0")
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Create FastAPI app
+app = FastAPI(
+    title="RegEngine Construction Compliance Service",
+    description="BIM change tracking and OSHA safety inspection management per 29 CFR 1926 for construction regulatory compliance",
+    version=settings.SERVICE_VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,49 +45,19 @@ app.include_router(bim_router)
 
 @app.get("/health")
 async def health():
+    """Health check endpoint for load balancers."""
+    return {"status": "healthy", "service": settings.SERVICE_NAME, "version": settings.SERVICE_VERSION}
+
+
+@app.get("/")
+async def root():
+    """Root endpoint with service information."""
     return {
-        "status": "healthy",
-        "service": settings.SERVICE_NAME,
-        "version": settings.SERVICE_VERSION
+        "service": "RegEngine Construction Compliance Service",
+        "version": settings.SERVICE_VERSION,
+        "docs": "/docs",
+        "health": "/health"
     }
-
-
-@app.get("/ready")
-async def ready_check():
-    """Readiness check endpoint that validates DB connectivity.
-    
-    Returns 503 if database is unreachable.
-    """
-    from fastapi import status
-    from fastapi.responses import JSONResponse
-    from sqlalchemy import text
-    from .db_session import get_db
-    
-    try:
-        # Get a database session
-        db = next(get_db())
-        try:
-            # Execute a simple query to check connectivity
-            db.execute(text("SELECT 1"))
-            return {
-                "status": "ready",
-                "service": settings.SERVICE_NAME,
-                "version": settings.SERVICE_VERSION,
-                "database": "connected"
-            }
-        finally:
-            db.close()
-    except Exception as e:
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "status": "not_ready",
-                "service": settings.SERVICE_NAME,
-                "version": settings.SERVICE_VERSION,
-                "database": "disconnected",
-                "error": str(e)
-            }
-        )
 
 
 if __name__ == "__main__":

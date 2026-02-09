@@ -29,31 +29,31 @@ router = APIRouter(prefix="/v1/aerospace", tags=["aerospace"])
 # Request/Response Models
 class FAIReportCreate(BaseModel):
     """Request body for creating AS9102 FAI report."""
-    part_number: str = Field(..., min_length=1, max_length=100)
-    part_name: str = Field(..., min_length=1, max_length=255)
-    drawing_number: str = Field(..., min_length=1, max_length=100)
-    drawing_revision: str = Field(..., min_length=1, max_length=50)
-    customer_name: str = Field(..., min_length=1, max_length=255)
-    customer_part_number: Optional[str] = Field(None, max_length=100)
+    part_number: str = Field(..., min_length=1, max_length=100, description="Part number being inspected")
+    part_name: str = Field(..., min_length=1, max_length=255, description="Descriptive name of the part")
+    drawing_number: str = Field(..., min_length=1, max_length=100, description="Engineering drawing number")
+    drawing_revision: str = Field(..., min_length=1, max_length=50, description="Drawing revision level (e.g., A, B, C)")
+    customer_name: str = Field(..., min_length=1, max_length=255, description="Customer or OEM name")
+    customer_part_number: Optional[str] = Field(None, max_length=100, description="Customer's part number (if different from internal)")
     
-    form1_data: Dict[str, Any]  # AS9102 Form 1
-    form2_data: List[Dict[str, Any]]  # AS9102 Form 2 (array)
-    form3_data: List[Dict[str, Any]]  # AS9102 Form 3 (array)
+    form1_data: Dict[str, Any] = Field(..., description="AS9102 Form 1: Part Number Accountability data")
+    form2_data: List[Dict[str, Any]] = Field(..., description="AS9102 Form 2: Product Accountability data (array)")
+    form3_data: List[Dict[str, Any]] = Field(..., description="AS9102 Form 3: Characteristic Accountability data (array)")
     
-    inspection_method: str = Field(..., pattern="^(ACTUAL|DELTA|BASELINE)$")
-    inspection_date: datetime
-    inspector_name: str = Field(..., min_length=1, max_length=255)
-    metadata: Optional[Dict[str, Any]] = None
+    inspection_method: str = Field(..., pattern="^(ACTUAL|DELTA|BASELINE)$", description="Inspection method: ACTUAL (full), DELTA (change), or BASELINE")
+    inspection_date: datetime = Field(..., description="Date when inspection was performed")
+    inspector_name: str = Field(..., min_length=1, max_length=255, description="Name of the inspector who performed the FAI")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata (NADCAP requirements, customer-specific data)")
 
 
 class FAIReportResponse(BaseModel):
     """Response body for FAI report."""
-    id: int
-    part_number: str
-    drawing_revision: str
-    content_hash: str
-    approval_status: str
-    created_at: datetime
+    id: int = Field(..., description="Unique FAI report identifier")
+    part_number: str = Field(..., description="Part number")
+    drawing_revision: str = Field(..., description="Drawing revision level")
+    content_hash: str = Field(..., description="SHA-256 hash for integrity verification")
+    approval_status: str = Field(..., description="Approval status: PENDING, APPROVED, or REJECTED")
+    created_at: datetime = Field(..., description="Timestamp when report was created")
     
     class Config:
         from_attributes = True
@@ -61,23 +61,23 @@ class FAIReportResponse(BaseModel):
 
 class ConfigurationBaselineCreate(BaseModel):
     """Request body for configuration baseline."""
-    assembly_id: str = Field(..., min_length=1, max_length=100)
-    assembly_name: str = Field(..., min_length=1, max_length=255)
-    serial_number: Optional[str] = Field(None, max_length=100)
-    baseline_data: List[Dict[str, Any]]  # Component list with part numbers, revisions
-    manufacturing_date: datetime
-    fai_report_id: Optional[int] = None
-    notes: Optional[str] = None
+    assembly_id: str = Field(..., min_length=1, max_length=100, description="Unique assembly identifier")
+    assembly_name: str = Field(..., min_length=1, max_length=255, description="Descriptive name of the assembly")
+    serial_number: Optional[str] = Field(None, max_length=100, description="Serial number of the specific assembly instance")
+    baseline_data: List[Dict[str, Any]] = Field(..., description="Component list with part numbers, revisions, and serial numbers")
+    manufacturing_date: datetime = Field(..., description="Date when the assembly was manufactured")
+    fai_report_id: Optional[int] = Field(None, description="ID of associated FAI report (if applicable)")
+    notes: Optional[str] = Field(None, description="Additional notes or documentation")
 
 
 class ConfigurationBaselineResponse(BaseModel):
     """Response body for configuration baseline."""
-    id: int
-    assembly_id: str
-    serial_number: Optional[str]
-    baseline_hash: str
-    lifecycle_status: str
-    created_at: datetime
+    id: int = Field(..., description="Unique baseline identifier")
+    assembly_id: str = Field(..., description="Assembly identifier")
+    serial_number: Optional[str] = Field(None, description="Serial number")
+    baseline_hash: str = Field(..., description="SHA-256 hash of the configuration for integrity")
+    lifecycle_status: str = Field(..., description="Status: ACTIVE, MAINTENANCE, or RETIRED")
+    created_at: datetime = Field(..., description="Timestamp when baseline was created")
     
     class Config:
         from_attributes = True
@@ -85,26 +85,26 @@ class ConfigurationBaselineResponse(BaseModel):
 
 class NADCAPEvidenceCreate(BaseModel):
     """Request body for NADCAP special process evidence."""
-    process_type: str = Field(..., pattern="^(HEAT_TREAT|WELDING|NDT|CHEMICAL)$")
-    part_number: str = Field(..., min_length=1, max_length=100)
-    lot_number: Optional[str] = Field(None, max_length=100)
-    process_parameters: Dict[str, Any]
-    process_results: Dict[str, Any]
-    operator_name: str = Field(..., min_length=1, max_length=255)
-    equipment_id: str = Field(..., min_length=1, max_length=100)
-    calibration_due_date: Optional[datetime] = None
-    process_date: datetime
-    nadcap_certification_number: Optional[str] = None
-    certification_expiry: Optional[datetime] = None
+    process_type: str = Field(..., pattern="^(HEAT_TREAT|WELDING|NDT|CHEMICAL)$", description="NADCAP process type: HEAT_TREAT, WELDING, NDT, or CHEMICAL")
+    part_number: str = Field(..., min_length=1, max_length=100, description="Part number undergoing special process")
+    lot_number: Optional[str] = Field(None, max_length=100, description="Lot or batch number")
+    process_parameters: Dict[str, Any] = Field(..., description="Process parameters (e.g., temperature, time, atmosphere)")
+    process_results: Dict[str, Any] = Field(..., description="Process results (e.g., hardness, pyrometry logs, NDT results)")
+    operator_name: str = Field(..., min_length=1, max_length=255, description="Name of the certified operator")
+    equipment_id: str = Field(..., min_length=1, max_length=100, description="Equipment identifier")
+    calibration_due_date: Optional[datetime] = Field(None, description="Next calibration due date for the equipment")
+    process_date: datetime = Field(..., description="Date when the special process was performed")
+    nadcap_certification_number: Optional[str] = Field(None, description="NADCAP certification number")
+    certification_expiry: Optional[datetime] = Field(None, description="NADCAP certification expiry date")
 
 
 class DashboardMetrics(BaseModel):
     """Dashboard metrics for Aerospace compliance."""
-    total_fai_reports: int
-    pending_fai_approvals: int
-    active_configurations: int
-    nadcap_expiring_soon: int
-    avg_fai_approval_days: float
+    total_fai_reports: int = Field(..., description="Total number of FAI reports")
+    pending_fai_approvals: int = Field(..., description="Number of FAI reports pending approval")
+    active_configurations: int = Field(..., description="Number of active configuration baselines")
+    nadcap_expiring_soon: int = Field(..., description="Number of NADCAP certifications expiring in next 90 days")
+    avg_fai_approval_days: float = Field(..., description="Average time to approve FAI reports (in days)")
 
 
 # FAI Endpoints
