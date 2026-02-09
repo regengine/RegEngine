@@ -3,111 +3,150 @@ name: Frontend CI/CD
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-ci.yml'
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
 
 jobs:
-  # Build check — this is the most critical gate
+  # ── Build ────────────────────────────────────────────────
   build:
-    name: Build Check
+    name: Build & Bundle Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      
+
       - name: Install dependencies
         run: |
           cd frontend
           npm ci
-      
+
       - name: Build production bundle
         run: |
           cd frontend
           npm run build
-      
-      - name: Report bundle size
+
+      - name: Bundle size report
         run: |
           cd frontend
-          echo "Bundle size:"
-          du -sh .next
+          echo "### 📦 Bundle Size Report" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          du -sh .next >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          du -sh .next/static/chunks/ >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
-  # Linting
+  # ── Lint ─────────────────────────────────────────────────
   lint:
-    name: Lint Check
+    name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      
+
       - name: Install dependencies
         run: |
           cd frontend
           npm ci
-      
+
       - name: Run ESLint
         run: |
           cd frontend
           npm run lint
         continue-on-error: true
 
-  # Unit tests with Vitest
+  # ── Tests ────────────────────────────────────────────────
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      
+
       - name: Install dependencies
         run: |
           cd frontend
           npm ci
-      
-      - name: Run tests
+
+      - name: Run Vitest
         run: |
           cd frontend
           npm run test:run
         continue-on-error: true
 
-  # Security audit (non-blocking)
+  # ── Security ─────────────────────────────────────────────
   security:
     name: Security Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      
+
       - name: Run npm audit
         run: |
           cd frontend
           npm audit --audit-level=high
         continue-on-error: true
+
+  # ── CI Summary ───────────────────────────────────────────
+  ci-status:
+    name: CI Status Gate
+    if: always()
+    needs: [build, lint, test, security]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "Build:    ${{ needs.build.result }}"
+          echo "Lint:     ${{ needs.lint.result }}"
+          echo "Tests:    ${{ needs.test.result }}"
+          echo "Security: ${{ needs.security.result }}"
+          if [[ "${{ needs.build.result }}" == "failure" ]]; then
+            echo "::error::Build failed"
+            exit 1
+          fi
+          echo "✅ All checks passed"

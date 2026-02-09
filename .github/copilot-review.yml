@@ -1,0 +1,15 @@
+reviews:
+  # Enable Copilot code review on PRs
+  auto_review: true
+  
+  # Review scope
+  paths:
+    - 'services/**'
+    - 'frontend/src/**'
+    - 'shared/**'
+  
+  # Focus areas
+  focus:
+    - security
+    - performance
+    - best-practices

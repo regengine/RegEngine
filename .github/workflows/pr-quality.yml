@@ -1,0 +1,87 @@
+name: PR Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  # ── PR Size Check ───────────────────────────────────────
+  pr-size:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        run: |
+          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions')
+          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions')
+          TOTAL=$((ADDITIONS + DELETIONS))
+          FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length')
+
+          echo "### 📊 PR Size" >> $GITHUB_STEP_SUMMARY
+          echo "- **Lines changed:** +$ADDITIONS / -$DELETIONS ($TOTAL total)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files changed:** $FILES" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$TOTAL" -gt 1000 ]; then
+            echo "::warning::Large PR detected ($TOTAL lines). Consider splitting into smaller PRs."
+            echo "- ⚠️ **Large PR** — consider splitting" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ Size is manageable" >> $GITHUB_STEP_SUMMARY
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Conventional Commits ────────────────────────────────
+  commit-lint:
+    name: Commit Message Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        run: |
+          echo "### 📝 Commit Messages" >> $GITHUB_STEP_SUMMARY
+          COMMITS=$(git log --format="%s" origin/main..HEAD)
+          VALID=true
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?:"; then
+              echo "- ✅ \`$msg\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ⚠️ \`$msg\` — not conventional" >> $GITHUB_STEP_SUMMARY
+              VALID=false
+            fi
+          done <<< "$COMMITS"
+
+          if [ "$VALID" = false ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> 💡 Use [Conventional Commits](https://www.conventionalcommits.org/) format: \`type(scope): description\`" >> $GITHUB_STEP_SUMMARY
+          fi
+        continue-on-error: true
+
+  # ── Label PR ────────────────────────────────────────────
+  label:
+    name: Auto-Label PR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Label by files changed
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

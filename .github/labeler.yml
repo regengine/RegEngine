@@ -1,0 +1,39 @@
+# Auto-label PRs based on file paths
+backend:
+  - changed-files:
+    - any-glob-to-any-file: 'services/**'
+
+frontend:
+  - changed-files:
+    - any-glob-to-any-file: 'frontend/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
+
+docs:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**'
+
+security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/security/**'
+      - '.github/workflows/security.yml'
+      - '.github/workflows/codeql.yml'
+
+database:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/migrations/**'
+      - '**/models.py'
+      - '**/db_session.py'
+
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/requirements.txt'
+      - '**/package.json'
+      - '**/package-lock.json'
