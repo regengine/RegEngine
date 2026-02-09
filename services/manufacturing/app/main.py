@@ -11,7 +11,7 @@ import structlog
 from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
-from shared.middleware import TenantContextMiddleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.rate_limiting import create_limiter, setup_rate_limiting
 
@@ -42,6 +42,7 @@ app.add_middleware(
 )
 
 # Tenant isolation middleware
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 
 # Rate limiting
@@ -106,8 +107,21 @@ async def root():
         "service": "RegEngine Manufacturing Compliance Service",
         "version": settings.SERVICE_VERSION,
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "ready": "/ready"
     }
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Log service startup."""
+    logger.info("Service starting up", service=settings.SERVICE_NAME)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Log service shutdown."""
+    logger.info("Service shutting down", service=settings.SERVICE_NAME)
 
 
 if __name__ == "__main__":
