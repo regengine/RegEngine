@@ -29,21 +29,21 @@ router = APIRouter(prefix="/v1/gaming", tags=["gaming"])
 # Request/Response Models
 class TransactionCreate(BaseModel):
     """Request body for creating a transaction log."""
-    player_id: str = Field(..., min_length=1, max_length=255)
-    transaction_type: str = Field(..., pattern="^(WAGER|PAYOUT|JACKPOT|DEPOSIT|WITHDRAWAL)$")
-    amount_cents: int = Field(..., ge=0)
-    game_id: str = Field(..., min_length=1, max_length=255)
-    jurisdiction: str = Field(..., min_length=1, max_length=100)
-    timestamp: datetime
-    metadata: Optional[dict] = None
+    player_id: str = Field(..., min_length=1, max_length=255, description="Unique player identifier")
+    transaction_type: str = Field(..., pattern="^(WAGER|PAYOUT|JACKPOT|DEPOSIT|WITHDRAWAL)$", description="Transaction type: WAGER, PAYOUT, JACKPOT, DEPOSIT, or WITHDRAWAL")
+    amount_cents: int = Field(..., ge=0, description="Transaction amount in cents (integer to avoid floating point issues)")
+    game_id: str = Field(..., min_length=1, max_length=255, description="Unique game identifier")
+    jurisdiction: str = Field(..., min_length=1, max_length=100, description="Gaming jurisdiction code (e.g., US-NV, US-NJ)")
+    timestamp: datetime = Field(..., description="Transaction timestamp")
+    metadata: Optional[dict] = Field(None, description="Additional transaction metadata")
 
 
 class TransactionResponse(BaseModel):
     """Response body for transaction creation."""
-    id: int
-    content_hash: str
-    status: str
-    created_at: datetime
+    id: int = Field(..., description="Unique transaction identifier")
+    content_hash: str = Field(..., description="SHA-256 hash for immutability verification")
+    status: str = Field(..., description="Status: 'sealed' for new, 'duplicate' for existing")
+    created_at: datetime = Field(..., description="Timestamp when transaction was recorded")
     
     class Config:
         from_attributes = True
@@ -51,19 +51,19 @@ class TransactionResponse(BaseModel):
 
 class SelfExclusionCreate(BaseModel):
     """Request body for self-exclusion registration."""
-    player_id: str = Field(..., min_length=1, max_length=255)
-    duration_days: int = Field(..., ge=0)
-    reason: Optional[str] = Field(None, max_length=500)
+    player_id: str = Field(..., min_length=1, max_length=255, description="Player identifier to exclude")
+    duration_days: int = Field(..., ge=0, description="Exclusion duration in days (0 = permanent)")
+    reason: Optional[str] = Field(None, max_length=500, description="Reason for self-exclusion (optional)")
 
 
 class DashboardMetrics(BaseModel):
     """Dashboard metrics for Gaming compliance."""
-    total_transactions: int
-    total_volume_cents: int
-    active_players_24h: int
-    active_exclusions: int
-    pending_alerts: int
-    jurisdiction_breakdown: dict
+    total_transactions: int = Field(..., description="Total number of transactions recorded")
+    total_volume_cents: int = Field(..., description="Total transaction volume in cents")
+    active_players_24h: int = Field(..., description="Number of unique active players in last 24 hours")
+    active_exclusions: int = Field(..., description="Number of currently active self-exclusions")
+    pending_alerts: int = Field(..., description="Number of pending responsible gaming alerts")
+    jurisdiction_breakdown: dict = Field(..., description="Transaction counts by jurisdiction")
 
 
 # API Endpoints
