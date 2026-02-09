@@ -25,24 +25,26 @@ router = APIRouter(prefix="/v1/construction", tags=["construction"])
 
 
 class BIMChangeCreate(BaseModel):
-    project_id: str
-    project_name: str
-    change_number: str
-    change_type: str = Field(..., pattern="^(RFI|SUBMITTAL|CHANGE_ORDER|DESIGN_REVISION)$")
-    description: str
-    file_name: str
-    file_version: str
-    file_content: str
-    submitted_by: str
+    """Request body for creating BIM change record."""
+    project_id: str = Field(..., description="Unique project identifier")
+    project_name: str = Field(..., description="Name of the construction project")
+    change_number: str = Field(..., description="Unique change control number")
+    change_type: str = Field(..., pattern="^(RFI|SUBMITTAL|CHANGE_ORDER|DESIGN_REVISION)$", description="Type of BIM change: RFI (Request for Information), SUBMITTAL, CHANGE_ORDER, or DESIGN_REVISION")
+    description: str = Field(..., description="Detailed description of the change")
+    file_name: str = Field(..., description="Name of the BIM file")
+    file_version: str = Field(..., description="Version number of the BIM file")
+    file_content: str = Field(..., description="Base64-encoded content of the BIM file")
+    submitted_by: str = Field(..., description="Name or ID of the person submitting the change")
 
 
 class OSHAInspectionCreate(BaseModel):
-    project_id: str
-    inspection_date: datetime
-    inspector_name: str
-    inspection_type: str = Field(..., pattern="^(WEEKLY|MONTHLY|INCIDENT|OSHA_VISIT)$")
-    violations_found: int = 0
-    violation_description: str = None
+    """Request body for creating OSHA safety inspection record."""
+    project_id: str = Field(..., description="Unique project identifier")
+    inspection_date: datetime = Field(..., description="Date and time of the safety inspection")
+    inspector_name: str = Field(..., description="Name of the OSHA inspector")
+    inspection_type: str = Field(..., pattern="^(WEEKLY|MONTHLY|INCIDENT|OSHA_VISIT)$", description="Type of inspection: WEEKLY, MONTHLY, INCIDENT, or OSHA_VISIT")
+    violations_found: int = Field(0, description="Number of safety violations found during inspection")
+    violation_description: str = Field(None, description="Detailed description of any violations found")
 
 
 @router.post("/bim-change", status_code=status.HTTP_201_CREATED)
@@ -52,7 +54,18 @@ async def create_bim_change(
     api_key: str = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id)
 ):
-    """Create BIM change record with SHA-256 versioning."""
+    """
+    Create BIM change record with SHA-256 versioning.
+    
+    Tracks design changes, submittals, RFIs, and change orders with cryptographic integrity.
+    Essential for construction document control and audit trails.
+    
+    **Change Types:**
+    - RFI: Request for Information
+    - SUBMITTAL: Material/equipment submittals
+    - CHANGE_ORDER: Approved design modifications
+    - DESIGN_REVISION: Drawing revisions
+    """
     file_hash = hashlib.sha256(change.file_content.encode()).hexdigest()
     
     bim_change = BIMChangeRecord(
@@ -84,7 +97,21 @@ async def create_osha_inspection(
     api_key: str = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id)
 ):
-    """Record OSHA safety inspection per 29 CFR 1926."""
+    """
+    Record OSHA safety inspection per 29 CFR 1926 (Construction Standards).
+    
+    **Compliance Standards:**
+    - 29 CFR 1926 (OSHA Construction Standards)
+    - Required weekly/monthly jobsite inspections
+    - Incident investigation documentation
+    - OSHA visit documentation
+    
+    **Inspection Types:**
+    - WEEKLY: Regular jobsite safety walks
+    - MONTHLY: Comprehensive site inspections
+    - INCIDENT: Post-accident investigations
+    - OSHA_VISIT: Official OSHA inspector visits
+    """
     osha_inspection = OSHASafetyInspection(
         tenant_id=tenant_id,
         project_id=inspection.project_id,
@@ -109,7 +136,12 @@ async def get_dashboard(
     api_key: str = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id)
 ):
-    """Construction compliance dashboard metrics."""
+    """
+    Construction compliance dashboard metrics.
+    
+    Provides real-time overview of BIM change control and OSHA safety status
+    for project managers and compliance officers.
+    """
     total_changes = db.query(func.count(BIMChangeRecord.id)).filter(
         BIMChangeRecord.tenant_id == tenant_id
     ).scalar() or 0

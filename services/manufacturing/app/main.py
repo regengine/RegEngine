@@ -11,6 +11,7 @@ from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
 from shared.middleware import TenantContextMiddleware
+from shared.cors import get_allowed_origins, should_allow_credentials
 
 from .config import settings
 from .ncr_engine import router as ncr_router
@@ -24,9 +25,11 @@ logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="Manufacturing API",
-    description="Unified manufacturing regulatory API",
-    version="1.0.0",
+    title="RegEngine Manufacturing Compliance Service",
+    description="NCR/CAPA tracking and supplier quality management for ISO 9001/14001/45001 triple certification",
+    version=settings.SERVICE_VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # CORS middleware
