@@ -13,6 +13,7 @@ _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
 from shared.middleware import TenantContextMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
+from shared.rate_limiting import create_limiter, setup_rate_limiting
 
 from .config import settings
 from .transaction_vault import router as transaction_router
@@ -60,6 +61,9 @@ app.add_middleware(
 
 # Tenant isolation middleware
 app.add_middleware(TenantContextMiddleware)
+
+# Rate limiting
+setup_rate_limiting(app)
 
 # Include routers
 app.include_router(transaction_router)

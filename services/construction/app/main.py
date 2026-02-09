@@ -4,24 +4,24 @@ Construction Compliance Service - Main application.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 import sys
+
+import structlog
 
 from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
 from shared.middleware import TenantContextMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
+from shared.rate_limiting import create_limiter, setup_rate_limiting
 
 from .config import settings
 from .bim_tracking import router as bim_router
+from .logging_config import configure_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Configure structured logging
+configure_logging()
+logger = structlog.get_logger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -40,6 +40,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(TenantContextMiddleware)
+
+# Rate limiting
+setup_rate_limiting(app)
+
 app.include_router(bim_router)
 
 
