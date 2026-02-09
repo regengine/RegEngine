@@ -13,7 +13,7 @@ jobs:
         service: [energy, admin, graph, nlp, ingestion]
     
     env:
-      PYTHONPATH: ${{ github.workspace }}
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services
     steps:
       - uses: actions/checkout@v3
       
