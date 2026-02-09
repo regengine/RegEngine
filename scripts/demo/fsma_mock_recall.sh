@@ -40,8 +40,8 @@ echo ""
 # -----------------------------------------------------------------------------
 echo -e "${YELLOW}[1/6] Checking API health...${NC}"
 
-HEALTH=$(curl -s "${API_BASE}/v1/fsma/health")
-if echo "$HEALTH" | grep -q "ok"; then
+HEALTH=$(curl -s "${API_BASE}/health")
+if echo "$HEALTH" | grep -q "healthy"; then
     echo -e "${GREEN}✓ FSMA API is healthy${NC}"
 else
     echo -e "${RED}✗ FSMA API not responding${NC}"

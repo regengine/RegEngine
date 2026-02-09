@@ -29,7 +29,7 @@ def http_client(request):
         yield MockClient()
 
 class MockClient:
-    def post(self, url, json=None):
+    def post(self, url, json=None, **kwargs):
         class Response:
             status_code = 200
             text = "Mock Success"
@@ -39,7 +39,7 @@ class MockClient:
                 return {}
         return Response()
         
-    def get(self, url):
+    def get(self, url, **kwargs):
         class Response:
             status_code = 200
             def json(self):

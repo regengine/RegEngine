@@ -148,6 +148,90 @@ export const useActivityTimeline = (limit: number = 5): UseQueryResult<TimelineE
 };
 
 // ============================================================================
+// CTE Coverage Analysis
+// ============================================================================
+
+interface CTECoverage {
+    event_type: string;
+    total_lots: number;
+    covered_lots: number;
+    coverage_pct: number;
+    status: 'excellent' | 'good' | 'warning' | 'critical';
+}
+
+export const useCTECoverage = (): UseQueryResult<CTECoverage[]> => {
+    return useQuery({
+        queryKey: ['fsma', 'dashboard', 'cte-coverage'],
+        queryFn: async () => {
+            return [
+                { event_type: 'Harvest (Growing)', total_lots: 430, covered_lots: 428, coverage_pct: 99.5, status: 'excellent' as const },
+                { event_type: 'Cooling', total_lots: 430, covered_lots: 418, coverage_pct: 97.2, status: 'excellent' as const },
+                { event_type: 'Packing (Initial)', total_lots: 430, covered_lots: 425, coverage_pct: 98.8, status: 'excellent' as const },
+                { event_type: 'Transformation', total_lots: 312, covered_lots: 298, coverage_pct: 95.5, status: 'good' as const },
+                { event_type: 'Shipping', total_lots: 430, covered_lots: 422, coverage_pct: 98.1, status: 'excellent' as const },
+                { event_type: 'Receiving', total_lots: 430, covered_lots: 410, coverage_pct: 95.3, status: 'good' as const },
+            ];
+        },
+        staleTime: 60000,
+    });
+};
+
+// ============================================================================
+// Traceability Trend (Weekly)
+// ============================================================================
+
+interface TrendPoint {
+    week: string;
+    score: number;
+    gaps: number;
+    events_processed: number;
+}
+
+export const useTraceabilityTrend = (): UseQueryResult<TrendPoint[]> => {
+    return useQuery({
+        queryKey: ['fsma', 'dashboard', 'trend'],
+        queryFn: async () => {
+            return [
+                { week: 'Jan 6', score: 91, gaps: 28, events_processed: 1240 },
+                { week: 'Jan 13', score: 93, gaps: 22, events_processed: 1380 },
+                { week: 'Jan 20', score: 94, gaps: 19, events_processed: 1510 },
+                { week: 'Jan 27', score: 95, gaps: 16, events_processed: 1620 },
+                { week: 'Feb 3', score: 97, gaps: 14, events_processed: 1780 },
+                { week: 'Feb 10', score: 98, gaps: 12, events_processed: 1890 },
+            ];
+        },
+        staleTime: 60000,
+    });
+};
+
+// ============================================================================
+// Gap Analysis Breakdown
+// ============================================================================
+
+interface GapCategory {
+    category: string;
+    count: number;
+    severity: 'high' | 'medium' | 'low';
+    description: string;
+    regulation: string;
+}
+
+export const useGapAnalysis = (): UseQueryResult<GapCategory[]> => {
+    return useQuery({
+        queryKey: ['fsma', 'dashboard', 'gap-analysis'],
+        queryFn: async () => {
+            return [
+                { category: 'Missing KDEs', count: 5, severity: 'medium' as const, description: 'Key Data Elements not captured at one or more CTEs', regulation: '21 CFR § 1.1315' },
+                { category: 'Broken TLC Links', count: 3, severity: 'high' as const, description: 'Traceability Lot Codes not linked across consecutive events', regulation: '21 CFR § 1.1320' },
+                { category: 'Late CTE Capture', count: 2, severity: 'low' as const, description: 'Events recorded more than 24h after occurrence', regulation: '21 CFR § 1.1455' },
+                { category: 'Incomplete Receiving', count: 2, severity: 'medium' as const, description: 'Receiving events missing supplier verification data', regulation: '21 CFR § 1.1345(b)' },
+            ];
+        },
+        staleTime: 60000,
+    });
+};
+
+// ============================================================================
 // System Health
 // ============================================================================
 

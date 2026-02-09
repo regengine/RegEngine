@@ -333,7 +333,7 @@ export default function RegEngineLanding() {
                 transition: "all 0.2s",
               }}
             >
-              Walmart Suppliers →
+              Retailer Readiness →
             </a>
           </div>
         </div>
@@ -378,7 +378,7 @@ export default function RegEngineLanding() {
             NEW
           </div>
           <span style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: 500 }}>
-            Now supporting <strong style={{ color: "#10b981" }}>GS1 EPCIS 2.0</strong> for Walmart &amp; Kroger supplier automation
+            Now supporting <strong style={{ color: "#10b981" }}>GS1 EPCIS 2.0</strong> for major retailer supplier automation
           </span>
           <a
             href="/ftl-checker"
@@ -423,7 +423,7 @@ export default function RegEngineLanding() {
         >
           {[
             { value: "23", label: "FDA categories", sublabel: "verified against FTL" },
-            { value: "EPCIS 2.0", label: "GS1 Export", sublabel: "Walmart/Kroger ready" },
+            { value: "EPCIS 2.0", label: "GS1 Export", sublabel: "Retailer-ready" },
             { value: "SHA-256", label: "Audit trail", sublabel: "cryptographic hashing" },
             { value: "24hr", label: "FDA response", sublabel: "recall-ready export" },
           ].map((stat, i) => (
@@ -594,7 +594,7 @@ export default function RegEngineLanding() {
                 badge: "Free",
               },
               {
-                title: "Walmart Readiness Assessment",
+                title: "Retailer Readiness Assessment",
                 description: "Interactive FSMA 204 compliance checklist. Self-assess your gaps and get a founder-led analysis of what needs fixing.",
                 icon: <ShieldCheck size={20} />,
                 href: "/walmart-suppliers",

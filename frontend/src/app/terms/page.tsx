@@ -44,7 +44,7 @@ You grant us a limited license to store, process, and display your data as neces
     },
     {
         title: "4. Free Tools",
-        content: `The FTL Coverage Checker, Walmart Readiness Assessment, and other free tools are provided as-is with no warranty. They are informational tools based on our reading of public FDA regulations.
+        content: `The FTL Coverage Checker, Retailer Readiness Assessment, and other free tools are provided as-is with no warranty. They are informational tools based on our reading of public FDA regulations.
 
 Free tools are provided without warranties of any kind, including merchantability, fitness for a particular purpose, or non-infringement, and RegEngine Inc. shall have no liability arising from reliance on free tools.
 
