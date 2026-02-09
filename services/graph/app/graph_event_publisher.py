@@ -14,13 +14,22 @@ TOPIC_GRAPH_AUDIT = "graph.audit"  # New topic for audit log
 
 class GraphEventPublisher:
     def __init__(self):
-        self.producer = KafkaProducer(
-            bootstrap_servers=KAFKA_BROKER,
-            value_serializer=lambda x: json.dumps(x).encode("utf-8"),
-        )
+        try:
+            self.producer = KafkaProducer(
+                bootstrap_servers=KAFKA_BROKER,
+                value_serializer=lambda x: json.dumps(x).encode("utf-8"),
+                request_timeout_ms=5000,
+                max_block_ms=5000,
+            )
+        except Exception as e:
+            logger.warning("Kafka producer unavailable (%s): audit events will be skipped. "
+                           "This is expected when running from host.", e)
+            self.producer = None
 
     def publish_control_event(self, tenant_id: str, control_data: dict):
         """Emits an audit event after a control is upserted."""
+        if not self.producer:
+            return
         try:
             payload = {
                 "event_type": "control",
@@ -34,6 +43,8 @@ class GraphEventPublisher:
 
     def publish_mapping_event(self, tenant_id: str, mapping_data: dict):
         """Emits an audit event after a mapping is created."""
+        if not self.producer:
+            return
         try:
             payload = {
                 "event_type": "mapping",
