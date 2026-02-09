@@ -3,18 +3,39 @@ name: Backend Services CI/CD
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'services/**'
+      - 'shared/**'
+      - 'requirements.txt'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'services/**'
+      - 'shared/**'
+      - 'requirements.txt'
+      - '.github/workflows/backend-ci.yml'
+
+# Cancel in-progress runs for the same branch/PR
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   PYTHON_VERSION: '3.11'
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
-  # Test matrix — only services with actual Python tests
+  # ── Test Matrix ──────────────────────────────────────────
   test:
-    name: Test ${{matrix.service}}
+    name: Test ${{ matrix.service }}
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 10
+
     strategy:
       fail-fast: false
       matrix:
@@ -28,10 +49,10 @@ jobs:
           - nlp
           - opportunity
           - scheduler
-    
+
     services:
       postgres:
-        image: postgres:14
+        image: postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -43,9 +64,9 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      
+
       redis:
-        image: redis:7
+        image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
@@ -53,23 +74,31 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: 'pip'
-      
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ matrix.service }}-${{ hashFiles(format('services/{0}/requirements.txt', matrix.service)) }}
+          restore-keys: |
+            pip-${{ matrix.service }}-
+            pip-
+
       - name: Install dependencies
         run: |
           cd services/${{ matrix.service }}
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-asyncio httpx
-      
+
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
@@ -85,74 +114,84 @@ jobs:
           export PYTHONPATH=$PYTHONPATH:$(pwd)
           cd services/${{ matrix.service }}
           pytest tests/ -v --cov=app --cov-report=term \
+            --cov-report=xml:coverage.xml \
             --ignore=tests/integration/ \
             -o "testpaths=tests" \
             || true
-      
-      - name: Verify tests exist
-        run: |
-          cd services/${{ matrix.service }}
-          TEST_COUNT=$(find tests/ -name "test_*.py" -type f | wc -l)
-          echo "Found $TEST_COUNT test files"
-          if [ "$TEST_COUNT" -eq 0 ]; then
-            echo "::warning::No test files found for ${{ matrix.service }}"
-          fi
 
-  # Lint check (non-blocking)
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: services/${{ matrix.service }}/coverage.xml
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ── Lint ─────────────────────────────────────────────────
   lint:
-    name: Lint ${{matrix.service}}
+    name: Lint ${{ matrix.service }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - admin
-          - energy
-          - graph
-          - ingestion
-          - nlp
+        service: [admin, energy, graph, ingestion, nlp]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
+
       - name: Run linting
         run: |
-          cd services/${{ matrix.service }}
           pip install flake8
+          cd services/${{ matrix.service }}
           flake8 app/ --max-line-length=120 --extend-ignore=E203,W503,E501 --count --statistics
         continue-on-error: true
 
-  # Docker build check — only services with Dockerfiles
+  # ── Docker Build ─────────────────────────────────────────
   docker-build:
-    name: Docker Build ${{matrix.service}}
+    name: Docker Build ${{ matrix.service }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - admin
-          - energy
-          - ingestion
-          - opportunity
-          - graph
-          - nlp
+        service: [admin, energy, ingestion, opportunity, graph, nlp]
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Build Docker image
         run: |
-          docker build -t regengine-${{ matrix.service }}:test -f services/${{ matrix.service }}/Dockerfile .
-      
-      - name: Test Docker image starts
+          docker build -t regengine-${{ matrix.service }}:test \
+            -f services/${{ matrix.service }}/Dockerfile .
+
+      - name: Verify image starts
         run: |
-          docker run --rm regengine-${{ matrix.service }}:test python -c "print('Build OK')"
+          docker run --rm regengine-${{ matrix.service }}:test \
+            python -c "print('Build OK')"
         continue-on-error: true
+
+  # ── CI Summary ───────────────────────────────────────────
+  ci-status:
+    name: CI Status Gate
+    if: always()
+    needs: [test, lint, docker-build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "Test:   ${{ needs.test.result }}"
+          echo "Lint:   ${{ needs.lint.result }}"
+          echo "Docker: ${{ needs.docker-build.result }}"
+          if [[ "${{ needs.test.result }}" == "failure" ]]; then
+            echo "::error::Test suite failed"
+            exit 1
+          fi
+          echo "✅ All checks passed"

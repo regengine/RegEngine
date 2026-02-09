@@ -3,6 +3,7 @@
 [![Backend CI](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/backend-ci.yml)
 [![Frontend CI](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/frontend-ci.yml)
 [![Security](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/security.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/security.yml)
+[![CodeQL](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/codeql.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 
