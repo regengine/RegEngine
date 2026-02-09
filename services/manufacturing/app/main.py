@@ -11,6 +11,7 @@ from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
 from shared.middleware import TenantContextMiddleware
+from shared.cors import get_allowed_origins, should_allow_credentials
 
 from .config import settings
 from .ncr_engine import router as ncr_router
