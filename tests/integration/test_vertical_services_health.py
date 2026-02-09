@@ -1,5 +1,5 @@
 """
-Unit tests for vertical services health check endpoints.
+Integration tests for vertical services health check endpoints.
 
 Tests health and readiness endpoints for:
 - Aerospace service

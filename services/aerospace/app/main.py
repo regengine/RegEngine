@@ -65,7 +65,7 @@ async def ready_check():
     
     Returns 503 if database is unreachable.
     """
-    from fastapi import Depends, status
+    from fastapi import status
     from fastapi.responses import JSONResponse
     from sqlalchemy.orm import Session
     from sqlalchemy import text
