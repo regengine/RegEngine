@@ -19,7 +19,7 @@ from .transaction_vault import router as transaction_router
 from .logging_config import configure_logging
 
 # Configure structured logging
-configure_logging(level=settings.LOG_LEVEL if hasattr(settings, 'LOG_LEVEL') else "INFO")
+configure_logging(level=settings.LOG_LEVEL)
 logger = structlog.get_logger("gaming_service")
 
 
