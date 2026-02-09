@@ -1,7 +1,7 @@
 """
 Test configuration and fixtures with PostgreSQL UUID support for SQLite.
 
-The Manufacturing service uses PostgreSQL-specific UUID types which aren't natively
+The Construction service uses PostgreSQL-specific UUID types which aren't natively
 supported in SQLite. This conftest patches the PGUUID type at import time
 to use a custom TypeDecorator that works with SQLite.
 """
@@ -13,13 +13,13 @@ from sqlalchemy import create_engine, TypeDecorator, CHAR
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# Ensure manufacturing service is on the path and clear any conflicting 'app' modules
-_manufacturing_dir = Path(__file__).resolve().parent.parent
+# Ensure construction service is on the path and clear any conflicting 'app' modules
+_construction_dir = Path(__file__).resolve().parent.parent
 # Remove any previously-cached 'app' module from other services to avoid cross-contamination
 _to_remove = [key for key in sys.modules if key == 'app' or key.startswith('app.')]
 for key in _to_remove:
     del sys.modules[key]
-sys.path.insert(0, str(_manufacturing_dir))
+sys.path.insert(0, str(_construction_dir))
 
 # First, create the custom UUID type for SQLite
 class SqliteUUID(TypeDecorator):
@@ -52,7 +52,7 @@ postgresql.UUID = SqliteUUID
 try:
     from app.models import Base
 except ImportError:
-    from services.manufacturing.app.models import Base
+    from services.construction.app.models import Base
 
 
 @pytest.fixture(scope="session")

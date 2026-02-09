@@ -33,6 +33,7 @@ addopts = "-ra -q --asyncio-mode=auto --import-mode=importlib"
 testpaths = [
     "tests",
     "services/admin/tests",
+    "services/aerospace/tests",
     "services/automotive/tests",
     "services/energy/tests",
     "services/graph/tests",

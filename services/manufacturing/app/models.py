@@ -66,7 +66,7 @@ class NonConformanceReport(Base):
     closed_date = Column(DateTime, nullable=True)
     closed_by = Column(String(255), nullable=True)
     
-    additional_metadata = Column(JSON, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     
