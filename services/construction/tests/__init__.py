@@ -1,1 +1,1 @@
-# Construction service tests
+"""Tests for construction compliance service."""

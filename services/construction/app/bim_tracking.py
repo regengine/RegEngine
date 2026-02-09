@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
+from typing import Optional
 import hashlib
 
 from .models import BIMChangeRecord, OSHASafetyInspection, SubcontractorCertification
@@ -42,7 +43,7 @@ class OSHAInspectionCreate(BaseModel):
     inspector_name: str
     inspection_type: str = Field(..., pattern="^(WEEKLY|MONTHLY|INCIDENT|OSHA_VISIT)$")
     violations_found: int = 0
-    violation_description: str = None
+    violation_description: Optional[str] = None
 
 
 @router.post("/bim-change", status_code=status.HTTP_201_CREATED)
