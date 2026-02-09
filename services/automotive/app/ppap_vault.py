@@ -30,25 +30,25 @@ router = APIRouter(prefix="/v1/automotive", tags=["automotive"])
 # Request/Response Models
 class PPAPSubmissionCreate(BaseModel):
     """Request body for creating PPAP submission."""
-    part_number: str = Field(..., min_length=1, max_length=100)
-    part_name: str = Field(..., min_length=1, max_length=255)
-    submission_level: int = Field(..., ge=1, le=5)
-    oem_customer: str = Field(..., min_length=1, max_length=255)
-    customer_part_number: Optional[str] = Field(None, max_length=100)
-    submission_date: datetime
-    metadata: Optional[dict] = None
+    part_number: str = Field(..., min_length=1, max_length=100, description="Internal part number")
+    part_name: str = Field(..., min_length=1, max_length=255, description="Descriptive name of the part")
+    submission_level: int = Field(..., ge=1, le=5, description="PPAP submission level (1-5): 1=PSW only, 3=Full documentation")
+    oem_customer: str = Field(..., min_length=1, max_length=255, description="OEM customer name (e.g., Ford, GM, Toyota)")
+    customer_part_number: Optional[str] = Field(None, max_length=100, description="Customer's part number (if different)")
+    submission_date: datetime = Field(..., description="Date of PPAP submission")
+    metadata: Optional[dict] = Field(None, description="Additional metadata")
 
 
 class PPAPSubmissionResponse(BaseModel):
     """Response body for PPAP submission."""
-    id: int
-    part_number: str
-    submission_level: int
-    oem_customer: str
-    approval_status: str
-    elements_uploaded: int
-    elements_required: int
-    created_at: datetime
+    id: int = Field(..., description="Unique submission identifier")
+    part_number: str = Field(..., description="Part number")
+    submission_level: int = Field(..., description="PPAP submission level (1-5)")
+    oem_customer: str = Field(..., description="OEM customer name")
+    approval_status: str = Field(..., description="Approval status: PENDING, APPROVED, REJECTED, or INTERIM")
+    elements_uploaded: int = Field(..., description="Number of PPAP elements uploaded")
+    elements_required: int = Field(..., description="Number of PPAP elements required for this level")
+    created_at: datetime = Field(..., description="Timestamp when submission was created")
     
     class Config:
         from_attributes = True
@@ -56,11 +56,11 @@ class PPAPSubmissionResponse(BaseModel):
 
 class PPAPElementResponse(BaseModel):
     """Response body for PPAP element upload."""
-    id: int
-    element_type: str
-    content_hash: str
-    file_size_bytes: int
-    uploaded_at: datetime
+    id: int = Field(..., description="Unique element identifier")
+    element_type: str = Field(..., description="One of 18 PPAP element types")
+    content_hash: str = Field(..., description="SHA-256 hash for integrity verification")
+    file_size_bytes: int = Field(..., description="File size in bytes")
+    uploaded_at: datetime = Field(..., description="Upload timestamp")
     
     class Config:
         from_attributes = True
@@ -68,23 +68,23 @@ class PPAPElementResponse(BaseModel):
 
 class LPAAuditCreate(BaseModel):
     """Request body for LPA audit record."""
-    layer: str = Field(..., pattern="^(EXECUTIVE|MANAGEMENT|FRONTLINE)$")
-    part_number: Optional[str] = Field(None, max_length=100)
-    process_step: str = Field(..., min_length=1, max_length=255)
-    question: str = Field(..., min_length=1)
-    result: str = Field(..., pattern="^(PASS|FAIL|NA)$")
-    auditor_name: str = Field(..., min_length=1, max_length=255)
-    corrective_action: Optional[str] = None
-    audit_date: Optional[datetime] = None
+    layer: str = Field(..., pattern="^(EXECUTIVE|MANAGEMENT|FRONTLINE)$", description="LPA layer: EXECUTIVE (top management), MANAGEMENT (supervisors), or FRONTLINE (team leaders)")
+    part_number: Optional[str] = Field(None, max_length=100, description="Part number being audited (if applicable)")
+    process_step: str = Field(..., min_length=1, max_length=255, description="Process step being audited")
+    question: str = Field(..., min_length=1, description="Audit question or checkpoint")
+    result: str = Field(..., pattern="^(PASS|FAIL|NA)$", description="Audit result: PASS, FAIL, or NA (Not Applicable)")
+    auditor_name: str = Field(..., min_length=1, max_length=255, description="Name of the auditor")
+    corrective_action: Optional[str] = Field(None, description="Description of corrective action (if FAIL)")
+    audit_date: Optional[datetime] = Field(None, description="Date of the audit")
 
 
 class DashboardMetrics(BaseModel):
     """Dashboard metrics for Automotive compliance."""
-    total_ppap_submissions: int
-    pending_approvals: int
-    approved_this_month: int
-    lpa_pass_rate_30d: float
-    open_corrective_actions: int
+    total_ppap_submissions: int = Field(..., description="Total number of PPAP submissions")
+    pending_approvals: int = Field(..., description="Number of PPAP submissions pending approval")
+    approved_this_month: int = Field(..., description="Number of PPAP approvals this month")
+    lpa_pass_rate_30d: float = Field(..., description="LPA pass rate for last 30 days (percentage)")
+    open_corrective_actions: int = Field(..., description="Number of open corrective actions from LPA failures")
 
 
 # PPAP Endpoints
