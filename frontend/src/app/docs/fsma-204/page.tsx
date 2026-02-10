@@ -43,7 +43,7 @@ export default function FSMA204GuidePage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         FSMA 204 Integration Guide
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px', maxWidth: '600px' }}>
@@ -79,14 +79,14 @@ export default function FSMA204GuidePage() {
 
                 {/* What is FSMA 204? */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         What is FSMA 204?
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
                         The FDA Food Safety Modernization Act Section 204 (FSMA 204) requires companies handling foods on
-                        the <strong style={{ color: '#ffffff' }}>Food Traceability List (FTL)</strong> to maintain standardized
+                        the <strong style={{ color: 'var(--re-text-primary)' }}>Food Traceability List (FTL)</strong> to maintain standardized
                         traceability records. In a recall, you must provide the FDA with a sortable spreadsheet within
-                        <strong style={{ color: '#ffffff' }}> 24 hours</strong>.
+                        <strong style={{ color: 'var(--re-text-primary)' }}> 24 hours</strong>.
                     </p>
 
                     <div style={{
@@ -96,9 +96,9 @@ export default function FSMA204GuidePage() {
                         padding: '16px 20px',
                     }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                            <AlertTriangle style={{ width: 20, height: 20, color: '#eab308', flexShrink: 0, marginTop: '2px' }} />
+                            <AlertTriangle style={{ width: 20, height: 20, color: 'var(--re-warning)', flexShrink: 0, marginTop: '2px' }} />
                             <div>
-                                <p style={{ color: '#ffffff', fontWeight: 600, marginBottom: '4px' }}>Enforcement Delayed</p>
+                                <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Enforcement Delayed</p>
                                 <p style={{ color: T.text, fontSize: '14px', margin: 0 }}>
                                     The FDA announced an enforcement discretion period ending <strong>July 20, 2028</strong>.
                                     RegEngine auto-detected this regulatory change and updated all compliance facts.
@@ -110,7 +110,7 @@ export default function FSMA204GuidePage() {
 
                 {/* Quick Start */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Quick Start: Record a CTE
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -143,7 +143,7 @@ export default function FSMA204GuidePage() {
                             fontSize: '13px',
                             lineHeight: 1.6,
                             overflowX: 'auto',
-                            color: '#e2e8f0',
+                            color: 'var(--re-text-primary)',
                         }}>
                             <code>{`curl -X POST https://api.regengine.co/v1/records \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
@@ -189,7 +189,7 @@ export default function FSMA204GuidePage() {
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
                             <span style={{ fontSize: '12px', color: T.accent }}>201 Created</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                             <code>{`{
   "id": "rec_3x7Kp9mN2vL",
   "record_hash": "a3f2b891c4d5e6f78901a2b3c4d5e6f7...",
@@ -205,7 +205,7 @@ export default function FSMA204GuidePage() {
 
                 {/* CTEs and KDEs */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Critical Tracking Events (CTEs)
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '24px' }}>
@@ -236,7 +236,7 @@ export default function FSMA204GuidePage() {
                                     { cte: 'Transformation', event: 'transformation', kdes: 'Input TLCs, Output TLC, Date, Location' },
                                 ].map((row, i, arr) => (
                                     <tr key={row.event} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                        <td style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 500 }}>{row.cte}</td>
+                                        <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{row.cte}</td>
                                         <td style={{ padding: '12px 16px' }}>
                                             <code style={{
                                                 background: 'rgba(16,185,129,0.2)',
@@ -256,11 +256,11 @@ export default function FSMA204GuidePage() {
 
                 {/* FDA Request Mode */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         FDA Request Mode
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
-                        When the FDA requests traceability data during a recall, you have <strong style={{ color: '#ffffff' }}>24 hours</strong> to
+                        When the FDA requests traceability data during a recall, you have <strong style={{ color: 'var(--re-text-primary)' }}>24 hours</strong> to
                         provide an electronic sortable spreadsheet per 21 CFR 1.1455(b)(3). RegEngine generates this with one API call:
                     </p>
 
@@ -284,7 +284,7 @@ export default function FSMA204GuidePage() {
                             fontSize: '13px',
                             lineHeight: 1.6,
                             overflowX: 'auto',
-                            color: '#e2e8f0',
+                            color: 'var(--re-text-primary)',
                         }}>
                             <code>{`curl https://api.regengine.co/fsma/v1/export/fda-request \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
@@ -307,7 +307,7 @@ export default function FSMA204GuidePage() {
                         border: `1px solid ${T.border}`,
                         fontSize: '13px',
                         fontFamily: T.fontMono,
-                        color: '#94a3b8',
+                        color: 'var(--re-text-tertiary)',
                         overflowX: 'auto',
                     }}>
                         <code>Entry #, Event Type, Event Date, Product, TLC, Quantity, Unit, Location, Source, Destination, Reference Doc URL</code>
@@ -316,7 +316,7 @@ export default function FSMA204GuidePage() {
 
                 {/* Supply Chain Tracing */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Supply Chain Tracing
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -338,7 +338,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span style={{ fontSize: '12px', color: T.textMuted }}>Forward Trace (where did this lot go?)</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                             <code>{`GET /graph/v1/trace/forward?lot_code=LOT-2026-001`}</code>
                         </pre>
                     </div>
@@ -357,7 +357,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span style={{ fontSize: '12px', color: T.textMuted }}>Backward Trace (where did this lot come from?)</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                             <code>{`GET /graph/v1/trace/backward?lot_code=LOT-2026-001`}</code>
                         </pre>
                     </div>
@@ -365,7 +365,7 @@ export default function FSMA204GuidePage() {
 
                 {/* Verify Don't Trust */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Verify, Don&apos;t Trust
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -386,7 +386,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span style={{ fontSize: '12px', color: T.textMuted }}>Independent Verification</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                             <code>{`python verify_chain.py --audit
 # ✓ Chain integrity verified
 # ✓ 1847 records validated
@@ -397,7 +397,7 @@ export default function FSMA204GuidePage() {
 
                 {/* API Reference Links */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Related Endpoints
                     </h2>
 
@@ -432,7 +432,7 @@ export default function FSMA204GuidePage() {
                     borderRadius: '8px',
                     padding: '24px',
                 }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Next Steps
                     </h3>
                     <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
@@ -461,7 +461,7 @@ export default function FSMA204GuidePage() {
                                 alignItems: 'center',
                                 gap: '8px',
                                 background: 'rgba(255,255,255,0.1)',
-                                color: '#ffffff',
+                                color: 'var(--re-text-primary)',
                                 padding: '10px 20px',
                                 borderRadius: '6px',
                                 fontWeight: 600,
@@ -479,7 +479,7 @@ export default function FSMA204GuidePage() {
                                 alignItems: 'center',
                                 gap: '8px',
                                 background: 'rgba(255,255,255,0.1)',
-                                color: '#ffffff',
+                                color: 'var(--re-text-primary)',
                                 padding: '10px 20px',
                                 borderRadius: '6px',
                                 fontWeight: 600,

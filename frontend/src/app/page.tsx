@@ -864,7 +864,7 @@ export default function RegEngineLanding() {
                           disabled={!waitlistEmail}
                           style={{
                             padding: "10px 18px",
-                            background: waitlistEmail ? "#2563eb" : "rgba(255,255,255,0.04)",
+                            background: waitlistEmail ? "var(--re-accent-blue)" : "rgba(255,255,255,0.04)",
                             color: waitlistEmail ? "#fff" : "var(--re-text-disabled)",
                             border: "none",
                             borderRadius: "6px",
@@ -979,8 +979,8 @@ export default function RegEngineLanding() {
                   gap: "6px",
                 }}
               >
-                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444", opacity: 0.6 }} />
-                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b", opacity: 0.6 }} />
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--re-danger)", opacity: 0.6 }} />
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--re-warning)", opacity: 0.6 }} />
                 <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--re-brand)", opacity: 0.6 }} />
                 <span style={{ marginLeft: "8px", fontSize: "11px", color: "var(--re-text-disabled)", fontFamily: "'JetBrains Mono', monospace" }}>
                   verify_compliance.sh
@@ -1002,10 +1002,10 @@ export default function RegEngineLanding() {
                 {" "}<span style={{ color: "var(--re-brand)" }}>api.regengine.co/v1/verify/doc_a1b2c3</span>
                 {"\n\n"}
                 <span style={{ color: "var(--re-text-disabled)" }}>{"{"}</span>
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"document_id"</span>: <span style={{ color: "#fbbf24" }}>"doc_a1b2c3"</span>,
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"status"</span>: <span style={{ color: "#fbbf24" }}>"verified"</span>,
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"hashes"</span>: {"{ "}<span style={{ color: "var(--re-info)" }}>"content_sha256"</span>: <span style={{ color: "#fbbf24" }}>"a3f2..."</span>{" }"},
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"verified_at"</span>: <span style={{ color: "#fbbf24" }}>"2026-02-08T20:15:00Z"</span>
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"document_id"</span>: <span style={{ color: "var(--re-warning)" }}>"doc_a1b2c3"</span>,
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"status"</span>: <span style={{ color: "var(--re-warning)" }}>"verified"</span>,
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"hashes"</span>: {"{ "}<span style={{ color: "var(--re-info)" }}>"content_sha256"</span>: <span style={{ color: "var(--re-warning)" }}>"a3f2..."</span>{" }"},
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"verified_at"</span>: <span style={{ color: "var(--re-warning)" }}>"2026-02-08T20:15:00Z"</span>
                 {"\n"}<span style={{ color: "var(--re-text-disabled)" }}>{"}"}</span>
               </pre>
             </div>

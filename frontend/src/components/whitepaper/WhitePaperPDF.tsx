@@ -24,16 +24,16 @@ interface WhitePaperPDFProps {
 }
 
 const verticalColors: Record<string, string> = {
-    energy: '#10b981',      // Green
-    nuclear: '#3b82f6',     // Blue
-    finance: '#8b5cf6',     // Purple
-    healthcare: '#ec4899',  // Pink
-    manufacturing: '#f59e0b', // Amber
-    aerospace: '#06b6d4',   // Cyan
-    automotive: '#ef4444',  // Red
-    construction: '#f97316', // Orange
-    gaming: '#a855f7',      // Purple
-    technology: '#6366f1',  // Indigo
+    energy: 'var(--re-brand)',      // Green
+    nuclear: 'var(--re-accent-blue)',     // Blue
+    finance: 'var(--re-accent-purple)',     // Purple
+    healthcare: 'var(--re-accent-pink)',  // Pink
+    manufacturing: 'var(--re-warning)', // Amber
+    aerospace: 'var(--re-accent-cyan)',   // Cyan
+    automotive: 'var(--re-danger)',  // Red
+    construction: 'var(--re-warning)', // Orange
+    gaming: 'var(--re-accent-purple)',      // Purple
+    technology: 'var(--re-accent-purple)',  // Indigo
 };
 
 export function WhitePaperPDF({
@@ -44,7 +44,7 @@ export function WhitePaperPDF({
     children,
     coverImage,
 }: WhitePaperPDFProps) {
-    const brandColor = verticalColors[vertical] || '#10b981';
+    const brandColor = verticalColors[vertical] || 'var(--re-brand)';
 
     return (
         <div className="whitepaper-container">

@@ -29,10 +29,10 @@ export default function HealthcareDocsPage() {
                     </Link>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                        <ShieldCheck style={{ width: 28, height: 28, color: '#ec4899' }} />
+                        <ShieldCheck style={{ width: 28, height: 28, color: 'var(--re-accent-pink)' }} />
                         <span style={{
                             background: 'rgba(236,72,153,0.2)',
-                            color: '#ec4899',
+                            color: 'var(--re-accent-pink)',
                             fontSize: '11px',
                             fontWeight: 600,
                             padding: '4px 10px',
@@ -42,7 +42,7 @@ export default function HealthcareDocsPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Healthcare Compliance
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px' }}>
@@ -56,7 +56,7 @@ export default function HealthcareDocsPage() {
 
                 {/* Scope Preview */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         What&apos;s Coming
                     </h2>
 
@@ -73,7 +73,7 @@ export default function HealthcareDocsPage() {
                                 borderRadius: '8px',
                                 border: `1px solid ${T.border}`,
                             }}>
-                                <div style={{ fontWeight: 600, color: '#ffffff', marginBottom: '4px' }}>{item.title}</div>
+                                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>{item.title}</div>
                                 <div style={{ fontSize: '14px', color: T.textMuted }}>{item.desc}</div>
                             </div>
                         ))}
@@ -82,7 +82,7 @@ export default function HealthcareDocsPage() {
 
                 {/* Sample API Call */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         <Clock style={{ width: 20, height: 20, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
                         Preview: PHI Access Log
                     </h2>
@@ -106,7 +106,7 @@ export default function HealthcareDocsPage() {
                             margin: 0,
                             fontSize: '13px',
                             lineHeight: 1.5,
-                            color: '#64748b',
+                            color: 'var(--re-text-muted)',
                         }}>
                             <code>{`{
   "type": "compliance_event",
@@ -131,8 +131,8 @@ export default function HealthcareDocsPage() {
                     padding: '32px',
                     textAlign: 'center',
                 }}>
-                    <Mail style={{ width: 32, height: 32, color: '#ec4899', margin: '0 auto 16px' }} />
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '8px' }}>
+                    <Mail style={{ width: 32, height: 32, color: 'var(--re-accent-pink)', margin: '0 auto 16px' }} />
+                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Get Early Access
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>
@@ -144,7 +144,7 @@ export default function HealthcareDocsPage() {
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '8px',
-                            background: '#ec4899',
+                            background: 'var(--re-accent-pink)',
                             color: 'white',
                             padding: '12px 24px',
                             borderRadius: '6px',

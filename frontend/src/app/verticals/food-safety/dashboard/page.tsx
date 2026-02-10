@@ -36,10 +36,10 @@ const quickActions: QuickAction[] = [
 
 function CTECoverageChart({ data }: { data: { event_type: string; coverage_pct: number; covered_lots: number; total_lots: number; status: string }[] }) {
     const statusColor: Record<string, string> = {
-        excellent: '#22c55e',
-        good: '#3b82f6',
-        warning: '#f59e0b',
-        critical: '#ef4444',
+        excellent: 'var(--re-success)',
+        good: 'var(--re-accent-blue)',
+        warning: 'var(--re-warning)',
+        critical: 'var(--re-danger)',
     };
 
     return (
@@ -54,7 +54,7 @@ function CTECoverageChart({ data }: { data: { event_type: string; coverage_pct: 
                             </span>
                             <span
                                 className="text-sm font-bold font-mono"
-                                style={{ color: statusColor[item.status] || '#94a3b8' }}
+                                style={{ color: statusColor[item.status] || 'var(--re-text-tertiary)' }}
                             >
                                 {item.coverage_pct}%
                             </span>
@@ -91,7 +91,7 @@ function TrendChart({ data }: { data: { week: string; score: number; gaps: numbe
         <div>
             <div className="flex items-center gap-6 mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-0.5 rounded" style={{ background: '#22c55e' }} />
+                    <div className="w-3 h-0.5 rounded" style={{ background: 'var(--re-success)' }} />
                     <span className="text-xs text-gray-500">Readiness Score</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -113,7 +113,7 @@ function TrendChart({ data }: { data: { week: string; score: number; gaps: numbe
                             x1="0" x2="100"
                             y1={chartHeight - (v / maxScore) * chartHeight}
                             y2={chartHeight - (v / maxScore) * chartHeight}
-                            stroke="#1e293b" strokeWidth="0.3"
+                            stroke="var(--re-surface-card)" strokeWidth="0.3"
                         />
                     ))}
                     {/* Gap bars */}
@@ -134,12 +134,12 @@ function TrendChart({ data }: { data: { week: string; score: number; gaps: numbe
                         );
                     })}
                     {/* Score line */}
-                    <path d={scorePath} fill="none" stroke="#22c55e" strokeWidth="0.8" strokeLinecap="round" />
+                    <path d={scorePath} fill="none" stroke="var(--re-success)" strokeWidth="0.8" strokeLinecap="round" />
                     {/* Score gradient fill */}
                     <defs>
                         <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="#22c55e" stopOpacity="0" />
+                            <stop offset="0%" stopColor="var(--re-success)" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="var(--re-success)" stopOpacity="0" />
                         </linearGradient>
                     </defs>
                     <path
@@ -148,7 +148,7 @@ function TrendChart({ data }: { data: { week: string; score: number; gaps: numbe
                     />
                     {/* Data points */}
                     {scorePoints.map((p, i) => (
-                        <circle key={i} cx={p.x} cy={p.y} r="1.2" fill="#22c55e" />
+                        <circle key={i} cx={p.x} cy={p.y} r="1.2" fill="var(--re-success)" />
                     ))}
                 </svg>
                 {/* X-axis labels */}
@@ -223,7 +223,7 @@ function GapAnalysisTable({ data }: { data: { category: string; count: number; s
                                         className="h-full rounded-full transition-all duration-700"
                                         style={{
                                             width: `${pct}%`,
-                                            background: gap.severity === 'high' ? '#ef4444' : gap.severity === 'medium' ? '#f59e0b' : '#3b82f6',
+                                            background: gap.severity === 'high' ? 'var(--re-danger)' : gap.severity === 'medium' ? 'var(--re-warning)' : 'var(--re-accent-blue)',
                                         }}
                                     />
                                 </div>

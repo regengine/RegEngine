@@ -41,7 +41,7 @@ export default function QuickstartPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Quickstart
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px' }}>
@@ -70,7 +70,7 @@ export default function QuickstartPage() {
                             flexShrink: 0,
                         }}>1</div>
                         <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
+                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
                                 Get your API key
                             </h2>
                             <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -115,7 +115,7 @@ export default function QuickstartPage() {
                             flexShrink: 0,
                         }}>2</div>
                         <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
+                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
                                 Set your environment variable
                             </h2>
                             <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -134,7 +134,7 @@ export default function QuickstartPage() {
                                 }}>
                                     <span style={{ fontSize: '12px', color: T.textMuted }}>Terminal</span>
                                 </div>
-                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                                     <code>{`export REGENGINE_API_KEY="rk_live_your_key_here"`}</code>
                                 </pre>
                             </div>
@@ -159,7 +159,7 @@ export default function QuickstartPage() {
                             flexShrink: 0,
                         }}>3</div>
                         <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
+                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
                                 Create your first compliance record
                             </h2>
                             <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -190,7 +190,7 @@ export default function QuickstartPage() {
                                     fontSize: '13px',
                                     lineHeight: 1.6,
                                     overflowX: 'auto',
-                                    color: '#e2e8f0',
+                                    color: 'var(--re-text-primary)',
                                 }}>
                                     <code>{`curl -X POST https://api.regengine.co/v1/records \\
   -H "Authorization: Bearer $REGENGINE_API_KEY" \\
@@ -227,7 +227,7 @@ export default function QuickstartPage() {
                                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
                                     <span style={{ fontSize: '12px', color: T.accent }}>201 Created</span>
                                 </div>
-                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                                     <code>{`{
   "id": "rec_3x7Kp9mN2vL",
   "record_hash": "a3f2b891c4d5e6f78901a2b3c4d5e6f7...",
@@ -260,7 +260,7 @@ export default function QuickstartPage() {
                             flexShrink: 0,
                         }}>4</div>
                         <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
+                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
                                 Verify your record
                             </h2>
                             <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
@@ -280,7 +280,7 @@ export default function QuickstartPage() {
                                 }}>
                                     <span style={{ fontSize: '12px', color: T.textMuted }}>Terminal</span>
                                 </div>
-                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                                     <code>{`python verify_chain.py --record rec_3x7Kp9mN2vL
 
 # Output:
@@ -306,7 +306,7 @@ export default function QuickstartPage() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                         <CheckCircle style={{ width: 24, height: 24, color: T.accent, flexShrink: 0 }} />
                         <div>
-                            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#ffffff', marginBottom: '8px' }}>
+                            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                                 You&apos;re all set!
                             </h3>
                             <p style={{ color: T.text, fontSize: '14px', margin: 0 }}>
@@ -319,7 +319,7 @@ export default function QuickstartPage() {
 
                 {/* Next Steps */}
                 <section>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Next Steps
                     </h2>
 
@@ -341,7 +341,7 @@ export default function QuickstartPage() {
                                 }}>
                                     <item.icon style={{ width: 20, height: 20, color: T.accent }} />
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontWeight: 600, color: '#ffffff', marginBottom: '2px' }}>{item.title}</div>
+                                        <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '2px' }}>{item.title}</div>
                                         <div style={{ fontSize: '13px', color: T.textMuted }}>{item.desc}</div>
                                     </div>
                                     <ArrowRight style={{ width: 16, height: 16, color: T.textMuted }} />

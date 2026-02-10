@@ -16,7 +16,7 @@ const wpStyles = {
     page: {
         minHeight: '100vh',
         background: T.bg,
-        color: '#f1f5f9', // Very light text for readability
+        color: 'var(--re-text-primary)', // Very light text for readability
         fontFamily: T.fontSans,
     },
     header: {
@@ -35,7 +35,7 @@ const wpStyles = {
     title: {
         fontSize: '2.5rem',
         fontWeight: 700,
-        color: '#ffffff',
+        color: 'var(--re-text-primary)',
         marginBottom: '8px',
     },
     subtitle: {
@@ -50,7 +50,7 @@ const wpStyles = {
     article: {
         lineHeight: 1.8,
         fontSize: '1.1rem',
-        color: '#e2e8f0', // High contrast light text
+        color: 'var(--re-text-primary)', // High contrast light text
     },
     cta: {
         marginTop: '48px',
@@ -201,7 +201,7 @@ export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
                     background: 'rgba(0,0,0,0.3)',
                 }}>
                     <p style={{
-                        color: '#f1f5f9',
+                        color: 'var(--re-text-primary)',
                         fontSize: '15px',
                         margin: 0,
                         lineHeight: 1.8,
@@ -218,7 +218,7 @@ export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
                         </Link>
                         <span style={{ color: T.textMuted }}> (5 min)</span><br />
                         <span style={{ color: T.text }}>Building the business case?</span>{' '}
-                        <span style={{ color: '#f1f5f9' }}>Keep scrolling.</span>
+                        <span style={{ color: 'var(--re-text-primary)' }}>Keep scrolling.</span>
                     </p>
                 </div>
             </div>

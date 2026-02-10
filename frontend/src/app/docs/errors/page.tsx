@@ -52,7 +52,7 @@ export default function ErrorCodesPage() {
                         <ArrowLeft style={{ width: 16, height: 16 }} />
                         Back to Docs
                     </Link>
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Error Codes
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px' }}>
@@ -66,7 +66,7 @@ export default function ErrorCodesPage() {
 
                 {/* HTTP Status Codes Section */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '24px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '24px' }}>
                         HTTP Status Codes
                     </h2>
 
@@ -83,7 +83,7 @@ export default function ErrorCodesPage() {
                             alignItems: 'center',
                             gap: '8px',
                         }}>
-                            <AlertTriangle style={{ width: 14, height: 14, color: '#eab308' }} />
+                            <AlertTriangle style={{ width: 14, height: 14, color: 'var(--re-warning)' }} />
                             4xx Client Errors
                         </h3>
 
@@ -108,14 +108,14 @@ export default function ErrorCodesPage() {
                                             <td style={{ padding: '12px 16px' }}>
                                                 <code style={{
                                                     background: 'rgba(234,179,8,0.2)',
-                                                    color: '#eab308',
+                                                    color: 'var(--re-warning)',
                                                     padding: '4px 8px',
                                                     borderRadius: '4px',
                                                     fontSize: '13px',
                                                     fontWeight: 600,
                                                 }}>{error.code}</code>
                                             </td>
-                                            <td style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 500 }}>{error.name}</td>
+                                            <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{error.name}</td>
                                             <td style={{ padding: '12px 16px', color: T.text, fontSize: '14px' }}>{error.description}</td>
                                             <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
                                         </tr>
@@ -138,7 +138,7 @@ export default function ErrorCodesPage() {
                             alignItems: 'center',
                             gap: '8px',
                         }}>
-                            <XCircle style={{ width: 14, height: 14, color: '#ef4444' }} />
+                            <XCircle style={{ width: 14, height: 14, color: 'var(--re-danger)' }} />
                             5xx Server Errors
                         </h3>
 
@@ -163,14 +163,14 @@ export default function ErrorCodesPage() {
                                             <td style={{ padding: '12px 16px' }}>
                                                 <code style={{
                                                     background: 'rgba(239,68,68,0.2)',
-                                                    color: '#ef4444',
+                                                    color: 'var(--re-danger)',
                                                     padding: '4px 8px',
                                                     borderRadius: '4px',
                                                     fontSize: '13px',
                                                     fontWeight: 600,
                                                 }}>{error.code}</code>
                                             </td>
-                                            <td style={{ padding: '12px 16px', color: '#ffffff', fontWeight: 500 }}>{error.name}</td>
+                                            <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{error.name}</td>
                                             <td style={{ padding: '12px 16px', color: T.text, fontSize: '14px' }}>{error.description}</td>
                                             <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
                                         </tr>
@@ -183,7 +183,7 @@ export default function ErrorCodesPage() {
 
                 {/* API Error Codes Section */}
                 <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         API Error Codes
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '24px' }}>
@@ -206,10 +206,10 @@ export default function ErrorCodesPage() {
                             alignItems: 'center',
                             gap: '8px',
                         }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444' }} />
-                            <span style={{ fontSize: '12px', color: '#ef4444' }}>401 Unauthorized</span>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--re-danger)' }} />
+                            <span style={{ fontSize: '12px', color: 'var(--re-danger)' }}>401 Unauthorized</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8' }}>
+                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
                             <code>{`{
   "error": {
     "code": "invalid_api_key",
@@ -241,7 +241,7 @@ export default function ErrorCodesPage() {
                                         <td style={{ padding: '12px 16px' }}>
                                             <code style={{
                                                 background: 'rgba(255,255,255,0.1)',
-                                                color: '#e2e8f0',
+                                                color: 'var(--re-text-primary)',
                                                 padding: '4px 8px',
                                                 borderRadius: '4px',
                                                 fontSize: '12px',
@@ -258,7 +258,7 @@ export default function ErrorCodesPage() {
 
                 {/* Retry Strategy */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Retry Strategy
                     </h2>
 
@@ -272,7 +272,7 @@ export default function ErrorCodesPage() {
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                             <Info style={{ width: 20, height: 20, color: T.accent, flexShrink: 0, marginTop: '2px' }} />
                             <div>
-                                <p style={{ color: '#ffffff', fontWeight: 600, marginBottom: '4px' }}>Best Practice</p>
+                                <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Best Practice</p>
                                 <p style={{ color: T.text, fontSize: '14px', margin: 0 }}>
                                     Use exponential backoff with jitter for 429 and 5xx errors. Start at 1 second, double each retry, cap at 32 seconds.
                                 </p>
@@ -293,7 +293,7 @@ export default function ErrorCodesPage() {
                         }}>
                             <span style={{ fontSize: '12px', color: T.textMuted }}>Python Example</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: '#94a3b8', overflowX: 'auto' }}>
+                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)', overflowX: 'auto' }}>
                             <code>{`import time
 import random
 import requests

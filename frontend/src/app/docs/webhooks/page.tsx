@@ -41,7 +41,7 @@ export default function WebhooksDocsPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Webhooks
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px' }}>
@@ -55,7 +55,7 @@ export default function WebhooksDocsPage() {
 
                 {/* Event Types Preview */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         <Zap style={{ width: 20, height: 20, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
                         Planned Event Types
                     </h2>
@@ -93,7 +93,7 @@ export default function WebhooksDocsPage() {
 
                 {/* Payload Preview */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Sample Payload
                     </h2>
 
@@ -116,7 +116,7 @@ export default function WebhooksDocsPage() {
                             margin: 0,
                             fontSize: '13px',
                             lineHeight: 1.5,
-                            color: '#64748b',
+                            color: 'var(--re-text-muted)',
                         }}>
                             <code>{`{
   "id": "evt_3x7Kp9mN2vL",
@@ -143,7 +143,7 @@ export default function WebhooksDocsPage() {
                     textAlign: 'center',
                 }}>
                     <Webhook style={{ width: 32, height: 32, color: T.accent, margin: '0 auto 16px' }} />
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Get Notified on Release
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>

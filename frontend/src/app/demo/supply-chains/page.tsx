@@ -59,7 +59,7 @@ const CHAINS: RecallChain[] = [
         recallBasis: 'Rizo Lopez Foods (2024) — Listeria monocytogenes',
         demoStory: 'A single creamery makes 8 cheese products — 5 are ON the FDA Food Traceability List, 3 are OFF. The FTL Checker reveals which products carry FSMA 204 obligations and which don\'t.',
         gradient: 'from-amber-500/20 via-orange-500/10 to-yellow-500/5',
-        accentColor: '#f59e0b',
+        accentColor: 'var(--re-warning)',
         badgeColor: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
         icon: '🧀',
         eventCount: 90,
@@ -98,7 +98,7 @@ const CHAINS: RecallChain[] = [
         recallBasis: 'Cesium-137 frozen shrimp recall (2025)',
         demoStory: 'Indonesian trawler catches shrimp → processed in Makassar → shipped via ocean freight to Port of Long Beach → Southwind Foods → retail. The First Land-Based Receiving CTE (§1.1335) is the key regulatory event that catches imported seafood failures.',
         gradient: 'from-cyan-500/20 via-blue-500/10 to-indigo-500/5',
-        accentColor: '#06b6d4',
+        accentColor: 'var(--re-accent-cyan)',
         badgeColor: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
         icon: '🦐',
         eventCount: 200,
@@ -139,7 +139,7 @@ const CHAINS: RecallChain[] = [
         recallBasis: '2024 cucumber Salmonella recall',
         demoStory: 'Florida farm harvests cucumbers → field cooling → packed at packing house → shipped to distributor in Atlanta → retail across the Southeast. The Field ID traces back to the exact harvest location — critical for outbreak investigation.',
         gradient: 'from-emerald-500/20 via-green-500/10 to-lime-500/5',
-        accentColor: '#10b981',
+        accentColor: 'var(--re-brand)',
         badgeColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
         icon: '🥒',
         eventCount: 140,
@@ -268,9 +268,9 @@ export default function SupplyChainExplorerPage() {
         <div
             style={{
                 minHeight: '100vh',
-                background: '#06090f',
+                background: 'var(--re-surface-base)',
                 fontFamily: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-                color: '#c8d1dc',
+                color: 'var(--re-text-secondary)',
                 overflowX: 'hidden',
             }}
         >
@@ -326,11 +326,11 @@ export default function SupplyChainExplorerPage() {
                 >
                     {/* Breadcrumb */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', fontSize: '13px' }}>
-                        <Link href="/" style={{ color: '#475569', textDecoration: 'none', transition: 'color 0.2s' }}>Home</Link>
-                        <span style={{ color: '#334155' }}>/</span>
-                        <Link href="/demo/mock-recall" style={{ color: '#475569', textDecoration: 'none', transition: 'color 0.2s' }}>Demo</Link>
-                        <span style={{ color: '#334155' }}>/</span>
-                        <span style={{ color: '#94a3b8' }}>Supply Chain Explorer</span>
+                        <Link href="/" style={{ color: 'var(--re-text-disabled)', textDecoration: 'none', transition: 'color 0.2s' }}>Home</Link>
+                        <span style={{ color: 'var(--re-text-disabled)' }}>/</span>
+                        <Link href="/demo/mock-recall" style={{ color: 'var(--re-text-disabled)', textDecoration: 'none', transition: 'color 0.2s' }}>Demo</Link>
+                        <span style={{ color: 'var(--re-text-disabled)' }}>/</span>
+                        <span style={{ color: 'var(--re-text-tertiary)' }}>Supply Chain Explorer</span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
@@ -343,7 +343,7 @@ export default function SupplyChainExplorerPage() {
                                 fontSize: '11px',
                                 fontFamily: "'JetBrains Mono', monospace",
                                 fontWeight: 500,
-                                color: '#10b981',
+                                color: 'var(--re-brand)',
                             }}
                         >
                             430 LIVE RECORDS
@@ -357,7 +357,7 @@ export default function SupplyChainExplorerPage() {
                                 fontSize: '11px',
                                 fontFamily: "'JetBrains Mono', monospace",
                                 fontWeight: 500,
-                                color: '#818cf8',
+                                color: 'var(--re-accent-purple)',
                             }}
                         >
                             SHA-256 VERIFIED
@@ -368,7 +368,7 @@ export default function SupplyChainExplorerPage() {
                         style={{
                             fontSize: 'clamp(32px, 4.5vw, 48px)',
                             fontWeight: 700,
-                            color: '#f8fafc',
+                            color: 'var(--re-text-primary)',
                             lineHeight: 1.1,
                             margin: '0 0 16px',
                             letterSpacing: '-0.02em',
@@ -376,7 +376,7 @@ export default function SupplyChainExplorerPage() {
                     >
                         Supply Chain Explorer
                     </h1>
-                    <p style={{ fontSize: '17px', color: '#64748b', lineHeight: 1.6, maxWidth: '640px', margin: 0 }}>
+                    <p style={{ fontSize: '17px', color: 'var(--re-text-muted)', lineHeight: 1.6, maxWidth: '640px', margin: 0 }}>
                         Explore 3 real-world recall scenarios modeled on FDA enforcement actions. Every record is
                         cryptographically hashed and independently verifiable — this is what FSMA 204 compliance looks like in practice.
                     </p>
@@ -429,15 +429,15 @@ export default function SupplyChainExplorerPage() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                                     <span style={{ fontSize: '24px' }}>{c.icon}</span>
                                     <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '14px', fontWeight: 600, color: isActive ? '#f1f5f9' : '#94a3b8' }}>
+                                        <div style={{ fontSize: '14px', fontWeight: 600, color: isActive ? 'var(--re-text-primary)' : 'var(--re-text-tertiary)' }}>
                                             {c.title}
                                         </div>
-                                        <div style={{ fontSize: '11px', color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>
+                                        <div style={{ fontSize: '11px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace" }}>
                                             {c.eventCount} events • {c.batchCount} batches
                                         </div>
                                     </div>
                                 </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>{c.subtitle}</div>
+                                <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>{c.subtitle}</div>
                             </button>
                         );
                     })}
@@ -465,11 +465,11 @@ export default function SupplyChainExplorerPage() {
                         marginBottom: '32px',
                     }}
                 >
-                    <div style={{ fontSize: '11px', fontFamily: "'JetBrains Mono', monospace", color: '#475569', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    <div style={{ fontSize: '11px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-disabled)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                         Based on real FDA recall
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{chain.recallBasis}</div>
-                    <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.5 }}>{chain.demoStory}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{chain.recallBasis}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--re-text-tertiary)', marginTop: '6px', lineHeight: 1.5 }}>{chain.demoStory}</div>
                 </div>
 
                 {/* Stats Row */}
@@ -498,8 +498,8 @@ export default function SupplyChainExplorerPage() {
                             }}
                         >
                             <div style={{ fontSize: '28px', fontWeight: 700, color: chain.accentColor, fontFamily: "'JetBrains Mono', monospace" }}>{stat.value}</div>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', marginTop: '4px' }}>{stat.label}</div>
-                            <div style={{ fontSize: '10px', color: '#475569', fontFamily: "'JetBrains Mono', monospace", marginTop: '2px' }}>{stat.sub}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)', marginTop: '4px' }}>{stat.label}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace", marginTop: '2px' }}>{stat.sub}</div>
                         </div>
                     ))}
                 </div>
@@ -508,8 +508,8 @@ export default function SupplyChainExplorerPage() {
                 <div style={{ marginBottom: '40px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                         <div>
-                            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>CTE Event Flow</h2>
-                            <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>Critical Tracking Events required by FSMA 204</p>
+                            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>CTE Event Flow</h2>
+                            <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: 0 }}>Critical Tracking Events required by FSMA 204</p>
                         </div>
                         <button
                             onClick={() => setShowCteTimeline(!showCteTimeline)}
@@ -518,7 +518,7 @@ export default function SupplyChainExplorerPage() {
                                 background: showCteTimeline ? `${chain.accentColor}15` : 'rgba(255,255,255,0.04)',
                                 border: `1px solid ${showCteTimeline ? chain.accentColor + '40' : 'rgba(255,255,255,0.08)'}`,
                                 borderRadius: '8px',
-                                color: showCteTimeline ? chain.accentColor : '#94a3b8',
+                                color: showCteTimeline ? chain.accentColor : 'var(--re-text-tertiary)',
                                 fontSize: '12px',
                                 fontWeight: 600,
                                 cursor: 'pointer',
@@ -563,10 +563,10 @@ export default function SupplyChainExplorerPage() {
                                     >
                                         {step.cte}
                                     </div>
-                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>{step.cfr}</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--re-text-tertiary)' }}>{step.cfr}</div>
                                 </div>
                                 {i < chain.cteFlow.length - 1 && (
-                                    <div style={{ padding: '0 6px', color: '#334155' }}>
+                                    <div style={{ padding: '0 6px', color: 'var(--re-text-disabled)' }}>
                                         <ArrowRight size={14} />
                                     </div>
                                 )}
@@ -613,7 +613,7 @@ export default function SupplyChainExplorerPage() {
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>{step.cte}</span>
+                                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{step.cte}</span>
                                             <span
                                                 style={{
                                                     fontSize: '10px',
@@ -627,8 +627,8 @@ export default function SupplyChainExplorerPage() {
                                                 {step.cfr}
                                             </span>
                                         </div>
-                                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>{step.description}</div>
-                                        <div style={{ fontSize: '11px', color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>
+                                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', marginBottom: '2px' }}>{step.description}</div>
+                                        <div style={{ fontSize: '11px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace" }}>
                                             📍 {step.facility}
                                         </div>
                                     </div>
@@ -640,8 +640,8 @@ export default function SupplyChainExplorerPage() {
 
                 {/* ─── FACILITIES GRID ─── */}
                 <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Facilities</h2>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Facilities</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
                         GLN-identified locations across the supply chain
                     </p>
 
@@ -667,8 +667,8 @@ export default function SupplyChainExplorerPage() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                                         <span style={{ fontSize: '20px' }}>{getFacilityIcon(facility.type)}</span>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>{facility.name}</div>
-                                            <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", color: '#475569' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{facility.name}</div>
+                                            <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-disabled)' }}>
                                                 {facility.type}
                                             </div>
                                         </div>
@@ -679,7 +679,7 @@ export default function SupplyChainExplorerPage() {
                                         style={{
                                             fontSize: '11px',
                                             fontFamily: "'JetBrains Mono', monospace",
-                                            color: '#64748b',
+                                            color: 'var(--re-text-muted)',
                                             background: 'rgba(255,255,255,0.03)',
                                             padding: '4px 8px',
                                             borderRadius: '4px',
@@ -690,13 +690,13 @@ export default function SupplyChainExplorerPage() {
                                     </div>
 
                                     {isExpanded && (
-                                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 }}>
+                                        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--re-text-tertiary)', lineHeight: 1.5 }}>
                                             {facility.address && (
                                                 <div style={{ marginBottom: '4px' }}>📍 {facility.address}</div>
                                             )}
                                             {facility.extra && Object.entries(facility.extra).map(([key, val]) => (
                                                 <div key={key} style={{ marginBottom: '2px' }}>
-                                                    <span style={{ color: '#475569' }}>{key}:</span> {val}
+                                                    <span style={{ color: 'var(--re-text-disabled)' }}>{key}:</span> {val}
                                                 </div>
                                             ))}
                                         </div>
@@ -709,8 +709,8 @@ export default function SupplyChainExplorerPage() {
 
                 {/* ─── PRODUCTS TABLE ─── */}
                 <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Products</h2>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Products</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
                         {chain.id === 'rizo-dairy'
                             ? 'Products are split by FTL coverage status — this is the key demo insight'
                             : 'GTIN-coded products tracked through the supply chain'}
@@ -734,7 +734,7 @@ export default function SupplyChainExplorerPage() {
                                 fontSize: '10px',
                                 fontFamily: "'JetBrains Mono', monospace",
                                 fontWeight: 600,
-                                color: '#475569',
+                                color: 'var(--re-text-disabled)',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.08em',
                             }}
@@ -761,11 +761,11 @@ export default function SupplyChainExplorerPage() {
                                         : 'transparent',
                                 }}
                             >
-                                <div style={{ fontWeight: 500, color: '#e2e8f0' }}>{product.name}</div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: '#64748b' }}>
+                                <div style={{ fontWeight: 500, color: 'var(--re-text-primary)' }}>{product.name}</div>
+                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: 'var(--re-text-muted)' }}>
                                     {product.gtin}
                                 </div>
-                                <div style={{ fontSize: '11px', color: '#94a3b8' }}>{product.category}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--re-text-tertiary)' }}>{product.category}</div>
                                 {chain.id === 'rizo-dairy' && (
                                     <div style={{ textAlign: 'center' }}>
                                         {product.onFtl ? (
@@ -776,7 +776,7 @@ export default function SupplyChainExplorerPage() {
                                                     gap: '4px',
                                                     fontSize: '10px',
                                                     fontWeight: 600,
-                                                    color: '#10b981',
+                                                    color: 'var(--re-brand)',
                                                     background: 'rgba(16,185,129,0.1)',
                                                     padding: '3px 10px',
                                                     borderRadius: '10px',
@@ -792,7 +792,7 @@ export default function SupplyChainExplorerPage() {
                                                     gap: '4px',
                                                     fontSize: '10px',
                                                     fontWeight: 600,
-                                                    color: '#ef4444',
+                                                    color: 'var(--re-danger)',
                                                     background: 'rgba(239,68,68,0.1)',
                                                     padding: '3px 10px',
                                                     borderRadius: '10px',
@@ -817,13 +817,13 @@ export default function SupplyChainExplorerPage() {
                                 borderLeft: '3px solid #f59e0b',
                                 borderRadius: '0 8px 8px 0',
                                 fontSize: '13px',
-                                color: '#94a3b8',
+                                color: 'var(--re-text-tertiary)',
                                 lineHeight: 1.5,
                             }}
                         >
-                            <strong style={{ color: '#f59e0b' }}>Why this matters:</strong> Hard cheeses and sour cream are
-                            <strong style={{ color: '#ef4444' }}> NOT </strong> on the FDA Food Traceability List, even though
-                            soft cheeses from the same facility <strong style={{ color: '#10b981' }}>are</strong>. A blanket
+                            <strong style={{ color: 'var(--re-warning)' }}>Why this matters:</strong> Hard cheeses and sour cream are
+                            <strong style={{ color: 'var(--re-danger)' }}> NOT </strong> on the FDA Food Traceability List, even though
+                            soft cheeses from the same facility <strong style={{ color: 'var(--re-brand)' }}>are</strong>. A blanket
                             compliance program wastes resources. The FTL Checker tells you exactly which products need tracking.
                         </div>
                     )}
@@ -831,8 +831,8 @@ export default function SupplyChainExplorerPage() {
 
                 {/* ─── KEY DATA ELEMENTS ─── */}
                 <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }}>Key Data Elements (KDEs)</h2>
-                    <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Key Data Elements (KDEs)</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
                         FDA-required data points captured at every CTE in this chain
                     </p>
 
@@ -850,7 +850,7 @@ export default function SupplyChainExplorerPage() {
                                     borderRadius: '8px',
                                     fontSize: '12px',
                                     fontWeight: 500,
-                                    color: '#94a3b8',
+                                    color: 'var(--re-text-tertiary)',
                                 }}
                             >
                                 <span style={{ color: chain.accentColor, fontSize: '10px' }}>●</span>
@@ -871,38 +871,38 @@ export default function SupplyChainExplorerPage() {
                     }}
                 >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                        <div style={{ color: '#818cf8' }}>
+                        <div style={{ color: 'var(--re-accent-purple)' }}>
                             <HashIcon size={20} />
                         </div>
-                        <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Cryptographic Integrity</h2>
+                        <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--re-text-primary)', margin: 0 }}>Cryptographic Integrity</h2>
                     </div>
-                    <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.6, margin: '0 0 16px' }}>
+                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', lineHeight: 1.6, margin: '0 0 16px' }}>
                         Every one of the {chain.eventCount} records in this chain has a SHA-256 hash computed from canonical JSON serialization.
-                        You can verify every record independently using our open-source <code style={{ fontSize: '12px', fontFamily: "'JetBrains Mono', monospace", background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: '4px', color: '#818cf8' }}>verify_chain.py</code> script.
+                        You can verify every record independently using our open-source <code style={{ fontSize: '12px', fontFamily: "'JetBrains Mono', monospace", background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: '4px', color: 'var(--re-accent-purple)' }}>verify_chain.py</code> script.
                     </p>
 
                     <div
                         style={{
                             padding: '12px 16px',
-                            background: '#0d1117',
+                            background: 'var(--re-surface-base)',
                             borderRadius: '8px',
                             fontFamily: "'JetBrains Mono', monospace",
                             fontSize: '12px',
-                            color: '#8b949e',
+                            color: 'var(--re-text-tertiary)',
                             overflowX: 'auto',
                             lineHeight: 1.7,
                         }}
                     >
-                        <span style={{ color: '#7ee787' }}>$</span>{' '}
-                        <span style={{ color: '#c9d1d9' }}>python3 verify_chain.py --offline</span>
+                        <span style={{ color: 'var(--re-success)' }}>$</span>{' '}
+                        <span style={{ color: 'var(--re-text-secondary)' }}>python3 verify_chain.py --offline</span>
                         <br />
-                        <span style={{ color: '#3b82f6' }}>Verifying {chain.eventCount} records...</span>
+                        <span style={{ color: 'var(--re-accent-blue)' }}>Verifying {chain.eventCount} records...</span>
                         <br />
-                        <span style={{ color: '#7ee787' }}>✓ {chain.eventCount}/{chain.eventCount} hashes valid (100%)</span>
+                        <span style={{ color: 'var(--re-success)' }}>✓ {chain.eventCount}/{chain.eventCount} hashes valid (100%)</span>
                         <br />
-                        <span style={{ color: '#7ee787' }}>✓ Canonical JSON serialization matches</span>
+                        <span style={{ color: 'var(--re-success)' }}>✓ Canonical JSON serialization matches</span>
                         <br />
-                        <span style={{ color: '#7ee787' }}>✓ No tamper detected</span>
+                        <span style={{ color: 'var(--re-success)' }}>✓ No tamper detected</span>
                     </div>
                 </div>
 
@@ -927,11 +927,11 @@ export default function SupplyChainExplorerPage() {
                         }}
                     >
                         <div style={{ fontSize: '20px', marginBottom: '8px' }}>🚨</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#f1f5f9', marginBottom: '4px' }}>Mock Recall Demo</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Mock Recall Demo</div>
+                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
                             Watch a contaminated lot traced through the supply chain in under 5 seconds
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#ef4444', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-danger)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             Run Demo <ArrowRight size={12} />
                         </div>
                     </Link>
@@ -949,11 +949,11 @@ export default function SupplyChainExplorerPage() {
                         }}
                     >
                         <div style={{ fontSize: '20px', marginBottom: '8px' }}>✅</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#f1f5f9', marginBottom: '4px' }}>FTL Coverage Checker</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>FTL Coverage Checker</div>
+                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
                             Check which of your products are on the FDA Food Traceability List
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#10b981', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-brand)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             Check Now <ArrowRight size={12} />
                         </div>
                     </Link>
@@ -971,11 +971,11 @@ export default function SupplyChainExplorerPage() {
                         }}
                     >
                         <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔐</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#f1f5f9', marginBottom: '4px' }}>Verify Records</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.4 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Verify Records</div>
+                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
                             Independently verify cryptographic integrity of any RegEngine record
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#818cf8', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-accent-purple)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             Verify <ArrowRight size={12} />
                         </div>
                     </Link>
@@ -992,10 +992,10 @@ export default function SupplyChainExplorerPage() {
                 }}
             >
                 <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '12px', color: '#475569' }}>
-                        Data generated by <code style={{ fontFamily: "'JetBrains Mono', monospace", color: '#64748b', fontSize: '11px' }}>seed_fsma_data.py v3</code> — 430 CTE records across 3 recall chains
+                    <div style={{ fontSize: '12px', color: 'var(--re-text-disabled)' }}>
+                        Data generated by <code style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-muted)', fontSize: '11px' }}>seed_fsma_data.py v3</code> — 430 CTE records across 3 recall chains
                     </div>
-                    <Link href="/docs/fsma-204" style={{ fontSize: '12px', color: '#10b981', textDecoration: 'none', fontWeight: 500 }}>
+                    <Link href="/docs/fsma-204" style={{ fontSize: '12px', color: 'var(--re-brand)', textDecoration: 'none', fontWeight: 500 }}>
                         Read FSMA 204 Documentation →
                     </Link>
                 </div>

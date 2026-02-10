@@ -120,9 +120,9 @@ export default function SecurityPage() {
     const statusColors: Record<string, { bg: string; border: string; text: string; label: string }> = {
         verified: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Verified" },
         implemented: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Implemented" },
-        implementing: { bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)", text: "#facc15", label: "Implementing" },
+        implementing: { bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)", text: "var(--re-warning)", label: "Implementing" },
         "in-progress": { bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)", text: "var(--re-info)", label: "In Progress" },
-        "in-preparation": { bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.2)", text: "#a855f7", label: "In Preparation" },
+        "in-preparation": { bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.2)", text: "var(--re-accent-purple)", label: "In Preparation" },
         planned: { bg: T.elevated, border: T.border, text: T.textDim, label: "Planned" },
     };
 

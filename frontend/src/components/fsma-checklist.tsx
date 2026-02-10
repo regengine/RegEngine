@@ -147,12 +147,12 @@ export default function FSMAChecklist() {
 
     const scoreColor =
         checkedCount <= 3
-            ? "#dc2626"
+            ? "var(--re-danger)"
             : checkedCount <= 5
-                ? "#d97706"
+                ? "var(--re-warning)"
                 : checkedCount <= 7
-                    ? "#2563eb"
-                    : "#059669";
+                    ? "var(--re-accent-blue)"
+                    : "var(--re-brand-dark)";
 
     return (
         <div className="bg-[#0a0e17] text-[#e2e8f0] py-16 px-4">
@@ -225,7 +225,7 @@ export default function FSMAChecklist() {
                                     className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-[1px] transition-all duration-200"
                                     style={{
                                         border: isChecked ? "none" : "2px solid rgba(255,255,255,0.15)",
-                                        background: isChecked ? "#059669" : "transparent",
+                                        background: isChecked ? "var(--re-brand-dark)" : "transparent",
                                     }}
                                 >
                                     {isChecked && <CheckIcon />}
@@ -236,7 +236,7 @@ export default function FSMAChecklist() {
                                     <div
                                         className="text-[15px] font-semibold mb-1 transition-colors duration-200"
                                         style={{
-                                            color: isChecked ? "#059669" : "#e2e8f0",
+                                            color: isChecked ? "var(--re-brand-dark)" : "var(--re-text-primary)",
                                             textDecoration: isChecked ? "line-through" : "none",
                                             textDecorationColor: "rgba(5,150,105,0.3)",
                                         }}
@@ -271,7 +271,7 @@ export default function FSMAChecklist() {
                         className="w-full p-4 rounded-lg text-[15px] font-semibold transition-all duration-300"
                         style={{
                             background: checkedCount === 0 ? "rgba(255,255,255,0.04)" : scoreColor,
-                            color: checkedCount === 0 ? "#64748b" : "#fff",
+                            color: checkedCount === 0 ? "var(--re-text-muted)" : "#fff",
                             border: checkedCount === 0 ? "1px solid rgba(255,255,255,0.08)" : "none",
                             opacity: checkedCount === 0 ? 0.5 : 1,
                             cursor: checkedCount === 0 ? "default" : "pointer",
@@ -396,8 +396,8 @@ export default function FSMAChecklist() {
                                                 disabled={!email || !company}
                                                 className="p-3.5 rounded-lg text-[15px] font-semibold transition-all duration-200"
                                                 style={{
-                                                    background: email && company ? "#2563eb" : "rgba(255,255,255,0.04)",
-                                                    color: email && company ? "#fff" : "#475569",
+                                                    background: email && company ? "var(--re-accent-blue)" : "rgba(255,255,255,0.04)",
+                                                    color: email && company ? "#fff" : "var(--re-text-disabled)",
                                                     cursor: email && company ? "pointer" : "default",
                                                 }}
                                             >

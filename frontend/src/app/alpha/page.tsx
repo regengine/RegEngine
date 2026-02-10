@@ -12,19 +12,19 @@ import Link from 'next/link';
    DESIGN TOKENS — Matched to homepage design system
    ───────────────────────────────────────────────────────────── */
 const T = {
-    bg: '#06090f',
+    bg: 'var(--re-surface-base)',
     surface: 'rgba(255,255,255,0.02)',
     surfaceHover: 'rgba(255,255,255,0.04)',
     border: 'rgba(255,255,255,0.06)',
     borderSubtle: 'rgba(255,255,255,0.03)',
-    text: '#c8d1dc',
-    textMuted: '#64748b',
-    textDim: '#475569',
-    heading: '#e2e8f0',
-    accent: '#10b981',
-    accentHover: '#059669',
+    text: 'var(--re-text-secondary)',
+    textMuted: 'var(--re-text-muted)',
+    textDim: 'var(--re-text-disabled)',
+    heading: 'var(--re-text-primary)',
+    accent: 'var(--re-brand)',
+    accentHover: 'var(--re-brand-dark)',
     accentBg: 'rgba(16,185,129,0.1)',
-    purple: '#8b5cf6',
+    purple: 'var(--re-accent-purple)',
     purpleBg: 'rgba(139,92,246,0.1)',
     fontSans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     fontMono: "'JetBrains Mono', monospace",
@@ -238,7 +238,7 @@ export default function AlphaPage() {
                         borderRadius: '8px',
                         padding: '10px 20px',
                         fontSize: '14px',
-                        color: '#f59e0b',
+                        color: 'var(--re-warning)',
                         fontWeight: 500,
                         marginBottom: '48px',
                     }}
@@ -419,7 +419,7 @@ export default function AlphaPage() {
                         </div>
 
                         {error && (
-                            <p style={{ fontSize: '13px', color: '#ef4444', marginTop: '12px', textAlign: 'center' }}>
+                            <p style={{ fontSize: '13px', color: 'var(--re-danger)', marginTop: '12px', textAlign: 'center' }}>
                                 {error}
                             </p>
                         )}
@@ -618,7 +618,7 @@ export default function AlphaPage() {
                                             background: item.status === 'current'
                                                 ? T.accent
                                                 : item.status === 'deadline'
-                                                    ? '#ef4444'
+                                                    ? 'var(--re-danger)'
                                                     : 'rgba(255,255,255,0.1)',
                                             border: item.status === 'current'
                                                 ? `3px solid ${T.accentBg}`
@@ -650,7 +650,7 @@ export default function AlphaPage() {
                                                 fontSize: '16px',
                                                 fontWeight: 600,
                                                 color: item.status === 'current' ? T.accent
-                                                    : item.status === 'deadline' ? '#ef4444'
+                                                    : item.status === 'deadline' ? 'var(--re-danger)'
                                                         : T.heading,
                                             }}
                                         >

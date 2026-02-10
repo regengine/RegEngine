@@ -31,7 +31,7 @@ export function MarketingHeader() {
                             width: "8px",
                             height: "8px",
                             borderRadius: "50%",
-                            background: "#10b981",
+                            background: "var(--re-brand)",
                             boxShadow: "0 0 10px rgba(16,185,129,0.4)",
                         }}
                     />
@@ -40,7 +40,7 @@ export function MarketingHeader() {
                             fontSize: "14px",
                             fontWeight: 700,
                             letterSpacing: "0.06em",
-                            color: "#f1f5f9",
+                            color: "var(--re-text-primary)",
                         }}
                     >
                         REGENGINE
@@ -59,13 +59,13 @@ export function MarketingHeader() {
                             href={item.href}
                             style={{
                                 fontSize: "13px",
-                                color: "#64748b",
+                                color: "var(--re-text-muted)",
                                 textDecoration: "none",
                                 fontWeight: 500,
                                 transition: "color 0.2s",
                             }}
-                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "#e2e8f0")}
-                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "#64748b")}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
                         >
                             {item.label}
                         </Link>
@@ -75,8 +75,8 @@ export function MarketingHeader() {
                         style={{
                             fontSize: "13px",
                             fontWeight: 600,
-                            color: "#06090f",
-                            background: "#10b981",
+                            color: "var(--re-surface-base)",
+                            background: "var(--re-brand)",
                             padding: "7px 16px",
                             borderRadius: "6px",
                             textDecoration: "none",
