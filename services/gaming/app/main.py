@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
-from shared.middleware import TenantContextMiddleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.rate_limiting import create_limiter, setup_rate_limiting
 
@@ -60,6 +60,7 @@ app.add_middleware(
 )
 
 # Tenant isolation middleware
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 
 # Rate limiting
@@ -106,6 +107,7 @@ async def ready_check():
         finally:
             db.close()
     except Exception as e:
+        logger.error("readiness_check_failed", error=str(e))
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={
@@ -113,7 +115,7 @@ async def ready_check():
                 "service": settings.SERVICE_NAME,
                 "version": settings.SERVICE_VERSION,
                 "database": "disconnected",
-                "error": str(e)
+                "error": type(e).__name__
             }
         )
 

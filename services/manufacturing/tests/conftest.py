@@ -125,3 +125,112 @@ def test_session_factory(test_db_engine):
     instead of importing the production SessionLocal which points at PostgreSQL.
     """
     return sessionmaker(bind=test_db_engine)
+
+
+# ── Application Fixtures ─────────────────────────────
+
+@pytest.fixture
+def tenant_id():
+    """Generate a test tenant UUID string."""
+    return str(uuid_module.uuid4())
+
+
+@pytest.fixture
+def auth_headers(tenant_id):
+    """Standard auth headers for testing, including tenant ID."""
+    return {
+        "X-RegEngine-API-Key": "test-key",
+        "X-RegEngine-Tenant-ID": tenant_id,
+    }
+
+
+@pytest.fixture
+def client(db_session, tenant_id):
+    """FastAPI test client with dependency overrides.
+    
+    Overrides get_db to use the in-memory test database.
+    """
+    from fastapi.testclient import TestClient
+    try:
+        from app.main import app
+        from app.db_session import get_db
+    except ImportError:
+        from services.manufacturing.app.main import app
+        from services.manufacturing.app.db_session import get_db
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+# ── Sample Data Fixtures ─────────────────────────────
+
+@pytest.fixture
+def sample_ncr_data():
+    """Sample NCR creation payload."""
+    from datetime import datetime
+    return {
+        "ncr_number": f"NCR-TEST-{uuid_module.uuid4().hex[:8].upper()}",
+        "detected_date": datetime.utcnow().isoformat(),
+        "detected_by": "Test Inspector",
+        "detection_source": "INTERNAL_AUDIT",
+        "part_number": "PART-001",
+        "lot_number": "LOT-2024-A",
+        "quantity_affected": 10,
+        "description": "Surface finish defect detected during inspection",
+        "severity": "MAJOR",
+        "iso_9001_relevant": True,
+        "iso_14001_relevant": False,
+        "iso_45001_relevant": False,
+    }
+
+
+@pytest.fixture
+def sample_capa_data():
+    """Sample CAPA creation payload (ncr_id to be set by test)."""
+    from datetime import datetime, timedelta
+    return {
+        "ncr_id": 1,
+        "action_type": "CORRECTIVE",
+        "description": "Retrain operators on surface finish requirements per SOP-QA-101",
+        "assigned_to": "Quality Manager",
+        "due_date": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+        "verification_required": True,
+    }
+
+
+@pytest.fixture
+def sample_supplier_issue_data():
+    """Sample supplier quality issue payload."""
+    from datetime import datetime
+    return {
+        "supplier_name": "ABC Suppliers Inc",
+        "supplier_code": "SUP-001",
+        "issue_date": datetime.utcnow().isoformat(),
+        "part_number": "RAW-MAT-042",
+        "lot_number": "LOT-EXT-2024-B",
+        "defect_description": "Incoming material hardness below specification (HRC 58 required, HRC 52 measured)",
+    }
+
+
+@pytest.fixture
+def sample_audit_finding_data():
+    """Sample audit finding payload."""
+    from datetime import datetime, timedelta
+    return {
+        "audit_type": "INTERNAL",
+        "audit_date": datetime.utcnow().isoformat(),
+        "auditor_name": "Lead Auditor",
+        "finding_number": f"AF-TEST-{uuid_module.uuid4().hex[:8].upper()}",
+        "clause_reference": "8.5.1",
+        "finding_type": "MINOR_NC",
+        "description": "Calibration records for CMM machine not updated within required interval",
+        "target_closure_date": (datetime.utcnow() + timedelta(days=14)).isoformat(),
+    }
+

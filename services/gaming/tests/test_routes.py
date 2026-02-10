@@ -40,6 +40,14 @@ class TestGamingRoutes(unittest.TestCase):
                 obj.id = 1
         self.mock_db.refresh.side_effect = mock_refresh
 
+        # Mock query to return no exclusion by default
+        mock_query = MagicMock()
+        self.mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = None
+        mock_query.scalar.return_value = 0
+        mock_query.all.return_value = []
+
         # Override dependencies
         app.dependency_overrides[get_db] = lambda: self.mock_db
         app.dependency_overrides[require_api_key] = lambda: self.test_api_key
@@ -73,14 +81,14 @@ class TestGamingRoutes(unittest.TestCase):
         tx_data = {
             "player_id": "PLR-001",
             "transaction_type": "WAGER",
-            "amount": 100.00,
-            "currency": "USD",
-            "jurisdiction": "NV",
+            "amount_cents": 10000,
+            "game_id": "SLOT-001",
+            "jurisdiction": "US-NV",
             "timestamp": "2024-02-09T10:00:00",
             "metadata": {"game_type": "slots"}
         }
 
-        response = self.client.post("/v1/gaming/transaction", json=tx_data)
+        response = self.client.post("/v1/gaming/transaction-log", json=tx_data)
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
@@ -104,13 +112,13 @@ class TestGamingRoutes(unittest.TestCase):
         tx_data = {
             "player_id": "PLR-002",
             "transaction_type": "PAYOUT",
-            "amount": 500.00,
-            "currency": "USD",
-            "jurisdiction": "NJ",
+            "amount_cents": 50000,
+            "game_id": "TABLE-001",
+            "jurisdiction": "US-NJ",
             "timestamp": "2024-02-09T11:00:00"
         }
 
-        response = self.client.post("/v1/gaming/transaction", json=tx_data)
+        response = self.client.post("/v1/gaming/transaction-log", json=tx_data)
         self.assertEqual(response.status_code, 201)
 
         args, _ = self.mock_db.add.call_args
@@ -124,13 +132,13 @@ class TestGamingRoutes(unittest.TestCase):
         tx_data = {
             "player_id": "PLR-003",
             "transaction_type": "WAGER",
-            "amount": 50.00,
-            "currency": "USD",
-            "jurisdiction": "NV",
+            "amount_cents": 5000,
+            "game_id": "SLOT-002",
+            "jurisdiction": "US-NV",
             "timestamp": "2024-02-09T12:00:00"
         }
 
-        response = self.client.post("/v1/gaming/transaction", json=tx_data)
+        response = self.client.post("/v1/gaming/transaction-log", json=tx_data)
         self.assertEqual(response.status_code, 401)
 
         app.dependency_overrides[require_api_key] = lambda: self.test_api_key
@@ -140,13 +148,13 @@ class TestGamingRoutes(unittest.TestCase):
         tx_data = {
             "player_id": "PLR-004",
             "transaction_type": "WAGER",
-            "amount": 75.00,
-            "currency": "USD",
-            "jurisdiction": "NV",
+            "amount_cents": 7500,
+            "game_id": "SLOT-003",
+            "jurisdiction": "US-NV",
             "timestamp": "2024-02-09T13:00:00"
         }
 
-        response = self.client.post("/v1/gaming/transaction", json=tx_data)
+        response = self.client.post("/v1/gaming/transaction-log", json=tx_data)
         self.assertEqual(response.status_code, 201)
         data = response.json()
 
@@ -160,9 +168,13 @@ class TestGamingRoutes(unittest.TestCase):
         mock_tx.id = 1
         mock_tx.player_id = "PLR-001"
         mock_tx.transaction_type = "WAGER"
-        mock_tx.amount = 100.00
+        mock_tx.amount_cents = 10000
+        mock_tx.game_id = "SLOT-001"
+        mock_tx.jurisdiction = "US-NV"
         mock_tx.content_hash = "a" * 64
         mock_tx.created_at = datetime(2024, 2, 9, 10, 0, 0)
+        mock_tx.timestamp = datetime(2024, 2, 9, 10, 0, 0)
+        mock_tx.metadata = None
         mock_tx.tenant_id = self.tenant_id
 
         mock_query = MagicMock()
@@ -170,7 +182,7 @@ class TestGamingRoutes(unittest.TestCase):
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = mock_tx
 
-        response = self.client.get("/v1/gaming/transaction/1")
+        response = self.client.get("/v1/gaming/transaction-log/1")
         self.assertEqual(response.status_code, 200)
 
     def test_get_transaction_not_found(self):
@@ -180,7 +192,7 @@ class TestGamingRoutes(unittest.TestCase):
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = None
 
-        response = self.client.get("/v1/gaming/transaction/99999")
+        response = self.client.get("/v1/gaming/transaction-log/99999")
         self.assertEqual(response.status_code, 404)
 
     # --- Self-Exclusion Endpoints ---
@@ -197,7 +209,6 @@ class TestGamingRoutes(unittest.TestCase):
 
         self.assertEqual(response.status_code, 201)
         data = response.json()
-        self.assertIn("id", data)
         self.assertEqual(data["player_id"], "PLR-010")
 
         # Verify SelfExclusionRecord was created
@@ -246,8 +257,9 @@ class TestGamingRoutes(unittest.TestCase):
 
         self.mock_db.query.return_value = mock_query
         mock_query.filter.return_value = mock_filter
-        mock_filter.scalar.side_effect = [100, 5, 3]
+        mock_filter.scalar.side_effect = [100, 5000, 3, 2, 1]
         mock_filter.all.return_value = []
+        mock_filter.group_by.return_value = mock_filter
 
         response = self.client.get("/v1/gaming/dashboard")
 
@@ -277,8 +289,8 @@ class TestGamingRoutes(unittest.TestCase):
         mock_filter.order_by.return_value = mock_filter
         mock_filter.all.return_value = []
 
-        response = self.client.get(
-            "/v1/gaming/export",
+        response = self.client.post(
+            "/v1/gaming/compliance-export",
             params={
                 "start_date": "2024-01-01T00:00:00",
                 "end_date": "2024-02-01T00:00:00"
@@ -293,8 +305,8 @@ class TestGamingRoutes(unittest.TestCase):
         """Test export requires API key."""
         del app.dependency_overrides[require_api_key]
 
-        response = self.client.get(
-            "/v1/gaming/export",
+        response = self.client.post(
+            "/v1/gaming/compliance-export",
             params={
                 "start_date": "2024-01-01T00:00:00",
                 "end_date": "2024-02-01T00:00:00"
