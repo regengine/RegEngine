@@ -18,6 +18,10 @@ const config = {
             },
         },
         extend: {
+            fontFamily: {
+                sans: ["'Instrument Sans'", "system-ui", "-apple-system", "sans-serif"],
+                mono: ["'JetBrains Mono'", "'Fira Code'", "monospace"],
+            },
             colors: {
                 border: "hsl(var(--border))",
                 input: "hsl(var(--input))",
@@ -52,6 +56,43 @@ const config = {
                     DEFAULT: "hsl(var(--card))",
                     foreground: "hsl(var(--card-foreground))",
                 },
+                // RegEngine semantic tokens
+                "re-brand": "var(--re-brand)",
+                "re-brand-dark": "var(--re-brand-dark)",
+                "re-brand-light": "var(--re-brand-light)",
+                "re-success": "var(--re-success)",
+                "re-success-muted": "var(--re-success-muted)",
+                "re-warning": "var(--re-warning)",
+                "re-warning-muted": "var(--re-warning-muted)",
+                "re-danger": "var(--re-danger)",
+                "re-danger-muted": "var(--re-danger-muted)",
+                "re-info": "var(--re-info)",
+                "re-info-muted": "var(--re-info-muted)",
+                "re-surface": {
+                    base: "var(--re-surface-base)",
+                    card: "var(--re-surface-card)",
+                    elevated: "var(--re-surface-elevated)",
+                    overlay: "var(--re-surface-overlay)",
+                },
+                "re-text": {
+                    primary: "var(--re-text-primary)",
+                    secondary: "var(--re-text-secondary)",
+                    tertiary: "var(--re-text-tertiary)",
+                    muted: "var(--re-text-muted)",
+                    disabled: "var(--re-text-disabled)",
+                },
+                "re-border": {
+                    DEFAULT: "var(--re-border-default)",
+                    subtle: "var(--re-border-subtle)",
+                    strong: "var(--re-border-strong)",
+                },
+            },
+            boxShadow: {
+                "re-sm": "var(--re-shadow-sm)",
+                "re-md": "var(--re-shadow-md)",
+                "re-lg": "var(--re-shadow-lg)",
+                "re-glow": "var(--re-shadow-glow)",
+                "re-glow-strong": "var(--re-shadow-glow-strong)",
             },
             borderRadius: {
                 lg: "var(--radius)",
