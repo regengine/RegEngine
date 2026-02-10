@@ -17,22 +17,20 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
         }
     }
 
-    // Client-side - Always use direct backend URLs
-    // Note: Static export mode (output: 'export') doesn't support Next.js rewrites
-    // so we must connect directly to backend services
+    // Client-side - use NEXT_PUBLIC_ env vars if available, else localhost
     switch (service) {
         case 'ingestion':
-            return 'http://localhost:8002';
+            return process.env.NEXT_PUBLIC_INGESTION_URL || 'http://localhost:8002';
         case 'admin':
-            return 'http://localhost:8400';
+            return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
         case 'graph':
-            return 'http://localhost:8200';
+            return process.env.NEXT_PUBLIC_GRAPH_URL || 'http://localhost:8200';
         case 'opportunity':
-            return 'http://localhost:8300';
+            return process.env.NEXT_PUBLIC_OPPORTUNITY_URL || 'http://localhost:8300';
         case 'compliance':
-            return 'http://localhost:8500';
+            return process.env.NEXT_PUBLIC_COMPLIANCE_URL || 'http://localhost:8500';
         default:
-            return 'http://localhost:8400';
+            return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
     }
 }
 
