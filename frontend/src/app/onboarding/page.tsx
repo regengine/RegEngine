@@ -8,7 +8,6 @@ import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -32,12 +31,77 @@ import {
   ExternalLink,
   AlertCircle,
   RefreshCw,
+  Shield,
+  Zap,
+  BarChart3,
+  Network,
+  FileSearch,
 } from 'lucide-react';
 
 type OnboardingStep = 'welcome' | 'health' | 'credentials' | 'first-ingest' | 'complete';
 
 const DEMO_DOCUMENT_URL = 'https://www.ecfr.gov/api/versioner/v1/full/2024-01-01/title-21.xml?chapter=I&subchapter=A&part=1';
 
+/* ───────────────────────────────────────────────────────────── */
+/*  Framer Motion Variants                                      */
+/* ───────────────────────────────────────────────────────────── */
+const cardVariants = {
+  enter: { opacity: 0, x: 30, scale: 0.98 },
+  center: { opacity: 1, x: 0, scale: 1, transition: { duration: 0.35, ease: [0.4, 0, 0.2, 1] } },
+  exit: { opacity: 0, x: -30, scale: 0.98, transition: { duration: 0.25 } },
+};
+
+const staggerChildren = {
+  animate: { transition: { staggerChildren: 0.08 } },
+};
+
+const fadeUp = {
+  initial: { opacity: 0, y: 12 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+};
+
+/* ───────────────────────────────────────────────────────────── */
+/*  Animated Background Orbs                                    */
+/* ───────────────────────────────────────────────────────────── */
+function BackgroundOrbs() {
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+      <div
+        className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-[0.03]"
+        style={{ background: 'radial-gradient(circle, var(--re-brand) 0%, transparent 70%)' }}
+      />
+      <div
+        className="absolute -bottom-60 -left-40 w-[500px] h-[500px] rounded-full opacity-[0.02]"
+        style={{ background: 'radial-gradient(circle, var(--re-info) 0%, transparent 70%)' }}
+      />
+    </div>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/*  Activation Stats (completion page)                          */
+/* ───────────────────────────────────────────────────────────── */
+function ActivationStat({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string; color: string }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      className="flex items-center gap-3 p-3 rounded-lg border border-[var(--re-border-default)]"
+      style={{ background: 'var(--re-surface-card)' }}
+    >
+      <div className="p-2 rounded-lg" style={{ background: `${color}15` }}>
+        <Icon className="w-4 h-4" style={{ color }} />
+      </div>
+      <div>
+        <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>{label}</p>
+        <p className="font-semibold text-sm" style={{ color: 'var(--re-text-primary)' }}>{value}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── */
+/*  Main Onboarding Page                                        */
+/* ───────────────────────────────────────────────────────────── */
 export default function OnboardingPage() {
   const router = useRouter();
   const { apiKey, adminKey, tenantId, setApiKey, setAdminKey, setTenantId, completeOnboarding, isOnboarded } = useAuth();
@@ -151,89 +215,121 @@ export default function OnboardingPage() {
   const currentStepIndex = steps.findIndex((s) => s.id === currentStep);
 
   return (
-    <div className="min-h-screen" style={{ background: '#06090f' }}>
+    <div className="min-h-screen relative" style={{ background: 'var(--re-surface-base)' }}>
+      <BackgroundOrbs />
+
       <PageContainer>
-        <div className="max-w-2xl mx-auto">
-          {/* Progress indicator */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-2">
+        <div className="max-w-2xl mx-auto relative z-10">
+          {/* ─── Progress Indicator ─── */}
+          <div className="mb-8 pt-4">
+            <div className="flex items-center justify-between mb-3">
               {steps.map((step, index) => (
                 <div key={step.id} className="flex items-center">
-                  <div
+                  <motion.div
+                    animate={{
+                      scale: index === currentStepIndex ? 1.1 : 1,
+                      boxShadow: index === currentStepIndex
+                        ? '0 0 20px rgba(16, 185, 129, 0.3)'
+                        : '0 0 0px transparent',
+                    }}
+                    transition={{ duration: 0.3 }}
                     className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium
-                      ${index < currentStepIndex ? 'bg-primary text-primary-foreground' : ''}
-                      ${index === currentStepIndex ? 'bg-primary text-primary-foreground ring-4 ring-primary/20' : ''}
-                      ${index > currentStepIndex ? 'bg-muted text-muted-foreground' : ''}
+                      w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-colors duration-300
+                      ${index < currentStepIndex
+                        ? 'bg-re-brand text-[var(--re-surface-base)]'
+                        : index === currentStepIndex
+                          ? 'bg-re-brand text-[var(--re-surface-base)] ring-4 ring-re-brand/20'
+                          : 'bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)]'
+                      }
                     `}
                   >
                     {index < currentStepIndex ? <CheckCircle className="w-4 h-4" /> : step.number}
-                  </div>
+                  </motion.div>
                   {index < steps.length - 1 && (
-                    <div
-                      className={`w-12 sm:w-20 h-1 mx-1 ${index < currentStepIndex ? 'bg-primary' : 'bg-muted'
-                        }`}
-                    />
+                    <div className="w-10 sm:w-16 h-1 mx-1 rounded-full overflow-hidden"
+                      style={{ background: 'var(--re-surface-elevated)' }}
+                    >
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: 'var(--re-brand)' }}
+                        initial={{ width: '0%' }}
+                        animate={{ width: index < currentStepIndex ? '100%' : '0%' }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                      />
+                    </div>
                   )}
                 </div>
               ))}
             </div>
-            <p className="text-center text-sm text-muted-foreground">
-              Step {currentStepIndex + 1} of {steps.length}: {steps[currentStepIndex]?.title}
+            <p className="text-center text-sm" style={{ color: 'var(--re-text-muted)' }}>
+              Step {currentStepIndex + 1} of {steps.length}: <span style={{ color: 'var(--re-text-secondary)' }}>{steps[currentStepIndex]?.title}</span>
             </p>
           </div>
 
           <AnimatePresence mode="wait">
-            {/* Step 1: Welcome */}
+            {/* ═══════════ Step 1: Welcome ═══════════ */}
             {currentStep === 'welcome' && (
-              <motion.div
-                key="welcome"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <Card>
-                  <CardHeader className="text-center">
-                    <div className="mx-auto mb-4 p-4 rounded-full bg-primary/10">
-                      <Rocket className="w-12 h-12 text-primary" />
-                    </div>
-                    <CardTitle className="text-3xl">Welcome to RegEngine</CardTitle>
-                    <CardDescription className="text-lg">
-                      Let&apos;s get you set up in just a few minutes
+              <motion.div key="welcome" variants={cardVariants} initial="enter" animate="center" exit="exit">
+                <Card className="overflow-hidden border-[var(--re-border-default)]" style={{ background: 'var(--re-surface-card)' }}>
+                  {/* Gradient header accent */}
+                  <div className="h-1" style={{ background: 'linear-gradient(90deg, var(--re-brand), var(--re-info), var(--re-brand-light))' }} />
+
+                  <CardHeader className="text-center pb-2">
+                    <motion.div
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
+                      className="mx-auto mb-4 p-4 rounded-2xl"
+                      style={{ background: 'rgba(16, 185, 129, 0.1)', boxShadow: 'var(--re-shadow-glow)' }}
+                    >
+                      <Rocket className="w-12 h-12" style={{ color: 'var(--re-brand)' }} />
+                    </motion.div>
+                    <CardTitle className="text-3xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
+                      Welcome to RegEngine
+                    </CardTitle>
+                    <CardDescription className="text-lg" style={{ color: 'var(--re-text-tertiary)' }}>
+                      Your compliance evidence platform — set up in under 3 minutes
                     </CardDescription>
                   </CardHeader>
+
                   <CardContent className="space-y-6">
-                    <div className="grid gap-4">
-                      <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
-                        <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Verify services are running</p>
-                          <p className="text-sm text-muted-foreground">We&apos;ll check that all backend services are healthy</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
-                        <Key className="w-5 h-5 text-blue-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Set up your API key</p>
-                          <p className="text-sm text-muted-foreground">Create or enter credentials to access the platform</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
-                        <Upload className="w-5 h-5 text-purple-500 mt-0.5" />
-                        <div>
-                          <p className="font-medium">Ingest your first document</p>
-                          <p className="text-sm text-muted-foreground">See the platform in action with a sample regulatory document</p>
-                        </div>
-                      </div>
-                    </div>
+                    <motion.div className="grid gap-3" variants={staggerChildren} initial="initial" animate="animate">
+                      {[
+                        { icon: Shield, label: 'Verify services are running', desc: 'Quick health check on all backend services', color: 'var(--re-success)' },
+                        { icon: Key, label: 'Set up your API key', desc: 'Create or enter credentials to access the platform', color: 'var(--re-info)' },
+                        { icon: Upload, label: 'Ingest your first document', desc: 'See the platform transform a regulation into evidence', color: 'var(--re-brand)' },
+                      ].map((item) => (
+                        <motion.div
+                          key={item.label}
+                          variants={fadeUp}
+                          className="flex items-start gap-3 p-4 rounded-xl border border-[var(--re-border-default)]"
+                          style={{ background: 'var(--re-surface-elevated)' }}
+                        >
+                          <div className="p-1.5 rounded-lg mt-0.5" style={{ background: `${item.color}15` }}>
+                            <item.icon className="w-4 h-4" style={{ color: item.color }} />
+                          </div>
+                          <div>
+                            <p className="font-medium" style={{ color: 'var(--re-text-primary)' }}>{item.label}</p>
+                            <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>{item.desc}</p>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </motion.div>
 
                     <div className="flex gap-3">
-                      <Button className="flex-1" onClick={() => setCurrentStep('health')}>
+                      <Button
+                        className="flex-1 h-11 font-semibold"
+                        onClick={() => setCurrentStep('health')}
+                        style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
+                      >
                         Get Started
                         <ArrowRight className="ml-2 w-4 h-4" />
                       </Button>
                       {apiKey && (
-                        <Button variant="outline" onClick={handleComplete}>
+                        <Button variant="outline" onClick={handleComplete}
+                          className="border-[var(--re-border-default)]"
+                          style={{ color: 'var(--re-text-secondary)' }}
+                        >
                           Skip (I have credentials)
                         </Button>
                       )}
@@ -243,18 +339,15 @@ export default function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* Step 2: Health Check */}
+            {/* ═══════════ Step 2: Health Check ═══════════ */}
             {currentStep === 'health' && (
-              <motion.div
-                key="health"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <Card>
+              <motion.div key="health" variants={cardVariants} initial="enter" animate="center" exit="exit">
+                <Card className="overflow-hidden border-[var(--re-border-default)]" style={{ background: 'var(--re-surface-card)' }}>
+                  <div className="h-1" style={{ background: 'linear-gradient(90deg, var(--re-brand), var(--re-info))' }} />
+
                   <CardHeader>
-                    <CardTitle>System Health Check</CardTitle>
-                    <CardDescription>
+                    <CardTitle style={{ color: 'var(--re-text-primary)' }}>System Health Check</CardTitle>
+                    <CardDescription style={{ color: 'var(--re-text-tertiary)' }}>
                       {isCloudMode
                         ? 'Cloud deployment detected — backend services connect separately'
                         : 'Verifying that all RegEngine services are running'}
@@ -262,14 +355,12 @@ export default function OnboardingPage() {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {isCloudMode ? (
-                      <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                      <div className="p-4 rounded-xl border" style={{ background: 'var(--re-info-muted)', borderColor: 'var(--re-info)' }}>
                         <div className="flex items-start gap-3">
-                          <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                          <Sparkles className="w-5 h-5 mt-0.5" style={{ color: 'var(--re-info)' }} />
                           <div>
-                            <p className="font-medium text-blue-900 dark:text-blue-100">
-                              Cloud Mode
-                            </p>
-                            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                            <p className="font-medium" style={{ color: 'var(--re-text-primary)' }}>Cloud Mode</p>
+                            <p className="text-sm mt-1" style={{ color: 'var(--re-text-tertiary)' }}>
                               You&apos;re on the hosted version of RegEngine. Backend services
                               (Admin API, Ingestion) are configured separately. You can continue
                               to set up your credentials.
@@ -297,23 +388,23 @@ export default function OnboardingPage() {
                         </div>
 
                         {!allServicesHealthy && !adminHealth.isLoading && !ingestionHealth.isLoading && (
-                          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                          <div className="p-4 rounded-xl border" style={{ background: 'var(--re-warning-muted)', borderColor: 'var(--re-warning)' }}>
                             <div className="flex items-start gap-3">
-                              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                              <AlertCircle className="w-5 h-5 mt-0.5" style={{ color: 'var(--re-warning)' }} />
                               <div>
-                                <p className="font-medium text-amber-900 dark:text-amber-100">
-                                  Services not ready
-                                </p>
-                                <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                                <p className="font-medium" style={{ color: 'var(--re-text-primary)' }}>Services not ready</p>
+                                <p className="text-sm mt-1" style={{ color: 'var(--re-text-tertiary)' }}>
                                   Make sure you&apos;ve started the backend services:
                                 </p>
-                                <code className="block mt-2 p-2 bg-amber-100 dark:bg-amber-900/40 rounded text-sm font-mono">
+                                <code className="block mt-2 p-2 rounded text-sm font-mono"
+                                  style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-secondary)' }}
+                                >
                                   make up
                                 </code>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="mt-3"
+                                  className="mt-3 border-[var(--re-border-default)]"
                                   onClick={() => {
                                     adminHealth.refetch();
                                     ingestionHealth.refetch();
@@ -330,14 +421,18 @@ export default function OnboardingPage() {
                     )}
 
                     <div className="flex gap-3">
-                      <Button variant="outline" onClick={() => setCurrentStep('welcome')}>
+                      <Button variant="outline" onClick={() => setCurrentStep('welcome')}
+                        className="border-[var(--re-border-default)]"
+                        style={{ color: 'var(--re-text-secondary)' }}
+                      >
                         <ArrowLeft className="mr-2 w-4 h-4" />
                         Back
                       </Button>
                       <Button
-                        className="flex-1"
+                        className="flex-1 font-semibold"
                         onClick={() => setCurrentStep('credentials')}
                         disabled={!allServicesHealthy}
+                        style={allServicesHealthy ? { background: 'var(--re-brand)', color: 'var(--re-surface-base)' } : undefined}
                       >
                         Continue
                         <ArrowRight className="ml-2 w-4 h-4" />
@@ -348,79 +443,83 @@ export default function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* Step 3: Credentials */}
+            {/* ═══════════ Step 3: Credentials ═══════════ */}
             {currentStep === 'credentials' && (
-              <motion.div
-                key="credentials"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <Card>
+              <motion.div key="credentials" variants={cardVariants} initial="enter" animate="center" exit="exit">
+                <Card className="overflow-hidden border-[var(--re-border-default)]" style={{ background: 'var(--re-surface-card)' }}>
+                  <div className="h-1" style={{ background: 'linear-gradient(90deg, var(--re-info), var(--re-brand))' }} />
+
                   <CardHeader>
-                    <CardTitle>Set Up Your Credentials</CardTitle>
-                    <CardDescription>
+                    <CardTitle style={{ color: 'var(--re-text-primary)' }}>Set Up Your Credentials</CardTitle>
+                    <CardDescription style={{ color: 'var(--re-text-tertiary)' }}>
                       Choose how you want to authenticate with RegEngine
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {!credentialMethod && (
-                      <div className="grid gap-3">
-                        <button
-                          className="flex items-start gap-4 p-4 rounded-lg border hover:border-primary hover:bg-accent transition-colors text-left"
-                          onClick={() => setCredentialMethod('admin')}
-                        >
-                          <Key className="w-6 h-6 text-primary mt-0.5" />
-                          <div>
-                            <p className="font-medium">I have an Admin Master Key</p>
-                            <p className="text-sm text-muted-foreground">
-                              Create a new API key using your admin credentials
-                            </p>
-                          </div>
-                        </button>
-
-                        <button
-                          className="flex items-start gap-4 p-4 rounded-lg border hover:border-primary hover:bg-accent transition-colors text-left"
-                          onClick={() => setCredentialMethod('existing')}
-                        >
-                          <CheckCircle className="w-6 h-6 text-green-500 mt-0.5" />
-                          <div>
-                            <p className="font-medium">I already have an API Key</p>
-                            <p className="text-sm text-muted-foreground">
-                              Enter an existing key to link this session
-                            </p>
-                          </div>
-                        </button>
-
-                        <button
-                          className="flex items-start gap-4 p-4 rounded-lg border hover:border-primary hover:bg-accent transition-colors text-left"
-                          onClick={() => setCredentialMethod('cli')}
-                        >
-                          <Terminal className="w-6 h-6 text-orange-500 mt-0.5" />
-                          <div>
-                            <p className="font-medium">Create via CLI / Console</p>
-                            <p className="text-sm text-muted-foreground">
-                              Generate a new tenant and key using the command line
-                            </p>
-                          </div>
-                        </button>
-                      </div>
+                      <motion.div className="grid gap-3" variants={staggerChildren} initial="initial" animate="animate">
+                        {[
+                          {
+                            id: 'admin' as const,
+                            icon: Key,
+                            color: 'var(--re-brand)',
+                            label: 'I have an Admin Master Key',
+                            desc: 'Create a new API key using your admin credentials',
+                          },
+                          {
+                            id: 'existing' as const,
+                            icon: CheckCircle,
+                            color: 'var(--re-success)',
+                            label: 'I already have an API Key',
+                            desc: 'Enter an existing key to link this session',
+                          },
+                          {
+                            id: 'cli' as const,
+                            icon: Terminal,
+                            color: 'var(--re-warning)',
+                            label: 'Create via CLI / Console',
+                            desc: 'Generate a new tenant and key using the command line',
+                          },
+                        ].map((method) => (
+                          <motion.button
+                            key={method.id}
+                            variants={fadeUp}
+                            className="flex items-start gap-4 p-4 rounded-xl border text-left transition-all duration-200
+                              hover:shadow-re-md"
+                            style={{
+                              borderColor: 'var(--re-border-default)',
+                              background: 'var(--re-surface-elevated)',
+                            }}
+                            onClick={() => setCredentialMethod(method.id)}
+                            whileHover={{ scale: 1.01, borderColor: 'var(--re-brand)' }}
+                          >
+                            <div className="p-2 rounded-lg" style={{ background: `${method.color}15` }}>
+                              <method.icon className="w-5 h-5" style={{ color: method.color }} />
+                            </div>
+                            <div>
+                              <p className="font-medium" style={{ color: 'var(--re-text-primary)' }}>{method.label}</p>
+                              <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>{method.desc}</p>
+                            </div>
+                          </motion.button>
+                        ))}
+                      </motion.div>
                     )}
 
                     {/* Admin Key Method */}
                     {credentialMethod === 'admin' && (
-                      <div className="space-y-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCredentialMethod(null)}
+                      <motion.div className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <Button variant="ghost" size="sm" onClick={() => setCredentialMethod(null)}
+                          style={{ color: 'var(--re-text-muted)' }}
                         >
                           <ArrowLeft className="w-4 h-4 mr-2" />
                           Back to options
                         </Button>
 
                         <div>
-                          <label className="text-sm font-medium mb-2 block" htmlFor="tenant-name">
+                          <label className="text-sm font-medium mb-2 block"
+                            style={{ color: 'var(--re-text-secondary)' }}
+                            htmlFor="tenant-name"
+                          >
                             Tenant or Organization Name
                           </label>
                           <Input
@@ -428,6 +527,8 @@ export default function OnboardingPage() {
                             placeholder="Acme Corp"
                             value={tenantName}
                             onChange={(e) => setTenantName(e.target.value)}
+                            className="border-[var(--re-border-default)]"
+                            style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-primary)' }}
                           />
                         </div>
 
@@ -435,14 +536,18 @@ export default function OnboardingPage() {
                           <div
                             id="onboarding-error"
                             role="alert"
-                            className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm"
+                            className="p-3 rounded-lg text-sm"
+                            style={{ background: 'var(--re-danger-muted)', color: 'var(--re-danger)' }}
                           >
                             Failed to create tenant or API key. Please check your admin key and try again.
                           </div>
                         ) : null}
 
                         <div>
-                          <label className="text-sm font-medium mb-2 block" htmlFor="admin-key">
+                          <label className="text-sm font-medium mb-2 block"
+                            style={{ color: 'var(--re-text-secondary)' }}
+                            htmlFor="admin-key"
+                          >
                             Admin Master Key
                           </label>
                           <Input
@@ -453,13 +558,16 @@ export default function OnboardingPage() {
                             onChange={(e) => setAdminKeyInput(e.target.value)}
                             aria-invalid={createKeyMutation.isError || createTenantMutation.isError}
                             aria-describedby="onboarding-error"
+                            className="border-[var(--re-border-default)]"
+                            style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-primary)' }}
                           />
                         </div>
 
                         <Button
-                          className="w-full"
+                          className="w-full font-semibold"
                           onClick={handleCreateTenant}
                           disabled={!adminKeyInput || !tenantName || createKeyMutation.isPending || createTenantMutation.isPending}
+                          style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                         >
                           {createKeyMutation.isPending || createTenantMutation.isPending ? (
                             <>
@@ -473,27 +581,30 @@ export default function OnboardingPage() {
                             </>
                           )}
                         </Button>
-                      </div>
+                      </motion.div>
                     )}
 
                     {/* Existing API Key Method */}
                     {credentialMethod === 'existing' && (
-                      <div className="space-y-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCredentialMethod(null)}
+                      <motion.div className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <Button variant="ghost" size="sm" onClick={() => setCredentialMethod(null)}
+                          style={{ color: 'var(--re-text-muted)' }}
                         >
                           <ArrowLeft className="w-4 h-4 mr-2" />
                           Back to options
                         </Button>
 
                         <div>
-                          <label className="text-sm font-medium mb-2 block" htmlFor="existing-api-key">
+                          <label className="text-sm font-medium mb-2 block"
+                            style={{ color: 'var(--re-text-secondary)' }}
+                            htmlFor="existing-api-key"
+                          >
                             Your API Key
                           </label>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Starts with <code className="bg-muted px-1 rounded">rge_</code>
+                          <p className="text-sm mb-2" style={{ color: 'var(--re-text-muted)' }}>
+                            Starts with <code className="px-1.5 py-0.5 rounded font-mono text-xs"
+                              style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-brand)' }}
+                            >rge_</code>
                           </p>
                           <Input
                             id="existing-api-key"
@@ -501,64 +612,71 @@ export default function OnboardingPage() {
                             placeholder="rge_..."
                             value={existingApiKey}
                             onChange={(e) => setExistingApiKey(e.target.value)}
+                            className="border-[var(--re-border-default)]"
+                            style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-primary)' }}
                           />
                         </div>
 
                         <Button
-                          className="w-full"
+                          className="w-full font-semibold"
                           onClick={handleUseExistingKey}
                           disabled={!existingApiKey}
+                          style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                         >
                           Use This Key
                           <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
-                      </div>
+                      </motion.div>
                     )}
 
                     {/* CLI Method */}
                     {credentialMethod === 'cli' && (
-                      <div className="space-y-4">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setCredentialMethod(null)}
+                      <motion.div className="space-y-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <Button variant="ghost" size="sm" onClick={() => setCredentialMethod(null)}
+                          style={{ color: 'var(--re-text-muted)' }}
                         >
                           <ArrowLeft className="w-4 h-4 mr-2" />
                           Back to options
                         </Button>
 
-                        <div className="p-4 rounded-lg bg-slate-950 text-slate-50 font-mono text-sm overflow-x-auto">
-                          <div className="flex items-center justify-between mb-2 text-slate-400">
-                            <span>Terminal</span>
+                        <div className="p-4 rounded-xl font-mono text-sm overflow-x-auto"
+                          style={{ background: 'var(--re-surface-base)', border: '1px solid var(--re-border-default)' }}
+                        >
+                          <div className="flex items-center justify-between mb-2" style={{ color: 'var(--re-text-muted)' }}>
+                            <span className="text-xs">Terminal</span>
                             <div className="flex gap-1.5">
-                              <div className="w-3 h-3 rounded-full bg-red-500/20" />
-                              <div className="w-3 h-3 rounded-full bg-yellow-500/20" />
-                              <div className="w-3 h-3 rounded-full bg-green-500/20" />
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--re-danger)', opacity: 0.4 }} />
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--re-warning)', opacity: 0.4 }} />
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'var(--re-success)', opacity: 0.4 }} />
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-green-400">$</span>
-                            <span>curl -X POST https://api.regengine.co/v1/tenants/init</span>
+                            <span style={{ color: 'var(--re-success)' }}>$</span>
+                            <span style={{ color: 'var(--re-text-secondary)' }}>curl -X POST https://api.regengine.co/v1/tenants/init</span>
                           </div>
-                          <div className="mt-4 flex justify-end">
+                          <div className="mt-3 flex justify-end">
                             <Button
                               variant="secondary"
                               size="sm"
-                              className="h-8 text-xs"
+                              className="h-7 text-xs"
                               onClick={() => copyToClipboard('curl -X POST https://api.regengine.co/v1/tenants/init')}
                             >
-                              {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                              {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                             </Button>
                           </div>
                         </div>
-                        <p className="text-sm text-muted-foreground mt-3">
+
+                        <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>
                           This will create a new tenant with sample data and display your API key.
                         </p>
 
-                        <div className="p-4 rounded-lg border">
-                          <p className="font-medium mb-2">After running the command:</p>
+                        <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--re-border-default)', background: 'var(--re-surface-elevated)' }}>
+                          <p className="font-medium mb-2" style={{ color: 'var(--re-text-primary)' }}>After running the command:</p>
                           <div>
-                            <label className="text-sm font-medium mb-2 block" htmlFor="cli-api-key">
+                            <label className="text-sm font-medium mb-2 block"
+                              style={{ color: 'var(--re-text-secondary)' }}
+                              htmlFor="cli-api-key"
+                            >
                               Enter the API Key from the output
                             </label>
                             <Input
@@ -567,24 +685,30 @@ export default function OnboardingPage() {
                               placeholder="rge_..."
                               value={existingApiKey}
                               onChange={(e) => setExistingApiKey(e.target.value)}
+                              className="border-[var(--re-border-default)]"
+                              style={{ background: 'var(--re-surface-base)', color: 'var(--re-text-primary)' }}
                             />
                           </div>
                           <Button
-                            className="w-full mt-3"
+                            className="w-full mt-3 font-semibold"
                             onClick={handleUseExistingKey}
                             disabled={!existingApiKey}
+                            style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                           >
                             Continue
                             <ArrowRight className="ml-2 w-4 h-4" />
                           </Button>
                         </div>
-                      </div>
+                      </motion.div>
                     )}
 
                     {/* Navigation Footer */}
                     {!credentialMethod && (
                       <div className="flex gap-3">
-                        <Button variant="outline" onClick={() => setCurrentStep('health')}>
+                        <Button variant="outline" onClick={() => setCurrentStep('health')}
+                          className="border-[var(--re-border-default)]"
+                          style={{ color: 'var(--re-text-secondary)' }}
+                        >
                           <ArrowLeft className="mr-2 w-4 h-4" />
                           Back
                         </Button>
@@ -595,78 +719,96 @@ export default function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* Step 4: First Ingest */}
+            {/* ═══════════ Step 4: First Ingest ═══════════ */}
             {currentStep === 'first-ingest' && (
-              <motion.div
-                key="first-ingest"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <Card>
+              <motion.div key="first-ingest" variants={cardVariants} initial="enter" animate="center" exit="exit">
+                <Card className="overflow-hidden border-[var(--re-border-default)]" style={{ background: 'var(--re-surface-card)' }}>
+                  <div className="h-1" style={{ background: 'linear-gradient(90deg, var(--re-brand-light), var(--re-brand))' }} />
+
                   <CardHeader>
-                    <CardTitle>Ingest Your First Document</CardTitle>
-                    <CardDescription>
-                      Let&apos;s see RegEngine in action with a sample regulatory document
+                    <CardTitle style={{ color: 'var(--re-text-primary)' }}>Ingest Your First Document</CardTitle>
+                    <CardDescription style={{ color: 'var(--re-text-tertiary)' }}>
+                      See RegEngine transform a regulation into structured compliance evidence
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <p className="font-medium mb-2">Sample Document</p>
-                      <p className="text-sm text-muted-foreground mb-2">
+                    <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--re-border-default)', background: 'var(--re-surface-elevated)' }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileSearch className="w-4 h-4" style={{ color: 'var(--re-brand)' }} />
+                        <p className="font-medium" style={{ color: 'var(--re-text-primary)' }}>Sample Document</p>
+                      </div>
+                      <p className="text-sm mb-2" style={{ color: 'var(--re-text-muted)' }}>
                         We&apos;ll ingest a section of FDA regulations (21 CFR Part 1)
                       </p>
-                      <code className="text-xs break-all block p-2 bg-background rounded">
+                      <code className="text-xs break-all block p-2 rounded font-mono"
+                        style={{ background: 'var(--re-surface-base)', color: 'var(--re-text-tertiary)' }}
+                      >
                         {DEMO_DOCUMENT_URL}
                       </code>
                     </div>
 
                     {ingestMutation.isSuccess && (
-                      <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 rounded-xl border"
+                        style={{ background: 'var(--re-success-muted)', borderColor: 'var(--re-success)' }}
+                      >
                         <div className="flex items-start gap-3">
-                          <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                          <CheckCircle className="w-5 h-5 mt-0.5" style={{ color: 'var(--re-success)' }} />
                           <div>
-                            <p className="font-semibold text-green-900 dark:text-green-100">
+                            <p className="font-semibold" style={{ color: 'var(--re-text-primary)' }}>
                               Document Submitted!
                             </p>
-                            <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                              Document ID: <code className="font-mono">{ingestMutation.data?.doc_id}</code>
+                            <p className="text-sm mt-1" style={{ color: 'var(--re-text-tertiary)' }}>
+                              Document ID: <code className="font-mono px-1 py-0.5 rounded text-xs"
+                                style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-brand)' }}
+                              >{ingestMutation.data?.doc_id}</code>
                             </p>
-                            <p className="text-sm text-green-700 dark:text-green-300">
+                            <p className="text-sm" style={{ color: 'var(--re-text-tertiary)' }}>
                               The document is now being processed through the NLP pipeline.
                             </p>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     )}
 
                     {ingestMutation.isError && (
-                      <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-4 rounded-xl border"
+                        style={{ background: 'var(--re-danger-muted)', borderColor: 'var(--re-danger)' }}
+                      >
                         <div className="flex items-start gap-3">
-                          <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+                          <XCircle className="w-5 h-5 mt-0.5" style={{ color: 'var(--re-danger)' }} />
                           <div>
-                            <p className="font-semibold text-red-900 dark:text-red-100">
+                            <p className="font-semibold" style={{ color: 'var(--re-text-primary)' }}>
                               Ingestion Failed
                             </p>
-                            <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+                            <p className="text-sm mt-1" style={{ color: 'var(--re-text-tertiary)' }}>
                               {ingestMutation.error?.message || 'An error occurred. You can try again or skip this step.'}
                             </p>
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     )}
 
                     <div className="flex gap-3">
-                      <Button variant="outline" onClick={() => setCurrentStep('credentials')}>
+                      <Button variant="outline" onClick={() => setCurrentStep('credentials')}
+                        className="border-[var(--re-border-default)]"
+                        style={{ color: 'var(--re-text-secondary)' }}
+                      >
                         <ArrowLeft className="mr-2 w-4 h-4" />
                         Back
                       </Button>
 
                       {!ingestMutation.isSuccess ? (
                         <Button
-                          className="flex-1"
+                          className="flex-1 font-semibold"
                           onClick={handleDemoIngest}
                           disabled={ingestMutation.isPending}
+                          style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                         >
                           {ingestMutation.isPending ? (
                             <>
@@ -681,13 +823,19 @@ export default function OnboardingPage() {
                           )}
                         </Button>
                       ) : (
-                        <Button className="flex-1" onClick={() => setCurrentStep('complete')}>
+                        <Button
+                          className="flex-1 font-semibold"
+                          onClick={() => setCurrentStep('complete')}
+                          style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
+                        >
                           Continue
                           <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                       )}
 
-                      <Button variant="ghost" onClick={() => setCurrentStep('complete')}>
+                      <Button variant="ghost" onClick={() => setCurrentStep('complete')}
+                        style={{ color: 'var(--re-text-muted)' }}
+                      >
                         Skip
                       </Button>
                     </div>
@@ -696,72 +844,82 @@ export default function OnboardingPage() {
               </motion.div>
             )}
 
-            {/* Step 5: Complete */}
+            {/* ═══════════ Step 5: Complete ═══════════ */}
             {currentStep === 'complete' && (
-              <motion.div
-                key="complete"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <Card>
-                  <CardHeader className="text-center">
-                    <div className="mx-auto mb-4 p-4 rounded-full bg-green-100 dark:bg-green-900/30">
-                      <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
-                    </div>
-                    <CardTitle className="text-3xl">You&apos;re All Set!</CardTitle>
-                    <CardDescription className="text-lg">
-                      RegEngine is ready to use
+              <motion.div key="complete" variants={cardVariants} initial="enter" animate="center" exit="exit">
+                <Card className="overflow-hidden border-[var(--re-border-default)]" style={{ background: 'var(--re-surface-card)' }}>
+                  <div className="h-1.5" style={{ background: 'linear-gradient(90deg, var(--re-success), var(--re-brand), var(--re-info))' }} />
+
+                  <CardHeader className="text-center pb-2">
+                    <motion.div
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+                      className="mx-auto mb-4 p-4 rounded-2xl"
+                      style={{ background: 'var(--re-success-muted)', boxShadow: '0 0 30px rgba(34, 197, 94, 0.2)' }}
+                    >
+                      <Sparkles className="w-12 h-12" style={{ color: 'var(--re-success)' }} />
+                    </motion.div>
+                    <CardTitle className="text-3xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
+                      You&apos;re All Set!
+                    </CardTitle>
+                    <CardDescription className="text-lg" style={{ color: 'var(--re-text-tertiary)' }}>
+                      RegEngine is ready — here&apos;s what you can do now
                     </CardDescription>
                   </CardHeader>
+
                   <CardContent className="space-y-6">
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <p className="font-medium mb-2">Your API Key is saved</p>
-                      <p className="text-sm text-muted-foreground">
-                        Your credentials are stored in this browser. You won&apos;t need to enter them again.
-                      </p>
-                    </div>
+                    {/* Platform stats */}
+                    <motion.div
+                      className="grid grid-cols-2 gap-3"
+                      variants={staggerChildren}
+                      initial="initial"
+                      animate="animate"
+                    >
+                      <ActivationStat icon={Shield} label="Security" value="Double-Lock Active" color="var(--re-success)" />
+                      <ActivationStat icon={Zap} label="Verticals" value="12 Industries" color="var(--re-warning)" />
+                      <ActivationStat icon={BarChart3} label="Evidence" value="Hash-Chained" color="var(--re-info)" />
+                      <ActivationStat icon={Network} label="Graph" value="Neo4j Ready" color="var(--re-brand)" />
+                    </motion.div>
 
-                    <div className="grid gap-3">
-                      <p className="font-medium">What&apos;s next?</p>
-                      <a
-                        href="/ingest"
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
-                      >
-                        <Upload className="w-5 h-5 text-blue-500" />
-                        <div className="flex-1">
-                          <p className="font-medium">Ingest More Documents</p>
-                          <p className="text-sm text-muted-foreground">Add your own regulatory documents</p>
-                        </div>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </a>
-                      <a
-                        href="/compliance"
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
-                      >
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                        <div className="flex-1">
-                          <p className="font-medium">Browse Compliance Checklists</p>
-                          <p className="text-sm text-muted-foreground">Explore pre-built compliance frameworks</p>
-                        </div>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </a>
-                      <a
-                        href="/review"
-                        className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors"
-                      >
-                        <CheckCircle className="w-5 h-5 text-amber-500" />
-                        <div className="flex-1">
-                          <p className="font-medium">Review Extractions</p>
-                          <p className="text-sm text-muted-foreground">Validate ML-extracted regulatory data</p>
-                        </div>
-                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
-                      </a>
-                    </div>
+                    {/* What's next */}
+                    <motion.div className="grid gap-2" variants={staggerChildren} initial="initial" animate="animate">
+                      <p className="font-semibold text-sm" style={{ color: 'var(--re-text-secondary)' }}>Explore the Platform</p>
+                      {[
+                        { href: '/ingest', icon: Upload, label: 'Ingest Documents', desc: 'Add your own regulatory documents', color: 'var(--re-info)' },
+                        { href: '/compliance', icon: Shield, label: 'Compliance Checklists', desc: 'Explore pre-built frameworks', color: 'var(--re-success)' },
+                        { href: '/review', icon: FileSearch, label: 'Review Extractions', desc: 'Validate ML-extracted regulatory data', color: 'var(--re-warning)' },
+                        { href: '/ftl-checker', icon: Zap, label: 'FTL Checker', desc: 'Check FDA Food Traceability List coverage', color: 'var(--re-brand)' },
+                      ].map((item) => (
+                        <motion.a
+                          key={item.href}
+                          href={item.href}
+                          variants={fadeUp}
+                          className="flex items-center gap-3 p-3 rounded-xl border transition-all duration-200
+                            hover:shadow-re-md"
+                          style={{ borderColor: 'var(--re-border-default)', background: 'var(--re-surface-elevated)' }}
+                          whileHover={{ scale: 1.01, x: 4 }}
+                        >
+                          <div className="p-1.5 rounded-lg" style={{ background: `${item.color}15` }}>
+                            <item.icon className="w-4 h-4" style={{ color: item.color }} />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm" style={{ color: 'var(--re-text-primary)' }}>{item.label}</p>
+                            <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>{item.desc}</p>
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5" style={{ color: 'var(--re-text-disabled)' }} />
+                        </motion.a>
+                      ))}
+                    </motion.div>
 
-                    <Button className="w-full" size="lg" onClick={handleComplete}>
+                    <Button
+                      className="w-full h-12 font-bold text-base"
+                      size="lg"
+                      onClick={handleComplete}
+                      style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)', boxShadow: 'var(--re-shadow-glow)' }}
+                    >
                       Go to Dashboard
-                      <ArrowRight className="ml-2 w-4 h-4" />
+                      <ArrowRight className="ml-2 w-5 h-5" />
                     </Button>
                   </CardContent>
                 </Card>
@@ -774,6 +932,9 @@ export default function OnboardingPage() {
   );
 }
 
+/* ───────────────────────────────────────────────────────────── */
+/*  Service Health Item                                         */
+/* ───────────────────────────────────────────────────────────── */
 function ServiceHealthItem({
   name,
   port,
@@ -788,26 +949,35 @@ function ServiceHealthItem({
   error: unknown;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border">
+    <div className="flex items-center justify-between p-3 rounded-xl border"
+      style={{ borderColor: 'var(--re-border-default)', background: 'var(--re-surface-elevated)' }}
+    >
       <div className="flex items-center gap-3">
         {isLoading ? (
           <Spinner size="sm" />
         ) : isHealthy ? (
-          <CheckCircle className="w-5 h-5 text-green-500" />
+          <CheckCircle className="w-5 h-5" style={{ color: 'var(--re-success)' }} />
         ) : (
-          <XCircle className="w-5 h-5 text-red-500" />
+          <XCircle className="w-5 h-5" style={{ color: 'var(--re-danger)' }} />
         )}
         <div>
-          <p className="font-medium">{name}</p>
-          <p className="text-sm text-muted-foreground">Port {port}</p>
+          <p className="font-medium text-sm" style={{ color: 'var(--re-text-primary)' }}>{name}</p>
+          <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>Port {port}</p>
         </div>
       </div>
-      <Badge
-        variant={isHealthy ? 'outline' : isLoading ? 'secondary' : 'destructive'}
-        className={isHealthy ? 'text-green-600 border-green-600 bg-green-50' : ''}
-      >
-        {isLoading ? 'Checking...' : isHealthy ? 'Healthy' : 'Offline'}
-      </Badge>
+      <div>
+        {isLoading ? (
+          <span className="text-xs" style={{ color: 'var(--re-text-muted)' }}>Checking...</span>
+        ) : isHealthy ? (
+          <span className="text-xs font-medium px-2 py-1 rounded-full"
+            style={{ background: 'var(--re-success-muted)', color: 'var(--re-success)' }}
+          >Healthy</span>
+        ) : (
+          <span className="text-xs font-medium px-2 py-1 rounded-full"
+            style={{ background: 'var(--re-danger-muted)', color: 'var(--re-danger)' }}
+          >Offline</span>
+        )}
+      </div>
     </div>
   );
 }
