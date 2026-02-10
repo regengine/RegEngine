@@ -90,7 +90,10 @@ async def get_current_user(
             raise credentials_exception
         
     # Set user_id context for RLS so the user can see themselves
-    db.execute(text(f"SELECT set_config('regengine.user_id', '{user_id}', false)"))
+    db.execute(
+        text("SELECT set_config('regengine.user_id', :uid, false)"),
+        {"uid": str(user_id)}
+    )
     
     user = db.get(UserModel, UUID(user_id))
     if user is None:

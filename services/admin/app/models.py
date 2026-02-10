@@ -221,7 +221,10 @@ class TenantContext:
         This sets the PostgreSQL session variable that RLS policies use
         to enforce tenant isolation.
         """
-        session.execute(text(f"SELECT set_tenant_context('{tenant_id}')"))
+        session.execute(
+            text("SELECT set_tenant_context(:tid)"),
+            {"tid": str(tenant_id)}
+        )
 
     @staticmethod
     def get_tenant_context(session) -> Optional[UUID]:
@@ -248,7 +251,10 @@ class TenantContext:
             session: SQLAlchemy session
             is_sysadmin: Whether to enable sysadmin bypass
         """
-        session.execute(text(f"SELECT set_admin_context({str(is_sysadmin).lower()})"))
+        session.execute(
+            text("SELECT set_admin_context(:is_admin)"),
+            {"is_admin": is_sysadmin}
+        )
 
     @staticmethod
     def clear_tenant_context(session) -> None:
