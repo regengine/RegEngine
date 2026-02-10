@@ -1,0 +1,88 @@
+name: 🤖 Agent Task
+description: Dispatch a task to a specific agent in the Fractal Agent Swarm
+title: "[AGENT] "
+labels: ["agent-task"]
+body:
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Assigned Agent
+      description: Which agent should handle this task?
+      options:
+        - "Bot-FSMA (FDA FSMA 204 Specialist)"
+        - "Bot-PCOS (Union Payroll & Fringe Benefits)"
+        - "Bot-Security (The CISO)"
+        - "Bot-Infra (The SRE)"
+        - "Bot-UI (Design System Guardian)"
+        - "Bot-Energy (NERC CIP Specialist)"
+        - "Bot-Health (HIPAA Specialist)"
+        - "Bot-Aero (AS9100D Specialist)"
+        - "Bot-QA (Quality Assurance)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task-type
+    attributes:
+      label: Task Type
+      description: What kind of work is this?
+      options:
+        - "feature — New functionality"
+        - "fix — Bug fix"
+        - "audit — Review existing code"
+        - "test — Add or improve tests"
+        - "docs — Documentation update"
+        - "refactor — Code improvement"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: chain
+    attributes:
+      label: Agent Chain (optional)
+      description: Should additional agents review after the primary agent completes?
+      options:
+        - "None — Single agent only"
+        - "→ Bot-Security (Security review)"
+        - "→ Bot-Security → Bot-QA (Security + QA)"
+        - "→ Bot-Security → Bot-UI → Bot-QA (Full review)"
+        - "→ Bot-QA (QA validation only)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: task-description
+    attributes:
+      label: Task Description
+      description: Detailed description of what the agent should accomplish
+      placeholder: |
+        Describe the task clearly. Include:
+        - What needs to be done
+        - Which files/services are affected
+        - Any constraints or requirements
+        - Expected outcome
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know the task is complete?
+      placeholder: |
+        - [ ] Feature implemented and working
+        - [ ] Tests added with >80% coverage
+        - [ ] No security vulnerabilities introduced
+        - [ ] Documentation updated
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional context, links, or references
+      placeholder: |
+        Related issues, PRs, documentation links, or screenshots
+    validations:
+      required: false

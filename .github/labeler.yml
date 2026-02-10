@@ -1,4 +1,5 @@
 # Auto-label PRs based on file paths
+# ── Service Labels ────────────────────────────────────────
 backend:
   - changed-files:
     - any-glob-to-any-file: 'services/**'
@@ -37,3 +38,65 @@ dependencies:
       - '**/requirements.txt'
       - '**/package.json'
       - '**/package-lock.json'
+
+# ── Agent Persona Labels ─────────────────────────────────
+agent:fsma:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'services/compliance/**'
+      - 'services/graph/app/routers/fsma/**'
+      - 'services/graph/app/models/fsma_nodes.py'
+
+agent:pcos:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'services/admin/app/pcos/**'
+      - 'industry_plugins/production_ca_la/**'
+
+agent:security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'shared/security/**'
+      - 'shared/auth.py'
+      - 'shared/middleware/**'
+
+agent:infra:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'infra/**'
+      - 'docker-compose*.yml'
+      - 'services/*/Dockerfile'
+      - '.github/workflows/**'
+
+agent:ui:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'frontend/src/components/**'
+      - 'frontend/tailwind.config.ts'
+      - 'frontend/src/app/globals.css'
+
+agent:energy:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'services/energy-api/**'
+      - 'industry_plugins/energy/**'
+
+agent:healthcare:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'services/healthcare/**'
+      - 'industry_plugins/healthcare/**'
+
+agent:aerospace:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'services/aerospace/**'
+      - 'industry_plugins/aerospace/**'
+
+# ── Agent Swarm Meta Labels ──────────────────────────────
+agent:swarm-config:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.agent/**'
+      - 'scripts/summon_agent.py'
+      - 'scripts/swarm_orchestrator.py'

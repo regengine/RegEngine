@@ -1,4 +1,89 @@
-Test Steps for New Agents:
-- Run NLP extraction review queue
-- Simulate ingestion changes to test drift
-- Launch adversary agent using synthetic compliance gaps
+# Agent Onboarding Simulation Pack
+# RegEngine Fractal Agent Swarm — Validation Harness
+# ══════════════════════════════════════════════════
+
+## Purpose
+
+This pack validates that agents are properly configured and produce
+correct output. Run these steps for every new persona addition or
+after modifying the swarm infrastructure.
+
+## Pre-Flight Checks
+
+1. Verify all persona files exist:
+   $ python scripts/summon_agent.py --list
+
+2. Verify orchestrator registry:
+   $ python scripts/swarm_orchestrator.py --roster
+
+3. Verify protocol files exist:
+   $ ls -la .agent/protocols/
+
+## Test Scenarios
+
+### Scenario 1: Single Agent Summon
+For each agent in the roster:
+   $ python scripts/summon_agent.py --role {key} --task "Status report"
+Expected: Prompt generated with persona + constitution + task
+
+### Scenario 2: JSON Output Mode
+   $ python scripts/summon_agent.py --role qa --task "Test run" --output json
+Expected: Prompt includes output schema instructions
+
+### Scenario 3: Agent Chain
+   $ python scripts/swarm_orchestrator.py --chain fsma,security,qa --task "Test chain"
+Expected: Chain execution plan displayed, first agent prompt generated
+
+### Scenario 4: Predefined Sweep
+   $ python scripts/swarm_orchestrator.py --sweep security
+Expected: Security sweep chain initiated
+
+### Scenario 5: Output Validation (Pass)
+Create valid_output.json:
+{
+  "agent": "Bot-QA",
+  "task": "Test validation",
+  "timestamp": "2026-02-09T00:00:00Z",
+  "status": "completed",
+  "confidence": 0.95,
+  "files_changed": [],
+  "tests": {"added": 0, "modified": 0, "all_passing": true},
+  "risks": [],
+  "recommendations": [],
+  "handoff": null
+}
+   $ python scripts/swarm_orchestrator.py --validate valid_output.json
+Expected: ✅ Output from Bot-QA is valid.
+
+### Scenario 6: Output Validation (Fail)
+Create invalid_output.json:
+{
+  "agent": "Bot-Unknown",
+  "task": "Test",
+  "status": "invalid_status"
+}
+   $ python scripts/swarm_orchestrator.py --validate invalid_output.json
+Expected: ❌ Validation FAILED with multiple errors
+
+### Scenario 7: Workflow Execution
+   Run /security_audit workflow
+   Run /full_feature_pipeline workflow
+   Run /onboarding_validation workflow
+Expected: All workflow steps are actionable
+
+## Quality Rubric
+
+| Criterion                          | Weight | A+ Threshold      |
+|------------------------------------|--------|--------------------|
+| Persona files: all 9 exist         |   15%  | 9/9                |
+| Constitution: handoff protocol     |   15%  | Present + complete |
+| Orchestrator: roster command       |   10%  | All 9 shown        |
+| Orchestrator: chain execution      |   10%  | Works for 3+ agents|
+| Orchestrator: sweep patterns       |   10%  | 5 sweeps defined   |
+| Orchestrator: output validation    |   10%  | Pass + fail cases  |
+| GitHub: issue template             |    5%  | All agents listed  |
+| GitHub: labeler with agent labels  |    5%  | 10+ labels         |
+| GitHub: copilot review routing     |   10%  | Per-path rules     |
+| GitHub: CI agent sweep             |   10%  | 3 jobs automated   |
+
+Pass: ≥ 90% → A+

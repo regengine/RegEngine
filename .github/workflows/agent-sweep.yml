@@ -1,0 +1,254 @@
+name: Agent Sweep — Automated Audits
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9:00 AM UTC
+  workflow_dispatch:
+    inputs:
+      sweep_type:
+        description: 'Sweep type to run'
+        required: true
+        default: 'full-audit'
+        type: choice
+        options:
+          - security
+          - ui-drift
+          - infra-health
+          - full-audit
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # ── Bot-Security: Weekly Security Sweep ──────────────────
+  security-sweep:
+    name: 🔒 Bot-Security Sweep
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'schedule' ||
+      github.event.inputs.sweep_type == 'security' ||
+      github.event.inputs.sweep_type == 'full-audit'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "## 🔒 Bot-Security Sweep Results" > security-report.md
+          echo "" >> security-report.md
+          echo "### Secrets Scan" >> security-report.md
+
+          # Check for common secret patterns
+          FINDINGS=$(grep -rn --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" \
+            -E "(password\s*=\s*['\"][^'\"]+['\"]|api_key\s*=\s*['\"][^'\"]+['\"]|secret\s*=\s*['\"][^'\"]+['\"])" \
+            services/ shared/ frontend/src/ 2>/dev/null | grep -v "test" | grep -v "__pycache__" || true)
+
+          if [ -n "$FINDINGS" ]; then
+            echo "⚠️ Potential hardcoded secrets found:" >> security-report.md
+            echo '```' >> security-report.md
+            echo "$FINDINGS" >> security-report.md
+            echo '```' >> security-report.md
+          else
+            echo "✅ No hardcoded secrets detected." >> security-report.md
+          fi
+
+      - name: Check for print statements (should use logger)
+        run: |
+          echo "" >> security-report.md
+          echo "### Print Statement Audit" >> security-report.md
+
+          PRINTS=$(grep -rn --include="*.py" "^\s*print(" services/ shared/ 2>/dev/null \
+            | grep -v "test" | grep -v "__pycache__" || true)
+
+          if [ -n "$PRINTS" ]; then
+            echo "⚠️ Found print() statements (should use structlog):" >> security-report.md
+            echo '```' >> security-report.md
+            echo "$PRINTS" | head -20 >> security-report.md
+            echo '```' >> security-report.md
+          else
+            echo "✅ No print() statements found in production code." >> security-report.md
+          fi
+
+      - name: Check tenant isolation
+        run: |
+          echo "" >> security-report.md
+          echo "### Tenant Isolation Check" >> security-report.md
+
+          # Check for SQL queries missing tenant_id
+          RAW_SQL=$(grep -rn --include="*.py" "execute\|raw_sql\|text(" services/ 2>/dev/null \
+            | grep -v "tenant_id" | grep -v "test" | grep -v "__pycache__" | grep -v "migration" || true)
+
+          if [ -n "$RAW_SQL" ]; then
+            echo "⚠️ SQL queries potentially missing tenant_id:" >> security-report.md
+            echo '```' >> security-report.md
+            echo "$RAW_SQL" | head -10 >> security-report.md
+            echo '```' >> security-report.md
+          else
+            echo "✅ All SQL queries appear to include tenant scoping." >> security-report.md
+          fi
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-sweep-report
+          path: security-report.md
+          retention-days: 90
+
+      - name: Create issue if findings
+        if: always()
+        run: |
+          if grep -q "⚠️" security-report.md; then
+            BODY=$(cat security-report.md)
+            gh issue create \
+              --title "🔒 [Bot-Security] Weekly Sweep — Findings $(date +%Y-%m-%d)" \
+              --body "$BODY" \
+              --label "agent-task,security,agent:security" \
+              || echo "Issue creation skipped (may lack permissions)"
+          else
+            echo "✅ No findings — no issue created."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Bot-UI: Weekly UI Drift Check ────────────────────────
+  ui-drift-check:
+    name: 🎨 Bot-UI Drift Check
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'schedule' ||
+      github.event.inputs.sweep_type == 'ui-drift' ||
+      github.event.inputs.sweep_type == 'full-audit'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for inline styles
+        run: |
+          echo "## 🎨 Bot-UI Drift Check Results" > ui-report.md
+          echo "" >> ui-report.md
+
+          # Check for inline style={{}} in React components
+          INLINE=$(grep -rn --include="*.tsx" --include="*.jsx" "style={{" frontend/src/ 2>/dev/null \
+            | grep -v "node_modules" || true)
+
+          echo "### Inline Styles" >> ui-report.md
+          if [ -n "$INLINE" ]; then
+            echo "⚠️ Inline styles detected (should use Tailwind classes):" >> ui-report.md
+            echo '```' >> ui-report.md
+            echo "$INLINE" | head -20 >> ui-report.md
+            echo '```' >> ui-report.md
+          else
+            echo "✅ No inline styles found." >> ui-report.md
+          fi
+
+      - name: Scan for hardcoded colors
+        run: |
+          echo "" >> ui-report.md
+          echo "### Hardcoded Colors" >> ui-report.md
+
+          COLORS=$(grep -rn --include="*.tsx" --include="*.jsx" --include="*.css" \
+            -E "#[0-9a-fA-F]{3,8}|rgb\(|rgba\(" frontend/src/ 2>/dev/null \
+            | grep -v "node_modules" | grep -v "globals.css" | grep -v "tailwind" || true)
+
+          if [ -n "$COLORS" ]; then
+            echo "⚠️ Hardcoded colors found (should use CSS variables/tokens):" >> ui-report.md
+            echo '```' >> ui-report.md
+            echo "$COLORS" | head -20 >> ui-report.md
+            echo '```' >> ui-report.md
+          else
+            echo "✅ No hardcoded colors found." >> ui-report.md
+          fi
+
+      - name: Upload UI report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-drift-report
+          path: ui-report.md
+          retention-days: 90
+
+      - name: Create issue if findings
+        if: always()
+        run: |
+          if grep -q "⚠️" ui-report.md; then
+            BODY=$(cat ui-report.md)
+            gh issue create \
+              --title "🎨 [Bot-UI] Weekly Drift Check — Findings $(date +%Y-%m-%d)" \
+              --body "$BODY" \
+              --label "agent-task,frontend,agent:ui" \
+              || echo "Issue creation skipped (may lack permissions)"
+          else
+            echo "✅ No drift detected — no issue created."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Bot-Infra: Monthly Infrastructure Health ─────────────
+  infra-health:
+    name: 🏗️ Bot-Infra Health Check
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.sweep_type == 'infra-health' ||
+       github.event.inputs.sweep_type == 'full-audit')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Dockerfile best practices
+        run: |
+          echo "## 🏗️ Bot-Infra Health Check Results" > infra-report.md
+          echo "" >> infra-report.md
+          echo "### Dockerfile Audit" >> infra-report.md
+
+          # Check for 'latest' tags
+          LATEST=$(grep -rn "FROM.*:latest" services/*/Dockerfile 2>/dev/null || true)
+
+          if [ -n "$LATEST" ]; then
+            echo "⚠️ Found ':latest' tags (pin specific versions):" >> infra-report.md
+            echo '```' >> infra-report.md
+            echo "$LATEST" >> infra-report.md
+            echo '```' >> infra-report.md
+          else
+            echo "✅ All Dockerfile base images use pinned versions." >> infra-report.md
+          fi
+
+          # Check for HEALTHCHECK
+          echo "" >> infra-report.md
+          echo "### Health Check Coverage" >> infra-report.md
+
+          for df in services/*/Dockerfile; do
+            SERVICE=$(dirname "$df" | xargs basename)
+            if grep -q "HEALTHCHECK" "$df"; then
+              echo "- ✅ $SERVICE: HEALTHCHECK defined" >> infra-report.md
+            else
+              echo "- ⚠️ $SERVICE: Missing HEALTHCHECK" >> infra-report.md
+            fi
+          done
+
+      - name: Upload infra report
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-health-report
+          path: infra-report.md
+          retention-days: 90
+
+      - name: Create issue if findings
+        if: always()
+        run: |
+          if grep -q "⚠️" infra-report.md; then
+            BODY=$(cat infra-report.md)
+            gh issue create \
+              --title "🏗️ [Bot-Infra] Health Check — Findings $(date +%Y-%m-%d)" \
+              --body "$BODY" \
+              --label "agent-task,agent:infra" \
+              || echo "Issue creation skipped (may lack permissions)"
+          else
+            echo "✅ All infra checks passed — no issue created."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
