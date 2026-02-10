@@ -50,6 +50,15 @@ export default function OnboardingPage() {
   const [existingApiKey, setExistingApiKey] = useState('');
   const [tenantName, setTenantName] = useState('');
 
+  // Cloud deployment detection — on Vercel, backend services don't exist
+  const [isCloudMode, setIsCloudMode] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      setIsCloudMode(host !== 'localhost' && host !== '127.0.0.1');
+    }
+  }, []);
+
   // Health checks
   const adminHealth = useAdminHealth();
   const ingestionHealth = useIngestionHealth();
@@ -59,10 +68,11 @@ export default function OnboardingPage() {
   const createTenantMutation = useCreateTenant();
   const ingestMutation = useIngestURL();
 
-  // System status derived state
+  // System status derived state — cloud mode bypasses the gate
   const allServicesHealthy =
-    adminHealth.data?.status === 'healthy' &&
-    ingestionHealth.data?.status === 'healthy';
+    isCloudMode ||
+    (adminHealth.data?.status === 'healthy' &&
+      ingestionHealth.data?.status === 'healthy');
 
   useEffect(() => {
     // If user is already onboarded, redirect to dashboard
@@ -245,56 +255,78 @@ export default function OnboardingPage() {
                   <CardHeader>
                     <CardTitle>System Health Check</CardTitle>
                     <CardDescription>
-                      Verifying that all RegEngine services are running
+                      {isCloudMode
+                        ? 'Cloud deployment detected — backend services connect separately'
+                        : 'Verifying that all RegEngine services are running'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="space-y-3">
-                      <ServiceHealthItem
-                        name="Admin Service"
-                        port={8400}
-                        isLoading={adminHealth.isLoading}
-                        isHealthy={adminHealth.data?.status === 'healthy'}
-                        error={adminHealth.error}
-                      />
-                      <ServiceHealthItem
-                        name="Ingestion Service"
-                        port={8000}
-                        isLoading={ingestionHealth.isLoading}
-                        isHealthy={ingestionHealth.data?.status === 'healthy'}
-                        error={ingestionHealth.error}
-                      />
-                    </div>
-
-                    {!allServicesHealthy && !adminHealth.isLoading && !ingestionHealth.isLoading && (
-                      <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    {isCloudMode ? (
+                      <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                         <div className="flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                          <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                           <div>
-                            <p className="font-medium text-amber-900 dark:text-amber-100">
-                              Services not ready
+                            <p className="font-medium text-blue-900 dark:text-blue-100">
+                              Cloud Mode
                             </p>
-                            <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                              Make sure you&apos;ve started the backend services:
+                            <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                              You&apos;re on the hosted version of RegEngine. Backend services
+                              (Admin API, Ingestion) are configured separately. You can continue
+                              to set up your credentials.
                             </p>
-                            <code className="block mt-2 p-2 bg-amber-100 dark:bg-amber-900/40 rounded text-sm font-mono">
-                              make up
-                            </code>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-3"
-                              onClick={() => {
-                                adminHealth.refetch();
-                                ingestionHealth.refetch();
-                              }}
-                            >
-                              <RefreshCw className="w-4 h-4 mr-2" />
-                              Retry Check
-                            </Button>
                           </div>
                         </div>
                       </div>
+                    ) : (
+                      <>
+                        <div className="space-y-3">
+                          <ServiceHealthItem
+                            name="Admin Service"
+                            port={8400}
+                            isLoading={adminHealth.isLoading}
+                            isHealthy={adminHealth.data?.status === 'healthy'}
+                            error={adminHealth.error}
+                          />
+                          <ServiceHealthItem
+                            name="Ingestion Service"
+                            port={8000}
+                            isLoading={ingestionHealth.isLoading}
+                            isHealthy={ingestionHealth.data?.status === 'healthy'}
+                            error={ingestionHealth.error}
+                          />
+                        </div>
+
+                        {!allServicesHealthy && !adminHealth.isLoading && !ingestionHealth.isLoading && (
+                          <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                            <div className="flex items-start gap-3">
+                              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                              <div>
+                                <p className="font-medium text-amber-900 dark:text-amber-100">
+                                  Services not ready
+                                </p>
+                                <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                                  Make sure you&apos;ve started the backend services:
+                                </p>
+                                <code className="block mt-2 p-2 bg-amber-100 dark:bg-amber-900/40 rounded text-sm font-mono">
+                                  make up
+                                </code>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-3"
+                                  onClick={() => {
+                                    adminHealth.refetch();
+                                    ingestionHealth.refetch();
+                                  }}
+                                >
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                  Retry Check
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     <div className="flex gap-3">
