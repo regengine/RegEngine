@@ -88,7 +88,7 @@ async def trace_forward_endpoint(
         duration = time.time() - start_time
         record_trace_query("forward", duration, "error", 0, 0)
         logger.exception("trace_forward_error", tlc=tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/trace/backward/{tlc}")
@@ -138,7 +138,7 @@ async def trace_backward_endpoint(
         duration = time.time() - start_time
         record_trace_query("backward", duration, "error", 0, 0)
         logger.exception("trace_backward_error", tlc=tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/timeline/{tlc}")
@@ -162,4 +162,4 @@ async def lot_timeline_endpoint(
         return {"lot_id": tlc, "events": timeline}
     except Exception as e:
         logger.exception("timeline_error", tlc=tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")

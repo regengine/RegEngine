@@ -85,7 +85,7 @@ async def mass_balance_endpoint(
         }
     except Exception as e:
         logger.exception("mass_balance_error", tlc=tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/mass-balance/event/{event_id}")
@@ -138,4 +138,4 @@ async def mass_balance_event_endpoint(
         }
     except Exception as e:
         logger.exception("mass_balance_event_error", event_id=event_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
