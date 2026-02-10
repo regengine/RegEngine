@@ -137,7 +137,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, energy, graph, ingestion, nlp]
+        service: [admin, automotive, compliance, energy, gaming, graph, ingestion, nlp, opportunity, scheduler]
     steps:
       - uses: actions/checkout@v4
 

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [energy, admin, graph, nlp, ingestion]
+        service: [admin, automotive, compliance, energy, gaming, graph, ingestion, nlp, opportunity, scheduler]
     
     env:
       PYTHONPATH: ${{ github.workspace }}
