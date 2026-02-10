@@ -63,8 +63,22 @@ interface VerifyResult {
     verified_at: string;
 }
 
+/**
+ * Get current user email from session storage.
+ * TODO: Replace with proper auth session context (e.g., next-auth useSession)
+ * once user authentication is fully integrated.
+ */
+function getUserEmail(tenantId: string): string {
+    if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('regengine_user_email');
+        if (stored) return stored;
+    }
+    return `admin@tenant-${tenantId.slice(0, 8)}.regengine.io`;
+}
+
 export default function SnapshotsPage() {
     const { tenantId } = useTenant();
+    const userEmail = getUserEmail(tenantId);
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
@@ -122,7 +136,7 @@ export default function SnapshotsPage() {
                 body: JSON.stringify({
                     snapshot_name: snapshotName,
                     snapshot_reason: snapshotReason || undefined,
-                    created_by: 'current-user@company.com',
+                    created_by: userEmail,
                 }),
             });
 
@@ -167,7 +181,7 @@ export default function SnapshotsPage() {
     const verifySnapshot = async (snapshotId: string) => {
         try {
             const response = await fetch(
-                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=current-user@company.com`
+                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=${encodeURIComponent(userEmail)}`
             );
 
             if (response.ok) {
@@ -209,7 +223,7 @@ export default function SnapshotsPage() {
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ created_by: 'current-user@company.com' }),
+                    body: JSON.stringify({ created_by: userEmail }),
                 }
             );
 
@@ -786,9 +800,9 @@ export default function SnapshotsPage() {
                                         <div
                                             key={index}
                                             className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-red-500/50 bg-red-500/10' :
-                                                    change.severity === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
-                                                        change.severity === 'positive' ? 'border-green-500/50 bg-green-500/10' :
-                                                            'border-white/10 bg-white/5'
+                                                change.severity === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
+                                                    change.severity === 'positive' ? 'border-green-500/50 bg-green-500/10' :
+                                                        'border-white/10 bg-white/5'
                                                 }`}
                                         >
                                             <div className="font-medium mb-2">{change.label}</div>
