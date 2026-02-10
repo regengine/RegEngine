@@ -58,6 +58,57 @@
 
         /* Border radius */
         --radius: 0.5rem;
+
+        /* ─── RegEngine Extended Tokens ──────────────────────── */
+
+        /* Brand */
+        --re-brand: #10b981;
+        --re-brand-dark: #059669;
+        --re-brand-light: #34d399;
+
+        /* Surfaces */
+        --re-surface-base: #06090f;
+        --re-surface-card: #0c1017;
+        --re-surface-elevated: #111827;
+        --re-surface-overlay: rgba(6, 9, 15, 0.80);
+
+        /* Text */
+        --re-text-primary: #f8fafc;
+        --re-text-secondary: #c8d1dc;
+        --re-text-tertiary: #94a3b8;
+        --re-text-muted: #64748b;
+        --re-text-disabled: #475569;
+
+        /* Borders */
+        --re-border-default: #1e293b;
+        --re-border-subtle: #334155;
+        --re-border-strong: #475569;
+
+        /* Status */
+        --re-success: #22c55e;
+        --re-success-muted: rgba(34, 197, 94, 0.15);
+        --re-warning: #f59e0b;
+        --re-warning-muted: rgba(245, 158, 11, 0.15);
+        --re-danger: #ef4444;
+        --re-danger-muted: rgba(239, 68, 68, 0.15);
+        --re-info: #60a5fa;
+        --re-info-muted: rgba(96, 165, 250, 0.15);
+
+        /* Shadows */
+        --re-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+        --re-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+        --re-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+        --re-shadow-glow: 0 0 20px rgba(16, 185, 129, 0.15);
+        --re-shadow-glow-strong: 0 0 40px rgba(16, 185, 129, 0.25);
+
+        /* Transitions */
+        --re-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        --re-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        --re-transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+        /* Typography */
+        --re-font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+        --re-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
     }
 }
 
