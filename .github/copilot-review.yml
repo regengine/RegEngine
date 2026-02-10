@@ -1,15 +1,144 @@
 reviews:
   # Enable Copilot code review on PRs
   auto_review: true
-  
-  # Review scope
-  paths:
-    - 'services/**'
-    - 'frontend/src/**'
-    - 'shared/**'
-  
-  # Focus areas
+
+  # ── Global Review Instructions ──────────────────────────
+  instructions: |
+    You are reviewing code for RegEngine, a multi-tenant regulatory compliance platform.
+    Follow the constitution at .agent/CONSTITUTION.md for all reviews.
+    
+    Key review priorities:
+    1. Tenant isolation — every query MUST include tenant_id scoping
+    2. No hardcoded secrets, API keys, or credentials
+    3. Parameterized SQL/Cypher queries only (no string interpolation)
+    4. Structured logging via structlog (no print statements)
+    5. Pydantic models for all API request/response contracts
+    6. Tests included for new functionality
+    
+  # ── Path-Based Review Routing ───────────────────────────
+  # Each path pattern gets persona-specific review instructions
+
+  path_instructions:
+    # Bot-FSMA scope
+    - path: "services/compliance/**"
+      instructions: |
+        FSMA 204 compliance code. Verify:
+        - TLC validation against GS1 standards
+        - CTE/KDE completeness (no partial records)
+        - Forward & backward trace support per 21 CFR 1.1455
+        - Immutable hash chain entries for all mutations
+    
+    - path: "services/graph/app/routers/fsma/**"
+      instructions: |
+        FSMA graph API. Verify:
+        - Parameterized Cypher queries (no interpolation)
+        - Bidirectional traversal support
+        - Tenant database routing via Neo4jClient
+
+    # Bot-PCOS scope
+    - path: "services/admin/app/pcos/**"
+      instructions: |
+        Payroll calculation engine. Verify:
+        - Decimal type used (not float) for all monetary values
+        - Rate table validation against union_rate_tables.yaml
+        - Fringe benefits itemized separately
+        - Rounding only at final output
+
+    # Bot-Security scope
+    - path: "shared/security/**"
+      instructions: |
+        Security-critical code. EXTRA SCRUTINY required:
+        - No IDOR vulnerabilities
+        - Tenant isolation intact (Double-Lock model)
+        - Input sanitization via Pydantic
+        - Least privilege on API key scopes
+        - Audit logging for security events
+
+    - path: "shared/auth.py"
+      instructions: |
+        Authentication module. Verify:
+        - API key validation is constant-time
+        - Rate limiting applied
+        - No secrets in error responses
+
+    - path: "shared/middleware/**"
+      instructions: |
+        Middleware layer. Verify:
+        - Tenant context set correctly
+        - Request ID propagation
+        - Context cleared after request
+
+    # Bot-Infra scope
+    - path: "infra/**"
+      instructions: |
+        Infrastructure code. Verify:
+        - All versions pinned (no 'latest' tags)
+        - Terraform state is remote and locked
+        - No .tfstate files committed
+        - Resource limits defined
+
+    - path: "docker-compose*.yml"
+      instructions: |
+        Docker composition. Verify:
+        - Health checks defined for all services
+        - Resource limits (CPU/memory) set
+        - No hardcoded secrets
+        - Environment variables from .env
+
+    - path: ".github/workflows/**"
+      instructions: |
+        CI/CD pipeline. Verify:
+        - Secrets accessed via ${{ secrets.* }}
+        - Permissions are minimal
+        - Concurrency controls present
+        - Artifact retention configured
+
+    # Bot-UI scope
+    - path: "frontend/src/components/**"
+      instructions: |
+        Frontend components. Verify:
+        - Design tokens used (hsl(var(--primary)), not raw hex)
+        - Tailwind utility classes (no inline styles)
+        - Existing UI primitives reused
+        - Accessibility: semantic HTML, ARIA labels, keyboard nav
+        - Unique IDs on interactive elements
+
+    - path: "frontend/tailwind.config.ts"
+      instructions: |
+        Design token configuration. CAREFUL REVIEW:
+        - Token additions are intentional
+        - No token removals without migration
+        - Color palette remains harmonious
+
+    # Bot-Energy scope
+    - path: "services/energy-api/**"
+      instructions: |
+        Energy regulation API. Verify:
+        - NERC CIP standard mapping accuracy
+        - BES Cyber System classification (High/Medium/Low)
+        - FERC vs. state PUC jurisdictional distinction
+
+    # Bot-Health scope
+    - path: "services/healthcare/**"
+      instructions: |
+        Healthcare compliance. EXTRA SCRUTINY for PHI:
+        - No PHI in logs, errors, or API responses
+        - Encryption at rest for PHI fields
+        - BAA chain coverage validated
+        - HIPAA safeguard category mapping
+
+    # Bot-Aero scope
+    - path: "services/aerospace/**"
+      instructions: |
+        Aerospace quality management. Verify:
+        - AS9100D clause mapping accuracy
+        - FAI record completeness
+        - Configuration revision tracking
+
+  # ── Review Focus Areas ──────────────────────────────────
   focus:
     - security
     - performance
     - best-practices
+    - test-coverage
+    - tenant-isolation

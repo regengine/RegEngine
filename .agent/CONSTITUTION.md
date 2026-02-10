@@ -1,6 +1,7 @@
-# Agent Guidelines for RegEngine
+# RegEngine Agent Swarm — Constitution
 
-This document provides guidance for AI coding agents (like GitHub Copilot) working on the RegEngine codebase.
+> **Immutable governing rules for all agents in the Fractal Agent Swarm.**
+> Every agent inherits these rules regardless of persona. Persona-specific directives extend but never override the Constitution.
 
 ## 🎯 Core Principles
 
@@ -27,6 +28,8 @@ RegEngine has established patterns. Don't reinvent:
 - Apply consistent error handling
 - Use FastAPI dependency injection for auth
 
+---
+
 ## 🤖 Agent Behavior Guidelines
 
 ### Ask Clarifying Questions
@@ -36,11 +39,6 @@ RegEngine has established patterns. Don't reinvent:
 - Changes might affect other services
 - You're unsure about security implications
 - Performance impact could be significant
-
-**Example questions:**
-- "Should this endpoint support pagination? What's the expected max result set?"
-- "This scraper could use BeautifulSoup or Selenium. Which fits the project's approach?"
-- "Should validation errors return 400 or 422 status codes?"
 
 ### Express Confidence Levels
 Be explicit about uncertainty:
@@ -56,6 +54,121 @@ Immediately flag for human review:
 - Performance-critical code paths
 - Changes to deployment configuration
 - Modifications to Kafka topic structures
+
+---
+
+## 🔗 Inter-Agent Handoff Protocol
+
+Agents operate as a **swarm** — specialized roles that chain together for complex tasks. Every handoff between agents must follow this protocol.
+
+### Handoff Format
+
+When an agent completes its scope and needs another agent to continue, it produces a **handoff block**:
+
+```yaml
+handoff:
+  from_agent: Bot-FSMA
+  to_agent: Bot-Security
+  priority: high          # critical | high | medium | low
+  context: |
+    Implemented new TLC validation endpoint at services/graph/app/routers/fsma/validate.py.
+    Added 3 new Cypher queries with parameterized inputs. Needs security review for
+    IDOR vulnerabilities and tenant isolation verification.
+  files_touched:
+    - services/graph/app/routers/fsma/validate.py
+    - services/graph/app/models/fsma_nodes.py
+    - services/graph/tests/test_fsma_validate.py
+  risks_found:
+    - "New endpoint accepts TLC strings — potential injection vector"
+    - "Cross-tenant query not yet verified at RLS layer"
+  action_required: "Review for IDOR, injection, and tenant isolation"
+  tests_added: 12
+  tests_passing: true
+```
+
+### Chain Execution Rules
+
+1. **Sequential by default.** Agent A completes → Agent B reviews → Agent C validates.
+2. **Context accumulates.** Each agent in the chain receives all prior handoff blocks.
+3. **Any agent can halt the chain** by setting `priority: critical` with a blocking risk.
+4. **The chain is complete** when the final agent produces a result with `handoff: null`.
+
+### Conflict Resolution
+
+When two agents disagree (e.g., Bot-Infra says "pin this version" but Bot-FSMA needs a newer API):
+1. The **Guardian agent** (Squad B) takes precedence on cross-cutting concerns (security, infra, UI consistency).
+2. The **Builder agent** (Squad A) takes precedence on domain-specific logic.
+3. If both are Squad B, **escalate to human**.
+
+---
+
+## 📋 Standardized Output Schema
+
+Every agent task must produce structured output for traceability and validation.
+
+```json
+{
+  "agent": "Bot-FSMA",
+  "task": "Implement TLC validation endpoint",
+  "timestamp": "2026-02-09T22:15:00Z",
+  "status": "completed",          
+  "confidence": 0.92,             
+  "files_changed": [
+    {"path": "services/graph/app/routers/fsma/validate.py", "action": "created"},
+    {"path": "services/graph/tests/test_fsma_validate.py", "action": "created"}
+  ],
+  "tests": {
+    "added": 12,
+    "modified": 0,
+    "all_passing": true
+  },
+  "risks": [
+    {"severity": "medium", "description": "New endpoint needs IDOR review", "mitigation": "Handoff to Bot-Security"}
+  ],
+  "recommendations": [
+    "Add rate limiting to the new endpoint",
+    "Consider caching TLC lookups for performance"
+  ],
+  "handoff": {
+    "to_agent": "Bot-Security",
+    "action_required": "IDOR and tenant isolation review"
+  }
+}
+```
+
+### Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `completed` | Task fully done, all tests passing |
+| `completed_with_warnings` | Done but risks identified |
+| `blocked` | Cannot proceed, needs human input |
+| `handoff` | Partial completion, next agent needed |
+| `failed` | Task could not be completed |
+
+---
+
+## 🚨 Escalation Matrix
+
+```
+Is it a security vulnerability?
+  ├── YES → Escalate to HUMAN immediately. Do not proceed.
+  └── NO
+       ├── Does it require domain expertise outside your persona?
+       │    ├── YES → HANDOFF to the appropriate agent
+       │    └── NO → Continue working
+       ├── Have you attempted 3+ approaches without success?
+       │    ├── YES → Escalate to HUMAN with approaches tried
+       │    └── NO → Try next approach
+       ├── Does it require breaking a backward-compatible API?
+       │    ├── YES → Escalate to HUMAN with migration plan
+       │    └── NO → Continue working
+       └── Does it affect shared modules (/shared/)?
+            ├── YES → HANDOFF to Bot-Security for review
+            └── NO → Continue working
+```
+
+---
 
 ## 📋 Development Workflow
 
@@ -95,6 +208,7 @@ Use this checklist:
 - [ ] Error handling comprehensive
 - [ ] Documentation updated
 - [ ] Security implications considered
+- [ ] Output schema produced
 
 ### Step 5: Document Changes
 Update relevant documentation:
@@ -102,6 +216,8 @@ Update relevant documentation:
 - `.env.example` for new environment variables
 - `CHANGELOG.md` for user-facing changes
 - Inline docstrings for complex logic
+
+---
 
 ## 🔍 Code Quality Standards
 
@@ -141,6 +257,8 @@ def extract_text(pdf_bytes: bytes, page_limit: Optional[int] = None) -> str:
     pass
 ```
 
+---
+
 ## 🚨 Common Pitfalls to Avoid
 
 ### ❌ Don't:
@@ -160,6 +278,9 @@ def extract_text(pdf_bytes: bytes, page_limit: Optional[int] = None) -> str:
 - Update tests when changing behavior
 - Consider backward compatibility
 - Run the full test suite before pushing
+- Produce structured output following the Output Schema
+
+---
 
 ## 📊 Testing Guidelines
 
@@ -197,6 +318,8 @@ class TestIngestionEndpoint:
 - Error conditions (invalid data, network failures)
 - Security scenarios (authentication, authorization, injection attacks)
 
+---
+
 ## 🔐 Security Checklist
 
 For every code change, verify:
@@ -209,19 +332,7 @@ For every code change, verify:
 - [ ] Errors don't leak sensitive information
 - [ ] PII is encrypted if stored
 
-## 🎓 Learning Resources
-
-### Internal Documentation
-- `shared/` - Security modules and utilities
-- `services/*/README.md` - Service-specific documentation
-- `.github/copilot-instructions.md` - Repository conventions
-- `DEPLOYMENT.md` - Infrastructure and deployment
-
-### External Resources
-- [FastAPI Documentation](https://fastapi.tiangolo.com/)
-- [Neo4j Cypher Manual](https://neo4j.com/docs/cypher-manual/current/)
-- [Pydantic Documentation](https://docs.pydantic.dev/)
-- [Structlog Documentation](https://www.structlog.org/)
+---
 
 ## 🤝 Collaboration with Humans
 
@@ -247,27 +358,9 @@ Escalate to humans when:
 - Decision requires business/product context
 - Security implications are serious
 
+---
+
 ## 📝 Documentation Standards
-
-### README Updates
-When adding a new feature, update the service README:
-```markdown
-## New Feature: FSMA 204 Export
-
-Generates FDA-compliant CSV exports for food traceability.
-
-### Endpoint
-`GET /v1/fsma/export/trace/{tlc}`
-
-### Example
-```bash
-curl -X GET "http://localhost:8300/v1/fsma/export/trace/00123456789012345678" \
-  -H "X-RegEngine-API-Key: your-key-here"
-```
-
-### Response
-Returns a downloadable CSV file with forward/backward trace data.
-```
 
 ### Inline Documentation
 Use docstrings for complex functions:
@@ -289,13 +382,10 @@ def calculate_compliance_score(
         
     Returns:
         Score between 0.0 (no compliance) and 1.0 (full compliance)
-        
-    Example:
-        >>> score = calculate_compliance_score(obligations, controls)
-        >>> print(f"Compliance: {score:.1%}")
-        Compliance: 87.5%
     """
 ```
+
+---
 
 ## 🎯 Success Criteria
 
@@ -308,5 +398,7 @@ A successful agent contribution:
 6. ✅ Has no security vulnerabilities
 7. ✅ Maintains backward compatibility
 8. ✅ Is reviewed and approved by humans
+9. ✅ **Produces structured output per the Output Schema**
+10. ✅ **Includes handoff context if chaining to another agent**
 
 Remember: **Your goal is to augment human developers, not replace them.** When in doubt, ask questions and seek guidance. We value thorough, secure, well-tested code over quick implementations.
