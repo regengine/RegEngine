@@ -3,18 +3,18 @@
 import { useState, useEffect } from "react";
 
 const T = {
-    bg: "#06090f",
+    bg: "var(--re-surface-base)",
     surface: "rgba(255,255,255,0.02)",
     elevated: "rgba(255,255,255,0.04)",
     border: "rgba(255,255,255,0.06)",
-    accent: "#10b981",
+    accent: "var(--re-brand)",
     accentBg: "rgba(16,185,129,0.08)",
     accentBorder: "rgba(16,185,129,0.2)",
-    textPrimary: "#f1f5f9",
-    textBody: "#c8d1dc",
-    textMuted: "#64748b",
-    textDim: "#475569",
-    textGhost: "#334155",
+    textPrimary: "var(--re-text-primary)",
+    textBody: "var(--re-text-secondary)",
+    textMuted: "var(--re-text-muted)",
+    textDim: "var(--re-text-disabled)",
+    textGhost: "var(--re-text-disabled)",
     sans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     mono: "'JetBrains Mono', monospace",
 };

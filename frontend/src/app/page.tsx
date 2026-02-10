@@ -181,9 +181,9 @@ export default function RegEngineLanding() {
     <div
       style={{
         minHeight: "100vh",
-        background: "#06090f",
+        background: "var(--re-surface-base)",
         fontFamily: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-        color: "#c8d1dc",
+        color: "var(--re-text-secondary)",
         overflowX: "hidden",
       }}
     >
@@ -251,14 +251,14 @@ export default function RegEngineLanding() {
               fontSize: "12px",
               fontFamily: "'JetBrains Mono', monospace",
               fontWeight: 500,
-              color: "#10b981",
+              color: "var(--re-brand)",
             }}
           >
             <span style={{
               width: "6px",
               height: "6px",
               borderRadius: "50%",
-              background: "#10b981",
+              background: "var(--re-brand)",
               animation: "pulse 2s ease infinite",
             }} />
             FSMA 204 Deadline: July 20, 2028
@@ -268,7 +268,7 @@ export default function RegEngineLanding() {
             style={{
               fontSize: "clamp(36px, 5vw, 56px)",
               fontWeight: 700,
-              color: "#f8fafc",
+              color: "var(--re-text-primary)",
               lineHeight: 1.1,
               margin: "0 0 20px",
               maxWidth: "700px",
@@ -279,13 +279,13 @@ export default function RegEngineLanding() {
             <br />
             traceability data
             <br />
-            <span style={{ color: "#10b981" }}>in 24 hours.</span>
+            <span style={{ color: "var(--re-brand)" }}>in 24 hours.</span>
           </h1>
 
           <p
             style={{
               fontSize: "18px",
-              color: "#64748b",
+              color: "var(--re-text-muted)",
               lineHeight: 1.6,
               margin: "0 0 40px",
               maxWidth: "520px",
@@ -304,8 +304,8 @@ export default function RegEngineLanding() {
                 alignItems: "center",
                 gap: "8px",
                 padding: "14px 28px",
-                background: "#10b981",
-                color: "#06090f",
+                background: "var(--re-brand)",
+                color: "var(--re-surface-base)",
                 borderRadius: "8px",
                 fontSize: "15px",
                 fontWeight: 600,
@@ -325,7 +325,7 @@ export default function RegEngineLanding() {
                 padding: "14px 28px",
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.08)",
-                color: "#c8d1dc",
+                color: "var(--re-text-secondary)",
                 borderRadius: "8px",
                 fontSize: "15px",
                 fontWeight: 500,
@@ -371,14 +371,14 @@ export default function RegEngineLanding() {
               borderRadius: "4px",
               fontSize: "11px",
               fontWeight: 700,
-              color: "#10b981",
+              color: "var(--re-brand)",
               letterSpacing: "0.05em",
             }}
           >
             NEW
           </div>
-          <span style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: 500 }}>
-            Now supporting <strong style={{ color: "#10b981" }}>GS1 EPCIS 2.0</strong> for major retailer supplier automation
+          <span style={{ color: "var(--re-text-primary)", fontSize: "14px", fontWeight: 500 }}>
+            Now supporting <strong style={{ color: "var(--re-brand)" }}>GS1 EPCIS 2.0</strong> for major retailer supplier automation
           </span>
           <a
             href="/ftl-checker"
@@ -391,7 +391,7 @@ export default function RegEngineLanding() {
               border: "1px solid rgba(255,255,255,0.1)",
               borderRadius: "4px",
               fontSize: "12px",
-              color: "#c8d1dc",
+              color: "var(--re-text-secondary)",
               textDecoration: "none",
               fontWeight: 500,
             }}
@@ -442,17 +442,17 @@ export default function RegEngineLanding() {
                 style={{
                   fontSize: "24px",
                   fontWeight: 700,
-                  color: "#10b981",
+                  color: "var(--re-brand)",
                   fontFamily: stat.value.includes("-") ? "'JetBrains Mono', monospace" : "inherit",
                   marginBottom: "4px",
                 }}
               >
                 {stat.value}
               </div>
-              <div style={{ fontSize: "13px", fontWeight: 600, color: "#e2e8f0", marginBottom: "2px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--re-text-primary)", marginBottom: "2px" }}>
                 {stat.label}
               </div>
-              <div style={{ fontSize: "11px", color: "#475569", fontFamily: "'JetBrains Mono', monospace" }}>
+              <div style={{ fontSize: "11px", color: "var(--re-text-disabled)", fontFamily: "'JetBrains Mono', monospace" }}>
                 {stat.sublabel}
               </div>
             </div>
@@ -468,7 +468,7 @@ export default function RegEngineLanding() {
               fontSize: "11px",
               fontFamily: "'JetBrains Mono', monospace",
               fontWeight: 500,
-              color: "#475569",
+              color: "var(--re-text-disabled)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               display: "block",
@@ -481,14 +481,14 @@ export default function RegEngineLanding() {
             style={{
               fontSize: "32px",
               fontWeight: 700,
-              color: "#f1f5f9",
+              color: "var(--re-text-primary)",
               margin: "0 0 12px",
               letterSpacing: "-0.01em",
             }}
           >
             Compliance you can verify yourself
           </h2>
-          <p style={{ fontSize: "16px", color: "#64748b", margin: 0, maxWidth: "520px", lineHeight: 1.6 }}>
+          <p style={{ fontSize: "16px", color: "var(--re-text-muted)", margin: 0, maxWidth: "520px", lineHeight: 1.6 }}>
             We don't ask you to trust our database. We give you the math and let you check it.
             Every fact is hashed, versioned, and independently auditable.
           </p>
@@ -533,18 +533,18 @@ export default function RegEngineLanding() {
                 e.currentTarget.style.background = "rgba(255,255,255,0.02)";
               }}
             >
-              <div style={{ color: "#10b981", marginBottom: "16px" }}>{card.icon}</div>
-              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#e2e8f0", margin: "0 0 8px" }}>
+              <div style={{ color: "var(--re-brand)", marginBottom: "16px" }}>{card.icon}</div>
+              <h3 style={{ fontSize: "16px", fontWeight: 600, color: "var(--re-text-primary)", margin: "0 0 8px" }}>
                 {card.title}
               </h3>
-              <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 16px", lineHeight: 1.5 }}>
+              <p style={{ fontSize: "14px", color: "var(--re-text-muted)", margin: "0 0 16px", lineHeight: 1.5 }}>
                 {card.description}
               </p>
               <span
                 style={{
                   fontSize: "11px",
                   fontFamily: "'JetBrains Mono', monospace",
-                  color: "#475569",
+                  color: "var(--re-text-disabled)",
                   padding: "4px 8px",
                   background: "rgba(255,255,255,0.03)",
                   borderRadius: "4px",
@@ -574,7 +574,7 @@ export default function RegEngineLanding() {
                 fontSize: "11px",
                 fontFamily: "'JetBrains Mono', monospace",
                 fontWeight: 500,
-                color: "#10b981",
+                color: "var(--re-brand)",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
               }}
@@ -632,14 +632,14 @@ export default function RegEngineLanding() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <span style={{ color: "#10b981" }}>{tool.icon}</span>
-                  <span style={{ fontSize: "16px", fontWeight: 600, color: "#f1f5f9" }}>{tool.title}</span>
+                  <span style={{ color: "var(--re-brand)" }}>{tool.icon}</span>
+                  <span style={{ fontSize: "16px", fontWeight: 600, color: "var(--re-text-primary)" }}>{tool.title}</span>
                   <span
                     style={{
                       marginLeft: "auto",
                       fontSize: "10px",
                       fontWeight: 600,
-                      color: "#10b981",
+                      color: "var(--re-brand)",
                       background: "rgba(16,185,129,0.1)",
                       padding: "3px 8px",
                       borderRadius: "4px",
@@ -650,10 +650,10 @@ export default function RegEngineLanding() {
                     {tool.badge}
                   </span>
                 </div>
-                <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 16px", lineHeight: 1.5 }}>
+                <p style={{ fontSize: "14px", color: "var(--re-text-muted)", margin: "0 0 16px", lineHeight: 1.5 }}>
                   {tool.description}
                 </p>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "#10b981" }}>{tool.cta}</span>
+                <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--re-brand)" }}>{tool.cta}</span>
               </a>
             ))}
           </div>
@@ -668,7 +668,7 @@ export default function RegEngineLanding() {
               fontSize: "11px",
               fontFamily: "'JetBrains Mono', monospace",
               fontWeight: 500,
-              color: "#475569",
+              color: "var(--re-text-disabled)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
               display: "block",
@@ -677,10 +677,10 @@ export default function RegEngineLanding() {
           >
             Industry Verticals
           </span>
-          <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#f1f5f9", margin: "0 0 12px" }}>
+          <h2 style={{ fontSize: "32px", fontWeight: 700, color: "var(--re-text-primary)", margin: "0 0 12px" }}>
             One platform, every regulated industry
           </h2>
-          <p style={{ fontSize: "16px", color: "#64748b", margin: 0, maxWidth: "520px", lineHeight: 1.6 }}>
+          <p style={{ fontSize: "16px", color: "var(--re-text-muted)", margin: 0, maxWidth: "520px", lineHeight: 1.6 }}>
             We're building RegEngine to work across every industry that deals with regulatory
             compliance. Food & Beverage is live. The rest are coming.
           </p>
@@ -723,7 +723,7 @@ export default function RegEngineLanding() {
                     style={{
                       fontSize: "14px",
                       fontWeight: 600,
-                      color: isLive ? "#10b981" : "#c8d1dc",
+                      color: isLive ? "var(--re-brand)" : "var(--re-text-secondary)",
                       flex: 1,
                     }}
                   >
@@ -735,7 +735,7 @@ export default function RegEngineLanding() {
                       style={{
                         fontSize: "10px",
                         fontWeight: 600,
-                        color: "#10b981",
+                        color: "var(--re-brand)",
                         background: "rgba(16,185,129,0.12)",
                         padding: "3px 10px",
                         borderRadius: "10px",
@@ -750,7 +750,7 @@ export default function RegEngineLanding() {
                       style={{
                         fontSize: "10px",
                         fontWeight: 600,
-                        color: "#60a5fa",
+                        color: "var(--re-info)",
                         background: "rgba(96,165,250,0.1)",
                         padding: "3px 10px",
                         borderRadius: "10px",
@@ -765,7 +765,7 @@ export default function RegEngineLanding() {
                       style={{
                         fontSize: "10px",
                         fontWeight: 500,
-                        color: "#475569",
+                        color: "var(--re-text-disabled)",
                         background: "rgba(255,255,255,0.03)",
                         padding: "3px 10px",
                         borderRadius: "10px",
@@ -779,7 +779,7 @@ export default function RegEngineLanding() {
 
                   <span
                     style={{
-                      color: "#475569",
+                      color: "var(--re-text-disabled)",
                       transition: "transform 0.2s",
                       transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
                     }}
@@ -795,7 +795,7 @@ export default function RegEngineLanding() {
                       animation: "fadeSlideIn 0.3s ease forwards",
                     }}
                   >
-                    <p style={{ fontSize: "14px", color: "#94a3b8", margin: "0 0 14px", lineHeight: 1.6 }}>
+                    <p style={{ fontSize: "14px", color: "var(--re-text-tertiary)", margin: "0 0 14px", lineHeight: 1.6 }}>
                       {industry.description}
                     </p>
 
@@ -806,7 +806,7 @@ export default function RegEngineLanding() {
                           style={{
                             fontSize: "11px",
                             fontFamily: "'JetBrains Mono', monospace",
-                            color: "#64748b",
+                            color: "var(--re-text-muted)",
                             background: "rgba(255,255,255,0.04)",
                             padding: "4px 10px",
                             borderRadius: "4px",
@@ -827,14 +827,14 @@ export default function RegEngineLanding() {
                           gap: "6px",
                           fontSize: "13px",
                           fontWeight: 600,
-                          color: "#10b981",
+                          color: "var(--re-brand)",
                           textDecoration: "none",
                         }}
                       >
                         {industry.linkLabel}
                       </a>
                     ) : hasSubmitted ? (
-                      <p style={{ fontSize: "13px", color: "#60a5fa", margin: 0 }}>
+                      <p style={{ fontSize: "13px", color: "var(--re-info)", margin: 0 }}>
                         You're on the list. We'll email {hasSubmitted} when this vertical goes live.
                       </p>
                     ) : waitlistIndustry === industry.name ? (
@@ -852,7 +852,7 @@ export default function RegEngineLanding() {
                             background: "rgba(0,0,0,0.3)",
                             border: "1px solid rgba(255,255,255,0.08)",
                             borderRadius: "6px",
-                            color: "#e2e8f0",
+                            color: "var(--re-text-primary)",
                             fontSize: "13px",
                             outline: "none",
                             fontFamily: "inherit",
@@ -865,7 +865,7 @@ export default function RegEngineLanding() {
                           style={{
                             padding: "10px 18px",
                             background: waitlistEmail ? "#2563eb" : "rgba(255,255,255,0.04)",
-                            color: waitlistEmail ? "#fff" : "#475569",
+                            color: waitlistEmail ? "#fff" : "var(--re-text-disabled)",
                             border: "none",
                             borderRadius: "6px",
                             fontSize: "13px",
@@ -886,7 +886,7 @@ export default function RegEngineLanding() {
                           gap: "6px",
                           fontSize: "13px",
                           fontWeight: 600,
-                          color: "#60a5fa",
+                          color: "var(--re-info)",
                           background: "transparent",
                           border: "none",
                           cursor: "pointer",
@@ -923,7 +923,7 @@ export default function RegEngineLanding() {
                   fontSize: "11px",
                   fontFamily: "'JetBrains Mono', monospace",
                   fontWeight: 500,
-                  color: "#475569",
+                  color: "var(--re-text-disabled)",
                   letterSpacing: "0.1em",
                   textTransform: "uppercase",
                   display: "block",
@@ -932,10 +932,10 @@ export default function RegEngineLanding() {
               >
                 For Developers
               </span>
-              <h2 style={{ fontSize: "28px", fontWeight: 700, color: "#f1f5f9", margin: "0 0 12px" }}>
+              <h2 style={{ fontSize: "28px", fontWeight: 700, color: "var(--re-text-primary)", margin: "0 0 12px" }}>
                 API-first by design
               </h2>
-              <p style={{ fontSize: "15px", color: "#64748b", margin: "0 0 24px", lineHeight: 1.6 }}>
+              <p style={{ fontSize: "15px", color: "var(--re-text-muted)", margin: "0 0 24px", lineHeight: 1.6 }}>
                 RegEngine is built for integration, not portals. Plug compliance data directly
                 into your WMS, ERP, or supply chain system with a single API call.
               </p>
@@ -950,7 +950,7 @@ export default function RegEngineLanding() {
                     background: "rgba(255,255,255,0.04)",
                     border: "1px solid rgba(255,255,255,0.08)",
                     borderRadius: "6px",
-                    color: "#c8d1dc",
+                    color: "var(--re-text-secondary)",
                     fontSize: "13px",
                     fontWeight: 500,
                     textDecoration: "none",
@@ -981,8 +981,8 @@ export default function RegEngineLanding() {
               >
                 <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444", opacity: 0.6 }} />
                 <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#f59e0b", opacity: 0.6 }} />
-                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", opacity: 0.6 }} />
-                <span style={{ marginLeft: "8px", fontSize: "11px", color: "#475569", fontFamily: "'JetBrains Mono', monospace" }}>
+                <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--re-brand)", opacity: 0.6 }} />
+                <span style={{ marginLeft: "8px", fontSize: "11px", color: "var(--re-text-disabled)", fontFamily: "'JetBrains Mono', monospace" }}>
                   verify_compliance.sh
                 </span>
               </div>
@@ -993,20 +993,20 @@ export default function RegEngineLanding() {
                   fontFamily: "'JetBrains Mono', monospace",
                   fontSize: "12px",
                   lineHeight: 1.7,
-                  color: "#94a3b8",
+                  color: "var(--re-text-tertiary)",
                   overflow: "auto",
                 }}
               >
-                <span style={{ color: "#475569" }}>$ </span>
-                <span style={{ color: "#c8d1dc" }}>curl</span>
-                {" "}<span style={{ color: "#10b981" }}>api.regengine.co/v1/verify/doc_a1b2c3</span>
+                <span style={{ color: "var(--re-text-disabled)" }}>$ </span>
+                <span style={{ color: "var(--re-text-secondary)" }}>curl</span>
+                {" "}<span style={{ color: "var(--re-brand)" }}>api.regengine.co/v1/verify/doc_a1b2c3</span>
                 {"\n\n"}
-                <span style={{ color: "#475569" }}>{"{"}</span>
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"document_id"</span>: <span style={{ color: "#fbbf24" }}>"doc_a1b2c3"</span>,
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"status"</span>: <span style={{ color: "#fbbf24" }}>"verified"</span>,
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"hashes"</span>: {"{ "}<span style={{ color: "#60a5fa" }}>"content_sha256"</span>: <span style={{ color: "#fbbf24" }}>"a3f2..."</span>{" }"},
-                {"\n  "}<span style={{ color: "#60a5fa" }}>"verified_at"</span>: <span style={{ color: "#fbbf24" }}>"2026-02-08T20:15:00Z"</span>
-                {"\n"}<span style={{ color: "#475569" }}>{"}"}</span>
+                <span style={{ color: "var(--re-text-disabled)" }}>{"{"}</span>
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"document_id"</span>: <span style={{ color: "#fbbf24" }}>"doc_a1b2c3"</span>,
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"status"</span>: <span style={{ color: "#fbbf24" }}>"verified"</span>,
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"hashes"</span>: {"{ "}<span style={{ color: "var(--re-info)" }}>"content_sha256"</span>: <span style={{ color: "#fbbf24" }}>"a3f2..."</span>{" }"},
+                {"\n  "}<span style={{ color: "var(--re-info)" }}>"verified_at"</span>: <span style={{ color: "#fbbf24" }}>"2026-02-08T20:15:00Z"</span>
+                {"\n"}<span style={{ color: "var(--re-text-disabled)" }}>{"}"}</span>
               </pre>
             </div>
           </div>
@@ -1028,13 +1028,13 @@ export default function RegEngineLanding() {
           style={{
             fontSize: "28px",
             fontWeight: 700,
-            color: "#f1f5f9",
+            color: "var(--re-text-primary)",
             margin: "0 0 12px",
           }}
         >
           Stop trusting. Start verifying.
         </h2>
-        <p style={{ fontSize: "16px", color: "#64748b", margin: "0 0 32px", maxWidth: "420px", marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>
+        <p style={{ fontSize: "16px", color: "var(--re-text-muted)", margin: "0 0 32px", maxWidth: "420px", marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>
           Check if your products are on the FDA Food Traceability List.
           Free, no signup, takes 2 minutes.
         </p>
@@ -1045,8 +1045,8 @@ export default function RegEngineLanding() {
             alignItems: "center",
             gap: "8px",
             padding: "16px 32px",
-            background: "#10b981",
-            color: "#06090f",
+            background: "var(--re-brand)",
+            color: "var(--re-surface-base)",
             borderRadius: "8px",
             fontSize: "16px",
             fontWeight: 600,

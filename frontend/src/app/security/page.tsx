@@ -3,18 +3,18 @@
 import { useState, useEffect } from "react";
 
 const T = {
-    bg: "#06090f",
+    bg: "var(--re-surface-base)",
     surface: "rgba(255,255,255,0.02)",
     elevated: "rgba(255,255,255,0.04)",
     border: "rgba(255,255,255,0.06)",
-    accent: "#10b981",
+    accent: "var(--re-brand)",
     accentBg: "rgba(16,185,129,0.08)",
     accentBorder: "rgba(16,185,129,0.2)",
-    textPrimary: "#f1f5f9",
-    textBody: "#c8d1dc",
-    textMuted: "#64748b",
-    textDim: "#475569",
-    textGhost: "#334155",
+    textPrimary: "var(--re-text-primary)",
+    textBody: "var(--re-text-secondary)",
+    textMuted: "var(--re-text-muted)",
+    textDim: "var(--re-text-disabled)",
+    textGhost: "var(--re-text-disabled)",
     sans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     mono: "'JetBrains Mono', monospace",
 };
@@ -118,10 +118,10 @@ export default function SecurityPage() {
     }, []);
 
     const statusColors: Record<string, { bg: string; border: string; text: string; label: string }> = {
-        verified: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "#10b981", label: "✓ Verified" },
-        implemented: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "#10b981", label: "✓ Implemented" },
+        verified: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Verified" },
+        implemented: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Implemented" },
         implementing: { bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)", text: "#facc15", label: "Implementing" },
-        "in-progress": { bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)", text: "#60a5fa", label: "In Progress" },
+        "in-progress": { bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)", text: "var(--re-info)", label: "In Progress" },
         "in-preparation": { bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.2)", text: "#a855f7", label: "In Preparation" },
         planned: { bg: T.elevated, border: T.border, text: T.textDim, label: "Planned" },
     };
