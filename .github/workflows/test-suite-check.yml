@@ -32,6 +32,24 @@ jobs:
           fi
           pip install pytest pytest-asyncio
       
+      - name: Setup Shared Module Bridge
+        run: |
+          # The graph service Dockerfile copies root shared/ into /app/shared/,
+          # but locally the graph has its own shared/ dir. Copy missing files
+          # from root shared/ into the service's shared/ to match Docker behavior.
+          SERVICE_SHARED="services/${{ matrix.service }}/shared"
+          if [ -d "$SERVICE_SHARED" ] && [ -d "shared" ]; then
+            # Copy files from root shared/ that don't exist in service shared/
+            for f in shared/*.py; do
+              fname=$(basename "$f")
+              if [ ! -f "$SERVICE_SHARED/$fname" ]; then
+                cp "$f" "$SERVICE_SHARED/$fname"
+                echo "  Copied $fname to $SERVICE_SHARED/"
+              fi
+            done
+            echo "✓ Shared module bridge configured"
+          fi
+      
       - name: Check Test Collection
         run: |
           cd services/${{ matrix.service }}
