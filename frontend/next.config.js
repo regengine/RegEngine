@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+// Last deployed: 2026-02-10
 const nextConfig = {
     // output: 'export',
     images: {
