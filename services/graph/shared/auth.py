@@ -210,10 +210,11 @@ async def require_api_key(
         )
 
     # Testing bypass: only works with explicit AUTH_TEST_BYPASS_TOKEN env var
-    # SECURITY: Never set this in production environments
+    # SECURITY: Disabled unconditionally in production environments
+    _environment = os.getenv("ENVIRONMENT", "development").lower()
     _test_bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
-    if _test_bypass_token and x_regengine_api_key == _test_bypass_token:
-        logger.info("test_bypass_auth_used", path=request.url.path)
+    if _test_bypass_token and _environment != "production" and x_regengine_api_key == _test_bypass_token:
+        logger.warning("test_bypass_auth_used", path=request.url.path, environment=_environment)
         return APIKey(
             key_id="test",
             key_hash="",
