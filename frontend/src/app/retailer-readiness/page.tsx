@@ -183,9 +183,9 @@ export default function RetailerSuppliersPage() {
     // Analytics tracking helper
     const trackEvent = useCallback((event: string, data?: Record<string, unknown>) => {
         if (typeof window !== 'undefined') {
-            const events = JSON.parse(localStorage.getItem('walmart_analytics') || '[]');
+            const events = JSON.parse(localStorage.getItem('retailer_analytics') || '[]');
             events.push({ event, data, ts: new Date().toISOString() });
-            localStorage.setItem('walmart_analytics', JSON.stringify(events));
+            localStorage.setItem('retailer_analytics', JSON.stringify(events));
         }
     }, []);
 
@@ -255,7 +255,7 @@ export default function RetailerSuppliersPage() {
     const handleAssessment = (e: React.FormEvent) => {
         e.preventDefault();
         if (email && companyName) {
-            localStorage.setItem('walmart_supplier_lead', JSON.stringify({
+            localStorage.setItem('retailer_supplier_lead', JSON.stringify({
                 email, companyName, date: new Date().toISOString()
             }));
             trackEvent('assessment_submitted', { email, companyName });

@@ -18,8 +18,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className="min-h-screen flex flex-col"
-        style={{ background: "#06090f", color: "#c8d1dc" }}
+        className="min-h-screen flex flex-col bg-background text-foreground"
         suppressHydrationWarning
       >
         <Providers>

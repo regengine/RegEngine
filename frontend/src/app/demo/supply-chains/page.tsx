@@ -111,7 +111,7 @@ const CHAINS: RecallChain[] = [
             { name: 'Pacific Rim Seafood Distribution', gln: '0078742000030', type: 'DISTRIBUTOR', address: '1500 Harbor Blvd, Long Beach, CA 90802' },
             { name: '99 Ranch Market — Rowland Heights', gln: '0078742000040', type: 'RETAILER' },
             { name: 'H Mart — Koreatown', gln: '0078742000041', type: 'RETAILER' },
-            { name: 'Costco Wholesale #681', gln: '0078742000042', type: 'RETAILER' },
+            { name: 'Wholesale Club #681', gln: '0078742000042', type: 'RETAILER' },
         ],
         products: [
             { name: 'Frozen White Shrimp 16/20ct 2lb Bag', gtin: '00787420000012', category: 'Crustaceans' },
@@ -149,10 +149,10 @@ const CHAINS: RecallChain[] = [
             { name: 'Suncoast Cold Storage', gln: '0071430000002', type: 'COOLER', address: '4520 Agricultural Rd, Immokalee, FL 34142' },
             { name: 'Fresh Fields Packing Co', gln: '0071430000003', type: 'PACKER', address: '200 Packing House Blvd, Plant City, FL 33563' },
             { name: 'Southeast Fresh Distribution', gln: '0071430000004', type: 'DISTRIBUTOR', address: '1000 Distribution Center Dr, Atlanta, GA 30318' },
-            { name: 'Publix Super Markets #1247', gln: '0071430000010', type: 'RETAILER' },
-            { name: 'Kroger #432', gln: '0071430000011', type: 'RETAILER' },
-            { name: 'Walmart Supercenter #2891', gln: '0071430000012', type: 'RETAILER' },
-            { name: 'Whole Foods Market — Buckhead', gln: '0071430000013', type: 'RETAILER' },
+            { name: 'Southeast Grocery #1247', gln: '0071430000010', type: 'RETAILER' },
+            { name: 'National Grocer DC #432', gln: '0071430000011', type: 'RETAILER' },
+            { name: 'Regional Supercenter #2891', gln: '0071430000012', type: 'RETAILER' },
+            { name: 'Organic Market — Buckhead', gln: '0071430000013', type: 'RETAILER' },
         ],
         products: [
             { name: 'Fresh Cucumbers (bulk)', gtin: '00714300000012', category: 'Cucumbers' },

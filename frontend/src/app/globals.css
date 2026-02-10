@@ -2,6 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+
+    /*
+   * RegEngine Dark Theme
+   * Maps the brand palette to shadcn/ui CSS variable tokens.
+   * Background: #06090f  Foreground: #c8d1dc  Accent: #10b981
+   */
+    :root {
+        /* Core surfaces */
+        --background: 220 43% 4%;
+        /* #06090f */
+        --foreground: 214 18% 82%;
+        /* #c8d1dc */
+
+        /* Cards & popovers */
+        --card: 220 30% 6%;
+        /* ~#0c1017 */
+        --card-foreground: 214 18% 82%;
+        /* #c8d1dc */
+        --popover: 220 30% 6%;
+        --popover-foreground: 214 18% 82%;
+
+        /* Primary (emerald accent) */
+        --primary: 160 81% 39%;
+        /* #10b981 */
+        --primary-foreground: 220 43% 4%;
+
+        /* Secondary */
+        --secondary: 217 19% 12%;
+        /* subtle surfaces */
+        --secondary-foreground: 214 18% 82%;
+
+        /* Muted */
+        --muted: 217 19% 12%;
+        --muted-foreground: 215 16% 47%;
+        /* #64748b */
+
+        /* Accent */
+        --accent: 160 81% 39%;
+        /* #10b981 */
+        --accent-foreground: 220 43% 4%;
+
+        /* Destructive */
+        --destructive: 0 84% 60%;
+        /* red-500 */
+        --destructive-foreground: 0 0% 98%;
+
+        /* Borders & inputs */
+        --border: 217 19% 14%;
+        /* subtle border */
+        --input: 217 19% 14%;
+        --ring: 160 81% 39%;
+        /* focus ring = accent */
+
+        /* Border radius */
+        --radius: 0.5rem;
+    }
+}
+
 /* Screen reader only styles - hidden visually but accessible to screen readers */
 .sr-only {
     position: absolute;
