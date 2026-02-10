@@ -57,11 +57,11 @@ const SUPPLY_CHAIN = [
     { id: 'shipper', type: 'SHIPPING', icon: Truck, label: 'Distribution', location: 'Los Angeles, CA', time: 'Jan 6, 2024 04:00' },
     { id: 'dc1', type: 'RECEIVING', icon: Building2, label: 'DC West', location: 'Phoenix, AZ', time: 'Jan 6, 2024 14:00' },
     { id: 'dc2', type: 'RECEIVING', icon: Building2, label: 'DC Southwest', location: 'Dallas, TX', time: 'Jan 7, 2024 02:00' },
-    { id: 'retail1', type: 'RECEIVING', icon: Store, label: 'Whole Foods #247', location: 'Scottsdale, AZ', time: 'Jan 7, 2024 08:00' },
+    { id: 'retail1', type: 'RECEIVING', icon: Store, label: 'Organic Market #247', location: 'Scottsdale, AZ', time: 'Jan 7, 2024 08:00' },
     { id: 'retail2', type: 'RECEIVING', icon: Store, label: 'Regional Grocery #1842', location: 'Plano, TX', time: 'Jan 7, 2024 10:00' },
-    { id: 'retail3', type: 'RECEIVING', icon: Store, label: 'Safeway #892', location: 'Tucson, AZ', time: 'Jan 7, 2024 09:00' },
-    { id: 'restaurant1', type: 'RECEIVING', icon: ChefHat, label: 'Chipotle #4521', location: 'Phoenix, AZ', time: 'Jan 7, 2024 11:00' },
-    { id: 'restaurant2', type: 'RECEIVING', icon: ChefHat, label: 'Sweetgreen #189', location: 'Austin, TX', time: 'Jan 7, 2024 13:00' },
+    { id: 'retail3', type: 'RECEIVING', icon: Store, label: 'Valley Grocery #892', location: 'Tucson, AZ', time: 'Jan 7, 2024 09:00' },
+    { id: 'restaurant1', type: 'RECEIVING', icon: ChefHat, label: 'Fast Casual #4521', location: 'Phoenix, AZ', time: 'Jan 7, 2024 11:00' },
+    { id: 'restaurant2', type: 'RECEIVING', icon: ChefHat, label: 'Health Bowl #189', location: 'Austin, TX', time: 'Jan 7, 2024 13:00' },
 ];
 
 interface TraceState {

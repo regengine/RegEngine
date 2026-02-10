@@ -30,7 +30,7 @@ const MOCK_ALERTS_BY_TENANT: Record<string, any[]> = {
             created_at: new Date().toISOString(),
         },
     ],
-    // Costco - Retailer
+    // Wholesale Club - Retailer
     '00000000-0000-0000-0000-000000000003': [
         {
             id: 'alert-002',
@@ -110,7 +110,7 @@ const MOCK_PROFILES: Record<string, any> = {
         supply_regions: ['CA', 'AZ', 'FL'],
         supplier_identifiers: ['Fresh Valley Farms', 'Green Acres'],
         fda_product_codes: ['54C21', '54E20'],
-        retailer_relationships: ['Costco', 'Walmart', 'Kroger'],
+        retailer_relationships: ['Wholesale Club', 'National Retailer', 'Regional Grocer'],
     },
     '00000000-0000-0000-0000-000000000003': {
         tenant_id: '00000000-0000-0000-0000-000000000003',

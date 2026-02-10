@@ -10,8 +10,13 @@ const nextConfig = {
         return [
             {
                 source: '/walmart-readiness',
-                destination: '/walmart-suppliers',
-                permanent: true, // 301
+                destination: '/retailer-readiness',
+                permanent: true,
+            },
+            {
+                source: '/walmart-suppliers',
+                destination: '/retailer-readiness',
+                permanent: true,
             },
         ];
     },

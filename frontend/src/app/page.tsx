@@ -317,7 +317,7 @@ export default function RegEngineLanding() {
               <ArrowRight size={16} />
             </a>
             <a
-              href="/walmart-suppliers"
+              href="/retailer-readiness"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -605,7 +605,7 @@ export default function RegEngineLanding() {
                 title: "Retailer Readiness Assessment",
                 description: "Interactive FSMA 204 compliance checklist. Self-assess your gaps and get a founder-led analysis of what needs fixing.",
                 icon: <ShieldCheck size={20} />,
-                href: "/walmart-suppliers",
+                href: "/retailer-readiness",
                 cta: "Assess Your Readiness →",
                 badge: "Free",
               },

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
         description:
             'API-first traceability for food suppliers. Automated CTEs, 5-second trace, FDA-ready exports. Free assessment.',
         type: 'website',
-        url: 'https://regengine.co/walmart-suppliers',
+        url: 'https://regengine.co/retailer-readiness',
     },
     twitter: {
         card: 'summary_large_image',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
         follow: true,
     },
     alternates: {
-        canonical: 'https://regengine.co/walmart-suppliers',
+        canonical: 'https://regengine.co/retailer-readiness',
     },
 };
 

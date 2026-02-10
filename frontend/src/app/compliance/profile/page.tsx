@@ -53,7 +53,7 @@ const US_STATES = [
 
 const MAJOR_RETAILERS = [
     "National Retailer A", "Wholesale Club", "Regional Grocery Chain", "Multi-Banner Group", "Southeast Grocer",
-    "Whole Foods", "Mass Merchant", "Specialty Grocer", "West Coast Chain", "Discount Grocer",
+    "Organic Market", "Mass Merchant", "Specialty Grocer", "West Coast Chain", "Discount Grocer",
 ];
 
 export default function ProductProfilePage() {

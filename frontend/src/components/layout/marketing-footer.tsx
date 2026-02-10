@@ -61,7 +61,7 @@ export function MarketingFooter() {
                     </h4>
                     {[
                         { label: "FTL Checker", href: "/ftl-checker", badge: "Free" },
-                        { label: "Retailer Readiness", href: "/walmart-suppliers" },
+                        { label: "Retailer Readiness", href: "/retailer-readiness" },
                         { label: "API Docs", href: "/docs" },
                         { label: "Pricing", href: "/pricing" },
                     ].map((link) => (
