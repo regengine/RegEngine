@@ -41,7 +41,7 @@ export default function SDKsDocsPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         SDKs & Libraries
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px' }}>
@@ -55,7 +55,7 @@ export default function SDKsDocsPage() {
 
                 {/* SDK Preview */}
                 <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Coming Soon
                     </h2>
 
@@ -64,7 +64,7 @@ export default function SDKsDocsPage() {
                             { title: 'Python SDK', badge: 'pip install regengine', color: '#3776ab' },
                             { title: 'Node.js SDK', badge: 'npm install @regengine/sdk', color: '#339933' },
                             { title: 'Go SDK', badge: 'go get regengine.co/sdk', color: '#00add8' },
-                            { title: 'REST Client', badge: 'OpenAPI 3.0 spec', color: '#6b7280' },
+                            { title: 'REST Client', badge: 'OpenAPI 3.0 spec', color: 'var(--re-text-muted)' },
                         ].map((item) => (
                             <div key={item.title} style={{
                                 padding: '20px',
@@ -76,7 +76,7 @@ export default function SDKsDocsPage() {
                                 alignItems: 'center',
                                 opacity: 0.6,
                             }}>
-                                <div style={{ fontWeight: 600, color: '#ffffff' }}>{item.title}</div>
+                                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)' }}>{item.title}</div>
                                 <code style={{
                                     background: 'rgba(0,0,0,0.3)',
                                     padding: '4px 8px',
@@ -97,7 +97,7 @@ export default function SDKsDocsPage() {
                     padding: '24px',
                     marginBottom: '48px',
                 }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#ffffff', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
                         What to Use Now
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '16px' }}>
@@ -127,7 +127,7 @@ export default function SDKsDocsPage() {
                     textAlign: 'center',
                 }}>
                     <Github style={{ width: 32, height: 32, color: T.accent, margin: '0 auto 16px' }} />
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '8px' }}>
+                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Get Notified on Release
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>

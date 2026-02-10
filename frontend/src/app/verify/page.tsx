@@ -19,15 +19,15 @@ import {
    DESIGN TOKENS (matches FTL Checker dark theme)
    ───────────────────────────────────────────────────────────── */
 const T = {
-    bg: '#06090f',
+    bg: 'var(--re-surface-base)',
     surface: 'rgba(255,255,255,0.02)',
     elevated: 'rgba(255,255,255,0.05)',
     border: 'rgba(255,255,255,0.06)',
     borderHover: 'rgba(255,255,255,0.12)',
-    text: '#e2e8f0',
-    textDim: '#8b95a5',
-    textMuted: '#64748b',
-    accent: '#22c55e',
+    text: 'var(--re-text-primary)',
+    textDim: 'var(--re-text-tertiary)',
+    textMuted: 'var(--re-text-muted)',
+    accent: 'var(--re-success)',
     accentDim: 'rgba(34,197,94,0.12)',
     mono: "'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
     brand: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
@@ -337,7 +337,7 @@ export default function VerifyPage() {
 
                 <div
                     style={{
-                        background: '#0d1117',
+                        background: 'var(--re-surface-base)',
                         border: `1px solid ${T.border}`,
                         borderRadius: 12,
                         overflow: 'hidden',
@@ -377,19 +377,19 @@ export default function VerifyPage() {
                             fontFamily: T.mono,
                             fontSize: 12,
                             lineHeight: 1.6,
-                            color: '#c9d1d9',
+                            color: 'var(--re-text-secondary)',
                             overflow: 'auto',
                             maxHeight: 480,
                         }}
                     >
                         {TERMINAL_OUTPUT.split('\n').map((line, i) => {
-                            let color = '#c9d1d9';
-                            if (line.startsWith('✓ VALID')) color = '#22c55e';
-                            if (line.startsWith('✗ INVALID')) color = '#ef4444';
-                            if (line.startsWith('$')) color = '#7ee787';
-                            if (line.startsWith('===') || line.startsWith('---')) color = '#484f58';
-                            if (line.includes('SUMMARY')) color = '#58a6ff';
-                            if (line.includes('REGENGINE')) color = '#58a6ff';
+                            let color = 'var(--re-text-secondary)';
+                            if (line.startsWith('✓ VALID')) color = 'var(--re-success)';
+                            if (line.startsWith('✗ INVALID')) color = 'var(--re-danger)';
+                            if (line.startsWith('$')) color = 'var(--re-success)';
+                            if (line.startsWith('===') || line.startsWith('---')) color = 'var(--re-text-disabled)';
+                            if (line.includes('SUMMARY')) color = 'var(--re-info)';
+                            if (line.includes('REGENGINE')) color = 'var(--re-info)';
                             return (
                                 <span key={i} style={{ color }}>
                                     {line}
@@ -454,7 +454,7 @@ export default function VerifyPage() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 8,
-                                        background: '#0d1117',
+                                        background: 'var(--re-surface-base)',
                                         borderRadius: 6,
                                         padding: '8px 12px',
                                         marginBottom: 6,
@@ -464,7 +464,7 @@ export default function VerifyPage() {
                                         style={{
                                             fontFamily: T.mono,
                                             fontSize: 13,
-                                            color: '#7ee787',
+                                            color: 'var(--re-success)',
                                             flex: 1,
                                         }}
                                     >
@@ -504,7 +504,7 @@ export default function VerifyPage() {
 
                 <div
                     style={{
-                        background: '#0d1117',
+                        background: 'var(--re-surface-base)',
                         border: `1px solid ${T.border}`,
                         borderRadius: 12,
                         overflow: 'hidden',
@@ -532,21 +532,21 @@ export default function VerifyPage() {
                             fontFamily: T.mono,
                             fontSize: 12.5,
                             lineHeight: 1.6,
-                            color: '#c9d1d9',
+                            color: 'var(--re-text-secondary)',
                             overflow: 'auto',
                         }}
                     >
                         {CODE_SAMPLE.split('\n').map((line, i) => {
-                            let color = '#c9d1d9';
-                            if (line.startsWith('#') || line.startsWith('"""')) color = '#8b949e';
+                            let color = 'var(--re-text-secondary)';
+                            if (line.startsWith('#') || line.startsWith('"""')) color = 'var(--re-text-tertiary)';
                             if (line.startsWith('from ') || line.startsWith('import ')) color = '#ff7b72';
-                            if (line.includes('print(')) color = '#d2a8ff';
+                            if (line.includes('print(')) color = 'var(--re-accent-purple)';
                             if (line.includes('"') || line.includes("'")) {
                                 // Strings
                                 if (!line.startsWith('#') && !line.startsWith('from') && !line.startsWith('import'))
-                                    color = '#a5d6ff';
+                                    color = 'var(--re-info)';
                             }
-                            if (line.includes('# →')) color = '#7ee787';
+                            if (line.includes('# →')) color = 'var(--re-success)';
                             return (
                                 <span key={i} style={{ color }}>
                                     {line}

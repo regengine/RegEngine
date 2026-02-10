@@ -8,24 +8,24 @@ import FSMAChecklist from '@/components/fsma-checklist';
    DESIGN TOKENS
    ───────────────────────────────────────────────────────────── */
 const T = {
-    bg: '#06090f',
+    bg: 'var(--re-surface-base)',
     surface: 'rgba(255,255,255,0.02)',
     surfaceHover: 'rgba(255,255,255,0.05)',
     border: 'rgba(255,255,255,0.06)',
     borderHover: 'rgba(255,255,255,0.12)',
-    text: '#c8d1dc',
-    textMuted: '#64748b',
-    textDim: '#475569',
-    heading: '#e2e8f0',
-    accent: '#10b981',
-    accentHover: '#059669',
+    text: 'var(--re-text-secondary)',
+    textMuted: 'var(--re-text-muted)',
+    textDim: 'var(--re-text-disabled)',
+    heading: 'var(--re-text-primary)',
+    accent: 'var(--re-brand)',
+    accentHover: 'var(--re-brand-dark)',
     accentGlow: 'rgba(16,185,129,0.15)',
-    warning: '#f59e0b',
+    warning: 'var(--re-warning)',
     warningBg: 'rgba(245,158,11,0.08)',
     warningBorder: 'rgba(245,158,11,0.15)',
-    danger: '#ef4444',
+    danger: 'var(--re-danger)',
     dangerBg: 'rgba(239,68,68,0.08)',
-    blue: '#3b82f6',
+    blue: 'var(--re-accent-blue)',
     blueBg: 'rgba(59,130,246,0.08)',
 };
 
@@ -667,9 +667,9 @@ export default function RetailerSuppliersPage() {
                         display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24,
                         paddingBottom: 16, borderBottom: `1px solid ${T.border}`,
                     }}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} />
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }} />
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--re-danger)' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--re-warning)' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--re-success)' }} />
                         <span style={{
                             marginLeft: 12, fontSize: 12, color: T.textDim,
                             fontFamily: "'JetBrains Mono', monospace",

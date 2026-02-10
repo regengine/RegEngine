@@ -31,7 +31,7 @@ export default function ChangelogPage() {
                         <FileText style={{ width: 28, height: 28, color: T.accent }} />
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         Changelog
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px' }}>
@@ -76,7 +76,7 @@ export default function ChangelogPage() {
                         </span>
                     </div>
 
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         Initial Public Release
                     </h2>
 
@@ -128,7 +128,7 @@ export default function ChangelogPage() {
                     borderRadius: '8px',
                     padding: '24px',
                 }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#ffffff', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
                         <Clock style={{ width: 18, height: 18, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
                         Coming Next
                     </h3>

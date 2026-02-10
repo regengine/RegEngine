@@ -98,7 +98,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
         page: {
             minHeight: '100vh',
             background: T.bg,
-            color: '#f1f5f9',
+            color: 'var(--re-text-primary)',
             fontFamily: T.fontSans,
         },
         header: {
@@ -114,7 +114,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
         article: {
             lineHeight: 1.8,
             fontSize: '1.1rem',
-            color: '#e2e8f0',
+            color: 'var(--re-text-primary)',
         },
     };
 
@@ -158,7 +158,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                         {docType.title}
                     </h1>
                     <p style={{ fontSize: '1.25rem', color: T.text }}>

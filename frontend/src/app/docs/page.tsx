@@ -30,7 +30,7 @@ export default function DocsHomePage() {
           <h1 style={{
             fontSize: '2rem',
             fontWeight: 700,
-            color: '#ffffff',
+            color: 'var(--re-text-primary)',
             marginBottom: '8px',
             lineHeight: 1.2,
           }}>
@@ -64,7 +64,7 @@ export default function DocsHomePage() {
               fontSize: '13px',
               lineHeight: 1.6,
               overflowX: 'auto',
-              color: '#e2e8f0',
+              color: 'var(--re-text-primary)',
             }}>
               <code>{`curl -X POST https://api.regengine.co/v1/records \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
@@ -107,7 +107,7 @@ export default function DocsHomePage() {
               margin: 0,
               fontSize: '12px',
               lineHeight: 1.5,
-              color: '#94a3b8',
+              color: 'var(--re-text-tertiary)',
             }}>
               <code>{`{
   "id": "rec_3x7Kp9mN2vL",
@@ -148,7 +148,7 @@ export default function DocsHomePage() {
                 alignItems: 'center',
                 gap: '8px',
                 background: 'rgba(255,255,255,0.1)',
-                color: '#ffffff',
+                color: 'var(--re-text-primary)',
                 padding: '12px 24px',
                 borderRadius: '6px',
                 fontWeight: 600,
@@ -198,7 +198,7 @@ export default function DocsHomePage() {
                 }}
               >
                 <item.icon style={{ width: 20, height: 20, color: T.accent, marginBottom: '12px' }} />
-                <div style={{ fontWeight: 600, color: '#ffffff', fontSize: '15px', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>
                   {item.name}
                 </div>
                 <div style={{ color: T.textMuted, fontSize: '13px' }}>{item.desc}</div>
@@ -257,7 +257,7 @@ export default function DocsHomePage() {
                   </div>
                 )}
                 <item.icon style={{ width: 20, height: 20, color: item.featured ? T.accent : T.textMuted, marginBottom: '12px' }} />
-                <div style={{ fontWeight: 600, color: '#ffffff', fontSize: '15px', marginBottom: '4px' }}>
+                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>
                   {item.name}
                 </div>
                 <div style={{ color: T.textMuted, fontSize: '13px' }}>{item.framework}</div>
@@ -300,7 +300,7 @@ export default function DocsHomePage() {
                 }}
               >
                 <item.icon style={{ width: 16, height: 16, color: T.textMuted }} />
-                <span style={{ color: '#e2e8f0', fontSize: '14px' }}>{item.name}</span>
+                <span style={{ color: 'var(--re-text-primary)', fontSize: '14px' }}>{item.name}</span>
               </Link>
             ))}
           </div>
