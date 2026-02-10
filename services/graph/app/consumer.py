@@ -5,10 +5,12 @@ import hashlib
 import json
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 import structlog
-from confluent_kafka import DeserializingConsumer
+from confluent_kafka import DeserializingConsumer, Producer
 from confluent_kafka.schema_registry import SchemaRegistryClient, SchemaRegistryError
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from prometheus_client import Counter
@@ -31,8 +33,97 @@ logger = structlog.get_logger("graph-consumer")
 MESSAGES_COUNTER = Counter(
     "graph_consumer_messages_total", "Graph consumer messages", ["status"]
 )
+DLQ_COUNTER = Counter(
+    "graph_consumer_dlq_total", "Messages sent to graph DLQ", ["reason"]
+)
 
 _shutdown_event = threading.Event()
+
+# Dead Letter Queue configuration
+TOPIC_DLQ = "graph.update.dlq"
+MAX_RETRIES = 3
+_retry_counts: Dict[str, int] = {}
+_dlq_producer: Optional[Producer] = None
+
+
+def _init_dlq_producer() -> Producer:
+    """Initialize the DLQ producer (called once at consumer startup)."""
+    global _dlq_producer
+    _dlq_producer = Producer({"bootstrap.servers": settings.kafka_bootstrap})
+    return _dlq_producer
+
+
+def _send_to_dlq(
+    event: Dict[str, Any],
+    error: str,
+    reason: str = "processing_error",
+    doc_id: Optional[str] = None,
+) -> None:
+    """Send a failed message to the dead letter queue for manual inspection."""
+    if not _dlq_producer:
+        logger.error("dlq_producer_not_initialized", reason=reason)
+        return
+    try:
+        dlq_payload = json.dumps({
+            "original_event": event,
+            "error": str(error)[:2048],
+            "reason": reason,
+            "failed_at": datetime.now(timezone.utc).isoformat(),
+            "source_topic": "graph.update",
+            "document_id": doc_id,
+            "retry_count": _retry_counts.get(doc_id or "unknown", 0),
+        }).encode("utf-8")
+        _dlq_producer.produce(TOPIC_DLQ, value=dlq_payload)
+        _dlq_producer.flush(timeout=5.0)
+        DLQ_COUNTER.labels(reason=reason).inc()
+        logger.info("message_sent_to_dlq", topic=TOPIC_DLQ, document_id=doc_id, reason=reason)
+    except Exception as exc:
+        logger.critical("dlq_send_failed", error=str(exc), document_id=doc_id)
+
+
+def _handle_processing_error(
+    record: Any,
+    evt: Dict[str, Any],
+    exc: Exception,
+    consumer: Any,
+    context: str = "graph_upsert",
+) -> None:
+    """Unified error handler: retry tracking → DLQ escalation → offset commit."""
+    doc_id = (
+        evt.get("document_id")
+        or evt.get("doc_id")
+        or "unknown"
+    )
+    retry_key = doc_id
+    _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
+    current_retries = _retry_counts[retry_key]
+
+    if current_retries >= MAX_RETRIES:
+        logger.error(
+            "max_retries_exceeded_sending_to_dlq",
+            document_id=doc_id,
+            retries=current_retries,
+            error=str(exc),
+            context=context,
+        )
+        _send_to_dlq(evt, str(exc), reason=context, doc_id=doc_id)
+        _retry_counts.pop(retry_key, None)
+    else:
+        logger.warning(
+            "processing_error_will_skip",
+            document_id=doc_id,
+            retry=current_retries,
+            max_retries=MAX_RETRIES,
+            error=str(exc),
+            context=context,
+        )
+
+    # Always commit to prevent infinite reprocessing (poison pill prevention)
+    MESSAGES_COUNTER.labels(status="error").inc()
+    try:
+        consumer.commit(message=record, asynchronous=False)
+    except Exception as commit_exc:
+        logger.error("offset_commit_failed", error=str(commit_exc))
 
 
 def generate_provision_hash(doc_hash: str, text: str) -> str:
@@ -69,6 +160,9 @@ def json_deserializer(v, ctx):
 
 async def run_consumer() -> None:
     topics = [settings.topic_in, "graph.update"]
+
+    # Initialize DLQ producer for error routing
+    _init_dlq_producer()
     
     schema_registry = SchemaRegistryClient({'url': 'http://schema-registry:8081'})
     avro_deserializer = AvroDeserializer(
@@ -186,8 +280,7 @@ async def run_consumer() -> None:
                     consumer.commit(message=record, asynchronous=False)
 
                 except Exception as exc:
-                    logger.exception("graph_upsert_err", error=str(exc))
-                    MESSAGES_COUNTER.labels(status="error").inc()
+                    _handle_processing_error(record, evt, exc, consumer, context="graph_upsert")
 
             except ValidationError:
                 # Fall back to legacy format (Synchronous)
@@ -229,12 +322,13 @@ async def run_consumer() -> None:
                     MESSAGES_COUNTER.labels(status="success").inc()
                     consumer.commit(message=record, asynchronous=False)
                 except Exception as exc:
-                    logger.exception("graph_upsert_err", doc_id=doc_id, error=str(exc))
-                    MESSAGES_COUNTER.labels(status="error").inc()
+                    _handle_processing_error(record, evt, exc, consumer, context="legacy_upsert")
             
             clear_contextvars()
     finally:
          consumer.close()
+         if _dlq_producer:
+             _dlq_producer.flush(timeout=2.0)
 
 if __name__ == "__main__":
     try:

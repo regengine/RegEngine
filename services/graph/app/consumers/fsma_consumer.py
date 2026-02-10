@@ -327,50 +327,32 @@ async def run_fsma_consumer(database: Optional[str] = None) -> None:
                 # Handle error logic
                 continue
 
+            # Phase 1: Deserialization (isolated to catch decode-level poison pills)
             try:
-                # Value is already deserialized by AvroDeserializer? 
-                # Wait, Consumer needs 'value.deserializer' config or explicit call?
-                # Confluent Consumer is low level. DeserializingConsumer is high level.
-                
-                # We need to manually deserialize if using raw Consumer, 
-                # or use DeserializingConsumer.
-                # Let's switch to DeserializingConsumer pattern or manual usage.
-                # Given structure, we'll manually use deserializer if msg.value() returns bytes
-                
-                # NOTE: For simplicity in this agent script, assuming we handle bytes manually 
-                # OR we passed it to config. 
-                # Let's use deserializer manually on the bytes.
-                
                 val_bytes = msg.value()
                 ctx = SerializationContext(msg.topic(), MessageField.VALUE)
-                
-                # If using DeserializingConsumer, this happens automatically.
-                # But here we initialized Consumer. 
-                # Let's verify: confluent_kafka.DeserializingConsumer is better.
-                # But to avoid re-writing everything, we call deserializer:
-                
                 event = avro_deserializer(val_bytes, ctx)
-                
+            except Exception as deser_err:
+                FSMA_MESSAGES_COUNTER.labels(status="error").inc()
+                DLQ_COUNTER.labels(reason="deserialization_error").inc()
+                send_to_dlq(msg.topic(), msg.value(), reason="deserialization_error", error=str(deser_err))
+                logger.error("avro_deserialization_failed", error=str(deser_err), action="dlq_sent")
+                await asyncio.to_thread(consumer.commit, msg)
+                continue
+
+            # Phase 2: Processing (business logic errors)
+            try:
                 if event:
                     bind_contextvars(offset=msg.offset(), partition=msg.partition())
                     await ingest_fsma_event(client, event)
                     await asyncio.to_thread(consumer.commit, msg)
-
             except Exception as e:
-                # Catch-all for message processing failures to preventing crashing
                 FSMA_MESSAGES_COUNTER.labels(status="error").inc()
-                
-                # Send to DLQ
-                # Note: msg.value() returns bytes
                 reason = "processing_exception"
                 if isinstance(e, TLCSourceValidationError):
                     reason = "validation_error"
-                
                 send_to_dlq(msg.topic(), msg.value(), reason=reason, error=str(e))
-                
                 logger.exception("fsma_event_processing_fatal_error", error=str(e), action="dlq_sent")
-                
-                # Commit offset to move past poison pill
                 await asyncio.to_thread(consumer.commit, msg)
             finally:
                 clear_contextvars()
