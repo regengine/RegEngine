@@ -68,7 +68,7 @@ async def login(
     user = db.execute(stmt).scalar_one_or_none()
     
     if not user or not verify_password(payload.password, user.password_hash):
-        logger.warning("login_failed", email=payload.email)
+        logger.warning("login_failed", reason="invalid_credentials")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",

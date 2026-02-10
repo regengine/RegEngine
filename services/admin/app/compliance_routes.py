@@ -190,7 +190,7 @@ def get_compliance_status(
         return ComplianceStatusResponse(**status)
     except Exception as e:
         logger.error("get_status_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/alerts/{tenant_id}", dependencies=[Depends(PermissionChecker("analysis.read"))])
@@ -215,7 +215,7 @@ def list_alerts(
         return [AlertResponse(**alert.to_dict()) for alert in alerts]
     except Exception as e:
         logger.error("list_alerts_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/alerts/{tenant_id}/{alert_id}", dependencies=[Depends(PermissionChecker("analysis.read"))])
@@ -237,7 +237,7 @@ def get_alert(
         raise
     except Exception as e:
         logger.error("get_alert_failed", alert_id=alert_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/alerts/{tenant_id}/{alert_id}/acknowledge", dependencies=[Depends(PermissionChecker("analysis.create"))])
@@ -262,7 +262,7 @@ def acknowledge_alert(
         raise
     except Exception as e:
         logger.error("acknowledge_alert_failed", alert_id=alert_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/alerts/{tenant_id}/{alert_id}/resolve", dependencies=[Depends(PermissionChecker("analysis.create"))])
@@ -291,7 +291,7 @@ def resolve_alert(
         raise
     except Exception as e:
         logger.error("resolve_alert_failed", alert_id=alert_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/alerts", dependencies=[Depends(PermissionChecker("analysis.create"))])
@@ -326,7 +326,7 @@ def create_alert(
         raise HTTPException(status_code=400, detail=f"Invalid enum value: {e}")
     except Exception as e:
         logger.error("create_alert_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/profile/{tenant_id}", dependencies=[Depends(PermissionChecker("analysis.read"))])
@@ -354,7 +354,7 @@ def get_product_profile(
         return profile.to_dict()
     except Exception as e:
         logger.error("get_profile_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put("/profile/{tenant_id}", dependencies=[Depends(PermissionChecker("analysis.create"))])
@@ -390,7 +390,7 @@ def update_product_profile(
         return profile.to_dict()
     except Exception as e:
         logger.error("update_profile_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ===========================================================================
@@ -422,7 +422,7 @@ def create_snapshot(
         return snapshot.to_dict()
     except Exception as e:
         logger.error("create_snapshot_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/snapshots/{tenant_id}", dependencies=[Depends(PermissionChecker("audit.read"))])
@@ -442,7 +442,7 @@ def list_snapshots(
         return [s.to_summary_dict() for s in snapshots]
     except Exception as e:
         logger.error("list_snapshots_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/snapshots/{tenant_id}/diff", dependencies=[Depends(PermissionChecker("audit.read"))])
@@ -472,7 +472,7 @@ def diff_snapshots(
         raise
     except Exception as e:
         logger.error("diff_snapshots_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/snapshots/{tenant_id}/{snapshot_id}", dependencies=[Depends(PermissionChecker("audit.read"))])
@@ -497,7 +497,7 @@ def get_snapshot(
         raise
     except Exception as e:
         logger.error("get_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/snapshots/{tenant_id}/{snapshot_id}/verify", dependencies=[Depends(PermissionChecker("audit.read"))])
@@ -527,7 +527,7 @@ def verify_snapshot(
         raise
     except Exception as e:
         logger.error("verify_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.get("/snapshots/{tenant_id}/{snapshot_id}/export", dependencies=[Depends(PermissionChecker("audit.export"))])
 def export_snapshot(
@@ -554,7 +554,7 @@ def export_snapshot(
         raise
     except Exception as e:
         logger.error("export_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/snapshots/{tenant_id}/{snapshot_id}/attest", dependencies=[Depends(PermissionChecker("audit.create"))])
@@ -589,7 +589,7 @@ def attest_snapshot(
         raise
     except Exception as e:
         logger.error("attest_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 class RefreezeRequest(BaseModel):
@@ -621,7 +621,7 @@ def refreeze_snapshot(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("refreeze_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/snapshots/{tenant_id}/{snapshot_id}/fda-response", dependencies=[Depends(PermissionChecker("audit.export"))])
@@ -652,4 +652,4 @@ def get_fda_response(
         raise
     except Exception as e:
         logger.error("generate_fda_response_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")

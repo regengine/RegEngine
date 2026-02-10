@@ -141,7 +141,7 @@ async def create_recall_drill(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("drill_creation_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/recall/drill/{drill_id}")

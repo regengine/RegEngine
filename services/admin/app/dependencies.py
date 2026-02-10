@@ -100,7 +100,7 @@ async def get_current_user(
         logger.warning("user_not_found_in_db", user_id=user_id)
         raise credentials_exception
         
-    logger.info("user_authenticated", user_id=user_id, email=user.email)
+    logger.info("user_authenticated", user_id=user_id)
         
     # Store tenant context in request state or handle via DB session context
     if tenant_id:

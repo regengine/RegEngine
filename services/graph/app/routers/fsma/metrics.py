@@ -110,7 +110,7 @@ async def get_data_quality_metrics(
         }
     except Exception as e:
         logger.exception("quality_metrics_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/dashboard")

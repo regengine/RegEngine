@@ -143,7 +143,7 @@ async def export_fda_request_sheet(
         
     except Exception as e:
         logger.exception("fda_request_export_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -308,7 +308,7 @@ async def export_epcis(
         
     except Exception as e:
         logger.exception("epcis_export_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _epcis_to_xml(epcis_doc: dict) -> str:
@@ -477,7 +477,7 @@ async def export_trace_csv(
 
     except Exception as e:
         logger.exception("csv_export_error", tlc=tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/export/recall-contacts/{tlc}")
@@ -554,7 +554,7 @@ async def export_recall_contacts(
 
     except Exception as e:
         logger.exception("recall_contacts_error", tlc=tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -595,7 +595,7 @@ async def get_compliance_gaps(
         }
     except Exception as e:
         logger.exception("gap_analysis_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/gaps/orphans")
@@ -652,7 +652,7 @@ async def get_orphaned_lots(
         }
     except Exception as e:
         logger.exception("orphan_detection_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 
@@ -710,7 +710,7 @@ async def export_gaps_csv(
 
     except Exception as e:
         logger.exception("gaps_export_error", error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
