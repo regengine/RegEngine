@@ -309,6 +309,16 @@ class ChaosRunner:
                     counts["postgres_api_keys"] = result.scalar() or 0
 
                 logger.info(f"📊 PostgreSQL counts: {counts['postgres_api_keys']} API keys")
+
+                # Count scheduler jobs (apscheduler_jobs)
+                # Table is created by APScheduler as 'apscheduler_jobs'
+                try:
+                    result = conn.execute(text("SELECT COUNT(*) FROM apscheduler_jobs"))
+                    counts["postgres_scheduler_jobs"] = result.scalar() or 0
+                except Exception:
+                    counts["postgres_scheduler_jobs"] = 0
+
+                logger.info(f"📊 PostgreSQL counts: {counts['postgres_api_keys']} API keys, {counts['postgres_scheduler_jobs']} persistent jobs")
             except Exception as e:
                 logger.warning(f"⚠️ Could not capture PostgreSQL counts: {e}")
         else:
@@ -504,6 +514,24 @@ class ChaosRunner:
         )
         return self.run_test(test)
 
+    def run_scheduler_failure(self, duration_seconds: int = 15) -> ChaosResult:
+        """
+        Simulate Scheduler service failure.
+
+        Args:
+            duration_seconds: How long to keep service down
+
+        Returns:
+            ChaosResult
+        """
+        test = ChaosTest(
+            name="Scheduler Service Failure",
+            description="Simulate Scheduler service crash and validate job persistence/recovery",
+            target_container="regengine-scheduler-1",
+            duration_seconds=duration_seconds
+        )
+        return self.run_test(test)
+
     def run_all_tests(self) -> List[ChaosResult]:
         """
         Run comprehensive chaos engineering test suite.
@@ -543,8 +571,13 @@ class ChaosRunner:
         time.sleep(10)
 
         # Test 6: Admin API failure
-        logger.info("\n📊 Test 6/6: Admin API Failure")
+        logger.info("\n📊 Test 6/7: Admin API Failure")
         self.results.append(self.run_service_failure("admin-api", duration_seconds=15))
+        time.sleep(10)
+
+        # Test 7: Scheduler Service failure
+        logger.info("\n📊 Test 7/7: Scheduler Service Failure")
+        self.results.append(self.run_scheduler_failure(duration_seconds=15))
 
         # Print summary
         self._print_summary()
@@ -605,7 +638,7 @@ def main():
     )
     parser.add_argument(
         "--test",
-        choices=["neo4j", "kafka", "postgres", "graph", "nlp", "ingestion", "admin", "all"],
+        choices=["neo4j", "kafka", "postgres", "graph", "nlp", "ingestion", "admin", "scheduler", "all"],
         default="all",
         help="Specific test to run (default: all)"
     )
@@ -638,6 +671,9 @@ def main():
         sys.exit(0 if result.success else 1)
     elif args.test == "postgres":
         result = runner.run_postgres_failure()
+        sys.exit(0 if result.success else 1)
+    elif args.test == "scheduler":
+        result = runner.run_scheduler_failure()
         sys.exit(0 if result.success else 1)
     else:
         result = runner.run_service_failure(args.test)
