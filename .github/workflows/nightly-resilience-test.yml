@@ -53,13 +53,13 @@ jobs:
       - name: Start RegEngine stack
         run: |
           echo "Starting RegEngine services..."
-          docker-compose up -d
+          docker compose up -d
 
           echo "Waiting for services to be healthy..."
           sleep 30
 
           # Check service health
-          docker-compose ps
+          docker compose ps
 
       - name: Run chaos engineering tests
         id: chaos_tests
@@ -83,13 +83,13 @@ jobs:
         if: always()
         run: |
           mkdir -p logs
-          docker-compose logs --no-color > logs/services.log
-          docker-compose logs admin-api > logs/admin-api.log
-          docker-compose logs ingestion-service > logs/ingestion.log
-          docker-compose logs nlp-service > logs/nlp.log
-          docker-compose logs graph-service > logs/graph.log
-          docker-compose logs neo4j > logs/neo4j.log
-          docker-compose logs redpanda > logs/kafka.log
+          docker compose logs --no-color > logs/services.log
+          docker compose logs admin-api > logs/admin-api.log
+          docker compose logs ingestion-service > logs/ingestion.log
+          docker compose logs nlp-service > logs/nlp.log
+          docker compose logs graph-service > logs/graph.log
+          docker compose logs neo4j > logs/neo4j.log
+          docker compose logs redpanda > logs/kafka.log
 
       - name: Upload test results
         if: always()
@@ -120,7 +120,7 @@ jobs:
       - name: Cleanup Docker resources
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
           docker system prune -af --volumes
 
       - name: Notify on failure
@@ -166,7 +166,7 @@ jobs:
 
       - name: Start RegEngine stack
         run: |
-          docker-compose up -d
+          docker compose up -d
           sleep 30
 
       - name: Run performance benchmarks
@@ -178,7 +178,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker-compose down -v
+          docker compose down -v
 
   security-scan:
     name: Security Vulnerability Scan
@@ -208,6 +208,7 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       - name: Run secrets scanner
+        continue-on-error: true  # Fails on workflow_dispatch when BASE=HEAD
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
