@@ -14,6 +14,7 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
 from models import PRICING_TIERS, BillingCycle
 
 logger = structlog.get_logger(__name__)
@@ -379,20 +380,20 @@ class InvoiceEngine:
                 "number": invoice.number,
                 "tenant_name": invoice.tenant_name,
                 "amount_due_cents": amount,
-                "amount_due_display": f"${amount / 100:,.2f}",
+                "amount_due_display": format_cents(amount),
                 "days_outstanding": days_outstanding,
             })
 
         total_outstanding = sum(buckets.values())
         return {
             "aging_buckets": {
-                k: {"amount_cents": v, "amount_display": f"${v / 100:,.2f}",
+                k: {"amount_cents": v, "amount_display": format_cents(v),
                      "invoice_count": len(bucket_invoices[k]),
                      "invoices": bucket_invoices[k]}
                 for k, v in buckets.items()
             },
             "total_outstanding_cents": total_outstanding,
-            "total_outstanding_display": f"${total_outstanding / 100:,.2f}",
+            "total_outstanding_display": format_cents(total_outstanding),
             "overdue_count": sum(1 for i in self._invoices.values()
                                 if i.status == InvoiceStatus.OVERDUE),
         }
@@ -414,11 +415,11 @@ class InvoiceEngine:
 
         return {
             "total_collected_cents": total_collected,
-            "total_collected_display": f"${total_collected / 100:,.2f}",
+            "total_collected_display": format_cents(total_collected),
             "total_invoiced_cents": total_invoiced,
-            "total_invoiced_display": f"${total_invoiced / 100:,.2f}",
+            "total_invoiced_display": format_cents(total_invoiced),
             "total_outstanding_cents": total_outstanding,
-            "total_outstanding_display": f"${total_outstanding / 100:,.2f}",
+            "total_outstanding_display": format_cents(total_outstanding),
             "collection_rate_pct": collection_rate,
             "invoices_paid": paid_count,
             "invoices_total": total_count,

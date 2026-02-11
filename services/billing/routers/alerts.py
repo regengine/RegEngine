@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from alerts_engine import alerts_engine, AlertType, AlertSeverity, AlertChannel, WebhookStatus
+from utils import paginate
 
 router = APIRouter(prefix="/v1/billing/alerts", tags=["Alerts"])
 
@@ -73,13 +74,24 @@ async def list_events(
     alert_type: Optional[AlertType] = Query(None),
     severity: Optional[AlertSeverity] = Query(None),
     unacknowledged: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ):
-    """List alert events."""
+    """List alert events with pagination."""
     events = alerts_engine.list_events(
         alert_type=alert_type, severity=severity,
         unacknowledged_only=unacknowledged,
     )
-    return {"events": [e.model_dump() for e in events], "total": len(events)}
+    result = paginate([e.model_dump() for e in events], page=page, page_size=page_size)
+    return {
+        "events": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
+    }
 
 
 @router.post("/events/{event_id}/acknowledge")
@@ -104,10 +116,23 @@ async def fire_alert(request: FireAlertRequest):
 
 
 @router.get("/webhooks")
-async def list_webhooks(status: Optional[WebhookStatus] = Query(None)):
-    """List webhook delivery log."""
+async def list_webhooks(
+    status: Optional[WebhookStatus] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    """List webhook delivery log with pagination."""
     webhooks = alerts_engine.list_webhooks(status=status)
-    return {"webhooks": [w.model_dump() for w in webhooks], "total": len(webhooks)}
+    result = paginate([w.model_dump() for w in webhooks], page=page, page_size=page_size)
+    return {
+        "webhooks": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
+    }
 
 
 @router.get("/summary")

@@ -16,6 +16,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from models import PRICING_TIERS, BillingCycle
+from utils import format_cents
 
 logger = structlog.get_logger(__name__)
 
@@ -404,7 +405,7 @@ class ContractEngine:
                 "tenant_name": contract.tenant_name,
                 "tier_id": contract.tier_id,
                 "acv_cents": contract.annual_contract_value_cents,
-                "acv_display": f"${contract.annual_contract_value_cents / 100:,.0f}",
+                "acv_display": format_cents(contract.annual_contract_value_cents),
                 "owner": contract.owner,
                 "term_years": contract.term_years,
             })
@@ -418,12 +419,12 @@ class ContractEngine:
         return {
             "pipeline": pipeline,
             "stage_totals": {k: {"count": len(v), "acv_cents": stage_totals[k],
-                                  "acv_display": f"${stage_totals[k] / 100:,.0f}"}
+                                  "acv_display": format_cents(stage_totals[k])}
                              for k, v in pipeline.items()},
             "total_pipeline_value_cents": total_pipeline_value,
-            "total_pipeline_value_display": f"${total_pipeline_value / 100:,.0f}",
+            "total_pipeline_value_display": format_cents(total_pipeline_value),
             "weighted_pipeline_cents": int(total_pipeline_value * 0.35),
-            "weighted_pipeline_display": f"${int(total_pipeline_value * 0.35) / 100:,.0f}",
+            "weighted_pipeline_display": format_cents(int(total_pipeline_value * 0.35)),
         }
 
     # ── SLA Status ─────────────────────────────────────────────
@@ -493,7 +494,7 @@ class ContractEngine:
                     "tenant_name": contract.tenant_name,
                     "tier_id": contract.tier_id,
                     "acv_cents": contract.annual_contract_value_cents,
-                    "acv_display": f"${contract.annual_contract_value_cents / 100:,.0f}",
+                    "acv_display": format_cents(contract.annual_contract_value_cents),
                     "renewal_date": contract.renewal_date.isoformat(),
                     "days_until_renewal": days_until,
                     "urgency": urgency,

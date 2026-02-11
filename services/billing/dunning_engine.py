@@ -14,6 +14,8 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 
@@ -303,7 +305,7 @@ class DunningEngine:
             stage_breakdown[stage.value] = {
                 "count": len(stage_cases),
                 "amount_cents": sum(c.amount_due_cents for c in stage_cases),
-                "amount_display": f"${sum(c.amount_due_cents for c in stage_cases) / 100:,.2f}",
+                "amount_display": format_cents(sum(c.amount_due_cents for c in stage_cases)),
             }
 
         return {
@@ -311,11 +313,11 @@ class DunningEngine:
             "active_cases": len(active),
             "recovered_cases": len(recovered),
             "total_at_risk_cents": total_at_risk,
-            "total_at_risk_display": f"${total_at_risk / 100:,.2f}",
+            "total_at_risk_display": format_cents(total_at_risk),
             "total_recovered_cents": total_recovered,
-            "total_recovered_display": f"${total_recovered / 100:,.2f}",
+            "total_recovered_display": format_cents(total_recovered),
             "total_written_off_cents": total_written_off,
-            "total_written_off_display": f"${total_written_off / 100:,.2f}",
+            "total_written_off_display": format_cents(total_written_off),
             "recovery_rate_pct": recovery_rate,
             "total_retries": sum(len(c.retry_attempts) for c in cases),
             "stage_breakdown": stage_breakdown,

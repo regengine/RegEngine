@@ -8,10 +8,11 @@ escalating cases, and viewing recovery metrics.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from dunning_engine import dunning_engine, DunningStatus, DunningStage
+from utils import paginate
 
 router = APIRouter(prefix="/v1/billing/dunning", tags=["Dunning"])
 
@@ -23,7 +24,7 @@ class OpenCaseRequest(BaseModel):
     tenant_name: str
     invoice_id: str
     invoice_number: str = ""
-    amount_due_cents: int
+    amount_due_cents: int = Field(..., gt=0)
 
 
 # ── Endpoints ──────────────────────────────────────────────────────
@@ -45,10 +46,21 @@ async def open_case(request: OpenCaseRequest):
 async def list_cases(
     status: Optional[DunningStatus] = Query(None),
     stage: Optional[DunningStage] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ):
-    """List dunning cases with filters."""
+    """List dunning cases with filters and pagination."""
     cases = dunning_engine.list_cases(status=status, stage=stage)
-    return {"cases": [c.model_dump() for c in cases], "total": len(cases)}
+    result = paginate([c.model_dump() for c in cases], page=page, page_size=page_size)
+    return {
+        "cases": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
+    }
 
 
 @router.get("/summary")
