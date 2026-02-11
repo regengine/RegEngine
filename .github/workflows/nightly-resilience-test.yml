@@ -22,6 +22,11 @@ on:
 env:
   PYTHON_VERSION: '3.11'
   DOCKER_COMPOSE_VERSION: '2.20.0'
+  # Required by docker-compose.yml (:? syntax) — CI-safe placeholders
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID || 'ci-placeholder' }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || 'ci-placeholder' }}
+  NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD || 'ci-test-password' }}
+  AUTH_SECRET_KEY: ${{ secrets.AUTH_SECRET_KEY || 'ci-test-auth-secret-key' }}
 
 jobs:
   resilience-tests:
