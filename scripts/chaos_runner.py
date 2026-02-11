@@ -111,8 +111,14 @@ class ChaosRunner:
             logger.info(f"Baseline health: {'✓ Healthy' if baseline_healthy else '✗ Unhealthy'}")
 
             # Capture baseline data counts BEFORE chaos event
-            logger.info("📊 Capturing baseline data counts...")
-            baseline_counts = self._capture_data_counts()
+            if os.getenv("CHAOS_SEED_MANIFEST"):
+                logger.info(f"📊 Loading baseline data counts from manifest")
+                with open(os.getenv("CHAOS_SEED_MANIFEST")) as f:
+                    baseline_counts = json.load(f)
+                logger.info(f"✅ Loaded baseline: {baseline_counts}")
+            else:
+                logger.info("📊 Capturing baseline data counts...")
+                baseline_counts = self._capture_data_counts()
 
             # Execute chaos action
             start_time = time.time()
@@ -304,7 +310,7 @@ class ChaosRunner:
                     counts["postgres_api_keys"] = result.scalar() or 0
 
                     # Count scheduler jobs
-                    result = conn.execute(text("SELECT COUNT(*) FROM scheduler_job_history"))
+                    result = conn.execute(text("SELECT COUNT(*) FROM scheduler_jobs"))
                     counts["postgres_scheduler_jobs"] = result.scalar() or 0
 
                 logger.info(f"📊 PostgreSQL counts: {counts['postgres_api_keys']} API keys, {counts['postgres_scheduler_jobs']} scheduler jobs")
