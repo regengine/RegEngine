@@ -227,8 +227,8 @@ services:
 
   energy-api:
     build:
-      context: ./services/energy
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/energy/Dockerfile
     restart: unless-stopped
     ports:
       - "8700:8700"
