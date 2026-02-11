@@ -432,6 +432,9 @@ class SchedulerService:
             self.scheduler.start()
         except (KeyboardInterrupt, SystemExit):
             pass
+        except Exception as e:
+            logger.error("scheduler_crashed", error=str(e))
+            raise e
             
     def shutdown(self) -> None:
         """Gracefully shutdown the scheduler."""
@@ -525,4 +528,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Use basic logging as fallback if structlog fails
+        import logging
+        logging.error(f"Critical scheduler failure: {e}", exc_info=True)
+        sys.exit(1)
