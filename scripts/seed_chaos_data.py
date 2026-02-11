@@ -63,14 +63,23 @@ def seed_neo4j():
         return False
 
     logger.info(f"🔌 Connecting to Neo4j at {NEO4J_URI}")
-    driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-
-    try:
-        driver.verify_connectivity()
-        logger.info("✅ Neo4j connection verified")
-    except Exception as e:
-        logger.error(f"❌ Neo4j connection failed: {e}")
-        return False
+    
+    # Retry logic for Neo4j connection
+    import time
+    max_retries = 30
+    for attempt in range(max_retries):
+        try:
+            driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+            driver.verify_connectivity()
+            logger.info("✅ Neo4j connection verified")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"⚠️ Neo4j connection failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                time.sleep(2)
+            else:
+                logger.error(f"❌ Neo4j connection failed after {max_retries} attempts: {e}")
+                return False
 
     with driver.session() as session:
         # Clean up any previous seed data first
@@ -198,15 +207,26 @@ def seed_postgres():
         return False
 
     logger.info(f"🔌 Connecting to PostgreSQL")
-    engine = create_engine(POSTGRES_URL)
-
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        logger.info("✅ PostgreSQL connection verified")
-    except Exception as e:
-        logger.error(f"❌ PostgreSQL connection failed: {e}")
-        return False
+    
+    # Retry logic for PostgreSQL connection
+    import time
+    max_retries = 30
+    engine = None
+    
+    for attempt in range(max_retries):
+        try:
+            engine = create_engine(POSTGRES_URL)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("✅ PostgreSQL connection verified")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"⚠️ PostgreSQL connection failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in 2s...")
+                time.sleep(2)
+            else:
+                logger.error(f"❌ PostgreSQL connection failed after {max_retries} attempts: {e}")
+                return False
 
     with engine.connect() as conn:
         # Clean up previous seed data
