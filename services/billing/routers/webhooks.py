@@ -7,14 +7,10 @@ Receives and processes Stripe webhook events with HMAC signature verification.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Request, HTTPException
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import stripe_client
 

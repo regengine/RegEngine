@@ -8,10 +8,11 @@ plus aging reports and revenue summaries.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from invoice_engine import invoice_engine, InvoiceStatus, PaymentMethod
+from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/invoices", tags=["Invoices"])
 
@@ -23,12 +24,12 @@ class CreateInvoiceRequest(BaseModel):
     tenant_name: str
     tier_id: str = "growth"
     overage_items: list[dict] = []
-    discount_cents: int = 0
+    discount_cents: int = Field(default=0, ge=0)
     notes: str = ""
 
 
 class RecordPaymentRequest(BaseModel):
-    amount_cents: int
+    amount_cents: int = Field(..., gt=0)
     method: PaymentMethod = PaymentMethod.CREDIT_CARD
     card_last4: str = "4242"
     card_brand: str = "visa"
@@ -50,7 +51,7 @@ async def create_invoice(request: CreateInvoiceRequest):
     )
     return {
         "invoice": invoice.model_dump(),
-        "message": f"Invoice {invoice.number} created: ${invoice.total_cents / 100:,.2f}",
+        "message": f"Invoice {invoice.number} created: {format_cents(invoice.total_cents)}",
     }
 
 
@@ -58,12 +59,20 @@ async def create_invoice(request: CreateInvoiceRequest):
 async def list_invoices(
     tenant_id: Optional[str] = Query(None),
     status: Optional[InvoiceStatus] = Query(None),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(50, ge=1, le=200, description="Items per page"),
 ):
-    """List invoices with optional filters."""
+    """List invoices with optional filters and pagination."""
     invoices = invoice_engine.list_invoices(tenant_id=tenant_id, status=status)
+    result = paginate([i.model_dump() for i in invoices], page=page, page_size=page_size)
     return {
-        "invoices": [i.model_dump() for i in invoices],
-        "total": len(invoices),
+        "invoices": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
     }
 
 

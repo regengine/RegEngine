@@ -15,8 +15,11 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from middleware import SecurityHeadersMiddleware, RequestIdMiddleware, RateLimitMiddleware
 
 # Ensure billing module is importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -66,6 +69,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 # ── Mount Routers ──────────────────────────────────────────────────
 app.include_router(subscriptions.router)
@@ -83,6 +89,17 @@ app.include_router(lifecycle.router)
 app.include_router(alerts.router)
 app.include_router(forecasting.router)
 app.include_router(optimization.router)
+
+
+# ── Global Error Handling ──────────────────────────────────────────
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """Convert ValueError from engines into a clean 400 JSON response."""
+    return JSONResponse(
+        status_code=400,
+        content={"detail": str(exc)},
+    )
 
 
 # ── Health & Info ──────────────────────────────────────────────────
@@ -111,6 +128,17 @@ async def root():
             "credits": "/v1/billing/credits",
             "checkout": "/v1/billing/checkout",
             "webhooks": "/v1/billing/webhooks",
+            "analytics": "/v1/billing/analytics",
+            "usage": "/v1/billing/usage",
+            "contracts": "/v1/billing/contracts",
+            "invoices": "/v1/billing/invoices",
+            "partners": "/v1/billing/partners",
+            "dunning": "/v1/billing/dunning",
+            "tax": "/v1/billing/tax",
+            "lifecycle": "/v1/billing/lifecycle",
+            "alerts": "/v1/billing/alerts",
+            "forecasting": "/v1/billing/forecasting",
+            "optimization": "/v1/billing/optimization",
             "health": "/health",
             "docs": "/docs",
         },

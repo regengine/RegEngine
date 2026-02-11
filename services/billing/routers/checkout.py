@@ -6,13 +6,9 @@ Creates Stripe Checkout sessions with credit application.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Header
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from models import (
     PRICING_TIERS,
@@ -23,15 +19,13 @@ from models import (
 )
 import stripe_client
 from credit_engine import credit_engine
+from utils import get_tenant_id, format_cents
 
 router = APIRouter(prefix="/v1/billing/checkout", tags=["checkout"])
 
 # In-memory session store
 _sessions: dict[str, CheckoutSession] = {}
 
-
-def _get_tenant_id(x_tenant_id: Optional[str] = Header(None)) -> str:
-    return x_tenant_id or "sandbox_tenant"
 
 
 def _calculate_total(tier_id: str, billing_cycle: BillingCycle) -> int:
@@ -49,7 +43,7 @@ async def create_checkout_session(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """Create a Stripe Checkout session for a subscription."""
-    tenant_id = _get_tenant_id(x_tenant_id)
+    tenant_id = get_tenant_id(x_tenant_id)
 
     # Validate tier
     tier = PRICING_TIERS.get(request.tier_id)
@@ -116,9 +110,9 @@ async def create_checkout_session(
         "checkout_url": session.checkout_url,
         "tier": tier.name,
         "billing_cycle": request.billing_cycle.value,
-        "subtotal": f"${subtotal_cents / 100:.2f}",
-        "credits_applied": f"${applied_credit_cents / 100:.2f}" if applied_credit_cents > 0 else None,
-        "total": f"${session.total_cents / 100:.2f}",
+        "subtotal": format_cents(subtotal_cents),
+        "credits_applied": format_cents(applied_credit_cents) if applied_credit_cents > 0 else None,
+        "total": format_cents(session.total_cents),
         "sandbox_mode": stripe_client.is_sandbox(),
     }
 
