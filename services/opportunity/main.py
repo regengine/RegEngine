@@ -5,12 +5,6 @@ Opportunity Service - FastAPI Application Entry Point
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import structlog
-import sys
-from pathlib import Path
-
-# Add shared utilities
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_SERVICES_DIR))
 from shared.middleware import TenantContextMiddleware
 
 from app.routes import router
@@ -41,10 +35,7 @@ app.include_router(router)
 async def startup_event():
     logger.info("opportunity_service_starting", version="1.0.0")
 
-@app.get("/health")
-async def health_proxy():
-    # The routes.py already has a /health endpoint, but uvicorn will route /health to it
-    pass
+
 
 if __name__ == "__main__":
     import uvicorn
