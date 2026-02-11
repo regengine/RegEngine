@@ -10,7 +10,17 @@ import {
     Shield,
     Settings,
     ChevronRight,
-    Building2
+    Building2,
+    DollarSign,
+    FileSignature,
+    Receipt,
+    Handshake,
+    AlertTriangle,
+    Calculator,
+    RefreshCw,
+    Bell,
+    Activity,
+    Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
@@ -21,8 +31,18 @@ interface OwnerLayoutProps {
 
 const navItems = [
     { href: '/owner', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/owner/billing', label: 'Revenue', icon: DollarSign },
+    { href: '/owner/contracts', label: 'Deals', icon: FileSignature },
+    { href: '/owner/invoices', label: 'Invoices', icon: Receipt },
+    { href: '/owner/partners', label: 'Partners', icon: Handshake },
+    { href: '/owner/dunning', label: 'Collections', icon: AlertTriangle },
+    { href: '/owner/tax', label: 'Tax', icon: Calculator },
+    { href: '/owner/lifecycle', label: 'Subscriptions', icon: RefreshCw },
+    { href: '/owner/alerts', label: 'Alerts', icon: Bell },
+    { href: '/owner/forecasting', label: 'Analytics', icon: Activity },
+    { href: '/owner/optimization', label: 'Intelligence', icon: Sparkles },
     { href: '/owner/tenants', label: 'Tenants', icon: Users },
-    { href: '/owner/analytics', label: 'Analytics', icon: BarChart3 },
+    { href: '/owner/analytics', label: 'Usage', icon: BarChart3 },
     { href: '/owner/security', label: 'Security', icon: Shield },
     { href: '/owner/settings', label: 'Settings', icon: Settings },
 ];
