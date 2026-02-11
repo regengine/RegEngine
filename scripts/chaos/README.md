@@ -99,7 +99,7 @@ Chaos tests run automatically:
 
 ### GitHub Actions Workflow
 
-Located at `.github/workflows/chaos_tests.yml`
+Located at `.github/workflows/nightly-resilience-test.yml`
 
 **Manual trigger**:
 1. Go to Actions tab in GitHub
