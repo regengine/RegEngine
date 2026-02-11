@@ -56,6 +56,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Install chaos dependencies
+        run: pip install neo4j sqlalchemy psycopg2-binary toml APScheduler
+
+
       - name: Start RegEngine stack
         run: |
           echo "Starting RegEngine services..."
@@ -64,8 +68,7 @@ jobs:
           echo "Service health status:"
           docker compose ps
 
-      - name: Install chaos dependencies
-        run: pip install neo4j sqlalchemy psycopg2-binary toml
+
 
       - name: Seed test data
         env:

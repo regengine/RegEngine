@@ -29,13 +29,8 @@ import argparse
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import create_engine, text
-from neo4j import GraphDatabase
+# APScheduler imports moved to seed_scheduler_jobs()
 
-# APScheduler imports for persistent job seeding
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
-from apscheduler.triggers.interval import IntervalTrigger
 
 logging.basicConfig(
     level=logging.INFO,
@@ -220,6 +215,10 @@ def seed_scheduler_jobs():
     logger.info("  📅 Seeding persistent scheduler jobs...")
     
     try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+        from apscheduler.triggers.interval import IntervalTrigger
+
         # Create a temporary scheduler to insert jobs into the DB
         jobstores = {
             'default': SQLAlchemyJobStore(url=POSTGRES_URL)
@@ -265,7 +264,9 @@ def seed_postgres():
     
     for attempt in range(max_retries):
         try:
+            from sqlalchemy import create_engine, text
             engine = create_engine(POSTGRES_URL)
+
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             logger.info("✅ PostgreSQL connection verified")
