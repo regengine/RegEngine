@@ -48,7 +48,6 @@ NEO4J_REGULATION_COUNT = 25
 NEO4J_SECTION_COUNT = 50      # 2 sections per regulation
 NEO4J_REQUIREMENT_COUNT = 100  # 2 requirements per section
 POSTGRES_API_KEY_COUNT = 10
-POSTGRES_SCHEDULER_JOB_COUNT = 15
 
 
 # ---------------------------------------------------------------------------
@@ -230,11 +229,9 @@ def seed_postgres():
 
     with engine.connect() as conn:
         # Clean up previous seed data
+        # Clean up previous seed data
         conn.execute(text(
             "DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"
-        ))
-        conn.execute(text(
-            "DELETE FROM scheduler_jobs WHERE name LIKE 'chaos-job-%'"
         ))
         conn.commit()
         logger.info("🧹 Cleaned up previous seed data")
@@ -259,42 +256,18 @@ def seed_postgres():
 
         logger.info(f"  🔑 Created {POSTGRES_API_KEY_COUNT} API keys")
 
-        # Seed scheduler jobs
-        for i in range(POSTGRES_SCHEDULER_JOB_COUNT):
-            conn.execute(
-                text("""
-                    INSERT INTO scheduler_jobs (id, name, cron_expression, handler, is_active, created_at)
-                    VALUES (:id, :name, :cron, :handler, true, :created_at)
-                    ON CONFLICT (id) DO NOTHING
-                """),
-                {
-                    "id": str(uuid4()),
-                    "name": f"chaos-job-{i:04d}",
-                    "cron": "0 */6 * * *",
-                    "handler": f"services.compliance.tasks.check_regulation_{i}",
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-
-        conn.commit()
-        logger.info(f"  📅 Created {POSTGRES_SCHEDULER_JOB_COUNT} scheduler jobs")
-
     # Verify
     with engine.connect() as conn:
         api_count = conn.execute(
             text("SELECT count(*) FROM api_keys WHERE name LIKE 'Chaos Test Key %'")
         ).scalar()
-        job_count = conn.execute(
-            text("SELECT count(*) FROM scheduler_jobs WHERE name LIKE 'chaos-job-%'")
-        ).scalar()
-
-    logger.info(f"  📊 PostgreSQL totals: {api_count} API keys, {job_count} scheduler jobs")
+        
+    logger.info(f"  📊 PostgreSQL totals: {api_count} API keys")
 
     engine.dispose()
 
     manifest = {
         "postgres_api_keys": api_count,
-        "postgres_scheduler_jobs": job_count,
     }
     return manifest
 
@@ -326,11 +299,8 @@ def cleanup_all():
             r1 = conn.execute(text(
                 "DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"
             ))
-            r2 = conn.execute(text(
-                "DELETE FROM scheduler_jobs WHERE name LIKE 'chaos-job-%'"
-            ))
             conn.commit()
-            logger.info(f"  PostgreSQL: deleted {r1.rowcount} API keys, {r2.rowcount} scheduler jobs")
+            logger.info(f"  PostgreSQL: deleted {r1.rowcount} API keys")
         engine.dispose()
     except Exception as e:
         logger.warning(f"  PostgreSQL cleanup skipped: {e}")
