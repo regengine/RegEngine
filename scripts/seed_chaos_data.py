@@ -231,11 +231,11 @@ def seed_postgres():
     with engine.connect() as conn:
         # Clean up previous seed data
         conn.execute(text(
-            "DELETE FROM api_keys WHERE metadata->>'_chaos_seed' = :tag"
-        ), {"tag": CHAOS_SEED_TAG})
+            "DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"
+        ))
         conn.execute(text(
-            "DELETE FROM scheduler_jobs WHERE metadata->>'_chaos_seed' = :tag"
-        ), {"tag": CHAOS_SEED_TAG})
+            "DELETE FROM scheduler_jobs WHERE name LIKE 'chaos-job-%'"
+        ))
         conn.commit()
         logger.info("🧹 Cleaned up previous seed data")
 
@@ -243,8 +243,8 @@ def seed_postgres():
         for i in range(POSTGRES_API_KEY_COUNT):
             conn.execute(
                 text("""
-                    INSERT INTO api_keys (id, key_hash, tenant_id, name, scopes, is_active, metadata, created_at)
-                    VALUES (:id, :key_hash, :tenant_id, :name, :scopes, true, :metadata, :created_at)
+                    INSERT INTO api_keys (id, key_hash, tenant_id, name, scopes, is_active, created_at)
+                    VALUES (:id, :key_hash, :tenant_id, :name, :scopes, true, :created_at)
                     ON CONFLICT (id) DO NOTHING
                 """),
                 {
@@ -253,7 +253,6 @@ def seed_postgres():
                     "tenant_id": f"tenant-chaos-{i % 3}",
                     "name": f"Chaos Test Key {i}",
                     "scopes": json.dumps(["read:regulations", "read:compliance"]),
-                    "metadata": json.dumps({"_chaos_seed": CHAOS_SEED_TAG}),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -264,8 +263,8 @@ def seed_postgres():
         for i in range(POSTGRES_SCHEDULER_JOB_COUNT):
             conn.execute(
                 text("""
-                    INSERT INTO scheduler_jobs (id, name, cron_expression, handler, is_active, metadata, created_at)
-                    VALUES (:id, :name, :cron, :handler, true, :metadata, :created_at)
+                    INSERT INTO scheduler_jobs (id, name, cron_expression, handler, is_active, created_at)
+                    VALUES (:id, :name, :cron, :handler, true, :created_at)
                     ON CONFLICT (id) DO NOTHING
                 """),
                 {
@@ -273,7 +272,6 @@ def seed_postgres():
                     "name": f"chaos-job-{i:04d}",
                     "cron": "0 */6 * * *",
                     "handler": f"services.compliance.tasks.check_regulation_{i}",
-                    "metadata": json.dumps({"_chaos_seed": CHAOS_SEED_TAG}),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 },
             )
@@ -284,12 +282,10 @@ def seed_postgres():
     # Verify
     with engine.connect() as conn:
         api_count = conn.execute(
-            text("SELECT count(*) FROM api_keys WHERE metadata->>'_chaos_seed' = :tag"),
-            {"tag": CHAOS_SEED_TAG}
+            text("SELECT count(*) FROM api_keys WHERE name LIKE 'Chaos Test Key %'")
         ).scalar()
         job_count = conn.execute(
-            text("SELECT count(*) FROM scheduler_jobs WHERE metadata->>'_chaos_seed' = :tag"),
-            {"tag": CHAOS_SEED_TAG}
+            text("SELECT count(*) FROM scheduler_jobs WHERE name LIKE 'chaos-job-%'")
         ).scalar()
 
     logger.info(f"  📊 PostgreSQL totals: {api_count} API keys, {job_count} scheduler jobs")
@@ -328,11 +324,11 @@ def cleanup_all():
         engine = create_engine(POSTGRES_URL)
         with engine.connect() as conn:
             r1 = conn.execute(text(
-                "DELETE FROM api_keys WHERE metadata->>'_chaos_seed' = :tag"
-            ), {"tag": CHAOS_SEED_TAG})
+                "DELETE FROM api_keys WHERE name LIKE 'Chaos Test Key %'"
+            ))
             r2 = conn.execute(text(
-                "DELETE FROM scheduler_jobs WHERE metadata->>'_chaos_seed' = :tag"
-            ), {"tag": CHAOS_SEED_TAG})
+                "DELETE FROM scheduler_jobs WHERE name LIKE 'chaos-job-%'"
+            ))
             conn.commit()
             logger.info(f"  PostgreSQL: deleted {r1.rowcount} API keys, {r2.rowcount} scheduler jobs")
         engine.dispose()
