@@ -59,12 +59,9 @@ jobs:
       - name: Start RegEngine stack
         run: |
           echo "Starting RegEngine services..."
-          docker compose up -d
+          docker compose up -d --wait --wait-timeout 120
 
-          echo "Waiting for services to be healthy..."
-          sleep 30
-
-          # Check service health
+          echo "Service health status:"
           docker compose ps
 
       - name: Run chaos engineering tests
