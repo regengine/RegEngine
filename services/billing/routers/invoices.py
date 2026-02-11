@@ -7,11 +7,12 @@ plus aging reports and revenue summaries.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from invoice_engine import invoice_engine, InvoiceStatus, PaymentMethod
+from invoice_engine import InvoiceEngine, InvoiceStatus, PaymentMethod
+from dependencies import get_invoice_engine
 from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/invoices", tags=["Invoices"])
@@ -39,9 +40,12 @@ class RecordPaymentRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.post("")
-async def create_invoice(request: CreateInvoiceRequest):
+async def create_invoice(
+    request: CreateInvoiceRequest,
+    engine: InvoiceEngine = Depends(get_invoice_engine),
+):
     """Generate a new invoice for a tenant."""
-    invoice = invoice_engine.create_invoice(
+    invoice = engine.create_invoice(
         tenant_id=request.tenant_id,
         tenant_name=request.tenant_name,
         tier_id=request.tier_id,
@@ -61,9 +65,10 @@ async def list_invoices(
     status: Optional[InvoiceStatus] = Query(None),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
+    engine: InvoiceEngine = Depends(get_invoice_engine),
 ):
     """List invoices with optional filters and pagination."""
-    invoices = invoice_engine.list_invoices(tenant_id=tenant_id, status=status)
+    invoices = engine.list_invoices(tenant_id=tenant_id, status=status)
     result = paginate([i.model_dump() for i in invoices], page=page, page_size=page_size)
     return {
         "invoices": result["items"],
@@ -77,21 +82,24 @@ async def list_invoices(
 
 
 @router.get("/aging")
-async def aging_report():
+async def aging_report(engine: InvoiceEngine = Depends(get_invoice_engine)):
     """Accounts receivable aging report."""
-    return invoice_engine.get_aging_report()
+    return engine.get_aging_report()
 
 
 @router.get("/revenue-summary")
-async def revenue_summary():
+async def revenue_summary(engine: InvoiceEngine = Depends(get_invoice_engine)):
     """Revenue collection summary."""
-    return invoice_engine.get_revenue_summary()
+    return engine.get_revenue_summary()
 
 
 @router.get("/payments")
-async def list_payments(tenant_id: Optional[str] = Query(None)):
+async def list_payments(
+    tenant_id: Optional[str] = Query(None),
+    engine: InvoiceEngine = Depends(get_invoice_engine),
+):
     """Payment history."""
-    payments = invoice_engine.list_payments(tenant_id=tenant_id)
+    payments = engine.list_payments(tenant_id=tenant_id)
     return {
         "payments": [p.model_dump() for p in payments],
         "total": len(payments),
@@ -99,19 +107,25 @@ async def list_payments(tenant_id: Optional[str] = Query(None)):
 
 
 @router.get("/{invoice_id}")
-async def get_invoice(invoice_id: str = Path(...)):
+async def get_invoice(
+    invoice_id: str = Path(...),
+    engine: InvoiceEngine = Depends(get_invoice_engine),
+):
     """Get invoice details."""
-    invoice = invoice_engine.get_invoice(invoice_id)
+    invoice = engine.get_invoice(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail=f"Invoice {invoice_id} not found")
     return {"invoice": invoice.model_dump()}
 
 
 @router.post("/{invoice_id}/send")
-async def send_invoice(invoice_id: str = Path(...)):
+async def send_invoice(
+    invoice_id: str = Path(...),
+    engine: InvoiceEngine = Depends(get_invoice_engine),
+):
     """Mark invoice as sent to customer."""
     try:
-        invoice = invoice_engine.send_invoice(invoice_id)
+        invoice = engine.send_invoice(invoice_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -121,10 +135,13 @@ async def send_invoice(invoice_id: str = Path(...)):
 
 
 @router.post("/{invoice_id}/void")
-async def void_invoice(invoice_id: str = Path(...)):
+async def void_invoice(
+    invoice_id: str = Path(...),
+    engine: InvoiceEngine = Depends(get_invoice_engine),
+):
     """Void an invoice."""
     try:
-        invoice = invoice_engine.void_invoice(invoice_id)
+        invoice = engine.void_invoice(invoice_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -137,10 +154,11 @@ async def void_invoice(invoice_id: str = Path(...)):
 async def pay_invoice(
     request: RecordPaymentRequest,
     invoice_id: str = Path(...),
+    engine: InvoiceEngine = Depends(get_invoice_engine),
 ):
     """Record a payment against an invoice."""
     try:
-        payment = invoice_engine.record_payment(
+        payment = engine.record_payment(
             invoice_id=invoice_id,
             amount_cents=request.amount_cents,
             method=request.method,
@@ -150,7 +168,7 @@ async def pay_invoice(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    invoice = invoice_engine.get_invoice(invoice_id)
+    invoice = engine.get_invoice(invoice_id)
     return {
         "payment": payment.model_dump(),
         "invoice_status": invoice.status.value if invoice else "unknown",

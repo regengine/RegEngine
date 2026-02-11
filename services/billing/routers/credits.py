@@ -8,21 +8,24 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends, Header
 
 from models import RedeemCreditRequest
-from credit_engine import credit_engine, CREDIT_CODES
+from credit_engine import CreditEngine, CREDIT_CODES
+from dependencies import get_credit_engine
 from utils import get_tenant_id, format_cents
 
 router = APIRouter(prefix="/v1/billing/credits", tags=["credits"])
 
 
-
 @router.get("/balance")
-async def get_credit_balance(x_tenant_id: Optional[str] = Header(None)):
+async def get_credit_balance(
+    x_tenant_id: Optional[str] = Header(None),
+    engine: CreditEngine = Depends(get_credit_engine),
+):
     """Get current credit balance for tenant."""
     tenant_id = get_tenant_id(x_tenant_id)
-    balance = credit_engine.get_balance(tenant_id)
+    balance = engine.get_balance(tenant_id)
     return {
         "balance_cents": balance.balance_cents,
         "balance_display": format_cents(balance.balance_cents),
@@ -33,10 +36,13 @@ async def get_credit_balance(x_tenant_id: Optional[str] = Header(None)):
 
 
 @router.get("/history")
-async def get_credit_history(x_tenant_id: Optional[str] = Header(None)):
+async def get_credit_history(
+    x_tenant_id: Optional[str] = Header(None),
+    engine: CreditEngine = Depends(get_credit_engine),
+):
     """Get credit transaction history for tenant."""
     tenant_id = get_tenant_id(x_tenant_id)
-    balance = credit_engine.get_balance(tenant_id)
+    balance = engine.get_balance(tenant_id)
     return {
         "transactions": [t.model_dump() for t in balance.transactions],
         "current_balance_cents": balance.balance_cents,
@@ -47,10 +53,11 @@ async def get_credit_history(x_tenant_id: Optional[str] = Header(None)):
 async def redeem_credit(
     request: RedeemCreditRequest,
     x_tenant_id: Optional[str] = Header(None),
+    engine: CreditEngine = Depends(get_credit_engine),
 ):
     """Redeem a credit code (referral, promo, partner, early adopter)."""
     tenant_id = get_tenant_id(x_tenant_id)
-    result = credit_engine.redeem_code(tenant_id, request.code)
+    result = engine.redeem_code(tenant_id, request.code)
     return result.model_dump()
 
 

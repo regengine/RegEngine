@@ -7,11 +7,12 @@ SLA monitoring, and renewal tracking.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel
 from typing import Optional
 
-from contract_engine import contract_engine, DealStage, ContractType
+from contract_engine import ContractEngine, DealStage, ContractType
+from dependencies import get_contract_engine
 from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/contracts", tags=["Contracts"])
@@ -42,9 +43,12 @@ class GenerateQuoteRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.post("")
-async def create_contract(request: CreateContractRequest):
+async def create_contract(
+    request: CreateContractRequest,
+    engine: ContractEngine = Depends(get_contract_engine),
+):
     """Create a new enterprise deal/contract."""
-    contract = contract_engine.create_contract(
+    contract = engine.create_contract(
         tenant_id=request.tenant_id,
         tenant_name=request.tenant_name,
         tier_id=request.tier_id,
@@ -65,9 +69,10 @@ async def list_contracts(
     owner: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: ContractEngine = Depends(get_contract_engine),
 ):
     """List all contracts with optional filters and pagination."""
-    contracts = contract_engine.list_contracts(stage=stage, owner=owner)
+    contracts = engine.list_contracts(stage=stage, owner=owner)
     result = paginate([c.model_dump() for c in contracts], page=page, page_size=page_size)
     return {
         "contracts": result["items"],
@@ -81,15 +86,15 @@ async def list_contracts(
 
 
 @router.get("/pipeline")
-async def deal_pipeline():
+async def deal_pipeline(engine: ContractEngine = Depends(get_contract_engine)):
     """Visual deal pipeline summary by stage."""
-    return contract_engine.get_pipeline()
+    return engine.get_pipeline()
 
 
 @router.get("/sla-status")
-async def sla_status():
+async def sla_status(engine: ContractEngine = Depends(get_contract_engine)):
     """SLA compliance for all active contracts."""
-    statuses = contract_engine.get_sla_status()
+    statuses = engine.get_sla_status()
     passing = sum(1 for s in statuses if s["compliance"] == "passing")
     breached = sum(1 for s in statuses if s["compliance"] == "breached")
     return {
@@ -104,9 +109,12 @@ async def sla_status():
 
 
 @router.get("/renewals")
-async def upcoming_renewals(days: int = Query(90, ge=7, le=365)):
+async def upcoming_renewals(
+    days: int = Query(90, ge=7, le=365),
+    engine: ContractEngine = Depends(get_contract_engine),
+):
     """Contracts approaching renewal."""
-    renewals = contract_engine.get_upcoming_renewals(days_ahead=days)
+    renewals = engine.get_upcoming_renewals(days_ahead=days)
     return {
         "renewals": renewals,
         "total": len(renewals),
@@ -116,9 +124,12 @@ async def upcoming_renewals(days: int = Query(90, ge=7, le=365)):
 
 
 @router.get("/{contract_id}")
-async def get_contract(contract_id: str = Path(...)):
+async def get_contract(
+    contract_id: str = Path(...),
+    engine: ContractEngine = Depends(get_contract_engine),
+):
     """Get contract details."""
-    contract = contract_engine.get_contract(contract_id)
+    contract = engine.get_contract(contract_id)
     if not contract:
         raise HTTPException(status_code=404, detail=f"Contract {contract_id} not found")
     return {"contract": contract.model_dump()}
@@ -128,10 +139,11 @@ async def get_contract(contract_id: str = Path(...)):
 async def advance_stage(
     request: AdvanceStageRequest,
     contract_id: str = Path(...),
+    engine: ContractEngine = Depends(get_contract_engine),
 ):
     """Advance a deal through the pipeline."""
     try:
-        contract = contract_engine.advance_stage(contract_id, request.new_stage)
+        contract = engine.advance_stage(contract_id, request.new_stage)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -144,10 +156,11 @@ async def advance_stage(
 async def generate_quote(
     request: GenerateQuoteRequest,
     contract_id: str = Path(...),
+    engine: ContractEngine = Depends(get_contract_engine),
 ):
     """Generate a quote with discount modeling."""
     try:
-        quote = contract_engine.generate_quote(
+        quote = engine.generate_quote(
             contract_id=contract_id,
             discount_codes=request.discount_codes,
             custom_discount_pct=request.custom_discount_pct,

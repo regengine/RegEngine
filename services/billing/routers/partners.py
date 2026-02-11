@@ -7,11 +7,12 @@ commission management, and payout processing.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from partner_engine import partner_engine, PartnerTier, PartnerStatus
+from partner_engine import PartnerEngine, PartnerTier, PartnerStatus
+from dependencies import get_partner_engine
 from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/partners", tags=["Partners"])
@@ -40,9 +41,12 @@ class ProcessPayoutRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.post("")
-async def register_partner(request: RegisterPartnerRequest):
+async def register_partner(
+    request: RegisterPartnerRequest,
+    engine: PartnerEngine = Depends(get_partner_engine),
+):
     """Register a new channel partner."""
-    partner = partner_engine.register_partner(
+    partner = engine.register_partner(
         name=request.name, company=request.company,
         email=request.email, tier=request.tier,
     )
@@ -58,9 +62,10 @@ async def list_partners(
     status: Optional[PartnerStatus] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: PartnerEngine = Depends(get_partner_engine),
 ):
     """List all partners with optional filters and pagination."""
-    partners = partner_engine.list_partners(tier=tier, status=status)
+    partners = engine.list_partners(tier=tier, status=status)
     result = paginate([p.model_dump() for p in partners], page=page, page_size=page_size)
     return {
         "partners": result["items"],
@@ -74,9 +79,9 @@ async def list_partners(
 
 
 @router.get("/summary")
-async def program_summary():
+async def program_summary(engine: PartnerEngine = Depends(get_partner_engine)):
     """Partner program performance overview."""
-    return partner_engine.get_program_summary()
+    return engine.get_program_summary()
 
 
 @router.get("/referrals")
@@ -84,9 +89,10 @@ async def list_referrals(
     partner_id: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: PartnerEngine = Depends(get_partner_engine),
 ):
     """All referrals or filtered by partner, with pagination."""
-    referrals = partner_engine.list_referrals(partner_id=partner_id)
+    referrals = engine.list_referrals(partner_id=partner_id)
     result = paginate([r.model_dump() for r in referrals], page=page, page_size=page_size)
     return {
         "referrals": result["items"],
@@ -100,9 +106,12 @@ async def list_referrals(
 
 
 @router.get("/payouts")
-async def list_payouts(partner_id: Optional[str] = Query(None)):
+async def list_payouts(
+    partner_id: Optional[str] = Query(None),
+    engine: PartnerEngine = Depends(get_partner_engine),
+):
     """Payout history."""
-    payouts = partner_engine.list_payouts(partner_id=partner_id)
+    payouts = engine.list_payouts(partner_id=partner_id)
     return {
         "payouts": [p.model_dump() for p in payouts],
         "total": len(payouts),
@@ -110,9 +119,12 @@ async def list_payouts(partner_id: Optional[str] = Query(None)):
 
 
 @router.get("/{partner_id}")
-async def get_partner(partner_id: str = Path(...)):
+async def get_partner(
+    partner_id: str = Path(...),
+    engine: PartnerEngine = Depends(get_partner_engine),
+):
     """Get partner details."""
-    partner = partner_engine.get_partner(partner_id)
+    partner = engine.get_partner(partner_id)
     if not partner:
         raise HTTPException(status_code=404, detail=f"Partner {partner_id} not found")
     return {"partner": partner.model_dump()}
@@ -122,10 +134,11 @@ async def get_partner(partner_id: str = Path(...)):
 async def record_referral(
     request: RecordReferralRequest,
     partner_id: str = Path(...),
+    engine: PartnerEngine = Depends(get_partner_engine),
 ):
     """Record a new referral for a partner."""
     try:
-        referral = partner_engine.record_referral(
+        referral = engine.record_referral(
             partner_id=partner_id,
             tenant_id=request.tenant_id,
             tenant_name=request.tenant_name,
@@ -134,7 +147,7 @@ async def record_referral(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    partner = partner_engine.get_partner(partner_id)
+    partner = engine.get_partner(partner_id)
     return {
         "referral": referral.model_dump(),
         "partner_tier": partner.tier.value if partner else "unknown",
@@ -143,10 +156,13 @@ async def record_referral(
 
 
 @router.post("/{partner_id}/payout")
-async def create_payout(partner_id: str = Path(...)):
+async def create_payout(
+    partner_id: str = Path(...),
+    engine: PartnerEngine = Depends(get_partner_engine),
+):
     """Create a payout for pending commissions."""
     try:
-        payout = partner_engine.create_payout(partner_id)
+        payout = engine.create_payout(partner_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -156,10 +172,13 @@ async def create_payout(partner_id: str = Path(...)):
 
 
 @router.post("/payouts/{payout_id}/process")
-async def process_payout(payout_id: str = Path(...)):
+async def process_payout(
+    payout_id: str = Path(...),
+    engine: PartnerEngine = Depends(get_partner_engine),
+):
     """Mark a payout as paid."""
     try:
-        payout = partner_engine.process_payout(payout_id)
+        payout = engine.process_payout(payout_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {

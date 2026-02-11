@@ -7,11 +7,12 @@ acknowledging alerts, and monitoring webhooks.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel
 from typing import Optional
 
-from alerts_engine import alerts_engine, AlertType, AlertSeverity, AlertChannel, WebhookStatus
+from alerts_engine import AlertsEngine, AlertType, AlertSeverity, AlertChannel, WebhookStatus
+from dependencies import get_alerts_engine
 from utils import paginate
 
 router = APIRouter(prefix="/v1/billing/alerts", tags=["Alerts"])
@@ -41,16 +42,19 @@ class FireAlertRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.get("/rules")
-async def list_rules():
+async def list_rules(engine: AlertsEngine = Depends(get_alerts_engine)):
     """List alert rules."""
-    rules = alerts_engine.list_rules()
+    rules = engine.list_rules()
     return {"rules": [r.model_dump() for r in rules], "total": len(rules)}
 
 
 @router.post("/rules")
-async def create_rule(request: CreateRuleRequest):
+async def create_rule(
+    request: CreateRuleRequest,
+    engine: AlertsEngine = Depends(get_alerts_engine),
+):
     """Create an alert rule."""
-    rule = alerts_engine.create_rule(
+    rule = engine.create_rule(
         name=request.name, alert_type=request.alert_type,
         severity=request.severity, channels=request.channels,
         threshold=request.threshold, recipient_emails=request.recipient_emails,
@@ -60,10 +64,13 @@ async def create_rule(request: CreateRuleRequest):
 
 
 @router.post("/rules/{rule_id}/toggle")
-async def toggle_rule(rule_id: str = Path(...)):
+async def toggle_rule(
+    rule_id: str = Path(...),
+    engine: AlertsEngine = Depends(get_alerts_engine),
+):
     """Enable/disable an alert rule."""
     try:
-        rule = alerts_engine.toggle_rule(rule_id)
+        rule = engine.toggle_rule(rule_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"rule": rule.model_dump(), "enabled": rule.enabled}
@@ -76,9 +83,10 @@ async def list_events(
     unacknowledged: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: AlertsEngine = Depends(get_alerts_engine),
 ):
     """List alert events with pagination."""
-    events = alerts_engine.list_events(
+    events = engine.list_events(
         alert_type=alert_type, severity=severity,
         unacknowledged_only=unacknowledged,
     )
@@ -95,19 +103,25 @@ async def list_events(
 
 
 @router.post("/events/{event_id}/acknowledge")
-async def acknowledge_event(event_id: str = Path(...)):
+async def acknowledge_event(
+    event_id: str = Path(...),
+    engine: AlertsEngine = Depends(get_alerts_engine),
+):
     """Acknowledge an alert event."""
     try:
-        event = alerts_engine.acknowledge_event(event_id)
+        event = engine.acknowledge_event(event_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"event": event.model_dump(), "message": "Event acknowledged"}
 
 
 @router.post("/fire")
-async def fire_alert(request: FireAlertRequest):
+async def fire_alert(
+    request: FireAlertRequest,
+    engine: AlertsEngine = Depends(get_alerts_engine),
+):
     """Manually fire an alert."""
-    event = alerts_engine.fire_alert(
+    event = engine.fire_alert(
         alert_type=request.alert_type, title=request.title,
         message=request.message, tenant_id=request.tenant_id,
         tenant_name=request.tenant_name, severity=request.severity,
@@ -120,9 +134,10 @@ async def list_webhooks(
     status: Optional[WebhookStatus] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: AlertsEngine = Depends(get_alerts_engine),
 ):
     """List webhook delivery log with pagination."""
-    webhooks = alerts_engine.list_webhooks(status=status)
+    webhooks = engine.list_webhooks(status=status)
     result = paginate([w.model_dump() for w in webhooks], page=page, page_size=page_size)
     return {
         "webhooks": result["items"],
@@ -136,6 +151,6 @@ async def list_webhooks(
 
 
 @router.get("/summary")
-async def alerts_summary():
+async def alerts_summary(engine: AlertsEngine = Depends(get_alerts_engine)):
     """Alerts program overview."""
-    return alerts_engine.get_summary()
+    return engine.get_summary()

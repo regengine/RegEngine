@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header
 
 from models import (
     PRICING_TIERS,
@@ -18,14 +18,14 @@ from models import (
     CheckoutStatus,
 )
 import stripe_client
-from credit_engine import credit_engine
+from credit_engine import CreditEngine
+from dependencies import get_credit_engine
 from utils import get_tenant_id, format_cents
 
 router = APIRouter(prefix="/v1/billing/checkout", tags=["checkout"])
 
 # In-memory session store
 _sessions: dict[str, CheckoutSession] = {}
-
 
 
 def _calculate_total(tier_id: str, billing_cycle: BillingCycle) -> int:
@@ -41,6 +41,7 @@ def _calculate_total(tier_id: str, billing_cycle: BillingCycle) -> int:
 async def create_checkout_session(
     request: CheckoutSessionCreate,
     x_tenant_id: Optional[str] = Header(None),
+    credit_eng: CreditEngine = Depends(get_credit_engine),
 ):
     """Create a Stripe Checkout session for a subscription."""
     tenant_id = get_tenant_id(x_tenant_id)
@@ -62,12 +63,12 @@ async def create_checkout_session(
 
     # Apply credit code if provided
     if request.credit_code:
-        result = credit_engine.redeem_code(tenant_id, request.credit_code)
+        result = credit_eng.redeem_code(tenant_id, request.credit_code)
         if result.success:
             applied_credit_cents = result.amount_cents
 
     # Apply any existing credit balance
-    total_cents, credits_used = credit_engine.apply_credit_to_invoice(
+    total_cents, credits_used = credit_eng.apply_credit_to_invoice(
         tenant_id, subtotal_cents
     )
     applied_credit_cents += credits_used
