@@ -24,6 +24,7 @@ from app.database import (
 )
 
 
+@pytest.mark.security
 class TestTenantIsolation:
     """Test tenant isolation in Energy service"""
 

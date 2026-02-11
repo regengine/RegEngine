@@ -348,12 +348,6 @@ def validate_tlc(
         "error": error,
     }
 
-    return {
-        "tlc": tlc,
-        "valid": is_valid,
-        "error": error,
-    }
-
 
 @app.get("/documents/{document_id}/analysis", response_model=AnalysisSummary)
 async def get_document_analysis(

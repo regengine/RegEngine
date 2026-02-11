@@ -32,6 +32,7 @@ from services.graph.app.routers.labels import (
 )
 
 
+@pytest.mark.security
 class TestURLEncoding:
     """Test URL encoding in QR payload generation."""
 
@@ -87,6 +88,7 @@ class TestURLEncoding:
         assert payload.endswith(f"/21/{serial}")
 
 
+@pytest.mark.security
 class TestTenantIDMandatory:
     """Test that tenant_id dependency is mandatory."""
 

@@ -104,6 +104,7 @@ class ExtractionPayload(BaseModel):
     confidence_score: float = Field(..., ge=0.0, le=1.0, description="Extraction confidence (0-1)")
     source_text: str = Field(..., description="Original text span from document")
     source_offset: int = Field(..., description="Character offset in source document")
+    entities: List[Dict[str, Any]] = Field(default_factory=list, description="Raw extracted entities")
 
     model_config = {
         "json_schema_extra": {

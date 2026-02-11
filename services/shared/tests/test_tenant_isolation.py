@@ -44,6 +44,7 @@ from fastapi import HTTPException, Request
 from types import SimpleNamespace
 
 
+@pytest.mark.security
 class TestTenantValidator:
     """Test TenantValidator utility."""
     
@@ -120,6 +121,7 @@ class TestTenantValidator:
         assert result is True
 
 
+@pytest.mark.security
 class TestTenantDependencies:
     """Test FastAPI dependency functions."""
     

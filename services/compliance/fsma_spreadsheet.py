@@ -12,7 +12,7 @@ import csv
 import io
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -174,7 +174,7 @@ def generate_fda_spreadsheet(
         rows.append(FDASpreadsheetRow(
             traceability_lot_code=tlc,
             event_type="NO_EVENTS_FOUND",
-            event_date=datetime.utcnow().strftime("%Y-%m-%d"),
+            event_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         ))
     
     # Generate CSV

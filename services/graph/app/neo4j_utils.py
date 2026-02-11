@@ -139,12 +139,16 @@ class Neo4jClient:
             In Neo4j Community Edition, this may not be supported.
         """
         db_name = self.get_tenant_database_name(tenant_id)
+        # Sanitize database name to prevent Cypher injection
+        import re
+        if not re.match(r'^[a-zA-Z0-9_\-]+$', db_name):
+            raise ValueError(f"Invalid database name: {db_name}")
         # Connect to system database to create new database
         async with self._driver.session(database="system") as session:
             # Check if database already exists
             result = await session.run("SHOW DATABASES WHERE name = $name", name=db_name)
             if not await result.single():
-                await session.run(f"CREATE DATABASE {db_name} IF NOT EXISTS")
+                await session.run(f"CREATE DATABASE `{db_name}` IF NOT EXISTS")
 
     async def __aenter__(self):
         """Async context manager support."""

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.5.0 — Billing Platform Audit Remediation
+
+- **Security Middleware (P0)**
+  - Added rate limiting (100 req/min per client), security headers, and `X-Request-ID` tracing via `middleware.py`.
+  - Centralized shared utilities (`format_cents`, `get_tenant_id`, `paginate`) in `utils.py`.
+- **API Quality (P1)**
+  - Added pagination (`page`, `page_size`) to all 12 list endpoints across 6 routers.
+  - Standardized error responses with a global `ValueError` → `HTTPException` handler.
+  - Added `Field(gt=0)` validation on all `amount_cents` fields (invoices, partners, dunning).
+- **Code Quality (P2)**
+  - Migrated 55+ inline `f"${x / 100:,.2f}"` patterns to centralized `format_cents()` across 10 engines and all routers.
+  - Replaced duplicated `_get_tenant_id()` with shared utility.
+  - Removed fragile `sys.path.insert()` hacks from 4 router files.
+  - Fixed import bugs: `format_cents4` typo, missing `uuid4` in 2 engines.
+- **Testing**
+  - 331/331 tests passing — zero regressions.
+  - 16 new middleware and utility tests added.
+
 ## v0.4.0 — Phase 7 Security Hardening: RLS & Double-Lock Isolation
 
 - **Database-Enforced Isolation (RLS)**
