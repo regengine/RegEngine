@@ -14,6 +14,8 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 
@@ -283,8 +285,8 @@ class TaxEngine:
             by_jurisdiction[key]["transaction_count"] += 1
 
         for j in by_jurisdiction.values():
-            j["total_taxable_display"] = f"${j['total_taxable_cents'] / 100:,.2f}"
-            j["total_tax_display"] = f"${j['total_tax_cents'] / 100:,.2f}"
+            j["total_taxable_display"] = format_cents(j['total_taxable_cents'])
+            j["total_tax_display"] = format_cents(j['total_tax_cents'])
 
         total_tax = sum(j["total_tax_cents"] for j in by_jurisdiction.values())
         total_taxable = sum(j["total_taxable_cents"] for j in by_jurisdiction.values())
@@ -293,9 +295,9 @@ class TaxEngine:
             "period": period or "all",
             "jurisdictions": list(by_jurisdiction.values()),
             "total_taxable_cents": total_taxable,
-            "total_taxable_display": f"${total_taxable / 100:,.2f}",
+            "total_taxable_display": format_cents(total_taxable),
             "total_tax_cents": total_tax,
-            "total_tax_display": f"${total_tax / 100:,.2f}",
+            "total_tax_display": format_cents(total_tax),
             "effective_rate_pct": round(total_tax / max(total_taxable, 1) * 100, 2),
             "exemptions_active": sum(1 for e in self._exemptions.values() if e.verified),
         }

@@ -17,6 +17,8 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 random.seed(99)  # Reproducible optimization data
@@ -271,7 +273,7 @@ class OptimizationEngine:
             self._expansion.append(ExpansionMetrics(
                 period=month.strftime("%Y-%m"),
                 expansion_revenue_cents=exp_rev,
-                expansion_display=f"${exp_rev / 100:,.2f}",
+                expansion_display=format_cents(exp_rev),
                 net_revenue_retention_pct=round(100 + random.uniform(5, 25), 1),
                 upgrades=random.randint(1, 4),
                 addons=random.randint(0, 3),
@@ -350,14 +352,14 @@ class OptimizationEngine:
 
         return {
             "pipeline_value_cents": pipeline_value,
-            "pipeline_value_display": f"${pipeline_value / 100:,.2f}",
+            "pipeline_value_display": format_cents(pipeline_value),
             "weighted_pipeline_cents": weighted_value,
-            "weighted_pipeline_display": f"${weighted_value / 100:,.2f}",
+            "weighted_pipeline_display": format_cents(weighted_value),
             "won_revenue_cents": won_value,
-            "won_revenue_display": f"${won_value / 100:,.2f}",
+            "won_revenue_display": format_cents(won_value),
             "active_opportunities": sum(1 for o in opps if o.status in (OpportunityStatus.IDENTIFIED, OpportunityStatus.CONTACTED, OpportunityStatus.IN_PROGRESS)),
             "win_back_recovered_cents": total_recovered,
-            "win_back_recovered_display": f"${total_recovered / 100:,.2f}",
+            "win_back_recovered_display": format_cents(total_recovered),
             "win_back_conversions": total_converted,
             "health_distribution": grade_dist,
             "net_revenue_retention_pct": latest_nrr,

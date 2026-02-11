@@ -8,10 +8,11 @@ commission management, and payout processing.
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from partner_engine import partner_engine, PartnerTier, PartnerStatus
+from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/partners", tags=["Partners"])
 
@@ -29,7 +30,7 @@ class RecordReferralRequest(BaseModel):
     tenant_id: str
     tenant_name: str
     tier_id: str
-    monthly_value_cents: int
+    monthly_value_cents: int = Field(..., gt=0)
 
 
 class ProcessPayoutRequest(BaseModel):
@@ -55,12 +56,20 @@ async def register_partner(request: RegisterPartnerRequest):
 async def list_partners(
     tier: Optional[PartnerTier] = Query(None),
     status: Optional[PartnerStatus] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ):
-    """List all partners with optional filters."""
+    """List all partners with optional filters and pagination."""
     partners = partner_engine.list_partners(tier=tier, status=status)
+    result = paginate([p.model_dump() for p in partners], page=page, page_size=page_size)
     return {
-        "partners": [p.model_dump() for p in partners],
-        "total": len(partners),
+        "partners": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
     }
 
 
@@ -71,12 +80,22 @@ async def program_summary():
 
 
 @router.get("/referrals")
-async def list_referrals(partner_id: Optional[str] = Query(None)):
-    """All referrals or filtered by partner."""
+async def list_referrals(
+    partner_id: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    """All referrals or filtered by partner, with pagination."""
     referrals = partner_engine.list_referrals(partner_id=partner_id)
+    result = paginate([r.model_dump() for r in referrals], page=page, page_size=page_size)
     return {
-        "referrals": [r.model_dump() for r in referrals],
-        "total": len(referrals),
+        "referrals": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
     }
 
 
@@ -132,7 +151,7 @@ async def create_payout(partner_id: str = Path(...)):
         raise HTTPException(status_code=400, detail=str(e))
     return {
         "payout": payout.model_dump(),
-        "message": f"Payout created: ${payout.amount_cents / 100:,.2f}",
+        "message": f"Payout created: {format_cents(payout.amount_cents)}",
     }
 
 

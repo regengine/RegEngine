@@ -18,6 +18,8 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 random.seed(42)  # Reproducible analytics
@@ -120,7 +122,7 @@ class ForecastingEngine:
             self._historical_mrr.append({
                 "month": month.strftime("%Y-%m"),
                 "mrr_cents": base_mrr,
-                "mrr_display": f"${base_mrr / 100:,.2f}",
+                "mrr_display": format_cents(base_mrr),
                 "new_mrr_cents": int(base_mrr * random.uniform(0.05, 0.12)),
                 "churned_mrr_cents": int(base_mrr * random.uniform(0.01, 0.04)),
                 "expansion_mrr_cents": int(base_mrr * random.uniform(0.02, 0.06)),
@@ -171,7 +173,7 @@ class ForecastingEngine:
                 monthly_revenue_cents=rev, months_active=months,
                 predicted_months_remaining=predicted_remaining,
                 lifetime_value_cents=rev * (months + predicted_remaining),
-                lifetime_value_display=f"${rev * (months + predicted_remaining) / 100:,.2f}",
+                lifetime_value_display=format_cents(rev * (months + predicted_remaining)),
             )
 
         # Cohort retention data
@@ -272,7 +274,7 @@ class ForecastingEngine:
             "risk_distribution": by_risk,
             "avg_score": round(sum(s.score for s in scores) / max(len(scores), 1), 1),
             "at_risk_revenue_cents": at_risk_revenue,
-            "at_risk_revenue_display": f"${at_risk_revenue / 100:,.2f}",
+            "at_risk_revenue_display": format_cents(at_risk_revenue),
             "high_risk_tenants": [
                 {"tenant": s.tenant_name, "score": s.score, "action": s.recommended_action}
                 for s in scores if s.risk in (ChurnRisk.HIGH, ChurnRisk.CRITICAL)
@@ -301,14 +303,14 @@ class ForecastingEngine:
 
         for v in by_plan.values():
             v["avg_clv_cents"] = v["total_clv_cents"] // max(v["count"], 1)
-            v["avg_clv_display"] = f"${v['avg_clv_cents'] / 100:,.2f}"
+            v["avg_clv_display"] = format_cents(v['avg_clv_cents'])
 
         return {
             "total_customers": len(estimates),
             "total_clv_cents": total_clv,
-            "total_clv_display": f"${total_clv / 100:,.2f}",
+            "total_clv_display": format_cents(total_clv),
             "avg_clv_cents": avg_clv,
-            "avg_clv_display": f"${avg_clv / 100:,.2f}",
+            "avg_clv_display": format_cents(avg_clv),
             "by_plan": by_plan,
             "top_customers": [
                 {"tenant": e.tenant_name, "clv": e.lifetime_value_display, "plan": e.plan}
@@ -360,10 +362,10 @@ class ForecastingEngine:
 
         return {
             "current_mrr_cents": current_mrr,
-            "current_mrr_display": f"${current_mrr / 100:,.2f}",
+            "current_mrr_display": format_cents(current_mrr),
             "mrr_growth_pct": round(growth, 1),
             "arr_cents": current_mrr * 12,
-            "arr_display": f"${current_mrr * 12 / 100:,.2f}",
+            "arr_display": format_cents(current_mrr * 12),
             "forecast_3mo": {
                 "predicted_cents": forecasts[2].predicted_mrr_cents if len(forecasts) >= 3 else 0,
                 "confidence": forecasts[2].confidence if len(forecasts) >= 3 else 0,

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from lifecycle_engine import lifecycle_engine, ChangeType, CancellationReason
+from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/lifecycle", tags=["Lifecycle"])
 
@@ -74,10 +75,21 @@ async def calculate_proration(request: ProrationRequest):
 async def list_changes(
     tenant_id: Optional[str] = Query(None),
     change_type: Optional[ChangeType] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ):
-    """List plan change history."""
+    """List plan change history with pagination."""
     changes = lifecycle_engine.list_changes(tenant_id=tenant_id, change_type=change_type)
-    return {"changes": [c.model_dump() for c in changes], "total": len(changes)}
+    result = paginate([c.model_dump() for c in changes], page=page, page_size=page_size)
+    return {
+        "changes": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
+    }
 
 
 @router.get("/changes/{change_id}")
@@ -90,10 +102,23 @@ async def get_change(change_id: str = Path(...)):
 
 
 @router.get("/trials")
-async def list_trials(active_only: bool = Query(False)):
-    """List trials."""
+async def list_trials(
+    active_only: bool = Query(False),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    """List trials with pagination."""
     trials = lifecycle_engine.list_trials(active_only=active_only)
-    return {"trials": [t.model_dump() for t in trials], "total": len(trials)}
+    result = paginate([t.model_dump() for t in trials], page=page, page_size=page_size)
+    return {
+        "trials": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
+    }
 
 
 @router.post("/trials")
@@ -124,9 +149,9 @@ async def list_plans():
         plans.append({
             "id": key, "name": val["name"],
             "monthly_cents": val["monthly_cents"],
-            "monthly_display": f"${val['monthly_cents'] / 100:,.2f}",
+            "monthly_display": format_cents(val['monthly_cents']),
             "annual_cents": val["annual_cents"],
-            "annual_display": f"${val['annual_cents'] / 100:,.2f}",
+            "annual_display": format_cents(val['annual_cents']),
             "tier": val["tier"],
         })
     return {"plans": plans}

@@ -15,6 +15,8 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 
@@ -211,7 +213,7 @@ class LifecycleEngine:
             old_plan_credit_cents=old_credit,
             new_plan_charge_cents=new_charge,
             net_amount_cents=net,
-            net_display=f"${abs(net) / 100:,.2f}" if net >= 0 else f"-${abs(net) / 100:,.2f}",
+            net_display=format_cents(abs(net)) if net >= 0 else f"-{format_cents(abs(net))}",
         )
 
     def change_plan(self, tenant_id: str, tenant_name: str,
@@ -323,9 +325,9 @@ class LifecycleEngine:
                 sum(1 for t in trials if t.converted) / max(len(trials), 1) * 100, 1
             ),
             "net_mrr_impact_cents": net_mrr_impact,
-            "net_mrr_impact_display": f"${abs(net_mrr_impact) / 100:,.2f}" if net_mrr_impact >= 0 else f"-${abs(net_mrr_impact) / 100:,.2f}",
+            "net_mrr_impact_display": format_cents(abs(net_mrr_impact)) if net_mrr_impact >= 0 else f"-{format_cents(abs(net_mrr_impact))}",
             "cancel_reasons": cancel_reasons,
-            "plan_catalog": {k: {"name": v["name"], "monthly": f"${v['monthly_cents'] / 100:,.2f}"} for k, v in PLAN_CATALOG.items()},
+            "plan_catalog": {k: {"name": v["name"], "monthly": format_cents(v['monthly_cents'])} for k, v in PLAN_CATALOG.items()},
         }
 
 

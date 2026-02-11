@@ -16,6 +16,8 @@ from collections import defaultdict
 from uuid import uuid4
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 
@@ -195,7 +197,7 @@ class UsageMeter:
                 "overage": overage,
                 "usage_pct": round(used / max(included, 1) * 100, 1) if included > 0 else 0,
                 "overage_cost_cents": overage_cost,
-                "overage_cost_display": f"${overage_cost / 100:.2f}",
+                "overage_cost_display": format_cents(overage_cost),
                 "unit": USAGE_PRICING[resource]["unit"],
             }
 
@@ -205,7 +207,7 @@ class UsageMeter:
             period_end=period_end,
             resources=resources,
             total_overage_cents=total_overage_cents,
-            total_overage_display=f"${total_overage_cents / 100:.2f}",
+            total_overage_display=format_cents(total_overage_cents),
         )
 
     # ── Detailed Breakdown ─────────────────────────────────────
@@ -224,7 +226,7 @@ class UsageMeter:
                         "limit": t["limit"],
                         "limit_display": f"{t['limit']:,}" if t["limit"] else "Unlimited",
                         "price_cents": t["price_cents"],
-                        "price_display": f"${t['price_cents'] / 100:.3f}/{pricing['unit']}",
+                        "price_display": f"{format_cents(t['price_cents'])}/{pricing['unit']}",
                     }
                     for t in pricing["tiers"]
                 ],

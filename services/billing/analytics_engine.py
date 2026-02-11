@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 from collections import defaultdict
 
+from utils import format_cents
+
 from models import (
     PRICING_TIERS,
     BillingCycle,
@@ -66,12 +68,12 @@ class AnalyticsEngine:
 
         return {
             "mrr_cents": total_mrr,
-            "mrr_display": f"${total_mrr / 100:,.0f}",
+            "mrr_display": format_cents(total_mrr),
             "arr_cents": total_mrr * 12,
-            "arr_display": f"${(total_mrr * 12) / 100:,.0f}",
+            "arr_display": format_cents(total_mrr * 12),
             "active_subscriptions": active_count + 47,  # +seed
             "tier_breakdown": {
-                k: {"mrr_cents": v, "display": f"${v / 100:,.0f}"}
+                k: {"mrr_cents": v, "display": format_cents(v)}
                 for k, v in tier_breakdown.items()
             },
             "avg_deal_size_cents": total_mrr // max(active_count + 47, 1),
@@ -103,7 +105,7 @@ class AnalyticsEngine:
                 "month": month_date.strftime("%Y-%m"),
                 "month_label": month_date.strftime("%b %Y"),
                 "mrr_cents": current_mrr,
-                "mrr_display": f"${current_mrr / 100:,.0f}",
+                "mrr_display": format_cents(current_mrr),
                 "new_mrr_cents": new_mrr,
                 "churned_mrr_cents": churned_mrr,
                 "expansion_mrr_cents": expansion_mrr,
@@ -216,7 +218,7 @@ class AnalyticsEngine:
                 "type": definition["type"].value,
                 "description": definition["description"],
                 "amount_cents": definition["amount_cents"],
-                "amount_display": f"${definition['amount_cents'] / 100:.0f}",
+                "amount_display": format_cents(definition['amount_cents']),
                 "total_redemptions": definition["uses"],
                 "max_uses": definition["max_uses"],
                 "utilization_rate": round(utilization, 4),
@@ -234,7 +236,7 @@ class AnalyticsEngine:
             "programs": programs,
             "summary": {
                 "total_credits_issued_cents": total_issued,
-                "total_credits_issued_display": f"${total_issued / 100:,.0f}",
+                "total_credits_issued_display": format_cents(total_issued),
                 "active_programs": len(programs),
                 "avg_roi": round(sum(p["roi"] for p in programs) / max(len(programs), 1), 2),
                 "abuse_alerts": [p for p in programs if p["abuse_risk"] == "high"],
@@ -275,8 +277,8 @@ class AnalyticsEngine:
                 "month": month.strftime("%Y-%m"),
                 "month_label": month.strftime("%b %Y"),
                 "projected_mrr_cents": projected,
-                "projected_mrr_display": f"${projected / 100:,.0f}",
-                "projected_arr_display": f"${(projected * 12) / 100:,.0f}",
+                "projected_mrr_display": format_cents(projected),
+                "projected_arr_display": format_cents(projected * 12),
                 "confidence_low_cents": int(projected - confidence_range),
                 "confidence_high_cents": int(projected + confidence_range),
             })
@@ -304,7 +306,7 @@ class AnalyticsEngine:
                 "monthly_churn_rate": f"{funnel['churn_rate'] * 100:.1f}%",
                 "ltv_cac_ratio": "4.2:1",
                 "avg_revenue_per_account": mrr["avg_deal_size_cents"],
-                "avg_revenue_per_account_display": f"${mrr['avg_deal_size_cents'] / 100:,.0f}",
+                "avg_revenue_per_account_display": format_cents(mrr['avg_deal_size_cents']),
             },
             "health": "excellent" if funnel["churn_rate"] < 0.03 else "good" if funnel["churn_rate"] < 0.05 else "at_risk",
             "generated_at": datetime.utcnow().isoformat(),

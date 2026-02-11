@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from contract_engine import contract_engine, DealStage, ContractType
+from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/contracts", tags=["Contracts"])
 
@@ -62,12 +63,20 @@ async def create_contract(request: CreateContractRequest):
 async def list_contracts(
     stage: Optional[DealStage] = Query(None),
     owner: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
 ):
-    """List all contracts with optional filters."""
+    """List all contracts with optional filters and pagination."""
     contracts = contract_engine.list_contracts(stage=stage, owner=owner)
+    result = paginate([c.model_dump() for c in contracts], page=page, page_size=page_size)
     return {
-        "contracts": [c.model_dump() for c in contracts],
-        "total": len(contracts),
+        "contracts": result["items"],
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "total_pages": result["total_pages"],
+        "has_next": result["has_next"],
+        "has_prev": result["has_prev"],
     }
 
 
@@ -102,7 +111,7 @@ async def upcoming_renewals(days: int = Query(90, ge=7, le=365)):
         "renewals": renewals,
         "total": len(renewals),
         "total_acv_at_risk_cents": sum(r["acv_cents"] for r in renewals),
-        "total_acv_at_risk_display": f"${sum(r['acv_cents'] for r in renewals) / 100:,.0f}",
+        "total_acv_at_risk_display": format_cents(sum(r['acv_cents'] for r in renewals)),
     }
 
 
@@ -148,5 +157,5 @@ async def generate_quote(
         raise HTTPException(status_code=400, detail=str(e))
     return {
         "quote": quote.model_dump(),
-        "message": f"Quote generated: ${quote.total_contract_value_cents / 100:,.0f} TCV",
+        "message": f"Quote generated: {format_cents(quote.total_contract_value_cents)} TCV",
     }

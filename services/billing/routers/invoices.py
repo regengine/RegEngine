@@ -155,5 +155,5 @@ async def pay_invoice(
         "payment": payment.model_dump(),
         "invoice_status": invoice.status.value if invoice else "unknown",
         "amount_remaining_cents": invoice.amount_due_cents if invoice else 0,
-        "message": f"Payment of ${request.amount_cents / 100:,.2f} recorded",
+        "message": f"Payment of {format_cents(request.amount_cents)} recorded",
     }

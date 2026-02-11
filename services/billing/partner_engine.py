@@ -14,6 +14,8 @@ from uuid import uuid4
 from enum import Enum
 from pydantic import BaseModel, Field
 
+from utils import format_cents
+
 logger = structlog.get_logger(__name__)
 
 
@@ -334,13 +336,13 @@ class PartnerEngine:
             "total_referrals": total_referrals,
             "active_referrals": active_referrals,
             "total_earned_cents": total_earned,
-            "total_earned_display": f"${total_earned / 100:,.2f}",
+            "total_earned_display": format_cents(total_earned),
             "total_paid_cents": total_paid,
-            "total_paid_display": f"${total_paid / 100:,.2f}",
+            "total_paid_display": format_cents(total_paid),
             "pending_payouts_cents": total_pending,
-            "pending_payouts_display": f"${total_pending / 100:,.2f}",
+            "pending_payouts_display": format_cents(total_pending),
             "partner_sourced_revenue_cents": partner_revenue,
-            "partner_sourced_revenue_display": f"${partner_revenue / 100:,.2f}",
+            "partner_sourced_revenue_display": format_cents(partner_revenue),
             "tier_breakdown": tier_breakdown,
         }
 
