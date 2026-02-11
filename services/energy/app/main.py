@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from prometheus_client import make_asgi_app
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -42,8 +42,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Add shared utilities to path
 import sys
 from pathlib import Path
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_SERVICES_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from shared.middleware import TenantContextMiddleware
 
@@ -137,7 +136,6 @@ def create_snapshot(
             patch_metrics=request.patch_metrics or {},
             active_mismatch_ids=[],
             generated_by=SnapshotGenerator.USER_MANUAL,
-            trigger_event=SnapshotTriggerEvent.USER_MANUAL_REQUEST,
             trigger_event=SnapshotTriggerEvent.USER_MANUAL_REQUEST,
             generator_user_id=UUID(current_user.user_id),  # Extract from JWT token
             tenant_id=UUID(current_user.tenant_id) if current_user.tenant_id else None
@@ -588,7 +586,7 @@ def export_for_verification(
         
         # Build export
         export_data = {
-"metadata": {
+            "metadata": {
                 "substation_id": substation_id,
                 "export_time": datetime.now(timezone.utc).isoformat(),
                 "total_snapshots": len(snapshots),
