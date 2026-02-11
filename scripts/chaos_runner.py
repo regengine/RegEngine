@@ -263,8 +263,7 @@ class ChaosRunner:
         counts = {
             "neo4j_nodes": 0,
             "neo4j_relationships": 0,
-            "postgres_api_keys": 0,
-            "postgres_scheduler_jobs": 0
+            "postgres_api_keys": 0
         }
 
         # Count Neo4j nodes and relationships
@@ -309,11 +308,7 @@ class ChaosRunner:
                     result = conn.execute(text("SELECT COUNT(*) FROM api_keys WHERE enabled = true"))
                     counts["postgres_api_keys"] = result.scalar() or 0
 
-                    # Count scheduler jobs
-                    result = conn.execute(text("SELECT COUNT(*) FROM scheduler_jobs"))
-                    counts["postgres_scheduler_jobs"] = result.scalar() or 0
-
-                logger.info(f"📊 PostgreSQL counts: {counts['postgres_api_keys']} API keys, {counts['postgres_scheduler_jobs']} scheduler jobs")
+                logger.info(f"📊 PostgreSQL counts: {counts['postgres_api_keys']} API keys")
             except Exception as e:
                 logger.warning(f"⚠️ Could not capture PostgreSQL counts: {e}")
         else:
