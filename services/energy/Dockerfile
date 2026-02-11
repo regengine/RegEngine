@@ -12,10 +12,16 @@ RUN apt-get update && apt-get install -y \
 COPY services/energy/requirements.txt services/energy/requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy shared code
+COPY shared /app/shared
+
 # Copy application code
 COPY services/energy/app/ ./app/
 COPY services/energy/migrations/ ./migrations/
 COPY services/energy/alembic.ini ./
+
+# Set PYTHONPATH
+ENV PYTHONPATH=/app
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
