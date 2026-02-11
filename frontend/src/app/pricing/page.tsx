@@ -403,7 +403,7 @@ export default function PricingPage() {
                                     </div>
 
                                     {/* CTA */}
-                                    <Link href={tier.id === 'enterprise' ? (tier as any).href || 'mailto:sales@regengine.co' : `/onboarding?plan=${tier.id}`}>
+                                    <Link href={tier.id === 'enterprise' ? (tier as any).href || 'mailto:sales@regengine.co' : `/checkout?plan=${tier.id}`}>
                                         <Button
                                             style={{
                                                 width: '100%',

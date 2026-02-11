@@ -4,7 +4,8 @@ import sys
 import logging
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from confluent_kafka import Consumer, KafkaError
@@ -12,12 +13,10 @@ from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from confluent_kafka.serialization import StringDeserializer, SerializationContext, MessageField
 
-# Add service root to path
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-# Also add full path for Docker context where PYTHONPATH=/app
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))  # services/compliance
-if os.path.exists("/app/services/compliance"):
-    sys.path.append("/app/services/compliance")
+# Service root for imports (prefer PYTHONPATH, fallback to relative)
+_SERVICE_ROOT = Path(__file__).resolve().parent.parent
+if str(_SERVICE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SERVICE_ROOT))
 
 from worker.models import AuthorityDocument, Base
 # Import shared schemas for GraphEvent parsing
@@ -40,9 +39,15 @@ TOPIC = os.environ.get("KAFKA_TOPIC_NORMALIZED", "ingest.normalized.v2")
 TOPIC_GRAPH_UPDATE = os.environ.get("KAFKA_TOPIC_GRAPH_UPDATE", "graph.update")
 GROUP_ID = "compliance-worker-group-phase3a"
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://regengine:regengine@postgres:5432/regengine_admin")
+SCHEMA_DIR = os.environ.get("SCHEMA_DIR", None)  # Explicit schema directory
+HEALTH_FILE = os.environ.get("HEALTH_FILE", "/tmp/compliance-worker-healthy")
+
+# DLQ tracking
+_DLQ_ERROR_COUNT = 0
+_DLQ_MAX_LOGGED = 100  # Max errors to log before throttling
 
 # DB Setup
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -52,18 +57,35 @@ def get_db():
     finally:
         db.close()
 
+def _get_fresh_session():
+    """Create a fresh DB session for per-batch processing."""
+    return SessionLocal()
+
+def _write_health_file():
+    """Write health file for container liveness probes."""
+    try:
+        Path(HEALTH_FILE).write_text(datetime.now(timezone.utc).isoformat())
+    except Exception:
+        pass  # Best-effort
+
 def load_schema(schema_name):
-    # Try generic paths
+    # Prefer SCHEMA_DIR env var
+    if SCHEMA_DIR:
+        schema_path = os.path.join(SCHEMA_DIR, schema_name)
+        if os.path.exists(schema_path):
+            with open(schema_path, 'r') as f:
+                return f.read()
+    # Fallback paths
     paths = [
         f"/app/schemas/{schema_name}",
-        f"../../schemas/{schema_name}",
+        str(_SERVICE_ROOT.parent.parent / "schemas" / schema_name),
         f"schemas/{schema_name}"
     ]
     for p in paths:
         if os.path.exists(p):
             with open(p, 'r') as f:
                 return f.read()
-    raise FileNotFoundError(f"Schema {schema_name} not found")
+    raise FileNotFoundError(f"Schema {schema_name} not found (searched: SCHEMA_DIR={SCHEMA_DIR}, {paths})")
 
 def process_event(event_data, db):
     logger.info(f"Processing event: {event_data.get('event_id')}")
@@ -74,11 +96,11 @@ def process_event(event_data, db):
         return
 
     try:
-        # Set tenant context for RLS
-        db.execute(text(f"SET app.current_tenant_id = '{tenant_id}'"))
+        # Set tenant context for RLS (parameterized to prevent SQL injection)
+        db.execute(text("SET app.current_tenant_id = :tid"), {"tid": str(tenant_id)})
     except Exception as e:
         logger.warning(f"Could not set tenant context (might be superuser): {e}")
-        db.rollback() 
+        db.rollback()
 
     source_url = event_data.get("source_url", "")
     
@@ -387,6 +409,7 @@ def process_nlp_event(data, db):
                 logger.info(f"Created Compliance Date fact: {val_str}")
 
 def main():
+    global _DLQ_ERROR_COUNT
     logger.info("Starting Compliance Worker...")
     
     # Load Schema
@@ -407,24 +430,29 @@ def main():
     })
 
     # Subscribe to all relevant topics including graph.update for NLP outputs
-    consumer.subscribe([TOPIC, "nlp.extracted", TOPIC_GRAPH_UPDATE])
-    
-    # We poll manually
-    db_gen = get_db()
-    db = next(db_gen)
-
     topics_list = [TOPIC, "nlp.extracted", TOPIC_GRAPH_UPDATE]
+    consumer.subscribe(topics_list)
     logger.info(f"Listening on topics: {topics_list}...")
+
+    # Write initial health file
+    _write_health_file()
+    poll_count = 0
 
     try:
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
+                poll_count += 1
+                # Update health file every 30 polls (~30s)
+                if poll_count % 30 == 0:
+                    _write_health_file()
                 continue
             if msg.error():
                 logger.error(f"Consumer error: {msg.error()}")
                 continue
             
+            # Per-batch DB session for resilience
+            db = _get_fresh_session()
             try:
                 topic = msg.topic()
                 if topic == "nlp.extracted":
@@ -455,7 +483,7 @@ def main():
                                         "extraction": {"entities": entities}
                                     }, db)
                             except Exception as e:
-                                logger.warning(f"Failed to parse as GraphEvent: {e}, falling back to raw dict")
+                                logger.warning(f"GraphEvent validation failed (DEBT-023): {e}, using raw dict fallback")
                                 process_nlp_event(data, db)
                         else:
                             # Fallback to raw dict parsing
@@ -476,18 +504,30 @@ def main():
                                  process_event(event, db)
 
             except Exception as e:
-                logger.error(f"Processing error: {e}")
+                _DLQ_ERROR_COUNT += 1
+                if _DLQ_ERROR_COUNT <= _DLQ_MAX_LOGGED:
+                    logger.error(
+                        f"Processing error (DLQ #{_DLQ_ERROR_COUNT}): {e}",
+                        exc_info=True,
+                        extra={
+                            "topic": msg.topic() if msg else "unknown",
+                            "partition": msg.partition() if msg else -1,
+                            "offset": msg.offset() if msg else -1,
+                        },
+                    )
                 db.rollback()
-                    
-            except Exception as e:
-                logger.error(f"Processing error: {e}")
-                db.rollback()
+            finally:
+                db.close()
                 
     except KeyboardInterrupt:
         pass
     finally:
         consumer.close()
-        db_gen.close()
+        # Clean up health file
+        try:
+            Path(HEALTH_FILE).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     main()

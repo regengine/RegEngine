@@ -10,6 +10,7 @@ import jwt
 import os
 
 
+@pytest.mark.security
 class TestAuthentication:
     """Tests for JWT authentication and user extraction."""
     

@@ -24,6 +24,7 @@ from app.models import (
 )
 
 
+@pytest.mark.security
 class TestTenantIsolation:
     """Test tenant isolation in Aerospace service"""
 

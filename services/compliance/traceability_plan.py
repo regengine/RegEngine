@@ -13,7 +13,7 @@ A traceability plan must contain:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -187,7 +187,7 @@ def create_sample_traceability_plan(facility_name: str) -> TraceabilityPlan:
     return TraceabilityPlan(
         facility_name=facility_name,
         plan_version="1.0",
-        effective_date=datetime.utcnow().strftime("%Y-%m-%d"),
+        effective_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         procedures=[
             Procedure(
                 id="PROC-001",

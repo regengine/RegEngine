@@ -292,6 +292,7 @@ services:
       <<: *env_common
       # Worker needs schema registry URL explicit if not in common
       SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      SCHEMA_DIR: /app/schemas
       # Connect to Admin DB where tables reside
       DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
     depends_on:
@@ -414,6 +415,36 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:9092
     depends_on:
       - redpanda
+
+  billing-service:
+    build:
+      context: ./services/billing
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8800:8800"
+    environment:
+      BILLING_PORT: "8800"
+      BILLING_ENV: ${BILLING_ENV:-sandbox}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,https://regengine.co,https://regengine.vercel.app"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8800/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 volumes:
   neo4j_data:

@@ -26,6 +26,12 @@ COPY services/compliance /app/services/compliance
 # But our worker script uses relative imports from "worker".
 # Let's set PYTHONPATH to /app
 ENV PYTHONPATH=/app
+ENV SCHEMA_DIR=/app/schemas
+
+# Liveness probe: worker writes /tmp/compliance-worker-healthy periodically
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD test -f /tmp/compliance-worker-healthy && \
+    test $(( $(date +%s) - $(date -r /tmp/compliance-worker-healthy +%s) )) -lt 120 || exit 1
 
 # Command
 CMD ["python", "services/compliance/worker/main.py"]

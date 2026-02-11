@@ -15,6 +15,7 @@ admin_client = TestClient(admin_app)
 ADMIN_PROTECTED_ENDPOINT = "/v1/admin/keys"
 
 
+@pytest.mark.security
 def test_admin_bypass_removed():
     """Verify hardcoded 'admin' key is now rejected."""
     response = admin_client.get(
@@ -25,12 +26,14 @@ def test_admin_bypass_removed():
     assert "Invalid admin credentials" in response.json().get("detail", "")
 
 
+@pytest.mark.security
 def test_admin_key_required():
     """Verify requests without admin key are rejected."""
     response = admin_client.get(ADMIN_PROTECTED_ENDPOINT)
     assert response.status_code == 401
 
 
+@pytest.mark.security
 def test_valid_admin_key_works():
     """Verify legitimate admin keys grant access (via dependency override)."""
     import sys

@@ -218,9 +218,9 @@ def _convert_entities_to_extraction(
                 "fact_type": "compliance_date",
                 "provenance": attrs.get("provenance"),
                 "signal_category": "regulatory_change",
-                "risk_level": "high" # Compliance Date changes are high impact
+                "risk_level": "high", # Compliance Date changes are high impact
+                "entities": [rd],  # DEBT-023 fix: route via attributes dict, not non-existent field
             },
-            entities=[rd] # Pass raw entity for worker processing
         )
         extractions.append(extraction)
 
