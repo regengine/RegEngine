@@ -38,7 +38,7 @@ logger = logging.getLogger("chaos-seeder")
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4j")
-POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5433/regengine")
+POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
 
 # Seed tag so we can identify and clean up test data
 CHAOS_SEED_TAG = "chaos_test_seed"
