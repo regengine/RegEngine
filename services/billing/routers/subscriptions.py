@@ -6,15 +6,10 @@ CRUD operations for tenant subscriptions with Stripe integration.
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from datetime import datetime, timedelta
-
-from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
 
-# Allow imports from parent
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from fastapi import APIRouter, HTTPException, Header
 
 from models import (
     PRICING_TIERS,
@@ -26,16 +21,13 @@ from models import (
     ChangeTierRequest,
 )
 import stripe_client
+from utils import get_tenant_id
 
 router = APIRouter(prefix="/v1/billing/subscriptions", tags=["subscriptions"])
 
 # In-memory subscription store (would be DB in production)
 _subscriptions: dict[str, Subscription] = {}  # tenant_id → Subscription
 
-
-def _get_tenant_id(x_tenant_id: Optional[str] = Header(None)) -> str:
-    """Extract tenant ID from header or default for sandbox."""
-    return x_tenant_id or "sandbox_tenant"
 
 
 @router.get("/tiers")
@@ -51,7 +43,7 @@ async def list_tiers():
 @router.get("/current")
 async def get_current_subscription(x_tenant_id: Optional[str] = Header(None)):
     """Get the current subscription for a tenant."""
-    tenant_id = _get_tenant_id(x_tenant_id)
+    tenant_id = get_tenant_id(x_tenant_id)
     sub = _subscriptions.get(tenant_id)
 
     if sub is None:
@@ -70,7 +62,7 @@ async def create_subscription(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """Create a new subscription for a tenant."""
-    tenant_id = _get_tenant_id(x_tenant_id)
+    tenant_id = get_tenant_id(x_tenant_id)
 
     # Validate tier
     tier = PRICING_TIERS.get(request.tier_id)
@@ -123,7 +115,7 @@ async def create_subscription(
 @router.post("/cancel")
 async def cancel_subscription(x_tenant_id: Optional[str] = Header(None)):
     """Cancel the current subscription for a tenant."""
-    tenant_id = _get_tenant_id(x_tenant_id)
+    tenant_id = get_tenant_id(x_tenant_id)
     sub = _subscriptions.get(tenant_id)
 
     if sub is None or sub.status == SubscriptionStatus.CANCELED:
@@ -148,7 +140,7 @@ async def change_tier(
     x_tenant_id: Optional[str] = Header(None),
 ):
     """Upgrade or downgrade the subscription tier."""
-    tenant_id = _get_tenant_id(x_tenant_id)
+    tenant_id = get_tenant_id(x_tenant_id)
     sub = _subscriptions.get(tenant_id)
 
     if sub is None or sub.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
