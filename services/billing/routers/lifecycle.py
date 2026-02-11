@@ -7,11 +7,12 @@ trials, and cancellations.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from pydantic import BaseModel
 from typing import Optional
 
-from lifecycle_engine import lifecycle_engine, ChangeType, CancellationReason
+from lifecycle_engine import LifecycleEngine, ChangeType, CancellationReason
+from dependencies import get_lifecycle_engine
 from utils import format_cents, paginate
 
 router = APIRouter(prefix="/v1/billing/lifecycle", tags=["Lifecycle"])
@@ -47,9 +48,12 @@ class StartTrialRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.post("/change")
-async def change_plan(request: ChangePlanRequest):
+async def change_plan(
+    request: ChangePlanRequest,
+    engine: LifecycleEngine = Depends(get_lifecycle_engine),
+):
     """Execute or schedule a plan change."""
-    change = lifecycle_engine.change_plan(
+    change = engine.change_plan(
         tenant_id=request.tenant_id, tenant_name=request.tenant_name,
         from_plan=request.from_plan, to_plan=request.to_plan,
         days_remaining=request.days_remaining, schedule=request.schedule,
@@ -59,10 +63,13 @@ async def change_plan(request: ChangePlanRequest):
 
 
 @router.post("/prorate")
-async def calculate_proration(request: ProrationRequest):
+async def calculate_proration(
+    request: ProrationRequest,
+    engine: LifecycleEngine = Depends(get_lifecycle_engine),
+):
     """Preview proration for a plan change."""
     try:
-        result = lifecycle_engine.calculate_proration(
+        result = engine.calculate_proration(
             from_plan=request.from_plan, to_plan=request.to_plan,
             days_remaining=request.days_remaining, days_in_period=request.days_in_period,
         )
@@ -77,9 +84,10 @@ async def list_changes(
     change_type: Optional[ChangeType] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: LifecycleEngine = Depends(get_lifecycle_engine),
 ):
     """List plan change history with pagination."""
-    changes = lifecycle_engine.list_changes(tenant_id=tenant_id, change_type=change_type)
+    changes = engine.list_changes(tenant_id=tenant_id, change_type=change_type)
     result = paginate([c.model_dump() for c in changes], page=page, page_size=page_size)
     return {
         "changes": result["items"],
@@ -93,9 +101,12 @@ async def list_changes(
 
 
 @router.get("/changes/{change_id}")
-async def get_change(change_id: str = Path(...)):
+async def get_change(
+    change_id: str = Path(...),
+    engine: LifecycleEngine = Depends(get_lifecycle_engine),
+):
     """Get plan change details."""
-    change = lifecycle_engine.get_change(change_id)
+    change = engine.get_change(change_id)
     if not change:
         raise HTTPException(status_code=404, detail=f"Change {change_id} not found")
     return {"change": change.model_dump()}
@@ -106,9 +117,10 @@ async def list_trials(
     active_only: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    engine: LifecycleEngine = Depends(get_lifecycle_engine),
 ):
     """List trials with pagination."""
-    trials = lifecycle_engine.list_trials(active_only=active_only)
+    trials = engine.list_trials(active_only=active_only)
     result = paginate([t.model_dump() for t in trials], page=page, page_size=page_size)
     return {
         "trials": result["items"],
@@ -122,10 +134,13 @@ async def list_trials(
 
 
 @router.post("/trials")
-async def start_trial(request: StartTrialRequest):
+async def start_trial(
+    request: StartTrialRequest,
+    engine: LifecycleEngine = Depends(get_lifecycle_engine),
+):
     """Start a new trial."""
     try:
-        trial = lifecycle_engine.start_trial(
+        trial = engine.start_trial(
             tenant_id=request.tenant_id, tenant_name=request.tenant_name,
             plan=request.plan, days=request.days,
         )
@@ -135,9 +150,9 @@ async def start_trial(request: StartTrialRequest):
 
 
 @router.get("/summary")
-async def lifecycle_summary():
+async def lifecycle_summary(engine: LifecycleEngine = Depends(get_lifecycle_engine)):
     """Lifecycle overview."""
-    return lifecycle_engine.get_summary()
+    return engine.get_summary()
 
 
 @router.get("/plans")
