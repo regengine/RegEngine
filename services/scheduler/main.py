@@ -23,7 +23,10 @@ from typing import Dict, List, Optional
 
 import structlog
 from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.interval import IntervalTrigger
+from pytz import utc
 
 # Add parent directory to path for shared imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,6 +45,7 @@ from app.scrapers import (
 )
 from app.state import StateManager
 from app.fda_fsma_transformer import get_fsma_transformer
+from app.distributed import DistributedContext
 
 # Configure structured logging
 structlog.configure(
@@ -63,7 +67,28 @@ class SchedulerService:
         self.state_manager = StateManager()
         self.notifier = WebhookNotifier()
         self.kafka_producer = get_kafka_producer()
-        self.scheduler = BlockingScheduler()
+        self.distributed_context = DistributedContext()
+        
+        # Fortune Top 15 Resilience Configuration
+        jobstores = {
+            'default': SQLAlchemyJobStore(url=self.settings.database_url)
+        }
+        executors = {
+            'default': ThreadPoolExecutor(20)
+        }
+        job_defaults = {
+            'coalesce': True,            # Roll multiple missed executions into one
+            'max_instances': 3,
+            'misfire_grace_time': 3600   # 1 hour grace for missed jobs (resilience)
+        }
+        
+        self.scheduler = BlockingScheduler(
+            jobstores=jobstores,
+            executors=executors,
+            job_defaults=job_defaults,
+            timezone=utc
+        )
+        self.scheduler_thread = None
         self._start_time = time.time()
 
         # Initialize scrapers with circuit breakers
@@ -376,21 +401,38 @@ class SchedulerService:
                 )
 
     def start(self) -> None:
-        """Start the scheduler service."""
+        """Start the scheduler service with distributed leadership."""
         self.initialize()
-        self.schedule_jobs()
-
-        # Run initial scrape
-        self.run_initial_scrape()
-
-        logger.info("scheduler_starting")
-
+        
+        logger.info("scheduler_joining_cluster")
+        
+        # Calculate robust lock ID based on service name if needed, 
+        # but DistributedContext uses a constant.
+        
         try:
-            self.scheduler.start()
+            # This blocks until leadership is acquired, then runs local scheduler
+            self.distributed_context.wait_for_leadership(self._run_scheduler_workload)
         except (KeyboardInterrupt, SystemExit):
-            logger.info("scheduler_stopping")
+            logger.info("scheduler_shutdown_signal_received")
             self.shutdown()
 
+    def _run_scheduler_workload(self) -> None:
+        """The workload to run when this instance is the Leader."""
+        logger.info("leadership_acquired_initializing_workload")
+        
+        # We only schedule/update jobs if we are the leader
+        self.schedule_jobs()
+
+        # Run initial scrape (on promotion to leader)
+        self.run_initial_scrape()
+
+        logger.info("scheduler_starting_mainloop")
+        try:
+            # BlockingScheduler.start() is blocking, so this holds the leader lock
+            self.scheduler.start()
+        except (KeyboardInterrupt, SystemExit):
+            pass
+            
     def shutdown(self) -> None:
         """Gracefully shutdown the scheduler."""
         logger.info("scheduler_shutting_down")
