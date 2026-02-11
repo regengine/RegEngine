@@ -27,6 +27,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY || 'ci-placeholder' }}
   NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD || 'ci-test-password' }}
   AUTH_SECRET_KEY: ${{ secrets.AUTH_SECRET_KEY || 'ci-test-auth-secret-key' }}
+  ADMIN_MASTER_KEY: ${{ secrets.ADMIN_MASTER_KEY || 'ci-test-master-key' }}
 
 jobs:
   resilience-tests:
