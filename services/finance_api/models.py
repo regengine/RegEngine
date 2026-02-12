@@ -11,7 +11,7 @@ from enum import Enum
 
 class DecisionType(str, Enum):
     """Decision types for finance vertical."""
-        CREDIT_APPROVAL = "credit_approval"
+    CREDIT_APPROVAL = "credit_approval"
     CREDIT_DENIAL = "credit_denial"
     LIMIT_ADJUSTMENT = "limit_adjustment"
     FRAUD_FLAG = "fraud_flag"
