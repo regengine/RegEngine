@@ -25,16 +25,17 @@ class RegulatoryEngine:
     - Persist results to graph + DB
     """
     
-    def __init__(self, verticals_dir: Path, graph_client=None, db_client=None):
+    def __init__(self, verticals_dir, graph_client=None, db_client=None):
         """
         Initialize regulatory engine.
         
         Args:
-            verticals_dir: Path to verticals directory
+            verticals_dir: Path to verticals directory (str or Path)
             graph_client: Neo4j graph client (optional)
             db_client: Database client (optional)
         """
-        self.verticals_dir = verticals_dir
+        # Convert to Path if string
+        self.verticals_dir = Path(verticals_dir) if isinstance(verticals_dir, str) else verticals_dir
         self.graph = graph_client
         self.db = db_client
         self.evaluators: Dict[str, ObligationEvaluator] = {}

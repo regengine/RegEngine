@@ -41,6 +41,8 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+{evidence_contract_placeholder}
+
 router = APIRouter(prefix="/v1/{vertical_name}", tags=["{vertical_name}"])
 
 
@@ -53,17 +55,59 @@ async def record_decision(request: DecisionRequest):
     """
     logger.info(f"Recording {{request.decision_type}} decision")
     
-    # TODO: Implement decision recording
-    # 1. Validate evidence against evidence_contract
-    # 2. Evaluate against regulatory obligations
-    # 3. Create evidence envelope
-    # 4. Persist to graph + DB
+    # Import services (will be defined in generated service files)
+    from .snapshot_service import {vertical_name.capitalize()}SnapshotService
+    from .graph_store import {vertical_name.capitalize()}GraphStore
     
-    return DecisionResponse(
-        decision_id="placeholder",
-        status="recorded",
-        timestamp="2024-01-01T00:00:00Z"
-    )
+    try:
+        # Initialize services
+        graph_store = {vertical_name.capitalize()}GraphStore()
+        snapshot_service = {vertical_name.capitalize()}SnapshotService(graph_store)
+        
+        # Validate evidence against evidence_contract
+        required_fields = EVIDENCE_CONTRACT.get(request.decision_type, [])
+        provided_fields = set(request.evidence.keys())
+        missing_fields = set(required_fields) - provided_fields
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required evidence fields: {{missing_fields}}"
+            )
+        
+        # Record decision
+        decision_id = await graph_store.create_decision(
+            decision_type=request.decision_type,
+            evidence=request.evidence,
+            metadata=request.metadata
+        )
+        
+        # Evaluate against regulatory obligations
+        obligation_results = await snapshot_service.evaluate_decision_obligations(
+            decision_id=decision_id,
+            decision_type=request.decision_type,
+            evidence=request.evidence
+        )
+        
+        # Create evidence envelope
+        envelope_id = await graph_store.create_evidence_envelope(
+            decision_id=decision_id,
+            evidence=request.evidence
+        )
+        
+        logger.info(f"Decision recorded: {{decision_id}}, envelope: {{envelope_id}}, obligations met: {{sum(1 for r in obligation_results if r['met'])}}/{{len(obligation_results)}}")
+        
+        return DecisionResponse(
+            decision_id=decision_id,
+            status="recorded",
+           timestamp=datetime.utcnow().isoformat(),
+            envelope_id=envelope_id,
+            obligations_evaluated=len(obligation_results),
+            obligations_met=sum(1 for r in obligation_results if r['met'])
+        )
+    except Exception as e:
+        logger.error(f"Failed to record decision: {{e}}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/snapshot", response_model=SnapshotResponse)
@@ -80,14 +124,24 @@ async def get_snapshot():
     """
     logger.info("Computing compliance snapshot")
     
-    # TODO: Implement snapshot computation
-    # Use verticals/{vertical_name}/snapshot_logic.py functions
+    # Import snapshot adapter
+    from .snapshot_adapter import {vertical_name.capitalize()}SnapshotAdapter
+    from .graph_store import get_graph_client
+    from .db import get_db_client
     
-    return SnapshotResponse(
-        snapshot_id="placeholder",
-        timestamp="2024-01-01T00:00:00Z",
-        total_compliance_score=0.0
-    )
+    try:
+        # Initialize adapter with graph and DB clients
+        graph = get_graph_client()
+        db = get_db_client()
+        adapter = {vertical_name.capitalize()}SnapshotAdapter(graph, db)
+        
+        # Compute snapshot
+        snapshot = adapter.compute_snapshot()
+        
+        return SnapshotResponse(**snapshot)
+    except Exception as e:
+        logger.error(f"Failed to compute snapshot: {{e}}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/health")

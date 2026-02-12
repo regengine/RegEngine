@@ -100,8 +100,8 @@ class DistributedContext:
                     if connection:
                         try:
                             connection.close()
-                        except:
-                            pass
+                        except Exception as close_error:
+                            logger.error("connection_close_failed", error=str(close_error))
                         connection = None
                     time.sleep(poll_interval)
 
@@ -165,8 +165,10 @@ class DistributedContext:
             except SQLAlchemyError as e:
                 logger.error("db_connection_lost_retrying", error=str(e))
                 if conn:
-                    try: conn.close()
-                    except: pass
+                    try:
+                        conn.close()
+                    except Exception as close_error:
+                        logger.error("leadership_conn_close_failed", error=str(close_error))
                 # Exponential backoff?
                 time.sleep(poll_interval)
             except Exception as e:

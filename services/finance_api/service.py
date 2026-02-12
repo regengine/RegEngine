@@ -212,11 +212,11 @@ class FinanceDecisionService:
         # Create envelope data (excluding current_hash to avoid circular dependency)
         envelope_data = {
             "envelope_id": envelope_id,
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.utcnow().isoformat(),  # Convert to string for JSON
             "previous_hash": self.latest_envelope_hash,
             "merkle_root": merkle_root,
             "merkle_proof": merkle_proof,
-            "evidence_type": EvidenceType.DECISION,
+            "evidence_type": EvidenceType.DECISION.value,  # Use value for JSON
             "evidence_payload_hash": payload_hash,
             "evidence_payload": combined_payload,
             "tamper_detected": False
