@@ -39,6 +39,10 @@ sqlalchemy>=2.0.0
 # Date parsing
 python-dateutil>=2.8.0
 
+# LLM / AI
+openai>=1.10.0
+backoff>=2.2.1
+
 # ============================================
 # Document Format Extraction Dependencies
 # ============================================

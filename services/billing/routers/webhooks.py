@@ -13,6 +13,7 @@ import structlog
 from fastapi import APIRouter, Request, HTTPException
 
 import stripe_client
+import store
 
 logger = structlog.get_logger(__name__)
 
@@ -64,48 +65,97 @@ async def stripe_webhook(request: Request):
 
 async def _handle_checkout_completed(event: dict) -> str:
     """Handle checkout.session.completed — activate subscription."""
-    session = event.get("data", {}).get("object", {})
-    metadata = session.get("metadata", {})
-    tenant_id = metadata.get("tenant_id", "unknown")
-    tier_id = metadata.get("tier_id", "unknown")
+    session_data = event.get("data", {}).get("object", {})
+    metadata = session_data.get("metadata", {})
+    tenant_id = metadata.get("tenant_id")
+    tier_id = metadata.get("tier_id")
+    stripe_sub_id = session_data.get("subscription")
+
+    if not tenant_id:
+        return "Missing tenant_id in metadata"
 
     logger.info(
         "checkout_completed",
         tenant_id=tenant_id,
         tier_id=tier_id,
-        payment_status=session.get("payment_status"),
+        subscription_id=stripe_sub_id,
+        payment_status=session_data.get("payment_status"),
     )
+
+    # Update subscription state
+    if tenant_id in store.subscriptions:
+        sub = store.subscriptions[tenant_id]
+        # Transition from TRIALING/INCOMPLETE to ACTIVE
+        sub.status = "active"
+        sub.stripe_subscription_id = stripe_sub_id
+        # Update period from Stripe if available
+        # (simulated here since we don't fetch from Stripe API during webhook)
+        sub.updated_at = datetime.utcnow()
+        logger.info("subscription_activated", tenant_id=tenant_id)
+    else:
+        logger.warning("subscription_not_found_for_activation", tenant_id=tenant_id)
+
     return f"Subscription activated for tenant {tenant_id}"
 
 
 async def _handle_subscription_updated(event: dict) -> str:
     """Handle customer.subscription.updated — sync subscription state."""
-    sub = event.get("data", {}).get("object", {})
-    sub_id = sub.get("id", "unknown")
-    status = sub.get("status", "unknown")
+    sub_data = event.get("data", {}).get("object", {})
+    sub_id = sub_data.get("id")
+    new_status = sub_data.get("status")
+    
+    # Find subscription by stripe_id (inefficient for in-memory, ok for demo)
+    # In DB we would query WHERE stripe_subscription_id = sub_id
+    target_tenant = None
+    for tid, sub in store.subscriptions.items():
+        if sub.stripe_subscription_id == sub_id:
+            sub.status = new_status
+            sub.updated_at = datetime.utcnow()
+            target_tenant = tid
+            break
 
-    logger.info("subscription_updated", subscription_id=sub_id, status=status)
-    return f"Subscription {sub_id} updated to {status}"
+    logger.info("subscription_sync", subscription_id=sub_id, status=new_status, tenant_id=target_tenant)
+    return f"Subscription {sub_id} updated to {new_status}"
 
 
 async def _handle_payment_succeeded(event: dict) -> str:
     """Handle invoice.payment_succeeded — record successful payment."""
     invoice = event.get("data", {}).get("object", {})
     amount = invoice.get("amount_paid", 0)
-    customer = invoice.get("customer", "unknown")
+    customer_id = invoice.get("customer")
+    sub_id = invoice.get("subscription")
 
-    logger.info("payment_succeeded", customer=customer, amount_cents=amount)
-    return f"Payment of ${amount / 100:.2f} recorded for {customer}"
+    logger.info("payment_succeeded", customer=customer_id, amount_cents=amount, subscription=sub_id)
+    
+    # If this was for a specific subscription, ensure it's active
+    if sub_id:
+        for tid, sub in store.subscriptions.items():
+            if sub.stripe_subscription_id == sub_id:
+                if sub.status == "past_due":
+                    sub.status = "active"
+                    logger.info("subscription_reactivated", tenant_id=tid)
+                break
+
+    return f"Payment of ${amount / 100:.2f} recorded for {customer_id}"
 
 
 async def _handle_payment_failed(event: dict) -> str:
     """Handle invoice.payment_failed — flag subscription as past_due."""
     invoice = event.get("data", {}).get("object", {})
-    customer = invoice.get("customer", "unknown")
+    customer_id = invoice.get("customer")
+    sub_id = invoice.get("subscription")
     attempt = invoice.get("attempt_count", 0)
 
-    logger.warning("payment_failed", customer=customer, attempt=attempt)
-    return f"Payment failed for {customer} (attempt {attempt})"
+    logger.warning("payment_failed", customer=customer_id, attempt=attempt)
+
+    if sub_id:
+        for tid, sub in store.subscriptions.items():
+            if sub.stripe_subscription_id == sub_id:
+                sub.status = "past_due"
+                logger.warning("subscription_past_due", tenant_id=tid)
+                break
+
+    return f"Payment failed for {customer_id} (attempt {attempt})"
 
 
 async def _handle_unknown(event: dict) -> str:

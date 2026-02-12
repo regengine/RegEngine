@@ -18,14 +18,15 @@ from models import (
     CheckoutStatus,
 )
 import stripe_client
+import store
 from credit_engine import CreditEngine
 from dependencies import get_credit_engine
 from utils import get_tenant_id, format_cents
 
 router = APIRouter(prefix="/v1/billing/checkout", tags=["checkout"])
 
-# In-memory session store
-_sessions: dict[str, CheckoutSession] = {}
+# Use shared store
+_sessions = store.sessions
 
 
 def _calculate_total(tier_id: str, billing_cycle: BillingCycle) -> int:

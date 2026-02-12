@@ -147,6 +147,7 @@ class Subscription(BaseModel):
     stripe_customer_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     canceled_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class SubscriptionCreateRequest(BaseModel):
