@@ -546,6 +546,66 @@ export default function FinancePage() {
         </div>
       </section>
 
+      {/* Free Tools */}
+      <section className="section" style={{ background: 'var(--bg-secondary)' }}>
+        <div className="container">
+          <div className="section-label" style={{ color: 'var(--accent-emerald)' }}>FREE TOOLS</div>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>Try Before You Integrate</h2>
+          <p style={{ color: 'var(--text-muted)', maxWidth: '600px', marginBottom: '2rem', lineHeight: '1.6' }}>
+            Real compliance tools that deliver real value — no signup required.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
+            <Link href="/tools/bias-checker" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '1.75rem',
+                transition: 'border-color 0.2s, transform 0.2s',
+                cursor: 'pointer',
+              }}
+                onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-emerald)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
+                onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
+              >
+                <span className="badge badge-live severity" style={{ marginBottom: '0.75rem' }}>FREE</span>
+                <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>AI Model Bias Checker</h3>
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.55', marginBottom: '1rem' }}>
+                  Input your model&apos;s approval/denial rates by demographic group. Get instant
+                  Disparate Impact Ratio analysis with 80% Rule assessment and regulatory citations.
+                </p>
+                <span style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 500 }}>
+                  Run Bias Analysis →
+                </span>
+              </div>
+            </Link>
+
+            <Link href="/tools/obligation-scanner" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '1.75rem',
+                transition: 'border-color 0.2s, transform 0.2s',
+                cursor: 'pointer',
+              }}
+                onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-emerald)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
+                onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
+              >
+                <span className="badge badge-live severity" style={{ marginBottom: '0.75rem' }}>FREE</span>
+                <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>Regulatory Obligation Scanner</h3>
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.55', marginBottom: '1rem' }}>
+                  Select your fintech product type — see exactly which of the 21 regulatory
+                  obligations apply, with full CFR citations and required evidence lists.
+                </p>
+                <span style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 500 }}>
+                  Scan Obligations →
+                </span>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* API Example */}
       <section className="section" id="api" style={{ background: 'var(--bg-secondary)' }}>
         <div className="container">
