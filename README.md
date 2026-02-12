@@ -40,6 +40,7 @@
 | **Ingestion** | 8300 | URL/file intake, format extraction (PDF, CSV, HTML, XML), S3 storage |
 | **NLP** | 8100 | LLM extraction, confidence routing, regulatory entity recognition |
 | **Graph** | 8200 | Neo4j interaction, FSMA traceability queries, supply chain analysis |
+| **Finance** | 8000 | Fintech compliance, Bias/Drift analysis, Graph persistence |
 | **Energy** | 8500 | Energy market compliance, snapshot engine, mismatch detection |
 | **Opportunity** | 8600 | Regulatory arbitrage and gap analysis |
 | **Compliance** | — | Industry-specific checklist evaluation engine |
@@ -47,7 +48,7 @@
 
 ### Industry Verticals
 
-Aerospace · Automotive · Construction · Energy · Entertainment · Food Safety · Gaming · Healthcare · Manufacturing
+Aerospace · Automotive · Construction · Energy · Entertainment · Finance · Food Safety · Gaming · Healthcare · Manufacturing
 
 ### Frontend (Next.js / React)
 
@@ -130,6 +131,22 @@ POST /v1/fsma/plan/generate            # Generate traceability plan
 📄 **Spec:** [docs/specs/FSMA_204_MVP_SPEC.md](docs/specs/FSMA_204_MVP_SPEC.md)
 
 ---
+
+## 🏦 Finance Vertical
+
+RegEngine's **Finance Vertical** provides AI-driven compliance for fintech and banking:
+
+- **Bias Detection** – Automated ECOA/Fair Lending analysis (Disparate Impact Ratio, 80% Rule) on every credit decision.
+- **Drift Monitoring** – Continuous tracking of model feature drift (PSI, KL Divergence) to satisfy SR 11-7.
+- **Graph Persistence** – Neo4j-backed decision trails linking `Evidence` → `Obligation` → `Regulation`.
+- **Real-Time Snapshots** – Instant compliance scoring based on aggregated bias, drift, and documentation metrics.
+
+**API Endpoints:**
+```
+POST /v1/finance/decision/record       # Record credit decision with evidence
+GET  /v1/fsma/snapshot                 # Get real-time compliance score
+GET  /v1/finance/stats                 # Live vertical statistics
+```
 
 ## 🔐 Security
 
