@@ -5,6 +5,9 @@ import { Activity } from 'lucide-react';
 
 const footerLinks = {
     product: [
+        { label: 'Field Capture', href: '/mobile/capture', badge: 'New' },
+        { label: 'Compliance Snapshots', href: '/compliance/snapshots', badge: 'New' },
+        { label: 'Ingest Documents', href: '/ingest' },
         { label: 'FTL Coverage Checker', href: '/ftl-checker', badge: 'Free' },
         { label: 'Pricing', href: '/pricing' },
         { label: 'Mock Recall Demo', href: '/demo/mock-recall' },
