@@ -63,3 +63,4 @@ frontend/build_log.txt
 
 # MCP / Gemini settings (contains tokens)
 .gemini/settings.json
+audit-findings-*.md
