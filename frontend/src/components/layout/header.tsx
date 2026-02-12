@@ -30,6 +30,7 @@ import {
   Building,
   Cog,
   Gamepad2,
+  Scan,
 } from 'lucide-react';
 import {
   DropdownMenu,
