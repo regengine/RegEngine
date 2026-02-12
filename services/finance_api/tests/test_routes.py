@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 # Mock the dependencies before importing app
 @pytest.fixture
 def mock_finance_service():
-    with patch('services.finance_api.main.FinanceDecisionService') as mock:
+    with patch('services.finance_api.service.FinanceDecisionService') as mock:
         yield mock
 
 
