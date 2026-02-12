@@ -555,41 +555,47 @@ export default function FinancePage() {
             Record credit decisions, evaluate obligations, create evidence envelopes — all from your code.
           </p>
 
-          <div className="code-block">
-            <div className="code-header">
-              <span>record_credit_decision.py</span>
-            </div>
-            <pre dangerouslySetInnerHTML={{
-              __html: `<span class="keyword">import</span> requests
-
-<span class="comment"># Record a credit denial decision with full compliance workflow</span>
-response = requests.<span class="func">post</span>(<span class="string">"http://localhost:8000/v1/finance/decision/record"</span>, json={
-    <span class="string">"decision_id"</span>: <span class="string">"dec_001"</span>,
-    <span class="string">"decision_type"</span>: <span class="string">"credit_denial"</span>,
-    <span class="string">"evidence"</span>: {
-        <span class="string">"adverse_action_notice"</span>: <span class="string">"Application denied due to insufficient credit history"</span>,
-        <span class="string">"reason_codes"</span>: [<span class="string">"insufficient_credit_history"</span>],
-        <span class="string">"notification_timing"</span>: <span class="string">"within_30_days"</span>,
-        <span class="string">"applicant_id"</span>: <span class="string">"app_12345"</span>
-    },
-    <span class="string">"metadata"</span>: {
-        <span class="string">"model_id"</span>: <span class="string">"credit_model_v1"</span>,
-        <span class="string">"model_version"</span>: <span class="string">"1.0.0"</span>
-    }
-})
-
-result = response.<span class="func">json</span>()
-<span class="keyword">print</span>(f<span class="string">"Decision: {result['decision_id']}"</span>)
-<span class="keyword">print</span>(f<span class="string">"Obligation Coverage: {result['coverage_percent']}%"</span>)
-<span class="keyword">print</span>(f<span class="string">"Risk Level: {result['risk_level']}"</span>)
-<span class="keyword">print</span>(f<span class="string">"Evaluation ID: {result['evaluation_id']}"</span>)
-
-<span class="comment"># Get real-time compliance snapshot</span>
-snapshot = requests.<span class="func">get</span>(<span class="string">"http://localhost:8000/v1/finance/snapshot"</span>).<span class="func">json</span>()
-<span class="keyword">print</span>(f<span class="string">"Total Compliance: {snapshot['total_compliance_score']}"</span>)
-<span class="keyword">print</span>(f<span class="string">"Bias Score: {snapshot['bias_score']}"</span>)
-<span class="keyword">print</span>(f<span class="string">"Drift Score: {snapshot['drift_score']}"</span>)` }} />
-          </div>
+          {(() => {
+            const codeHtml = [
+              '<span style="color:#ff7b72">import</span> requests',
+              '',
+              '<span style="color:#8b949e"># Record a credit denial decision with full compliance workflow</span>',
+              'response = requests.<span style="color:#d2a8ff">post</span>(<span style="color:#a5d6ff">"http://localhost:8000/v1/finance/decision/record"</span>, json={',
+              '    <span style="color:#a5d6ff">"decision_id"</span>: <span style="color:#a5d6ff">"dec_001"</span>,',
+              '    <span style="color:#a5d6ff">"decision_type"</span>: <span style="color:#a5d6ff">"credit_denial"</span>,',
+              '    <span style="color:#a5d6ff">"evidence"</span>: {',
+              '        <span style="color:#a5d6ff">"adverse_action_notice"</span>: <span style="color:#a5d6ff">"Application denied..."</span>,',
+              '        <span style="color:#a5d6ff">"reason_codes"</span>: [<span style="color:#a5d6ff">"insufficient_credit_history"</span>],',
+              '        <span style="color:#a5d6ff">"notification_timing"</span>: <span style="color:#a5d6ff">"within_30_days"</span>,',
+              '        <span style="color:#a5d6ff">"applicant_id"</span>: <span style="color:#a5d6ff">"app_12345"</span>',
+              '    },',
+              '    <span style="color:#a5d6ff">"metadata"</span>: {',
+              '        <span style="color:#a5d6ff">"model_id"</span>: <span style="color:#a5d6ff">"credit_model_v1"</span>,',
+              '        <span style="color:#a5d6ff">"model_version"</span>: <span style="color:#a5d6ff">"1.0.0"</span>',
+              '    }',
+              '})',
+              '',
+              'result = response.<span style="color:#d2a8ff">json</span>()',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Decision: {result[\'decision_id\']}"</span>)',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Coverage: {result[\'coverage_percent\']}%"</span>)',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Risk Level: {result[\'risk_level\']}"</span>)',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Eval ID: {result[\'evaluation_id\']}"</span>)',
+              '',
+              '<span style="color:#8b949e"># Get real-time compliance snapshot</span>',
+              'snapshot = requests.<span style="color:#d2a8ff">get</span>(<span style="color:#a5d6ff">"http://localhost:8000/v1/finance/snapshot"</span>).<span style="color:#d2a8ff">json</span>()',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Compliance: {snapshot[\'total_compliance_score\']}"</span>)',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Bias Score: {snapshot[\'bias_score\']}"</span>)',
+              '<span style="color:#ff7b72">print</span>(f<span style="color:#a5d6ff">"Drift Score: {snapshot[\'drift_score\']}"</span>)',
+            ].join('\n');
+            return (
+              <div className="code-block">
+                <div className="code-header">
+                  <span>record_credit_decision.py</span>
+                </div>
+                <pre dangerouslySetInnerHTML={{ __html: codeHtml }} />
+              </div>
+            );
+          })()}
         </div>
       </section>
 
