@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/lib/tenant-context';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// dynamic imports used in exportSnapshot
 import {
     Camera,
     Shield,
@@ -207,6 +206,8 @@ export default function SnapshotsPage() {
                 const data = await response.json();
 
                 // Generate PDF
+                const jsPDF = (await import('jspdf')).default;
+                const autoTable = (await import('jspdf-autotable')).default;
                 const doc = new jsPDF();
 
                 // Header
