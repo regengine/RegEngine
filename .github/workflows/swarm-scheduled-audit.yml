@@ -1,0 +1,132 @@
+name: Swarm Scheduled Audit
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM UTC
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      audit_type:
+        description: 'Type of audit to run'
+        required: false
+        default: 'security'
+        type: choice
+        options:
+          - security
+          - quality
+          - tech-debt
+          - compliance
+          - full
+
+jobs:
+  daily-security-audit:
+    if: github.event.schedule == '0 3 * * *' || (github.event_name == 'workflow_dispatch' && github.event.inputs.audit_type == 'security')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml requests
+          
+      - name: Run Security Audit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/swarm_audit.py \
+            --type security \
+            --severity critical \
+            --auto-create-issues
+      
+      - name: Upload Audit Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-results
+          path: audit-findings-*.md
+          retention-days: 30
+
+  weekly-full-audit:
+    if: github.event.schedule == '0 2 * * 1' || (github.event_name == 'workflow_dispatch' && github.event.inputs.audit_type == 'full')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml requests
+          
+      - name: Run Comprehensive Audit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/swarm_audit.py \
+            --type full \
+            --auto-create-issues \
+            --assignee ${{ github.repository_owner }}
+      
+      - name: Upload Audit Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-audit-results
+          path: audit-findings-*.md
+          retention-days: 90
+
+  quality-audit-on-demand:
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.audit_type == 'quality' || github.event.inputs.audit_type == 'tech-debt' || github.event.inputs.audit_type == 'compliance')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyyaml requests
+          
+      - name: Run ${{ github.event.inputs.audit_type }} Audit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/swarm_audit.py \
+            --type ${{ github.event.inputs.audit_type }} \
+            --auto-create-issues
+      
+      - name: Upload Audit Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.audit_type }}-audit-results
+          path: audit-findings-*.md
+          retention-days: 30
