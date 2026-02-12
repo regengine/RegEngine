@@ -270,8 +270,41 @@ class FinanceSnapshotAdapter:
         # Persist to DB if available
         if self.db:
             try:
-                # Would insert into snapshots table
-                logger.debug("DB persistence not yet implemented")
+                from sqlalchemy import text
+                
+                # Insert snapshot into PostgreSQL
+                # Note: Table schema should be created via Alembic migration
+                insert_query = text("""
+                    INSERT INTO finance_snapshots (
+                        snapshot_id, timestamp, vertical,
+                        bias_score, drift_score, documentation_score,
+                        regulatory_mapping_score, obligation_coverage_percent,
+                        total_compliance_score, risk_level,
+                        num_open_violations, data, created_at
+                    ) VALUES (
+                        :snapshot_id, :timestamp, :vertical,
+                        :bias_score, :drift_score, :documentation_score,
+                        :regulatory_mapping_score, :obligation_coverage_percent,
+                        :total_compliance_score, :risk_level,
+                        :num_open_violations, :data::jsonb, NOW()
+                    )
+                    ON CONFLICT (snapshot_id) DO UPDATE SET
+                        timestamp = EXCLUDED.timestamp,
+                        bias_score = EXCLUDED.bias_score,
+                        drift_score = EXCLUDED.drift_score,
+                        total_compliance_score = EXCLUDED.total_compliance_score,
+                        risk_level = EXCLUDED.risk_level,
+                        data = EXCLUDED.data
+                """)
+                
+                import json
+                with self.db.begin() as conn:
+                    conn.execute(insert_query, {
+                        **snapshot,
+                        'data': json.dumps(snapshot)  # Store full snapshot as JSONB
+                    })
+                
+                logger.info(f"Persisted snapshot {snapshot['snapshot_id']} to PostgreSQL")
             except Exception as e:
                 logger.error(f"Failed to persist snapshot to DB: {e}")
 
