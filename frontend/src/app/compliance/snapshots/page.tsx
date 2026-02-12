@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/lib/tenant-context';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
     Camera,
     Shield,
@@ -203,13 +205,46 @@ export default function SnapshotsPage() {
 
             if (response.ok) {
                 const data = await response.json();
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `compliance-snapshot-${snapshotName.replace(/\s+/g, '-')}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+
+                // Generate PDF
+                const doc = new jsPDF();
+
+                // Header
+                doc.setFontSize(20);
+                doc.setTextColor(40, 40, 40);
+                doc.text("Compliance Snapshot Artifact", 14, 22);
+
+                doc.setFontSize(10);
+                doc.setTextColor(100, 100, 100);
+                doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
+                doc.text(`Snapshot ID: ${snapshotId}`, 14, 35);
+
+                // Metadata Table
+                autoTable(doc, {
+                    startY: 45,
+                    head: [['Field', 'Value']],
+                    body: [
+                        ['Snapshot Name', snapshotName],
+                        ['Tenant ID', tenantId],
+                        ['Export Timestamp', data.export_date],
+                        ['Content Hash', data.content_hash || 'N/A'],
+                        ['Verified', data.integrity_verified ? 'Yes' : 'No']
+                    ],
+                    theme: 'grid',
+                    headStyles: { fillColor: [75, 0, 130] } // Purple
+                });
+
+                // Content Dump
+                doc.setFontSize(12);
+                doc.text("Snapshot Data Content", 14, (doc as any).lastAutoTable.finalY + 15);
+
+                doc.setFontSize(8);
+                const contentStr = JSON.stringify(data, null, 2);
+                const splitText = doc.splitTextToSize(contentStr, 180);
+                doc.text(splitText, 14, (doc as any).lastAutoTable.finalY + 25);
+
+                // Save
+                doc.save(`compliance-snapshot-${snapshotName.replace(/\s+/g, '-')}.pdf`);
             }
         } catch (error) {
             console.error('Failed to export snapshot:', error);

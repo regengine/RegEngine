@@ -21,12 +21,13 @@ from models import (
     ChangeTierRequest,
 )
 import stripe_client
+import store
 from utils import get_tenant_id
 
 router = APIRouter(prefix="/v1/billing/subscriptions", tags=["subscriptions"])
 
-# In-memory subscription store (would be DB in production)
-_subscriptions: dict[str, Subscription] = {}  # tenant_id → Subscription
+# Use shared store
+_subscriptions = store.subscriptions
 
 
 

@@ -8,6 +8,7 @@ from .text_parser import TextParser
 from .sec_parser import SECParser
 from .fda_parser import FDAParser
 from .edi_parser import EDIParser
+from .image_parser import ImageParser
 
 
 def create_default_registry() -> ParserRegistry:
@@ -20,6 +21,7 @@ def create_default_registry() -> ParserRegistry:
     registry = ParserRegistry()
     
     # Register parsers in priority order
+    registry.register(ImageParser())
     registry.register(SECParser())
     registry.register(FDAParser())
     registry.register(EDIParser())
@@ -41,5 +43,6 @@ __all__ = [
     "SECParser",
     "FDAParser",
     "EDIParser",
+    "ImageParser",
     "create_default_registry",
 ]
