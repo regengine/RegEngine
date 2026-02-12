@@ -37,11 +37,13 @@ class Settings(BaseSettings):
         default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED"
     )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-    api_key: Optional[str] = Field(default=None, alias="API_KEY")
+    auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Return cached settings instance."""
-
-    return Settings()
+    settings = Settings()
+    if not settings.api_key and settings.auth_test_bypass_token:
+        settings.api_key = settings.auth_test_bypass_token
+    return settings
