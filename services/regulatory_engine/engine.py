@@ -124,12 +124,61 @@ class RegulatoryEngine:
             logger.warning("No graph client configured, skipping persistence")
             return
         
-        # TODO: Implement graph persistence
-        # - Create ObligationEvaluation node for each match
-        # - Link to FinanceDecision via FOR_DECISION
-        # - Link to RegulatoryObligation via AGAINST_OBLIGATION
-        
-        logger.info(f"Persisted evaluation {result.evaluation_id}")
+        try:
+            with self.graph.session() as session:
+                # Create ObligationEvaluation node
+                session.run(
+                    """
+                    CREATE (oe:ObligationEvaluation {
+                        evaluation_id: $evaluation_id,
+                        vertical: $vertical,
+                        decision_id: $decision_id,
+                        obligation_id: $obligation_id,
+                        met: $met,
+                        confidence: $confidence,
+                        matched_evidence_count: $matched_evidence_count,
+                        evaluated_at: datetime($evaluated_at),
+                        risk_score: $risk_score
+                    })
+                    """,
+                    evaluation_id=result.evaluation_id,
+                    vertical=result.vertical,
+                    decision_id=result.decision_id,
+                    obligation_id=result.obligation_id,
+                    met=result.met,
+                    confidence=result.confidence,
+                    matched_evidence_count=len(result.matched_evidence),
+                    evaluated_at=result.evaluated_at,
+                    risk_score=result.risk_score
+                )
+                
+                # Link to Decision if it exists
+                if result.decision_id:
+                    session.run(
+                        """
+                        MATCH (oe:ObligationEvaluation {evaluation_id: $evaluation_id})
+                        MATCH (d:Decision {decision_id: $decision_id})
+                        CREATE (oe)-[:FOR_DECISION]->(d)
+                        """,
+                        evaluation_id=result.evaluation_id,
+                        decision_id=result.decision_id
+                    )
+                
+                # Link to Obligation if it exists
+                if result.obligation_id:
+                    session.run(
+                        """
+                        MATCH (oe:ObligationEvaluation {evaluation_id: $evaluation_id})
+                        MATCH (o:RegulatoryObligation {obligation_id: $obligation_id})
+                        CREATE (oe)-[:AGAINST_OBLIGATION]->(o)
+                        """,
+                        evaluation_id=result.evaluation_id,
+                        obligation_id=result.obligation_id
+                    )
+                
+                logger.info(f"Persisted evaluation {result.evaluation_id} to Neo4j")
+        except Exception as e:
+            logger.error(f"Failed to persist evaluation to graph: {e}")
     
     def get_coverage_report(self, vertical: str = "finance") -> Dict[str, Any]:
         """
@@ -141,9 +190,76 @@ class RegulatoryEngine:
         Returns:
             Coverage statistics
         """
-        # TODO: Implement coverage report from persisted evaluations
+        if self.graph is None:
+            logger.warning("No graph client configured, returning empty coverage report")
+            return {
+                "vertical": vertical,
+                "status": "graph_unavailable",
+                "total_obligations": 0,
+                "evaluated_obligations": 0,
+                "met_obligations": 0,
+                "coverage_percent": 0.0
+            }
         
-        return {
-            "vertical": vertical,
-            "status": "not_implemented"
-        }
+        try:
+            with self.graph.session() as session:
+                # Get total obligations for this vertical
+                total_result = session.run(
+                    """
+                    MATCH (o:RegulatoryObligation {vertical: $vertical})
+                    RETURN count(o) as total
+                    """,
+                    vertical=vertical
+                )
+                total_obligations = total_result.single()["total"]
+                
+                # Get evaluated obligations (recent evaluations)
+                evaluated_result = session.run(
+                    """
+                    MATCH (oe:ObligationEvaluation {vertical: $vertical})
+                    WHERE oe.evaluated_at > datetime() - duration('P30D')
+                    RETURN count(DISTINCT oe.obligation_id) as evaluated,
+                           sum(CASE WHEN oe.met THEN 1 ELSE 0 END) as met
+                    """,
+                    vertical=vertical
+                )
+                eval_record = evaluated_result.single()
+                evaluated_obligations = eval_record["evaluated"] or 0
+                met_obligations = eval_record["met"] or 0
+                
+                # Get recent evaluations for trend analysis
+                trend_result = session.run(
+                    """
+                    MATCH (oe:ObligationEvaluation {vertical: $vertical})
+                    WHERE oe.evaluated_at > datetime() - duration('P7D')
+                    RETURN 
+                        count(oe) as recent_evaluations,
+                        avg(CASE WHEN oe.met THEN 1.0 ELSE 0.0 END) as recent_compliance_rate,
+                        avg(oe.confidence) as avg_confidence
+                    """,
+                    vertical=vertical
+                )
+                trend_record = trend_result.single()
+                
+                coverage_percent = (evaluated_obligations / total_obligations * 100) if total_obligations > 0 else 0.0
+                
+                logger.info(f"Coverage report for {vertical}: {coverage_percent:.1f}% ({evaluated_obligations}/{total_obligations})")
+                
+                return {
+                    "vertical": vertical,
+                    "status": "success",
+                    "total_obligations": total_obligations,
+                    "evaluated_obligations": evaluated_obligations,
+                    "met_obligations": met_obligations,
+                    "coverage_percent": round(coverage_percent, 2),
+                    "recent_evaluations_7d": trend_record["recent_evaluations"] or 0,
+                    "recent_compliance_rate": round(trend_record["recent_compliance_rate"] or 0.0, 4),
+                    "avg_confidence": round(trend_record["avg_confidence"] or 0.0, 4)
+                }
+        except Exception as e:
+            logger.error(f"Failed to generate coverage report: {e}")
+            return {
+                "vertical": vertical,
+                "status": "error",
+                "error": str(e)
+            }

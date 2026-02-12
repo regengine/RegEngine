@@ -11,10 +11,17 @@ def admin_client():
     return httpx.Client(base_url=ADMIN_URL, timeout=30)
 
 @pytest.fixture(scope="module")
-def sysadmin_auth(admin_client):
+def test_password():
+    """Generate a secure random password for testing."""
+    import secrets
+    return secrets.token_urlsafe(16)
+
+@pytest.fixture(scope="module")
+def sysadmin_auth(admin_client, test_password):
     """Register and login a sysadmin."""
     email = f"admin-{uuid4()}@example.com"
-    password = "password123"
+    # Use secure random password from fixture
+    password = test_password
     tenant_name = f"Tenant {uuid4()}"
     
     try:
