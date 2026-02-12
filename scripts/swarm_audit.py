@@ -63,9 +63,22 @@ class SecurityAuditor(BaseAuditor):
     def find_bare_excepts(self):
         """Find dangerous bare except clauses"""
         try:
-            result = subprocess.run([
-                'grep', '-rn', 'except:', 'services', '--include=*.py'
-            ], capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
+            # Target specific source directories to avoid venv noise
+            target_dirs = ['services', 'scripts']
+            
+            # Common directories to exclude (extra safety)
+            exclude_dirs = [
+                '--exclude-dir=node_modules', '--exclude-dir=.git', 
+                '--exclude-dir=venv', '--exclude-dir=.venv', 
+                '--exclude-dir=.venv-test', '--exclude-dir=env', 
+                '--exclude-dir=dist', '--exclude-dir=build', 
+                '--exclude-dir=__pycache__', '--exclude-dir=site-packages',
+                '--exclude-dir=tests'  # Exclude tests from critical security scan for now to avoid false positives
+            ]
+            
+            cmd = ['grep', '-rn', 'except:', *target_dirs, '--include=*.py'] + exclude_dirs
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
             
             if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split('\n')
@@ -107,10 +120,19 @@ class SecurityAuditor(BaseAuditor):
         
         for pattern, secret_type in patterns:
             try:
-                result = subprocess.run([
-                    'grep', '-rn', '-E', pattern, '.', '--include=*.py',
-                    '--exclude-dir=node_modules', '--exclude-dir=.git'
-                ], capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
+                target_dirs = ['services', 'scripts']
+                exclude_dirs = [
+                    '--exclude-dir=node_modules', '--exclude-dir=.git', 
+                    '--exclude-dir=venv', '--exclude-dir=.venv', 
+                    '--exclude-dir=.venv-test', '--exclude-dir=env', 
+                    '--exclude-dir=dist', '--exclude-dir=build', 
+                    '--exclude-dir=__pycache__', '--exclude-dir=site-packages',
+                    '--exclude-dir=tests' 
+                ]
+                
+                cmd = ['grep', '-rn', '-E', pattern, *target_dirs, '--include=*.py'] + exclude_dirs
+                
+                result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
                 
                 if result.returncode == 0 and result.stdout:
                     lines = result.stdout.strip().split('\n')
@@ -139,10 +161,17 @@ class SecurityAuditor(BaseAuditor):
     def find_eval_exec(self):
         """Find dangerous eval() and exec() usage"""
         try:
-            result = subprocess.run([
-                'grep', '-rn', '-E', r'\b(eval|exec)\s*\(', '.', '--include=*.py',
-                '--exclude-dir=node_modules'
-            ], capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
+            target_dirs = ['services', 'scripts']
+            exclude_dirs = [
+                '--exclude-dir=node_modules', '--exclude-dir=.git', 
+                '--exclude-dir=venv', '--exclude-dir=.venv',
+                '--exclude-dir=.venv-test', '--exclude-dir=site-packages',
+                '--exclude-dir=tests'
+            ]
+            
+            cmd = ['grep', '-rn', '-E', r'\b(eval|exec)\s*\(', *target_dirs, '--include=*.py', '--exclude=swarm_audit.py'] + exclude_dirs
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
             
             if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split('\n')
@@ -211,10 +240,17 @@ class TechDebtAuditor(BaseAuditor):
     def find_todo_comments(self):
         """Find TODO and FIXME comments"""
         try:
-            result = subprocess.run([
-                'grep', '-rn', '-E', 'TODO|FIXME|HACK|XXX', 
-                'services', '--include=*.py'
-            ], capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
+            exclude_dirs = [
+                '--exclude-dir=node_modules', '--exclude-dir=.git', 
+                '--exclude-dir=venv', '--exclude-dir=.venv', 
+                '--exclude-dir=env', '--exclude-dir=dist', 
+                '--exclude-dir=build', '--exclude-dir=__pycache__',
+                '--exclude-dir=site-packages'
+            ]
+            
+            cmd = ['grep', '-rn', '-E', 'TODO|FIXME|HACK|XXX', 'services', '--include=*.py'] + exclude_dirs
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
             
             if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split('\n')

@@ -632,7 +632,7 @@ def seed_graph_data(session: requests.Session, api_key: str, lots: List[Dict], f
                         headers={"X-API-Key": api_key}
                     )
                     total_ctes += 1
-                except:
+                except Exception:
                     pass
             
             if (i + 1) % 50 == 0:
@@ -705,7 +705,7 @@ def simulate_recall(session: requests.Session, api_key: str) -> Dict:
             headers={"X-API-Key": api_key}
         )
         result = resp.json() if resp.ok else {"nodes": [], "edges": []}
-    except:
+    except Exception:
         result = {"nodes": [], "edges": []}
     
     elapsed = time.perf_counter() - start
@@ -814,8 +814,8 @@ def main():
                 with open("/tmp/fresh_valley_demo.json") as f:
                     config = json.load(f)
                     api_key = config.get("api_key")
-            except:
-                print("❌ No API key provided. Run --seed first or use --api-key")
+            except Exception as e:
+                print(f"❌ No API key provided and failed to read config: {e}")
                 sys.exit(1)
         
         session = requests.Session()
@@ -828,8 +828,8 @@ def main():
                 with open("/tmp/fresh_valley_demo.json") as f:
                     config = json.load(f)
                     api_key = config.get("api_key")
-            except:
-                print("❌ No API key provided. Run --seed first or use --api-key")
+            except Exception as e:
+                print(f"❌ No API key provided and failed to read config: {e}")
                 sys.exit(1)
         
         session = requests.Session()
