@@ -82,31 +82,43 @@ async def get_decision(
 
 
 @router.get("/snapshot", response_model=SnapshotResponse)
-async def get_snapshot():
+async def get_snapshot(service: FinanceDecisionService = Depends(get_service)):
     """
     Get current compliance snapshot for finance vertical.
     
-    Computes:
-    - Bias score (from bias engine)
-    - Drift score (from drift engine)
-    - Documentation score
-    - Regulatory mapping score
-    - Overall compliance score
+    **Computes**:
+    - **Bias score** (30%): DIR, 80% rule compliance across protected classes
+    - **Drift score** (20%): PSI, KL/JS divergence for model features
+    - **Documentation score** (25%): Model cards, decision logs completeness
+    - **Regulatory mapping score** (25%): Obligation coverage and compliance
     
-    **TODO**: Implement snapshot computation using:
-    - verticals/finance/snapshot_logic.py functions
-    - services/analytics/bias_engine.py
-    - services/analytics/drift_engine.py
+    **Risk Levels**:
+    - low: >= 90% compliance
+    - medium: 70-89% compliance
+    - high: 50-69% compliance
+    - critical: < 50% compliance
     """
+    from .snapshot_service import FinanceSnapshotService
+    
     logger.info("Computing compliance snapshot")
     
-    # Placeholder response
-    # TODO: Integrate with snapshot_adapter.py and analytics engines
-    return SnapshotResponse(
-        snapshot_id=f"snapshot_{int(datetime.now().timestamp())}",
-        timestamp=datetime.now().isoformat(),
-        total_compliance_score=0.0
+    # Get all decisions and evaluations
+    decisions = list(service.decisions.values())
+    models = []  # Would fetch from model registry
+    
+    # Get obligation evaluations (simplified - would query from ROE)
+    obligation_evaluations = []
+    
+    # Compute snapshot using analytics engines
+    snapshot_service = FinanceSnapshotService()
+    snapshot = snapshot_service.compute_snapshot(
+        decisions=decisions,
+        models=models,
+        obligation_evaluations=obligation_evaluations
     )
+    
+    return snapshot
+
 
 
 @router.get("/stats")
