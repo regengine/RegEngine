@@ -559,7 +559,8 @@ export default function FinancePage() {
             <div className="code-header">
               <span>record_credit_decision.py</span>
             </div>
-            <pre>{`<span class="keyword">import</span> requests
+            <pre dangerouslySetInnerHTML={{
+              __html: `<span class="keyword">import</span> requests
 
 <span class="comment"># Record a credit denial decision with full compliance workflow</span>
 response = requests.<span class="func">post</span>(<span class="string">"http://localhost:8000/v1/finance/decision/record"</span>, json={
@@ -587,7 +588,7 @@ result = response.<span class="func">json</span>()
 snapshot = requests.<span class="func">get</span>(<span class="string">"http://localhost:8000/v1/finance/snapshot"</span>).<span class="func">json</span>()
 <span class="keyword">print</span>(f<span class="string">"Total Compliance: {snapshot['total_compliance_score']}"</span>)
 <span class="keyword">print</span>(f<span class="string">"Bias Score: {snapshot['bias_score']}"</span>)
-<span class="keyword">print</span>(f<span class="string">"Drift Score: {snapshot['drift_score']}"</span>)`}</pre>
+<span class="keyword">print</span>(f<span class="string">"Drift Score: {snapshot['drift_score']}"</span>)` }} />
           </div>
         </div>
       </section>
