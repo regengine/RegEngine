@@ -225,24 +225,73 @@ class FinanceSnapshotService:
         for model_id, model_decisions in decisions_by_model.items():
             try:
                 # Convert to format expected by bias engine
-                formatted_decisions = [
-                    {
-                        "outcome": "approved" if d.get("decision_type") in ["credit_approval", "limit_adjustment"] else "denied",
-                        **d.get("evidence", {})
-                    }
-                    for d in model_decisions
-                ]
+                # Extract protected attributes if available
+                protected_data = []
+                for d in model_decisions:
+                    evidence = d.get("evidence", {})
+                    outcome = "approved" if d.get("decision_type") in ["credit_approval", "limitadjustment"] else "denied"
+                    
+                    # Check for protected class attributes
+                    if "race" in evidence or "gender" in evidence or "age" in evidence:
+                        protected_data.append({
+                            "outcome": outcome,
+                            **evidence
+                        })
                 
-                # Analyze bias (would check for protected class attributes in real data)
-                # For now, return placeholder
+                # Only analyze if we have protected class data
+                if len(protected_data) > 10:  # Need minimum sample size
+                    # Analyze racial disparities if race data exists
+                    race_data = [d for d in protected_data if "race" in d]
+                    if len(race_data) > 10:
+                        try:
+                            dir_result = self.bias_engine.compute_dir(
+                                race_data,
+                                protected_attribute="race",
+                                favorable_outcome="approved"
+                            )
+                            
+                            bias_detected = dir_result.get("dir", 1.0) < 0.8  # 80% rule
+                            
+                            bias_reports.append({
+                                "model_id": model_id,
+                                "bias_detected": bias_detected,
+                                "protected_classes_tested": 1,
+                                "dir_score": dir_result.get("dir", 1.0),
+                                "test_type": "disparate_impact_ratio"
+                            })
+                        except Exception as e:
+                            logger.warning(f\"DIR computation failed for model {model_id}: {e}\")\
+                            # Fallback to placeholder
+                            bias_reports.append({
+                                "model_id": model_id,
+                                "bias_detected": False,
+                                "protected_classes_tested": 0
+                            })
+                    else:
+                        # Insufficient data for bias analysis
+                        bias_reports.append({
+                            "model_id": model_id,
+                            "bias_detected": False,
+                            "protected_classes_tested": 0,
+                            "note": "insufficient_protected_class_data"
+                        })
+                else:
+                    # No protected class attributes in data - can't detect bias
+                    bias_reports.append({
+                        "model_id": model_id,
+                        "bias_detected": False,
+                        "protected_classes_tested": 0,
+                        "note": "no_protected_attributes"
+                    })
+                
+            except Exception as e:
+                logger.warning(f"Bias analysis failed for model {model_id}: {e}")
+                # Fallback to safe placeholder
                 bias_reports.append({
                     "model_id": model_id,
                     "bias_detected": False,
                     "protected_classes_tested": 0
                 })
-                
-            except Exception as e:
-                logger.warning(f"Bias analysis failed for model {model_id}: {e}")
         
         return bias_reports
     
