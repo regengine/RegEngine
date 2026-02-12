@@ -602,6 +602,30 @@ export default function FinancePage() {
                 </span>
               </div>
             </Link>
+
+            <Link href="/tools/notice-validator" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <div style={{
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
+                padding: '1.75rem',
+                transition: 'border-color 0.2s, transform 0.2s',
+                cursor: 'pointer',
+              }}
+                onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-emerald)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
+                onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
+              >
+                <span className="badge badge-live severity" style={{ marginBottom: '0.75rem' }}>FREE</span>
+                <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>Adverse Action Notice Validator</h3>
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.55', marginBottom: '1rem' }}>
+                  Paste your denial notice text — get instant compliance grading against
+                  11 ECOA and FCRA requirements with a letter grade and specific pass/fail checks.
+                </p>
+                <span style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 500 }}>
+                  Validate Notice →
+                </span>
+              </div>
+            </Link>
           </div>
         </div>
       </section>
