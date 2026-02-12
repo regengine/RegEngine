@@ -111,28 +111,128 @@ class {vertical_name}SnapshotAdapter:
     
     def _fetch_decisions(self) -> List[Dict]:
         """Fetch recent decisions from graph."""
-        # TODO: Implement graph query
-        return []
+        if not self.graph:
+            logger.warning("No graph client available, returning empty decisions")
+            return []
+        
+        try:
+            # Query Neo4j for recent {vertical_name} decisions
+            with self.graph.session() as session:
+                result = session.run(
+                    \"\"\"
+                    MATCH (d:Decision)
+                    WHERE d.vertical = '{vertical_meta.name}'
+                    RETURN d
+                    ORDER BY d.created_at DESC
+                    LIMIT 100
+                    \"\"\"
+                )
+                decisions = [dict(record['d']) for record in result]
+                logger.debug(f"Fetched {{len(decisions)}} decisions from graph")
+                return decisions
+        except Exception as e:
+            logger.error(f"Failed to fetch decisions from graph: {{e}}")
+            return []
     
     def _fetch_models(self) -> List[Dict]:
         """Fetch model versions from graph."""
-        # TODO: Implement graph query
-        return []
+        if not self.graph:
+            logger.warning("No graph client available, returning empty models")
+            return []
+        
+        try:
+            # Query Neo4j for {vertical_name} model versions
+            with self.graph.session() as session:
+                result = session.run(
+                    \"\"\"
+                    MATCH (m:Model)
+                    WHERE m.vertical = '{vertical_meta.name}'
+                    RETURN m
+                    ORDER BY m.version DESC
+                    LIMIT 50
+                    \"\"\"
+                )
+models = [dict(record['m']) for record in result]
+                logger.debug(f"Fetched {{len(models)}} models from graph")
+                return models
+        except Exception as e:
+            logger.error(f"Failed to fetch models from graph: {{e}}")
+            return []
     
     def _fetch_bias_reports(self) -> List[Dict]:
         """Fetch bias reports from graph."""
-        # TODO: Implement graph query
-        return []
+        if not self.graph:
+            logger.warning("No graph client available, returning empty bias reports")
+            return []
+        
+        try:
+            # Query Neo4j for {vertical_name} bias reports
+            with self.graph.session() as session:
+                result = session.run(
+                    \"\"\"
+                    MATCH (b:BiasReport)
+                    WHERE b.vertical = '{vertical_meta.name}'
+                    RETURN b
+                    ORDER BY b.created_at DESC
+                    LIMIT 50
+                    \"\"\"
+                )
+                reports = [dict(record['b']) for record in result]
+                logger.debug(f"Fetched {{len(reports)}} bias reports from graph")
+                return reports
+        except Exception as e:
+            logger.error(f"Failed to fetch bias reports from graph: {{e}}")
+            return []
     
     def _fetch_drift_events(self) -> List[Dict]:
         """Fetch drift events from graph."""
-        # TODO: Implement graph query
-        return []
+        if not self.graph:
+            logger.warning("No graph client available, returning empty drift events")
+            return []
+        
+        try:
+            # Query Neo4j for {vertical_name} drift events
+            with self.graph.session() as session:
+                result = session.run(
+                    \"\"\"
+                    MATCH (de:DriftEvent)
+                    WHERE de.vertical = '{vertical_meta.name}'
+                    RETURN de
+                    ORDER BY de.detected_at DESC
+                    LIMIT 50
+                    \"\"\"
+                )
+                events = [dict(record['de']) for record in result]
+                logger.debug(f"Fetched {{len(events)}} drift events from graph")
+                return events
+        except Exception as e:
+            logger.error(f"Failed to fetch drift events from graph: {{e}}")
+            return []
     
     def _fetch_obligation_evaluations(self) -> List[Dict]:
         """Fetch obligation evaluations from graph."""
-        # TODO: Implement graph query
-        return []
+        if not self.graph:
+            logger.warning("No graph client available, returning empty obligation evaluations")
+            return []
+        
+        try:
+            # Query Neo4j for {vertical_name} obligation evaluations
+            with self.graph.session() as session:
+                result = session.run(
+                    \"\"\"
+                    MATCH (oe:ObligationEvaluation)
+                    WHERE oe.vertical = '{vertical_meta.name}'
+                    RETURN oe
+                    ORDER BY oe.evaluated_at DESC
+                    LIMIT 100
+                    \"\"\"
+                )
+                evaluations = [dict(record['oe']) for record in result]
+                logger.debug(f"Fetched {{len(evaluations)}} obligation evaluations from graph")
+                return evaluations
+        except Exception as e:
+            logger.error(f"Failed to fetch obligation evaluations from graph: {{e}}")
+            return []
     
     def _determine_risk_level(self, total_score: float, evaluations: List[Dict]) -> str:
         """
@@ -159,8 +259,39 @@ class {vertical_name}SnapshotAdapter:
     
     def _persist_snapshot(self, snapshot: Dict):
         """Persist snapshot to graph and DB."""
-        # TODO: Implement persistence
-        pass
+        # Persist to Neo4j if available
+        if self.graph:
+            try:
+                with self.graph.session() as session:
+                    session.run(
+                        \"\"\"
+                        CREATE (s:ComplianceSnapshot {{
+                            snapshot_id: $snapshot_id,
+                            timestamp: $timestamp,
+                            vertical: $vertical,
+                            bias_score: $bias_score,
+                            drift_score: $drift_score,
+                            documentation_score: $documentation_score,
+                            regulatory_mapping_score: $regulatory_mapping_score,
+                            obligation_coverage_percent: $obligation_coverage_percent,
+                            total_compliance_score: $total_compliance_score,
+                            risk_level: $risk_level,
+                            num_open_violations: $num_open_violations
+                        }})
+                        \"\"\",
+                        **snapshot
+                    )
+                    logger.info(f"Persisted snapshot {{snapshot['snapshot_id']}} to graph")
+            except Exception as e:
+                logger.error(f"Failed to persist snapshot to graph: {{e}}")
+        
+        # Persist to DB if available
+        if self.db:
+            try:
+                # Would insert into snapshots table
+                logger.debug("DB persistence not yet implemented")
+            except Exception as e:
+                logger.error(f"Failed to persist snapshot to DB: {{e}}")
 
 
 import uuid
