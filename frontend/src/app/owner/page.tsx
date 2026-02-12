@@ -143,7 +143,7 @@ export default function OwnerDashboard() {
     };
 
     return (
-        <div className="p-8">
+        <div className="min-h-screen bg-[#06090f] p-8 text-slate-200">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
@@ -151,13 +151,13 @@ export default function OwnerDashboard() {
                 className="flex items-center justify-between mb-8"
             >
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Executive Dashboard</h1>
-                    <p className="text-white/60 mt-1">Welcome back. Here's your business overview.</p>
+                    <h1 className="text-3xl font-bold text-white tracking-tight">Executive Dashboard</h1>
+                    <p className="text-slate-400 mt-1">Welcome back. Here's your business overview.</p>
                 </div>
                 <Button
                     onClick={handleRefresh}
                     variant="outline"
-                    className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                    className="bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
                 >
                     <RefreshCw className={cn('h-4 w-4 mr-2', isRefreshing && 'animate-spin')} />
                     Refresh
