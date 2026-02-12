@@ -3,12 +3,18 @@
 import Link from 'next/link';
 
 const industries = [
-    { name: "Food & Beverage", status: "live" as const },
-    { name: "Energy", status: "coming" as const },
-    { name: "Nuclear", status: "coming" as const },
-    { name: "Finance", status: "coming" as const },
-    { name: "Healthcare", status: "coming" as const },
-    { name: "Manufacturing", status: "coming" as const },
+    { name: "Food & Beverage", href: "/ftl-checker" },
+    { name: "Energy", href: "/verticals/energy" },
+    { name: "Nuclear", href: "/verticals/nuclear" },
+    { name: "Finance", href: "/verticals/finance" },
+    { name: "Healthcare", href: "/verticals/healthcare" },
+    { name: "Manufacturing", href: "/verticals/manufacturing" },
+    { name: "Construction", href: "/verticals/construction" },
+    { name: "Aerospace", href: "/verticals/aerospace" },
+    { name: "Automotive", href: "/verticals/automotive" },
+    { name: "Gaming", href: "/verticals/gaming" },
+    { name: "Entertainment", href: "/verticals/entertainment" },
+    { name: "Technology", href: "/verticals/technology" },
 ];
 
 export function MarketingFooter() {
@@ -97,20 +103,15 @@ export function MarketingFooter() {
                     <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--re-text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "16px" }}>
                         Industries
                     </h4>
-                    <Link href="/ftl-checker" style={{ fontSize: "13px", color: "var(--re-brand)", textDecoration: "none", marginBottom: "10px", display: "block" }}>
-                        Food & Beverage ✓
-                    </Link>
-                    {industries.filter(i => i.status === "coming").slice(0, 5).map((ind) => (
-                        <span
+                    {industries.map((ind) => (
+                        <Link
                             key={ind.name}
-                            style={{ fontSize: "13px", color: "var(--re-text-disabled)", marginBottom: "10px", display: "block" }}
+                            href={ind.href}
+                            style={{ fontSize: "13px", color: "var(--re-text-tertiary)", textDecoration: "none", marginBottom: "10px", display: "block" }}
                         >
                             {ind.name}
-                        </span>
+                        </Link>
                     ))}
-                    <Link href="/#industries" style={{ fontSize: "12px", color: "var(--re-text-disabled)", textDecoration: "none", marginTop: "4px", display: "block" }}>
-                        +5 more →
-                    </Link>
                 </div>
 
                 <div>
