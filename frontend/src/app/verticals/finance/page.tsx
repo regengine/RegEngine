@@ -396,7 +396,7 @@ export default function FinancePage() {
           </div>
 
           <div className="hero-actions">
-            <Link href="/api/docs" className="btn btn-primary">
+            <Link href="/docs/api" className="btn btn-primary">
               View API Docs →
             </Link>
             <a className="btn btn-secondary" href="#api">See Examples</a>
@@ -609,7 +609,7 @@ snapshot = requests.<span class="func">get</span>(<span class="string">"http://l
               <h4 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1rem' }}>
                 Product
               </h4>
-              <Link href="/api/docs" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
+              <Link href="/docs/api" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
                 API Docs
               </Link>
               <Link href="/verticals/finance#api" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
