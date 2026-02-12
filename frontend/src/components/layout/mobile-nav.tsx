@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Clapperboard, Users, FileText, Zap, Server } from "lucide-react"
+import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Clapperboard, Users, FileText, Zap, Server, Scan } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -25,6 +25,12 @@ export function MobileNav() {
                 { href: "/fsma", label: "FSMA", icon: Leaf },
                 { href: "/review", label: "Review", icon: ClipboardCheck },
                 { href: "/opportunities", label: "Opportunities", icon: TrendingUp },
+            ]
+        },
+        {
+            title: "Field Operations",
+            items: [
+                { href: "/mobile/capture", label: "Field Capture", icon: Scan, iconClass: "text-red-500" },
             ]
         },
         {
