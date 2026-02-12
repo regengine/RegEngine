@@ -98,24 +98,31 @@ async def get_snapshot(service: FinanceDecisionService = Depends(get_service)):
     - high: 50-69% compliance
     - critical: < 50% compliance
     """
-    from .snapshot_service import FinanceSnapshotService
+    from .snapshot_adapter import FinanceSnapshotAdapter
     
-    logger.info("Computing compliance snapshot")
+    logger.info("Computing compliance snapshot via Adapter")
     
-    # Get all decisions and evaluations
-    decisions = list(service.decisions.values())
-    models = []  # Would fetch from model registry
-    
-    # Get obligation evaluations (simplified - would query from ROE)
-    obligation_evaluations = []
-    
-    # Compute snapshot using analytics engines
-    snapshot_service = FinanceSnapshotService()
-    snapshot = snapshot_service.compute_snapshot(
-        decisions=decisions,
-        models=models,
-        obligation_evaluations=obligation_evaluations
-    )
+    # Use Adapter to fetch data from Graph/DB and compute snapshot
+    # This addresses Issue #67 (Unimplemented Graph Queries)
+    if service.graph_store:
+        adapter = FinanceSnapshotAdapter(
+            graph_client=service.graph_store.driver,
+            db_client=service.db_engine
+        )
+        snapshot_data = adapter.compute_snapshot()
+        
+        # Convert dict to SnapshotResponse model
+        snapshot = SnapshotResponse(**snapshot_data)
+    else:
+        logger.warning("Graph store not available, returning empty snapshot")
+        # Fallback to empty/mock if graph is down
+        from .snapshot_service import FinanceSnapshotService
+        snapshot_service = FinanceSnapshotService()
+        snapshot = snapshot_service.compute_snapshot(
+            decisions=[], models=[], obligation_evaluations=[]
+        )
+        
+    return snapshot
     
     return snapshot
 

@@ -383,3 +383,67 @@ class FinanceGraphStore:
         """
         result = tx.run(query, model_id=model_id)
         return [record["violation"] for record in result]
+
+    def create_bias_report(
+        self,
+        report_id: str,
+        model_id: str,
+        bias_detected: bool,
+        dir_score: float,
+        metrics: Dict[str, Any]
+    ) -> None:
+        """Create bias report node."""
+        with self.driver.session() as session:
+            session.write_transaction(
+                self._create_bias_report_tx,
+                report_id, model_id, bias_detected, dir_score, metrics
+            )
+            
+    @staticmethod
+    def _create_bias_report_tx(tx, report_id, model_id, bias_detected, dir_score, metrics):
+        query = """
+        MATCH (m:ModelVersion {model_id: $model_id})
+        CREATE (b:BiasReport {
+            report_id: $report_id,
+            timestamp: datetime(),
+            vertical: 'finance',
+            bias_detected: $bias_detected,
+            dir_score: $dir_score,
+            metrics: $metrics
+        })
+        CREATE (m)-[:HAS_BIAS_CHECK {timestamp: datetime()}]->(b)
+        """
+        tx.run(query, report_id=report_id, model_id=model_id, 
+               bias_detected=bias_detected, dir_score=dir_score, metrics=metrics)
+
+    def create_drift_event(
+        self,
+        event_id: str,
+        model_id: str,
+        psi_score: float,
+        drift_detected: bool,
+        feature_scores: Dict[str, float]
+    ) -> None:
+        """Create drift event node."""
+        with self.driver.session() as session:
+            session.write_transaction(
+                self._create_drift_event_tx,
+                event_id, model_id, psi_score, drift_detected, feature_scores
+            )
+
+    @staticmethod
+    def _create_drift_event_tx(tx, event_id, model_id, psi_score, drift_detected, feature_scores):
+        query = """
+        MATCH (m:ModelVersion {model_id: $model_id})
+        CREATE (d:DriftEvent {
+            event_id: $event_id,
+            timestamp: datetime(),
+            vertical: 'finance',
+            drift_detected: $drift_detected,
+            psi_score: $psi_score,
+            feature_scores: $feature_scores
+        })
+        CREATE (m)-[:HAS_DRIFT_CHECK {timestamp: datetime()}]->(d)
+        """
+        tx.run(query, event_id=event_id, model_id=model_id, 
+               psi_score=psi_score, drift_detected=drift_detected, feature_scores=feature_scores)

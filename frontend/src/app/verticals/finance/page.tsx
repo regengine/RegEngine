@@ -4,12 +4,15 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 
+import { useToast } from "@/components/ui/use-toast";
+
 export default function FinancePage() {
   const [stats, setStats] = useState<any>(null);
   const [snapshot, setSnapshot] = useState<any>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     setLoading(true);
@@ -27,6 +30,11 @@ export default function FinancePage() {
       .catch(err => {
         console.error('Stats fetch failed:', err);
         setStatsError('Unable to load statistics. The Finance API may be offline.');
+        toast({
+          title: "Connection Error",
+          description: "Could not connect to Finance API stats service.",
+          variant: "destructive",
+        });
       });
 
     // Fetch compliance snapshot
@@ -42,11 +50,16 @@ export default function FinancePage() {
       .catch(err => {
         console.error('Snapshot fetch failed:', err);
         setSnapshotError('Unable to load compliance snapshot. The Finance API may be offline.');
+        toast({
+          title: "Snapshot Failed",
+          description: "Could not retrieve compliance snapshot.",
+          variant: "destructive",
+        });
       })
       .finally(() => {
         setLoading(false);
       });
-  }, []);
+  }, [toast]);
 
   return (
     <>
