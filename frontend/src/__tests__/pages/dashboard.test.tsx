@@ -173,7 +173,7 @@ describe('DashboardPage', () => {
 
         it('handles loading state for dashboard data', async () => {
             // Mock slow API response
-            let resolveData: any;
+            let resolveData!: (value: unknown) => void;
             const dataPromise = new Promise((resolve) => {
                 resolveData = resolve;
             });

@@ -279,6 +279,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # L-1: Non-standard HEALTHCHECK intervals (10s/30s vs 30s/5s) are intentional —
+    # energy service loads ML models at startup requiring a longer start_period.
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8700/health" ]
       interval: 10s
@@ -445,7 +447,7 @@ services:
     command: redis-server --appendonly yes
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     restart: unless-stopped
     ports:
       - "8080:8080"
