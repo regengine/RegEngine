@@ -295,9 +295,17 @@ class TestSnapshotCreation:
     
     @pytest.fixture
     def mock_db(self):
-        """Mock database session."""
-        # TODO: Implement with actual test database
-        pass
+        """Mock database session for snapshot creation tests."""
+        from unittest.mock import MagicMock
+        session = MagicMock()
+        # Mock query chain for SnapshotEngine._calculate_system_status
+        session.query.return_value.filter.return_value.all.return_value = []
+        session.query.return_value.filter.return_value.count.return_value = 0
+        # Mock add/commit/refresh cycle
+        session.add.return_value = None
+        session.commit.return_value = None
+        session.refresh.return_value = None
+        return session
     
     def test_snapshot_id_is_uuid7(self):
         """Snapshot IDs should be UUIDv7 (time-ordered)."""
