@@ -4,7 +4,7 @@ import { T } from '@/lib/design-tokens';
 
 export default function DocsHomePage() {
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+    <div className="re-page">
       {/* Code-First Hero - Drop into code within 10 seconds */}
       <div style={{
         background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.05) 100%)',
@@ -55,8 +55,8 @@ export default function DocsHomePage() {
               justifyContent: 'space-between',
               alignItems: 'center',
             }}>
-              <span style={{ fontSize: '12px', color: T.textMuted }}>POST /v1/records</span>
-              <span style={{ fontSize: '12px', color: T.accent }}>bash</span>
+              <span className="text-xs text-re-text-muted">POST /v1/records</span>
+              <span className="text-xs text-re-brand">bash</span>
             </div>
             <pre style={{
               padding: '20px',
@@ -100,7 +100,7 @@ export default function DocsHomePage() {
               gap: '8px',
             }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
-              <span style={{ fontSize: '12px', color: T.accent }}>201 Created</span>
+              <span className="text-xs text-re-brand">201 Created</span>
             </div>
             <pre style={{
               padding: '16px 20px',
@@ -138,7 +138,7 @@ export default function DocsHomePage() {
                 textDecoration: 'none',
               }}
             >
-              <Key style={{ width: 16, height: 16 }} />
+              <Key className="w-4 h-4" />
               Get API Key
             </Link>
             <Link
@@ -158,7 +158,7 @@ export default function DocsHomePage() {
               }}
             >
               Full Quickstart Guide
-              <ArrowRight style={{ width: 16, height: 16 }} />
+              <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function DocsHomePage() {
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* Row 2: By Task */}
-        <section style={{ marginBottom: '48px' }}>
+        <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
             fontWeight: 600,
@@ -208,7 +208,7 @@ export default function DocsHomePage() {
         </section>
 
         {/* Row 3: By Vertical - Food & Beverage FIRST */}
-        <section style={{ marginBottom: '48px' }}>
+        <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
             fontWeight: 600,
@@ -267,7 +267,7 @@ export default function DocsHomePage() {
         </section>
 
         {/* Row 4: Popular Pages */}
-        <section style={{ marginBottom: '48px' }}>
+        <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
             fontWeight: 600,

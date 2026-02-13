@@ -51,8 +51,7 @@ export function CreditRedemption({ onCreditApplied, compact = false }: CreditRed
         return (
             <button
                 onClick={() => setShowInput(true)}
-                className="flex items-center gap-2 text-sm transition-colors hover:opacity-80"
-                style={{ color: 'var(--re-brand)' }}
+                className="flex items-center gap-2 text-sm transition-colors hover:opacity-80 text-re-brand"
             >
                 <Tag className="w-4 h-4" />
                 Have a promo or referral code?
@@ -65,8 +64,8 @@ export function CreditRedemption({ onCreditApplied, compact = false }: CreditRed
             {/* Header */}
             {!compact && (
                 <div className="flex items-center gap-2">
-                    <Gift className="w-5 h-5" style={{ color: 'var(--re-brand)' }} />
-                    <h3 className="font-semibold text-sm" style={{ color: 'var(--re-text-primary)' }}>
+                    <Gift className="w-5 h-5 text-re-brand" />
+                    <h3 className="font-semibold text-sm text-re-text-primary">
                         Apply Credit Code
                     </h3>
                 </div>
@@ -126,9 +125,9 @@ export function CreditRedemption({ onCreditApplied, compact = false }: CreditRed
                             }}
                         >
                             {lastResult.success ? (
-                                <Sparkles className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--re-success)' }} />
+                                <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-re-success" />
                             ) : (
-                                <X className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--re-danger)' }} />
+                                <X className="w-4 h-4 mt-0.5 shrink-0 text-re-danger" />
                             )}
                             <div>
                                 <p
@@ -141,9 +140,9 @@ export function CreditRedemption({ onCreditApplied, compact = false }: CreditRed
                                 >
                                     {lastResult.success ? 'Credit Applied!' : 'Code Not Valid'}
                                 </p>
-                                <p style={{ color: 'var(--re-text-secondary)' }}>{lastResult.message}</p>
+                                <p className="text-re-text-secondary">{lastResult.message}</p>
                                 {lastResult.success && (
-                                    <p className="mt-1 font-semibold" style={{ color: 'var(--re-success)' }}>
+                                    <p className="mt-1 font-semibold text-re-success">
                                         +${(lastResult.amount_cents / 100).toFixed(2)} added to your balance
                                     </p>
                                 )}

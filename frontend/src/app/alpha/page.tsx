@@ -187,7 +187,7 @@ export default function AlphaPage() {
                         color: T.purple,
                     }}
                 >
-                    <Lock style={{ width: 14, height: 14 }} />
+                    <Lock className="w-3.5 h-3.5" />
                     Private Alpha — Invite Only
                 </div>
 
@@ -243,7 +243,7 @@ export default function AlphaPage() {
                         marginBottom: '48px',
                     }}
                 >
-                    <AlertTriangle style={{ width: 16, height: 16 }} />
+                    <AlertTriangle className="w-4 h-4" />
                     Only {spotCount} spots remaining in the Alpha cohort
                 </div>
 
@@ -412,7 +412,7 @@ export default function AlphaPage() {
                                 ) : (
                                     <>
                                         Request Alpha Access
-                                        <ArrowRight style={{ width: 16, height: 16 }} />
+                                        <ArrowRight className="w-4 h-4" />
                                     </>
                                 )}
                             </button>
@@ -464,7 +464,7 @@ export default function AlphaPage() {
                             You&apos;re on the List!
                         </h2>
                         <p style={{ fontSize: '15px', color: T.textMuted, lineHeight: 1.6, marginBottom: '24px' }}>
-                            We&apos;ll review your application and reach out to <strong style={{ color: T.heading }}>{email}</strong> within 48 hours.
+                            We&apos;ll review your application and reach out to <strong className="text-re-text-primary">{email}</strong> within 48 hours.
                         </p>
                         <div
                             style={{
@@ -477,7 +477,7 @@ export default function AlphaPage() {
                                 lineHeight: 1.6,
                             }}
                         >
-                            <strong style={{ color: T.text }}>While you wait:</strong> Check the
+                            <strong className="text-re-text-secondary">While you wait:</strong> Check the
                             {' '}<Link href="/ftl-checker" style={{ color: T.accent, textDecoration: 'none' }}>FTL Checker</Link>{' '}
                             to see if your products are on the FDA&apos;s traceability list, or explore our
                             {' '}<Link href="/docs" style={{ color: T.accent, textDecoration: 'none' }}>API documentation</Link>.
@@ -584,7 +584,7 @@ export default function AlphaPage() {
                     padding: '80px 24px',
                 }}
             >
-                <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                <div className="max-w-[700px] mx-auto">
                     <h2
                         style={{
                             fontSize: '28px',
@@ -770,7 +770,7 @@ export default function AlphaPage() {
                             onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
                         >
                             Request Alpha Access
-                            <ChevronRight style={{ width: 16, height: 16 }} />
+                            <ChevronRight className="w-4 h-4" />
                         </button>
                     )}
                 </div>

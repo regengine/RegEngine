@@ -339,7 +339,7 @@ export default function RetailerSuppliersPage() {
                             Don&apos;t leave without your free assessment
                         </h3>
                         <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.7, marginBottom: 24 }}>
-                            Major retailers are evaluating suppliers <strong style={{ color: T.warning }}>right now</strong>.
+                            Major retailers are evaluating suppliers <strong className="text-re-warning">right now</strong>.
                             Get a personalized gap analysis before your next category review.
                         </p>
                         <Link href="#assessment">
@@ -501,14 +501,14 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div style={{ textAlign: 'center', marginBottom: 48 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                    <p className="re-section-label">
                         Compliance Timeline
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
                         The Clock Is Already Running
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 500, margin: '0 auto' }}>
-                        Major retailer internal deadlines come <strong style={{ color: T.warning }}>before</strong> the FDA mandate.
+                        Major retailer internal deadlines come <strong className="text-re-warning">before</strong> the FDA mandate.
                         Suppliers who wait will be too late.
                     </p>
                 </div>
@@ -615,7 +615,7 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div style={{ textAlign: 'center', marginBottom: 48 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                    <p className="re-section-label">
                         Live Trace Demo
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
@@ -762,7 +762,7 @@ export default function RetailerSuppliersPage() {
                         transform: traceComplete ? 'translateY(0)' : 'translateY(8px)',
                         transition: 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div className="flex items-center justify-between">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 <span style={{ fontSize: 16 }}>{traceDirection === 'forward' ? '⚡' : '🎯'}</span>
                                 <span style={{ fontSize: 14, fontWeight: 600, color: traceDirection === 'forward' ? T.accent : T.warning }}>
@@ -816,7 +816,7 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div style={{ textAlign: 'center', marginBottom: 48 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                    <p className="re-section-label">
                         Why Switch?
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
@@ -901,8 +901,8 @@ export default function RetailerSuppliersPage() {
                 transform: riskCalc.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 40 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                <div className="text-center mb-10">
+                    <p className="re-section-label">
                         Risk Calculator
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
@@ -994,9 +994,9 @@ export default function RetailerSuppliersPage() {
                     }}>
                         <span style={{ fontSize: 18 }}>💡</span>
                         <p style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }}>
-                            RegEngine costs <strong style={{ color: T.accent }}>
+                            RegEngine costs <strong className="text-re-brand">
                                 {annualRevenue <= 50 ? '$999' : annualRevenue <= 200 ? '$1,999' : 'a fraction'}/mo
-                            </strong> — that's <strong style={{ color: T.accent }}>
+                            </strong> — that's <strong className="text-re-brand">
                                 {((monthlyRisk / (annualRevenue <= 50 ? 999 : annualRevenue <= 200 ? 1999 : 4999)) * 100).toFixed(0)}x less
                             </strong> than what you risk losing every month.
                         </p>
@@ -1019,8 +1019,8 @@ export default function RetailerSuppliersPage() {
                 transform: pricing.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 40 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                <div className="text-center mb-10">
+                    <p className="re-section-label">
                         Pricing
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
@@ -1174,7 +1174,7 @@ export default function RetailerSuppliersPage() {
 
                     {!submitted ? (
                         <form onSubmit={handleAssessment} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                            <div style={{ textAlign: 'left' }}>
+                            <div className="text-left">
                                 <label style={{ fontSize: 13, fontWeight: 500, color: T.text, display: 'block', marginBottom: 6 }}>
                                     Company Name
                                 </label>
@@ -1193,7 +1193,7 @@ export default function RetailerSuppliersPage() {
                                     onBlur={e => e.currentTarget.style.borderColor = T.border}
                                 />
                             </div>
-                            <div style={{ textAlign: 'left' }}>
+                            <div className="text-left">
                                 <label style={{ fontSize: 13, fontWeight: 500, color: T.text, display: 'block', marginBottom: 6 }}>
                                     Work Email
                                 </label>
@@ -1266,8 +1266,8 @@ export default function RetailerSuppliersPage() {
                 transform: socialReveal.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 40 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                <div className="text-center mb-10">
+                    <p className="re-section-label">
                         Proof It Works
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
@@ -1330,8 +1330,8 @@ export default function RetailerSuppliersPage() {
                 transform: competitorReveal.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 40 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                <div className="text-center mb-10">
+                    <p className="re-section-label">
                         How We Compare
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
@@ -1378,8 +1378,8 @@ export default function RetailerSuppliersPage() {
                 transform: faqReveal.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 40 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                <div className="text-center mb-10">
+                    <p className="re-section-label">
                         FAQ
                     </p>
                     <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
@@ -1437,7 +1437,7 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                    <p style={{ fontSize: 12, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, fontWeight: 600 }}>
+                    <p className="re-section-label">
                         Works With Your Stack
                     </p>
                     <h2 style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 700, color: T.heading }}>

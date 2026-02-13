@@ -4,13 +4,13 @@ import { T } from '@/lib/design-tokens';
 
 export default function WebhooksDocsPage() {
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+        <div className="re-page">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
                 padding: '24px',
             }}>
-                <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                <div className="max-w-[700px] mx-auto">
                     <Link
                         href="/docs"
                         style={{
@@ -23,11 +23,11 @@ export default function WebhooksDocsPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to Docs
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <Webhook style={{ width: 28, height: 28, color: T.accent }} />
                         <span style={{
                             background: 'rgba(16,185,129,0.2)',
@@ -41,26 +41,26 @@ export default function WebhooksDocsPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         Webhooks
                     </h1>
-                    <p style={{ color: T.textMuted, fontSize: '16px' }}>
+                    <p className="text-re-text-muted text-base">
                         Real-time event notifications for compliance changes
                     </p>
                 </div>
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '700px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="re-page-narrow">
 
                 {/* Event Types Preview */}
-                <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-12">
+                    <h2 className="re-heading-md">
                         <Zap style={{ width: 20, height: 20, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
                         Planned Event Types
                     </h2>
 
-                    <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="grid gap-3">
                         {[
                             { event: 'record.created', desc: 'New compliance record created' },
                             { event: 'record.verified', desc: 'Record independently verified' },
@@ -85,15 +85,15 @@ export default function WebhooksDocsPage() {
                                     borderRadius: '4px',
                                     fontSize: '12px',
                                 }}>{item.event}</code>
-                                <span style={{ fontSize: '13px', color: T.textMuted }}>{item.desc}</span>
+                                <span className="text-[13px] text-re-text-muted">{item.desc}</span>
                             </div>
                         ))}
                     </div>
                 </section>
 
                 {/* Payload Preview */}
-                <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-12">
+                    <h2 className="re-heading-md">
                         Sample Payload
                     </h2>
 
@@ -109,7 +109,7 @@ export default function WebhooksDocsPage() {
                             padding: '8px 16px',
                             borderBottom: `1px solid ${T.border}`,
                         }}>
-                            <span style={{ fontSize: '12px', color: T.textMuted }}>POST (to your endpoint)</span>
+                            <span className="text-xs text-re-text-muted">POST (to your endpoint)</span>
                         </div>
                         <pre style={{
                             padding: '16px 20px',
@@ -143,7 +143,7 @@ export default function WebhooksDocsPage() {
                     textAlign: 'center',
                 }}>
                     <Webhook style={{ width: 32, height: 32, color: T.accent, margin: '0 auto 16px' }} />
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h3 className="re-heading-sm">
                         Get Notified on Release
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>
@@ -164,7 +164,7 @@ export default function WebhooksDocsPage() {
                             textDecoration: 'none',
                         }}
                     >
-                        <Mail style={{ width: 16, height: 16 }} />
+                        <Mail className="w-4 h-4" />
                         Notify Me
                     </a>
                 </section>

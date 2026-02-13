@@ -127,7 +127,7 @@ export default function SecurityPage() {
     };
 
     return (
-        <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.sans, color: T.textBody }}>
+        <div className="re-page">
             <link
                 href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
                 rel="stylesheet"
@@ -155,7 +155,7 @@ export default function SecurityPage() {
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15 }}>
                         Don't trust us.<br />
-                        <span style={{ color: T.accent }}>Verify us.</span>
+                        <span className="text-re-brand">Verify us.</span>
                     </h1>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
                         Security in compliance software shouldn't be a marketing claim — it should be independently auditable. Here's exactly what we've built, what we've verified, and what's still on the roadmap. No hand-waving.
@@ -181,7 +181,7 @@ export default function SecurityPage() {
                             }}
                         >
                             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-                                <span style={{ color: T.accent }}>{feature.icon}</span>
+                                <span className="text-re-brand">{feature.icon}</span>
                                 <h3 style={{ fontSize: "16px", fontWeight: 600, color: T.textPrimary, margin: 0, flex: 1 }}>
                                     {feature.title}
                                 </h3>
@@ -210,7 +210,7 @@ export default function SecurityPage() {
                                     lineHeight: 1.5,
                                 }}
                             >
-                                <span style={{ color: T.accent }}>Evidence:</span> {feature.evidence}
+                                <span className="text-re-brand">Evidence:</span> {feature.evidence}
                             </div>
                         </div>
                     ))}

@@ -200,7 +200,7 @@ export default function VerifyPage() {
                         }}
                     >
                         Every RegEngine traceability record is protected by a{' '}
-                        <strong style={{ color: T.text }}>SHA-256 cryptographic hash</strong>.
+                        <strong className="text-re-text-secondary">SHA-256 cryptographic hash</strong>.
                         Our open-source verification script lets you independently verify
                         record integrity — without relying on our servers.
                     </p>
@@ -249,7 +249,7 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Trust Model ───────────────────────────────────────── */}
-            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="re-page-content">
                 <div
                     style={{
                         display: 'grid',
@@ -402,7 +402,7 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Installation ──────────────────────────────────────── */}
-            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="re-page-content">
                 <h2
                     style={{
                         fontSize: 28,
@@ -445,7 +445,7 @@ export default function VerifyPage() {
                             >
                                 {i + 1}
                             </div>
-                            <div style={{ flex: 1 }}>
+                            <div className="flex-1">
                                 <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
                                     {step.title}
                                 </div>
@@ -480,7 +480,7 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Code Sample ──────────────────────────────────────── */}
-            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="re-page-content">
                 <h2
                     style={{
                         fontSize: 28,
@@ -559,7 +559,7 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Hash Algorithm ────────────────────────────────────── */}
-            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="re-page-content">
                 <h2
                     style={{
                         fontSize: 28,
@@ -620,7 +620,7 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Canonical Fields Table ────────────────────────────── */}
-            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="re-page-content">
                 <h2
                     style={{
                         fontSize: 24,

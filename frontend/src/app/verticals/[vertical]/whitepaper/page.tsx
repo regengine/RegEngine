@@ -162,12 +162,12 @@ export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
 
             {/* Header Section */}
             <div style={wpStyles.header} className="print:hidden">
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <div className="max-w-[900px] mx-auto">
                     <Link
                         href={`/verticals/${vertical}`}
                         style={wpStyles.backLink}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to {verticalName} Vertical
                     </Link>
 
@@ -206,26 +206,26 @@ export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
                         margin: 0,
                         lineHeight: 1.8,
                     }}>
-                        <strong style={{ color: T.accent }}>Choose your path:</strong><br />
-                        <span style={{ color: T.text }}>CFO/CRO?</span>{' '}
+                        <strong className="text-re-brand">Choose your path:</strong><br />
+                        <span className="text-re-text-secondary">CFO/CRO?</span>{' '}
                         <Link href={`/verticals/${vertical}/whitepaper/executive-brief`} style={{ color: T.accent, textDecoration: 'underline' }}>
                             Read the Executive Brief
                         </Link>
-                        <span style={{ color: T.textMuted }}> (2 min)</span><br />
-                        <span style={{ color: T.text }}>CISO/Compliance?</span>{' '}
+                        <span className="text-re-text-muted"> (2 min)</span><br />
+                        <span className="text-re-text-secondary">CISO/Compliance?</span>{' '}
                         <Link href={`/verticals/${vertical}/whitepaper/technical`} style={{ color: T.accent, textDecoration: 'underline' }}>
                             Read the Technical Architecture
                         </Link>
-                        <span style={{ color: T.textMuted }}> (5 min)</span><br />
-                        <span style={{ color: T.text }}>Building the business case?</span>{' '}
-                        <span style={{ color: 'var(--re-text-primary)' }}>Keep scrolling.</span>
+                        <span className="text-re-text-muted"> (5 min)</span><br />
+                        <span className="text-re-text-secondary">Building the business case?</span>{' '}
+                        <span className="text-re-text-primary">Keep scrolling.</span>
                     </p>
                 </div>
             </div>
 
             {/* Visual Stats Section - Non-technical friendly */}
             <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: '32px 24px' }} className="print:hidden">
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <div className="max-w-[900px] mx-auto">
                     <p style={{ color: T.textMuted, fontSize: '14px', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                         Key Benefits at a Glance
                     </p>
@@ -291,7 +291,7 @@ export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
                 <div style={wpStyles.cta} className="print:hidden">
                     <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px' }}>Ready to Get Started?</h3>
                     <p style={{ marginBottom: '16px', opacity: 0.9 }}>Contact our sales team to schedule a personalized demo.</p>
-                    <div style={{ display: 'flex', gap: '16px' }}>
+                    <div className="flex gap-4">
                         <a href="mailto:sales@regengine.co?subject=Schedule Demo&body=Hi, I'd like to schedule a personalized demo of RegEngine.">
                             <Button style={{ background: 'white', color: T.accent }}>
                                 Schedule Demo

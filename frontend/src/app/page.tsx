@@ -1022,10 +1022,10 @@ export default function RegEngineLanding() {
                 {" "}<span style={{ color: "var(--re-brand)" }}>api.regengine.co/v1/verify/doc_a1b2c3</span>
                 {"\n\n"}
                 <span style={{ color: "var(--re-text-disabled)" }}>{"{"}</span>
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"document_id"</span>: <span style={{ color: "var(--re-warning)" }}>"doc_a1b2c3"</span>,
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"status"</span>: <span style={{ color: "var(--re-warning)" }}>"verified"</span>,
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"hashes"</span>: {"{ "}<span style={{ color: "var(--re-info)" }}>"content_sha256"</span>: <span style={{ color: "var(--re-warning)" }}>"a3f2..."</span>{" }"},
-                {"\n  "}<span style={{ color: "var(--re-info)" }}>"verified_at"</span>: <span style={{ color: "var(--re-warning)" }}>"2026-02-08T20:15:00Z"</span>
+                {"\n  "}<span className="text-re-info">"document_id"</span>: <span style={{ color: "var(--re-warning)" }}>"doc_a1b2c3"</span>,
+                {"\n  "}<span className="text-re-info">"status"</span>: <span style={{ color: "var(--re-warning)" }}>"verified"</span>,
+                {"\n  "}<span className="text-re-info">"hashes"</span>: {"{ "}<span className="text-re-info">"content_sha256"</span>: <span style={{ color: "var(--re-warning)" }}>"a3f2..."</span>{" }"},
+                {"\n  "}<span className="text-re-info">"verified_at"</span>: <span style={{ color: "var(--re-warning)" }}>"2026-02-08T20:15:00Z"</span>
                 {"\n"}<span style={{ color: "var(--re-text-disabled)" }}>{"}"}</span>
               </pre>
             </div>

@@ -15,8 +15,7 @@ import { Spinner } from '@/components/ui/spinner';
 export default function CheckoutPage() {
     return (
         <div
-            className="min-h-screen relative"
-            style={{ background: 'var(--re-surface-base)' }}
+            className="min-h-screen relative bg-re-surface-base"
         >
             <PageContainer>
                 <Suspense

@@ -129,10 +129,10 @@ export function MarketingHeader() {
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
-                                <span style={{ fontSize: "14px" }}>🥬</span>
+                                <span className="text-sm">🥬</span>
                                 <div>
-                                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--re-text-primary)" }}>FTL Checker</div>
-                                    <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>FSMA 204 Food Traceability</div>
+                                    <div className="text-[13px] font-medium text-re-text-primary">FTL Checker</div>
+                                    <div className="text-[11px] text-re-text-muted">FSMA 204 Food Traceability</div>
                                 </div>
                             </Link>
                             <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "4px 12px" }} />
@@ -143,30 +143,30 @@ export function MarketingHeader() {
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
-                                <span style={{ fontSize: "14px" }}>⚖️</span>
+                                <span className="text-sm">⚖️</span>
                                 <div>
-                                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--re-text-primary)" }}>Bias Checker</div>
-                                    <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>Disparate Impact & 80% Rule</div>
+                                    <div className="text-[13px] font-medium text-re-text-primary">Bias Checker</div>
+                                    <div className="text-[11px] text-re-text-muted">Disparate Impact & 80% Rule</div>
                                 </div>
                             </Link>
                             <Link href="/tools/obligation-scanner" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", textDecoration: "none", transition: "background 0.15s" }}
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
-                                <span style={{ fontSize: "14px" }}>🔍</span>
+                                <span className="text-sm">🔍</span>
                                 <div>
-                                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--re-text-primary)" }}>Obligation Scanner</div>
-                                    <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>Regulatory obligation mapping</div>
+                                    <div className="text-[13px] font-medium text-re-text-primary">Obligation Scanner</div>
+                                    <div className="text-[11px] text-re-text-muted">Regulatory obligation mapping</div>
                                 </div>
                             </Link>
                             <Link href="/tools/notice-validator" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", textDecoration: "none", transition: "background 0.15s" }}
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
-                                <span style={{ fontSize: "14px" }}>📋</span>
+                                <span className="text-sm">📋</span>
                                 <div>
-                                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--re-text-primary)" }}>Notice Validator</div>
-                                    <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>Adverse action notice check</div>
+                                    <div className="text-[13px] font-medium text-re-text-primary">Notice Validator</div>
+                                    <div className="text-[11px] text-re-text-muted">Adverse action notice check</div>
                                 </div>
                             </Link>
                         </div>

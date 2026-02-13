@@ -617,9 +617,9 @@ export default function FTLCheckerPage() {
                             Instantly check if your products are covered by FDA FSMA 204 Food Traceability requirements
                         </p>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} style={{ color: T.accent }} /> No account required</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} style={{ color: T.accent }} /> Results in seconds</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} style={{ color: T.accent }} /> Deadline: July 2028</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} className="text-re-brand" /> Deadline: July 2028</span>
                         </div>
                     </motion.div>
                 </div>
@@ -630,7 +630,7 @@ export default function FTLCheckerPage() {
                 {currentStep !== 'categories' && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}>
                         {[{ num: 1, label: 'Categories', step: 'categories' }, { num: 2, label: 'Exemptions', step: 'exemptions' }, { num: 3, label: 'Results', step: 'results' }].map((s, i) => (
-                            <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div key={s.step} className="flex items-center gap-2">
                                 {i > 0 && <div style={{ width: '32px', height: '1px', background: T.border }} />}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: currentStep === s.step ? T.accent : T.textDim }}>
                                     <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, background: currentStep === s.step ? T.accent : T.elevated, color: currentStep === s.step ? T.bg : T.textDim }}>{s.num}</div>
@@ -646,9 +646,9 @@ export default function FTLCheckerPage() {
                     {currentStep === 'categories' && (
                         <motion.div key="selector" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
-                                <div style={{ marginBottom: '24px' }}>
+                                <div className="mb-6">
                                     <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <Search size={20} style={{ color: T.accent }} /> Select Your Product Categories
+                                        <Search size={20} className="text-re-brand" /> Select Your Product Categories
                                     </h2>
                                     <p style={{ fontSize: '14px', color: T.textMuted, margin: 0 }}>Choose all the food categories your company handles</p>
                                 </div>
@@ -667,11 +667,11 @@ export default function FTLCheckerPage() {
                                                     border: `2px solid ${isSelected ? T.accent : T.border}`,
                                                 }}
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                                <div className="flex items-start gap-3">
                                                     <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `2px solid ${isSelected ? T.accent : T.textDim}`, background: isSelected ? T.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
                                                         {isSelected && <CheckCircle2 size={12} style={{ color: T.bg }} />}
                                                     </div>
-                                                    <div style={{ flex: 1 }}>
+                                                    <div className="flex-1">
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                             <Icon size={14} style={{ color: isSelected ? T.accent : T.textDim }} />
                                                             <span style={{ fontWeight: 500, color: T.textPrimary, fontSize: '14px' }}>{category.name}</span>
@@ -688,7 +688,7 @@ export default function FTLCheckerPage() {
                                 </div>
 
                                 <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ fontSize: '13px', color: T.textMuted }}>{selectedCategories.length} categories selected</span>
+                                    <span className="text-[13px] text-re-text-muted">{selectedCategories.length} categories selected</span>
                                     <button
                                         onClick={handleCheck}
                                         disabled={selectedCategories.length === 0}
@@ -710,14 +710,14 @@ export default function FTLCheckerPage() {
                     {currentStep === 'exemptions' && (
                         <motion.div key="exemptions" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
                             <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
-                                <div style={{ marginBottom: '24px' }}>
+                                <div className="mb-6">
                                     <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <ShieldCheck size={20} style={{ color: T.accent }} /> Check for Exemptions
+                                        <ShieldCheck size={20} className="text-re-brand" /> Check for Exemptions
                                     </h2>
                                     <p style={{ fontSize: '14px', color: T.textMuted, margin: 0 }}>Answer these questions to see if you qualify for any FSMA 204 exemptions</p>
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div className="flex flex-col gap-3">
                                     {EXEMPTION_QUESTIONS.map((q, index) => {
                                         const Icon = q.icon;
                                         const answer = exemptionAnswers[q.id];
@@ -727,11 +727,11 @@ export default function FTLCheckerPage() {
 
                                         return (
                                             <div key={q.id} style={{ padding: '20px', borderRadius: '10px', background: answer === true ? T.successBg : T.surface, border: `2px solid ${answer === true ? T.successBorder : T.border}` }}>
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                                                <div className="flex items-start gap-4">
                                                     <div style={{ padding: '10px', borderRadius: '8px', background: answer === true ? T.successBg : T.elevated }}>
                                                         <Icon size={20} style={{ color: answer === true ? T.accent : T.textDim }} />
                                                     </div>
-                                                    <div style={{ flex: 1 }}>
+                                                    <div className="flex-1">
                                                         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
                                                             <div>
                                                                 <p style={{ fontWeight: 500, color: T.textPrimary, margin: '0 0 6px', fontSize: '14px', lineHeight: 1.5 }}>{q.question}</p>
@@ -741,7 +741,7 @@ export default function FTLCheckerPage() {
                                                                 <button onClick={() => handleExemptionAnswer(q.id, true)} style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, background: answer === true ? T.accent : T.elevated, color: answer === true ? T.bg : T.textBody }}>Yes</button>
                                                                 <button onClick={() => handleExemptionAnswer(q.id, false)} style={{ padding: '6px 14px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 500, background: answer === false ? T.textDim : T.elevated, color: answer === false ? '#fff' : T.textBody }}>No</button>
                                                                 <button onClick={() => setShowExemptionHelp(isExpanded ? null : q.id)} style={{ padding: '6px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: 'transparent' }}>
-                                                                    <HelpCircle size={16} style={{ color: T.textDim }} />
+                                                                    <HelpCircle size={16} className="text-re-text-disabled" />
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -760,7 +760,7 @@ export default function FTLCheckerPage() {
 
                                 <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                     <button onClick={handleBackToCategories} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>← Back to Categories</button>
-                                    <div style={{ display: 'flex', gap: '12px' }}>
+                                    <div className="flex gap-3">
                                         <button onClick={handleSkipExemptions} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>Skip Exemptions</button>
                                         <button onClick={handleFinishExemptions} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', borderRadius: '8px', border: 'none', background: T.accent, color: T.bg, fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
                                             See Results <ArrowRight size={16} />
@@ -800,7 +800,7 @@ export default function FTLCheckerPage() {
                                     </div>
 
                                     {/* Coverage Meter */}
-                                    <div style={{ marginBottom: '32px' }}>
+                                    <div className="mb-8">
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                             <span style={{ fontSize: '16px', fontWeight: 600, color: T.textPrimary }}>FSMA 204 Coverage</span>
                                             <span style={{ fontSize: '28px', fontWeight: 700, color: coveragePercent === 100 ? T.danger : coveragePercent > 50 ? T.warning : coveragePercent > 0 ? T.warning : T.accent }}>{coveragePercent}%</span>
@@ -814,30 +814,30 @@ export default function FTLCheckerPage() {
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
                                         <div style={{ textAlign: 'center', padding: '20px', background: T.successBg, borderRadius: '10px', border: `1px solid ${T.successBorder}` }}>
                                             <div style={{ fontSize: '28px', fontWeight: 700, color: T.accent }}>{results.coveredCount}</div>
-                                            <div style={{ fontSize: '12px', color: T.textMuted }}>On FTL</div>
+                                            <div className="text-xs text-re-text-muted">On FTL</div>
                                         </div>
                                         <div style={{ textAlign: 'center', padding: '20px', background: T.elevated, borderRadius: '10px', border: `1px solid ${T.border}` }}>
                                             <div style={{ fontSize: '28px', fontWeight: 700, color: T.textDim }}>{results.notCoveredCount}</div>
-                                            <div style={{ fontSize: '12px', color: T.textMuted }}>Not on FTL</div>
+                                            <div className="text-xs text-re-text-muted">Not on FTL</div>
                                         </div>
                                         <div style={{ textAlign: 'center', padding: '20px', background: T.warningBg, borderRadius: '10px', border: `1px solid ${T.warningBorder}` }}>
                                             <div style={{ fontSize: '28px', fontWeight: 700, color: T.warning }}>{results.highOutbreakCount}</div>
-                                            <div style={{ fontSize: '12px', color: T.textMuted }}>High Outbreak Frequency</div>
+                                            <div className="text-xs text-re-text-muted">High Outbreak Frequency</div>
                                         </div>
                                     </div>
 
                                     {/* Exemption Status */}
                                     {results.coveredCount > 0 && (
                                         <div style={{ marginBottom: '24px', padding: '20px', borderRadius: '10px', background: results.exemptionStatus === 'EXEMPT' ? T.successBg : results.exemptionStatus === 'NOT_EXEMPT' ? T.warningBg : T.elevated, border: `2px solid ${results.exemptionStatus === 'EXEMPT' ? T.successBorder : results.exemptionStatus === 'NOT_EXEMPT' ? T.warningBorder : T.border}` }}>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                                                {results.exemptionStatus === 'EXEMPT' ? <ShieldCheck size={24} style={{ color: T.accent }} /> : results.exemptionStatus === 'NOT_EXEMPT' ? <AlertTriangle size={24} style={{ color: T.warning }} /> : <HelpCircle size={24} style={{ color: T.textDim }} />}
+                                            <div className="flex items-start gap-3">
+                                                {results.exemptionStatus === 'EXEMPT' ? <ShieldCheck size={24} className="text-re-brand" /> : results.exemptionStatus === 'NOT_EXEMPT' ? <AlertTriangle size={24} className="text-re-warning" /> : <HelpCircle size={24} className="text-re-text-disabled" />}
                                                 <div>
                                                     <h4 style={{ fontWeight: 600, color: results.exemptionStatus === 'EXEMPT' ? T.accent : results.exemptionStatus === 'NOT_EXEMPT' ? T.warning : T.textPrimary, margin: '0 0 8px' }}>
                                                         {results.exemptionStatus === 'EXEMPT' ? '🎉 You May Be Exempt from FSMA 204!' : results.exemptionStatus === 'NOT_EXEMPT' ? 'Full FSMA 204 Requirements Apply' : 'Exemption Status Unknown'}
                                                     </h4>
                                                     {results.exemptionStatus === 'EXEMPT' && results.qualifyingExemptions.map(e => (
                                                         <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '4px' }}>
-                                                            <CheckCircle2 size={14} style={{ color: T.accent }} /> <a href={ecfrUrl(e.citation)} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 500, color: T.accent, textDecoration: 'none' }}>{e.citation}</a>
+                                                            <CheckCircle2 size={14} className="text-re-brand" /> <a href={ecfrUrl(e.citation)} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 500, color: T.accent, textDecoration: 'none' }}>{e.citation}</a>
                                                         </div>
                                                     ))}
                                                     {results.exemptionStatus === 'NOT_EXEMPT' && <p style={{ fontSize: '13px', color: T.textMuted, margin: 0 }}>You must comply with FSMA 204 traceability requirements for covered products by July 2028.</p>}
@@ -849,7 +849,7 @@ export default function FTLCheckerPage() {
                                     {/* Same Form Ingredient Rule */}
                                     {results.coveredCount > 0 && results.exemptionStatus !== 'EXEMPT' && (
                                         <div style={{ marginBottom: '24px', padding: '20px', borderRadius: '10px', background: T.infoBg, border: `2px solid ${T.infoBorder}` }}>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                            <div className="flex items-start gap-3">
                                                 <AlertTriangle size={24} style={{ color: T.info }} />
                                                 <div>
                                                     <h4 style={{ fontWeight: 600, color: T.info, margin: '0 0 8px' }}>"Same Form" Ingredient Rule</h4>
@@ -862,15 +862,15 @@ export default function FTLCheckerPage() {
 
                                     {/* Category Breakdown with CTE/KDE Details */}
                                     <h3 style={{ fontWeight: 600, color: T.textPrimary, margin: '0 0 16px' }}>Category Breakdown</h3>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div className="flex flex-col gap-2">
                                         {results.categories.map(category => (
                                             <div key={category.id} style={{ background: T.elevated, borderRadius: '8px', overflow: 'hidden' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                        {category.covered ? <CheckCircle2 size={18} style={{ color: T.accent }} /> : <XCircle size={18} style={{ color: T.textDim }} />}
+                                                    <div className="flex items-center gap-3">
+                                                        {category.covered ? <CheckCircle2 size={18} className="text-re-brand" /> : <XCircle size={18} className="text-re-text-disabled" />}
                                                         <span style={{ fontSize: '14px', color: T.textPrimary }}>{category.name}</span>
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    <div className="flex items-center gap-2">
                                                         {category.outbreakFrequency === 'HIGH' && <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: T.dangerBg, color: T.danger, border: `1px solid ${T.dangerBorder}` }}>Higher Outbreak Frequency</span>}
                                                         <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim }}>{category.covered ? 'FSMA 204 Applies' : 'Not Covered'}</span>
                                                     </div>
@@ -922,12 +922,12 @@ export default function FTLCheckerPage() {
                                 <div style={{ padding: '28px', background: `linear-gradient(135deg, ${T.accent} 0%, #059669 100%)`, borderRadius: '16px', color: '#fff', alignSelf: 'start' }}>
                                     {results.coveredCount > 0 ? (
                                         <>
-                                            <AlertTriangle size={28} style={{ marginBottom: '12px' }} />
+                                            <AlertTriangle size={28} className="mb-3" />
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>Action Required</h3>
                                             <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 8px' }}>You have <strong>{results.coveredCount} product categories</strong> that require FSMA 204 compliance by <strong>July 2028</strong>.</p>
                                             <p style={{ fontSize: '13px', opacity: 0.8, margin: '0 0 20px' }}>But major retailers are already requiring traceability NOW.</p>
                                             {!emailSubmitted ? (
-                                                <form onSubmit={handleEmailSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
                                                     <p style={{ fontWeight: 600, margin: 0 }}>Get Your Full Compliance Report</p>
                                                     <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ padding: '12px 16px', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.2)', color: '#fff', fontSize: '14px' }} />
                                                     <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', borderRadius: '8px', border: 'none', background: '#fff', color: T.accent, fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
@@ -944,7 +944,7 @@ export default function FTLCheckerPage() {
                                         </>
                                     ) : (
                                         <>
-                                            <CheckCircle2 size={28} style={{ marginBottom: '12px' }} />
+                                            <CheckCircle2 size={28} className="mb-3" />
                                             <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 12px' }}>Good News!</h3>
                                             <p style={{ fontSize: '14px', opacity: 0.9, margin: '0 0 16px' }}>None of your selected categories are currently on the Food Traceability List.</p>
                                             <Link href="/fsma" style={{ display: 'block', textAlign: 'center', padding: '12px', borderRadius: '8px', background: '#fff', color: T.accent, fontSize: '14px', fontWeight: 600, textDecoration: 'none' }}>Learn About Retailer Requirements</Link>
@@ -981,36 +981,36 @@ export default function FTLCheckerPage() {
                             {/* Regulatory Sources Footer */}
                             <div style={{ marginTop: '32px', padding: '24px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px' }}>
                                 <h4 style={{ fontSize: '14px', fontWeight: 600, color: T.textPrimary, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <ExternalLink size={16} style={{ color: T.accent }} />
+                                    <ExternalLink size={16} className="text-re-brand" />
                                     Regulatory Sources
                                 </h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                                    <a href="https://www.ecfr.gov/current/title-21/part-1/subpart-S" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://www.ecfr.gov/current/title-21/part-1/subpart-S" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         21 CFR Part 1 Subpart S — Full Rule Text
                                     </a>
-                                    <a href="https://www.federalregister.gov/documents/2022/11/21/2022-24417/requirements-for-additional-traceability-records-for-certain-foods" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://www.federalregister.gov/documents/2022/11/21/2022-24417/requirements-for-additional-traceability-records-for-certain-foods" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         Final Rule — 87 FR 70910 (Nov 21, 2022)
                                     </a>
-                                    <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         FDA Food Traceability List (Official)
                                     </a>
-                                    <a href="https://www.federalregister.gov/documents/2025/08/07/2025-14967/requirements-for-additional-traceability-records-for-certain-foods-compliance-date-extension" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://www.federalregister.gov/documents/2025/08/07/2025-14967/requirements-for-additional-traceability-records-for-certain-foods-compliance-date-extension" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         Compliance Date Extension — 90 FR 38084
                                     </a>
-                                    <a href="https://www.fda.gov/files/food/published/FSMA%20Rule%20for%20Food%20Traceability%20-%202024-0520-CTEs-KDEs.pdf" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://www.fda.gov/files/food/published/FSMA%20Rule%20for%20Food%20Traceability%20-%202024-0520-CTEs-KDEs.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         FDA CTE/KDE Reference Chart (PDF)
                                     </a>
-                                    <a href="https://www.fda.gov/regulatory-information/search-fda-guidance-documents/small-entity-compliance-guide-requirements-additional-traceability-records-certain-foods-what-you" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://www.fda.gov/regulatory-information/search-fda-guidance-documents/small-entity-compliance-guide-requirements-additional-traceability-records-certain-foods-what-you" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         Small Entity Compliance Guide
                                     </a>
-                                    <a href="https://collaboration.fda.gov/tefcv13" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: T.accent, textDecoration: 'none' }}>
-                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: T.accent }} />
+                                    <a href="https://collaboration.fda.gov/tefcv13" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
+                                        <span className="re-dot bg-re-brand" />
                                         FDA Exemptions & Exclusions Tool
                                     </a>
                                 </div>
