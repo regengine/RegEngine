@@ -36,15 +36,15 @@ export function CodePlayground({
             // Create a sandboxed console
             const logs: string[] = [];
             const mockConsole = {
-                log: (...args: any[]) => {
+                log: (...args: unknown[]) => {
                     logs.push(args.map(arg =>
                         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
                     ).join(' '));
                 },
-                error: (...args: any[]) => {
+                error: (...args: unknown[]) => {
                     logs.push('ERROR: ' + args.map(arg => String(arg)).join(' '));
                 },
-                warn: (...args: any[]) => {
+                warn: (...args: unknown[]) => {
                     logs.push('WARN: ' + args.map(arg => String(arg)).join(' '));
                 },
             };
@@ -56,8 +56,8 @@ export function CodePlayground({
             await executor(mockConsole);
 
             setOutput(logs.join('\n') || '// Code executed successfully with no output');
-        } catch (err: any) {
-            setError(err.message || 'Unknown error occurred');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Unknown error occurred');
             setOutput('');
         } finally {
             setIsRunning(false);

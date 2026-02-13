@@ -64,6 +64,20 @@ interface VerifyResult {
     verified_at: string;
 }
 
+interface DiffChange {
+    label: string;
+    before: string;
+    after: string;
+    diff?: string;
+    severity: 'critical' | 'high' | 'positive' | 'info';
+}
+
+interface DiffResult {
+    snapshot_a?: { name: string };
+    snapshot_b?: { name: string };
+    changes?: DiffChange[];
+}
+
 /**
  * Get current user email from session storage.
  * TODO: Replace with proper auth session context (e.g., next-auth useSession)
@@ -96,7 +110,7 @@ export default function SnapshotsPage() {
     // Diff modal
     const [showDiffModal, setShowDiffModal] = useState(false);
     const [selectedForDiff, setSelectedForDiff] = useState<string[]>([]);
-    const [diffResult, setDiffResult] = useState<any>(null);
+    const [diffResult, setDiffResult] = useState<DiffResult | null>(null);
 
     // Form state
     const [snapshotName, setSnapshotName] = useState('');
@@ -832,7 +846,7 @@ export default function SnapshotsPage() {
                                 </div>
                             ) : (
                                 <div className="space-y-3">
-                                    {diffResult.changes?.map((change: any, index: number) => (
+                                    {diffResult.changes?.map((change: DiffChange, index: number) => (
                                         <div
                                             key={index}
                                             className={`p-4 rounded-xl border ${change.severity === 'critical' ? 'border-red-500/50 bg-red-500/10' :

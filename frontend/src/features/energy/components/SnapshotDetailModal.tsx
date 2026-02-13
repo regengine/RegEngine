@@ -25,8 +25,8 @@ interface SnapshotDetail {
     generated_by: string;
     trigger_event: string | null;
     regulatory_version: string;
-    asset_states?: any;
-    esp_config?: any;
+    asset_states?: Record<string, Record<string, unknown>>;
+    esp_config?: Record<string, unknown>;
 }
 
 function DataItem({ label, value }: { label: string; value: string | number }) {
@@ -132,11 +132,11 @@ export function SnapshotDetailModal({ snapshotId, onClose }: SnapshotDetailModal
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {Object.entries(data.asset_states).map(([assetId, state]: [string, any]) => (
+                                            {Object.entries(data.asset_states).map(([assetId, state]: [string, Record<string, unknown>]) => (
                                                 <tr key={assetId} className="border-t">
                                                     <td className="p-3 font-mono text-xs">{assetId}</td>
                                                     <td className="p-3">
-                                                        <Badge variant="outline">{state.status || 'N/A'}</Badge>
+                                                        <Badge variant="outline">{String(state.status || 'N/A')}</Badge>
                                                     </td>
                                                     <td className="p-3 text-xs text-muted-foreground">
                                                         {JSON.stringify(state, null, 2).slice(0, 100)}...

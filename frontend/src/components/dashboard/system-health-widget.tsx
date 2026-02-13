@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface ServiceStatusProps {
     name: string;
     status: 'healthy' | 'unhealthy' | 'degraded';
-    details?: any;
+    details?: Record<string, unknown>;
 }
 
 const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
@@ -43,9 +43,9 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
                 {getIcon()}
                 <div>
                     <p className="font-medium capitalize">{name}</p>
-                    {status !== 'healthy' && details?.error && (
+                    {status !== 'healthy' && details?.error != null && (
                         <p className="text-xs text-muted-foreground truncate max-w-[200px]">
-                            {details.error}
+                            {String(details.error)}
                         </p>
                     )}
                 </div>
@@ -100,7 +100,7 @@ export function SystemHealthWidget() {
                 <CardTitle className="text-sm font-medium">System Health</CardTitle>
                 <div className="flex items-center gap-2">
                     <span className={`h-2 w-2 rounded-full ${overallStatus === 'healthy' ? 'bg-green-500' :
-                            overallStatus === 'degraded' ? 'bg-yellow-500' : 'bg-red-500'
+                        overallStatus === 'degraded' ? 'bg-yellow-500' : 'bg-red-500'
                         }`} />
                     <span className="text-xs text-muted-foreground capitalize">{overallStatus}</span>
                 </div>
@@ -109,7 +109,7 @@ export function SystemHealthWidget() {
                 {services.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No services monitored.</p>
                 ) : (
-                    services.map((service: any) => (
+                    services.map((service: ServiceStatusProps) => (
                         <ServiceStatus
                             key={service.name}
                             name={service.name}

@@ -32,7 +32,7 @@ export interface SystemStatusResponse {
   services: {
     name: string;
     status: 'healthy' | 'unhealthy';
-    details: any;
+    details: Record<string, unknown>;
   }[];
 }
 

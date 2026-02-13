@@ -103,7 +103,16 @@ function StatCard({ title, value, subtitle, icon: Icon, delay = 0, gradient, ico
     );
 }
 
-function DealCard({ deal, stageColor }: { deal: any; stageColor: string }) {
+interface Deal {
+    id: string;
+    name: string;
+    tier: string;
+    acv: string;
+    owner: string;
+    daysInStage: number;
+}
+
+function DealCard({ deal, stageColor }: { deal: Deal; stageColor: string }) {
     return (
         <div className="p-3 rounded-lg bg-white/5 border border-white/10 hover:bg-white/8 transition-all group cursor-pointer">
             <div className="flex items-start justify-between mb-2">

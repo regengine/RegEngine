@@ -38,7 +38,7 @@ export default function LabelsPage() {
 
   const { mutate: initializeBatch, isPending } = useInitializeLabelBatch();
 
-  const handleInputChange = (field: keyof LabelFormData, value: any) => {
+  const handleInputChange = (field: keyof LabelFormData, value: LabelFormData[keyof LabelFormData]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
