@@ -1,16 +1,16 @@
 # Core dependencies — pinned for reproducible builds
-apscheduler>=3.10.0,<4.0.0
-pydantic>=2.5.0,<3.0.0
-pydantic-settings>=2.1.0,<3.0.0
-structlog>=24.1.0,<25.0.0
-requests>=2.31.0,<3.0.0
+apscheduler==3.10.4
+pydantic==2.5.0
+pydantic-settings==2.1.0
+structlog==24.1.0
+requests==2.32.5
 
 # Database
-sqlalchemy>=2.0.25,<3.0.0
-psycopg2-binary>=2.9.9,<3.0.0
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
 
 # Kafka
-kafka-python>=2.0.2,<3.0.0
+kafka-python==2.0.2
 
 # Metrics (optional)
-prometheus-client>=0.20.0,<1.0.0
+prometheus-client==0.19.0
