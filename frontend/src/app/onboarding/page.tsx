@@ -519,8 +519,7 @@ export default function OnboardingPage() {
                             placeholder="Acme Corp"
                             value={tenantName}
                             onChange={(e) => setTenantName(e.target.value)}
-                            className="border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-primary)' }}
+                            className="border-[var(--re-border-default)] bg-re-surface-elevated text-re-text-primary"
                           />
                         </div>
 
@@ -549,8 +548,7 @@ export default function OnboardingPage() {
                             onChange={(e) => setAdminKeyInput(e.target.value)}
                             aria-invalid={createKeyMutation.isError || createTenantMutation.isError}
                             aria-describedby="onboarding-error"
-                            className="border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-primary)' }}
+                            className="border-[var(--re-border-default)] bg-re-surface-elevated text-re-text-primary"
                           />
                         </div>
 
@@ -601,8 +599,7 @@ export default function OnboardingPage() {
                             placeholder="rge_..."
                             value={existingApiKey}
                             onChange={(e) => setExistingApiKey(e.target.value)}
-                            className="border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-elevated)', color: 'var(--re-text-primary)' }}
+                            className="border-[var(--re-border-default)] bg-re-surface-elevated text-re-text-primary"
                           />
                         </div>
 

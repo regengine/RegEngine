@@ -290,7 +290,7 @@ export default async function WhitePaperPage({ params }: WhitePaperPageProps) {
                 {/* Footer CTA Section */}
                 <div style={wpStyles.cta} className="print:hidden">
                     <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px' }}>Ready to Get Started?</h3>
-                    <p style={{ marginBottom: '16px', opacity: 0.9 }}>Contact our sales team to schedule a personalized demo.</p>
+                    <p className="mb-4 opacity-90">Contact our sales team to schedule a personalized demo.</p>
                     <div className="flex gap-4">
                         <a href="mailto:sales@regengine.co?subject=Schedule Demo&body=Hi, I'd like to schedule a personalized demo of RegEngine.">
                             <Button style={{ background: 'white', color: T.accent }}>

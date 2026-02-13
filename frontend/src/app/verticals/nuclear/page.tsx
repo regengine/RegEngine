@@ -164,7 +164,7 @@ export default function NuclearPage() {
       </section>
 
       {/* ITAAC Tracker Preview */}
-      <section className={styles.section} style={{ paddingTop: 0 }}>
+      <section className={`${styles.section} pt-0`}>
         <div className={styles.container}>
           <div className={styles.sectionLabel}>ITAAC Closure Tracking</div>
           <h2 className={styles.sectionTitle}>

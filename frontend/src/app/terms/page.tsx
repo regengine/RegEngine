@@ -162,7 +162,7 @@ export default function TermsPage() {
             />
 
             {/* Hero */}
-            <section style={{ position: "relative", zIndex: 2, maxWidth: "720px", margin: "0 auto", padding: "80px 24px 48px" }}>
+            <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-12">
                 <div
                     style={{
                         opacity: animateIn ? 1 : 0,
@@ -205,7 +205,7 @@ export default function TermsPage() {
             </section>
 
             {/* Sections */}
-            <section style={{ position: "relative", zIndex: 2, maxWidth: "720px", margin: "0 auto", padding: "0 24px 80px" }}>
+            <section className="relative z-[2] max-w-[720px] mx-auto px-6 pb-20">
                 {sections.map((section, si) => (
                     <div
                         key={si}

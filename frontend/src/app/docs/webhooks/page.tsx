@@ -142,7 +142,7 @@ export default function WebhooksDocsPage() {
                     padding: '32px',
                     textAlign: 'center',
                 }}>
-                    <Webhook style={{ width: 32, height: 32, color: T.accent, margin: '0 auto 16px' }} />
+                    <Webhook className="w-8 h-8 text-re-brand mx-auto mb-4" />
                     <h3 className="re-heading-sm">
                         Get Notified on Release
                     </h3>

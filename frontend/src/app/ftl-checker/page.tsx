@@ -687,7 +687,7 @@ export default function FTLCheckerPage() {
                                     })}
                                 </div>
 
-                                <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div className="mt-6 flex items-center justify-between">
                                     <span className="text-[13px] text-re-text-muted">{selectedCategories.length} categories selected</span>
                                     <button
                                         onClick={handleCheck}
@@ -758,7 +758,7 @@ export default function FTLCheckerPage() {
                                     })}
                                 </div>
 
-                                <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div className="mt-6 flex items-center justify-between">
                                     <button onClick={handleBackToCategories} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>← Back to Categories</button>
                                     <div className="flex gap-3">
                                         <button onClick={handleSkipExemptions} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>Skip Exemptions</button>

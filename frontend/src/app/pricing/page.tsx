@@ -356,7 +356,7 @@ export default function PricingPage() {
 
                                 <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                                     {/* Header */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                    <div className="flex items-center gap-2.5 mb-2">
                                         <div
                                             style={{
                                                 background: tier.highlighted ? T.accentBg : T.surface,
@@ -415,7 +415,7 @@ export default function PricingPage() {
                                             }}
                                         >
                                             {isSelected ? `Continue with ${tier.name}` : tier.cta}
-                                            <ArrowRight style={{ marginLeft: 8, width: 16, height: 16 }} />
+                                            <ArrowRight className="ml-2 w-4 h-4" />
                                         </Button>
                                     </Link>
                                 </div>
@@ -440,7 +440,7 @@ export default function PricingPage() {
                     padding: '60px 24px',
                 }}
             >
-                <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+                <div className="max-w-[1000px] mx-auto">
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '12px' }}>
                         See How We Compare
                     </h2>
@@ -554,7 +554,7 @@ export default function PricingPage() {
                                 }}
                             >
                                 Start Free Trial
-                                <ArrowRight style={{ marginLeft: 8, width: 16, height: 16 }} />
+                                <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
                         <Link href="/ftl-checker">

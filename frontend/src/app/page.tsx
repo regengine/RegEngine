@@ -481,7 +481,7 @@ export default function RegEngineLanding() {
       </section>
 
       {/* ─── WHAT REGENGINE DOES ─── */}
-      <section id="product" style={{ position: "relative", zIndex: 2, maxWidth: "1120px", margin: "0 auto", padding: "100px 24px" }}>
+      <section id="product" className="relative z-[2] max-w-[1120px] mx-auto py-[100px] px-6">
         <div style={{ marginBottom: "56px" }}>
           <span
             style={{
@@ -681,7 +681,7 @@ export default function RegEngineLanding() {
       </section>
 
       {/* ─── INDUSTRY VERTICALS ─── */}
-      <section id="industries" style={{ position: "relative", zIndex: 2, maxWidth: "1120px", margin: "0 auto", padding: "100px 24px" }}>
+      <section id="industries" className="relative z-[2] max-w-[1120px] mx-auto py-[100px] px-6">
         <div style={{ marginBottom: "48px" }}>
           <span
             style={{
@@ -1017,16 +1017,16 @@ export default function RegEngineLanding() {
                   overflow: "auto",
                 }}
               >
-                <span style={{ color: "var(--re-text-disabled)" }}>$ </span>
+                <span className="text-re-text-disabled">$ </span>
                 <span style={{ color: "var(--re-text-secondary)" }}>curl</span>
                 {" "}<span className="text-re-brand">api.regengine.co/v1/verify/doc_a1b2c3</span>
                 {"\n\n"}
-                <span style={{ color: "var(--re-text-disabled)" }}>{"{"}</span>
+                <span className="text-re-text-disabled">{"{"}</span>
                 {"\n  "}<span className="text-re-info">"document_id"</span>: <span className="text-re-warning">"doc_a1b2c3"</span>,
                 {"\n  "}<span className="text-re-info">"status"</span>: <span className="text-re-warning">"verified"</span>,
                 {"\n  "}<span className="text-re-info">"hashes"</span>: {"{ "}<span className="text-re-info">"content_sha256"</span>: <span className="text-re-warning">"a3f2..."</span>{" }"},
                 {"\n  "}<span className="text-re-info">"verified_at"</span>: <span className="text-re-warning">"2026-02-08T20:15:00Z"</span>
-                {"\n"}<span style={{ color: "var(--re-text-disabled)" }}>{"}"}</span>
+                {"\n"}<span className="text-re-text-disabled">{"}"}</span>
               </pre>
             </div>
           </div>

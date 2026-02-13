@@ -11,7 +11,7 @@ export default function DocsHomePage() {
         borderBottom: `1px solid ${T.border}`,
         padding: '48px 24px',
       }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <div className="max-w-[1000px] mx-auto">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
             <div style={{
               background: 'rgba(16,185,129,0.2)',
@@ -299,7 +299,7 @@ export default function DocsHomePage() {
                   gap: '12px',
                 }}
               >
-                <item.icon style={{ width: 16, height: 16, color: T.textMuted }} />
+                <item.icon className="w-4 h-4 text-re-text-muted" />
                 <span style={{ color: 'var(--re-text-primary)', fontSize: '14px' }}>{item.name}</span>
               </Link>
             ))}
@@ -332,13 +332,13 @@ export default function DocsHomePage() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: '24px' }}>
-            <Link href="/docs/api" style={{ color: T.textMuted, fontSize: '13px', textDecoration: 'none' }}>
+            <Link href="/docs/api" className="text-re-text-muted text-[13px] no-underline">
               API Reference
             </Link>
-            <Link href="/docs/errors" style={{ color: T.textMuted, fontSize: '13px', textDecoration: 'none' }}>
+            <Link href="/docs/errors" className="text-re-text-muted text-[13px] no-underline">
               Error Codes
             </Link>
-            <a href="mailto:support@regengine.co" style={{ color: T.textMuted, fontSize: '13px', textDecoration: 'none' }}>
+            <a href="mailto:support@regengine.co" className="text-re-text-muted text-[13px] no-underline">
               Support
             </a>
           </div>

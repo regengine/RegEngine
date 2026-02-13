@@ -62,7 +62,7 @@ export default function ErrorCodesPage() {
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="max-w-[900px] mx-auto py-12 px-6">
 
                 {/* HTTP Status Codes Section */}
                 <section className="mb-14">
@@ -273,7 +273,7 @@ export default function ErrorCodesPage() {
                             <Info style={{ width: 20, height: 20, color: T.accent, flexShrink: 0, marginTop: '2px' }} />
                             <div>
                                 <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Best Practice</p>
-                                <p style={{ color: T.text, fontSize: '14px', margin: 0 }}>
+                                <p className="text-re-text-secondary text-sm m-0">
                                     Use exponential backoff with jitter for 429 and 5xx errors. Start at 1 second, double each retry, cap at 32 seconds.
                                 </p>
                             </div>
