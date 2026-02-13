@@ -266,13 +266,7 @@ export default function SupplyChainExplorerPage() {
 
     return (
         <div
-            style={{
-                minHeight: '100vh',
-                background: 'var(--re-surface-base)',
-                fontFamily: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-                color: 'var(--re-text-secondary)',
-                overflowX: 'hidden',
-            }}
+            className="min-h-screen bg-[var(--re-surface-base)] font-['Instrument_Sans',_-apple-system,_BlinkMacSystemFont,_sans-serif] text-[var(--re-text-secondary)] overflow-x-hidden"
         >
             <link
                 href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
@@ -281,102 +275,60 @@ export default function SupplyChainExplorerPage() {
 
             {/* Noise texture */}
             <div
+                className="fixed inset-0 opacity-[0.015] bg-[length:128px_128px] pointer-events-none z-[1]"
                 style={{
-                    position: 'fixed',
-                    inset: 0,
-                    opacity: 0.015,
                     backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-                    backgroundSize: '128px 128px',
-                    pointerEvents: 'none',
-                    zIndex: 1,
                 }}
             />
 
             {/* ─── HERO HEADER ─── */}
             <section
-                style={{
-                    position: 'relative',
-                    zIndex: 2,
-                    maxWidth: '1120px',
-                    margin: '0 auto',
-                    padding: '80px 24px 40px',
-                }}
+                className="relative z-[2] max-w-[1120px] mx-auto px-6 pt-20 pb-10"
             >
                 {/* Gradient glow */}
                 <div
+                    className="absolute -top-20 left-1/2 -translate-x-1/2 w-[700px] h-[400px] pointer-events-none transition-[background] duration-[600ms] ease-[ease]"
                     style={{
-                        position: 'absolute',
-                        top: '-80px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: '700px',
-                        height: '400px',
                         background: `radial-gradient(ellipse, ${chain.accentColor}0f 0%, transparent 70%)`,
-                        pointerEvents: 'none',
-                        transition: 'background 0.6s ease',
                     }}
                 />
 
                 <div
+                    className="transition-all duration-[800ms]"
                     style={{
                         opacity: animateIn ? 1 : 0,
                         transform: animateIn ? 'translateY(0)' : 'translateY(20px)',
-                        transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
+                        transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
                     }}
                 >
                     {/* Breadcrumb */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', fontSize: '13px' }}>
-                        <Link href="/" style={{ color: 'var(--re-text-disabled)', textDecoration: 'none', transition: 'color 0.2s' }}>Home</Link>
-                        <span style={{ color: 'var(--re-text-disabled)' }}>/</span>
-                        <Link href="/demo/mock-recall" style={{ color: 'var(--re-text-disabled)', textDecoration: 'none', transition: 'color 0.2s' }}>Demo</Link>
-                        <span style={{ color: 'var(--re-text-disabled)' }}>/</span>
-                        <span style={{ color: 'var(--re-text-tertiary)' }}>Supply Chain Explorer</span>
+                    <div className="flex items-center gap-2 mb-6 text-[13px]">
+                        <Link href="/" className="text-[var(--re-text-disabled)] no-underline transition-colors duration-200">Home</Link>
+                        <span className="text-[var(--re-text-disabled)]">/</span>
+                        <Link href="/demo/mock-recall" className="text-[var(--re-text-disabled)] no-underline transition-colors duration-200">Demo</Link>
+                        <span className="text-[var(--re-text-disabled)]">/</span>
+                        <span className="text-[var(--re-text-tertiary)]">Supply Chain Explorer</span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <span
-                            style={{
-                                padding: '4px 12px',
-                                background: 'rgba(16,185,129,0.08)',
-                                border: '1px solid rgba(16,185,129,0.15)',
-                                borderRadius: '20px',
-                                fontSize: '11px',
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontWeight: 500,
-                                color: 'var(--re-brand)',
-                            }}
+                            className="px-3 py-1 bg-[rgba(16,185,129,0.08)] border border-[rgba(16,185,129,0.15)] rounded-[20px] text-[11px] font-['JetBrains_Mono',_monospace] font-medium text-[var(--re-brand)]"
                         >
                             430 LIVE RECORDS
                         </span>
                         <span
-                            style={{
-                                padding: '4px 12px',
-                                background: 'rgba(99,102,241,0.08)',
-                                border: '1px solid rgba(99,102,241,0.15)',
-                                borderRadius: '20px',
-                                fontSize: '11px',
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontWeight: 500,
-                                color: 'var(--re-accent-purple)',
-                            }}
+                            className="px-3 py-1 bg-[rgba(99,102,241,0.08)] border border-[rgba(99,102,241,0.15)] rounded-[20px] text-[11px] font-['JetBrains_Mono',_monospace] font-medium text-[var(--re-accent-purple)]"
                         >
                             SHA-256 VERIFIED
                         </span>
                     </div>
 
                     <h1
-                        style={{
-                            fontSize: 'clamp(32px, 4.5vw, 48px)',
-                            fontWeight: 700,
-                            color: 'var(--re-text-primary)',
-                            lineHeight: 1.1,
-                            margin: '0 0 16px',
-                            letterSpacing: '-0.02em',
-                        }}
+                        className="text-[clamp(32px,4.5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] m-0 mb-4 tracking-[-0.02em]"
                     >
                         Supply Chain Explorer
                     </h1>
-                    <p style={{ fontSize: '17px', color: 'var(--re-text-muted)', lineHeight: 1.6, maxWidth: '640px', margin: 0 }}>
+                    <p className="text-[17px] text-[var(--re-text-muted)] leading-[1.6] max-w-[640px] m-0">
                         Explore 3 real-world recall scenarios modeled on FDA enforcement actions. Every record is
                         cryptographically hashed and independently verifiable — this is what FSMA 204 compliance looks like in practice.
                     </p>
@@ -384,13 +336,9 @@ export default function SupplyChainExplorerPage() {
             </section>
 
             {/* ─── CHAIN SELECTOR TABS ─── */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '1120px', margin: '0 auto', padding: '0 24px 40px' }}>
+            <section className="relative z-[2] max-w-[1120px] mx-auto px-6 pb-10">
                 <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '12px',
-                    }}
+                    className="grid grid-cols-3 gap-3"
                 >
                     {CHAINS.map((c) => {
                         const isActive = selectedChain === c.id;
@@ -398,46 +346,34 @@ export default function SupplyChainExplorerPage() {
                             <button
                                 key={c.id}
                                 onClick={() => handleChainSwitch(c.id)}
+                                className="p-5 rounded-xl cursor-pointer text-left text-inherit font-inherit transition-all duration-300 ease-[ease] relative overflow-hidden"
                                 style={{
-                                    padding: '20px',
                                     background: isActive
                                         ? `linear-gradient(135deg, ${c.accentColor}12, ${c.accentColor}06)`
                                         : 'rgba(255,255,255,0.02)',
                                     border: `1px solid ${isActive ? c.accentColor + '40' : 'rgba(255,255,255,0.06)'}`,
-                                    borderRadius: '12px',
-                                    cursor: 'pointer',
-                                    textAlign: 'left',
-                                    color: 'inherit',
-                                    fontFamily: 'inherit',
-                                    transition: 'all 0.3s ease',
-                                    position: 'relative',
-                                    overflow: 'hidden',
                                 }}
                             >
                                 {isActive && (
                                     <div
+                                        className="absolute top-0 left-0 right-0 h-[2px]"
                                         style={{
-                                            position: 'absolute',
-                                            top: 0,
-                                            left: 0,
-                                            right: 0,
-                                            height: '2px',
                                             background: c.accentColor,
                                         }}
                                     />
                                 )}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                                    <span style={{ fontSize: '24px' }}>{c.icon}</span>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: '14px', fontWeight: 600, color: isActive ? 'var(--re-text-primary)' : 'var(--re-text-tertiary)' }}>
+                                <div className="flex items-center gap-[10px] mb-2">
+                                    <span className="text-2xl">{c.icon}</span>
+                                    <div className="flex-1">
+                                        <div className="text-sm font-semibold" style={{ color: isActive ? 'var(--re-text-primary)' : 'var(--re-text-tertiary)' }}>
                                             {c.title}
                                         </div>
-                                        <div style={{ fontSize: '11px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace" }}>
+                                        <div className="text-[11px] text-[var(--re-text-disabled)] font-['JetBrains_Mono',_monospace]">
                                             {c.eventCount} events • {c.batchCount} batches
                                         </div>
                                     </div>
                                 </div>
-                                <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>{c.subtitle}</div>
+                                <div className="text-xs text-[var(--re-text-muted)] leading-[1.4]">{c.subtitle}</div>
                             </button>
                         );
                     })}
@@ -447,39 +383,26 @@ export default function SupplyChainExplorerPage() {
             {/* ─── CHAIN DETAIL ─── */}
             <section
                 key={chain.id}
-                style={{
-                    position: 'relative',
-                    zIndex: 2,
-                    maxWidth: '1120px',
-                    margin: '0 auto',
-                    padding: '0 24px 80px',
-                }}
+                className="relative z-[2] max-w-[1120px] mx-auto px-6 pb-20"
             >
                 {/* Recall Basis Banner */}
                 <div
+                    className="py-4 px-5 rounded-r-lg mb-8"
                     style={{
-                        padding: '16px 20px',
                         background: `linear-gradient(90deg, ${chain.accentColor}08, transparent)`,
                         borderLeft: `3px solid ${chain.accentColor}`,
-                        borderRadius: '0 8px 8px 0',
-                        marginBottom: '32px',
                     }}
                 >
-                    <div style={{ fontSize: '11px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-disabled)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    <div className="text-[11px] font-['JetBrains_Mono',_monospace] text-[var(--re-text-disabled)] mb-1 uppercase tracking-[0.08em]">
                         Based on real FDA recall
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{chain.recallBasis}</div>
-                    <div style={{ fontSize: '13px', color: 'var(--re-text-tertiary)', marginTop: '6px', lineHeight: 1.5 }}>{chain.demoStory}</div>
+                    <div className="text-sm font-semibold text-[var(--re-text-primary)]">{chain.recallBasis}</div>
+                    <div className="text-[13px] text-[var(--re-text-tertiary)] mt-1.5 leading-[1.5]">{chain.demoStory}</div>
                 </div>
 
                 {/* Stats Row */}
                 <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(4, 1fr)',
-                        gap: '12px',
-                        marginBottom: '32px',
-                    }}
+                    className="grid grid-cols-4 gap-3 mb-8"
                 >
                     {[
                         { value: String(chain.eventCount), label: 'CTE Records', sub: 'SHA-256 hashed' },
@@ -489,41 +412,29 @@ export default function SupplyChainExplorerPage() {
                     ].map((stat, i) => (
                         <div
                             key={i}
-                            style={{
-                                padding: '20px',
-                                background: 'rgba(255,255,255,0.02)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                borderRadius: '10px',
-                                textAlign: 'center',
-                            }}
+                            className="p-5 bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-[10px] text-center"
                         >
-                            <div style={{ fontSize: '28px', fontWeight: 700, color: chain.accentColor, fontFamily: "'JetBrains Mono', monospace" }}>{stat.value}</div>
-                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)', marginTop: '4px' }}>{stat.label}</div>
-                            <div style={{ fontSize: '10px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace", marginTop: '2px' }}>{stat.sub}</div>
+                            <div className="text-[28px] font-bold font-['JetBrains_Mono',_monospace]" style={{ color: chain.accentColor }}>{stat.value}</div>
+                            <div className="text-[13px] font-semibold text-[var(--re-text-primary)] mt-1">{stat.label}</div>
+                            <div className="text-[10px] text-[var(--re-text-disabled)] font-['JetBrains_Mono',_monospace] mt-0.5">{stat.sub}</div>
                         </div>
                     ))}
                 </div>
 
                 {/* CTE Flow Diagram */}
-                <div style={{ marginBottom: '40px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div className="mb-10">
+                    <div className="flex items-center justify-between mb-4">
                         <div>
-                            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>CTE Event Flow</h2>
-                            <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: 0 }}>Critical Tracking Events required by FSMA 204</p>
+                            <h2 className="text-xl font-bold text-[var(--re-text-primary)] m-0 mb-1">CTE Event Flow</h2>
+                            <p className="text-[13px] text-[var(--re-text-muted)] m-0">Critical Tracking Events required by FSMA 204</p>
                         </div>
                         <button
                             onClick={() => setShowCteTimeline(!showCteTimeline)}
+                            className="py-2 px-4 rounded-lg text-xs font-semibold cursor-pointer font-inherit transition-all duration-200"
                             style={{
-                                padding: '8px 16px',
                                 background: showCteTimeline ? `${chain.accentColor}15` : 'rgba(255,255,255,0.04)',
                                 border: `1px solid ${showCteTimeline ? chain.accentColor + '40' : 'rgba(255,255,255,0.08)'}`,
-                                borderRadius: '8px',
                                 color: showCteTimeline ? chain.accentColor : 'var(--re-text-tertiary)',
-                                fontSize: '12px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                                transition: 'all 0.2s',
                             }}
                         >
                             {showCteTimeline ? 'Hide Details' : 'Show Details'}
@@ -532,41 +443,29 @@ export default function SupplyChainExplorerPage() {
 
                     {/* Compact flow */}
                     <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0',
-                            overflowX: 'auto',
-                            padding: '16px 0',
-                        }}
+                        className="flex items-center gap-0 overflow-x-auto py-4"
                     >
                         {chain.cteFlow.map((step, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                            <div key={i} className="flex items-center flex-shrink-0">
                                 <div
+                                    className="py-[10px] px-3.5 rounded-lg min-w-[120px] text-center"
                                     style={{
-                                        padding: '10px 14px',
                                         background: `${chain.accentColor}08`,
                                         border: `1px solid ${chain.accentColor}25`,
-                                        borderRadius: '8px',
-                                        minWidth: '120px',
-                                        textAlign: 'center',
                                     }}
                                 >
                                     <div
+                                        className="text-[10px] font-['JetBrains_Mono',_monospace] font-semibold mb-1"
                                         style={{
-                                            fontSize: '10px',
-                                            fontFamily: "'JetBrains Mono', monospace",
-                                            fontWeight: 600,
                                             color: chain.accentColor,
-                                            marginBottom: '4px',
                                         }}
                                     >
                                         {step.cte}
                                     </div>
-                                    <div style={{ fontSize: '11px', color: 'var(--re-text-tertiary)' }}>{step.cfr}</div>
+                                    <div className="text-[11px] text-[var(--re-text-tertiary)]">{step.cfr}</div>
                                 </div>
                                 {i < chain.cteFlow.length - 1 && (
-                                    <div style={{ padding: '0 6px', color: 'var(--re-text-disabled)' }}>
+                                    <div className="px-1.5 text-[var(--re-text-disabled)]">
                                         <ArrowRight size={14} />
                                     </div>
                                 )}
@@ -577,58 +476,41 @@ export default function SupplyChainExplorerPage() {
                     {/* Expanded CTE timeline */}
                     {showCteTimeline && (
                         <div
-                            style={{
-                                marginTop: '16px',
-                                padding: '0',
-                            }}
+                            className="mt-4 p-0"
                         >
                             {chain.cteFlow.map((step, i) => (
                                 <div
                                     key={i}
+                                    className="flex gap-4 py-4"
                                     style={{
-                                        display: 'flex',
-                                        gap: '16px',
-                                        padding: '16px 0',
                                         borderBottom: i < chain.cteFlow.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                                     }}
                                 >
                                     <div
+                                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold font-['JetBrains_Mono',_monospace]"
                                         style={{
-                                            width: '32px',
-                                            height: '32px',
-                                            borderRadius: '50%',
                                             background: `${chain.accentColor}15`,
                                             border: `1px solid ${chain.accentColor}30`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            fontSize: '12px',
-                                            fontWeight: 700,
                                             color: chain.accentColor,
-                                            fontFamily: "'JetBrains Mono', monospace",
                                         }}
                                     >
                                         {i + 1}
                                     </div>
-                                    <div style={{ flex: 1 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{step.cte}</span>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-[10px] mb-1">
+                                            <span className="text-[13px] font-semibold text-[var(--re-text-primary)]">{step.cte}</span>
                                             <span
+                                                className="text-[10px] font-['JetBrains_Mono',_monospace] py-0.5 px-2 rounded"
                                                 style={{
-                                                    fontSize: '10px',
-                                                    fontFamily: "'JetBrains Mono', monospace",
                                                     color: chain.accentColor,
                                                     background: `${chain.accentColor}10`,
-                                                    padding: '2px 8px',
-                                                    borderRadius: '4px',
                                                 }}
                                             >
                                                 {step.cfr}
                                             </span>
                                         </div>
-                                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', marginBottom: '2px' }}>{step.description}</div>
-                                        <div style={{ fontSize: '11px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace" }}>
+                                        <div className="text-xs text-[var(--re-text-muted)] mb-0.5">{step.description}</div>
+                                        <div className="text-[11px] text-[var(--re-text-disabled)] font-['JetBrains_Mono',_monospace]">
                                             📍 {step.facility}
                                         </div>
                                     </div>
@@ -639,36 +521,30 @@ export default function SupplyChainExplorerPage() {
                 </div>
 
                 {/* ─── FACILITIES GRID ─── */}
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Facilities</h2>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold text-[var(--re-text-primary)] m-0 mb-1">Facilities</h2>
+                    <p className="text-[13px] text-[var(--re-text-muted)] m-0 mb-4">
                         GLN-identified locations across the supply chain
                     </p>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3">
                         {chain.facilities.map((facility) => {
                             const isExpanded = expandedFacility === facility.gln;
                             return (
                                 <button
                                     key={facility.gln}
                                     onClick={() => setExpandedFacility(isExpanded ? null : facility.gln)}
+                                    className="p-4 rounded-[10px] text-left cursor-pointer text-inherit font-inherit transition-all duration-200"
                                     style={{
-                                        padding: '16px',
                                         background: isExpanded ? `${chain.accentColor}06` : 'rgba(255,255,255,0.02)',
                                         border: `1px solid ${isExpanded ? chain.accentColor + '30' : 'rgba(255,255,255,0.05)'}`,
-                                        borderRadius: '10px',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        color: 'inherit',
-                                        fontFamily: 'inherit',
-                                        transition: 'all 0.2s',
                                     }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '20px' }}>{getFacilityIcon(facility.type)}</span>
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{facility.name}</div>
-                                            <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-disabled)' }}>
+                                    <div className="flex items-center gap-[10px] mb-2">
+                                        <span className="text-xl">{getFacilityIcon(facility.type)}</span>
+                                        <div className="flex-1">
+                                            <div className="text-[13px] font-semibold text-[var(--re-text-primary)]">{facility.name}</div>
+                                            <div className="text-[10px] font-['JetBrains_Mono',_monospace] text-[var(--re-text-disabled)]">
                                                 {facility.type}
                                             </div>
                                         </div>
@@ -676,13 +552,8 @@ export default function SupplyChainExplorerPage() {
 
                                     {/* GLN */}
                                     <div
+                                        className="text-[11px] font-['JetBrains_Mono',_monospace] text-[var(--re-text-muted)] bg-[rgba(255,255,255,0.03)] py-1 px-2 rounded"
                                         style={{
-                                            fontSize: '11px',
-                                            fontFamily: "'JetBrains Mono', monospace",
-                                            color: 'var(--re-text-muted)',
-                                            background: 'rgba(255,255,255,0.03)',
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
                                             marginBottom: isExpanded ? '10px' : '0',
                                         }}
                                     >
@@ -690,13 +561,13 @@ export default function SupplyChainExplorerPage() {
                                     </div>
 
                                     {isExpanded && (
-                                        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--re-text-tertiary)', lineHeight: 1.5 }}>
+                                        <div className="mt-2 text-xs text-[var(--re-text-tertiary)] leading-[1.5]">
                                             {facility.address && (
-                                                <div style={{ marginBottom: '4px' }}>📍 {facility.address}</div>
+                                                <div className="mb-1">📍 {facility.address}</div>
                                             )}
                                             {facility.extra && Object.entries(facility.extra).map(([key, val]) => (
-                                                <div key={key} style={{ marginBottom: '2px' }}>
-                                                    <span style={{ color: 'var(--re-text-disabled)' }}>{key}:</span> {val}
+                                                <div key={key} className="mb-0.5">
+                                                    <span className="text-[var(--re-text-disabled)]">{key}:</span> {val}
                                                 </div>
                                             ))}
                                         </div>
@@ -708,95 +579,61 @@ export default function SupplyChainExplorerPage() {
                 </div>
 
                 {/* ─── PRODUCTS TABLE ─── */}
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Products</h2>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold text-[var(--re-text-primary)] m-0 mb-1">Products</h2>
+                    <p className="text-[13px] text-[var(--re-text-muted)] m-0 mb-4">
                         {chain.id === 'rizo-dairy'
                             ? 'Products are split by FTL coverage status — this is the key demo insight'
                             : 'GTIN-coded products tracked through the supply chain'}
                     </p>
 
                     <div
-                        style={{
-                            border: '1px solid rgba(255,255,255,0.05)',
-                            borderRadius: '10px',
-                            overflow: 'hidden',
-                        }}
+                        className="border border-[rgba(255,255,255,0.05)] rounded-[10px] overflow-hidden"
                     >
                         {/* Table header */}
                         <div
+                            className="py-[10px] px-4 bg-[rgba(255,255,255,0.03)] border-b border-[rgba(255,255,255,0.05)] text-[10px] font-['JetBrains_Mono',_monospace] font-semibold text-[var(--re-text-disabled)] uppercase tracking-[0.08em]"
                             style={{
                                 display: 'grid',
                                 gridTemplateColumns: chain.id === 'rizo-dairy' ? '2fr 2fr 1fr 1fr' : '2fr 2fr 1fr',
-                                padding: '10px 16px',
-                                background: 'rgba(255,255,255,0.03)',
-                                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                fontSize: '10px',
-                                fontFamily: "'JetBrains Mono', monospace",
-                                fontWeight: 600,
-                                color: 'var(--re-text-disabled)',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.08em',
                             }}
                         >
                             <div>Product</div>
                             <div>GTIN</div>
                             <div>Category</div>
-                            {chain.id === 'rizo-dairy' && <div style={{ textAlign: 'center' }}>On FTL?</div>}
+                            {chain.id === 'rizo-dairy' && <div className="text-center">On FTL?</div>}
                         </div>
 
                         {/* Rows */}
                         {chain.products.map((product, i) => (
                             <div
                                 key={product.gtin}
+                                className="py-3 px-4 text-[13px] items-center"
                                 style={{
                                     display: 'grid',
                                     gridTemplateColumns: chain.id === 'rizo-dairy' ? '2fr 2fr 1fr 1fr' : '2fr 2fr 1fr',
-                                    padding: '12px 16px',
                                     borderBottom: i < chain.products.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                                    fontSize: '13px',
-                                    alignItems: 'center',
                                     background: chain.id === 'rizo-dairy' && product.onFtl === false
                                         ? 'rgba(239,68,68,0.03)'
                                         : 'transparent',
                                 }}
                             >
-                                <div style={{ fontWeight: 500, color: 'var(--re-text-primary)' }}>{product.name}</div>
-                                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', color: 'var(--re-text-muted)' }}>
+                                <div className="font-medium text-[var(--re-text-primary)]">{product.name}</div>
+                                <div className="font-['JetBrains_Mono',_monospace] text-[11px] text-[var(--re-text-muted)]">
                                     {product.gtin}
                                 </div>
-                                <div style={{ fontSize: '11px', color: 'var(--re-text-tertiary)' }}>{product.category}</div>
+                                <div className="text-[11px] text-[var(--re-text-tertiary)]">{product.category}</div>
                                 {chain.id === 'rizo-dairy' && (
-                                    <div style={{ textAlign: 'center' }}>
+                                    <div className="text-center">
                                         {product.onFtl ? (
                                             <span
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    fontSize: '10px',
-                                                    fontWeight: 600,
-                                                    color: 'var(--re-brand)',
-                                                    background: 'rgba(16,185,129,0.1)',
-                                                    padding: '3px 10px',
-                                                    borderRadius: '10px',
-                                                }}
+                                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--re-brand)] bg-[rgba(16,185,129,0.1)] py-[3px] px-[10px] rounded-[10px]"
                                             >
                                                 <CheckIcon size={10} /> YES
                                             </span>
                                         ) : (
                                             <span
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '4px',
-                                                    fontSize: '10px',
-                                                    fontWeight: 600,
-                                                    color: 'var(--re-danger)',
-                                                    background: 'rgba(239,68,68,0.1)',
-                                                    padding: '3px 10px',
-                                                    borderRadius: '10px',
-                                                }}
+                                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--re-danger)] bg-[rgba(239,68,68,0.1)] py-[3px] px-[10px] rounded-[10px]"
                                             >
                                                 <XIcon size={10} /> NO
                                             </span>
@@ -810,50 +647,30 @@ export default function SupplyChainExplorerPage() {
                     {/* FTL coverage callout for dairy chain */}
                     {chain.id === 'rizo-dairy' && (
                         <div
-                            style={{
-                                marginTop: '12px',
-                                padding: '14px 16px',
-                                background: 'rgba(245,158,11,0.05)',
-                                borderLeft: '3px solid #f59e0b',
-                                borderRadius: '0 8px 8px 0',
-                                fontSize: '13px',
-                                color: 'var(--re-text-tertiary)',
-                                lineHeight: 1.5,
-                            }}
+                            className="mt-3 py-3.5 px-4 bg-[rgba(245,158,11,0.05)] border-l-[3px] border-l-[#f59e0b] rounded-r-lg text-[13px] text-[var(--re-text-tertiary)] leading-[1.5]"
                         >
-                            <strong style={{ color: 'var(--re-warning)' }}>Why this matters:</strong> Hard cheeses and sour cream are
-                            <strong style={{ color: 'var(--re-danger)' }}> NOT </strong> on the FDA Food Traceability List, even though
-                            soft cheeses from the same facility <strong style={{ color: 'var(--re-brand)' }}>are</strong>. A blanket
+                            <strong className="text-[var(--re-warning)]">Why this matters:</strong> Hard cheeses and sour cream are
+                            <strong className="text-[var(--re-danger)]"> NOT </strong> on the FDA Food Traceability List, even though
+                            soft cheeses from the same facility <strong className="text-[var(--re-brand)]">are</strong>. A blanket
                             compliance program wastes resources. The FTL Checker tells you exactly which products need tracking.
                         </div>
                     )}
                 </div>
 
                 {/* ─── KEY DATA ELEMENTS ─── */}
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Key Data Elements (KDEs)</h2>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold text-[var(--re-text-primary)] m-0 mb-1">Key Data Elements (KDEs)</h2>
+                    <p className="text-[13px] text-[var(--re-text-muted)] m-0 mb-4">
                         FDA-required data points captured at every CTE in this chain
                     </p>
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <div className="flex flex-wrap gap-2">
                         {chain.keyKDEs.map((kde) => (
                             <div
                                 key={kde}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '6px',
-                                    padding: '8px 14px',
-                                    background: 'rgba(255,255,255,0.03)',
-                                    border: '1px solid rgba(255,255,255,0.06)',
-                                    borderRadius: '8px',
-                                    fontSize: '12px',
-                                    fontWeight: 500,
-                                    color: 'var(--re-text-tertiary)',
-                                }}
+                                className="inline-flex items-center gap-1.5 py-2 px-3.5 bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-lg text-xs font-medium text-[var(--re-text-tertiary)]"
                             >
-                                <span style={{ color: chain.accentColor, fontSize: '10px' }}>●</span>
+                                <span className="text-[10px]" style={{ color: chain.accentColor }}>●</span>
                                 {kde}
                             </div>
                         ))}
@@ -862,120 +679,77 @@ export default function SupplyChainExplorerPage() {
 
                 {/* ─── CRYPTOGRAPHIC PROOF SECTION ─── */}
                 <div
-                    style={{
-                        padding: '24px',
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        borderRadius: '12px',
-                        marginBottom: '40px',
-                    }}
+                    className="p-6 bg-[rgba(255,255,255,0.02)] border border-[rgba(255,255,255,0.05)] rounded-xl mb-10"
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                        <div style={{ color: 'var(--re-accent-purple)' }}>
+                    <div className="flex items-center gap-[10px] mb-3">
+                        <div className="text-[var(--re-accent-purple)]">
                             <HashIcon size={20} />
                         </div>
-                        <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--re-text-primary)', margin: 0 }}>Cryptographic Integrity</h2>
+                        <h2 className="text-[18px] font-bold text-[var(--re-text-primary)] m-0">Cryptographic Integrity</h2>
                     </div>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', lineHeight: 1.6, margin: '0 0 16px' }}>
+                    <p className="text-[13px] text-[var(--re-text-muted)] leading-[1.6] m-0 mb-4">
                         Every one of the {chain.eventCount} records in this chain has a SHA-256 hash computed from canonical JSON serialization.
-                        You can verify every record independently using our open-source <code style={{ fontSize: '12px', fontFamily: "'JetBrains Mono', monospace", background: 'rgba(255,255,255,0.04)', padding: '2px 6px', borderRadius: '4px', color: 'var(--re-accent-purple)' }}>verify_chain.py</code> script.
+                        You can verify every record independently using our open-source <code className="text-xs font-['JetBrains_Mono',_monospace] bg-[rgba(255,255,255,0.04)] py-0.5 px-1.5 rounded text-[var(--re-accent-purple)]">verify_chain.py</code> script.
                     </p>
 
                     <div
-                        style={{
-                            padding: '12px 16px',
-                            background: 'var(--re-surface-base)',
-                            borderRadius: '8px',
-                            fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: '12px',
-                            color: 'var(--re-text-tertiary)',
-                            overflowX: 'auto',
-                            lineHeight: 1.7,
-                        }}
+                        className="py-3 px-4 bg-[var(--re-surface-base)] rounded-lg font-['JetBrains_Mono',_monospace] text-xs text-[var(--re-text-tertiary)] overflow-x-auto leading-[1.7]"
                     >
-                        <span style={{ color: 'var(--re-success)' }}>$</span>{' '}
-                        <span style={{ color: 'var(--re-text-secondary)' }}>python3 verify_chain.py --offline</span>
+                        <span className="text-[var(--re-success)]">$</span>{' '}
+                        <span className="text-[var(--re-text-secondary)]">python3 verify_chain.py --offline</span>
                         <br />
-                        <span style={{ color: 'var(--re-accent-blue)' }}>Verifying {chain.eventCount} records...</span>
+                        <span className="text-[var(--re-accent-blue)]">Verifying {chain.eventCount} records...</span>
                         <br />
-                        <span style={{ color: 'var(--re-success)' }}>✓ {chain.eventCount}/{chain.eventCount} hashes valid (100%)</span>
+                        <span className="text-[var(--re-success)]">✓ {chain.eventCount}/{chain.eventCount} hashes valid (100%)</span>
                         <br />
-                        <span style={{ color: 'var(--re-success)' }}>✓ Canonical JSON serialization matches</span>
+                        <span className="text-[var(--re-success)]">✓ Canonical JSON serialization matches</span>
                         <br />
-                        <span style={{ color: 'var(--re-success)' }}>✓ No tamper detected</span>
+                        <span className="text-[var(--re-success)]">✓ No tamper detected</span>
                     </div>
                 </div>
 
                 {/* ─── CTAs ─── */}
                 <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(3, 1fr)',
-                        gap: '12px',
-                    }}
+                    className="grid grid-cols-3 gap-3"
                 >
                     <Link
                         href="/demo/mock-recall"
-                        style={{
-                            padding: '20px',
-                            background: 'rgba(239,68,68,0.05)',
-                            border: '1px solid rgba(239,68,68,0.15)',
-                            borderRadius: '12px',
-                            textDecoration: 'none',
-                            transition: 'all 0.3s ease',
-                            display: 'block',
-                        }}
+                        className="p-5 bg-[rgba(239,68,68,0.05)] border border-[rgba(239,68,68,0.15)] rounded-xl no-underline transition-all duration-300 ease-[ease] block"
                     >
-                        <div style={{ fontSize: '20px', marginBottom: '8px' }}>🚨</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Mock Recall Demo</div>
-                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
+                        <div className="text-xl mb-2">🚨</div>
+                        <div className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">Mock Recall Demo</div>
+                        <div className="text-xs text-[var(--re-text-muted)] leading-[1.4]">
                             Watch a contaminated lot traced through the supply chain in under 5 seconds
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-danger)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div className="text-xs font-semibold text-[var(--re-danger)] mt-[10px] flex items-center gap-1">
                             Run Demo <ArrowRight size={12} />
                         </div>
                     </Link>
 
                     <Link
                         href="/ftl-checker"
-                        style={{
-                            padding: '20px',
-                            background: 'rgba(16,185,129,0.05)',
-                            border: '1px solid rgba(16,185,129,0.15)',
-                            borderRadius: '12px',
-                            textDecoration: 'none',
-                            transition: 'all 0.3s ease',
-                            display: 'block',
-                        }}
+                        className="p-5 bg-[rgba(16,185,129,0.05)] border border-[rgba(16,185,129,0.15)] rounded-xl no-underline transition-all duration-300 ease-[ease] block"
                     >
-                        <div style={{ fontSize: '20px', marginBottom: '8px' }}>✅</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>FTL Coverage Checker</div>
-                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
+                        <div className="text-xl mb-2">✅</div>
+                        <div className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">FTL Coverage Checker</div>
+                        <div className="text-xs text-[var(--re-text-muted)] leading-[1.4]">
                             Check which of your products are on the FDA Food Traceability List
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-brand)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div className="text-xs font-semibold text-[var(--re-brand)] mt-[10px] flex items-center gap-1">
                             Check Now <ArrowRight size={12} />
                         </div>
                     </Link>
 
                     <Link
                         href="/verify"
-                        style={{
-                            padding: '20px',
-                            background: 'rgba(129,140,248,0.05)',
-                            border: '1px solid rgba(129,140,248,0.15)',
-                            borderRadius: '12px',
-                            textDecoration: 'none',
-                            transition: 'all 0.3s ease',
-                            display: 'block',
-                        }}
+                        className="p-5 bg-[rgba(129,140,248,0.05)] border border-[rgba(129,140,248,0.15)] rounded-xl no-underline transition-all duration-300 ease-[ease] block"
                     >
-                        <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔐</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Verify Records</div>
-                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
+                        <div className="text-xl mb-2">🔐</div>
+                        <div className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">Verify Records</div>
+                        <div className="text-xs text-[var(--re-text-muted)] leading-[1.4]">
                             Independently verify cryptographic integrity of any RegEngine record
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-accent-purple)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div className="text-xs font-semibold text-[var(--re-accent-purple)] mt-[10px] flex items-center gap-1">
                             Verify <ArrowRight size={12} />
                         </div>
                     </Link>
@@ -984,18 +758,13 @@ export default function SupplyChainExplorerPage() {
 
             {/* ─── FOOTER BREADCRUMB ─── */}
             <section
-                style={{
-                    position: 'relative',
-                    zIndex: 2,
-                    borderTop: '1px solid rgba(255,255,255,0.04)',
-                    padding: '24px',
-                }}
+                className="relative z-[2] border-t border-[rgba(255,255,255,0.04)] p-6"
             >
-                <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '12px', color: 'var(--re-text-disabled)' }}>
-                        Data generated by <code style={{ fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-muted)', fontSize: '11px' }}>seed_fsma_data.py v3</code> — 430 CTE records across 3 recall chains
+                <div className="max-w-[1120px] mx-auto flex justify-between items-center">
+                    <div className="text-xs text-[var(--re-text-disabled)]">
+                        Data generated by <code className="font-['JetBrains_Mono',_monospace] text-[var(--re-text-muted)] text-[11px]">seed_fsma_data.py v3</code> — 430 CTE records across 3 recall chains
                     </div>
-                    <Link href="/docs/fsma-204" style={{ fontSize: '12px', color: 'var(--re-brand)', textDecoration: 'none', fontWeight: 500 }}>
+                    <Link href="/docs/fsma-204" className="text-xs text-[var(--re-brand)] no-underline font-medium">
                         Read FSMA 204 Documentation →
                     </Link>
                 </div>
