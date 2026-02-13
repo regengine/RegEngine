@@ -309,7 +309,7 @@ export default function QuickstartPage() {
                             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
                                 You&apos;re all set!
                             </h3>
-                            <p style={{ color: T.text, fontSize: '14px', margin: 0 }}>
+                            <p className="text-re-text-secondary text-sm m-0">
                                 You&apos;ve created your first tamper-evident compliance record. The record is now
                                 part of an immutable chain that can be independently verified by auditors.
                             </p>
@@ -339,12 +339,12 @@ export default function QuickstartPage() {
                                     alignItems: 'center',
                                     gap: '16px',
                                 }}>
-                                    <item.icon style={{ width: 20, height: 20, color: T.accent }} />
+                                    <item.icon className="w-5 h-5 text-re-brand" />
                                     <div className="flex-1">
                                         <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '2px' }}>{item.title}</div>
                                         <div className="text-[13px] text-re-text-muted">{item.desc}</div>
                                     </div>
-                                    <ArrowRight style={{ width: 16, height: 16, color: T.textMuted }} />
+                                    <ArrowRight className="w-4 h-4 text-re-text-muted" />
                                 </div>
                             </Link>
                         ))}

@@ -426,7 +426,7 @@ export default function SupplyChainExplorerPage() {
                                         }}
                                     />
                                 )}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                <div className="flex items-center gap-2.5 mb-2">
                                     <span style={{ fontSize: '24px' }}>{c.icon}</span>
                                     <div className="flex-1">
                                         <div style={{ fontSize: '14px', fontWeight: 600, color: isActive ? 'var(--re-text-primary)' : 'var(--re-text-tertiary)' }}>
@@ -664,7 +664,7 @@ export default function SupplyChainExplorerPage() {
                                         transition: 'all 0.2s',
                                     }}
                                 >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                    <div className="flex items-center gap-2.5 mb-2">
                                         <span style={{ fontSize: '20px' }}>{getFacilityIcon(facility.type)}</span>
                                         <div className="flex-1">
                                             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{facility.name}</div>

@@ -122,7 +122,7 @@ export function MarketingHeader() {
                                 boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
                             }}
                         >
-                            <div style={{ padding: "4px 16px 8px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em", color: "var(--re-text-muted)", textTransform: "uppercase" as const }}>
+                            <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
                                 Food Safety
                             </div>
                             <Link href="/ftl-checker" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
@@ -136,7 +136,7 @@ export function MarketingHeader() {
                                 </div>
                             </Link>
                             <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "4px 12px" }} />
-                            <div style={{ padding: "4px 16px 8px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em", color: "var(--re-text-muted)", textTransform: "uppercase" as const }}>
+                            <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
                                 Finance AI Governance
                             </div>
                             <Link href="/tools/bias-checker" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"

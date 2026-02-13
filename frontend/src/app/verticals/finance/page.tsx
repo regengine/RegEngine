@@ -466,7 +466,7 @@ export default function FinancePage() {
 
       {/* Live Stats Banner */}
       {snapshot && (
-        <section className="section" style={{ paddingTop: 0 }}>
+        <section className="section pt-0">
           <div className="container">
             <div className="section-label">LIVE COMPLIANCE SNAPSHOT</div>
             <div className="live-stats-banner">
@@ -573,7 +573,7 @@ export default function FinancePage() {
                   Input your model&apos;s approval/denial rates by demographic group. Get instant
                   Disparate Impact Ratio analysis with 80% Rule assessment and regulatory citations.
                 </p>
-                <span style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 500 }}>
+                <span className="text-re-brand text-[0.85rem] font-medium">
                   Run Bias Analysis →
                 </span>
               </div>
@@ -597,7 +597,7 @@ export default function FinancePage() {
                   Select your fintech product type — see exactly which of the 21 regulatory
                   obligations apply, with full CFR citations and required evidence lists.
                 </p>
-                <span style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 500 }}>
+                <span className="text-re-brand text-[0.85rem] font-medium">
                   Scan Obligations →
                 </span>
               </div>
@@ -621,7 +621,7 @@ export default function FinancePage() {
                   Paste your denial notice text — get instant compliance grading against
                   11 ECOA and FCRA requirements with a letter grade and specific pass/fail checks.
                 </p>
-                <span style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem', fontWeight: 500 }}>
+                <span className="text-re-brand text-[0.85rem] font-medium">
                   Validate Notice →
                 </span>
               </div>

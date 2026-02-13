@@ -559,7 +559,7 @@ export default function AlphaPage() {
                                         marginBottom: '16px',
                                     }}
                                 >
-                                    <Icon style={{ width: 20, height: 20, color: T.accent }} />
+                                    <Icon className="w-5 h-5 text-re-brand" />
                                 </div>
                                 <h3 style={{ fontSize: '16px', fontWeight: 600, color: T.heading, marginBottom: '8px' }}>
                                     {perk.title}

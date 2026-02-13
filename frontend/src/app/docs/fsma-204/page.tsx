@@ -75,7 +75,7 @@ export default function FSMA204GuidePage() {
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="max-w-[900px] mx-auto py-12 px-6">
 
                 {/* What is FSMA 204? */}
                 <section className="mb-14">
@@ -99,7 +99,7 @@ export default function FSMA204GuidePage() {
                             <AlertTriangle style={{ width: 20, height: 20, color: 'var(--re-warning)', flexShrink: 0, marginTop: '2px' }} />
                             <div>
                                 <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Enforcement Delayed</p>
-                                <p style={{ color: T.text, fontSize: '14px', margin: 0 }}>
+                                <p className="text-re-text-secondary text-sm m-0">
                                     The FDA announced an enforcement discretion period ending <strong>July 20, 2028</strong>.
                                     RegEngine auto-detected this regulatory change and updated all compliance facts.
                                 </p>

@@ -504,19 +504,19 @@ export default function NoticeValidatorPage() {
                                             <span className="nv-score-num" style={{ color: results.criticalPass === results.criticalTotal ? 'var(--nv-pass)' : 'var(--nv-fail)' }}>
                                                 {results.criticalPass}/{results.criticalTotal}
                                             </span>
-                                            <span style={{ color: 'var(--nv-text-dim)' }}>Critical</span>
+                                            <span className="text-re-text-disabled">Critical</span>
                                         </div>
                                         <div className="nv-score-item">
                                             <span className="nv-score-num" style={{ color: results.importantPass === results.importantTotal ? 'var(--nv-pass)' : 'var(--nv-warn)' }}>
                                                 {results.importantPass}/{results.importantTotal}
                                             </span>
-                                            <span style={{ color: 'var(--nv-text-dim)' }}>Important</span>
+                                            <span className="text-re-text-disabled">Important</span>
                                         </div>
                                         <div className="nv-score-item">
                                             <span className="nv-score-num" style={{ color: 'var(--nv-text-muted)' }}>
                                                 {results.recommendedPass}/{results.recommendedTotal}
                                             </span>
-                                            <span style={{ color: 'var(--nv-text-dim)' }}>Recommended</span>
+                                            <span className="text-re-text-disabled">Recommended</span>
                                         </div>
                                     </div>
                                 </div>
@@ -603,13 +603,13 @@ export default function NoticeValidatorPage() {
                             reviewed by qualified legal counsel before use.
                         </p>
                         <div className="nv-tool-links">
-                            <Link href="/tools/bias-checker" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                            <Link href="/tools/bias-checker" className="text-re-brand text-[0.82rem]">
                                 AI Model Bias Checker →
                             </Link>
-                            <Link href="/tools/obligation-scanner" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                            <Link href="/tools/obligation-scanner" className="text-re-brand text-[0.82rem]">
                                 Obligation Scanner →
                             </Link>
-                            <Link href="/verticals/finance" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                            <Link href="/verticals/finance" className="text-re-brand text-[0.82rem]">
                                 ← Finance Vertical
                             </Link>
                         </div>

@@ -249,7 +249,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
                     color: 'white',
                 }} className="print:hidden">
                     <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '8px' }}>Ready to Get Started?</h3>
-                    <p style={{ marginBottom: '16px', opacity: 0.9 }}>Schedule a personalized demo with our team.</p>
+                    <p className="mb-4 opacity-90">Schedule a personalized demo with our team.</p>
                     <a href="mailto:sales@regengine.co?subject=Schedule Demo">
                         <Button style={{ background: 'white', color: T.accent }}>
                             Schedule Demo
