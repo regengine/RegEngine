@@ -60,7 +60,7 @@ export default function AboutPage() {
     }, []);
 
     return (
-        <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.sans, color: T.textBody }}>
+        <div className="re-page">
             <link
                 href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
                 rel="stylesheet"
@@ -155,7 +155,7 @@ export default function AboutPage() {
                                         position: "relative", left: "10px", zIndex: 2,
                                     }}
                                 />
-                                <div style={{ flex: 1 }}>
+                                <div className="flex-1">
                                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", flexWrap: "wrap" }}>
                                         <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim, fontWeight: 500 }}>
                                             {item.year}

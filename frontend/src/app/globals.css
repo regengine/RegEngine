@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import '../styles/re-utils.css';
+
 @layer base {
 
     /*

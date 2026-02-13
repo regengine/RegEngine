@@ -91,7 +91,7 @@ function TrendChart({ data }: { data: { week: string; score: number; gaps: numbe
         <div>
             <div className="flex items-center gap-6 mb-4">
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-0.5 rounded" style={{ background: 'var(--re-success)' }} />
+                    <div className="w-3 h-0.5 rounded bg-re-success" />
                     <span className="text-xs text-gray-500">Readiness Score</span>
                 </div>
                 <div className="flex items-center gap-2">

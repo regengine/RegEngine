@@ -327,13 +327,13 @@ export default function SupplyChainExplorerPage() {
                     {/* Breadcrumb */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px', fontSize: '13px' }}>
                         <Link href="/" style={{ color: 'var(--re-text-disabled)', textDecoration: 'none', transition: 'color 0.2s' }}>Home</Link>
-                        <span style={{ color: 'var(--re-text-disabled)' }}>/</span>
+                        <span className="text-re-text-disabled">/</span>
                         <Link href="/demo/mock-recall" style={{ color: 'var(--re-text-disabled)', textDecoration: 'none', transition: 'color 0.2s' }}>Demo</Link>
-                        <span style={{ color: 'var(--re-text-disabled)' }}>/</span>
-                        <span style={{ color: 'var(--re-text-tertiary)' }}>Supply Chain Explorer</span>
+                        <span className="text-re-text-disabled">/</span>
+                        <span className="text-re-text-tertiary">Supply Chain Explorer</span>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <span
                             style={{
                                 padding: '4px 12px',
@@ -428,7 +428,7 @@ export default function SupplyChainExplorerPage() {
                                 )}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                                     <span style={{ fontSize: '24px' }}>{c.icon}</span>
-                                    <div style={{ flex: 1 }}>
+                                    <div className="flex-1">
                                         <div style={{ fontSize: '14px', fontWeight: 600, color: isActive ? 'var(--re-text-primary)' : 'var(--re-text-tertiary)' }}>
                                             {c.title}
                                         </div>
@@ -437,7 +437,7 @@ export default function SupplyChainExplorerPage() {
                                         </div>
                                     </div>
                                 </div>
-                                <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>{c.subtitle}</div>
+                                <div className="text-xs text-re-text-muted leading-tight">{c.subtitle}</div>
                             </button>
                         );
                     })}
@@ -505,10 +505,10 @@ export default function SupplyChainExplorerPage() {
                 </div>
 
                 {/* CTE Flow Diagram */}
-                <div style={{ marginBottom: '40px' }}>
+                <div className="mb-10">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                         <div>
-                            <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>CTE Event Flow</h2>
+                            <h2 className="text-xl font-bold text-re-text-primary mb-1">CTE Event Flow</h2>
                             <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: 0 }}>Critical Tracking Events required by FSMA 204</p>
                         </div>
                         <button
@@ -611,7 +611,7 @@ export default function SupplyChainExplorerPage() {
                                     >
                                         {i + 1}
                                     </div>
-                                    <div style={{ flex: 1 }}>
+                                    <div className="flex-1">
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                                             <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{step.cte}</span>
                                             <span
@@ -639,8 +639,8 @@ export default function SupplyChainExplorerPage() {
                 </div>
 
                 {/* ─── FACILITIES GRID ─── */}
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Facilities</h2>
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold text-re-text-primary mb-1">Facilities</h2>
                     <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
                         GLN-identified locations across the supply chain
                     </p>
@@ -666,7 +666,7 @@ export default function SupplyChainExplorerPage() {
                                 >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                                         <span style={{ fontSize: '20px' }}>{getFacilityIcon(facility.type)}</span>
-                                        <div style={{ flex: 1 }}>
+                                        <div className="flex-1">
                                             <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--re-text-primary)' }}>{facility.name}</div>
                                             <div style={{ fontSize: '10px', fontFamily: "'JetBrains Mono', monospace", color: 'var(--re-text-disabled)' }}>
                                                 {facility.type}
@@ -696,7 +696,7 @@ export default function SupplyChainExplorerPage() {
                                             )}
                                             {facility.extra && Object.entries(facility.extra).map(([key, val]) => (
                                                 <div key={key} style={{ marginBottom: '2px' }}>
-                                                    <span style={{ color: 'var(--re-text-disabled)' }}>{key}:</span> {val}
+                                                    <span className="text-re-text-disabled">{key}:</span> {val}
                                                 </div>
                                             ))}
                                         </div>
@@ -708,8 +708,8 @@ export default function SupplyChainExplorerPage() {
                 </div>
 
                 {/* ─── PRODUCTS TABLE ─── */}
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Products</h2>
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold text-re-text-primary mb-1">Products</h2>
                     <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
                         {chain.id === 'rizo-dairy'
                             ? 'Products are split by FTL coverage status — this is the key demo insight'
@@ -742,7 +742,7 @@ export default function SupplyChainExplorerPage() {
                             <div>Product</div>
                             <div>GTIN</div>
                             <div>Category</div>
-                            {chain.id === 'rizo-dairy' && <div style={{ textAlign: 'center' }}>On FTL?</div>}
+                            {chain.id === 'rizo-dairy' && <div className="text-center">On FTL?</div>}
                         </div>
 
                         {/* Rows */}
@@ -767,7 +767,7 @@ export default function SupplyChainExplorerPage() {
                                 </div>
                                 <div style={{ fontSize: '11px', color: 'var(--re-text-tertiary)' }}>{product.category}</div>
                                 {chain.id === 'rizo-dairy' && (
-                                    <div style={{ textAlign: 'center' }}>
+                                    <div className="text-center">
                                         {product.onFtl ? (
                                             <span
                                                 style={{
@@ -821,17 +821,17 @@ export default function SupplyChainExplorerPage() {
                                 lineHeight: 1.5,
                             }}
                         >
-                            <strong style={{ color: 'var(--re-warning)' }}>Why this matters:</strong> Hard cheeses and sour cream are
-                            <strong style={{ color: 'var(--re-danger)' }}> NOT </strong> on the FDA Food Traceability List, even though
-                            soft cheeses from the same facility <strong style={{ color: 'var(--re-brand)' }}>are</strong>. A blanket
+                            <strong className="text-re-warning">Why this matters:</strong> Hard cheeses and sour cream are
+                            <strong className="text-re-danger"> NOT </strong> on the FDA Food Traceability List, even though
+                            soft cheeses from the same facility <strong className="text-re-brand">are</strong>. A blanket
                             compliance program wastes resources. The FTL Checker tells you exactly which products need tracking.
                         </div>
                     )}
                 </div>
 
                 {/* ─── KEY DATA ELEMENTS ─── */}
-                <div style={{ marginBottom: '40px' }}>
-                    <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--re-text-primary)', margin: '0 0 4px' }}>Key Data Elements (KDEs)</h2>
+                <div className="mb-10">
+                    <h2 className="text-xl font-bold text-re-text-primary mb-1">Key Data Elements (KDEs)</h2>
                     <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
                         FDA-required data points captured at every CTE in this chain
                     </p>
@@ -893,16 +893,16 @@ export default function SupplyChainExplorerPage() {
                             lineHeight: 1.7,
                         }}
                     >
-                        <span style={{ color: 'var(--re-success)' }}>$</span>{' '}
-                        <span style={{ color: 'var(--re-text-secondary)' }}>python3 verify_chain.py --offline</span>
+                        <span className="text-re-success">$</span>{' '}
+                        <span className="text-re-text-secondary">python3 verify_chain.py --offline</span>
                         <br />
                         <span style={{ color: 'var(--re-accent-blue)' }}>Verifying {chain.eventCount} records...</span>
                         <br />
-                        <span style={{ color: 'var(--re-success)' }}>✓ {chain.eventCount}/{chain.eventCount} hashes valid (100%)</span>
+                        <span className="text-re-success">✓ {chain.eventCount}/{chain.eventCount} hashes valid (100%)</span>
                         <br />
-                        <span style={{ color: 'var(--re-success)' }}>✓ Canonical JSON serialization matches</span>
+                        <span className="text-re-success">✓ Canonical JSON serialization matches</span>
                         <br />
-                        <span style={{ color: 'var(--re-success)' }}>✓ No tamper detected</span>
+                        <span className="text-re-success">✓ No tamper detected</span>
                     </div>
                 </div>
 
@@ -928,7 +928,7 @@ export default function SupplyChainExplorerPage() {
                     >
                         <div style={{ fontSize: '20px', marginBottom: '8px' }}>🚨</div>
                         <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Mock Recall Demo</div>
-                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
+                        <div className="text-xs text-re-text-muted leading-tight">
                             Watch a contaminated lot traced through the supply chain in under 5 seconds
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-danger)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -950,7 +950,7 @@ export default function SupplyChainExplorerPage() {
                     >
                         <div style={{ fontSize: '20px', marginBottom: '8px' }}>✅</div>
                         <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>FTL Coverage Checker</div>
-                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
+                        <div className="text-xs text-re-text-muted leading-tight">
                             Check which of your products are on the FDA Food Traceability List
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-brand)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -972,7 +972,7 @@ export default function SupplyChainExplorerPage() {
                     >
                         <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔐</div>
                         <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Verify Records</div>
-                        <div style={{ fontSize: '12px', color: 'var(--re-text-muted)', lineHeight: 1.4 }}>
+                        <div className="text-xs text-re-text-muted leading-tight">
                             Independently verify cryptographic integrity of any RegEngine record
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--re-accent-purple)', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>

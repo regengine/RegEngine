@@ -200,7 +200,7 @@ export default function NuclearPage() {
                   <td>
                     <span className={`${styles.statusDot} ${styles.statusClosed}`}></span>Closed
                   </td>
-                  <td className={styles.mono} style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <td className={`${styles.mono} text-xs text-re-text-muted`}>
                     a3f8c9…d41e
                   </td>
                 </tr>
@@ -212,7 +212,7 @@ export default function NuclearPage() {
                   <td>
                     <span className={`${styles.statusDot} ${styles.statusClosed}`}></span>Closed
                   </td>
-                  <td className={styles.mono} style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <td className={`${styles.mono} text-xs text-re-text-muted`}>
                     7b2e01…f83a
                   </td>
                 </tr>
@@ -224,7 +224,7 @@ export default function NuclearPage() {
                   <td>
                     <span className={`${styles.statusDot} ${styles.statusOpen}`}></span>Open
                   </td>
-                  <td className={styles.mono} style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <td className={`${styles.mono} text-xs text-re-text-muted`}>
                     —
                   </td>
                 </tr>
@@ -236,7 +236,7 @@ export default function NuclearPage() {
                   <td>
                     <span className={`${styles.statusDot} ${styles.statusBlocked}`}></span>Blocked
                   </td>
-                  <td className={styles.mono} style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <td className={`${styles.mono} text-xs text-re-text-muted`}>
                     —
                   </td>
                 </tr>
@@ -248,7 +248,7 @@ export default function NuclearPage() {
                   <td>
                     <span className={`${styles.statusDot} ${styles.statusOpen}`}></span>Open
                   </td>
-                  <td className={styles.mono} style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                  <td className={`${styles.mono} text-xs text-re-text-muted`}>
                     —
                   </td>
                 </tr>

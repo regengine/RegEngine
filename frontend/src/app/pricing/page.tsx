@@ -215,7 +215,7 @@ export default function PricingPage() {
                     }}
                 >
                     FSMA 204 Compliance,<br />
-                    <span style={{ color: T.accent }}>Without the Enterprise Price Tag</span>
+                    <span className="text-re-brand">Without the Enterprise Price Tag</span>
                 </h1>
 
                 <p
@@ -336,7 +336,7 @@ export default function PricingPage() {
                                             gap: '4px',
                                         }}
                                     >
-                                        <Check style={{ width: 14, height: 14 }} /> Selected
+                                        <Check className="w-3.5 h-3.5" /> Selected
                                     </div>
                                 )}
                                 {tier.highlighted && !isSelected && (
@@ -425,7 +425,7 @@ export default function PricingPage() {
                 </div>
 
                 <p style={{ textAlign: 'center', fontSize: '13px', color: T.textDim, marginTop: '32px' }}>
-                    Need more CTEs? Just <strong style={{ color: T.text }}>$0.001 per additional CTE</strong>. No surprise bills.
+                    Need more CTEs? Just <strong className="text-re-text-secondary">$0.001 per additional CTE</strong>. No surprise bills.
                 </p>
             </section>
 
@@ -457,7 +457,7 @@ export default function PricingPage() {
                         }}
                     >
                         <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <table className="re-table">
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                                         <th style={{ textAlign: 'left', padding: '16px', fontSize: '13px', color: T.textMuted, fontWeight: 500 }}>Feature</th>
@@ -506,7 +506,7 @@ export default function PricingPage() {
                     Frequently Asked Questions
                 </h2>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="flex flex-col gap-4">
                     {FAQ.map((item, i) => (
                         <div
                             key={i}
@@ -543,7 +543,7 @@ export default function PricingPage() {
                     <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)', marginBottom: '32px' }}>
                         14-day free trial. No credit card required. First CTE in 5 minutes.
                     </p>
-                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">
                             <Button
                                 style={{

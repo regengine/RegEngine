@@ -33,10 +33,10 @@ const apiErrors = [
 
 export default function ErrorCodesPage() {
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+        <div className="re-page">
             {/* Header */}
             <div style={{ borderBottom: `1px solid ${T.border}`, padding: '24px' }}>
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <div className="max-w-[900px] mx-auto">
                     <Link
                         href="/docs"
                         style={{
@@ -49,13 +49,13 @@ export default function ErrorCodesPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to Docs
                     </Link>
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         Error Codes
                     </h1>
-                    <p style={{ color: T.textMuted, fontSize: '16px' }}>
+                    <p className="text-re-text-muted text-base">
                         HTTP status codes and API-specific error responses
                     </p>
                 </div>
@@ -65,13 +65,13 @@ export default function ErrorCodesPage() {
             <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px' }}>
 
                 {/* HTTP Status Codes Section */}
-                <section style={{ marginBottom: '56px' }}>
+                <section className="mb-14">
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '24px' }}>
                         HTTP Status Codes
                     </h2>
 
                     {/* Client Errors */}
-                    <div style={{ marginBottom: '32px' }}>
+                    <div className="mb-8">
                         <h3 style={{
                             fontSize: '12px',
                             fontWeight: 600,
@@ -93,19 +93,19 @@ export default function ErrorCodesPage() {
                             borderRadius: '8px',
                             overflow: 'hidden',
                         }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <table className="re-table">
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600, width: '100px' }}>Code</th>
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600, width: '150px' }}>Name</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>Description</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>How to Fix</th>
+                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Description</th>
+                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">How to Fix</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {errorCodes.filter(e => e.category === 'client').map((error, i) => (
                                         <tr key={error.code} style={{ borderBottom: i < errorCodes.filter(e => e.category === 'client').length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                            <td style={{ padding: '12px 16px' }}>
+                                            <td className="px-4 py-3">
                                                 <code style={{
                                                     background: 'rgba(234,179,8,0.2)',
                                                     color: 'var(--re-warning)',
@@ -116,7 +116,7 @@ export default function ErrorCodesPage() {
                                                 }}>{error.code}</code>
                                             </td>
                                             <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{error.name}</td>
-                                            <td style={{ padding: '12px 16px', color: T.text, fontSize: '14px' }}>{error.description}</td>
+                                            <td className="px-4 py-3 text-re-text-secondary text-sm">{error.description}</td>
                                             <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
                                         </tr>
                                     ))}
@@ -148,19 +148,19 @@ export default function ErrorCodesPage() {
                             borderRadius: '8px',
                             overflow: 'hidden',
                         }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <table className="re-table">
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600, width: '100px' }}>Code</th>
                                         <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600, width: '150px' }}>Name</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>Description</th>
-                                        <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>How to Fix</th>
+                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Description</th>
+                                        <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">How to Fix</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {errorCodes.filter(e => e.category === 'server').map((error, i) => (
                                         <tr key={error.code} style={{ borderBottom: i < errorCodes.filter(e => e.category === 'server').length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                            <td style={{ padding: '12px 16px' }}>
+                                            <td className="px-4 py-3">
                                                 <code style={{
                                                     background: 'rgba(239,68,68,0.2)',
                                                     color: 'var(--re-danger)',
@@ -171,7 +171,7 @@ export default function ErrorCodesPage() {
                                                 }}>{error.code}</code>
                                             </td>
                                             <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{error.name}</td>
-                                            <td style={{ padding: '12px 16px', color: T.text, fontSize: '14px' }}>{error.description}</td>
+                                            <td className="px-4 py-3 text-re-text-secondary text-sm">{error.description}</td>
                                             <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
                                         </tr>
                                     ))}
@@ -182,8 +182,8 @@ export default function ErrorCodesPage() {
                 </section>
 
                 {/* API Error Codes Section */}
-                <section style={{ marginBottom: '56px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-14">
+                    <h2 className="re-heading-lg">
                         API Error Codes
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '24px' }}>
@@ -209,7 +209,7 @@ export default function ErrorCodesPage() {
                             <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--re-danger)' }} />
                             <span style={{ fontSize: '12px', color: 'var(--re-danger)' }}>401 Unauthorized</span>
                         </div>
-                        <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
+                        <pre className="re-code-block">
                             <code>{`{
   "error": {
     "code": "invalid_api_key",
@@ -227,18 +227,18 @@ export default function ErrorCodesPage() {
                         borderRadius: '8px',
                         overflow: 'hidden',
                     }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <table className="re-table">
                             <thead>
                                 <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                                    <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>Error Code</th>
-                                    <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>Message</th>
-                                    <th style={{ textAlign: 'left', padding: '12px 16px', color: T.textMuted, fontSize: '12px', fontWeight: 600 }}>How to Fix</th>
+                                    <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Error Code</th>
+                                    <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">Message</th>
+                                    <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">How to Fix</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {apiErrors.map((error, i) => (
                                     <tr key={error.code} style={{ borderBottom: i < apiErrors.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                        <td style={{ padding: '12px 16px' }}>
+                                        <td className="px-4 py-3">
                                             <code style={{
                                                 background: 'rgba(255,255,255,0.1)',
                                                 color: 'var(--re-text-primary)',
@@ -247,7 +247,7 @@ export default function ErrorCodesPage() {
                                                 fontSize: '12px',
                                             }}>{error.code}</code>
                                         </td>
-                                        <td style={{ padding: '12px 16px', color: T.text, fontSize: '14px' }}>{error.message}</td>
+                                        <td className="px-4 py-3 text-re-text-secondary text-sm">{error.message}</td>
                                         <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
                                     </tr>
                                 ))}
@@ -257,8 +257,8 @@ export default function ErrorCodesPage() {
                 </section>
 
                 {/* Retry Strategy */}
-                <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-12">
+                    <h2 className="re-heading-lg">
                         Retry Strategy
                     </h2>
 
@@ -269,7 +269,7 @@ export default function ErrorCodesPage() {
                         padding: '20px',
                         marginBottom: '24px',
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <div className="flex items-start gap-3">
                             <Info style={{ width: 20, height: 20, color: T.accent, flexShrink: 0, marginTop: '2px' }} />
                             <div>
                                 <p style={{ color: 'var(--re-text-primary)', fontWeight: 600, marginBottom: '4px' }}>Best Practice</p>
@@ -291,7 +291,7 @@ export default function ErrorCodesPage() {
                             padding: '8px 16px',
                             borderBottom: `1px solid ${T.border}`,
                         }}>
-                            <span style={{ fontSize: '12px', color: T.textMuted }}>Python Example</span>
+                            <span className="text-xs text-re-text-muted">Python Example</span>
                         </div>
                         <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)', overflowX: 'auto' }}>
                             <code>{`import time
@@ -328,7 +328,7 @@ def make_request_with_retry(url, headers, max_retries=5):
                         href="/docs/rate-limits"
                         style={{ color: T.accent, fontSize: '14px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Rate Limits
                     </Link>
                     <Link

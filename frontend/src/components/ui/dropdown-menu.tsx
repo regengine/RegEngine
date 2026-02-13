@@ -37,8 +37,8 @@ const DropdownMenuItem = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
     <DropdownMenuPrimitive.Item
         ref={ref}
-        style={{ color: 'var(--re-text-primary)' }}
         className={cn(
+            "text-re-text-primary",
             "relative flex cursor-pointer select-none items-center rounded-lg px-3 py-2.5 text-sm outline-none transition-all duration-150",
             "hover:!bg-[#334155] hover:!text-white focus:!bg-[#334155] focus:!text-white",
             "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
@@ -58,8 +58,8 @@ const DropdownMenuLabel = React.forwardRef<
 >(({ className, inset, ...props }, ref) => (
     <DropdownMenuPrimitive.Label
         ref={ref}
-        style={{ color: 'var(--re-text-tertiary)' }}
         className={cn(
+            "text-re-text-tertiary",
             "px-3 py-2 text-xs font-semibold uppercase tracking-wider",
             inset && "pl-8",
             className
@@ -75,8 +75,8 @@ const DropdownMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <DropdownMenuPrimitive.Separator
         ref={ref}
-        style={{ backgroundColor: 'var(--re-text-disabled)' }}
-        className={cn("-mx-1 my-2 h-px", className)}
+        className={cn(
+            "bg-re-text-disabled", "-mx-1 my-2 h-px", className)}
         {...props}
     />
 ))

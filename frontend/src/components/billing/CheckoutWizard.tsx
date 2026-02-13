@@ -219,12 +219,10 @@ export function CheckoutWizard() {
                             </motion.div>
                             {index < stepsMeta.length - 1 && (
                                 <div
-                                    className="w-10 sm:w-16 h-1 mx-1 rounded-full overflow-hidden"
-                                    style={{ background: 'var(--re-surface-elevated)' }}
+                                    className="w-10 sm:w-16 h-1 mx-1 rounded-full overflow-hidden bg-re-surface-elevated"
                                 >
                                     <motion.div
-                                        className="h-full rounded-full"
-                                        style={{ background: 'var(--re-brand)' }}
+                                        className="h-full rounded-full bg-re-brand"
                                         initial={{ width: '0%' }}
                                         animate={{ width: index < currentStepIndex ? '100%' : '0%' }}
                                         transition={{ duration: 0.5, ease: 'easeOut' }}
@@ -234,9 +232,9 @@ export function CheckoutWizard() {
                         </div>
                     ))}
                 </div>
-                <p className="text-center text-sm" style={{ color: 'var(--re-text-muted)' }}>
+                <p className="text-center text-sm text-re-text-muted">
                     Step {currentStepIndex + 1} of {stepsMeta.length}:{' '}
-                    <span style={{ color: 'var(--re-text-secondary)' }}>
+                    <span className="text-re-text-secondary">
                         {stepsMeta[currentStepIndex]?.title}
                     </span>
                 </p>
@@ -248,8 +246,7 @@ export function CheckoutWizard() {
                 {currentStep === 'industry' && (
                     <motion.div key="industry" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
-                            className="overflow-hidden border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-card)' }}
+                            className="overflow-hidden border-[var(--re-border-default)] bg-re-surface-card"
                         >
                             <div
                                 className="h-1"
@@ -263,12 +260,12 @@ export function CheckoutWizard() {
                                     className="mx-auto mb-4 p-4 rounded-2xl"
                                     style={{ background: 'rgba(16, 185, 129, 0.1)', boxShadow: 'var(--re-shadow-glow)' }}
                                 >
-                                    <Building2 className="w-10 h-10" style={{ color: 'var(--re-brand)' }} />
+                                    <Building2 className="w-10 h-10 text-re-brand" />
                                 </motion.div>
-                                <CardTitle className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
+                                <CardTitle className="text-2xl font-bold text-re-text-primary">
                                     What industry are you in?
                                 </CardTitle>
-                                <CardDescription style={{ color: 'var(--re-text-tertiary)' }}>
+                                <CardDescription className="text-re-text-tertiary">
                                     We&apos;ll customize your compliance workflows
                                 </CardDescription>
                             </CardHeader>
@@ -304,10 +301,10 @@ export function CheckoutWizard() {
                                                 <ind.icon className="w-5 h-5" style={{ color: ind.color }} />
                                             </div>
                                             <div>
-                                                <p className="font-medium text-sm" style={{ color: 'var(--re-text-primary)' }}>
+                                                <p className="font-medium text-sm text-re-text-primary">
                                                     {ind.name}
                                                 </p>
-                                                <p className="text-xs mt-0.5" style={{ color: 'var(--re-text-muted)' }}>
+                                                <p className="text-xs mt-0.5 text-re-text-muted">
                                                     {ind.desc}
                                                 </p>
                                             </div>
@@ -319,8 +316,7 @@ export function CheckoutWizard() {
                                     <Button
                                         variant="outline"
                                         onClick={() => router.push('/pricing')}
-                                        className="border-[var(--re-border-default)]"
-                                        style={{ color: 'var(--re-text-secondary)' }}
+                                        className="border-[var(--re-border-default)] text-re-text-secondary"
                                     >
                                         <ArrowLeft className="mr-2 w-4 h-4" />
                                         Back
@@ -348,16 +344,15 @@ export function CheckoutWizard() {
                 {currentStep === 'plan' && (
                     <motion.div key="plan" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
-                            className="overflow-hidden border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-card)' }}
+                            className="overflow-hidden border-[var(--re-border-default)] bg-re-surface-card"
                         >
                             <div
                                 className="h-1"
                                 style={{ background: 'linear-gradient(90deg, var(--re-info), var(--re-brand))' }}
                             />
                             <CardHeader>
-                                <CardTitle style={{ color: 'var(--re-text-primary)' }}>Choose Your Plan</CardTitle>
-                                <CardDescription style={{ color: 'var(--re-text-tertiary)' }}>
+                                <CardTitle className="text-re-text-primary">Choose Your Plan</CardTitle>
+                                <CardDescription className="text-re-text-tertiary">
                                     All plans include a 14-day free trial
                                 </CardDescription>
 
@@ -426,13 +421,12 @@ export function CheckoutWizard() {
                                         background: 'var(--re-surface-elevated)',
                                     }}
                                 >
-                                    <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>
+                                    <p className="text-sm text-re-text-muted">
                                         Need unlimited CTEs, custom contracts, or on-premise deployment?
                                     </p>
                                     <a
                                         href="mailto:sales@regengine.co"
-                                        className="inline-flex items-center gap-1 mt-1 text-sm font-medium hover:underline"
-                                        style={{ color: 'var(--re-brand)' }}
+                                        className="inline-flex items-center gap-1 mt-1 text-sm font-medium hover:underline text-re-brand"
                                     >
                                         Contact Enterprise Sales <ExternalLink className="w-3.5 h-3.5" />
                                     </a>
@@ -442,16 +436,14 @@ export function CheckoutWizard() {
                                     <Button
                                         variant="outline"
                                         onClick={() => setCurrentStep('industry')}
-                                        className="border-[var(--re-border-default)]"
-                                        style={{ color: 'var(--re-text-secondary)' }}
+                                        className="border-[var(--re-border-default)] text-re-text-secondary"
                                     >
                                         <ArrowLeft className="mr-2 w-4 h-4" />
                                         Back
                                     </Button>
                                     <Button
-                                        className="flex-1 font-semibold"
+                                        className="flex-1 font-semibold bg-re-brand text-re-surface-base"
                                         onClick={() => setCurrentStep('payment')}
-                                        style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                                     >
                                         Continue to Payment
                                         <ArrowRight className="ml-2 w-4 h-4" />
@@ -466,21 +458,20 @@ export function CheckoutWizard() {
                 {currentStep === 'payment' && (
                     <motion.div key="payment" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
-                            className="overflow-hidden border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-card)' }}
+                            className="overflow-hidden border-[var(--re-border-default)] bg-re-surface-card"
                         >
                             <div
                                 className="h-1"
                                 style={{ background: 'linear-gradient(90deg, var(--re-brand-light), var(--re-brand))' }}
                             />
                             <CardHeader>
-                                <CardTitle style={{ color: 'var(--re-text-primary)' }}>
+                                <CardTitle className="text-re-text-primary">
                                     <div className="flex items-center gap-2">
-                                        <CreditCard className="w-5 h-5" style={{ color: 'var(--re-brand)' }} />
+                                        <CreditCard className="w-5 h-5 text-re-brand" />
                                         Complete Your Purchase
                                     </div>
                                 </CardTitle>
-                                <CardDescription style={{ color: 'var(--re-text-tertiary)' }}>
+                                <CardDescription className="text-re-text-tertiary">
                                     Secure payment processing powered by Stripe
                                 </CardDescription>
                             </CardHeader>
@@ -493,30 +484,30 @@ export function CheckoutWizard() {
                                         background: 'var(--re-surface-elevated)',
                                     }}
                                 >
-                                    <h4 className="font-semibold mb-3" style={{ color: 'var(--re-text-primary)' }}>
+                                    <h4 className="font-semibold mb-3 text-re-text-primary">
                                         Order Summary
                                     </h4>
                                     <div className="space-y-2 text-sm">
                                         <div className="flex justify-between">
-                                            <span style={{ color: 'var(--re-text-secondary)' }}>
+                                            <span className="text-re-text-secondary">
                                                 {selectedPlanData?.name} Plan ({isAnnual ? 'Annual' : 'Monthly'})
                                             </span>
-                                            <span className="font-semibold" style={{ color: 'var(--re-text-primary)' }}>
+                                            <span className="font-semibold text-re-text-primary">
                                                 ${planPrice}/mo
                                             </span>
                                         </div>
                                         {isAnnual && (
                                             <div className="flex justify-between">
-                                                <span style={{ color: 'var(--re-text-muted)' }}>Billed annually</span>
-                                                <span style={{ color: 'var(--re-text-muted)' }}>
+                                                <span className="text-re-text-muted">Billed annually</span>
+                                                <span className="text-re-text-muted">
                                                     ${(planPrice ?? 0) * 12}/yr
                                                 </span>
                                             </div>
                                         )}
                                         {appliedCredits > 0 && (
                                             <div className="flex justify-between">
-                                                <span style={{ color: 'var(--re-success)' }}>Credits applied</span>
-                                                <span className="font-semibold" style={{ color: 'var(--re-success)' }}>
+                                                <span className="text-re-success">Credits applied</span>
+                                                <span className="font-semibold text-re-success">
                                                     -${(appliedCredits / 100).toFixed(2)}
                                                 </span>
                                             </div>
@@ -525,14 +516,14 @@ export function CheckoutWizard() {
                                             className="border-t pt-2 mt-2 flex justify-between"
                                             style={{ borderColor: 'var(--re-border-default)' }}
                                         >
-                                            <span className="font-semibold" style={{ color: 'var(--re-text-primary)' }}>
+                                            <span className="font-semibold text-re-text-primary">
                                                 Today&apos;s total
                                             </span>
-                                            <span className="font-bold text-lg" style={{ color: 'var(--re-brand)' }}>
+                                            <span className="font-bold text-lg text-re-brand">
                                                 $0.00
                                             </span>
                                         </div>
-                                        <p className="text-xs text-center mt-1" style={{ color: 'var(--re-text-muted)' }}>
+                                        <p className="text-xs text-center mt-1 text-re-text-muted">
                                             14-day free trial — you won&apos;t be charged until the trial ends
                                         </p>
                                     </div>
@@ -548,7 +539,7 @@ export function CheckoutWizard() {
                                         { icon: Shield, label: 'PCI Compliant' },
                                         { icon: CreditCard, label: 'Stripe Secure' },
                                     ].map((badge) => (
-                                        <div key={badge.label} className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--re-text-muted)' }}>
+                                        <div key={badge.label} className="flex items-center gap-1.5 text-xs text-re-text-muted">
                                             <badge.icon className="w-3.5 h-3.5" />
                                             {badge.label}
                                         </div>
@@ -559,17 +550,15 @@ export function CheckoutWizard() {
                                     <Button
                                         variant="outline"
                                         onClick={() => setCurrentStep('plan')}
-                                        className="border-[var(--re-border-default)]"
-                                        style={{ color: 'var(--re-text-secondary)' }}
+                                        className="border-[var(--re-border-default)] text-re-text-secondary"
                                     >
                                         <ArrowLeft className="mr-2 w-4 h-4" />
                                         Back
                                     </Button>
                                     <Button
-                                        className="flex-1 font-semibold h-12 text-base"
+                                        className="flex-1 font-semibold h-12 text-base bg-re-brand text-re-surface-base"
                                         onClick={handleCheckout}
                                         disabled={createCheckout.isPending}
-                                        style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                                     >
                                         {createCheckout.isPending ? (
                                             <>
@@ -593,8 +582,7 @@ export function CheckoutWizard() {
                 {currentStep === 'activation' && (
                     <motion.div key="activation" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
-                            className="overflow-hidden border-[var(--re-border-default)]"
-                            style={{ background: 'var(--re-surface-card)' }}
+                            className="overflow-hidden border-[var(--re-border-default)] bg-re-surface-card"
                         >
                             <div
                                 className="h-1"
@@ -608,12 +596,12 @@ export function CheckoutWizard() {
                                     className="mx-auto mb-4 p-5 rounded-2xl"
                                     style={{ background: 'rgba(16, 185, 129, 0.1)', boxShadow: '0 0 40px rgba(16,185,129,0.2)' }}
                                 >
-                                    <Sparkles className="w-12 h-12" style={{ color: 'var(--re-brand)' }} />
+                                    <Sparkles className="w-12 h-12 text-re-brand" />
                                 </motion.div>
-                                <CardTitle className="text-3xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
+                                <CardTitle className="text-3xl font-bold text-re-text-primary">
                                     You&apos;re All Set!
                                 </CardTitle>
-                                <CardDescription className="text-base" style={{ color: 'var(--re-text-tertiary)' }}>
+                                <CardDescription className="text-base text-re-text-tertiary">
                                     Your {selectedPlanData?.name} plan trial is now active
                                 </CardDescription>
                             </CardHeader>
@@ -634,15 +622,14 @@ export function CheckoutWizard() {
                                         <motion.div
                                             key={stat.label}
                                             variants={fadeUp}
-                                            className="flex items-center gap-3 p-3 rounded-lg border border-[var(--re-border-default)]"
-                                            style={{ background: 'var(--re-surface-elevated)' }}
+                                            className="flex items-center gap-3 p-3 rounded-lg border border-[var(--re-border-default)] bg-re-surface-elevated"
                                         >
                                             <div className="p-2 rounded-lg" style={{ background: `${stat.color}15` }}>
                                                 <stat.icon className="w-4 h-4" style={{ color: stat.color }} />
                                             </div>
                                             <div>
-                                                <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>{stat.label}</p>
-                                                <p className="font-semibold text-sm" style={{ color: 'var(--re-text-primary)' }}>{stat.value}</p>
+                                                <p className="text-xs text-re-text-muted">{stat.label}</p>
+                                                <p className="font-semibold text-sm text-re-text-primary">{stat.value}</p>
                                             </div>
                                         </motion.div>
                                     ))}
@@ -650,11 +637,10 @@ export function CheckoutWizard() {
 
                                 {/* Next steps */}
                                 <div
-                                    className="p-4 rounded-xl border"
-                                    style={{ borderColor: 'var(--re-border-default)', background: 'var(--re-surface-elevated)' }}
+                                    className="p-4 rounded-xl border border-re-border bg-re-surface-elevated"
                                 >
-                                    <h4 className="font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--re-text-primary)' }}>
-                                        <Rocket className="w-4 h-4" style={{ color: 'var(--re-brand)' }} />
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2 text-re-text-primary">
+                                        <Rocket className="w-4 h-4 text-re-brand" />
                                         Next Steps
                                     </h4>
                                     <ul className="space-y-2">
@@ -665,8 +651,8 @@ export function CheckoutWizard() {
                                             'Invite your team members',
                                         ].map((step, i) => (
                                             <li key={i} className="flex items-center gap-2 text-sm">
-                                                <CheckCircle className="w-4 h-4 shrink-0" style={{ color: 'var(--re-text-muted)' }} />
-                                                <span style={{ color: 'var(--re-text-secondary)' }}>{step}</span>
+                                                <CheckCircle className="w-4 h-4 shrink-0 text-re-text-muted" />
+                                                <span className="text-re-text-secondary">{step}</span>
                                             </li>
                                         ))}
                                     </ul>
@@ -674,9 +660,8 @@ export function CheckoutWizard() {
 
                                 <div className="flex gap-3">
                                     <Button
-                                        className="flex-1 font-semibold h-12 text-base"
+                                        className="flex-1 font-semibold h-12 text-base bg-re-brand text-re-surface-base"
                                         onClick={() => router.push('/onboarding')}
-                                        style={{ background: 'var(--re-brand)', color: 'var(--re-surface-base)' }}
                                     >
                                         <Rocket className="mr-2 w-4 h-4" />
                                         Start Onboarding
@@ -684,8 +669,7 @@ export function CheckoutWizard() {
                                     <Button
                                         variant="outline"
                                         onClick={() => router.push('/dashboard')}
-                                        className="border-[var(--re-border-default)]"
-                                        style={{ color: 'var(--re-text-secondary)' }}
+                                        className="border-[var(--re-border-default)] text-re-text-secondary"
                                     >
                                         Go to Dashboard
                                     </Button>

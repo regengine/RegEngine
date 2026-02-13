@@ -4,7 +4,7 @@ import { T } from '@/lib/design-tokens';
 
 export default function QuickstartPage() {
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+        <div className="re-page">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
@@ -23,11 +23,11 @@ export default function QuickstartPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to Docs
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <Zap style={{ width: 28, height: 28, color: T.accent }} />
                         <span style={{
                             background: 'rgba(16,185,129,0.2)',
@@ -41,10 +41,10 @@ export default function QuickstartPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         Quickstart
                     </h1>
-                    <p style={{ color: T.textMuted, fontSize: '16px' }}>
+                    <p className="text-re-text-muted text-base">
                         Create your first tamper-evident compliance record in under 5 minutes
                     </p>
                 </div>
@@ -54,8 +54,8 @@ export default function QuickstartPage() {
             <div style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
 
                 {/* Step 1: Get API Key */}
-                <section style={{ marginBottom: '48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <section className="mb-12">
+                    <div className="flex items-start gap-4">
                         <div style={{
                             width: 32,
                             height: 32,
@@ -69,11 +69,11 @@ export default function QuickstartPage() {
                             color: 'white',
                             flexShrink: 0,
                         }}>1</div>
-                        <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
+                        <div className="flex-1">
+                            <h2 className="re-heading-sm">
                                 Get your API key
                             </h2>
-                            <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
+                            <p className="re-body">
                                 Sign up for a RegEngine account and generate an API key from your dashboard.
                             </p>
                             <Link
@@ -91,7 +91,7 @@ export default function QuickstartPage() {
                                     textDecoration: 'none',
                                 }}
                             >
-                                <Key style={{ width: 16, height: 16 }} />
+                                <Key className="w-4 h-4" />
                                 Get API Key
                             </Link>
                         </div>
@@ -99,8 +99,8 @@ export default function QuickstartPage() {
                 </section>
 
                 {/* Step 2: Set Environment */}
-                <section style={{ marginBottom: '48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <section className="mb-12">
+                    <div className="flex items-start gap-4">
                         <div style={{
                             width: 32,
                             height: 32,
@@ -114,11 +114,11 @@ export default function QuickstartPage() {
                             color: 'white',
                             flexShrink: 0,
                         }}>2</div>
-                        <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
+                        <div className="flex-1">
+                            <h2 className="re-heading-sm">
                                 Set your environment variable
                             </h2>
-                            <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
+                            <p className="re-body">
                                 Store your API key securely. Never commit it to version control.
                             </p>
                             <div style={{
@@ -132,9 +132,9 @@ export default function QuickstartPage() {
                                     padding: '8px 16px',
                                     borderBottom: `1px solid ${T.border}`,
                                 }}>
-                                    <span style={{ fontSize: '12px', color: T.textMuted }}>Terminal</span>
+                                    <span className="text-xs text-re-text-muted">Terminal</span>
                                 </div>
-                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
+                                <pre className="re-code-block">
                                     <code>{`export REGENGINE_API_KEY="rk_live_your_key_here"`}</code>
                                 </pre>
                             </div>
@@ -143,8 +143,8 @@ export default function QuickstartPage() {
                 </section>
 
                 {/* Step 3: Create Record */}
-                <section style={{ marginBottom: '48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <section className="mb-12">
+                    <div className="flex items-start gap-4">
                         <div style={{
                             width: 32,
                             height: 32,
@@ -158,11 +158,11 @@ export default function QuickstartPage() {
                             color: 'white',
                             flexShrink: 0,
                         }}>3</div>
-                        <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
+                        <div className="flex-1">
+                            <h2 className="re-heading-sm">
                                 Create your first compliance record
                             </h2>
-                            <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
+                            <p className="re-body">
                                 Use the <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>/v1/records</code> endpoint
                                 to create a tamper-evident compliance event:
                             </p>
@@ -181,8 +181,8 @@ export default function QuickstartPage() {
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                 }}>
-                                    <span style={{ fontSize: '12px', color: T.textMuted }}>POST /v1/records</span>
-                                    <span style={{ fontSize: '12px', color: T.accent }}>bash</span>
+                                    <span className="text-xs text-re-text-muted">POST /v1/records</span>
+                                    <span className="text-xs text-re-brand">bash</span>
                                 </div>
                                 <pre style={{
                                     padding: '20px',
@@ -225,9 +225,9 @@ export default function QuickstartPage() {
                                     gap: '8px',
                                 }}>
                                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
-                                    <span style={{ fontSize: '12px', color: T.accent }}>201 Created</span>
+                                    <span className="text-xs text-re-brand">201 Created</span>
                                 </div>
-                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
+                                <pre className="re-code-block">
                                     <code>{`{
   "id": "rec_3x7Kp9mN2vL",
   "record_hash": "a3f2b891c4d5e6f78901a2b3c4d5e6f7...",
@@ -244,8 +244,8 @@ export default function QuickstartPage() {
                 </section>
 
                 {/* Step 4: Verify */}
-                <section style={{ marginBottom: '48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <section className="mb-12">
+                    <div className="flex items-start gap-4">
                         <div style={{
                             width: 32,
                             height: 32,
@@ -259,11 +259,11 @@ export default function QuickstartPage() {
                             color: 'white',
                             flexShrink: 0,
                         }}>4</div>
-                        <div style={{ flex: 1 }}>
-                            <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '12px' }}>
+                        <div className="flex-1">
+                            <h2 className="re-heading-sm">
                                 Verify your record
                             </h2>
-                            <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '16px' }}>
+                            <p className="re-body">
                                 Every record is cryptographically hashed. Verify the integrity independently:
                             </p>
 
@@ -278,9 +278,9 @@ export default function QuickstartPage() {
                                     padding: '8px 16px',
                                     borderBottom: `1px solid ${T.border}`,
                                 }}>
-                                    <span style={{ fontSize: '12px', color: T.textMuted }}>Terminal</span>
+                                    <span className="text-xs text-re-text-muted">Terminal</span>
                                 </div>
-                                <pre style={{ padding: '16px 20px', margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--re-text-tertiary)' }}>
+                                <pre className="re-code-block">
                                     <code>{`python verify_chain.py --record rec_3x7Kp9mN2vL
 
 # Output:
@@ -303,7 +303,7 @@ export default function QuickstartPage() {
                     padding: '24px',
                     marginBottom: '48px',
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                    <div className="flex items-start gap-4">
                         <CheckCircle style={{ width: 24, height: 24, color: T.accent, flexShrink: 0 }} />
                         <div>
                             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
@@ -319,11 +319,11 @@ export default function QuickstartPage() {
 
                 {/* Next Steps */}
                 <section>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                    <h2 className="re-heading-md">
                         Next Steps
                     </h2>
 
-                    <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="grid gap-3">
                         {[
                             { title: 'FSMA 204 Guide', desc: 'Learn about CTEs, KDEs, and FDA Request Mode', href: '/docs/fsma-204', icon: FileText },
                             { title: 'API Reference', desc: 'Explore all available endpoints', href: '/docs/api', icon: Code },
@@ -340,9 +340,9 @@ export default function QuickstartPage() {
                                     gap: '16px',
                                 }}>
                                     <item.icon style={{ width: 20, height: 20, color: T.accent }} />
-                                    <div style={{ flex: 1 }}>
+                                    <div className="flex-1">
                                         <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '2px' }}>{item.title}</div>
-                                        <div style={{ fontSize: '13px', color: T.textMuted }}>{item.desc}</div>
+                                        <div className="text-[13px] text-re-text-muted">{item.desc}</div>
                                     </div>
                                     <ArrowRight style={{ width: 16, height: 16, color: T.textMuted }} />
                                 </div>

@@ -134,12 +134,12 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
 
             {/* Header */}
             <div style={pageStyles.header} className="print:hidden">
-                <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                <div className="max-w-[900px] mx-auto">
                     <Link
                         href={`/verticals/${vertical}/whitepaper`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: T.accent, marginBottom: '24px', fontSize: '14px' }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to White Paper Hub
                     </Link>
 
@@ -158,7 +158,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         {docType.title}
                     </h1>
                     <p style={{ fontSize: '1.25rem', color: T.text }}>

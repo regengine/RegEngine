@@ -93,10 +93,9 @@ export function PlanCard({
                 <motion.div
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ background: 'var(--re-brand)' }}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center bg-re-brand"
                 >
-                    <Check className="w-3.5 h-3.5" style={{ color: 'var(--re-surface-base)' }} />
+                    <Check className="w-3.5 h-3.5 text-re-surface-base" />
                 </motion.div>
             )}
 
@@ -116,10 +115,10 @@ export function PlanCard({
                     <Icon className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                    <h3 className="font-bold text-lg" style={{ color: 'var(--re-text-primary)' }}>
+                    <h3 className="font-bold text-lg text-re-text-primary">
                         {name}
                     </h3>
-                    <p className="text-xs" style={{ color: 'var(--re-text-muted)' }}>
+                    <p className="text-xs text-re-text-muted">
                         {description}
                     </p>
                 </div>
@@ -129,30 +128,30 @@ export function PlanCard({
             <div className="mt-2 mb-4">
                 {isEnterprise ? (
                     <div>
-                        <span className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>
+                        <span className="text-2xl font-bold text-re-text-primary">
                             Custom
                         </span>
-                        <p className="text-sm mt-1" style={{ color: 'var(--re-text-muted)' }}>
+                        <p className="text-sm mt-1 text-re-text-muted">
                             Contact sales for pricing
                         </p>
                     </div>
                 ) : (
                     <div>
                         <div className="flex items-baseline gap-1">
-                            <span className="text-3xl font-extrabold" style={{ color: 'var(--re-text-primary)' }}>
+                            <span className="text-3xl font-extrabold text-re-text-primary">
                                 ${price}
                             </span>
-                            <span className="text-sm" style={{ color: 'var(--re-text-muted)' }}>
+                            <span className="text-sm text-re-text-muted">
                                 /mo
                             </span>
                         </div>
                         {isAnnual && savings > 0 && (
-                            <p className="text-xs mt-1" style={{ color: 'var(--re-success)' }}>
+                            <p className="text-xs mt-1 text-re-success">
                                 Save ${savings}/year with annual billing
                             </p>
                         )}
                         {appliedCredit > 0 && (
-                            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--re-brand)' }}>
+                            <p className="text-xs mt-1 font-medium text-re-brand">
                                 -${(appliedCredit / 100).toFixed(0)} credit applied
                             </p>
                         )}
@@ -166,7 +165,7 @@ export function PlanCard({
                 style={{ background: 'var(--re-surface-base)', color: 'var(--re-text-secondary)' }}
             >
                 <span className="font-mono font-semibold">{cteLimit}</span>
-                <span className="text-xs" style={{ color: 'var(--re-text-muted)' }}>
+                <span className="text-xs text-re-text-muted">
                     CTEs/month
                 </span>
             </div>
@@ -176,9 +175,9 @@ export function PlanCard({
                 {features.map((feature) => (
                     <li key={feature.text} className="flex items-start gap-2 text-sm">
                         {feature.included ? (
-                            <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--re-success)' }} />
+                            <Check className="w-4 h-4 mt-0.5 shrink-0 text-re-success" />
                         ) : (
-                            <X className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--re-text-muted)' }} />
+                            <X className="w-4 h-4 mt-0.5 shrink-0 text-re-text-muted" />
                         )}
                         <span
                             style={{

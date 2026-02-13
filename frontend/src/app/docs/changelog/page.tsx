@@ -4,13 +4,13 @@ import { T } from '@/lib/design-tokens';
 
 export default function ChangelogPage() {
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+        <div className="re-page">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
                 padding: '24px',
             }}>
-                <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                <div className="max-w-[700px] mx-auto">
                     <Link
                         href="/docs"
                         style={{
@@ -23,28 +23,28 @@ export default function ChangelogPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to Docs
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <FileText style={{ width: 28, height: 28, color: T.accent }} />
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         Changelog
                     </h1>
-                    <p style={{ color: T.textMuted, fontSize: '16px' }}>
+                    <p className="text-re-text-muted text-base">
                         Latest updates and improvements to RegEngine
                     </p>
                 </div>
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '700px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="re-page-narrow">
 
                 {/* Latest Release */}
-                <section style={{ marginBottom: '48px' }}>
+                <section className="mb-12">
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -76,11 +76,11 @@ export default function ChangelogPage() {
                         </span>
                     </div>
 
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                    <h2 className="re-heading-md">
                         Initial Public Release
                     </h2>
 
-                    <div style={{ marginBottom: '24px' }}>
+                    <div className="mb-6">
                         <h4 style={{
                             fontSize: '12px',
                             fontWeight: 600,
@@ -100,7 +100,7 @@ export default function ChangelogPage() {
                         </ul>
                     </div>
 
-                    <div style={{ marginBottom: '24px' }}>
+                    <div className="mb-6">
                         <h4 style={{
                             fontSize: '12px',
                             fontWeight: 600,
@@ -133,7 +133,7 @@ export default function ChangelogPage() {
                         Coming Next
                     </h3>
 
-                    <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="grid gap-3">
                         {[
                             { item: 'Python & Node.js SDKs', quarter: 'Q2 2026' },
                             { item: 'Webhook notifications', quarter: 'Q2 2026' },

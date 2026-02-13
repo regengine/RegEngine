@@ -4,14 +4,14 @@ import { T } from '@/lib/design-tokens';
 
 export default function EnergyDocsPage() {
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+        <div className="re-page">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
                 padding: '24px',
                 background: 'linear-gradient(135deg, rgba(234,179,8,0.1) 0%, transparent 50%)',
             }}>
-                <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                <div className="max-w-[700px] mx-auto">
                     <Link
                         href="/docs"
                         style={{
@@ -24,11 +24,11 @@ export default function EnergyDocsPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to Docs
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <Zap style={{ width: 28, height: 28, color: 'var(--re-warning)' }} />
                         <span style={{
                             background: 'rgba(234,179,8,0.2)',
@@ -42,25 +42,25 @@ export default function EnergyDocsPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         Energy Compliance
                     </h1>
-                    <p style={{ color: T.textMuted, fontSize: '16px' }}>
+                    <p className="text-re-text-muted text-base">
                         NERC CIP-013, supply chain risk, and grid security compliance
                     </p>
                 </div>
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '700px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="re-page-narrow">
 
                 {/* Scope Preview */}
-                <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-12">
+                    <h2 className="re-heading-md">
                         What&apos;s Coming
                     </h2>
 
-                    <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="grid gap-3">
                         {[
                             { title: 'NERC CIP-013 Tracking', desc: 'Supply chain risk management evidence' },
                             { title: 'Vendor Risk Assessment', desc: 'Automated third-party security reviews' },
@@ -73,16 +73,16 @@ export default function EnergyDocsPage() {
                                 borderRadius: '8px',
                                 border: `1px solid ${T.border}`,
                             }}>
-                                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>{item.title}</div>
-                                <div style={{ fontSize: '14px', color: T.textMuted }}>{item.desc}</div>
+                                <div className="font-semibold text-re-text-primary mb-1">{item.title}</div>
+                                <div className="text-sm text-re-text-muted">{item.desc}</div>
                             </div>
                         ))}
                     </div>
                 </section>
 
                 {/* Sample API Call */}
-                <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-12">
+                    <h2 className="re-heading-md">
                         <Clock style={{ width: 20, height: 20, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
                         Preview: Vendor Assessment
                     </h2>
@@ -99,7 +99,7 @@ export default function EnergyDocsPage() {
                             padding: '8px 16px',
                             borderBottom: `1px solid ${T.border}`,
                         }}>
-                            <span style={{ fontSize: '12px', color: T.textMuted }}>POST /v1/records (Coming Soon)</span>
+                            <span className="text-xs text-re-text-muted">POST /v1/records (Coming Soon)</span>
                         </div>
                         <pre style={{
                             padding: '16px 20px',
@@ -132,7 +132,7 @@ export default function EnergyDocsPage() {
                     textAlign: 'center',
                 }}>
                     <Mail style={{ width: 32, height: 32, color: 'var(--re-warning)', margin: '0 auto 16px' }} />
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h3 className="re-heading-sm">
                         Get Early Access
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>
@@ -153,13 +153,13 @@ export default function EnergyDocsPage() {
                             textDecoration: 'none',
                         }}
                     >
-                        <Mail style={{ width: 16, height: 16 }} />
+                        <Mail className="w-4 h-4" />
                         Request Early Access
                     </a>
                 </section>
 
                 {/* Back Link */}
-                <div style={{ marginTop: '48px', textAlign: 'center' }}>
+                <div className="mt-12 text-center">
                     <Link
                         href="/docs/fsma-204"
                         style={{
@@ -171,7 +171,7 @@ export default function EnergyDocsPage() {
                             gap: '8px',
                         }}
                     >
-                        <FileText style={{ width: 16, height: 16 }} />
+                        <FileText className="w-4 h-4" />
                         See FSMA 204 Guide (Live Now)
                     </Link>
                 </div>

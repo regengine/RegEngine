@@ -4,13 +4,13 @@ import { T } from '@/lib/design-tokens';
 
 export default function SDKsDocsPage() {
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: T.fontSans }}>
+        <div className="re-page">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
                 padding: '24px',
             }}>
-                <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                <div className="max-w-[700px] mx-auto">
                     <Link
                         href="/docs"
                         style={{
@@ -23,11 +23,11 @@ export default function SDKsDocsPage() {
                             marginBottom: '16px',
                         }}
                     >
-                        <ArrowLeft style={{ width: 16, height: 16 }} />
+                        <ArrowLeft className="w-4 h-4" />
                         Back to Docs
                     </Link>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                    <div className="flex items-center gap-3 mb-3">
                         <Package style={{ width: 28, height: 28, color: T.accent }} />
                         <span style={{
                             background: 'rgba(16,185,129,0.2)',
@@ -41,25 +41,25 @@ export default function SDKsDocsPage() {
                         </span>
                     </div>
 
-                    <h1 style={{ fontSize: '2.5rem', fontWeight: 700, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h1 className="re-heading-xl">
                         SDKs & Libraries
                     </h1>
-                    <p style={{ color: T.textMuted, fontSize: '16px' }}>
+                    <p className="text-re-text-muted text-base">
                         Official client libraries for Python, Node.js, and more
                     </p>
                 </div>
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '700px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="re-page-narrow">
 
                 {/* SDK Preview */}
-                <section style={{ marginBottom: '48px' }}>
-                    <h2 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
+                <section className="mb-12">
+                    <h2 className="re-heading-md">
                         Coming Soon
                     </h2>
 
-                    <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="grid gap-3">
                         {[
                             { title: 'Python SDK', badge: 'pip install regengine', color: '#3776ab' },
                             { title: 'Node.js SDK', badge: 'npm install @regengine/sdk', color: '#339933' },
@@ -127,7 +127,7 @@ export default function SDKsDocsPage() {
                     textAlign: 'center',
                 }}>
                     <Github style={{ width: 32, height: 32, color: T.accent, margin: '0 auto 16px' }} />
-                    <h3 style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '8px' }}>
+                    <h3 className="re-heading-sm">
                         Get Notified on Release
                     </h3>
                     <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>
@@ -148,7 +148,7 @@ export default function SDKsDocsPage() {
                             textDecoration: 'none',
                         }}
                     >
-                        <Mail style={{ width: 16, height: 16 }} />
+                        <Mail className="w-4 h-4" />
                         Notify Me
                     </a>
                 </section>
