@@ -43,7 +43,8 @@ def generate_csv_stream(
     substation_id: str,
     from_time: datetime,
     to_time: datetime,
-    db: Session
+    db: Session,
+    tenant_id: UUID = None
 ):
     """
     Generate CSV rows lazily for streaming export.
@@ -69,6 +70,7 @@ def generate_csv_stream(
         )
         .filter(ComplianceSnapshotModel.substation_id == substation_id)
         .filter(ComplianceSnapshotModel.snapshot_time.between(from_time, to_time))
+        .filter(ComplianceSnapshotModel.tenant_id == tenant_id)
         .order_by(ComplianceSnapshotModel.snapshot_time)
         .yield_per(100)  # Batch size
     )
@@ -93,7 +95,8 @@ def generate_json_stream(
     substation_id: str,
     from_time: datetime,
     to_time: datetime,
-    db: Session
+    db: Session,
+    tenant_id: UUID = None
 ):
     """
     Generate JSON array lazily for streaming export.
@@ -122,6 +125,7 @@ def generate_json_stream(
         )
         .filter(ComplianceSnapshotModel.substation_id == substation_id)
         .filter(ComplianceSnapshotModel.snapshot_time.between(from_time, to_time))
+        .filter(ComplianceSnapshotModel.tenant_id == tenant_id)
         .order_by(ComplianceSnapshotModel.snapshot_time)
         .yield_per(100)  # Batch size
     )
@@ -156,7 +160,8 @@ def get_cached_count(
     substation_id: str,
     from_time: Optional[datetime] = None,
     to_time: Optional[datetime] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    tenant_id: UUID = None
 ) -> int:
     """
     Get count with in-memory caching (5-minute TTL).
@@ -165,15 +170,15 @@ def get_cached_count(
     Redis key format: "energy:count:{substation_id}:{filters_hash}"
     Redis TTL: 300 seconds
     """
-    # Simple in-memory cache for development
-    # TODO (Production): Migrate to Redis for horizontal scaling
-    cache_key_data = f"{substation_id}:{from_time}:{to_time}:{status}"
+    # In-memory cache for development; production should use Redis
+    # (key format: "energy:count:{substation_id}:{filters_hash}", TTL: 300s)
+    cache_key_data = f"{substation_id}:{from_time}:{to_time}:{status}:{tenant_id}"
     cache_key_hash = hashlib.sha256(cache_key_data.encode()).hexdigest()[:16]
     
-    # Check cache (if implemented in production with Redis)
-    # For now, perform live query
+    # Perform live query (Redis upgrade tracked in backlog)
     query = db.query(ComplianceSnapshotModel).filter(
-        ComplianceSnapshotModel.substation_id == substation_id
+        ComplianceSnapshotModel.substation_id == substation_id,
+        ComplianceSnapshotModel.tenant_id == tenant_id
     )
     
     if from_time:

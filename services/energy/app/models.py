@@ -65,8 +65,11 @@ class SnapshotCreationRequest:
         if not self.asset_states or len(self.asset_states) == 0:
             raise ValueError("At least one asset state required")
         
-        # Note: generator_user_id validation relaxed for development/testing
-        # TODO: In production, enforce user_id requirement based on generated_by type
+        # Enforce user attribution for manual snapshots
+        if self.generated_by == SnapshotGenerator.USER_MANUAL and not self.generator_user_id:
+            raise ValueError(
+                "generator_user_id is required when generated_by is USER_MANUAL"
+            )
 
 
 @dataclass(frozen=True)
