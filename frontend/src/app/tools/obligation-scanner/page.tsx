@@ -176,11 +176,11 @@ const PRODUCT_TYPES = [
 ];
 
 const DOMAIN_COLORS: Record<string, string> = {
-    ECOA: '#f59e0b',
-    TILA: '#3b82f6',
+    ECOA: 'var(--os-warn, #f59e0b)',
+    TILA: 'var(--os-blue, #3b82f6)',
     FCRA: '#8b5cf6',
-    UDAAP: '#ef4444',
-    SR_11_7: '#10b981',
+    UDAAP: 'var(--os-fail, #ef4444)',
+    SR_11_7: 'var(--os-accent, #10b981)',
     OCC_AI: '#06b6d4',
 };
 
@@ -225,16 +225,19 @@ export default function ObligationScannerPage() {
         <>
             <style jsx global>{`
         :root {
-          --os-bg: #09090b;
-          --os-surface: #0f0f13;
-          --os-elevated: #16161d;
+          --os-bg: var(--re-surface-base, #06090f);
+          --os-surface: var(--re-surface-card, #0c1017);
+          --os-elevated: var(--re-surface-elevated, #111827);
           --os-border: rgba(255,255,255,0.08);
           --os-border-strong: rgba(255,255,255,0.15);
-          --os-text: #e4e4e7;
-          --os-text-muted: #71717a;
-          --os-text-dim: #52525b;
-          --os-accent: #10b981;
-          --os-accent-hover: #34d399;
+          --os-text: var(--re-text-primary, #f8fafc);
+          --os-text-muted: var(--re-text-muted, #64748b);
+          --os-text-dim: var(--re-text-disabled, #475569);
+          --os-accent: var(--re-brand, #10b981);
+          --os-accent-hover: var(--re-brand-light, #34d399);
+          --os-fail: #ef4444;
+          --os-warn: #f59e0b;
+          --os-blue: #3b82f6;
         }
         .os-page {
           min-height: 100vh;
@@ -345,9 +348,9 @@ export default function ObligationScannerPage() {
           font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
           padding: 0.2rem 0.5rem; border-radius: 4px; flex-shrink: 0;
         }
-        .os-risk-high { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .os-risk-medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
-        .os-risk-low { background: rgba(16,185,129,0.15); color: #10b981; }
+        .os-risk-high { background: rgba(239,68,68,0.15); color: var(--os-fail); }
+        .os-risk-medium { background: rgba(245,158,11,0.15); color: var(--os-warn); }
+        .os-risk-low { background: rgba(16,185,129,0.15); color: var(--os-accent); }
         .os-ob-detail {
           padding: 0 1.25rem 1.25rem;
           border-top: 1px solid var(--os-border);
@@ -381,7 +384,7 @@ export default function ObligationScannerPage() {
           background: var(--os-accent); color: #000; font-weight: 600; font-size: 0.9rem;
           padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none; transition: background 0.15s;
         }
-        .os-cta-btn:hover { background: #34d399; }
+        .os-cta-btn:hover { background: var(--os-accent-hover); }
 
         .os-footer {
           border-top: 1px solid var(--os-border); padding: 2rem 0; margin-top: 3rem;
@@ -456,11 +459,11 @@ export default function ObligationScannerPage() {
                             <div className="os-summary-label">Obligations Apply</div>
                         </div>
                         <div className="os-summary-item">
-                            <div className="os-summary-value" style={{ color: '#ef4444' }}>{highCount}</div>
+                            <div className="os-summary-value" style={{ color: 'var(--os-fail)' }}>{highCount}</div>
                             <div className="os-summary-label">High Risk</div>
                         </div>
                         <div className="os-summary-item">
-                            <div className="os-summary-value" style={{ color: '#f59e0b' }}>{medCount}</div>
+                            <div className="os-summary-value" style={{ color: 'var(--os-warn)' }}>{medCount}</div>
                             <div className="os-summary-label">Medium Risk</div>
                         </div>
                         <div className="os-summary-item">

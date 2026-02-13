@@ -235,7 +235,7 @@ export default function NoticeValidatorPage() {
     }, []);
 
     const gradeColor = (g?: string) => {
-        if (g === 'A') return '#10b981';
+        if (g === 'A') return 'var(--re-brand, #10b981)';
         if (g === 'B') return '#3b82f6';
         if (g === 'C') return '#f59e0b';
         return '#ef4444';
@@ -245,19 +245,19 @@ export default function NoticeValidatorPage() {
         <>
             <style jsx global>{`
         :root {
-          --nv-bg: #09090b;
-          --nv-surface: #0f0f13;
-          --nv-elevated: #16161d;
+          --nv-bg: var(--re-surface-base, #06090f);
+          --nv-surface: var(--re-surface-card, #0c1017);
+          --nv-elevated: var(--re-surface-elevated, #111827);
           --nv-border: rgba(255,255,255,0.08);
           --nv-border-strong: rgba(255,255,255,0.15);
-          --nv-text: #e4e4e7;
-          --nv-text-muted: #71717a;
-          --nv-text-dim: #52525b;
-          --nv-accent: #10b981;
-          --nv-accent-hover: #34d399;
+          --nv-text: var(--re-text-primary, #f8fafc);
+          --nv-text-muted: var(--re-text-muted, #64748b);
+          --nv-text-dim: var(--re-text-disabled, #475569);
+          --nv-accent: var(--re-brand, #10b981);
+          --nv-accent-hover: var(--re-brand-light, #34d399);
           --nv-fail: #ef4444;
           --nv-warn: #f59e0b;
-          --nv-pass: #10b981;
+          --nv-pass: var(--re-brand, #10b981);
         }
         .nv-page {
           min-height: 100vh;
@@ -378,8 +378,8 @@ export default function NoticeValidatorPage() {
           font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
           padding: 0.15rem 0.4rem; border-radius: 3px;
         }
-        .nv-w-critical { background: rgba(239,68,68,0.15); color: #ef4444; }
-        .nv-w-important { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .nv-w-critical { background: rgba(239,68,68,0.15); color: var(--nv-fail); }
+        .nv-w-important { background: rgba(245,158,11,0.15); color: var(--nv-warn); }
         .nv-w-recommended { background: rgba(59,130,246,0.15); color: #3b82f6; }
         .nv-check-desc { font-size: 0.8rem; color: var(--nv-text-muted); line-height: 1.55; }
 
@@ -396,7 +396,7 @@ export default function NoticeValidatorPage() {
           background: var(--nv-accent); color: #000; font-weight: 600; font-size: 0.9rem;
           padding: 0.75rem 1.5rem; border-radius: 8px; text-decoration: none; transition: background 0.15s;
         }
-        .nv-cta-btn:hover { background: #34d399; }
+        .nv-cta-btn:hover { background: var(--nv-accent-hover); }
 
         .nv-footer {
           border-top: 1px solid var(--nv-border); padding: 2rem 0; margin-top: 3rem;
@@ -529,7 +529,7 @@ export default function NoticeValidatorPage() {
                                     return (
                                         <div key={weight}>
                                             <div className="nv-check-group-title" style={{
-                                                color: weight === 'critical' ? '#ef4444' : weight === 'important' ? '#f59e0b' : '#3b82f6',
+                                                color: weight === 'critical' ? 'var(--nv-fail)' : weight === 'important' ? 'var(--nv-warn)' : '#3b82f6',
                                             }}>
                                                 {weight === 'critical' ? '🔴 Critical Requirements' : weight === 'important' ? '🟡 Important Requirements' : '🔵 Recommended Elements'}
                                             </div>
