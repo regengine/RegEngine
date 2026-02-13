@@ -83,7 +83,7 @@ export default function AboutPage() {
                         transition: "all 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
                     }}
                 >
-                    <span style={{ fontSize: "11px", fontFamily: T.mono, fontWeight: 500, color: T.textDim, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
                         About
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
@@ -100,7 +100,7 @@ export default function AboutPage() {
 
             {/* Founder */}
             <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.01)" }}>
-                <div style={{ maxWidth: "720px", margin: "0 auto", padding: "60px 24px" }}>
+                <div className="max-w-[720px] mx-auto py-[60px] px-6">
                     <div style={{ display: "flex", gap: "24px", alignItems: "start" }}>
                         <div
                             style={{
@@ -119,7 +119,7 @@ export default function AboutPage() {
                             <p style={{ fontSize: "14px", color: T.accent, fontWeight: 600, margin: "0 0 12px" }}>
                                 CEO & Technical Founder
                             </p>
-                            <p style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.6, margin: 0 }}>
+                            <p className="text-sm text-re-text-muted leading-relaxed m-0">
                                 20+ years spanning federal government (U.S. Senate), nonprofit program management (Epilepsy Foundation), disaster response (AmeriCorps NCCC / Hurricane Katrina), and tech startups (SeatGeek, RadarFirst, Shift Technologies). President's Volunteer Service Award for lifetime achievement. B.S. Political Science, Portland State University.
                             </p>
                         </div>
@@ -175,7 +175,7 @@ export default function AboutPage() {
                                     <h3 style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary, margin: "0 0 6px" }}>
                                         {item.title}
                                     </h3>
-                                    <p style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.6, margin: 0 }}>
+                                    <p className="text-sm text-re-text-muted leading-relaxed m-0">
                                         {item.description}
                                     </p>
                                 </div>
@@ -187,7 +187,7 @@ export default function AboutPage() {
 
             {/* What we believe */}
             <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: T.accentBg }}>
-                <div style={{ maxWidth: "720px", margin: "0 auto", padding: "60px 24px" }}>
+                <div className="max-w-[720px] mx-auto py-[60px] px-6">
                     <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.textPrimary, margin: "0 0 28px" }}>
                         What we believe
                     </h2>
@@ -202,7 +202,7 @@ export default function AboutPage() {
                                 <h3 style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary, margin: "0 0 4px" }}>
                                     {belief.title}
                                 </h3>
-                                <p style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.6, margin: 0 }}>
+                                <p className="text-sm text-re-text-muted leading-relaxed m-0">
                                     {belief.body}
                                 </p>
                             </div>

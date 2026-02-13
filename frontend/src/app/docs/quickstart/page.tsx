@@ -28,7 +28,7 @@ export default function QuickstartPage() {
                     </Link>
 
                     <div className="flex items-center gap-3 mb-3">
-                        <Zap style={{ width: 28, height: 28, color: T.accent }} />
+                        <Zap className="w-7 h-7 text-re-brand" />
                         <span style={{
                             background: 'rgba(16,185,129,0.2)',
                             color: T.accent,
@@ -224,7 +224,7 @@ export default function QuickstartPage() {
                                     alignItems: 'center',
                                     gap: '8px',
                                 }}>
-                                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
+                                    <div className="w-2 h-2 rounded-full bg-re-brand" />
                                     <span className="text-xs text-re-brand">201 Created</span>
                                 </div>
                                 <pre className="re-code-block">

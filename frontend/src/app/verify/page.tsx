@@ -205,7 +205,7 @@ export default function VerifyPage() {
                         record integrity — without relying on our servers.
                     </p>
 
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div className="flex gap-3 justify-center flex-wrap">
                         <a
                             href="/sdk/verify_chain.py"
                             download
@@ -414,7 +414,7 @@ export default function VerifyPage() {
                     Get Started in 30 Seconds
                 </h2>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="flex flex-col gap-4">
                     {INSTALL_STEPS.map((step, i) => (
                         <div
                             key={i}
@@ -711,7 +711,7 @@ export default function VerifyPage() {
                         No trust required.
                     </p>
 
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <div className="flex gap-3 justify-center flex-wrap">
                         <a
                             href="/sdk/verify_chain.py"
                             download

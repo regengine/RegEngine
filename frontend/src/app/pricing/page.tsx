@@ -464,9 +464,9 @@ export default function PricingPage() {
                                         <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', background: T.accentBg }}>
                                             <span style={{ color: T.accent, fontWeight: 700 }}>RegEngine</span>
                                         </th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', color: T.textDim }}>FoodLogiQ</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', color: T.textDim }}>ReposiTrak</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', color: T.textDim }}>TraceGains</th>
+                                        <th className="text-center p-4 text-[13px] text-re-text-disabled">FoodLogiQ</th>
+                                        <th className="text-center p-4 text-[13px] text-re-text-disabled">ReposiTrak</th>
+                                        <th className="text-center p-4 text-[13px] text-re-text-disabled">TraceGains</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -476,9 +476,9 @@ export default function PricingPage() {
                                             <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', background: T.accentBg, color: T.accent, fontWeight: 600 }}>
                                                 {row.regengine}
                                             </td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.foodlogiq}</td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.repositrak}</td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.tracegains}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-re-text-disabled">{row.foodlogiq}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-re-text-disabled">{row.repositrak}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-re-text-disabled">{row.tracegains}</td>
                                         </tr>
                                     ))}
                                 </tbody>

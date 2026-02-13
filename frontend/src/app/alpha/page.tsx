@@ -279,7 +279,7 @@ export default function AlphaPage() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                             <div>
-                                <label htmlFor="alpha-email" style={{ fontSize: '12px', fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
+                                <label htmlFor="alpha-email" className="text-xs font-semibold text-re-text-muted uppercase tracking-wide block mb-1.5">
                                     Work Email *
                                 </label>
                                 <div style={{ position: 'relative' }}>
@@ -310,7 +310,7 @@ export default function AlphaPage() {
                             </div>
 
                             <div>
-                                <label htmlFor="alpha-company" style={{ fontSize: '12px', fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
+                                <label htmlFor="alpha-company" className="text-xs font-semibold text-re-text-muted uppercase tracking-wide block mb-1.5">
                                     Company Name
                                 </label>
                                 <input
@@ -337,7 +337,7 @@ export default function AlphaPage() {
                             </div>
 
                             <div>
-                                <label htmlFor="alpha-role" style={{ fontSize: '12px', fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
+                                <label htmlFor="alpha-role" className="text-xs font-semibold text-re-text-muted uppercase tracking-wide block mb-1.5">
                                     Your Role
                                 </label>
                                 <select
@@ -675,8 +675,8 @@ export default function AlphaPage() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <span style={{ fontSize: '13px', color: T.textMuted, fontFamily: T.fontMono }}>{item.date}</span>
-                                        <span style={{ fontSize: '13px', color: T.textDim }}>·</span>
-                                        <span style={{ fontSize: '13px', color: T.textDim }}>{item.detail}</span>
+                                        <span className="text-[13px] text-re-text-disabled">·</span>
+                                        <span className="text-[13px] text-re-text-disabled">{item.detail}</span>
                                     </div>
                                 </div>
                             </div>
@@ -720,7 +720,7 @@ export default function AlphaPage() {
                             >
                                 {stat.value}
                             </div>
-                            <div style={{ fontSize: '13px', color: T.textDim }}>{stat.label}</div>
+                            <div className="text-[13px] text-re-text-disabled">{stat.label}</div>
                         </div>
                     ))}
                 </div>

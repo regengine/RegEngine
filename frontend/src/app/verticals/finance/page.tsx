@@ -555,7 +555,7 @@ export default function FinancePage() {
             Real compliance tools that deliver real value — no signup required.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
-            <Link href="/tools/bias-checker" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link href="/tools/bias-checker" className="no-underline text-inherit">
               <div style={{
                 background: 'var(--bg-primary)',
                 border: '1px solid var(--border)',
@@ -567,9 +567,9 @@ export default function FinancePage() {
                 onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-emerald)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
                 onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
               >
-                <span className="badge badge-live severity" style={{ marginBottom: '0.75rem' }}>FREE</span>
-                <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>AI Model Bias Checker</h3>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.55', marginBottom: '1rem' }}>
+                <span className="badge badge-live severity mb-3">FREE</span>
+                <h3 className="text-lg mb-2">AI Model Bias Checker</h3>
+                <p className="text-sm text-re-text-muted leading-relaxed mb-4">
                   Input your model&apos;s approval/denial rates by demographic group. Get instant
                   Disparate Impact Ratio analysis with 80% Rule assessment and regulatory citations.
                 </p>
@@ -579,7 +579,7 @@ export default function FinancePage() {
               </div>
             </Link>
 
-            <Link href="/tools/obligation-scanner" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link href="/tools/obligation-scanner" className="no-underline text-inherit">
               <div style={{
                 background: 'var(--bg-primary)',
                 border: '1px solid var(--border)',
@@ -591,9 +591,9 @@ export default function FinancePage() {
                 onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-emerald)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
                 onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
               >
-                <span className="badge badge-live severity" style={{ marginBottom: '0.75rem' }}>FREE</span>
-                <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>Regulatory Obligation Scanner</h3>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.55', marginBottom: '1rem' }}>
+                <span className="badge badge-live severity mb-3">FREE</span>
+                <h3 className="text-lg mb-2">Regulatory Obligation Scanner</h3>
+                <p className="text-sm text-re-text-muted leading-relaxed mb-4">
                   Select your fintech product type — see exactly which of the 21 regulatory
                   obligations apply, with full CFR citations and required evidence lists.
                 </p>
@@ -603,7 +603,7 @@ export default function FinancePage() {
               </div>
             </Link>
 
-            <Link href="/tools/notice-validator" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <Link href="/tools/notice-validator" className="no-underline text-inherit">
               <div style={{
                 background: 'var(--bg-primary)',
                 border: '1px solid var(--border)',
@@ -615,9 +615,9 @@ export default function FinancePage() {
                 onMouseOver={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent-emerald)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
                 onMouseOut={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
               >
-                <span className="badge badge-live severity" style={{ marginBottom: '0.75rem' }}>FREE</span>
-                <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>Adverse Action Notice Validator</h3>
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.55', marginBottom: '1rem' }}>
+                <span className="badge badge-live severity mb-3">FREE</span>
+                <h3 className="text-lg mb-2">Adverse Action Notice Validator</h3>
+                <p className="text-sm text-re-text-muted leading-relaxed mb-4">
                   Paste your denial notice text — get instant compliance grading against
                   11 ECOA and FCRA requirements with a letter grade and specific pass/fail checks.
                 </p>
@@ -700,10 +700,10 @@ export default function FinancePage() {
               <h4 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1rem' }}>
                 Product
               </h4>
-              <Link href="/docs/api" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
+              <Link href="/docs/api" className="text-re-text-muted no-underline block py-[0.2rem]">
                 API Docs
               </Link>
-              <Link href="/verticals/finance#api" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
+              <Link href="/verticals/finance#api" className="text-re-text-muted no-underline block py-[0.2rem]">
                 Finance API
               </Link>
             </div>
@@ -711,10 +711,10 @@ export default function FinancePage() {
               <h4 style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '1rem' }}>
                 Verticals
               </h4>
-              <Link href="/verticals/finance" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
+              <Link href="/verticals/finance" className="text-re-text-muted no-underline block py-[0.2rem]">
                 Finance
               </Link>
-              <Link href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none', display: 'block', padding: '0.2rem 0' }}>
+              <Link href="/" className="text-re-text-muted no-underline block py-[0.2rem]">
                 All Verticals
               </Link>
             </div>

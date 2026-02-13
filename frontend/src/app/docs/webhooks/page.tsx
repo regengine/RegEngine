@@ -28,7 +28,7 @@ export default function WebhooksDocsPage() {
                     </Link>
 
                     <div className="flex items-center gap-3 mb-3">
-                        <Webhook style={{ width: 28, height: 28, color: T.accent }} />
+                        <Webhook className="w-7 h-7 text-re-brand" />
                         <span style={{
                             background: 'rgba(16,185,129,0.2)',
                             color: T.accent,
@@ -56,7 +56,7 @@ export default function WebhooksDocsPage() {
                 {/* Event Types Preview */}
                 <section className="mb-12">
                     <h2 className="re-heading-md">
-                        <Zap style={{ width: 20, height: 20, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
+                        <Zap className="w-5 h-5 inline align-middle mr-2" />
                         Planned Event Types
                     </h2>
 
@@ -146,7 +146,7 @@ export default function WebhooksDocsPage() {
                     <h3 className="re-heading-sm">
                         Get Notified on Release
                     </h3>
-                    <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>
+                    <p className="text-re-text-secondary text-sm mb-5 max-w-[400px] mx-auto">
                         Be the first to know when webhooks are available.
                     </p>
                     <a

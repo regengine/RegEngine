@@ -641,7 +641,7 @@ export default function SupplyChainExplorerPage() {
                 {/* ─── FACILITIES GRID ─── */}
                 <div className="mb-10">
                     <h2 className="text-xl font-bold text-re-text-primary mb-1">Facilities</h2>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
+                    <p className="text-[13px] text-re-text-muted mb-4">
                         GLN-identified locations across the supply chain
                     </p>
 
@@ -710,7 +710,7 @@ export default function SupplyChainExplorerPage() {
                 {/* ─── PRODUCTS TABLE ─── */}
                 <div className="mb-10">
                     <h2 className="text-xl font-bold text-re-text-primary mb-1">Products</h2>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
+                    <p className="text-[13px] text-re-text-muted mb-4">
                         {chain.id === 'rizo-dairy'
                             ? 'Products are split by FTL coverage status — this is the key demo insight'
                             : 'GTIN-coded products tracked through the supply chain'}
@@ -832,7 +832,7 @@ export default function SupplyChainExplorerPage() {
                 {/* ─── KEY DATA ELEMENTS ─── */}
                 <div className="mb-10">
                     <h2 className="text-xl font-bold text-re-text-primary mb-1">Key Data Elements (KDEs)</h2>
-                    <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: '0 0 16px' }}>
+                    <p className="text-[13px] text-re-text-muted mb-4">
                         FDA-required data points captured at every CTE in this chain
                     </p>
 
@@ -926,8 +926,8 @@ export default function SupplyChainExplorerPage() {
                             display: 'block',
                         }}
                     >
-                        <div style={{ fontSize: '20px', marginBottom: '8px' }}>🚨</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Mock Recall Demo</div>
+                        <div className="text-xl mb-2">🚨</div>
+                        <div className="text-sm font-semibold text-re-text-primary mb-1">Mock Recall Demo</div>
                         <div className="text-xs text-re-text-muted leading-tight">
                             Watch a contaminated lot traced through the supply chain in under 5 seconds
                         </div>
@@ -948,8 +948,8 @@ export default function SupplyChainExplorerPage() {
                             display: 'block',
                         }}
                     >
-                        <div style={{ fontSize: '20px', marginBottom: '8px' }}>✅</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>FTL Coverage Checker</div>
+                        <div className="text-xl mb-2">✅</div>
+                        <div className="text-sm font-semibold text-re-text-primary mb-1">FTL Coverage Checker</div>
                         <div className="text-xs text-re-text-muted leading-tight">
                             Check which of your products are on the FDA Food Traceability List
                         </div>
@@ -970,8 +970,8 @@ export default function SupplyChainExplorerPage() {
                             display: 'block',
                         }}
                     >
-                        <div style={{ fontSize: '20px', marginBottom: '8px' }}>🔐</div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '4px' }}>Verify Records</div>
+                        <div className="text-xl mb-2">🔐</div>
+                        <div className="text-sm font-semibold text-re-text-primary mb-1">Verify Records</div>
                         <div className="text-xs text-re-text-muted leading-tight">
                             Independently verify cryptographic integrity of any RegEngine record
                         </div>

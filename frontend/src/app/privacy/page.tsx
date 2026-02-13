@@ -167,7 +167,7 @@ export default function PrivacyPage() {
                         transition: "all 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
                     }}
                 >
-                    <span style={{ fontSize: "11px", fontFamily: T.mono, fontWeight: 500, color: T.textDim, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
                         Legal
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 12px", lineHeight: 1.15 }}>
