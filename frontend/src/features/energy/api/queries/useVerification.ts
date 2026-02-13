@@ -51,7 +51,7 @@ export const useVerifyRecentSnapshots = (
     corrupted_snapshots: Array<{
         snapshot_id: string;
         substation_id: string;
-        checks: any[];
+        checks: Array<{ check_name: string; passed: boolean; details?: string }>;
     }>;
 }> => {
     return useQuery({

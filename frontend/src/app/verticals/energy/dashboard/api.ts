@@ -9,6 +9,7 @@ import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { energyApi } from '@/features/energy/api/client';
 import type { ComplianceSnapshot, VerificationReport } from '@/features/energy/types/energy.types';
 import type { MetricConfig, SystemHealth, TimelineEvent, Alert } from '@/components/verticals';
+import { Layers, Database, Shield, AlertTriangle } from 'lucide-react';
 
 // ============================================================================
 // Dashboard Metrics Aggregation
@@ -36,7 +37,7 @@ export const useDashboardMetrics = (): UseQueryResult<MetricConfig[]> => {
           total_checked: number;
           valid: number;
           corrupted: number;
-          corrupted_snapshots: any[];
+          corrupted_snapshots: Array<{ snapshot_id: string; substation_id: string }>;
         }>('/energy/verify/recent', { params: { limit: 100 } });
 
         // Calculate metrics from summary
@@ -58,7 +59,7 @@ export const useDashboardMetrics = (): UseQueryResult<MetricConfig[]> => {
           {
             label: 'Substations',
             value: substations.toString(),
-            icon: 'Layers' as any,
+            icon: Layers,
             iconColor: 'text-blue-600',
             iconBgColor: 'bg-blue-100',
             trend: { value: 12, isPositive: true },
@@ -67,7 +68,7 @@ export const useDashboardMetrics = (): UseQueryResult<MetricConfig[]> => {
           {
             label: 'Snapshots Today',
             value: snapshotsToday.toString(),
-            icon: 'Database' as any,
+            icon: Database,
             iconColor: 'text-purple-600',
             iconBgColor: 'bg-purple-100',
             trend: { value: 8, isPositive: true },
@@ -75,14 +76,14 @@ export const useDashboardMetrics = (): UseQueryResult<MetricConfig[]> => {
           {
             label: 'Chain Integrity',
             value: `${chainIntegrity}%`,
-            icon: 'Shield' as any,
+            icon: Shield,
             iconColor: 'text-green-600',
             iconBgColor: 'bg-green-100',
           },
           {
             label: 'Active Incidents',
             value: corruptedCount.toString(),
-            icon: 'AlertTriangle' as any,
+            icon: AlertTriangle,
             iconColor: 'text-amber-600',
             iconBgColor: 'bg-amber-100',
           },

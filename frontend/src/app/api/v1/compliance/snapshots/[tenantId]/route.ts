@@ -4,8 +4,29 @@ import { v4 as uuidv4 } from 'uuid';
 
 const { Client } = pg;
 
+interface MockSnapshot {
+    id: string;
+    tenant_id: string;
+    snapshot_name: string;
+    snapshot_reason: string;
+    created_by: string;
+    compliance_status: string;
+    compliance_status_emoji: string;
+    active_alert_count: number;
+    critical_alert_count: number;
+    content_hash: string;
+    integrity_verified: boolean;
+    snapshot_state: string;
+    state_emoji: string;
+    age_hours: number;
+    is_auto_created: boolean;
+    is_attested: boolean;
+    attested_by: string;
+    captured_at: string;
+}
+
 // Mock data fallback
-const MOCK_SNAPSHOTS: any[] = [
+const MOCK_SNAPSHOTS: MockSnapshot[] = [
     {
         id: '00000000-0000-0000-0000-000000000001',
         tenant_id: 'tenant-123',

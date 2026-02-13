@@ -24,7 +24,7 @@ export function SnapshotFilters({ onFilterChange }: {
 
     const [showFilters, setShowFilters] = useState(false);
 
-    const handleFilterChange = (key: keyof FilterState, value: any) => {
+    const handleFilterChange = (key: keyof FilterState, value: FilterState[keyof FilterState]) => {
         const newFilters = { ...filters, [key]: value };
         setFilters(newFilters);
         onFilterChange(newFilters);

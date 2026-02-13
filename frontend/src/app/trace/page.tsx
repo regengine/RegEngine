@@ -17,11 +17,32 @@ import { Search, ArrowRight, MapPin, Calendar, Package } from 'lucide-react';
  * Placeholder UI for forward/backward traceability queries.
  * This page will integrate with the backend trace API.
  */
+interface TraceFacility {
+  gln: string;
+  name: string;
+  type: string;
+}
+
+interface TraceEvent {
+  type: string;
+  date: string;
+  facility: string;
+}
+
+interface TraceResult {
+  lot_id: string;
+  direction: string;
+  facilities: TraceFacility[];
+  events: TraceEvent[];
+  query_time_ms: number;
+  total_quantity: number;
+}
+
 export default function TracePage() {
   const [tlcInput, setTlcInput] = useState('');
   const [traceDirection, setTraceDirection] = useState<'forward' | 'backward'>('forward');
   const [isLoading, setIsLoading] = useState(false);
-  const [traceResult, setTraceResult] = useState<any>(null);
+  const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
 
   const handleTrace = async () => {
     if (!tlcInput.trim()) return;
@@ -163,7 +184,7 @@ export default function TracePage() {
                   {/* Facility Chain */}
                   <h4 className="font-medium mb-4">Supply Chain Path</h4>
                   <div className="flex flex-wrap items-center gap-2">
-                    {traceResult.facilities.map((facility: any, index: number) => (
+                    {traceResult.facilities.map((facility: TraceFacility, index: number) => (
                       <div key={facility.gln} className="flex items-center gap-2">
                         <div className="px-3 py-2 rounded-lg border bg-background">
                           <p className="font-medium text-sm">{facility.name}</p>
@@ -185,7 +206,7 @@ export default function TracePage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {traceResult.events.map((event: any, index: number) => (
+                    {traceResult.events.map((event: TraceEvent, index: number) => (
                       <div
                         key={index}
                         className="flex items-center gap-4 p-3 rounded-lg border"

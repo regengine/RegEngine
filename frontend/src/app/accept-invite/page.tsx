@@ -50,10 +50,11 @@ export default function AcceptInvitePage() {
                 name
             });
             setStep('success');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(err);
-            if (err?.response?.data?.detail) {
-                setError(err.response.data.detail);
+            const axiosError = err as { response?: { data?: { detail?: string } } };
+            if (axiosError?.response?.data?.detail) {
+                setError(axiosError.response.data.detail);
             } else {
                 setError("Failed to accept invite. It may have expired or been revoked.");
             }

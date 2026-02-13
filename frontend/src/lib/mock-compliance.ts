@@ -8,8 +8,36 @@ import { MOCK_TENANTS } from './mock-tenants';
 // Calculate countdown seconds from hours
 const hoursToSeconds = (hours: number) => hours * 3600;
 
+interface MockAlertAction {
+    action: string;
+    completed: boolean;
+}
+
+interface MockAlert {
+    id: string;
+    title: string;
+    summary: string;
+    severity: string;
+    severity_emoji: string;
+    countdown_seconds: number;
+    countdown_display: string;
+    is_expired: boolean;
+    status: string;
+    required_actions: MockAlertAction[];
+    created_at: string;
+}
+
+interface MockProfile {
+    tenant_id: string;
+    product_categories: string[];
+    supply_regions: string[];
+    supplier_identifiers: string[];
+    fda_product_codes: string[];
+    retailer_relationships: string[];
+}
+
 // Mock alerts that vary by tenant
-const MOCK_ALERTS_BY_TENANT: Record<string, any[]> = {
+const MOCK_ALERTS_BY_TENANT: Record<string, MockAlert[]> = {
     // Taylor Farms - Supplier with leafy greens
     '00000000-0000-0000-0000-000000000002': [
         {
@@ -103,7 +131,7 @@ function getMockStatus(tenantId: string) {
 }
 
 // Mock product profiles by tenant
-const MOCK_PROFILES: Record<string, any> = {
+const MOCK_PROFILES: Record<string, MockProfile> = {
     '00000000-0000-0000-0000-000000000002': {
         tenant_id: '00000000-0000-0000-0000-000000000002',
         product_categories: ['leafy_greens', 'tomatoes', 'peppers'],
@@ -156,7 +184,7 @@ export const mockComplianceApi = {
         };
     },
 
-    updateProfile: async (tenantId: string, profile: any) => {
+    updateProfile: async (tenantId: string, profile: MockProfile) => {
         await new Promise(resolve => setTimeout(resolve, 300));
         MOCK_PROFILES[tenantId] = { ...profile, tenant_id: tenantId };
         return MOCK_PROFILES[tenantId];

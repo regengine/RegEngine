@@ -8,11 +8,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
 
+interface ServiceInfo {
+    name: string;
+    status: string;
+    details?: Record<string, unknown>;
+}
+
+interface SystemStatus {
+    overall_status: string;
+    services: ServiceInfo[];
+}
+
+interface SystemMetrics {
+    total_tenants: number;
+    total_documents: number;
+    active_jobs: number;
+}
+
 export default function SysAdminDashboard() {
     const { user, accessToken, isHydrated } = useAuth()
     const router = useRouter()
-    const [status, setStatus] = useState<any>(null)
-    const [metrics, setMetrics] = useState<any>(null)
+    const [status, setStatus] = useState<SystemStatus | null>(null)
+    const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -44,8 +61,8 @@ export default function SysAdminDashboard() {
             const metricsData = await metricsRes.json()
             setMetrics(metricsData)
 
-        } catch (err: any) {
-            setError(err.message)
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred')
         } finally {
             setLoading(false)
         }
@@ -96,7 +113,7 @@ export default function SysAdminDashboard() {
                             {status?.overall_status || "Unknown"}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            {status?.services.filter((s: any) => s.status === 'healthy').length || 0} / {status?.services.length || 0} services healthy
+                            {status?.services.filter((s: ServiceInfo) => s.status === 'healthy').length || 0} / {status?.services.length || 0} services healthy
                         </p>
                     </CardContent>
                 </Card>
@@ -147,7 +164,7 @@ export default function SysAdminDashboard() {
                             <div>Status</div>
                             <div>Details</div>
                         </div>
-                        {status?.services.map((service: any) => (
+                        {status?.services.map((service: ServiceInfo) => (
                             <div key={service.name} className="grid grid-cols-3 p-4 border-b last:border-0 items-center">
                                 <div className="font-semibold capitalize">{service.name}</div>
                                 <div className="flex items-center">
