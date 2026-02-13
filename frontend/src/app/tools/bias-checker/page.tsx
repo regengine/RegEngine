@@ -737,7 +737,7 @@ export default function BiasCheckerPage() {
                                     Get instant Disparate Impact Ratio analysis with regulatory citations.
                                 </p>
                             </div>
-                            <div style={{ flexShrink: 0, paddingTop: '2rem' }}>
+                            <div className="shrink-0 pt-8">
                                 <Scale size={48} strokeWidth={1} color="var(--bc-accent)" />
                             </div>
                         </div>
@@ -746,7 +746,7 @@ export default function BiasCheckerPage() {
 
                 <main className="bc-container">
                     {/* Preset Scenarios */}
-                    <div className="bc-section-label" style={{ marginTop: '2rem' }}>PRESET SCENARIOS</div>
+                    <div className="bc-section-label mt-8">PRESET SCENARIOS</div>
                     <div className="bc-presets">
                         {PRESET_SCENARIOS.map((preset, i) => (
                             <button
@@ -765,11 +765,11 @@ export default function BiasCheckerPage() {
                         <table className="bc-table">
                             <thead>
                                 <tr>
-                                    <th style={{ width: '30%' }}>Group Name</th>
-                                    <th style={{ width: '22%' }}>Approved</th>
-                                    <th style={{ width: '22%' }}>Denied</th>
-                                    <th style={{ width: '18%', textAlign: 'right' }}>Rate</th>
-                                    <th style={{ width: '8%' }}></th>
+                                    <th className="w-[30%]">Group Name</th>
+                                    <th className="w-[22%]">Approved</th>
+                                    <th className="w-[22%]">Denied</th>
+                                    <th className="w-[18%] text-right">Rate</th>
+                                    <th className="w-[8%]"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -879,17 +879,17 @@ export default function BiasCheckerPage() {
                                             <span className="bc-result-label">Approval Rate</span>
                                             <span className="bc-result-value">{r.approvalRate}%</span>
                                         </div>
-                                        <div className="bc-result-dir" style={{
-                                            color: r.severity === 'pass' ? 'var(--bc-pass)'
-                                                : r.severity === 'warning' ? 'var(--bc-warn)'
-                                                    : 'var(--bc-fail)'
-                                        }}>
+                                        <div className={`bc-result-dir ${
+                                            r.severity === 'pass' ? 'text-[var(--bc-pass)]'
+                                                : r.severity === 'warning' ? 'text-[var(--bc-warn)]'
+                                                    : 'text-[var(--bc-fail)]'
+                                        }`}>
                                             {r.dir.toFixed(3)}
                                         </div>
                                         <div className="bc-result-metric">
                                             <span className="bc-result-label">Disparate Impact Ratio</span>
                                         </div>
-                                        <div style={{ marginTop: '0.5rem' }}>
+                                        <div className="mt-2">
                                             <span className={`bc-result-badge ${r.severity === 'pass' ? 'bc-badge-pass'
                                                     : r.severity === 'warning' ? 'bc-badge-warn'
                                                         : 'bc-badge-fail'
@@ -947,7 +947,7 @@ export default function BiasCheckerPage() {
                             constitutes evidence of adverse impact. This standard is referenced in EEOC Uniform
                             Guidelines (29 CFR 1607.4D) and applied by CFPB in fair lending examinations.
                         </p>
-                        <p style={{ marginBottom: 0 }}>
+                        <p className="mb-0">
                             <strong>Note:</strong> This tool provides a preliminary assessment only. A comprehensive
                             fair lending analysis requires regression modeling, matched-pair testing, and legal review.
                             Results should be validated with your compliance team.
@@ -961,7 +961,7 @@ export default function BiasCheckerPage() {
                             It does not constitute legal advice. Disparate impact analysis should be conducted in
                             consultation with qualified fair lending counsel. RegEngine Inc. © {new Date().getFullYear()}.
                             <br />
-                            <Link href="/verticals/finance" style={{ color: 'var(--bc-accent)' }}>
+                            <Link href="/verticals/finance" className="text-[var(--bc-accent)]">
                                 ← Back to Finance Vertical
                             </Link>
                         </p>

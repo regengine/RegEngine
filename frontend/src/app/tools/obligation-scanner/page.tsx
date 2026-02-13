@@ -452,15 +452,15 @@ export default function ObligationScannerPage() {
                     {/* Summary */}
                     <div className="os-summary">
                         <div className="os-summary-item">
-                            <div className="os-summary-value" style={{ color: 'var(--os-accent)' }}>{filteredObligations.length}</div>
+                            <div className="os-summary-value text-[var(--os-accent)]">{filteredObligations.length}</div>
                             <div className="os-summary-label">Obligations Apply</div>
                         </div>
                         <div className="os-summary-item">
-                            <div className="os-summary-value" style={{ color: '#ef4444' }}>{highCount}</div>
+                            <div className="os-summary-value text-[#ef4444]">{highCount}</div>
                             <div className="os-summary-label">High Risk</div>
                         </div>
                         <div className="os-summary-item">
-                            <div className="os-summary-value" style={{ color: '#f59e0b' }}>{medCount}</div>
+                            <div className="os-summary-value text-[#f59e0b]">{medCount}</div>
                             <div className="os-summary-label">Medium Risk</div>
                         </div>
                         <div className="os-summary-item">
@@ -489,7 +489,7 @@ export default function ObligationScannerPage() {
                                             {expandedId === ob.id ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                             <span className="os-ob-name">{ob.description.substring(0, 80)}{ob.description.length > 80 ? '...' : ''}</span>
                                         </div>
-                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <div className="flex gap-2 items-center">
                                             <span className="os-ob-cite">{ob.citation}</span>
                                             <span className={`os-risk-badge os-risk-${ob.riskLevel.toLowerCase()}`}>{ob.riskLevel}</span>
                                         </div>
@@ -503,7 +503,7 @@ export default function ObligationScannerPage() {
                                                     <span key={ev} className="os-evidence-tag">{ev}</span>
                                                 ))}
                                             </div>
-                                            <div style={{ marginTop: '0.75rem', fontSize: '0.78rem', color: 'var(--os-text-dim)' }}>
+                                            <div className="mt-3 text-[0.78rem] text-[var(--os-text-dim)]">
                                                 Regulator: {ob.regulator} &nbsp;·&nbsp; ID: {ob.id}
                                             </div>
                                         </div>
@@ -514,8 +514,8 @@ export default function ObligationScannerPage() {
                     ))}
 
                     {filteredObligations.length === 0 && (
-                        <div style={{ textAlign: 'center', padding: '3rem 0', color: 'var(--os-text-muted)' }}>
-                            <Filter size={32} strokeWidth={1} style={{ marginBottom: '1rem', opacity: 0.5 }} />
+                        <div className="text-center py-12 text-[var(--os-text-muted)]">
+                            <Filter size={32} strokeWidth={1} className="mb-4 opacity-50" />
                             <p>No obligations match your current selection. Try adjusting your product type or feature toggles.</p>
                         </div>
                     )}
@@ -539,10 +539,10 @@ export default function ObligationScannerPage() {
                             This tool is for informational purposes only and does not constitute legal advice.
                             Consult qualified regulatory counsel for compliance determinations.
                             <br />
-                            <Link href="/tools/bias-checker" style={{ color: 'var(--os-accent)', marginRight: '1rem' }}>
+                            <Link href="/tools/bias-checker" className="text-[var(--os-accent)] mr-4">
                                 AI Model Bias Checker →
                             </Link>
-                            <Link href="/verticals/finance" style={{ color: 'var(--os-accent)' }}>
+                            <Link href="/verticals/finance" className="text-[var(--os-accent)]">
                                 ← Back to Finance Vertical
                             </Link>
                         </p>

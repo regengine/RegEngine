@@ -424,7 +424,7 @@ export default function NoticeValidatorPage() {
                             <span>/</span>
                             <span>Notice Validator</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div className="flex justify-between items-start">
                             <div>
                                 <div className="nv-badge-free"><Shield size={12} /> Free Tool</div>
                                 <h1>Adverse Action Notice Validator</h1>
@@ -433,7 +433,7 @@ export default function NoticeValidatorPage() {
                                     requirements. Get a compliance grade with specific pass/fail checks for each regulatory element.
                                 </p>
                             </div>
-                            <div style={{ flexShrink: 0, paddingTop: '2rem' }}>
+                            <div className="shrink-0 pt-8">
                                 <FileWarning size={48} strokeWidth={1} color="var(--nv-accent)" />
                             </div>
                         </div>
@@ -501,22 +501,22 @@ export default function NoticeValidatorPage() {
                                     </p>
                                     <div className="nv-score-bar">
                                         <div className="nv-score-item">
-                                            <span className="nv-score-num" style={{ color: results.criticalPass === results.criticalTotal ? 'var(--nv-pass)' : 'var(--nv-fail)' }}>
+                                            <span className={`nv-score-num ${results.criticalPass === results.criticalTotal ? 'text-[var(--nv-pass)]' : 'text-[var(--nv-fail)]'}`}>
                                                 {results.criticalPass}/{results.criticalTotal}
                                             </span>
-                                            <span style={{ color: 'var(--nv-text-dim)' }}>Critical</span>
+                                            <span className="text-[var(--nv-text-dim)]">Critical</span>
                                         </div>
                                         <div className="nv-score-item">
-                                            <span className="nv-score-num" style={{ color: results.importantPass === results.importantTotal ? 'var(--nv-pass)' : 'var(--nv-warn)' }}>
+                                            <span className={`nv-score-num ${results.importantPass === results.importantTotal ? 'text-[var(--nv-pass)]' : 'text-[var(--nv-warn)]'}`}>
                                                 {results.importantPass}/{results.importantTotal}
                                             </span>
-                                            <span style={{ color: 'var(--nv-text-dim)' }}>Important</span>
+                                            <span className="text-[var(--nv-text-dim)]">Important</span>
                                         </div>
                                         <div className="nv-score-item">
-                                            <span className="nv-score-num" style={{ color: 'var(--nv-text-muted)' }}>
+                                            <span className="nv-score-num text-[var(--nv-text-muted)]">
                                                 {results.recommendedPass}/{results.recommendedTotal}
                                             </span>
-                                            <span style={{ color: 'var(--nv-text-dim)' }}>Recommended</span>
+                                            <span className="text-[var(--nv-text-dim)]">Recommended</span>
                                         </div>
                                     </div>
                                 </div>
@@ -528,9 +528,9 @@ export default function NoticeValidatorPage() {
                                     const items = results.checks.filter(c => c.weight === weight);
                                     return (
                                         <div key={weight}>
-                                            <div className="nv-check-group-title" style={{
-                                                color: weight === 'critical' ? '#ef4444' : weight === 'important' ? '#f59e0b' : '#3b82f6',
-                                            }}>
+                                            <div className={`nv-check-group-title ${
+                                                weight === 'critical' ? 'text-[#ef4444]' : weight === 'important' ? 'text-[#f59e0b]' : 'text-[#3b82f6]'
+                                            }`}>
                                                 {weight === 'critical' ? '🔴 Critical Requirements' : weight === 'important' ? '🟡 Important Requirements' : '🔵 Recommended Elements'}
                                             </div>
                                             {items.map(check => (
@@ -573,22 +573,19 @@ export default function NoticeValidatorPage() {
 
                     {/* Methodology */}
                     {!results && (
-                        <div style={{
-                            background: 'var(--nv-surface)', border: '1px solid var(--nv-border)',
-                            borderRadius: '10px', padding: '1.5rem', margin: '1rem 0',
-                        }}>
-                            <h3 style={{ fontSize: '0.95rem', fontWeight: 600, margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div className="bg-[var(--nv-surface)] border border-[var(--nv-border)] rounded-[10px] p-6 my-4">
+                            <h3 className="text-[0.95rem] font-semibold m-0 mb-3 flex items-center gap-2">
                                 <Info size={16} /> What This Tool Checks
                             </h3>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--nv-text-muted)', lineHeight: 1.65, margin: '0 0 0.75rem' }}>
+                            <p className="text-[0.85rem] text-[var(--nv-text-muted)] leading-[1.65] m-0 mb-3">
                                 The validator scans your adverse action notice for <strong>11 regulatory requirements</strong> across
                                 two federal laws:
                             </p>
-                            <ul style={{ fontSize: '0.85rem', color: 'var(--nv-text-muted)', lineHeight: 1.8, paddingLeft: '1.25rem', margin: 0 }}>
+                            <ul className="text-[0.85rem] text-[var(--nv-text-muted)] leading-[1.8] pl-5 m-0">
                                 <li><strong>ECOA (Reg B)</strong> — Statement of action, specific denial reasons, creditor ID, anti-discrimination notice, CFPB contact, timing, applicant ID</li>
                                 <li><strong>FCRA</strong> — CRA identification, CRA non-decision disclaimer, dispute rights & free report, credit score disclosure</li>
                             </ul>
-                            <p style={{ fontSize: '0.8rem', color: 'var(--nv-text-dim)', lineHeight: 1.55, margin: '0.75rem 0 0', fontStyle: 'italic' }}>
+                            <p className="text-[0.8rem] text-[var(--nv-text-dim)] leading-[1.55] mt-3 mb-0 italic">
                                 Requirements are weighted: Critical (60%), Important (25%), Recommended (15%). The grade reflects overall
                                 regulatory completeness based on keyword presence analysis.
                             </p>
@@ -603,13 +600,13 @@ export default function NoticeValidatorPage() {
                             reviewed by qualified legal counsel before use.
                         </p>
                         <div className="nv-tool-links">
-                            <Link href="/tools/bias-checker" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                            <Link href="/tools/bias-checker" className="text-[var(--nv-accent)] text-[0.82rem]">
                                 AI Model Bias Checker →
                             </Link>
-                            <Link href="/tools/obligation-scanner" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                            <Link href="/tools/obligation-scanner" className="text-[var(--nv-accent)] text-[0.82rem]">
                                 Obligation Scanner →
                             </Link>
-                            <Link href="/verticals/finance" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                            <Link href="/verticals/finance" className="text-[var(--nv-accent)] text-[0.82rem]">
                                 ← Finance Vertical
                             </Link>
                         </div>
