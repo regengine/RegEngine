@@ -298,7 +298,7 @@ export default function RetailerSuppliersPage() {
                         }}>
                             {daysCount.toLocaleString()}
                         </span>
-                        <span style={{ fontSize: 13, color: T.textMuted }}>days until FDA deadline</span>
+                        <span className="text-[13px] text-re-text-muted">days until FDA deadline</span>
                     </div>
                     <Link href="#assessment">
                         <button
@@ -449,10 +449,10 @@ export default function RetailerSuppliersPage() {
                     }}>
                         {daysCount.toLocaleString()}
                     </span>
-                    <span style={{ fontSize: 14, color: T.textMuted }}>days until FDA's July 2028 deadline</span>
+                    <span className="text-sm text-re-text-muted">days until FDA's July 2028 deadline</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <div className="flex gap-3 justify-center flex-wrap">
                     <Link href="#assessment">
                         <button style={{
                             background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
@@ -500,11 +500,11 @@ export default function RetailerSuppliersPage() {
                 transform: timeline.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 48 }}>
+                <div className="text-center mb-12">
                     <p className="re-section-label">
                         Compliance Timeline
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
+                    <h2 className="re-section-title">
                         The Clock Is Already Running
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 500, margin: '0 auto' }}>
@@ -557,7 +557,7 @@ export default function RetailerSuppliersPage() {
                                 textAlign: 'center', whiteSpace: 'nowrap',
                             }}>
                                 <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Retailer Internal</p>
-                                <p style={{ fontSize: 11, color: T.textDim }}>~Q1 2027 (est.)</p>
+                                <p className="text-[11px] text-re-text-disabled">~Q1 2027 (est.)</p>
                             </div>
                         </div>
 
@@ -579,7 +579,7 @@ export default function RetailerSuppliersPage() {
                                 textAlign: 'center', whiteSpace: 'nowrap',
                             }}>
                                 <p style={{ fontSize: 13, fontWeight: 600, color: T.danger }}>FDA Mandate</p>
-                                <p style={{ fontSize: 11, color: T.textDim }}>July 20, 2028</p>
+                                <p className="text-[11px] text-re-text-disabled">July 20, 2028</p>
                             </div>
                         </div>
                     </div>
@@ -614,11 +614,11 @@ export default function RetailerSuppliersPage() {
                 transform: trace.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 48 }}>
+                <div className="text-center mb-12">
                     <p className="re-section-label">
                         Live Trace Demo
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
+                    <h2 className="re-section-title">
                         {traceDirection === 'forward' ? '5-Second Trace. Farm to Store.' : '5-Second Trace. Store to Farm.'}
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 520, margin: '0 auto', marginBottom: 24 }}>
@@ -815,11 +815,11 @@ export default function RetailerSuppliersPage() {
                 transform: comparison.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
-                <div style={{ textAlign: 'center', marginBottom: 48 }}>
+                <div className="text-center mb-12">
                     <p className="re-section-label">
                         Why Switch?
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                    <h2 className="re-section-title">
                         Your Current Setup vs. RegEngine
                     </h2>
                 </div>
@@ -841,7 +841,7 @@ export default function RetailerSuppliersPage() {
                         }}>
                             ✗ Without RegEngine
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div className="flex flex-col gap-4">
                             {[
                                 { label: 'Record keeping', value: 'Excel spreadsheets', bad: true },
                                 { label: 'Trace response time', value: '3–5 business days', bad: true },
@@ -851,7 +851,7 @@ export default function RetailerSuppliersPage() {
                                 { label: 'Team workflow', value: 'Manual portal logins', bad: true },
                             ].map((item, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                                    <span style={{ fontSize: 14, color: T.textMuted }}>{item.label}</span>
+                                    <span className="text-sm text-re-text-muted">{item.label}</span>
                                     <span style={{ fontSize: 14, color: T.danger, fontWeight: 500 }}>{item.value}</span>
                                 </div>
                             ))}
@@ -872,7 +872,7 @@ export default function RetailerSuppliersPage() {
                         }}>
                             ✓ With RegEngine
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                        <div className="flex flex-col gap-4">
                             {[
                                 { label: 'Record keeping', value: 'Automated API capture' },
                                 { label: 'Trace response time', value: '< 5 seconds' },
@@ -882,7 +882,7 @@ export default function RetailerSuppliersPage() {
                                 { label: 'Team workflow', value: 'Zero portal logins' },
                             ].map((item, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.accent}08` }}>
-                                    <span style={{ fontSize: 14, color: T.textMuted }}>{item.label}</span>
+                                    <span className="text-sm text-re-text-muted">{item.label}</span>
                                     <span style={{ fontSize: 14, color: T.accent, fontWeight: 600 }}>{item.value}</span>
                                 </div>
                             ))}
@@ -905,7 +905,7 @@ export default function RetailerSuppliersPage() {
                     <p className="re-section-label">
                         Risk Calculator
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
+                    <h2 className="re-section-title">
                         What Does Losing a Major Retailer Cost You?
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted }}>
@@ -1023,7 +1023,7 @@ export default function RetailerSuppliersPage() {
                     <p className="re-section-label">
                         Pricing
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 12 }}>
+                    <h2 className="re-section-title">
                         Simple, Transparent Pricing
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted }}>
@@ -1141,7 +1141,7 @@ export default function RetailerSuppliersPage() {
                                     <p style={{ fontSize: 18, fontWeight: 700, color: T.heading, fontFamily: "'JetBrains Mono', monospace" }}>
                                         {stat.value}
                                     </p>
-                                    <p style={{ fontSize: 11, color: T.textDim }}>{stat.label}</p>
+                                    <p className="text-[11px] text-re-text-disabled">{stat.label}</p>
                                 </div>
                             ))}
                         </div>
@@ -1270,7 +1270,7 @@ export default function RetailerSuppliersPage() {
                     <p className="re-section-label">
                         Proof It Works
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                    <h2 className="re-section-title">
                         From 0% to Retailer-Ready in 18 Days
                     </h2>
                 </div>
@@ -1292,7 +1292,7 @@ export default function RetailerSuppliersPage() {
                             <p style={{ fontSize: 16, fontWeight: 600, color: T.heading }}>
                                 Mid-size Produce Supplier · $40M Annual Revenue
                             </p>
-                            <p style={{ fontSize: 13, color: T.textMuted }}>Central California · 3 Major Retailer DCs</p>
+                            <p className="text-[13px] text-re-text-muted">Central California · 3 Major Retailer DCs</p>
                         </div>
                     </div>
                     <p style={{ fontSize: 14, color: T.text, lineHeight: 1.8, marginBottom: 24 }}>
@@ -1334,7 +1334,7 @@ export default function RetailerSuppliersPage() {
                     <p className="re-section-label">
                         How We Compare
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                    <h2 className="re-section-title">
                         RegEngine vs. Legacy Platforms
                     </h2>
                 </div>
@@ -1348,10 +1348,10 @@ export default function RetailerSuppliersPage() {
                         padding: '16px 20px', borderBottom: `1px solid ${T.border}`,
                         background: 'rgba(255,255,255,0.02)',
                     }}>
-                        <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>Feature</span>
+                        <span className="text-xs text-re-text-disabled font-medium">Feature</span>
                         <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>RegEngine</span>
-                        <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>FoodLogiQ</span>
-                        <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>TraceLink</span>
+                        <span className="text-xs text-re-text-disabled font-medium">FoodLogiQ</span>
+                        <span className="text-xs text-re-text-disabled font-medium">TraceLink</span>
                     </div>
                     {COMPETITORS.map((row, i) => (
                         <div key={i} className="competitor-row" style={{
@@ -1382,7 +1382,7 @@ export default function RetailerSuppliersPage() {
                     <p className="re-section-label">
                         FAQ
                     </p>
-                    <h2 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 700, color: T.heading }}>
+                    <h2 className="re-section-title">
                         Common Questions
                     </h2>
                 </div>
@@ -1480,7 +1480,7 @@ export default function RetailerSuppliersPage() {
                         ].map((item, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <span style={{ fontSize: 14 }}>{item.icon}</span>
-                                <span style={{ fontSize: 13, color: T.textMuted }}>{item.label}</span>
+                                <span className="text-[13px] text-re-text-muted">{item.label}</span>
                             </div>
                         ))}
                     </div>

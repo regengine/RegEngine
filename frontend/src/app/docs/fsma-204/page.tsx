@@ -29,7 +29,7 @@ export default function FSMA204GuidePage() {
                     </Link>
 
                     <div className="flex items-center gap-3 mb-3">
-                        <Utensils style={{ width: 28, height: 28, color: T.accent }} />
+                        <Utensils className="w-7 h-7 text-re-brand" />
                         <span style={{
                             background: T.accent,
                             color: 'white',
@@ -60,16 +60,16 @@ export default function FSMA204GuidePage() {
             }}>
                 <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', gap: '32px', flexWrap: 'wrap' }}>
                     <div className="flex items-center gap-2">
-                        <Clock style={{ width: 16, height: 16, color: T.accent }} />
-                        <span style={{ fontSize: '14px', color: T.text }}>24-hour FDA response</span>
+                        <Clock className="w-4 h-4 text-re-brand" />
+                        <span className="text-sm text-re-text-secondary">24-hour FDA response</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Shield style={{ width: 16, height: 16, color: T.accent }} />
-                        <span style={{ fontSize: '14px', color: T.text }}>21 CFR 1.1455 compliant</span>
+                        <Shield className="w-4 h-4 text-re-brand" />
+                        <span className="text-sm text-re-text-secondary">21 CFR 1.1455 compliant</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <CheckCircle style={{ width: 16, height: 16, color: T.accent }} />
-                        <span style={{ fontSize: '14px', color: T.text }}>Enforcement: July 20, 2028</span>
+                        <CheckCircle className="w-4 h-4 text-re-brand" />
+                        <span className="text-sm text-re-text-secondary">Enforcement: July 20, 2028</span>
                     </div>
                 </div>
             </div>
@@ -186,7 +186,7 @@ export default function FSMA204GuidePage() {
                             alignItems: 'center',
                             gap: '8px',
                         }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
+                            <div className="w-2 h-2 rounded-full bg-re-brand" />
                             <span className="text-xs text-re-brand">201 Created</span>
                         </div>
                         <pre className="re-code-block">
@@ -236,7 +236,7 @@ export default function FSMA204GuidePage() {
                                     { cte: 'Transformation', event: 'transformation', kdes: 'Input TLCs, Output TLC, Date, Location' },
                                 ].map((row, i, arr) => (
                                     <tr key={row.event} style={{ borderBottom: i < arr.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                                        <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{row.cte}</td>
+                                        <td className="px-4 py-3 text-re-text-primary font-medium">{row.cte}</td>
                                         <td className="px-4 py-3">
                                             <code style={{
                                                 background: 'rgba(16,185,129,0.2)',

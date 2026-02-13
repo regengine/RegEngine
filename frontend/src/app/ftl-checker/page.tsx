@@ -617,9 +617,9 @@ export default function FTLCheckerPage() {
                             Instantly check if your products are covered by FDA FSMA 204 Food Traceability requirements
                         </p>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={14} className="text-re-brand" /> Deadline: July 2028</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Deadline: July 2028</span>
                         </div>
                     </motion.div>
                 </div>
@@ -650,7 +650,7 @@ export default function FTLCheckerPage() {
                                     <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <Search size={20} className="text-re-brand" /> Select Your Product Categories
                                     </h2>
-                                    <p style={{ fontSize: '14px', color: T.textMuted, margin: 0 }}>Choose all the food categories your company handles</p>
+                                    <p className="text-sm text-re-text-muted m-0">Choose all the food categories your company handles</p>
                                 </div>
 
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
@@ -714,7 +714,7 @@ export default function FTLCheckerPage() {
                                     <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <ShieldCheck size={20} className="text-re-brand" /> Check for Exemptions
                                     </h2>
-                                    <p style={{ fontSize: '14px', color: T.textMuted, margin: 0 }}>Answer these questions to see if you qualify for any FSMA 204 exemptions</p>
+                                    <p className="text-sm text-re-text-muted m-0">Answer these questions to see if you qualify for any FSMA 204 exemptions</p>
                                 </div>
 
                                 <div className="flex flex-col gap-3">
@@ -780,7 +780,7 @@ export default function FTLCheckerPage() {
                                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
                                         <div>
                                             <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.textPrimary, margin: '0 0 8px' }}>Your FTL Coverage Results</h2>
-                                            <p style={{ fontSize: '14px', color: T.textMuted, margin: 0 }}>Based on your selected product categories</p>
+                                            <p className="text-sm text-re-text-muted m-0">Based on your selected product categories</p>
                                         </div>
                                         <button
                                             onClick={handleCopyLink}

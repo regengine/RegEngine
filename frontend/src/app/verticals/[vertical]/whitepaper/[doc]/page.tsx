@@ -180,7 +180,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
                             size="sm"
                             style={doc === 'executive-brief' ? { background: T.accent } : { borderColor: T.border, color: T.text }}
                         >
-                            <FileText style={{ width: 14, height: 14, marginRight: 6 }} />
+                            <FileText className="w-3.5 h-3.5 mr-1.5" />
                             Executive Brief
                         </Button>
                     </Link>
@@ -190,7 +190,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
                             size="sm"
                             style={doc === 'technical' ? { background: T.accent } : { borderColor: T.border, color: T.text }}
                         >
-                            <Wrench style={{ width: 14, height: 14, marginRight: 6 }} />
+                            <Wrench className="w-3.5 h-3.5 mr-1.5" />
                             Technical Architecture
                         </Button>
                     </Link>
@@ -200,7 +200,7 @@ export default async function WhitePaperDocPage({ params }: DocPageProps) {
                             size="sm"
                             style={{ borderColor: T.border, color: T.text }}
                         >
-                            <BookOpen style={{ width: 14, height: 14, marginRight: 6 }} />
+                            <BookOpen className="w-3.5 h-3.5 mr-1.5" />
                             Full Business Case
                         </Button>
                     </Link>

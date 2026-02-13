@@ -299,7 +299,7 @@ export default function RegEngineLanding() {
             <br />
             traceability data
             <br />
-            <span style={{ color: "var(--re-brand)" }}>in 24 hours.</span>
+            <span className="text-re-brand">in 24 hours.</span>
           </h1>
 
           <p
@@ -398,7 +398,7 @@ export default function RegEngineLanding() {
             NEW
           </div>
           <span style={{ color: "var(--re-text-primary)", fontSize: "14px", fontWeight: 500 }}>
-            Now supporting <strong style={{ color: "var(--re-brand)" }}>GS1 EPCIS 2.0</strong> for major retailer supplier automation
+            Now supporting <strong className="text-re-brand">GS1 EPCIS 2.0</strong> for major retailer supplier automation
           </span>
           <a
             href="/ftl-checker"
@@ -652,7 +652,7 @@ export default function RegEngineLanding() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                  <span style={{ color: "var(--re-brand)" }}>{tool.icon}</span>
+                  <span className="text-re-brand">{tool.icon}</span>
                   <span style={{ fontSize: "16px", fontWeight: 600, color: "var(--re-text-primary)" }}>{tool.title}</span>
                   <span
                     style={{
@@ -1019,13 +1019,13 @@ export default function RegEngineLanding() {
               >
                 <span style={{ color: "var(--re-text-disabled)" }}>$ </span>
                 <span style={{ color: "var(--re-text-secondary)" }}>curl</span>
-                {" "}<span style={{ color: "var(--re-brand)" }}>api.regengine.co/v1/verify/doc_a1b2c3</span>
+                {" "}<span className="text-re-brand">api.regengine.co/v1/verify/doc_a1b2c3</span>
                 {"\n\n"}
                 <span style={{ color: "var(--re-text-disabled)" }}>{"{"}</span>
-                {"\n  "}<span className="text-re-info">"document_id"</span>: <span style={{ color: "var(--re-warning)" }}>"doc_a1b2c3"</span>,
-                {"\n  "}<span className="text-re-info">"status"</span>: <span style={{ color: "var(--re-warning)" }}>"verified"</span>,
-                {"\n  "}<span className="text-re-info">"hashes"</span>: {"{ "}<span className="text-re-info">"content_sha256"</span>: <span style={{ color: "var(--re-warning)" }}>"a3f2..."</span>{" }"},
-                {"\n  "}<span className="text-re-info">"verified_at"</span>: <span style={{ color: "var(--re-warning)" }}>"2026-02-08T20:15:00Z"</span>
+                {"\n  "}<span className="text-re-info">"document_id"</span>: <span className="text-re-warning">"doc_a1b2c3"</span>,
+                {"\n  "}<span className="text-re-info">"status"</span>: <span className="text-re-warning">"verified"</span>,
+                {"\n  "}<span className="text-re-info">"hashes"</span>: {"{ "}<span className="text-re-info">"content_sha256"</span>: <span className="text-re-warning">"a3f2..."</span>{" }"},
+                {"\n  "}<span className="text-re-info">"verified_at"</span>: <span className="text-re-warning">"2026-02-08T20:15:00Z"</span>
                 {"\n"}<span style={{ color: "var(--re-text-disabled)" }}>{"}"}</span>
               </pre>
             </div>

@@ -62,7 +62,7 @@ export function MarketingFooter() {
                 </div>
 
                 <div>
-                    <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--re-text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "16px" }}>
+                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Product
                     </h4>
                     {[
@@ -100,14 +100,14 @@ export function MarketingFooter() {
                 </div>
 
                 <div>
-                    <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--re-text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "16px" }}>
+                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Industries
                     </h4>
                     {industries.map((ind) => (
                         <Link
                             key={ind.name}
                             href={ind.href}
-                            style={{ fontSize: "13px", color: "var(--re-text-tertiary)", textDecoration: "none", marginBottom: "10px", display: "block" }}
+                            className="text-[13px] text-re-text-tertiary no-underline mb-2.5 block"
                         >
                             {ind.name}
                         </Link>
@@ -115,14 +115,14 @@ export function MarketingFooter() {
                 </div>
 
                 <div>
-                    <h4 style={{ fontSize: "12px", fontWeight: 600, color: "var(--re-text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "16px" }}>
+                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Company
                     </h4>
                     {["About", "Security", "Privacy", "Terms"].map((item) => (
                         <Link
                             key={item}
                             href={`/${item.toLowerCase()}`}
-                            style={{ fontSize: "13px", color: "var(--re-text-tertiary)", textDecoration: "none", marginBottom: "10px", display: "block" }}
+                            className="text-[13px] text-re-text-tertiary no-underline mb-2.5 block"
                         >
                             {item}
                         </Link>
@@ -141,7 +141,7 @@ export function MarketingFooter() {
                     alignItems: "center",
                 }}
             >
-                <span style={{ fontSize: "12px", color: "var(--re-text-disabled)" }}>
+                <span className="text-xs text-re-text-disabled">
                     © 2026 RegEngine Inc. All rights reserved.
                 </span>
                 <span style={{ fontSize: "11px", color: "var(--re-surface-card)", fontFamily: "'JetBrains Mono', monospace" }}>

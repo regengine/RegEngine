@@ -115,9 +115,9 @@ export default function ErrorCodesPage() {
                                                     fontWeight: 600,
                                                 }}>{error.code}</code>
                                             </td>
-                                            <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{error.name}</td>
+                                            <td className="px-4 py-3 text-re-text-primary font-medium">{error.name}</td>
                                             <td className="px-4 py-3 text-re-text-secondary text-sm">{error.description}</td>
-                                            <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
+                                            <td className="px-4 py-3 text-re-text-muted text-sm">{error.fix}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -170,9 +170,9 @@ export default function ErrorCodesPage() {
                                                     fontWeight: 600,
                                                 }}>{error.code}</code>
                                             </td>
-                                            <td style={{ padding: '12px 16px', color: 'var(--re-text-primary)', fontWeight: 500 }}>{error.name}</td>
+                                            <td className="px-4 py-3 text-re-text-primary font-medium">{error.name}</td>
                                             <td className="px-4 py-3 text-re-text-secondary text-sm">{error.description}</td>
-                                            <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
+                                            <td className="px-4 py-3 text-re-text-muted text-sm">{error.fix}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -248,7 +248,7 @@ export default function ErrorCodesPage() {
                                             }}>{error.code}</code>
                                         </td>
                                         <td className="px-4 py-3 text-re-text-secondary text-sm">{error.message}</td>
-                                        <td style={{ padding: '12px 16px', color: T.textMuted, fontSize: '14px' }}>{error.fix}</td>
+                                        <td className="px-4 py-3 text-re-text-muted text-sm">{error.fix}</td>
                                     </tr>
                                 ))}
                             </tbody>

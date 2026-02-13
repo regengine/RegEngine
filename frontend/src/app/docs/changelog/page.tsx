@@ -28,7 +28,7 @@ export default function ChangelogPage() {
                     </Link>
 
                     <div className="flex items-center gap-3 mb-3">
-                        <FileText style={{ width: 28, height: 28, color: T.accent }} />
+                        <FileText className="w-7 h-7 text-re-brand" />
                     </div>
 
                     <h1 className="re-heading-xl">

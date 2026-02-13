@@ -83,7 +83,7 @@ export default function EnergyDocsPage() {
                 {/* Sample API Call */}
                 <section className="mb-12">
                     <h2 className="re-heading-md">
-                        <Clock style={{ width: 20, height: 20, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
+                        <Clock className="w-5 h-5 inline align-middle mr-2" />
                         Preview: Vendor Assessment
                     </h2>
 
@@ -135,7 +135,7 @@ export default function EnergyDocsPage() {
                     <h3 className="re-heading-sm">
                         Get Early Access
                     </h3>
-                    <p style={{ color: T.text, fontSize: '14px', marginBottom: '20px', maxWidth: '400px', margin: '0 auto 20px' }}>
+                    <p className="text-re-text-secondary text-sm mb-5 max-w-[400px] mx-auto">
                         Join the waitlist to be notified when Energy compliance features launch.
                     </p>
                     <a

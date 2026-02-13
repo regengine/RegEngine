@@ -99,7 +99,7 @@ export default function DocsHomePage() {
               alignItems: 'center',
               gap: '8px',
             }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
+              <div className="w-2 h-2 rounded-full bg-re-brand" />
               <span className="text-xs text-re-brand">201 Created</span>
             </div>
             <pre style={{

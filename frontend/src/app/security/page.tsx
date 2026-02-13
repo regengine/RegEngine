@@ -150,7 +150,7 @@ export default function SecurityPage() {
                         transition: "all 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
                     }}
                 >
-                    <span style={{ fontSize: "11px", fontFamily: T.mono, fontWeight: 500, color: T.textDim, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                    <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
                         Security
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15 }}>
@@ -219,7 +219,7 @@ export default function SecurityPage() {
 
             {/* Infrastructure */}
             <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.01)" }}>
-                <div style={{ maxWidth: "720px", margin: "0 auto", padding: "60px 24px" }}>
+                <div className="max-w-[720px] mx-auto py-[60px] px-6">
                     <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 24px" }}>
                         Infrastructure
                     </h2>

@@ -125,7 +125,7 @@ export function MarketingHeader() {
                             <div style={{ padding: "4px 16px 8px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em", color: "var(--re-text-muted)", textTransform: "uppercase" as const }}>
                                 Food Safety
                             </div>
-                            <Link href="/ftl-checker" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", textDecoration: "none", transition: "background 0.15s" }}
+                            <Link href="/ftl-checker" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
@@ -139,7 +139,7 @@ export function MarketingHeader() {
                             <div style={{ padding: "4px 16px 8px", fontSize: "10px", fontWeight: 600, letterSpacing: "0.08em", color: "var(--re-text-muted)", textTransform: "uppercase" as const }}>
                                 Finance AI Governance
                             </div>
-                            <Link href="/tools/bias-checker" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", textDecoration: "none", transition: "background 0.15s" }}
+                            <Link href="/tools/bias-checker" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
@@ -149,7 +149,7 @@ export function MarketingHeader() {
                                     <div className="text-[11px] text-re-text-muted">Disparate Impact & 80% Rule</div>
                                 </div>
                             </Link>
-                            <Link href="/tools/obligation-scanner" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", textDecoration: "none", transition: "background 0.15s" }}
+                            <Link href="/tools/obligation-scanner" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
@@ -159,7 +159,7 @@ export function MarketingHeader() {
                                     <div className="text-[11px] text-re-text-muted">Regulatory obligation mapping</div>
                                 </div>
                             </Link>
-                            <Link href="/tools/notice-validator" style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", textDecoration: "none", transition: "background 0.15s" }}
+                            <Link href="/tools/notice-validator" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
