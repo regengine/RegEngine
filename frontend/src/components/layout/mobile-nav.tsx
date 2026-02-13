@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Clapperboard, Users, FileText, Zap, Server, Scan } from "lucide-react"
+import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Clapperboard, Users, FileText, Zap, Server, Scan, Gamepad2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -25,6 +25,15 @@ export function MobileNav() {
                 { href: "/fsma", label: "FSMA", icon: Leaf },
                 { href: "/review", label: "Review", icon: ClipboardCheck },
                 { href: "/opportunities", label: "Opportunities", icon: TrendingUp },
+            ]
+        },
+        {
+            title: "Free Tools",
+            items: [
+                { href: "/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-green-500" },
+                { href: "/tools/bias-checker", label: "Bias Checker", icon: Users, iconClass: "text-rose-500" },
+                { href: "/tools/obligation-scanner", label: "Obligation Scanner", icon: Shield, iconClass: "text-amber-500" },
+                { href: "/tools/notice-validator", label: "Notice Validator", icon: FileText, iconClass: "text-blue-500" },
             ]
         },
         {

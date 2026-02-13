@@ -8,6 +8,7 @@ Replaces in-memory stores with graph database.
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import json
 import logging
 from neo4j import GraphDatabase
 
@@ -87,8 +88,8 @@ class FinanceGraphStore:
             query,
             decision_id=decision_id,
             decision_type=decision_type,
-            evidence=evidence,
-            metadata=metadata
+            evidence=json.dumps(evidence) if isinstance(evidence, dict) else str(evidence),
+            metadata=json.dumps(metadata) if isinstance(metadata, dict) else str(metadata)
         )
         return result.single()
     
@@ -414,7 +415,8 @@ class FinanceGraphStore:
         CREATE (m)-[:HAS_BIAS_CHECK {timestamp: datetime()}]->(b)
         """
         tx.run(query, report_id=report_id, model_id=model_id, 
-               bias_detected=bias_detected, dir_score=dir_score, metrics=metrics)
+               bias_detected=bias_detected, dir_score=dir_score,
+               metrics=json.dumps(metrics) if isinstance(metrics, dict) else str(metrics))
 
     def create_drift_event(
         self,
@@ -446,4 +448,5 @@ class FinanceGraphStore:
         CREATE (m)-[:HAS_DRIFT_CHECK {timestamp: datetime()}]->(d)
         """
         tx.run(query, event_id=event_id, model_id=model_id, 
-               psi_score=psi_score, drift_detected=drift_detected, feature_scores=feature_scores)
+               psi_score=psi_score, drift_detected=drift_detected,
+               feature_scores=json.dumps(feature_scores) if isinstance(feature_scores, dict) else str(feature_scores))
