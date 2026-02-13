@@ -286,25 +286,26 @@ class ConsoleChannelHandler(AlertChannelHandler):
         return AlertChannel.CONSOLE
     
     async def send(self, alert: SecurityAlert) -> bool:
-        """Print alert to console."""
-        severity_colors = {
-            AlertSeverity.INFO: "",
-            AlertSeverity.LOW: "",
-            AlertSeverity.MEDIUM: "",
-            AlertSeverity.HIGH: "",
-            AlertSeverity.CRITICAL: "",
-        }
-        
-        print(f"🚨 SECURITY ALERT [{alert.severity.value.upper()}]")
-        print(f"   Category: {alert.category.value}")
-        print(f"   Title: {alert.title}")
-        print(f"   Description: {alert.description}")
-        if alert.user_id:
-            print(f"   User: {alert.user_id}")
-        if alert.ip_address:
-            print(f"   IP: {alert.ip_address}")
-        print(f"   Time: {alert.timestamp.isoformat()}")
-        print()
+        """Send alert to console via logger."""
+        log_level = {
+            AlertSeverity.INFO: logging.INFO,
+            AlertSeverity.LOW: logging.INFO,
+            AlertSeverity.MEDIUM: logging.WARNING,
+            AlertSeverity.HIGH: logging.ERROR,
+            AlertSeverity.CRITICAL: logging.CRITICAL,
+        }.get(alert.severity, logging.WARNING)
+
+        logger.log(
+            log_level,
+            "🚨 SECURITY ALERT [%s] Category=%s Title=%s Description=%s user=%s ip=%s time=%s",
+            alert.severity.value.upper(),
+            alert.category.value,
+            alert.title,
+            alert.description,
+            alert.user_id,
+            alert.ip_address,
+            alert.timestamp.isoformat(),
+        )
         
         return True
 

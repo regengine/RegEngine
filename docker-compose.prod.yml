@@ -3,6 +3,7 @@ version: '3.8'
 # Production Docker Compose configuration for RegEngine
 # SEC-004: All secrets MUST be provided via environment variables
 # CRITICAL: Never use default values for sensitive credentials in production
+# DEPLOY: Set IMAGE_TAG env var to pin images (e.g., IMAGE_TAG=sha-80ef59d)
 
 x-env-prod: &env_prod
   REGENGINE_ENV: production
@@ -56,7 +57,7 @@ services:
     build:
       context: .
       dockerfile: ./services/admin/Dockerfile
-    image: ghcr.io/regengine/admin-api:latest
+    image: ghcr.io/regengine/admin-api:${IMAGE_TAG:-latest}
     environment:
       <<: *env_prod
       ADMIN_MASTER_KEY: ${ADMIN_MASTER_KEY:?error}
@@ -77,7 +78,7 @@ services:
     build:
       context: .
       dockerfile: ./services/ingestion/Dockerfile
-    image: ghcr.io/regengine/ingestion-service:latest
+    image: ghcr.io/regengine/ingestion-service:${IMAGE_TAG:-latest}
     environment:
       <<: *env_prod
     healthcheck:
@@ -97,7 +98,7 @@ services:
     build:
       context: .
       dockerfile: ./services/nlp/Dockerfile
-    image: ghcr.io/regengine/nlp-service:latest
+    image: ghcr.io/regengine/nlp-service:${IMAGE_TAG:-latest}
     environment:
       <<: *env_prod
     healthcheck:
@@ -117,7 +118,7 @@ services:
     build:
       context: .
       dockerfile: ./services/graph/Dockerfile
-    image: ghcr.io/regengine/graph-service:latest
+    image: ghcr.io/regengine/graph-service:${IMAGE_TAG:-latest}
     environment:
       <<: *env_prod
     healthcheck:
@@ -137,7 +138,7 @@ services:
     build:
       context: .
       dockerfile: ./services/opportunity/Dockerfile
-    image: ghcr.io/regengine/opportunity-api:latest
+    image: ghcr.io/regengine/opportunity-api:${IMAGE_TAG:-latest}
     environment:
       <<: *env_prod
     healthcheck:
@@ -157,7 +158,7 @@ services:
     build:
       context: .
       dockerfile: ./services/compliance/Dockerfile
-    image: ghcr.io/regengine/compliance-api:latest
+    image: ghcr.io/regengine/compliance-api:${IMAGE_TAG:-latest}
     environment:
       <<: *env_prod
     healthcheck:
@@ -176,7 +177,7 @@ services:
   scheduler:
     build:
       context: ./services/scheduler
-    image: ghcr.io/regengine/scheduler:latest
+    image: ghcr.io/regengine/scheduler:${IMAGE_TAG:-latest}
     environment:
       INGESTION_SERVICE_URL: http://ingestion-service:8000
       SCHEDULER_API_KEY: ${ADMIN_MASTER_KEY:?error}

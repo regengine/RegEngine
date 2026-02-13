@@ -8,16 +8,20 @@ This module provides OAuth 2.0 and OIDC integration for:
 - ID token validation
 
 Usage:
-    from shared.oauth_oidc import OIDCClient, OAuthConfig
+    from shared.oauth_oidc import OAuthConfig, OAuthFlow
     
+    # Load from environment variables (recommended):
+    config = OAuthConfig.from_env()  # Reads OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET, etc.
+    
+    # Or configure explicitly (never hardcode secrets):
     config = OAuthConfig(
         issuer="https://auth.example.com",
         client_id="regengine-app",
-        client_secret="secret",
+        client_secret=os.environ["OAUTH_CLIENT_SECRET"],
         redirect_uri="https://regengine.co/callback",
     )
     
-    client = OIDCClient(config)
+    flow = OAuthFlow(config)
     
     # Get authorization URL
     auth_url, state = client.get_authorization_url()

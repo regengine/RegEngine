@@ -391,7 +391,8 @@ class MemorySecurityService:
             final_count = self.resource_tracker.get_open_count()
             if final_count > initial_count:
                 leaked = final_count - initial_count
-                print(f"Warning: {leaked} resources may have leaked")
+                import logging
+                logging.getLogger(__name__).warning("Resource leak detected: %d resources may have leaked", leaked)
 
 
 # Convenience functions

@@ -456,7 +456,9 @@ class ConsoleEventHandler(EventHandler):
     def handle(self, event: SecurityEvent) -> None:
         """Print event to console."""
         if self._severity_order.index(event.severity) >= self._severity_order.index(self._min_severity):
-            print(f"[{event.severity.value.upper()}] {event.timestamp.isoformat()} - {event.message}")
+            logging.getLogger(__name__).info(
+                "[%s] %s - %s", event.severity.value.upper(), event.timestamp.isoformat(), event.message
+            )
 
 
 class CallbackEventHandler(EventHandler):

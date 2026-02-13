@@ -409,6 +409,6 @@ if __name__ == "__main__":
 
     try:
         result = flaky_function()
-        print(f"Result: {result}")
+        logger.info("Result: %s", result)
     except ConnectionError as e:
-        print(f"Failed after all retries: {e}")
+        logger.error("Failed after all retries: %s", e)
