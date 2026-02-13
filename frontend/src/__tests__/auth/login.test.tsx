@@ -316,7 +316,7 @@ describe('LoginPage', () => {
     describe('Loading States', () => {
         it('shows loading state during login', async () => {
             const user = userEvent.setup();
-            let resolveLogin: any;
+            let resolveLogin!: (value: unknown) => void;
             const loginPromise = new Promise((resolve) => {
                 resolveLogin = resolve;
             });
@@ -349,7 +349,7 @@ describe('LoginPage', () => {
 
         it('disables inputs during login', async () => {
             const user = userEvent.setup();
-            let resolveLogin: any;
+            let resolveLogin!: (value: unknown) => void;
             const loginPromise = new Promise((resolve) => {
                 resolveLogin = resolve;
             });

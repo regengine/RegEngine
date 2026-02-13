@@ -227,7 +227,7 @@ describe('API Client - Opportunity Service', () => {
 
             const response = await mockClient.get('/opportunities/gaps', { params });
 
-            expect(response.data.items.every((item: any) => item.priority === 'high')).toBe(true);
+            expect(response.data.items.every((item: { priority: string }) => item.priority === 'high')).toBe(true);
         });
     });
 
