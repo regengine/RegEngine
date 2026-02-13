@@ -23,7 +23,7 @@ class FinanceDecision(StructuredNode):
     
     decision_id = UniqueIdProperty()
     decision_type = StringProperty(required=True, choices=['credit_approval', 'credit_denial', 'limit_adjustment', 'fraud_flag', 'account_closure'])
-   timestamp = DateTimeProperty(default_now=True)
+    timestamp = DateTimeProperty(default_now=True)
     customer_id = StringProperty(required=True, index=True)
     model_version_id = StringProperty(required=True, index=True)
     decision_outcome = StringProperty(required=True)
@@ -68,7 +68,7 @@ class RegulatoryObligation(StructuredNode):
     triggering_conditions = JSONProperty()
     required_evidence = JSONProperty()
     
-   # Relationships
+    # Relationships
     violations = RelationshipFrom('FinanceDecision', 'VIOLATES')
     evaluations = RelationshipFrom('ObligationEvaluation', 'AGAINST_OBLIGATION')
 

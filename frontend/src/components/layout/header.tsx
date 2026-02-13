@@ -192,8 +192,59 @@ export function Header() {
           </DropdownMenu>
 
 
+          {/* Free Tools */}
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">
+                <Scan className="h-4 w-4 text-cyan-500" />
+                <span>Tools</span>
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Free Compliance Tools</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/ftl-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Leaf className="h-4 w-4 text-green-500" />
+                  <div>
+                    <div className="font-medium">FTL Checker</div>
+                    <div className="text-xs text-muted-foreground">FSMA 204 Food Traceability</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Finance AI Governance</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/tools/bias-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Users className="h-4 w-4 text-rose-500" />
+                  <div>
+                    <div className="font-medium">Bias Checker</div>
+                    <div className="text-xs text-muted-foreground">Disparate Impact & 80% Rule</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/tools/obligation-scanner" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Shield className="h-4 w-4 text-amber-500" />
+                  <div>
+                    <div className="font-medium">Obligation Scanner</div>
+                    <div className="text-xs text-muted-foreground">Regulatory obligation mapping</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/tools/notice-validator" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <FileText className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <div className="font-medium">Notice Validator</div>
+                    <div className="text-xs text-muted-foreground">Adverse action notice check</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {/* Verticals */}
+
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">

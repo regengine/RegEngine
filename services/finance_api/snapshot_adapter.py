@@ -3,6 +3,7 @@ Auto-generated snapshot adapter for Finance vertical.
 DO NOT MODIFY MANUALLY - regenerate via: regengine compile vertical finance
 """
 
+import uuid
 from typing import Dict, List, Any
 from datetime import datetime
 import logging
@@ -308,5 +309,3 @@ class FinanceSnapshotAdapter:
             except Exception as e:
                 logger.error(f"Failed to persist snapshot to DB: {e}")
 
-
-import uuid
