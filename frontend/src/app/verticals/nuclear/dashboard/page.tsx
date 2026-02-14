@@ -11,6 +11,7 @@ import {
     QuickActionsPanel,
     ComplianceScoreGauge,
     ExportButton,
+    ComplianceReportButton,
     type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -382,6 +383,15 @@ export default function NuclearDashboardPage() {
                         }}
                         filename="nuclear_compliance_report"
                         variant="default"
+                        className="w-full"
+                    />
+                    <ComplianceReportButton
+                        dashboardTitle="10 CFR Nuclear Compliance Report"
+                        vertical="Nuclear"
+                        reportData={{
+                            summary: 'NRC regulatory evidence compliance covering 10 CFR requirements, evidence vault integrity, legal hold status, and fail-safe mode readiness.',
+                            metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [],
+                        }}
                         className="w-full"
                     />
                 </div>

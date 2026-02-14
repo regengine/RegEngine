@@ -39,12 +39,16 @@ from app.analysis import AnalysisEngine
 import sys
 from pathlib import Path
 
-# Calculate project root relative to this file
-_PROJECT_ROOT = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(_PROJECT_ROOT))
+# Centralised path resolution
+_srv = str(Path(__file__).resolve().parent.parent)
+if _srv not in sys.path:
+    sys.path.insert(0, _srv)
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from shared.auth import require_api_key, APIKey
-from shared.middleware import TenantContextMiddleware, get_current_tenant_id
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware, get_current_tenant_id
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 from shared.health import (
     HealthChecker,
     create_neo4j_check,
@@ -72,7 +76,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+
+import structlog
+_compliance_logger = structlog.get_logger("compliance-service")
+
+@app.on_event("startup")
+async def startup():
+    _compliance_logger.info("compliance_service_started", version=settings.service_version)
+
+@app.on_event("shutdown")
+async def shutdown():
+    _compliance_logger.info("compliance_service_stopped")
+
+# Global exception handlers (Sprint 18)
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
 
 # Initialize checklist engine with path relative to project root
 # Initialize checklist engine with path relative to this file

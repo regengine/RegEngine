@@ -5,7 +5,7 @@ Opportunity Service - FastAPI Application Entry Point
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import structlog
-from shared.middleware import TenantContextMiddleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 
 from app.routes import router
 
@@ -26,7 +26,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
+
+# Per-tenant rate limiting (Sprint 16)
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+
+# Global exception handlers (Sprint 18)
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
 
 # Mount routes
 app.include_router(router)
@@ -35,6 +44,17 @@ app.include_router(router)
 async def startup_event():
     logger.info("opportunity_service_starting", version="1.0.0")
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("opportunity_service_stopped")
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "opportunity-service", "version": "1.0.0"}
+
+@app.get("/ready")
+async def readiness():
+    return {"status": "ready", "service": "opportunity-service"}
 
 
 if __name__ == "__main__":

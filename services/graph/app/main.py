@@ -11,11 +11,12 @@ from pathlib import Path
 # Add shared utilities
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_SERVICES_DIR))
-from shared.middleware import TenantContextMiddleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 
 from .routes import router, v1_router
 from .fsma_routes import fsma_router
 from .routers.arbitrage import arbitrage_router
+from .routers.lineage_traversal import router as lineage_router
 
 logger = structlog.get_logger("graph-api")
 
@@ -44,13 +45,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
+
+# Per-tenant rate limiting (Sprint 16)
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+
+# Global exception handlers (Sprint 18)
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
 
 # Mount routers
 app.include_router(router, tags=["health"])  # Health/metrics at root
 app.include_router(v1_router, tags=["v1"])  # General v1 endpoints
 app.include_router(fsma_router, prefix="/fsma", tags=["fsma"])  # FSMA-specific
 app.include_router(arbitrage_router, tags=["arbitrage"])  # Arbitrage detection
+app.include_router(lineage_router, tags=["lineage"])  # Fact version history
 
 
 @app.on_event("startup")

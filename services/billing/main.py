@@ -73,6 +73,13 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
+# Per-tenant rate limiting (Sprint 16)
+try:
+    from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+    app.add_middleware(TenantRateLimitMiddleware, default_rpm=60)
+except ImportError:
+    logger.warning("tenant_rate_limiting_not_available", service=SERVICE_NAME)
+
 # ── Mount Routers ──────────────────────────────────────────────────
 app.include_router(subscriptions.router)
 app.include_router(credits.router)
@@ -114,6 +121,11 @@ async def health():
         "version": SERVICE_VERSION,
         "billing_mode": "sandbox" if is_sandbox() else "production",
     }
+
+@app.get("/ready")
+async def readiness():
+    """Readiness probe for k8s orchestration."""
+    return {"status": "ready", "service": SERVICE_NAME}
 
 
 @app.get("/")

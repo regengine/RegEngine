@@ -9,11 +9,14 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 import sys
 import uuid
 
-# Add shared utilities to path
+# Centralised path resolution
 from pathlib import Path
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_SERVICES_DIR))
-from shared.middleware import TenantContextMiddleware
+_srv = str(Path(__file__).resolve().parent.parent.parent)
+if _srv not in sys.path:
+    sys.path.insert(0, _srv)
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.correlation import CorrelationIdMiddleware, get_correlation_id
 from shared.rate_limiting import create_limiter, setup_rate_limiting
@@ -27,16 +30,9 @@ configure_logging(log_level="INFO")
 logger = structlog.get_logger("aerospace")
 
 
-def get_allowed_origins():
-    """Get allowed CORS origins from environment."""
-    import os
-    origins = os.getenv("CORS_ORIGINS", "*")
-    return origins.split(",") if "," in origins else [origins]
-
-
-def should_allow_credentials():
-    """Determine if credentials should be allowed."""
-    return True
+# SEC-AER-002 REMEDIATION: Removed local get_allowed_origins() and
+# should_allow_credentials() that shadowed shared.cors imports (lines 17-18)
+# with an insecure default of CORS_ORIGINS='*'.
 
 
 # Create FastAPI app
@@ -90,10 +86,19 @@ app.add_middleware(
 )
 
 # Tenant isolation middleware - extracts tenant_id from JWT or headers
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
+
+# Per-tenant rate limiting (Sprint 16)
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 # Rate limiting
 setup_rate_limiting(app)
+
+# Global exception handlers (Sprint 18)
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
 
 # Include routers
 app.include_router(fai_router)

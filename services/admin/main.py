@@ -139,6 +139,13 @@ app.add_middleware(
 from app.audit_middleware import AuditContextMiddleware
 app.add_middleware(AuditContextMiddleware)
 
+# Per-tenant rate limiting (Sprint 14)
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=200)
+
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
+
 app.include_router(router)
 app.include_router(v1_router)
 app.include_router(overlay_router)

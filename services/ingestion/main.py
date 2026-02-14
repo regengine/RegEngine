@@ -13,15 +13,16 @@ import os
 import sys
 from pathlib import Path
 
-# Add shared module to path
-# Add shared module to path
-from pathlib import Path
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
-# sys.path.insert(0, str(_SERVICES_DIR / "shared"))
-# sys.path.insert(0, str(_SERVICES_DIR))
+# Centralised path resolution
+_srv = str(Path(__file__).resolve().parent.parent)
+if _srv not in sys.path:
+    sys.path.insert(0, _srv)
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
-from shared.middleware import TenantContextMiddleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.observability import setup_telemetry
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,7 +43,9 @@ app = FastAPI(
 setup_telemetry("ingestion-service", app)
 
 # Add tenant isolation middleware
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 # Configure CORS for frontend access
 # In development, allow localhost:3000
@@ -58,8 +61,21 @@ app.add_middleware(
     expose_headers=["X-Request-ID"],
 )
 
+# Global exception handlers (Sprint 18)
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
+
 # Include the API routes
 app.include_router(router)
+
+# Health check
+@app.get("/health")
+async def health():
+    return {"status": "healthy", "service": "ingestion-service", "version": "1.0.0"}
+
+@app.get("/ready")
+async def readiness():
+    return {"status": "ready", "service": "ingestion-service"}
 
 # Startup event
 @app.on_event("startup")

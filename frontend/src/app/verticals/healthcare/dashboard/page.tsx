@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { PillarCard } from "@/components/verticals/healthcare/pillar-card"
 import { Button } from "@/components/ui/button"
 import { WifiOff, RefreshCw, Download } from "lucide-react"
+import { ComplianceReportButton } from "@/components/verticals"
 
 type Status = "green" | "yellow" | "red" | "gray"
 
@@ -172,8 +173,35 @@ export default function HealthcareDashboardPage() {
                 </div>
 
                 {/* Main Grid */}
-                {loading && pillars.length === 0 ? (
-                    <div className="text-center py-20 text-slate-500">Loading safety data...</div>
+                {loading ? (
+                    <div className="text-center py-20 text-slate-500">
+                        <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-slate-400" />
+                        Loading safety data...
+                    </div>
+                ) : pillars.length === 0 ? (
+                    <div className="text-center py-16">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
+                            <WifiOff className="h-8 w-8 text-slate-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-700 mb-2">
+                            {isOffline ? "Connection Issue" : "No Data Available"}
+                        </h3>
+                        <p className="text-slate-500 max-w-md mx-auto mb-6">
+                            {isOffline
+                                ? "Unable to reach the compliance API. Check your network connection or API key, then try again."
+                                : "No compliance pillars configured. Complete the setup wizard to get started."}
+                        </p>
+                        <div className="flex items-center justify-center gap-3">
+                            <Button onClick={loadData} variant="outline">
+                                <RefreshCw className="mr-2 h-4 w-4" /> Retry
+                            </Button>
+                            {!isOffline && (
+                                <Button onClick={() => window.location.href = '/verticals/healthcare/setup'} variant="outline">
+                                    Open Setup Wizard
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                 ) : (
                     <div className={"grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 " + (isOffline ? "opacity-75 grayscale-[0.2]" : "")}>
                         {pillars.map((pillar, idx) => (
@@ -201,6 +229,15 @@ export default function HealthcareDashboardPage() {
                     >
                         <Download className="mr-2 h-4 w-4" /> Export Evidence Bundle
                     </Button>
+                    <ComplianceReportButton
+                        dashboardTitle="HIPAA/MSCF Compliance Report"
+                        vertical="Healthcare"
+                        reportData={{
+                            summary: 'Healthcare compliance covering HIPAA privacy safeguards, MSCF framework pillars, medication safety controls, and evidence vault integrity.',
+                            metrics: pillars.flatMap(p => p.controls.map(c => ({ label: `${p.title}: ${c.name}`, value: c.status === 'green' ? 'Compliant' : c.status === 'yellow' ? 'Needs Review' : 'Non-Compliant', status: (c.status === 'green' ? 'pass' : c.status === 'yellow' ? 'warning' : 'fail') as 'pass' | 'warning' | 'fail' }))),
+                        }}
+                        className=""
+                    />
                 </div>
             </div>
         </div>

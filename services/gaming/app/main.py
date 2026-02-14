@@ -8,9 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 import structlog
 import sys
 
+# Centralised path resolution
 from pathlib import Path
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_SERVICES_DIR))
+_srv = str(Path(__file__).resolve().parent.parent.parent)
+if _srv not in sys.path:
+    sys.path.insert(0, _srv)
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.cors import get_allowed_origins, should_allow_credentials
 from shared.rate_limiting import create_limiter, setup_rate_limiting
@@ -63,8 +67,16 @@ app.add_middleware(
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 
+# Per-tenant rate limiting (Sprint 16)
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+
 # Rate limiting
 setup_rate_limiting(app)
+
+# Global exception handlers (Sprint 18)
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
 
 # Include routers
 app.include_router(transaction_router)

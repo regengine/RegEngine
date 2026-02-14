@@ -10,6 +10,7 @@ import {
     QuickActionsPanel,
     ComplianceScoreGauge,
     ExportButton,
+    ComplianceReportButton,
     type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -204,6 +205,15 @@ export default function ManufacturingDashboardPage() {
                         }}
                         filename="manufacturing_compliance_report"
                         variant="default"
+                        className="w-full"
+                    />
+                    <ComplianceReportButton
+                        dashboardTitle="ISO 9001/14001/45001 Compliance Report"
+                        vertical="Manufacturing"
+                        reportData={{
+                            summary: 'Triple-certification compliance covering quality management (ISO 9001), environmental management (ISO 14001), and occupational health & safety (ISO 45001).',
+                            metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [],
+                        }}
                         className="w-full"
                     />
                 </div>

@@ -15,10 +15,12 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 import html
 
-# Add shared module to path
-# In Docker: shared is at /app/shared/, service is at /app/
-sys.path.insert(0, "/app/shared")
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+# Centralised path resolution — replaces hardcoded Docker /app/shared path
+_srv = str(Path(__file__).resolve().parent.parent.parent)
+if _srv not in sys.path:
+    sys.path.insert(0, _srv)
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from shared.auth import get_key_store
 from shared.api_key_store import DatabaseAPIKeyStore
@@ -190,6 +192,12 @@ async def health():
     from fastapi.responses import JSONResponse
     status_code = 200 if result.status.value == "healthy" else 503
     return JSONResponse(content=result.to_dict(), status_code=status_code)
+
+
+@router.get("/ready")
+async def readiness():
+    """Readiness probe for k8s orchestration."""
+    return {"status": "ready", "service": "admin-api"}
 
 
 @router.get("/health/consumer")

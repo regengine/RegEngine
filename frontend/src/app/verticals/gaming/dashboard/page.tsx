@@ -10,6 +10,7 @@ import {
     AlertsWidget,
     QuickActionsPanel,
     ExportButton,
+    ComplianceReportButton,
     type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -115,6 +116,19 @@ export default function GamingDashboardPage() {
                         }}
                         filename="gaming_compliance_daily"
                         variant="default"
+                        className="w-full"
+                    />
+                    <ComplianceReportButton
+                        dashboardTitle="Gaming & AML Compliance Report"
+                        vertical="Gaming"
+                        reportData={{
+                            summary: 'Casino and sportsbook compliance covering AML/CFT obligations, GLI certification status, responsible gambling controls, and jurisdictional licensing.',
+                            metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [],
+                            alerts: alerts?.map(a => ({
+                                severity: a.severity || 'warning',
+                                message: a.title || a.message || '',
+                            })) || [],
+                        }}
                         className="w-full"
                     />
                 </div>
