@@ -12,6 +12,7 @@ from uuid import UUID
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from prometheus_client import make_asgi_app
+import structlog
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -44,10 +45,15 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from shared.middleware import TenantContextMiddleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 
 # Tenant isolation middleware - extracts tenant_id from JWT or headers
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
+
+# Per-tenant rate limiting (Sprint 16)
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 # CORS - configurable for production
 import os
@@ -62,6 +68,16 @@ app.add_middleware(
 # Prometheus metrics endpoint
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
+
+_energy_logger = structlog.get_logger("energy-api")
+
+@app.on_event("startup")
+async def startup():
+    _energy_logger.info("energy_service_started", version="1.0.0")
+
+@app.on_event("shutdown")
+async def shutdown():
+    _energy_logger.info("energy_service_stopped")
 
 
 # Request/Response Models
@@ -253,6 +269,12 @@ def health_check(db: Session = Depends(get_db)):
     
     status_code = 200 if health["status"] == "healthy" else 503
     return JSONResponse(content=health, status_code=status_code)
+
+
+@app.get("/ready")
+async def readiness():
+    """Readiness probe for k8s orchestration."""
+    return {"status": "ready", "service": "energy-api", "version": "1.0.0"}
 
 
 @app.get("/energy/verify/latest/{substation_id}")

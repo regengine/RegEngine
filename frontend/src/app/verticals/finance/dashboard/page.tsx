@@ -11,6 +11,7 @@ import {
     QuickActionsPanel,
     ComplianceScoreGauge,
     ExportButton,
+    ComplianceReportButton,
     type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -408,6 +409,15 @@ export default function FinanceDashboardPage() {
                         }}
                         filename="finance_compliance_report"
                         variant="default"
+                        className="w-full"
+                    />
+                    <ComplianceReportButton
+                        dashboardTitle="SEC & SOX 404 Compliance Report"
+                        vertical="Finance"
+                        reportData={{
+                            summary: 'Financial regulatory compliance covering SEC filing verification, SOX 404 internal control effectiveness, risk heat map analysis, and regulation change tracking.',
+                            metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [],
+                        }}
                         className="w-full"
                     />
                 </div>

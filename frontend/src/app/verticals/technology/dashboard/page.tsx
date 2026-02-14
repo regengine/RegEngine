@@ -11,6 +11,7 @@ import {
     QuickActionsPanel,
     ComplianceScoreGauge,
     ExportButton,
+    ComplianceReportButton,
     type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -434,6 +435,15 @@ export default function TechnologyDashboardPage() {
                         }}
                         filename="technology_compliance_report"
                         variant="default"
+                        className="w-full"
+                    />
+                    <ComplianceReportButton
+                        dashboardTitle="SOC 2 & ISO 27001 Compliance Report"
+                        vertical="Technology"
+                        reportData={{
+                            summary: 'Technology security compliance covering SOC 2 control matrix, ISO 27001 gap analysis, configuration drift monitoring, and access review status.',
+                            metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [],
+                        }}
                         className="w-full"
                     />
                 </div>

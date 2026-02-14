@@ -43,6 +43,12 @@ async def health():
             await client.close()
 
 
+@router.get("/ready")
+async def readiness():
+    """Readiness probe for k8s orchestration."""
+    return {"status": "ready", "service": "graph-api"}
+
+
 @router.get("/metrics")
 def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)

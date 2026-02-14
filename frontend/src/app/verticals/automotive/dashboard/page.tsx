@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Car, Activity, FileCheck, AlertCircle, Download, Award, FileText } from 'lucide-react';
-import { VerticalDashboardLayout, ComplianceMetricsGrid, RealTimeMonitor, ComplianceTimeline, QuickActionsPanel, ComplianceScoreGauge, ExportButton, type QuickAction } from '@/components/verticals';
+import { VerticalDashboardLayout, ComplianceMetricsGrid, RealTimeMonitor, ComplianceTimeline, QuickActionsPanel, ComplianceScoreGauge, ExportButton, ComplianceReportButton, type QuickAction } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDashboardMetrics, useSystemHealth, useAuditTimeline } from './api';
@@ -36,6 +36,7 @@ export default function AutomotiveDashboardPage() {
                     {timelineLoading ? <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card> : <ComplianceTimeline events={auditTimeline || []} title="Activity Timeline" maxItems={5} />}
                     <QuickActionsPanel actions={quickActions} />
                     <ExportButton data={{ title: 'Automotive Compliance Dashboard Export', subtitle: 'IATF 16949 & PPAP Monitoring', metrics: metrics?.map(m => ({ label: m.label, value: m.value, helpText: m.helpText })) || [], tables: [], metadata: { 'generated_at': new Date().toISOString(), 'compliance_score': 98 } }} filename="automotive_compliance_report" variant="default" className="w-full" />
+                    <ComplianceReportButton dashboardTitle="IATF 16949 Compliance Report" vertical="Automotive" reportData={{ summary: 'IATF 16949 quality management compliance covering PPAP documentation, process audit readiness, and part approval status across all product lines.', metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [] }} className="w-full" />
                 </div>
             </div>
         </VerticalDashboardLayout>

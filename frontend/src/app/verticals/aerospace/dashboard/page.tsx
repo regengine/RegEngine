@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Plane, Activity, Shield, AlertCircle, Download, Award, FileText } from 'lucide-react';
-import { VerticalDashboardLayout, ComplianceMetricsGrid, RealTimeMonitor, ComplianceTimeline, QuickActionsPanel, ComplianceScoreGauge, ExportButton, type QuickAction } from '@/components/verticals';
+import { VerticalDashboardLayout, ComplianceMetricsGrid, RealTimeMonitor, ComplianceTimeline, QuickActionsPanel, ComplianceScoreGauge, ExportButton, ComplianceReportButton, type QuickAction } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDashboardMetrics, useSystemHealth, useAuditTimeline } from './api';
@@ -36,6 +36,7 @@ export default function AerospaceDashboardPage() {
                     {timelineLoading ? <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card> : <ComplianceTimeline events={auditTimeline || []} title="Activity Timeline" maxItems={5} />}
                     <QuickActionsPanel actions={quickActions} />
                     <ExportButton data={{ title: 'Aerospace Compliance Dashboard Export', subtitle: 'AS9100 & FAI Monitoring', metrics: metrics?.map(m => ({ label: m.label, value: m.value, helpText: m.helpText })) || [], tables: [], metadata: { 'generated_at': new Date().toISOString(), 'compliance_score': 97 } }} filename="aerospace_compliance_report" variant="default" className="w-full" />
+                    <ComplianceReportButton dashboardTitle="AS9100 Compliance Report" vertical="Aerospace" reportData={{ summary: 'AS9100 aerospace quality management compliance covering FAI documentation, NADCAP special process certification, and configuration management status across all programs.', metrics: metrics?.map(m => ({ label: m.label, value: m.value, status: 'pass' as const })) || [] }} className="w-full" />
                 </div>
             </div>
         </VerticalDashboardLayout>
