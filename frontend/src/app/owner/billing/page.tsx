@@ -307,6 +307,32 @@ export default function RevenueDashboard() {
                 </div>
             </motion.div>
 
+            {/* Demo Mode Banner */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="mb-6 p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border border-amber-500/20 flex items-center justify-between"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-500/20">
+                        <Sparkles className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-amber-200">Demo Mode — Simulated Data</p>
+                        <p className="text-xs text-amber-400/70">Connect your Stripe account to display live revenue metrics</p>
+                    </div>
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20 hover:text-amber-200"
+                >
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Connect Stripe
+                </Button>
+            </motion.div>
+
             {/* KPI Cards — Row 1 */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <MetricCard

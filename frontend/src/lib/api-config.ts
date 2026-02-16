@@ -1,8 +1,21 @@
 // API Configuration for RegEngine services
 
+export function isStaticExport(): boolean {
+    // Detect if we are running in a static/mobile context (e.g. Capacitor)
+    return typeof window !== 'undefined' &&
+        ((window as any).Capacitor !== undefined ||
+            process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export');
+}
+
 export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'admin' | 'opportunity'): string {
-    if (typeof window === 'undefined') {
-        // Server-side - connect directly to backend services
+    const isClient = typeof window !== 'undefined';
+
+    // In production static export (Capacitor), we MUST use absolute URLs
+    // We prefer a unified API gateway if NEXT_PUBLIC_API_BASE_URL is set
+    const gatewayUrl = isClient ? process.env.NEXT_PUBLIC_API_BASE_URL : null;
+
+    if (!isClient) {
+        // Server-side (Standard Next.js Server Components or SSR)
         switch (service) {
             case 'ingestion':
                 return process.env.INGESTION_SERVICE_URL || 'http://localhost:8002';
@@ -17,7 +30,13 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
         }
     }
 
-    // Client-side - use NEXT_PUBLIC_ env vars if available, else localhost
+    // Client-side / Static Export
+    if (gatewayUrl) {
+        // If a gateway is provided (e.g. Nginx proxy), use it for all services
+        // The gateway should route based on paths like /admin, /ingestion, etc.
+        return `${gatewayUrl}/${service}`;
+    }
+
     switch (service) {
         case 'ingestion':
             return process.env.NEXT_PUBLIC_INGESTION_URL || 'http://localhost:8002';

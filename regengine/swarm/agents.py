@@ -153,16 +153,32 @@ class CoderAgent(BaseAgent):
                 self.log.warning("unsafe_path_skipped", path=path)
                 continue
 
-            written.append({
-                "path": path,
-                "action": action,
-                "lines": len(content.splitlines()),
-                "content": content,
-            })
+            # Actual file writing
+            try:
+                full_path = Path(path)
+                full_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(full_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                
+                written.append({
+                    "path": path,
+                    "action": action,
+                    "lines": len(content.splitlines()),
+                    "status": "written",
+                })
+                self.log.info("file_written", path=path)
+            except Exception as e:
+                self.log.error("file_write_failed", path=path, error=str(e))
+                written.append({
+                    "path": path,
+                    "action": action,
+                    "status": "failed",
+                    "error": str(e),
+                })
 
         return {
             "files_written": written,
-            "file_count": len(written),
+            "file_count": len([w for w in written if w["status"] == "written"]),
             "summary": plan.get("summary", ""),
         }
 
@@ -345,4 +361,79 @@ class TesterAgent(BaseAgent):
             "issues": issues,
             "test_count": result.get("total_tests", 0),
             "scenarios": scenarios,
+        }
+
+
+# ── CI Resilience Agent ───────────────────────────────────
+
+class CIResilienceAgent(BaseAgent):
+    """Analyzes CI/CD failures and orchestrates autonomous remediation.
+
+    Think: Parse logs, identify root causes (environment, code, test, or infra)
+    Act:   Generate remediation plan and trigger appropriate sub-agents
+    Reflect: Verify fix effectiveness via targeted validation
+    """
+
+    SYSTEM_PROMPT = (
+        "You are a Senior SRE and CI/CD Automation Expert. "
+        "Your goal is to parse CI logs (GitHub Actions) and propose immediate fixes. "
+        "Focus on:\n"
+        "1. Environment drift (missing env vars, wrong ports)\n"
+        "2. Flaky tests (race conditions, missing cleanups)\n"
+        "3. Dependency issues (outdated packages, broken sidecars)\n"
+        "4. Structural failures (wrong build context, missing files)\n\n"
+        "ALWAYS respond in valid JSON format with this structure:\n"
+        '{"analysis": {"root_cause": "...", "category": "infra|code|test|env"}, '
+        '"remediation": {"immediate_fix": "...", "long_term_fix": "...", '
+        '"files_to_modify": ["..."]}, "confidence": 0.0-1.0}'
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("name", "CIResilienceAgent")
+        kwargs.setdefault("role", "sre")
+        kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
+        super().__init__(**kwargs)
+
+    def think(self, log_snippet: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Analyze CI failure logs and diagnose the issue."""
+        prompt_parts = [f"CI FAILURE LOGS:\n{log_snippet}"]
+
+        if context:
+            if context.get("affected_service"):
+                prompt_parts.append(f"AFFECTED SERVICE: {context['affected_service']}")
+            if context.get("recent_changes"):
+                prompt_parts.append(f"RECENT CHANGES:\n{json.dumps(context['recent_changes'], indent=2)}")
+
+        prompt_parts.append(
+            "\nAnalyze these logs and determine the root cause. "
+            "Propose an immediate fix to stabilize the pipeline."
+        )
+
+        return self._call_llm_json("\n".join(prompt_parts), "troubleshooting")
+
+    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Orchestrate the remediation."""
+        analysis = plan.get("analysis", {})
+        remediation = plan.get("remediation", {})
+
+        return {
+            "root_cause": analysis.get("root_cause"),
+            "category": analysis.get("category"),
+            "immediate_fix": remediation.get("immediate_fix"),
+            "files_to_modify": remediation.get("files_to_modify", []),
+            "confidence": plan.get("confidence", 0.0),
+        }
+
+    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Evaluate the quality of the diagnosis."""
+        issues = []
+        if not result.get("root_cause"):
+            issues.append("Missing root cause analysis")
+        if result.get("confidence", 0.0) < 0.5:
+            issues.append("Low confidence diagnosis")
+
+        return {
+            "status": "pass" if not issues else "needs_improvement",
+            "issues": issues,
+            "category": result.get("category", "unknown"),
         }

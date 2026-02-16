@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import structlog
 
 from regengine.swarm.base import AgentMessage, BaseAgent, MessageType
-from regengine.swarm.agents import PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent
+from regengine.swarm.agents import PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent, CIResilienceAgent
 from regengine.swarm.llm import BaseLLMClient, LLMClientFactory
 
 logger = structlog.get_logger("swarm.coordinator")
@@ -85,12 +85,14 @@ class AgentSwarm:
         self.coder = CoderAgent(llm_client=self.llm)
         self.reviewer = ReviewerAgent(llm_client=self.llm)
         self.tester = TesterAgent(llm_client=self.llm)
+        self.sre = CIResilienceAgent(llm_client=self.llm)
 
         self.agents: Dict[str, BaseAgent] = {
             "planner": self.planner,
             "coder": self.coder,
             "reviewer": self.reviewer,
             "tester": self.tester,
+            "sre": self.sre,
         }
 
     def _post_message(self, msg: AgentMessage) -> None:
@@ -106,6 +108,40 @@ class AgentSwarm:
     def _get_messages_for(self, agent_name: str) -> List[AgentMessage]:
         """Get all messages addressed to a specific agent."""
         return [m for m in self.message_bus if m.receiver == agent_name]
+
+    async def troubleshoot(self, log_snippet: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
+        """Execute the self-healing chain to fix CI failures.
+        
+        Chain: SRE (Analysis) → Planner → Coder → Reviewer
+        """
+        start = time.perf_counter()
+        self.log.info("troubleshoot_started", logs=log_snippet[:100])
+        
+        agents_used = []
+        errors = []
+        
+        # ── Step 1: Analyze ───────────────────────────────
+        try:
+            self.log.info("phase_started", phase="troubleshooting")
+            sre_output = self.sre.run(log_snippet, context)
+            sre_result = sre_output.get("result", {})
+            agents_used.append("CIResilienceAgent")
+            
+            analysis = sre_result.get("analysis", {})
+            remediation = sre_result.get("remediation", {})
+            
+            task = f"Fix CI failure: {analysis.get('root_cause')}. Remediation: {remediation.get('immediate_fix')}"
+            
+            # Now call standard solve chain with this new specific task
+            return self.solve(task, context)
+            
+        except Exception as e:
+            self.log.error("troubleshooting_failed", error=str(e))
+            errors.append(f"CIResilienceAgent failed: {e}")
+            return self._build_result(
+                "Troubleshoot", "failed", agents_used, 0,
+                time.perf_counter() - start, errors=errors,
+            )
 
     def solve(self, task: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
         """Execute the full agent chain to solve a task.
@@ -247,12 +283,52 @@ class AgentSwarm:
             "completed_with_warnings" if review_result and review_result.get("critical_issues") else "completed"
         )
 
-        return self._build_result(
+        result = self._build_result(
             task, status, agents_used, iteration, duration,
             plan=plan_result, code=code_result,
             review=review_result, tests=test_result,
             errors=errors,
         )
+
+        # ── Autonomous CI Auto-Fix ───────────────────────
+        if os.getenv("REGENGINE_CI_AUTO_FIX") == "true" and status == "completed":
+            self.log.info("ci_auto_fix_triggered")
+            try:
+                from regengine.swarm.github_integration import GitHubClient
+                import subprocess
+
+                gh = GitHubClient()
+                branch_name = f"auto-fix/{int(time.time())}"
+                
+                # Use git CLI for local operations (CI environment has git)
+                subprocess.run(["git", "config", "user.name", "RegEngine Bot"], check=True)
+                subprocess.run(["git", "config", "user.email", "bot@regengine.co"], check=True)
+                subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+                subprocess.run(["git", "add", "."], check=True)
+                subprocess.run(["git", "commit", "-m", f"🤖 Autonomous Fix: {task[:50]}"], check=True)
+                subprocess.run(["git", "push", "origin", branch_name], check=True)
+
+                pr_body = (
+                    f"## 🤖 Autonomous CI Self-Healing\n\n"
+                    f"**Task:** {task}\n"
+                    f"**Status:** {status}\n"
+                    f"**Agents Used:** {', '.join(agents_used)}\n\n"
+                    f"### Analysis\n"
+                    f"{plan_result.get('details', 'No detailed analysis provided.')}\n"
+                )
+                
+                gh.create_pr(
+                    title=f"🤖 Fix: {task[:50]}",
+                    body=pr_body,
+                    head=branch_name,
+                    labels=["agent:self-healing"]
+                )
+                self.log.info("ci_pr_created", branch=branch_name)
+            except Exception as e:
+                self.log.error("ci_auto_fix_failed", error=str(e))
+                result.errors.append(f"CI Auto-Fix failed: {e}")
+
+        return result
 
     def _build_result(
         self,

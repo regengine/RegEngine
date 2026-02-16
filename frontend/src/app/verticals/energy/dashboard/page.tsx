@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Zap, Activity, Shield, Layers, AlertTriangle, Download, FileText, RefreshCw, Database } from 'lucide-react';
+import { Zap, Activity, Shield, Layers, AlertTriangle, Download, FileText, RefreshCw, Database, CheckCircle2 } from 'lucide-react';
 import {
   VerticalDashboardLayout,
   ComplianceMetricsGrid,
@@ -11,6 +11,7 @@ import {
   QuickActionsPanel,
   ComplianceScoreGauge,
   ExportButton,
+  ComplianceReportButton,
   type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -18,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { VerificationWidget } from '@/features/energy/components/VerificationWidget';
 import { SnapshotList } from '@/features/energy/components/SnapshotList';
 import { AuditHistoryTimeline } from '@/features/energy/components/AuditHistoryTimeline';
+import { toast } from '@/components/ui/use-toast';
 
 // Import dashboard API hooks
 import {
@@ -45,13 +47,20 @@ const createSnapshot = async () => {
 
     if (response.ok) {
       const data = await response.json();
-      alert(`✅ Snapshot created: ${data.snapshot_id}`);
-      window.location.reload(); // Refresh to show new snapshot
+      toast({
+        title: '✅ Snapshot Created',
+        description: `Snapshot ${data.snapshot_id} captured successfully.`,
+      });
+      window.location.reload();
     } else {
       throw new Error(`HTTP ${response.status}`);
     }
   } catch (error) {
-    alert(`❌ Failed to create snapshot: ${error}`);
+    toast({
+      title: 'Snapshot Failed',
+      description: `Unable to create snapshot: ${error}`,
+      variant: 'destructive',
+    });
   }
 };
 
@@ -66,12 +75,23 @@ const runVerification = async () => {
     const data = await response.json();
 
     if (data.corrupted > 0) {
-      alert(`⚠️ Verification Alert: ${data.corrupted} corrupted snapshots detected!\n\nVerified: ${data.verified}\nFailed: ${data.corrupted}\n\nContact compliance team immediately.`);
+      toast({
+        title: `⚠️ ${data.corrupted} Corrupted Snapshots Detected`,
+        description: `Verified: ${data.verified} · Failed: ${data.corrupted}. Contact compliance team immediately.`,
+        variant: 'destructive',
+      });
     } else {
-      alert(`✅ Chain Integrity Verified\n\nAll ${data.verified} snapshots passed verification.\n\nContent hash: ✓\nSignatures: ✓\nChain linkage: ✓`);
+      toast({
+        title: '✅ Chain Integrity Verified',
+        description: `All ${data.verified} snapshots passed — hashes, signatures, and chain linkage valid.`,
+      });
     }
   } catch (error) {
-    alert(`❌ Verification failed: ${error}`);
+    toast({
+      title: 'Verification Failed',
+      description: `${error}`,
+      variant: 'destructive',
+    });
   }
 };
 
@@ -290,6 +310,20 @@ export default function EnergyDashboardPage() {
             }}
             filename="energy_compliance_report"
             variant="default"
+            className="w-full"
+          />
+
+          <ComplianceReportButton
+            dashboardTitle="Energy Compliance Report"
+            vertical="Energy"
+            reportData={{
+              summary: 'NERC CIP / energy compliance dashboard covering substation health, chain integrity verification, and audit readiness across all monitored grid assets.',
+              metrics: metrics?.map(m => ({
+                label: m.label,
+                value: m.value,
+                status: 'pass' as const,
+              })) || [],
+            }}
             className="w-full"
           />
         </div>

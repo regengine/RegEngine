@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
-// Last deployed: 2026-02-10
+// Last deployed: 2026-02-13
+const { withSentryConfig } = require("@sentry/nextjs");
+
 const nextConfig = {
-    // output: 'export',
+    output: 'export',
     images: {
         // unoptimized: true, // Enabled for production optimization (requires sharp)
     },
@@ -64,4 +66,23 @@ const withPWA = require("next-pwa")({
     skipWaiting: true,
 });
 
-module.exports = withPWA(nextConfig);
+// Compose: PWA → Sentry → Next.js
+const sentryWebpackPluginOptions = {
+    // Suppresses source map upload logs during build
+    silent: true,
+
+    // Upload source maps for better stack traces
+    widenClientFileUpload: true,
+
+    // Route Sentry requests through a Next.js rewrite to bypass ad blockers
+    tunnelRoute: "/monitoring",
+
+    // Disable Sentry telemetry during build
+    disableLogger: true,
+
+    // Automatically tree-shake Sentry logger in production
+    hideSourceMaps: true,
+};
+
+module.exports = withSentryConfig(withPWA(nextConfig), sentryWebpackPluginOptions);
+

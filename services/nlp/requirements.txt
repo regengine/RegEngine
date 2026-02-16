@@ -13,3 +13,4 @@ jsonschema>=4.17.0
 kafka-python>=2.0.2
 prometheus_client>=0.17.0
 boto3>=1.28.0
+redis==5.0.1

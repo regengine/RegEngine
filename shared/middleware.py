@@ -1,15 +1,38 @@
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.requests import Request
+from starlette.responses import JSONResponse
 import contextvars
+import os
 import uuid
 
 # Context variable to hold tenant ID
 tenant_id_context = contextvars.ContextVar("tenant_id", default=None)
 
+# Paths that do not require tenant identification
+_SKIP_TENANT_PATHS = {"/health", "/ready", "/docs", "/redoc", "/openapi.json", "/"}
+
 class TenantContextMiddleware(BaseHTTPMiddleware):
+    """Extract tenant ID from X-Tenant-ID header and inject into request context.
+    
+    SEC-TENANT-003 REMEDIATION: When REQUIRE_TENANT_ID=true, requests without
+    the X-Tenant-ID header are rejected (except health/docs endpoints).
+    """
     async def dispatch(self, request: Request, call_next):
+        # Allow unauthenticated-by-design endpoints through
+        if request.url.path in _SKIP_TENANT_PATHS:
+            request.state.tenant_id = None
+            return await call_next(request)
+        
         tenant_id = request.headers.get("X-Tenant-ID")
+        
+        # Enforce tenant ID requirement if configured
+        if not tenant_id and os.getenv("REQUIRE_TENANT_ID", "false").lower() == "true":
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing X-Tenant-ID header"},
+            )
+        
         if tenant_id:
             token = tenant_id_context.set(tenant_id)
             # Also store on request.state for dependency functions

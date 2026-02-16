@@ -9,6 +9,8 @@ pydantic-settings>=2.1.0
 requests>=2.31.0
 httpx>=0.25.0
 feedparser>=6.0.0
+redis==5.0.1
+
 
 # Kafka
 confluent-kafka[schema-registry,avro]>=2.3.0
@@ -78,3 +80,8 @@ PyYAML>=6.0.0
 # Testing
 pytest>=7.4.0
 pytest-mock>=3.12.0
+
+# Testing
+testcontainers[postgresql]==4.4.2
+testcontainers[redis]==4.4.2
+testcontainers[localstack]==4.4.2

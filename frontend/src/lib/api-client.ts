@@ -221,9 +221,9 @@ class APIClient {
     formData.append('file', file);
     formData.append('source_system', sourceSystem);
 
-    const baseUrl = '/_api'; // Use local proxy
+    const baseUrl = getServiceURL('ingestion');
     const response = await axios.post<IngestURLResponse>(
-      `${baseUrl}/ingest/file`,
+      `${baseUrl}/v1/ingest/file`,
       formData,
       {
         headers: {
@@ -331,23 +331,32 @@ class APIClient {
 
   // Review Workflow
   async getReviewItems(adminKey: string, status: string = 'PENDING'): Promise<ReviewItem[]> {
-    // Use Next.js API proxy which handles field mapping from backend format to frontend format
-    // Backend returns: review_id, text_raw, extraction
-    // Proxy maps to: id, source_text, extracted_data
-    const { data } = await axios.get('/api/review/items', {
+    // Call Admin API directly
+    const { data } = await this.adminClient.get('/v1/review/items', {
       params: { status },
+      headers: { 'X-Admin-Key': adminKey }
     });
-    return data || [];
+
+    // The backend returns: review_id, text_raw, extraction
+    // We map to the frontend expected format here if the backend differs
+    return (data || []).map((item: any) => ({
+      id: item.review_id || item.id,
+      source_text: item.text_raw || item.source_text,
+      extracted_data: item.extraction || item.extracted_data,
+      status: item.status
+    }));
   }
 
   async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    // Use Next.js API proxy for consistent auth and error handling
-    await axios.post(`/api/review/${itemId}/approve`);
+    await this.adminClient.post(`/v1/review/${itemId}/approve`, {}, {
+      headers: { 'X-Admin-Key': adminKey }
+    });
   }
 
   async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    // Use Next.js API proxy for consistent auth and error handling
-    await axios.post(`/api/review/${itemId}/reject`);
+    await this.adminClient.post(`/v1/review/${itemId}/reject`, {}, {
+      headers: { 'X-Admin-Key': adminKey }
+    });
   }
 
   // Auth API

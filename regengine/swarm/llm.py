@@ -133,6 +133,11 @@ class LLMClientFactory:
 
     @staticmethod
     def create(model: Optional[str] = None) -> BaseLLMClient:
+        # Simulation Mode
+        if os.getenv("REGENGINE_USE_MOCK_LLM", "").lower() == "true":
+            logger.info("llm_client_created", provider="mock", mode="simulation")
+            return MockLLMClient()
+
         model = model or os.getenv("LLM_MODEL", "llama3:8b")
         timeout = int(os.getenv("LLM_TIMEOUT_S", "60"))
 

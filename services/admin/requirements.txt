@@ -22,3 +22,10 @@ boto3==1.34.0
 neo4j==5.16.0
 supabase>=2.3.0
 gotrue>=2.3.0
+redis==5.0.1
+
+
+# Testing
+testcontainers[postgresql]==4.4.0
+testcontainers[redis]==4.4.0
+testcontainers[neo4j]==4.4.0

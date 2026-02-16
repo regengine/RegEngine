@@ -17,17 +17,28 @@ export default function EntertainmentROICalculatorPage() {
 
     // Calculate ROI
     const calculateROI = () => {
-        // 1. Union Violation Prevention
-        const violationPrevention = annualViolationFines * 0.8; // 80% reduction
+        // Map budget tier to daily shutdown cost
+        const budgetToCostPerDay: Record<string, number> = {
+            '<1M': 50000,
+            '1-5M': 150000,
+            '5-25M': 250000,
+            '25M+': 500000,
+        };
+        const costPerDay = budgetToCostPerDay[avgBudget] || 250000;
 
-        // 2. Production Shut-Down Avoidance
-        const avgViolations = 2; // industry average
+        // Union complexity multiplier — more unions = more compliance risk
+        const unionComplexity = Math.max(1, unionCrews.length * 0.3 + 0.7);
+
+        // 1. Union Violation Prevention (scales with union complexity)
+        const violationPrevention = annualViolationFines * 0.8 * unionComplexity; // 80% reduction
+
+        // 2. Production Shut-Down Avoidance (scales with production count + budget)
+        const violationProbPerProduction = 0.15; // 15% chance per production
         const shutdownProbability = 0.3; // 30% of violations lead to shutdowns
         const avgShutdownDays = 2;
-        const costPerDay = 250000;
         const shutdownReduction = 0.9; // 90% reduction
 
-        const shutdownAvoidance = avgViolations * shutdownProbability * avgShutdownDays * costPerDay * shutdownReduction;
+        const shutdownAvoidance = productions * violationProbPerProduction * shutdownProbability * avgShutdownDays * costPerDay * shutdownReduction;
 
         // 3. Insurance Premium Savings
         const insuranceSavings = insurancePremium * 0.15; // 15% reduction
@@ -42,7 +53,7 @@ export default function EntertainmentROICalculatorPage() {
         // Total benefits
         const totalBenefit = violationPrevention + shutdownAvoidance + insuranceSavings + crewVerificationSavings;
 
-        // PCOS Cost (tiered)
+        // PCOS Cost (tiered by production count)
         let pcosCost = 60000; // base
         if (productions >= 16) pcosCost = 150000;
         else if (productions >= 6) pcosCost = 100000;
@@ -63,6 +74,7 @@ export default function EntertainmentROICalculatorPage() {
             roi
         };
     };
+
 
     const results = calculateROI();
 
@@ -396,9 +408,9 @@ export default function EntertainmentROICalculatorPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm space-y-2">
-                                <p><strong>Assumption:</strong> 2 violations per year (industry average from Producers Guild 2023 survey)</p>
+                                <p><strong>Assumption:</strong> 15% violation probability per production (Producers Guild 2023 survey)</p>
                                 <p><strong>Shut-down probability:</strong> 30% of violations lead to production halts</p>
-                                <p><strong>Average shut-down:</strong> 2 days at $250K/day</p>
+                                <p><strong>Average shut-down:</strong> 2 days at budget-adjusted daily rate ($50K–$500K)</p>
                                 <p><strong>PCOS reduction:</strong> 90% (database-enforced prevention)</p>
                             </CardContent>
                         </Card>

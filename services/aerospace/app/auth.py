@@ -1,37 +1,22 @@
 """
 API key authentication for Aerospace service.
+
+SEC-AER-001 REMEDIATION: Replaced local presence-only validation
+with delegation to shared RegEngine auth module for proper HMAC-based
+key validation, rate limiting, and expiry checks.
+
+Follows the same pattern as gaming/app/auth.py.
 """
 
-from fastapi import HTTPException, Header, status
-from typing import Optional
+import sys
+from pathlib import Path
 
-from .config import settings
+# Ensure shared module is importable
+_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_SERVICES_DIR))
 
+from shared.auth import require_api_key, optional_api_key, APIKey  # noqa: F401
 
-async def require_api_key(
-    x_regengine_api_key: Optional[str] = Header(None, alias="X-RegEngine-API-Key")
-) -> str:
-    """
-    Verify API key from X-RegEngine-API-Key header.
-    
-    Raises:
-        HTTPException: 401 if key is missing or invalid.
-    
-    Returns:
-        str: The validated API key.
-    """
-    if not x_regengine_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing X-RegEngine-API-Key header",
-            headers={"WWW-Authenticate": "ApiKey"}
-        )
-    
-    if not x_regengine_api_key.strip():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-            headers={"WWW-Authenticate": "ApiKey"}
-        )
-    
-    return x_regengine_api_key
+# Re-export for backward compatibility — routes can continue to use:
+#   from .auth import require_api_key
+__all__ = ["require_api_key", "optional_api_key", "APIKey"]

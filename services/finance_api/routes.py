@@ -1,11 +1,24 @@
 """
-Auto-generated FastAPI routes for finance vertical.
-DO NOT MODIFY MANUALLY - regenerate via: regengine compile vertical finance
+FastAPI routes for finance vertical.
+
+Originally auto-generated via: regengine compile vertical finance
+SEC-FIN-001/002 REMEDIATION: Manually patched to add authentication
+and error handling hardening. Compiler template should incorporate
+these patterns before next regeneration.
 """
 
+import sys
+from pathlib import Path
+
+import structlog
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
-import logging
+
+# Ensure shared modules are importable
+_SERVICES_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.auth import require_api_key
 
 from .models import (
     DecisionRequest,
@@ -15,7 +28,7 @@ from .models import (
 )
 from .service import FinanceDecisionService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger("finance_routes")
 
 router = APIRouter(prefix="/v1/finance", tags=["finance"])
 
@@ -34,7 +47,8 @@ def get_service() -> FinanceDecisionService:
 @router.post("/decision/record", response_model=DecisionResponse)
 async def record_decision(
     request: DecisionRequest,
-    service: FinanceDecisionService = Depends(get_service)
+    service: FinanceDecisionService = Depends(get_service),
+    _api_key=Depends(require_api_key),
 ):
     """
     Record a finance decision with evidence.
@@ -57,17 +71,18 @@ async def record_decision(
         return response
         
     except Exception as e:
-        logger.error(f"Decision recording failed: {str(e)}", exc_info=True)
+        logger.error("decision_recording_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Decision recording failed: {str(e)}"
+            detail="Decision recording failed. Check server logs for details."
         )
 
 
 @router.get("/decision/{decision_id}", response_model=Dict[str, Any])
 async def get_decision(
     decision_id: str,
-    service: FinanceDecisionService = Depends(get_service)
+    service: FinanceDecisionService = Depends(get_service),
+    _api_key=Depends(require_api_key),
 ):
     """Retrieve a decision record by ID."""
     decision = service.get_decision(decision_id)
@@ -82,7 +97,10 @@ async def get_decision(
 
 
 @router.get("/snapshot", response_model=SnapshotResponse)
-async def get_snapshot(service: FinanceDecisionService = Depends(get_service)):
+async def get_snapshot(
+    service: FinanceDecisionService = Depends(get_service),
+    _api_key=Depends(require_api_key),
+):
     """
     Get current compliance snapshot for finance vertical.
     
@@ -100,7 +118,7 @@ async def get_snapshot(service: FinanceDecisionService = Depends(get_service)):
     """
     from .snapshot_adapter import FinanceSnapshotAdapter
     
-    logger.info("Computing compliance snapshot via Adapter")
+    logger.info("computing_compliance_snapshot")
     
     # Use Adapter to fetch data from Graph/DB and compute snapshot
     # This addresses Issue #67 (Unimplemented Graph Queries)
@@ -114,7 +132,7 @@ async def get_snapshot(service: FinanceDecisionService = Depends(get_service)):
         # Convert dict to SnapshotResponse model
         snapshot = SnapshotResponse(**snapshot_data)
     else:
-        logger.warning("Graph store not available, returning empty snapshot")
+        logger.warning("graph_store_not_available", fallback="empty_snapshot")
         # Fallback to empty/mock if graph is down
         from .snapshot_service import FinanceSnapshotService
         snapshot_service = FinanceSnapshotService()
@@ -123,13 +141,14 @@ async def get_snapshot(service: FinanceDecisionService = Depends(get_service)):
         )
         
     return snapshot
-    
-    return snapshot
 
 
 
 @router.get("/stats")
-async def get_stats(service: FinanceDecisionService = Depends(get_service)):
+async def get_stats(
+    service: FinanceDecisionService = Depends(get_service),
+    _api_key=Depends(require_api_key),
+):
     """Get Finance API statistics."""
     chain_stats = service.get_chain_stats()
     
