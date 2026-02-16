@@ -145,6 +145,19 @@ class AgentSwarm:
                 time.perf_counter() - start, errors=errors,
             )
 
+    def sweep(self, tasks: List[str], context: Optional[Dict[str, Any]] = None) -> List[SwarmResult]:
+        """Execute a batch sweep of multiple similar tasks.
+        
+        Optimizes for horizontal productivity by processing related tasks in a fleet.
+        """
+        self.log.info("fleet_sweep_started", task_count=len(tasks))
+        results = []
+        for i, task in enumerate(tasks):
+            self.log.info("sweep_task_started", index=i+1, total=len(tasks))
+            result = self.solve(task, context)
+            results.append(result)
+        return results
+
     def solve(self, task: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
         """Execute the full agent chain to solve a task.
 
