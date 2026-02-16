@@ -437,3 +437,79 @@ class CIResilienceAgent(BaseAgent):
             "issues": issues,
             "category": result.get("category", "unknown"),
         }
+
+
+# ── Security Agent ────────────────────────────────────────
+
+class SecurityAgent(BaseAgent):
+    """Audits code changes for security vulnerabilities, secrets, and compliance risks.
+
+    Think: Scan diffs for OWASP Top 10, hardcoded secrets, and PII leaks.
+    Act:   Generate a security scorecard and pass/fail verdict.
+    Reflect: Validate the severity of identified risks.
+    """
+
+    SYSTEM_PROMPT = (
+        "You are a Senior Security Engineer and Penetration Tester. "
+        "Your goal is to audit code changes for security vulnerabilities.\n\n"
+        "Check for:\n"
+        "1. Injection vulnerabilities (SQLi, NoSQLi, Command Injection)\n"
+        "2. Broken Authentication & Session Management\n"
+        "3. Sensitive Data Exposure (Secrets, PII, API Keys)\n"
+        "4. Insecure Multi-tenant Isolation (RLS bypass, IDOR)\n"
+        "5. Vulnerable Dependencies\n\n"
+        "ALWAYS respond in valid JSON format with this structure:\n"
+        '{"vulnerabilities": [{"issue": "...", "severity": "low|medium|high|critical", '
+        '"file": "...", "snippet": "...", "remediation": "..."}], '
+        '"verdict": "pass|fail", "summary": "...", "score": 0.0-1.0}'
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("name", "SecurityAgent")
+        kwargs.setdefault("role", "security")
+        kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
+        super().__init__(**kwargs)
+
+    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Analyze code for security risks."""
+        prompt_parts = [f"TASK/CONTEXT: {task}"]
+
+        if context:
+            if context.get("code"):
+                prompt_parts.append(f"\nCODE CHANGES:\n{context['code']}")
+            if context.get("diff"):
+                prompt_parts.append(f"\nGIT DIFF:\n{context['diff']}")
+            if context.get("tenant_context"):
+                prompt_parts.append(f"\nTENANT MODEL:\n{json.dumps(context['tenant_context'], indent=2)}")
+
+        prompt_parts.append(
+            "\nPerform a deep security audit. Identify any critical vulnerabilities or "
+            "compliance risks. Be pedantic about multi-tenant isolation."
+        )
+
+        return self._call_llm_json("\n".join(prompt_parts), "security_audit")
+
+    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate the security scorecard."""
+        vulnerabilities = plan.get("vulnerabilities", [])
+        verdict = plan.get("verdict", "fail")
+        
+        return {
+            "vulnerabilities": vulnerabilities,
+            "vulnerability_count": len(vulnerabilities),
+            "verdict": verdict,
+            "score": plan.get("score", 0.0),
+            "summary": plan.get("summary", "Audit complete"),
+        }
+
+    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Verify the audit quality."""
+        issues = []
+        if result.get("vulnerability_count", 0) > 0 and result.get("verdict") == "pass":
+            issues.append("Found vulnerabilities but passed the audit - inconsistent")
+
+        return {
+            "status": "pass" if not issues else "needs_improvement",
+            "issues": issues,
+            "critical_vulnerabilities": len([v for v in result.get("vulnerabilities", []) if v["severity"] in ["high", "critical"]]),
+        }

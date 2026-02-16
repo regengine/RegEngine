@@ -75,7 +75,24 @@ def cmd_run(args) -> None:
         print(f"🤖 LLM Provider: {llm.model}\n")
 
     swarm = AgentSwarm(llm_client=llm, max_iterations=args.max_iterations)
-    result = swarm.solve(args.task)
+    
+    if args.agent:
+        print(f"🕵️  Directing task to: {args.agent}\n")
+        agent_instance = swarm.agents.get(args.agent)
+        if not agent_instance:
+            print(f"❌ Error: Agent '{args.agent}' not found. Available: {list(swarm.agents.keys())}")
+            sys.exit(1)
+        
+        # Security audit logic for direct agent call
+        if args.agent == "security":
+            result_data = agent_instance.run(args.task)
+            # Wrap result in a SwarmResult-like object or format output
+            print(json.dumps(result_data, indent=2))
+            return
+
+        result = swarm.solve(args.task)
+    else:
+        result = swarm.solve(args.task)
 
     print("\n" + "═" * 60)
     print(f"📊 Result: {result.status}")
@@ -229,6 +246,7 @@ def main() -> None:
     # ── run ──
     run_parser = subparsers.add_parser("run", help="Run swarm on a task")
     run_parser.add_argument("--task", required=True, help="Task description")
+    run_parser.add_argument("--agent", help="Direct to specific agent (e.g. security, core)")
     run_parser.add_argument("--dry-run", action="store_true", help="Use mock LLM")
     run_parser.add_argument("--max-iterations", type=int, default=3, help="Max feedback loops")
     run_parser.add_argument("--output-file", help="Save result JSON to file")
