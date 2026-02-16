@@ -46,7 +46,7 @@ class SwarmSweeper:
         
         return patterns
 
-    def sweep(self, limit: int = 5):
+    async def sweep(self, limit: int = 5):
         """Execute the sweep across identified patterns."""
         log.info("sweep_started", limit=limit)
         
@@ -60,32 +60,29 @@ class SwarmSweeper:
                  logging=len(patterns["logging"]),
                  styling=len(patterns["styling"]))
 
-        count = 0
-        for pattern_name, pattern_issues in patterns.items():
-            if not pattern_issues:
-                continue
-                
-            log.info("sweeping_pattern", pattern=pattern_name, count=len(pattern_issues))
-            
+        all_candidate_tasks = []
+        for pattern_issues in patterns.values():
             for issue in pattern_issues:
-                if count >= limit:
-                    log.info("limit_reached", limit=limit)
-                    return
-                
-                log.info("processing_issue", number=issue['number'], title=issue['title'])
-                
-                # Assign to swarm with auto-fix enabled
-                os.environ["REGENGINE_CI_AUTO_FIX"] = "true"
                 task = f"Solve GitHub Issue #{issue['number']}: {issue['title']}\n\n{issue['body']}"
-                
-                try:
-                    result = self.swarm.solve(task)
-                    log.info("issue_processed", number=issue['number'], status=result.status)
-                    count += 1
-                except Exception as e:
-                    log.error("issue_failed", number=issue['number'], error=str(e))
+                all_candidate_tasks.append(task)
+        
+        tasks_to_run = all_candidate_tasks[:limit]
+        if not tasks_to_run:
+            log.info("no_tasks_to_run")
+            return
+
+        log.info("launching_fleet_sweep", task_count=len(tasks_to_run))
+        
+        # Ensure environment variables are set for auto-fix
+        os.environ["REGENGINE_CI_AUTO_FIX"] = "true"
+        
+        results = await self.swarm.sweep(tasks_to_run, concurrency=5)
+        
+        for i, result in enumerate(results):
+            log.info("task_completed", index=i, status=result.status, task=result.task[:50])
 
 if __name__ == "__main__":
+    import asyncio
     # Ensure environment variables are set
     if not os.getenv("GITHUB_TOKEN"):
         print("❌ GITHUB_TOKEN not found.")
@@ -93,4 +90,4 @@ if __name__ == "__main__":
         
     sweeper = SwarmSweeper()
     # Sweep the first 10 horizontal tasks to clear the backlog
-    sweeper.sweep(limit=10)
+    asyncio.run(sweeper.sweep(limit=10))
