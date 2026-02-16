@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 import structlog
 
 from regengine.swarm.base import AgentMessage, BaseAgent, MessageType
-from regengine.swarm.agents import PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent, CIResilienceAgent, SecurityAgent
+from regengine.swarm.agents import PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent, CIResilienceAgent, SecurityAgent, JanitorAgent
 from regengine.swarm.llm import BaseLLMClient, LLMClientFactory
 
 logger = structlog.get_logger("swarm.coordinator")
@@ -87,6 +87,7 @@ class AgentSwarm:
         self.tester = TesterAgent(llm_client=self.llm)
         self.sre = CIResilienceAgent(llm_client=self.llm)
         self.security = SecurityAgent(llm_client=self.llm)
+        self.janitor = JanitorAgent(llm_client=self.llm)
 
         self.agents: Dict[str, BaseAgent] = {
             "planner": self.planner,
@@ -95,6 +96,7 @@ class AgentSwarm:
             "tester": self.tester,
             "sre": self.sre,
             "security": self.security,
+            "janitor": self.janitor,
         }
 
     def _post_message(self, msg: AgentMessage) -> None:

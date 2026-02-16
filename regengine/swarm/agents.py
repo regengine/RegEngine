@@ -513,3 +513,79 @@ class SecurityAgent(BaseAgent):
             "issues": issues,
             "critical_vulnerabilities": len([v for v in result.get("vulnerabilities", []) if v["severity"] in ["high", "critical"]]),
         }
+
+
+# ── Janitor Agent ─────────────────────────────────────────
+
+class JanitorAgent(BaseAgent):
+    """Automates repository maintenance and safe merging of verified PRs.
+
+    Think: Evaluate PR health (Security Score + Test Coverage)
+    Act:   Merge PR if safe, otherwise flag for manual review
+    Reflect: Verify merge success and cleanup branch
+    """
+
+    SYSTEM_PROMPT = (
+        "You are a Senior Release Engineer and Repository Janitor. "
+        "Your goal is to maintain repository health and automate safe merges.\n\n"
+        "Rules for Merging:\n"
+        "1. Security Verdict MUST be 'pass'\n"
+        "2. Tester Verdict MUST be 'pass'\n"
+        "3. No critical security findings\n"
+        "4. All CI checks must be green\n\n"
+        "ALWAYS respond in valid JSON format with this structure:\n"
+        '{"decision": "merge|hold|review", "reasoning": "...", '
+        '"cleanup_actions": ["..."], "confidence": 0.0-1.0}'
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("name", "JanitorAgent")
+        kwargs.setdefault("role", "janitor")
+        kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
+        super().__init__(**kwargs)
+
+    def think(self, pr_data: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Analyze PR health for merge readiness."""
+        prompt_parts = [f"PR DATA:\n{pr_data}"]
+
+        if context:
+            if context.get("security_scorecard"):
+                prompt_parts.append(f"\nSECURITY SCORECARD:\n{context['security_scorecard']}")
+            if context.get("test_results"):
+                prompt_parts.append(f"\nTEST RESULTS:\n{context['test_results']}")
+            if context.get("ci_status"):
+                prompt_parts.append(f"\nCI STATUS: {context['ci_status']}")
+
+        prompt_parts.append(
+            "\nEvaluate this PR. Should it be merged autonomously? "
+            "Err on the side of caution. Only merge if security and tests are 100% green."
+        )
+
+        return self._call_llm_json("\n".join(prompt_parts), "merge_evaluation")
+
+    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Perform the merge and cleanup if decided."""
+        decision = plan.get("decision", "hold")
+        reasoning = plan.get("reasoning", "")
+        
+        # Note: Actual GitHub execution logic will be handled by the github_integration client
+        # or the workflow caller. The agent just makes the decision here.
+        
+        return {
+            "decision": decision,
+            "reasoning": reasoning,
+            "cleanup_actions": plan.get("cleanup_actions", []),
+            "merged": False, # Flag to be updated by caller
+        }
+
+    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Verify the decision quality."""
+        issues = []
+        if result.get("decision") == "merge" and "test" not in result.get("reasoning", "").lower():
+            issues.append("Merging without explicitly mentioning tests in reasoning")
+
+        return {
+            "status": "pass" if not issues else "needs_improvement",
+            "issues": issues,
+            "decision": result.get("decision"),
+        }

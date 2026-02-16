@@ -157,6 +157,24 @@ class GitHubClient:
             "state": pr.state,
         }
 
+    def merge_pr(self, pr_number: int, commit_message: str = "") -> bool:
+        """Merge a pull request."""
+        pr = self.repo.get_pull(pr_number)
+        if pr.mergeable:
+            status = pr.merge(commit_message=commit_message or f"🤖 Swarm Auto-Merge PR #{pr_number}")
+            logger.info("pr_merged", number=pr_number, success=status.merged)
+            return status.merged
+        else:
+            logger.warning("pr_not_mergeable", number=pr_number)
+            return False
+
+    def get_pr_checks_status(self, pr_number: int) -> str:
+        """Get the combined status of CI checks for a PR."""
+        pr = self.repo.get_pull(pr_number)
+        ref = pr.head.sha
+        status = self.repo.get_combined_status(ref)
+        return status.state # 'success', 'failure', 'pending', etc.
+
 
 class IssueLabelClassifier:
     """Uses LLM to classify and auto-label GitHub issues.
