@@ -107,17 +107,54 @@ class OllamaClient(BaseLLMClient):
 
 
 class MockLLMClient(BaseLLMClient):
-    """Mock client for testing — returns predefined responses."""
+    """Mock client for testing — returns predefined responses based on role."""
 
     def __init__(self, responses: Optional[list] = None):
         super().__init__(model="mock", timeout=0)
-        self._responses = responses or ['{"result": "mock response"}']
+        self._responses = responses
         self._call_count = 0
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
-        idx = min(self._call_count, len(self._responses) - 1)
-        self._call_count += 1
-        return self._responses[idx]
+        if self._responses:
+            idx = min(self._call_count, len(self._responses) - 1)
+            self._call_count += 1
+            return self._responses[idx]
+        
+        # Behavior based on system prompt or prompt content
+        if "Planner" in system_prompt or "Planner" in prompt:
+            return json.dumps({
+                "plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}],
+                "files_to_edit": ["main.py"]
+            })
+        if "Coder" in system_prompt or "Coder" in prompt:
+            return json.dumps({
+                "explanation": "Added compliance headers",
+                "files_written": ["main.py"]
+            })
+        if "Reviewer" in system_prompt or "Reviewer" in prompt:
+            return json.dumps({
+                "verdict": "approve",
+                "review": "Code looks good and implements the requested headers.",
+                "critical_issues": []
+            })
+        if "Tester" in system_prompt or "Tester" in prompt:
+            return json.dumps({
+                "verdict": "pass",
+                "tests_run": 5,
+                "passed": 5,
+                "failed": 0
+            })
+            
+        # Specific fallback for word 'plan' only if no other role matched
+        if "plan" in prompt.lower() and "review" not in prompt.lower():
+            return json.dumps({
+                "plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}],
+                "files_to_edit": ["main.py"]
+            })
+            
+        return json.dumps({"result": "mock response", "verdict": "pass", "status": "completed"})
+            
+        return json.dumps({"result": "mock response", "verdict": "pass", "status": "completed"})
 
 
 class LLMClientFactory:

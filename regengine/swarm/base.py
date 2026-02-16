@@ -147,18 +147,18 @@ class BaseAgent(abc.ABC):
         self.log = logger.bind(agent=name, role=role)
 
     @abc.abstractmethod
-    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Reason about the task using the LLM. Returns a structured plan."""
 
     @abc.abstractmethod
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the plan. Returns structured results."""
 
     @abc.abstractmethod
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Self-evaluate results. Returns assessment with pass/fail + feedback."""
 
-    def run(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def run(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Full lifecycle: think → act → reflect with timing and memory."""
         start = time.perf_counter()
         self.log.info("agent_started", task=task[:100])
@@ -166,17 +166,17 @@ class BaseAgent(abc.ABC):
 
         # Think
         self.log.info("thinking")
-        plan = self.think(task, context)
+        plan = await self.think(task, context)
         self.memory.record("plan_created", plan)
 
         # Act
         self.log.info("acting")
-        result = self.act(plan)
+        result = await self.act(plan)
         self.memory.record("action_completed", result)
 
         # Reflect
         self.log.info("reflecting")
-        assessment = self.reflect(result)
+        assessment = await self.reflect(result)
         self.memory.record("reflection", assessment)
 
         duration = time.perf_counter() - start
@@ -192,22 +192,25 @@ class BaseAgent(abc.ABC):
             "duration_seconds": round(duration, 2),
         }
 
-    def _call_llm(self, prompt: str, context_label: str = "") -> str:
+    async def _call_llm(self, prompt: str, context_label: str = "") -> str:
         """Convenience method to call the LLM with structured logging."""
         self.log.info("llm_call", context=context_label, model=self.llm.model)
         try:
-            response = self.llm.generate(prompt, self.system_prompt)
+            # LLM generate is currently sync, but we call it in an async wrapper to maintain interface
+            import asyncio
+            response = await asyncio.to_thread(self.llm.generate, prompt, self.system_prompt)
             self.log.info("llm_response", length=len(response), context=context_label)
             return response
         except Exception as e:
             self.log.error("llm_call_failed", error=str(e), context=context_label)
             raise
 
-    def _call_llm_json(self, prompt: str, context_label: str = "") -> dict:
+    async def _call_llm_json(self, prompt: str, context_label: str = "") -> dict:
         """Call LLM and parse response as JSON with auto-retry."""
         self.log.info("llm_json_call", context=context_label, model=self.llm.model)
         try:
-            response = self.llm.generate_json(prompt, self.system_prompt)
+            import asyncio
+            response = await asyncio.to_thread(self.llm.generate_json, prompt, self.system_prompt)
             self.log.info("llm_json_response", keys=list(response.keys()), context=context_label)
             return response
         except Exception as e:
