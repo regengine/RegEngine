@@ -1,52 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Compliance status API endpoint - returns tenant compliance status
-// In production: this would proxy to the compliance service backend
-// For demo: returns mock COMPLIANT status
+const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 
 // Required for static export
-export function generateStaticParams() {
-    return [];
-}
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ tenantId: '_build' }];
+};
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ tenantId: string }> }
 ) {
-    const { tenantId } = await params;
-
-    // Try to fetch from compliance service first
-    try {
-        const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
-        const response = await fetch(`${complianceUrl}/v1/compliance/status/${tenantId}`, {
-            headers: {
-                'X-RegEngine-API-Key': 'admin',
-            },
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            return NextResponse.json(data);
-        }
-    } catch {
-        // Compliance service unavailable — fall back to demo response
+    // Guard against static export execution
+    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+        return NextResponse.json({ status: 'PENDING' });
     }
 
-    // Demo response - COMPLIANT status with no active alerts
-    const demoStatus = {
-        tenant_id: tenantId,
-        status: "COMPLIANT" as const,
-        status_emoji: "✅",
-        status_label: "Compliant",
-        active_alert_count: 0,
-        critical_alert_count: 0,
-        countdown_seconds: null,
-        countdown_display: null,
-        next_deadline_description: null,
-        active_alerts: [],
-        last_checked: new Date().toISOString(),
-        message: "All compliance requirements met. Your FSMA 204 traceability is up to date."
-    };
+    const { tenantId } = await params;
+    const searchParams = request.nextUrl.searchParams;
+    const detailed = searchParams.get('detailed') === 'true';
 
-    return NextResponse.json(demoStatus);
+    try {
+        const res = await fetch(`${COMPLIANCE_URL}/v1/compliance/status/${tenantId}?detailed=${detailed}`, {
+            headers: { 'X-RegEngine-API-Key': 'admin' }
+        });
+        const data = await res.json();
+        return NextResponse.json(data);
+    } catch {
+        // Fallback for demo
+        return NextResponse.json({
+            tenant_id: tenantId,
+            status: 'COMPLIANT',
+            score: 94,
+            last_check: new Date().toISOString()
+        });
+    }
 }

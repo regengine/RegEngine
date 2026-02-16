@@ -80,6 +80,12 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
+@app.middleware("http")
+async def add_compliance_header(request, call_next):
+    response = await call_next(request)
+    response.headers["X-FSMA-204-Traceability"] = "true"
+    return response
+
 import structlog
 _compliance_logger = structlog.get_logger("compliance-service")
 

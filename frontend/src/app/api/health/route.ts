@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 
-// Simple health check endpoint for the frontend
-// This is called by various components to check API availability
+// Required for static export
+export const dynamic = 'force-static';
 
 export async function GET() {
     return NextResponse.json({
-        status: 'healthy',
-        service: 'regengine-frontend',
+        status: 'ok',
         timestamp: new Date().toISOString(),
+        services: {
+            frontend: 'healthy',
+            api: 'static-proxy-mode'
+        }
     });
 }

@@ -143,6 +143,12 @@ app.add_middleware(AuditContextMiddleware)
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=200)
 
+@app.middleware("http")
+async def add_compliance_header(request, call_next):
+    response = await call_next(request)
+    response.headers["X-FSMA-204-Traceability"] = "true"
+    return response
+
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 

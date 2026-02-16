@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Required for static export
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ id: '_build' }];
+};
+
 // Mock export data
 const MOCK_EXPORTS: Record<string, any> = {
     '00000000-0000-0000-0000-000000000001': {
@@ -85,6 +91,11 @@ export async function GET(
     request: NextRequest,
     { params }: PageProps
 ) {
+    // Guard against static export execution
+    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+        return NextResponse.json({ message: 'Dynamic export not available during static build' });
+    }
+
     const { id } = await params;
 
     const exportData = MOCK_EXPORTS[id];

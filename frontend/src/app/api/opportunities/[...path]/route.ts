@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Proxy opportunities API requests to the Opportunity backend service
-// This allows browser clients to access opportunity endpoints without CORS issues
-
-const OPPORTUNITY_URL = process.env.OPPORTUNITY_SERVICE_URL || 'http://localhost:8300';
+const OPPORTunity_URL = process.env.OPPORTUNITY_SERVICE_URL || 'http://localhost:8300';
 
 // Required for static export
-export function generateStaticParams() {
-    return [];
-}
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ path: ['_build'] }];
+};
 
 export async function GET(
     request: NextRequest,
@@ -32,6 +30,11 @@ async function proxyRequest(
     method: string
 ) {
     try {
+        // Guard against static export execution
+        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+        }
+
         const path = pathParts.join('/');
         const url = new URL(request.url);
         const queryString = url.search;
@@ -40,22 +43,21 @@ async function proxyRequest(
             method,
             headers: {
                 'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': 'admin', // Use admin key for demo
+                'X-RegEngine-API-Key': 'admin',
             },
         };
 
-        // Include body for POST requests
         if (method === 'POST') {
             try {
                 const body = await request.json();
                 fetchOptions.body = JSON.stringify(body);
             } catch {
-                // No body or invalid JSON, continue without body
+                // No body or invalid JSON
             }
         }
 
         const response = await fetch(
-            `${OPPORTUNITY_URL}/${path}${queryString}`,
+            `${OPPORTunity_URL}/${path}${queryString}`,
             fetchOptions
         );
 
@@ -63,7 +65,7 @@ async function proxyRequest(
 
         if (!response.ok) {
             return NextResponse.json(
-                { error: data.detail || 'Opportunity request failed', items: [] },
+                { error: data.detail || 'Opportunity request failed' },
                 { status: response.status }
             );
         }
@@ -71,10 +73,10 @@ async function proxyRequest(
         return NextResponse.json(data);
 
     } catch (error: unknown) {
-        console.error('Opportunities proxy error:', error);
+        console.error('Opportunity proxy error:', error);
         const message = error instanceof Error ? error.message : 'Opportunity request failed';
         return NextResponse.json(
-            { error: message, items: [] },
+            { error: message },
             { status: 500 }
         );
     }
