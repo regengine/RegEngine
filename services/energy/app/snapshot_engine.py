@@ -31,6 +31,7 @@ from app.crypto import (
 )
 from app.database import ComplianceSnapshotModel, MismatchModel
 from app.idempotency import SnapshotIdempotencyModel
+from app.rule_parser import NERCRuleParser
 
 
 class SnapshotEngine:
@@ -258,10 +259,18 @@ class SnapshotEngine:
         # Step 1: Get previous snapshot for chaining
         previous = self._get_latest_snapshot(request.substation_id)
         
-        # Step 2: Calculate system status deterministically
-        system_status = self._calculate_system_status(
+        # Step 2: Calculate system status deterministically using NERC Rule Parser
+        # Fetch active mismatches to pass to the rule parser
+        active_mismatches = (
+            self.db.query(MismatchModel)
+            .filter(MismatchModel.id.in_(request.active_mismatch_ids))
+            .all()
+        )
+        mismatch_dicts = [{"id": m.id, "severity": m.severity} for m in active_mismatches]
+        
+        system_status = NERCRuleParser.calculate_status(
             request.asset_states,
-            request.active_mismatch_ids
+            mismatch_dicts
         )
         
         # Step 3: Prepare snapshot data
@@ -379,61 +388,3 @@ class SnapshotEngine:
             .first()
         )
     
-    def _calculate_system_status(
-        self,
-        asset_states: Dict[str, Any],
-        active_mismatch_ids: List[uuid.UUID]
-    ) -> SystemStatus:
-        """
-        Deterministic system status calculation.
-        
-        Rules:
-        1. Any CRITICAL/HIGH mismatches → NON_COMPLIANT
-        2. MEDIUM mismatches OR <90% verified → DEGRADED
-        3. Otherwise → NOMINAL
-        
-        Args:
-            asset_states: Current asset state dictionary
-            active_mismatch_ids: List of open mismatch UUIDs
-            
-        Returns:
-            SystemStatus enum value
-        """
-        # Rule 1: Check for high-severity mismatches
-        if active_mismatch_ids:
-            high_severity_count = self._count_high_severity_mismatches(
-                active_mismatch_ids
-            )
-            if high_severity_count > 0:
-                return SystemStatus.NON_COMPLIANT
-            
-            # If any mismatches exist (even if low severity), degraded
-            return SystemStatus.DEGRADED
-        
-        # Rule 2: Check asset verification percentage
-        summary = asset_states.get("summary", {})
-        total = summary.get("total_assets", 0)
-        verified = summary.get("verified_count", 0)
-        
-        if total > 0:
-            verification_pct = verified / total
-            if verification_pct < 0.9:
-                return SystemStatus.DEGRADED
-        
-        # Rule 3: All good
-        return SystemStatus.NOMINAL
-    
-    def _count_high_severity_mismatches(
-        self, 
-        mismatch_ids: List[uuid.UUID]
-    ) -> int:
-        """Count mismatches with HIGH or CRITICAL severity."""
-        return (
-            self.db.query(MismatchModel)
-            .filter(MismatchModel.id.in_(mismatch_ids))
-            .filter(MismatchModel.severity.in_([
-                MismatchSeverity.HIGH,
-                MismatchSeverity.CRITICAL
-            ]))
-            .count()
-        )

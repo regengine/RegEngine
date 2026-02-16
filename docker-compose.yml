@@ -385,6 +385,7 @@ services:
       - --advertise-kafka-addr=redpanda:9092
     ports:
       - "9092:9092"
+      - "9644:9644"
     healthcheck:
       test: [ "CMD", "rpk", "cluster", "health" ]
       interval: 15s

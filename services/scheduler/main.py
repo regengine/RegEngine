@@ -118,6 +118,7 @@ class SchedulerService:
                 ),
             ),
         }
+        self.last_results: Dict[SourceType, ScrapeResult] = {}
 
     def initialize(self) -> None:
         """Initialize all components."""
@@ -208,6 +209,9 @@ class SchedulerService:
                     success=False,
                     duration_seconds=duration_seconds,
                 )
+            
+            # Update last results for health reporting
+            self.last_results[source_type] = result
 
         except CircuitOpenError:
             logger.warning(
@@ -487,6 +491,15 @@ class HealthHandler(BaseHTTPRequestHandler):
             "service": "scheduler",
             "status": "running",
             "circuit_breakers": circuit_registry.get_all_status(),
+            "last_scrapes": {
+                st.value: {
+                    "success": r.success,
+                    "count": r.items_found,
+                    "scraped_at": r.scraped_at.isoformat(),
+                    "error": r.error_message if not r.success else None
+                }
+                for st, r in self.scheduler_service.last_results.items()
+            } if self.scheduler_service else {}
         }
 
         self.send_response(200)

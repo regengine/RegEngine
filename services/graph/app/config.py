@@ -31,6 +31,20 @@ class Settings(BaseSettings):
     neo4j_max_lifetime: int = Field(default=3600, alias="NEO4J_MAX_LIFETIME")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
+    # Security & Compliance Patterns
+    redaction_patterns: list[str] = Field(
+        default=[
+            r"password\s*=\s*'[^']*'",
+            r"password\s*=\s*\"[^\"]*\"",
+            r"secret\s*=\s*'[^']*'",
+            r"api_key\s*=\s*'[^']*'",
+            r"token\s*=\s*'[^']*'",
+            r"ssn\s*=\s*'[^']*'",
+            r"credit_card\s*=\s*'[^']*'"
+        ],
+        alias="REDACTION_PATTERNS"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
