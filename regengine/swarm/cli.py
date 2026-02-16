@@ -75,6 +75,7 @@ def cmd_run(args) -> None:
         print(f"🤖 LLM Provider: {llm.model}\n")
 
     swarm = AgentSwarm(llm_client=llm, max_iterations=args.max_iterations)
+    import asyncio
     
     if args.agent:
         print(f"🕵️  Directing task to: {args.agent}\n")
@@ -85,7 +86,7 @@ def cmd_run(args) -> None:
         
         # Security audit logic for direct agent call
         if args.agent == "security":
-            result_data = agent_instance.run(args.task)
+            result_data = asyncio.run(agent_instance.run(args.task))
             print(json.dumps(result_data, indent=2))
             
             # Post to GitHub if in CI and it's a PR
@@ -97,6 +98,7 @@ def cmd_run(args) -> None:
                     # Extract PR number from task or env if possible
                     # Task format usually: "Audit PR #123 ..."
                     import re
+                    import os
                     match = re.search(r"PR #(\d+)", args.task)
                     pr_num = int(match.group(1)) if match else None
                     
@@ -144,7 +146,7 @@ def cmd_run(args) -> None:
                     "ci_status": gh.get_pr_checks_status(pr.number)
                 }
                 
-                agent_output = agent_instance.run(f"Evaluate PR #{pr.number}", context)
+                agent_output = asyncio.run(agent_instance.run(f"Evaluate PR #{pr.number}", context))
                 res = agent_output.get("result", {})
                 decision = res.get("decision", "hold")
                 reasoning = res.get("reasoning", "No reasoning.")
@@ -161,9 +163,9 @@ def cmd_run(args) -> None:
                         print(f"   ❌ Merge failed for PR #{pr.number}.")
             return
 
-        result = swarm.solve(args.task)
+        result = asyncio.run(swarm.solve(args.task))
     else:
-        result = swarm.solve(args.task)
+        result = asyncio.run(swarm.solve(args.task))
 
     print("\n" + "═" * 60)
     print(f"📊 Result: {result.status}")
@@ -218,7 +220,8 @@ def cmd_solve(args) -> None:
     task = f"GitHub Issue #{issue['number']}: {issue['title']}\n\n{issue['body']}"
 
     swarm = AgentSwarm()
-    result = swarm.solve(task)
+    import asyncio
+    result = asyncio.run(swarm.solve(task))
 
     print(f"\n📊 Result: {result.status}")
     print(f"   Agents: {', '.join(result.agents_used)}")
@@ -310,15 +313,17 @@ def cmd_status(args) -> None:
 
 def cmd_sweep(args) -> None:
     """Execute a proactive sweep across horizontal technical debt."""
+    import asyncio
     from scripts.swarm_sweep import SwarmSweeper
     sweeper = SwarmSweeper()
-    sweeper.sweep(limit=args.limit)
+    asyncio.run(sweeper.sweep(limit=args.limit))
 
 
 def cmd_compliance(args) -> None:
     """Execute a proactive compliance rollout across the fleet."""
+    import asyncio
     from scripts.compliance_sweep import roll_out_compliance
-    roll_out_compliance(standard=args.standard)
+    asyncio.run(roll_out_compliance(standard=args.standard))
 
 
 def main() -> None:
