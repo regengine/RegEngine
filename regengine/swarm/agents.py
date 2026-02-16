@@ -45,7 +45,7 @@ class PlannerAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyze the task and produce a decomposed plan."""
         prompt_parts = [f"TASK: {task}"]
 
@@ -60,9 +60,9 @@ class PlannerAgent(BaseAgent):
             "For each step, specify the files to modify, exact changes, and acceptance criteria."
         )
 
-        return self._call_llm_json("\n".join(prompt_parts), "planning")
+        return await self._call_llm_json("\n".join(prompt_parts), "planning")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """For PlannerAgent, the plan IS the action output."""
         steps = plan.get("steps", [])
         return {
@@ -72,7 +72,7 @@ class PlannerAgent(BaseAgent):
             "estimated_complexity": plan.get("estimated_complexity", "unknown"),
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate plan quality."""
         plan = result.get("plan", {})
         steps = plan.get("steps", [])
@@ -122,7 +122,7 @@ class CoderAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyze the plan and prepare implementation approach."""
         prompt_parts = [f"TASK: {task}"]
 
@@ -136,9 +136,9 @@ class CoderAgent(BaseAgent):
 
         prompt_parts.append("\nImplement the code changes described above. Return the complete file contents.")
 
-        return self._call_llm_json("\n".join(prompt_parts), "coding")
+        return await self._call_llm_json("\n".join(prompt_parts), "coding")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Write generated code to disk (or return for review)."""
         files = plan.get("files", [])
         written = []
@@ -182,7 +182,7 @@ class CoderAgent(BaseAgent):
             "summary": plan.get("summary", ""),
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Basic quality checks on generated code."""
         files = result.get("files_written", [])
         issues = []
@@ -234,7 +234,7 @@ class ReviewerAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyze code and produce review feedback."""
         prompt_parts = [f"REVIEW TASK: {task}"]
 
@@ -249,9 +249,9 @@ class ReviewerAgent(BaseAgent):
             "code quality, and test coverage. Be specific with line-level feedback."
         )
 
-        return self._call_llm_json("\n".join(prompt_parts), "reviewing")
+        return await self._call_llm_json("\n".join(prompt_parts), "reviewing")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """The review output IS the action."""
         return {
             "review": plan,
@@ -263,7 +263,7 @@ class ReviewerAgent(BaseAgent):
             ],
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Assess review thoroughness."""
         review = result.get("review", {})
         issues = []
@@ -310,7 +310,7 @@ class TesterAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Identify test scenarios for the given code."""
         prompt_parts = [f"TESTING TASK: {task}"]
 
@@ -327,9 +327,9 @@ class TesterAgent(BaseAgent):
             "error conditions, and security scenarios. Use mocks for external services."
         )
 
-        return self._call_llm_json("\n".join(prompt_parts), "test_generation")
+        return await self._call_llm_json("\n".join(prompt_parts), "test_generation")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[Any, Any]) -> Dict[str, Any]:
         """Return generated test files."""
         test_files = plan.get("test_files", [])
 
@@ -341,7 +341,7 @@ class TesterAgent(BaseAgent):
             "coverage_estimate": plan.get("coverage_estimate", "unknown"),
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Verify test quality and coverage."""
         issues = []
 
@@ -394,7 +394,7 @@ class CIResilienceAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, log_snippet: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, log_snippet: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyze CI failure logs and diagnose the issue."""
         prompt_parts = [f"CI FAILURE LOGS:\n{log_snippet}"]
 
@@ -409,9 +409,9 @@ class CIResilienceAgent(BaseAgent):
             "Propose an immediate fix to stabilize the pipeline."
         )
 
-        return self._call_llm_json("\n".join(prompt_parts), "troubleshooting")
+        return await self._call_llm_json("\n".join(prompt_parts), "troubleshooting")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Orchestrate the remediation."""
         analysis = plan.get("analysis", {})
         remediation = plan.get("remediation", {})
@@ -424,7 +424,7 @@ class CIResilienceAgent(BaseAgent):
             "confidence": plan.get("confidence", 0.0),
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate the quality of the diagnosis."""
         issues = []
         if not result.get("root_cause"):
@@ -470,7 +470,7 @@ class SecurityAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyze code for security risks."""
         prompt_parts = [f"TASK/CONTEXT: {task}"]
 
@@ -487,9 +487,9 @@ class SecurityAgent(BaseAgent):
             "compliance risks. Be pedantic about multi-tenant isolation."
         )
 
-        return self._call_llm_json("\n".join(prompt_parts), "security_audit")
+        return await self._call_llm_json("\n".join(prompt_parts), "security_audit")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Generate the security scorecard."""
         vulnerabilities = plan.get("vulnerabilities", [])
         verdict = plan.get("verdict", "fail")
@@ -502,7 +502,7 @@ class SecurityAgent(BaseAgent):
             "summary": plan.get("summary", "Audit complete"),
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Verify the audit quality."""
         issues = []
         if result.get("vulnerability_count", 0) > 0 and result.get("verdict") == "pass":
@@ -544,7 +544,7 @@ class JanitorAgent(BaseAgent):
         kwargs.setdefault("system_prompt", self.SYSTEM_PROMPT)
         super().__init__(**kwargs)
 
-    def think(self, pr_data: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def think(self, pr_data: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Analyze PR health for merge readiness."""
         prompt_parts = [f"PR DATA:\n{pr_data}"]
 
@@ -561,9 +561,9 @@ class JanitorAgent(BaseAgent):
             "Err on the side of caution. Only merge if security and tests are 100% green."
         )
 
-        return self._call_llm_json("\n".join(prompt_parts), "merge_evaluation")
+        return await self._call_llm_json("\n".join(prompt_parts), "merge_evaluation")
 
-    def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    async def act(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """Perform the merge and cleanup if decided."""
         decision = plan.get("decision", "hold")
         reasoning = plan.get("reasoning", "")
@@ -578,7 +578,7 @@ class JanitorAgent(BaseAgent):
             "merged": False, # Flag to be updated by caller
         }
 
-    def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
+    async def reflect(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Verify the decision quality."""
         issues = []
         if result.get("decision") == "merge" and "test" not in result.get("reasoning", "").lower():
