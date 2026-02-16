@@ -8,6 +8,7 @@ The coordinator manages:
   - Structured final output per .agent/protocols/output_schema.md
 """
 
+import asyncio
 import json
 import os
 import time
@@ -114,6 +115,47 @@ class AgentSwarm:
         """Get all messages addressed to a specific agent."""
         return [m for m in self.message_bus if m.receiver == agent_name]
 
+    async def _create_auto_fix_pr(self, task: str, coder_output: Dict[str, Any]):
+        """Helper to create a GitHub PR for autonomous CI fixes."""
+        try:
+            from regengine.swarm.github_integration import GitHubClient
+            import subprocess
+
+            gh = GitHubClient()
+            branch_name = f"auto-fix/{int(time.time())}"
+            
+            # Use git CLI for local operations (CI environment has git)
+            subprocess.run(["git", "config", "user.name", "RegEngine Bot"], check=True)
+            subprocess.run(["git", "config", "user.email", "bot@regengine.co"], check=True)
+            subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+            
+            # Assuming coder_output contains file changes that need to be staged
+            # This part might need more specific logic based on coder_output structure
+            # For now, a simple 'git add .'
+            subprocess.run(["git", "add", "."], check=True)
+            subprocess.run(["git", "commit", "-m", f"🤖 Autonomous Fix: {task[:50]}"], check=True)
+            subprocess.run(["git", "push", "origin", branch_name], check=True)
+
+            pr_body = (
+                f"## 🤖 Autonomous CI Self-Healing\n\n"
+                f"**Task:** {task}\n"
+                f"**Status:** completed\n" # Always completed if this is called
+                f"**Agents Used:** PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent\n\n" # Simplified for now
+                f"### Code Changes\n"
+                f"```json\n{json.dumps(coder_output.get('files_written', []), indent=2)}\n```\n"
+            )
+            
+            gh.create_pr(
+                title=f"🤖 Fix: {task[:50]}",
+                body=pr_body,
+                head=branch_name,
+                labels=["agent:self-healing"]
+            )
+            self.log.info("ci_pr_created", branch=branch_name)
+        except Exception as e:
+            self.log.error("ci_auto_fix_failed", error=str(e))
+            raise # Re-raise to be caught by the solve method's error handling
+
     async def troubleshoot(self, log_snippet: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
         """Execute the self-healing chain to fix CI failures.
         
@@ -128,7 +170,7 @@ class AgentSwarm:
         # ── Step 1: Analyze ───────────────────────────────
         try:
             self.log.info("phase_started", phase="troubleshooting")
-            sre_output = self.sre.run(log_snippet, context)
+            sre_output = await self.sre.run(log_snippet, context)
             sre_result = sre_output.get("result", {})
             agents_used.append("CIResilienceAgent")
             
@@ -138,7 +180,7 @@ class AgentSwarm:
             task = f"Fix CI failure: {analysis.get('root_cause')}. Remediation: {remediation.get('immediate_fix')}"
             
             # Now call standard solve chain with this new specific task
-            return self.solve(task, context)
+            return await self.solve(task, context)
             
         except Exception as e:
             self.log.error("troubleshooting_failed", error=str(e))
@@ -148,20 +190,24 @@ class AgentSwarm:
                 time.perf_counter() - start, errors=errors,
             )
 
-    def sweep(self, tasks: List[str], context: Optional[Dict[str, Any]] = None) -> List[SwarmResult]:
-        """Execute a batch sweep of multiple similar tasks.
+    async def sweep(self, tasks: List[str], context: Optional[Dict[str, Any]] = None, concurrency: int = 5) -> List[SwarmResult]:
+        """Execute a batch sweep of multiple similar tasks in parallel.
         
         Optimizes for horizontal productivity by processing related tasks in a fleet.
+        Uses asyncio.gather with concurrency control.
         """
-        self.log.info("fleet_sweep_started", task_count=len(tasks))
-        results = []
-        for i, task in enumerate(tasks):
-            self.log.info("sweep_task_started", index=i+1, total=len(tasks))
-            result = self.solve(task, context)
-            results.append(result)
+        self.log.info("fleet_sweep_started", task_count=len(tasks), concurrency=concurrency)
+        
+        semaphore = asyncio.Semaphore(concurrency)
+        
+        async def wrapped_solve(task_item):
+            async with semaphore:
+                return await self.solve(task_item, context)
+
+        results = await asyncio.gather(*[wrapped_solve(t) for t in tasks])
         return results
 
-    def solve(self, task: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
+    async def solve(self, task: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
         """Execute the full agent chain to solve a task.
 
         Chain: Planner → Coder → Reviewer → (feedback loop) → Tester
@@ -187,7 +233,7 @@ class AgentSwarm:
         # ── Step 1: Plan ──────────────────────────────────
         try:
             self.log.info("phase_started", phase="planning")
-            plan_output = self.planner.run(task, context)
+            plan_output = await self.planner.run(task, context)
             plan_result = plan_output.get("result", {})
             agents_used.append("PlannerAgent")
 
@@ -219,7 +265,7 @@ class AgentSwarm:
                 if review_feedback:
                     code_context["review_feedback"] = review_feedback
 
-                code_output = self.coder.run(task, code_context)
+                code_output = await self.coder.run(task, code_context)
                 code_result = code_output.get("result", {})
                 if "CoderAgent" not in agents_used:
                     agents_used.append("CoderAgent")
@@ -243,7 +289,7 @@ class AgentSwarm:
                     "code": json.dumps(code_result.get("files_written", []), indent=2),
                     "plan": plan_result,
                 }
-                review_output = self.reviewer.run(task, review_context)
+                review_output = await self.reviewer.run(task, review_context)
                 review_result = review_output.get("result", {})
                 if "ReviewerAgent" not in agents_used:
                     agents_used.append("ReviewerAgent")
@@ -288,7 +334,7 @@ class AgentSwarm:
                     "code": json.dumps(code_result.get("files_written", []), indent=2),
                     "plan": plan_result,
                 }
-                test_output = self.tester.run(task, test_context)
+                test_output = await self.tester.run(task, test_context)
                 test_result = test_output.get("result", {})
                 agents_used.append("TesterAgent")
             except Exception as e:
@@ -312,38 +358,9 @@ class AgentSwarm:
         if os.getenv("REGENGINE_CI_AUTO_FIX") == "true" and status == "completed":
             self.log.info("ci_auto_fix_triggered")
             try:
-                from regengine.swarm.github_integration import GitHubClient
-                import subprocess
-
-                gh = GitHubClient()
-                branch_name = f"auto-fix/{int(time.time())}"
-                
-                # Use git CLI for local operations (CI environment has git)
-                subprocess.run(["git", "config", "user.name", "RegEngine Bot"], check=True)
-                subprocess.run(["git", "config", "user.email", "bot@regengine.co"], check=True)
-                subprocess.run(["git", "checkout", "-b", branch_name], check=True)
-                subprocess.run(["git", "add", "."], check=True)
-                subprocess.run(["git", "commit", "-m", f"🤖 Autonomous Fix: {task[:50]}"], check=True)
-                subprocess.run(["git", "push", "origin", branch_name], check=True)
-
-                pr_body = (
-                    f"## 🤖 Autonomous CI Self-Healing\n\n"
-                    f"**Task:** {task}\n"
-                    f"**Status:** {status}\n"
-                    f"**Agents Used:** {', '.join(agents_used)}\n\n"
-                    f"### Analysis\n"
-                    f"{plan_result.get('details', 'No detailed analysis provided.')}\n"
-                )
-                
-                gh.create_pr(
-                    title=f"🤖 Fix: {task[:50]}",
-                    body=pr_body,
-                    head=branch_name,
-                    labels=["agent:self-healing"]
-                )
-                self.log.info("ci_pr_created", branch=branch_name)
+                await self._create_auto_fix_pr(task, code_result)
             except Exception as e:
-                self.log.error("ci_auto_fix_failed", error=str(e))
+                self.log.error("ci_auto_fix_failed_final", error=str(e))
                 result.errors.append(f"CI Auto-Fix failed: {e}")
 
         return result
