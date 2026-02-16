@@ -86,8 +86,41 @@ def cmd_run(args) -> None:
         # Security audit logic for direct agent call
         if args.agent == "security":
             result_data = agent_instance.run(args.task)
-            # Wrap result in a SwarmResult-like object or format output
             print(json.dumps(result_data, indent=2))
+            
+            # Post to GitHub if in CI and it's a PR
+            if os.getenv("GITHUB_ACTIONS") == "true":
+                try:
+                    from regengine.swarm.github_integration import GitHubClient
+                    gh = GitHubClient()
+                    
+                    # Extract PR number from task or env if possible
+                    # Task format usually: "Audit PR #123 ..."
+                    import re
+                    match = re.search(r"PR #(\d+)", args.task)
+                    pr_num = int(match.group(1)) if match else None
+                    
+                    if pr_num:
+                        res = result_data.get("result", {})
+                        vulnerabilities = res.get("vulnerabilities", [])
+                        verdict = "✅ PASS" if res.get("verdict") == "pass" else "❌ FAIL"
+                        
+                        comment = f"### 🛡️ Autonomous Security Audit: {verdict}\n\n"
+                        comment += f"**Summary:** {res.get('summary', 'Audit complete')}\n"
+                        comment += f"**Score:** {res.get('score', 0.0)*100:.1f}%\n\n"
+                        
+                        if vulnerabilities:
+                            comment += "#### ⚠️ Findings:\n"
+                            for v in vulnerabilities:
+                                comment += f"- **[{v['severity'].upper()}]** {v['issue']} in `{v['file']}`\n"
+                                comment += f"  - *Remediation:* {v['remediation']}\n"
+                        else:
+                            comment += "✨ No critical vulnerabilities identified.\n"
+                        
+                        gh.comment_on_issue(pr_num, comment)
+                        print(f"💬 Security report posted to PR #{pr_num}")
+                except Exception as e:
+                    print(f"⚠️ Failed to post security report: {e}")
             return
 
         result = swarm.solve(args.task)

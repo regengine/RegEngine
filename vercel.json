@@ -1,0 +1,15 @@
+{
+    "version": 2,
+    "public": true,
+    "buildCommand": "cd frontend && npm install && npm run build",
+    "installCommand": "cd frontend && npm install",
+    "framework": "nextjs",
+    "outputDirectory": "frontend/.next",
+    "regions": [
+        "sfo1"
+    ],
+    "env": {
+        "NEXT_PUBLIC_API_BASE_URL": "https://api.regengine.co",
+        "REGENGINE_DEPLOY_MODE": "cloud"
+    }
+}
