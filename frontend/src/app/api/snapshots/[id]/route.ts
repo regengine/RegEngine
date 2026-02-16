@@ -3,6 +3,12 @@ import pg from 'pg';
 
 const { Client } = pg;
 
+// Required for static export
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ id: '_build' }];
+};
+
 // Mock data as fallback
 const MOCK_SNAPSHOTS: Record<string, Record<string, unknown>> = {
     '00000000-0000-0000-0000-000000000001': {
@@ -59,6 +65,11 @@ export async function GET(
     request: NextRequest,
     { params }: PageProps
 ) {
+    // Guard against static export execution
+    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+        return NextResponse.json({ message: 'Dynamic data not available during static build' });
+    }
+
     const { id } = await params;
 
     // Try database first, fall back to mock

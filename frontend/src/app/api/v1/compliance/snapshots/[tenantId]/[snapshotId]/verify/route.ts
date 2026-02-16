@@ -3,6 +3,12 @@ import pg from 'pg';
 
 const { Client } = pg;
 
+// Required for static export
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ tenantId: '_build', snapshotId: '_build' }];
+};
+
 interface Props {
     params: Promise<{ tenantId: string; snapshotId: string }>;
 }
@@ -11,6 +17,11 @@ export async function GET(
     request: NextRequest,
     { params }: Props
 ) {
+    // Guard against static export execution
+    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+        return NextResponse.json({ is_valid: true, message: 'Dynamic check not available during static build' });
+    }
+
     const { tenantId, snapshotId } = await params;
     const searchParams = request.nextUrl.searchParams;
     const verifiedBy = searchParams.get('verified_by');

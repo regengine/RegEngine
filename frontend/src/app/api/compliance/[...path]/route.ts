@@ -6,9 +6,10 @@ import { NextRequest, NextResponse } from 'next/server';
 const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 
 // Required for static export
-export function generateStaticParams() {
-    return [];
-}
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ path: ['_build'] }];
+};
 
 export async function GET(
     request: NextRequest,
@@ -32,6 +33,11 @@ async function proxyRequest(
     method: string
 ) {
     try {
+        // Guard against static export execution
+        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+        }
+
         const path = pathParts.join('/');
         const url = new URL(request.url);
         const queryString = url.search;

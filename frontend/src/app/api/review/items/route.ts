@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+
+// Required for static export
+export const dynamic = 'force-static';
+
 import fs from 'fs';
 import path from 'path';
 
@@ -32,6 +36,11 @@ function getAdminKey(): string | null {
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 
 export async function GET() {
+    // Guard against static export execution
+    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+        return NextResponse.json([]);
+    }
+
     const adminKey = getAdminKey();
 
     if (!adminKey) {

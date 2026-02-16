@@ -6,9 +6,11 @@ import { NextRequest, NextResponse } from 'next/server';
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 
 // Required for static export
-export function generateStaticParams() {
-    return [];
-}
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    // Return a dummy path to satisfy Next.js static export requirement for catch-all
+    return [{ path: ['_build'] }];
+};
 
 export async function GET(
     request: NextRequest,
@@ -40,6 +42,11 @@ async function proxyRequest(
     method: string
 ) {
     try {
+        // Guard against static export execution
+        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+        }
+
         const path = pathParts.join('/');
         const url = new URL(request.url);
         const queryString = url.search;

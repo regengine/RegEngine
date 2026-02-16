@@ -2,11 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 
+// Required for static export
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ id: '_build' }];
+};
+
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        // Guard against static export execution
+        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+            return NextResponse.json({ message: 'Dynamic action not available during static build' });
+        }
+
         const { id } = await params;
 
         const response = await fetch(

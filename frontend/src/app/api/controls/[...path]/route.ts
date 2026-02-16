@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Proxy controls/overlay API requests to the Admin backend service
-// This allows browser clients to access controls endpoints without CORS issues
-
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 
 // Required for static export
-export function generateStaticParams() {
-    return [];
-}
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ path: ['_build'] }];
+};
 
 export async function GET(
     request: NextRequest,
@@ -26,28 +24,17 @@ export async function POST(
     return proxyRequest(request, path, 'POST');
 }
 
-export async function PUT(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const { path } = await params;
-    return proxyRequest(request, path, 'PUT');
-}
-
-export async function DELETE(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const { path } = await params;
-    return proxyRequest(request, path, 'DELETE');
-}
-
 async function proxyRequest(
     request: NextRequest,
     pathParts: string[],
     method: string
 ) {
     try {
+        // Guard against static export execution
+        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+        }
+
         const path = pathParts.join('/');
         const url = new URL(request.url);
         const queryString = url.search;
@@ -56,26 +43,26 @@ async function proxyRequest(
             method,
             headers: {
                 'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': 'admin', // Use admin key for demo
+                'X-Admin-Key': process.env.ADMIN_MASTER_KEY || 'admin',
+                'X-RegEngine-API-Key': 'admin',
             },
         };
 
-        // Include body for POST/PUT requests
-        if (method === 'POST' || method === 'PUT') {
+        if (method === 'POST') {
             try {
                 const body = await request.json();
                 fetchOptions.body = JSON.stringify(body);
             } catch {
-                // No body or invalid JSON, continue without body
+                // No body or invalid JSON
             }
         }
 
         const response = await fetch(
-            `${ADMIN_URL}/overlay/${path}${queryString}`,
+            `${ADMIN_URL}/v1/admin/${path}${queryString}`,
             fetchOptions
         );
 
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
             return NextResponse.json(

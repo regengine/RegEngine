@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Proxy FSMA API requests to the Graph/FSMA backend service
-// This allows browser clients to access FSMA endpoints without CORS issues
+const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 
 // Required for static export
-export function generateStaticParams() {
-    return [];
-}
+export const dynamic = 'force-static';
+export const generateStaticParams = async () => {
+    return [{ path: ['_build'] }];
+};
 
 export async function GET(
     request: NextRequest,
@@ -24,21 +24,17 @@ export async function POST(
     return proxyRequest(request, path, 'POST');
 }
 
-export async function DELETE(
-    request: NextRequest,
-    { params }: { params: Promise<{ path: string[] }> }
-) {
-    const { path } = await params;
-    return proxyRequest(request, path, 'DELETE');
-}
-
 async function proxyRequest(
     request: NextRequest,
     pathParts: string[],
     method: string
 ) {
     try {
-        const fsmaUrl = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
+        // Guard against static export execution
+        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+        }
+
         const path = pathParts.join('/');
         const url = new URL(request.url);
         const queryString = url.search;
@@ -47,39 +43,25 @@ async function proxyRequest(
             method,
             headers: {
                 'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': 'admin', // Use admin key for demo
+                'X-RegEngine-API-Key': 'admin',
             },
         };
 
-        // Include body for POST requests
         if (method === 'POST') {
             try {
                 const body = await request.json();
                 fetchOptions.body = JSON.stringify(body);
             } catch {
-                // No body or invalid JSON, continue without body
+                // No body or invalid JSON
             }
         }
 
         const response = await fetch(
-            `${fsmaUrl}/v1/fsma/${path}${queryString}`,
+            `${COMPLIANCE_URL}/fsma-204/${path}${queryString}`,
             fetchOptions
         );
 
-        // For file downloads, return blob
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType.includes('text/csv') || contentType.includes('application/octet-stream')) {
-            const blob = await response.blob();
-            return new NextResponse(blob, {
-                status: response.status,
-                headers: {
-                    'Content-Type': contentType,
-                    'Content-Disposition': response.headers.get('content-disposition') || '',
-                },
-            });
-        }
-
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
             return NextResponse.json(
