@@ -31,6 +31,7 @@ class SwarmCommand(Enum):
     REVIEW = "review"
     LABEL = "label"
     SECURITY_AUDIT = "security_audit"
+    TROUBLESHOOT = "troubleshoot"
     HELP = "help"
     UNKNOWN = "unknown"
 
@@ -76,7 +77,7 @@ def is_authorized(username: str) -> bool:
 
 # Pattern: @swarm <command> [extra context]
 SWARM_PATTERN = re.compile(
-    r"@swarm\s+(solve\s+this|solve|analyze|review|label|security\s+audit|audit|help)"
+    r"@swarm\s+(solve\s+this|solve|analyze|review|label|security\s+audit|audit|troubleshoot|help)"
     r"(?:\s+(.+))?",
     re.IGNORECASE | re.DOTALL,
 )
@@ -92,6 +93,7 @@ COMMAND_MAP = {
     "label": SwarmCommand.LABEL,
     "security audit": SwarmCommand.SECURITY_AUDIT,
     "audit": SwarmCommand.SECURITY_AUDIT,
+    "troubleshoot": SwarmCommand.TROUBLESHOOT,
     "help": SwarmCommand.HELP,
 }
 
@@ -262,6 +264,7 @@ def format_help_response() -> str:
         "| `@swarm review PR #42` | Review a pull request |\n"
         "| `@swarm label` | Auto-label this issue |\n"
         "| `@swarm security audit` | Run a security scan |\n"
+        "| `@swarm troubleshoot` | Analyze and heal CI/CD failures |\n"
         "| `@swarm help` | Show this help message |\n\n"
         "### How it works\n"
         "1. You comment `@swarm solve this` on any open issue\n"

@@ -191,13 +191,27 @@ async def create_billing_portal_session(
 # ── Webhook Verification ──────────────────────────────────────────
 
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
-    """Verify Stripe webhook HMAC signature."""
+    """Verify Stripe webhook HMAC signature.
+    
+    SEC-BIL-001 REMEDIATION: Rejects webhooks in production when
+    STRIPE_WEBHOOK_SECRET is not configured. Sandbox mode still
+    accepts unverified webhooks for local development.
+    """
     if not STRIPE_WEBHOOK_SECRET:
-        logger.warning("webhook_verification_skipped", reason="No webhook secret configured")
-        return True  # Accept in sandbox
+        if BILLING_ENV == "production":
+            logger.error(
+                "webhook_rejected_no_secret",
+                reason="STRIPE_WEBHOOK_SECRET must be set in production",
+            )
+            return False
+        logger.warning("webhook_verification_skipped_sandbox", reason="No webhook secret configured")
+        return True  # Accept only in sandbox
 
     stripe = _get_stripe()
     if stripe is None:
+        if BILLING_ENV == "production":
+            logger.error("webhook_rejected_no_stripe", reason="Stripe SDK unavailable in production")
+            return False
         return True
 
     try:

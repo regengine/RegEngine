@@ -2,7 +2,10 @@
 # Do NOT use default values for sensitive credentials in production
 # Run ./scripts/check_required_secrets.sh to validate before starting
 
-x-env-common: &env_common
+x-env-common:
+  # B4: Centralized path resolution (Sprint 11)
+  &env_common
+  PROJECT_ROOT: /code
   RAW_DATA_BUCKET: ${RAW_DATA_BUCKET:-reg-engine-raw-data-dev}
   PROCESSED_DATA_BUCKET: ${PROCESSED_DATA_BUCKET:-reg-engine-processed-data-dev}
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID must be set}
@@ -21,6 +24,9 @@ x-env-common: &env_common
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
   OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
   ENABLE_DB_API_KEYS: "true"
+  # Per-tenant rate limiting (Sprint 13)
+  RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-100/minute}
+  RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/2}
   # Test API key bypass - allows 'admin' as a valid key for development
   AUTH_TEST_BYPASS_TOKEN: ${AUTH_TEST_BYPASS_TOKEN:-admin}
   AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
@@ -157,6 +163,9 @@ services:
       DATABASE_URL: postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin
       # CORS origins for frontend access (comma-separated)
       CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
+    volumes:
+      - ./services/ingestion/app:/app/services/ingestion/app
+      - ./services/shared:/app/services/shared
     deploy:
       resources:
         limits:
@@ -189,6 +198,9 @@ services:
     restart: unless-stopped
     environment:
       <<: *env_common
+    volumes:
+      - ./services/nlp/app:/app/services/nlp/app
+      - ./services/shared:/app/services/shared
     depends_on:
       postgres:
         condition: service_healthy

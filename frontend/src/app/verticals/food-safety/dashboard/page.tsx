@@ -11,6 +11,7 @@ import {
     QuickActionsPanel,
     ComplianceScoreGauge,
     ExportButton,
+    ComplianceReportButton,
     type QuickAction,
 } from '@/components/verticals';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -475,6 +476,20 @@ export default function FoodSafetyDashboardPage() {
                         }}
                         filename="fsma_compliance_report"
                         variant="default"
+                        className="w-full"
+                    />
+
+                    <ComplianceReportButton
+                        dashboardTitle="FSMA 204 Compliance Report"
+                        vertical="Food Safety"
+                        reportData={{
+                            summary: 'FSMA 204 traceability compliance dashboard covering KDE completeness, CTE coverage, and 24-hour recall readiness across all monitored lots.',
+                            metrics: metrics?.map(m => ({
+                                label: m.label,
+                                value: m.value,
+                                status: m.trend?.isPositive ? 'pass' as const : m.trend && !m.trend.isPositive ? 'warning' as const : 'pass' as const,
+                            })) || [],
+                        }}
                         className="w-full"
                     />
                 </div>

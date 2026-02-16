@@ -94,6 +94,25 @@ def cmd_run(args) -> None:
         print(f"\n💾 Output saved to: {args.output_file}")
 
 
+def cmd_troubleshoot(args) -> None:
+    """Run the CI resilience agent to troubleshoot and heal failures."""
+    import asyncio
+    from regengine.swarm.coordinator import AgentSwarm
+    
+    print(f"🧬 CI Resilience Agent — Analyzing logs...\n")
+    
+    swarm = AgentSwarm()
+    # Troubleshoot is async in coordinator
+    result = asyncio.run(swarm.troubleshoot(args.logs))
+    
+    print("\n" + "═" * 60)
+    print(f"📊 Diagnosis: {result.status}")
+    print(f"   Root Cause: {result.plan.get('root_cause') if result.plan else 'Unknown'}")
+    print(f"   Remediation: {result.plan.get('immediate_fix') if result.plan else 'None'}")
+    print(f"   Agents: {', '.join(result.agents_used)}")
+    print(f"   Duration: {result.duration_seconds}s")
+
+
 def cmd_solve(args) -> None:
     """Solve a GitHub issue using the agent swarm."""
     from regengine.swarm.github_integration import GitHubClient
@@ -192,6 +211,7 @@ def cmd_status(args) -> None:
     print("║                                                              ║")
     print("║  Commands:                                                   ║")
     print("║    run   --task 'description'    Solve a task                ║")
+    print("║    troubleshoot --logs '...'      Heal CI failures            ║")
     print("║    solve --issue 42 --repo o/r   Solve a GitHub issue       ║")
     print("║    label --repo o/r --dry-run    Auto-label issues          ║")
     print("╚══════════════════════════════════════════════════════════════╝")
@@ -229,6 +249,11 @@ def main() -> None:
     label_parser.add_argument("--limit", type=int, default=10, help="Max issues to process")
     label_parser.add_argument("--min-confidence", type=float, default=0.7, help="Min confidence threshold")
     label_parser.set_defaults(func=cmd_label)
+
+    # ── troubleshoot ──
+    ts_parser = subparsers.add_parser("troubleshoot", help="Troubleshoot and fix CI failures")
+    ts_parser.add_argument("--logs", required=True, help="CI failure logs/snippet")
+    ts_parser.set_defaults(func=cmd_troubleshoot)
 
     # ── status ──
     status_parser = subparsers.add_parser("status", help="Show swarm status")

@@ -6,6 +6,8 @@ export { AlertsWidget, type Alert, type AlertSeverity } from './AlertsWidget';
 export { ExportButton } from './ExportButton';
 export { QuickActionsPanel, type QuickAction } from './QuickActionsPanel';
 export { ComplianceScoreGauge } from './ComplianceScoreGauge';
+export { HeatMapWidget, type HeatMapRow, type HeatMapCell } from './HeatMapWidget';
+export { ComplianceReportButton } from './ComplianceReportButton';
 export { VerticalDashboardLayout } from './VerticalDashboardLayout';
 
 // Existing components
