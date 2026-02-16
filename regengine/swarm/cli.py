@@ -118,9 +118,42 @@ def cmd_run(args) -> None:
                             comment += "✨ No critical vulnerabilities identified.\n"
                         
                         gh.comment_on_issue(pr_num, comment)
-                        print(f"💬 Security report posted to PR #{pr_num}")
-                except Exception as e:
-                    print(f"⚠️ Failed to post security report: {e}")
+        # Janitor logic for direct agent call
+        if args.agent == "janitor":
+            from regengine.swarm.github_integration import GitHubClient
+            gh = GitHubClient()
+            prs = gh.repo.get_pulls(state="open")
+            
+            print(f"🧹 Janitor scanning {prs.totalCount} open Pull Requests...\n")
+            
+            for pr in prs:
+                print(f"🔍 Evaluating PR #{pr.number}: {pr.title}")
+                
+                # Gather context for Janitor
+                security_comments = [c.body for c in pr.get_issue_comments() if "Security Audit" in c.body]
+                test_results = "CI status: " + gh.get_pr_checks_status(pr.number)
+                
+                context = {
+                    "security_scorecard": "\n".join(security_comments) if security_comments else "No security audit found.",
+                    "test_results": test_results,
+                    "ci_status": gh.get_pr_checks_status(pr.number)
+                }
+                
+                agent_output = agent_instance.run(f"Evaluate PR #{pr.number}", context)
+                res = agent_output.get("result", {})
+                decision = res.get("decision", "hold")
+                reasoning = res.get("reasoning", "No reasoning.")
+                
+                print(f"   - Decision: {decision.upper()}")
+                print(f"   - Reasoning: {reasoning}")
+                
+                if decision == "merge":
+                    print(f"   🚀 AUTOMATIC MERGE TRIGGERED for PR #{pr.number}...")
+                    success = gh.merge_pr(pr.number)
+                    if success:
+                        print(f"   ✅ PR #{pr.number} merged successfully.")
+                    else:
+                        print(f"   ❌ Merge failed for PR #{pr.number}.")
             return
 
         result = swarm.solve(args.task)
@@ -312,8 +345,17 @@ def cmd_sweep(args) -> None:
     sweeper = SwarmSweeper()
     sweeper.sweep(limit=args.limit)
 
+def cmd_compliance(args) -> None:
+    """Execute a proactive compliance rollout across the fleet."""
+    from scripts.compliance_sweep import roll_out_compliance
+    roll_out_compliance(standard=args.standard)
+
 def main() -> None:
     # ...
+    # ── compliance ──
+    compliance_parser = subparsers.add_parser("compliance", help="Proactively roll out compliance standards")
+    compliance_parser.add_argument("--standard", default="FSMA-204", help="Standard to roll out (FSMA-204, Finance)")
+    compliance_parser.set_defaults(func=cmd_compliance)
     # ── sweep ──
     sweep_parser = subparsers.add_parser("sweep", help="Proactively sweep horizontal tech debt")
     sweep_parser.add_argument("--limit", type=int, default=5, help="Max issues to solve")
