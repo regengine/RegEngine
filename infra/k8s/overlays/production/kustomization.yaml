@@ -1,0 +1,30 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: regengine-prod
+
+resources:
+  - ../../base/namespace.yaml
+  - ../../base/compliance/deployment.yaml
+  - ../../base/energy/deployment.yaml
+  - ../../base/admin/deployment.yaml
+  - ../../base/ingestion/deployment.yaml
+  - ../../base/scheduler/deployment.yaml
+  - ../../base/ingress.yaml
+
+images:
+  - name: regengine/compliance-service
+    newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/regengine/compliance
+    newTag: v1.1.0
+  - name: regengine/energy-api
+    newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/regengine/energy
+    newTag: v1.1.0
+
+patchesStrategicMerge:
+  - |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: compliance-service
+    spec:
+      replicas: 5

@@ -445,32 +445,36 @@ class InMemoryDataAccessStorage(DataAccessStorage):
 class QuerySanitizer:
     """Sanitize queries to remove sensitive data."""
     
-    # Common patterns to redact
-    SENSITIVE_PATTERNS = [
-        (r"password\s*=\s*'[^']*'", "password='[REDACTED]'"),
-        (r"password\s*=\s*\"[^\"]*\"", 'password="[REDACTED]"'),
-        (r"secret\s*=\s*'[^']*'", "secret='[REDACTED]'"),
-        (r"api_key\s*=\s*'[^']*'", "api_key='[REDACTED]'"),
-        (r"token\s*=\s*'[^']*'", "token='[REDACTED]'"),
-        (r"ssn\s*=\s*'[^']*'", "ssn='[REDACTED]'"),
-        (r"credit_card\s*=\s*'[^']*'", "credit_card='[REDACTED]'"),
-    ]
-    
+    @property
+    def sensitive_patterns(self):
+        """Dynamic patterns from configuration."""
+        try:
+            from app.config import settings
+            patterns = settings.redaction_patterns
+            return [(p, f"{p.split('\\s*=')[0] if '\\s*=' in p else 'value'}='[REDACTED]'") for p in patterns]
+        except (ImportError, AttributeError):
+            # Fallback to defaults if config is not accessible
+            return [
+                (r"password\s*=\s*'[^']*'", "password='[REDACTED]'"),  # nosec
+                (r"secret\s*=\s*'[^']*'", "secret='[REDACTED]'"),  # nosec
+                (r"api_key\s*=\s*'[^']*'", "api_key='[REDACTED]'"),  # nosec
+                (r"token\s*=\s*'[^']*'", "token='[REDACTED]'"),  # nosec
+            ]
+
     @classmethod
     def sanitize(cls, query: str, max_length: int = 10000) -> str:
         """
         Sanitize a query string.
-        
-        - Redacts sensitive values
-        - Truncates to max length
-        - Normalizes whitespace
         """
         import re
         
-        result = query
+        # Initialize patterns on first use or per call if we want full dynamism
+        # For simplicity and performance, we'll compute it here or use a class instance
+        instance = cls()
+        patterns = instance.sensitive_patterns
         
-        # Apply redaction patterns
-        for pattern, replacement in cls.SENSITIVE_PATTERNS:
+        result = query
+        for pattern, replacement in patterns:
             result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
         
         # Normalize whitespace

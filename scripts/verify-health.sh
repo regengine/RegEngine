@@ -24,7 +24,7 @@ SERVICES=(
 
 INFRASTRUCTURE=(
     "http://localhost:7474|Neo4j|1"
-    "http://localhost:9092|Redpanda|0"
+    "tcp://localhost:9092|Redpanda|0"
 )
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -41,17 +41,25 @@ check_service() {
     local required=$3
     local timeout=${4:-5}
     
-    if curl -sf --max-time $timeout "$url" > /dev/null 2>&1; then
+    if [[ $url == tcp://* ]]; then
+        local host_port=${url#tcp://}
+        local host=${host_port%:*}
+        local port=${host_port#*:}
+        if nc -z -w $timeout $host $port > /dev/null 2>&1; then
+            echo -e "  ${GREEN}✅${NC} $name"
+            return 0
+        fi
+    elif curl -sf --max-time $timeout "$url" > /dev/null 2>&1; then
         echo -e "  ${GREEN}✅${NC} $name"
         return 0
+    fi
+
+    if [ "$required" == "1" ]; then
+        echo -e "  ${RED}❌${NC} $name (FAILED: $url)"
+        return 1
     else
-        if [ "$required" == "1" ]; then
-            echo -e "  ${RED}❌${NC} $name (FAILED: $url)"
-            return 1
-        else
-            echo -e "  ${YELLOW}⚠️${NC}  $name (optional, not responding)"
-            return 2
-        fi
+        echo -e "  ${YELLOW}⚠️${NC}  $name (optional, not responding)"
+        return 2
     fi
 }
 
@@ -79,6 +87,27 @@ for entry in "${SERVICES[@]}"; do
         WARNINGS=$((WARNINGS + 1))
     fi
 done
+
+echo ""
+echo "Scheduler Autonomy Status:"
+if curl -sf http://localhost:8600/status > /dev/null 2>&1; then
+    python3 -c "
+import json, urllib.request
+try:
+    with urllib.request.urlopen('http://localhost:8600/status') as response:
+        data = json.loads(response.read())
+        scrapes = data.get('last_scrapes', {})
+        if not scrapes:
+            print('    Scrapers: Initializing...')
+        for source, result in scrapes.items():
+            icon = '✅' if result['success'] else '❌'
+            print(f'    {icon} {source}: {result[\"count\"]} items ({result[\"scraped_at\"][:19]})')
+except:
+    print('    Failed to parse status')
+"
+else
+    echo "    Diagnostics unavailable (Service starting...)"
+fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

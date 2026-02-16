@@ -66,7 +66,7 @@ sleep 5
 docker-compose up -d ingestion-service nlp-service graph-service
 sleep 5
 
-docker-compose up -d opportunity-api compliance-api
+docker-compose up -d opportunity-api compliance-api scheduler
 sleep 3
 
 # Phase 3: Supporting Services

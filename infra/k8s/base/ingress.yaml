@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: regengine-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  rules:
+  - host: api.regengine.co
+    http:
+      paths:
+      - path: /compliance
+        pathType: Prefix
+        backend:
+          service:
+            name: compliance-service
+            port:
+              number: 80

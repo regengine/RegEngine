@@ -3,6 +3,7 @@ from typing import List
 import asyncio
 from app.models import AnalysisSummary, AnalysisRisk
 from app.notifications import notify_hazard # Import notification service
+from app.audit import HIPAAAuditLogger
 
 class AnalysisEngine:
     """
@@ -55,13 +56,24 @@ class AnalysisEngine:
         
         # Healthcare PHI Detection (Simulated based on hash)
         if h % 7 == 0:
-            risks.insert(0, AnalysisRisk(
+            phi_risk = AnalysisRisk(
                 id="PHI-001",
                 description="Unredacted PHI Detected: SSN Pattern found on page 3",
                 severity="CRITICAL"
-            ))
+            )
+            risks.insert(0, phi_risk)
             risk_score = 95 # Override score to critical
             obligations += 12 # Higher complexity
+            
+            # Log the PHI detection to the audit trail
+            HIPAAAuditLogger.log_phi_detection(
+                document_id=document_id,
+                risk_description=phi_risk.description,
+                severity=phi_risk.severity
+            )
+        
+        # Log general analysis access for audit trail
+        HIPAAAuditLogger.log_access(document_id, "SYSTEM_ANALYSIS")
         
         summary = AnalysisSummary(
             document_id=document_id,

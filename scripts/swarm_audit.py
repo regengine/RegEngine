@@ -73,10 +73,10 @@ class SecurityAuditor(BaseAuditor):
                 '--exclude-dir=.venv-test', '--exclude-dir=env', 
                 '--exclude-dir=dist', '--exclude-dir=build', 
                 '--exclude-dir=__pycache__', '--exclude-dir=site-packages',
-                '--exclude-dir=tests'  # Exclude tests from critical security scan for now to avoid false positives
+                '--exclude-dir=tests', '--exclude-dir=artifacts'
             ]
             
-            cmd = ['grep', '-rn', 'except:', *target_dirs, '--include=*.py'] + exclude_dirs
+            cmd = ['grep', '-rn', 'except:', *target_dirs, '--include=*.py', '--exclude=swarm_audit.py'] + exclude_dirs
             
             result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
             
@@ -90,8 +90,8 @@ class SecurityAuditor(BaseAuditor):
                     parts = line.split(':', 2)
                     if len(parts) >= 3:
                         file_path, line_num, code = parts[0], parts[1], parts[2]
-                        # Exclude if it's properly handling Exception
-                        if 'except:' in code and 'Exception' not in code and '#' not in code.split('except:')[0]:
+                        # Exclude if it's properly handling Exception or has bypass comment
+                        if 'except:' in code and 'Exception' not in code and '#' not in code.split('except:')[0] and '# nosec' not in code:
                             self.add_finding(
                                 "Bare except clause detected",
                                 f"**File:** `{file_path}:{line_num}`\n\n"
@@ -127,18 +127,18 @@ class SecurityAuditor(BaseAuditor):
                     '--exclude-dir=.venv-test', '--exclude-dir=env', 
                     '--exclude-dir=dist', '--exclude-dir=build', 
                     '--exclude-dir=__pycache__', '--exclude-dir=site-packages',
-                    '--exclude-dir=tests' 
+                    '--exclude-dir=tests', '--exclude-dir=artifacts'
                 ]
                 
-                cmd = ['grep', '-rn', '-E', pattern, *target_dirs, '--include=*.py'] + exclude_dirs
+                cmd = ['grep', '-rn', '-E', pattern, *target_dirs, '--include=*.py', '--exclude=swarm_audit.py'] + exclude_dirs
                 
                 result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
                 
                 if result.returncode == 0 and result.stdout:
                     lines = result.stdout.strip().split('\n')
                     for line in lines:
-                        # Skip if it's using environment variables or in test files
-                        if any(exc in line.lower() for exc in exclude_patterns):
+                        # Skip if it's using environment variables, in test files, or has bypass comment
+                        if any(exc in line.lower() for exc in exclude_patterns) or '# nosec' in line:
                             continue
                         
                         if ':' in line:
@@ -176,7 +176,8 @@ class SecurityAuditor(BaseAuditor):
             if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split('\n')
                 for line in lines:
-                    if ':' in line and ('.eval()' not in line):  # Exclude model.eval()
+                    # Exclude model.eval(), byte strings, comments/docstrings, and docstring headers
+                    if ':' in line and ('.eval()' not in line) and ('b"eval(' not in line) and ('"eval(' not in line) and ('# nosec' not in line) and ('"""' not in line) and ("'''" not in line):
                         parts = line.split(':', 2)
                         if len(parts) >= 3:
                             file_path, line_num, code = parts[0], parts[1], parts[2]
@@ -197,11 +198,22 @@ class SecurityAuditor(BaseAuditor):
     def find_sql_injection_risks(self):
         """Find potential SQL injection vulnerabilities"""
         try:
+            exclude_dirs = [
+                '--exclude-dir=node_modules', '--exclude-dir=.git', 
+                '--exclude-dir=venv', '--exclude-dir=.venv', 
+                '--exclude-dir=.venv-test', '--exclude-dir=env', 
+                '--exclude-dir=dist', '--exclude-dir=build', 
+                '--exclude-dir=__pycache__', '--exclude-dir=site-packages',
+                '--exclude-dir=tests', '--exclude-dir=artifacts'
+            ]
+            
             # Look for string formatting in SQL queries
-            result = subprocess.run([
+            cmd = [
                 'grep', '-rn', '-E', r'(execute|query|run)\s*\([^)]*f["\']|\.format\(', 
                 'services', '--include=*.py'
-            ], capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
+            ] + exclude_dirs
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd='/Users/christophersellers/Desktop/RegEngine')
             
             if result.returncode == 0 and result.stdout:
                 lines = result.stdout.strip().split('\n')

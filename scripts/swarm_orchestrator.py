@@ -30,6 +30,12 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+try:
+    from swarm_handoff_relay import SwarmHandoffRelay
+    RELAY_AVAILABLE = True
+except ImportError:
+    RELAY_AVAILABLE = False
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PERSONAS_DIR = REPO_ROOT / ".agent" / "personas"
 PROTOCOLS_DIR = REPO_ROOT / ".agent" / "protocols"
@@ -127,6 +133,30 @@ AGENT_REGISTRY: Dict[str, AgentRole] = {
         persona_file="aerospace.md",
         description="AS9100D / Aerospace Quality Specialist",
         domain_paths=["services/aerospace/", "industry_plugins/aerospace/"],
+    ),
+    "legal": AgentRole(
+        key="legal",
+        label="Bot-Legal",
+        squad=Squad.BUILDERS,
+        persona_file="legal.md",
+        description="FDA 510(k) & Regulatory Counsel",
+        domain_paths=["docs/compliance/legal/", "services/compliance/app/legal/"],
+    ),
+    "finance": AgentRole(
+        key="finance",
+        label="Bot-Finance",
+        squad=Squad.BUILDERS,
+        persona_file="finance.md",
+        description="ROI & Monetization Engine",
+        domain_paths=["services/admin/app/pcos/", "services/compliance/app/pricing/"],
+    ),
+    "devops": AgentRole(
+        key="devops",
+        label="Bot-DevOps",
+        squad=Squad.GUARDIANS,
+        persona_file="devops.md",
+        description="CI/CD & Reliability Guardian",
+        domain_paths=[".github/workflows/", "scripts/release/"],
     ),
     "qa": AgentRole(
         key="qa",
@@ -348,7 +378,7 @@ def validate_output(output: dict) -> List[str]:
     return errors
 
 
-def validate_output_file(filepath: str) -> None:
+def validate_output_file(filepath: str, relay_mode: bool = False) -> None:
     """Load and validate an agent output JSON file."""
     path = Path(filepath)
     if not path.exists():
@@ -371,8 +401,17 @@ def validate_output_file(filepath: str) -> None:
         print(f"   Confidence: {data.get('confidence')}")
         print(f"   Files changed: {len(data.get('files_changed', []))}")
         print(f"   Tests added: {data.get('tests', {}).get('added', 0)}")
-        if data.get("handoff"):
-            print(f"   Handoff → {data['handoff'].get('to_agent')}")
+        
+        # Handoff Logic
+        handoff = data.get("handoff")
+        if handoff:
+            print(f"   Handoff → {handoff.get('to_agent')} (Priority: {handoff.get('priority')})")
+            
+            # Emit to Redpanda if relay_mode is active
+            if relay_mode and RELAY_AVAILABLE:
+                relay = SwarmHandoffRelay()
+                relay.emit_handoff(data)
+                print("   📡 Handoff emitted to Redpanda")
         else:
             print("   Handoff: None (chain complete)")
 
@@ -494,7 +533,9 @@ def main() -> None:
     group.add_argument("--chain", metavar="ROLES", help="Run agents in chain (comma-separated)")
     group.add_argument("--sweep", metavar="TYPE", help="Run a predefined sweep pattern")
     group.add_argument("--validate", metavar="FILE", help="Validate an agent output JSON file")
+    group.add_argument("--daemon", action="store_true", help="Run in daemon mode, listening for Redpanda handoffs")
 
+    parser.add_argument("--relay", action="store_true", help="Emit handoffs to Redpanda during validation")
     parser.add_argument("--task", metavar="DESC", help="Task description for the agent(s)")
     parser.add_argument(
         "--output",
@@ -514,7 +555,14 @@ def main() -> None:
     elif args.sweep:
         cmd_sweep(args.sweep, args.output)
     elif args.validate:
-        validate_output_file(args.validate)
+        validate_output_file(args.validate, relay_mode=args.relay)
+    elif args.daemon:
+        if RELAY_AVAILABLE:
+            relay = SwarmHandoffRelay()
+            relay.listen()
+        else:
+            print("ERROR: SwarmHandoffRelay not available. Check dependencies.", file=sys.stderr)
+            sys.exit(1)
     else:
         parser.print_help()
         sys.exit(1)

@@ -305,22 +305,8 @@ Enforced via `slowapi`:
 
 ### Authentication
 
-**Current:** Open API (development)  
-**TODO:** Integrate with Admin service JWT authentication
-
-```python
-# Future implementation
-@app.post("/energy/snapshots")
-@limiter.limit("10/minute")
-def create_snapshot(
-    request: Request,
-    data: SnapshotCreateRequest,
-    current_user: User = Depends(get_current_user),  # TODO
-    db: Session = Depends(get_db)
-):
-    # Extract user_id from JWT
-    generator_user_id = current_user.id
-```
+**Status:** ✅ CERTIFIED (Admin service JWT integration complete)  
+Access is enforced via the `get_current_user` dependency in `app/main.py`.
 
 ### Data Integrity
 

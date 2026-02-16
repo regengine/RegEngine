@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: energy-api
+  labels:
+    app: energy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: energy
+  template:
+    metadata:
+      labels:
+        app: energy
+    spec:
+      containers:
+      - name: energy
+        image: regengine/energy-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: url
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: energy-api
+spec:
+  selector:
+    app: energy
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

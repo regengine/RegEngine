@@ -63,21 +63,16 @@ class FDAWarningLettersScraper(BaseScraper):
         try:
             # Try RSS feed first
             items = self._scrape_rss()
-            logger.info(
-                "fda_warning_letters_scraped",
-                source="rss",
-                count=len(items),
-            )
-
-        except Exception as rss_error:
-            logger.warning(
-                "rss_scrape_failed",
-                error=str(rss_error),
-                fallback="api",
-            )
-
-            try:
-                # Fallback to API
+            
+            if items:
+                logger.info(
+                    "fda_warning_letters_scraped",
+                    source="rss",
+                    count=len(items),
+                )
+            else:
+                # If _scrape_rss returned [] because of a 404, we try API
+                logger.debug("no_rss_items_trying_api_fallback")
                 items = self._scrape_api()
                 logger.info(
                     "fda_warning_letters_scraped",
@@ -85,12 +80,13 @@ class FDAWarningLettersScraper(BaseScraper):
                     count=len(items),
                 )
 
-            except Exception as api_error:
-                error_message = f"RSS: {rss_error}, API: {api_error}"
-                logger.error(
-                    "fda_warning_letters_failed",
-                    error=error_message,
-                )
+        except Exception as scrap_error:
+            logger.warning(
+                "scrape_attempt_failed",
+                error=str(scrap_error),
+                source="rss_or_api",
+            )
+            error_message = str(scrap_error)
 
         duration_ms = (time.time() - start_time) * 1000
 
@@ -106,8 +102,21 @@ class FDAWarningLettersScraper(BaseScraper):
 
     def _scrape_rss(self) -> List[EnforcementItem]:
         """Parse FDA Warning Letters RSS feed."""
-        response = self.session.get(FDA_WARNING_LETTERS_RSS, timeout=self.timeout)
-        response.raise_for_status()
+        try:
+            response = self.session.get(FDA_WARNING_LETTERS_RSS, timeout=self.timeout)
+            
+            if response.status_code == 404:
+                logger.info(
+                    "rss_feed_defunct_skipping",
+                    url=FDA_WARNING_LETTERS_RSS,
+                    note="FDA has reorganized feeds; using API fallback"
+                )
+                return []
+                
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            # Re-raise for fallback logic in scrape()
+            raise e
 
         items = []
         root = ElementTree.fromstring(response.content)
