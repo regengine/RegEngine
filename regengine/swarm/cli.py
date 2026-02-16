@@ -306,9 +306,18 @@ def main() -> None:
     ts_parser.add_argument("--logs", required=True, help="CI failure logs/snippet")
     ts_parser.set_defaults(func=cmd_troubleshoot)
 
-    # ── status ──
-    status_parser = subparsers.add_parser("status", help="Show swarm status")
-    status_parser.set_defaults(func=cmd_status)
+def cmd_sweep(args) -> None:
+    """Execute a proactive sweep across horizontal technical debt."""
+    from scripts.swarm_sweep import SwarmSweeper
+    sweeper = SwarmSweeper()
+    sweeper.sweep(limit=args.limit)
+
+def main() -> None:
+    # ...
+    # ── sweep ──
+    sweep_parser = subparsers.add_parser("sweep", help="Proactively sweep horizontal tech debt")
+    sweep_parser.add_argument("--limit", type=int, default=5, help="Max issues to solve")
+    sweep_parser.set_defaults(func=cmd_sweep)
 
     args = parser.parse_args()
     configure_logging(verbose=getattr(args, "verbose", False))
