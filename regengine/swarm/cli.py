@@ -118,6 +118,11 @@ def cmd_run(args) -> None:
                             comment += "✨ No critical vulnerabilities identified.\n"
                         
                         gh.comment_on_issue(pr_num, comment)
+                        print(f"💬 Security report posted to PR #{pr_num}")
+                except Exception as e:
+                    print(f"⚠️ Failed to post security report: {e}")
+            return
+
         # Janitor logic for direct agent call
         if args.agent == "janitor":
             from regengine.swarm.github_integration import GitHubClient
@@ -297,7 +302,23 @@ def cmd_status(args) -> None:
     print("║    troubleshoot --logs '...'      Heal CI failures            ║")
     print("║    solve --issue 42 --repo o/r   Solve a GitHub issue       ║")
     print("║    label --repo o/r --dry-run    Auto-label issues          ║")
+    print("║    status                        Show swarm status           ║")
+    print("║    sweep --limit 5               Proactively sweep tech debt ║")
+    print("║    compliance --standard FSMA-204 Roll out compliance       ║")
     print("╚══════════════════════════════════════════════════════════════╝")
+
+
+def cmd_sweep(args) -> None:
+    """Execute a proactive sweep across horizontal technical debt."""
+    from scripts.swarm_sweep import SwarmSweeper
+    sweeper = SwarmSweeper()
+    sweeper.sweep(limit=args.limit)
+
+
+def cmd_compliance(args) -> None:
+    """Execute a proactive compliance rollout across the fleet."""
+    from scripts.compliance_sweep import roll_out_compliance
+    roll_out_compliance(standard=args.standard)
 
 
 def main() -> None:
@@ -339,23 +360,15 @@ def main() -> None:
     ts_parser.add_argument("--logs", required=True, help="CI failure logs/snippet")
     ts_parser.set_defaults(func=cmd_troubleshoot)
 
-def cmd_sweep(args) -> None:
-    """Execute a proactive sweep across horizontal technical debt."""
-    from scripts.swarm_sweep import SwarmSweeper
-    sweeper = SwarmSweeper()
-    sweeper.sweep(limit=args.limit)
+    # ── status ──
+    status_parser = subparsers.add_parser("status", help="Show swarm status")
+    status_parser.set_defaults(func=cmd_status)
 
-def cmd_compliance(args) -> None:
-    """Execute a proactive compliance rollout across the fleet."""
-    from scripts.compliance_sweep import roll_out_compliance
-    roll_out_compliance(standard=args.standard)
-
-def main() -> None:
-    # ...
     # ── compliance ──
     compliance_parser = subparsers.add_parser("compliance", help="Proactively roll out compliance standards")
     compliance_parser.add_argument("--standard", default="FSMA-204", help="Standard to roll out (FSMA-204, Finance)")
     compliance_parser.set_defaults(func=cmd_compliance)
+
     # ── sweep ──
     sweep_parser = subparsers.add_parser("sweep", help="Proactively sweep horizontal tech debt")
     sweep_parser.add_argument("--limit", type=int, default=5, help="Max issues to solve")
