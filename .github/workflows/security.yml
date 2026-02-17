@@ -142,7 +142,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt || true
-          pip install pytest httpx pytest-json-report pytest-asyncio
+          pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy psycopg2-binary
 
       - name: Run tenant isolation tests
         run: |

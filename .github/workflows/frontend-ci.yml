@@ -47,6 +47,8 @@ jobs:
           npm ci
 
       - name: Build production bundle
+        env:
+          REGENGINE_DEPLOY_MODE: static
         run: |
           cd frontend
           npm run build
