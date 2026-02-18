@@ -106,6 +106,15 @@
 - Golden sample test: `services/nlp/tests/test_fsma_extractor.py` using provided BOL PDF; assert TLC extraction `GTIN-14 + Lot-123` and presence of 7 KDEs.
 - Demo data seeder: `scripts/demo/seed_fsma_data.py` to create Farm → Packer → Distributor → Retailer chain with ~50 events.
 
+## Global Harmonization & Impact Analysis (Phase 29-30)
+- **Semantic Mapping** – Using `MappingEngine` (shared/graph/mapping_engine.py) to link FSMA 204 obligations to equivalent requirements in other jurisdictions (e.g., EMA, PMDA).
+- **Supply Chain Linking** – Using `TraceabilityLinker` (shared/graph/traceability_linker.py) to establish `GOVERNS` relationships between obligations and `TraceEvent`/`Lot` nodes.
+- **Impact Querying** – Sub-second identification of shipments impacted by specific regulatory updates.
+
+**New Linkage Metadata:**
+- Relationship: `(Obligation)-[:GOVERNS {link_type: 'keyword_match', confidence: float}]->(TraceEvent)`
+- Relationship: `(Obligation)-[:MAPPED_TO {justification: string}]->(Obligation)`
+
 ## Security & Logging
 - All service endpoints: require `X-RegEngine-API-Key` (use `require_api_key`).
 - Structured logging via `structlog` with `request_id`/`correlation_id`; avoid logging raw PII.
