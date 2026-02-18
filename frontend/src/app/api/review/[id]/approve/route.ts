@@ -5,7 +5,7 @@ const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ id: '_build' }];
+    return [{ id: 'approve_static' }];
 };
 
 export async function POST(

@@ -15,20 +15,20 @@ from kafka.errors import KafkaTimeoutError, TopicAlreadyExistsError
 from prometheus_client import Counter
 from structlog.contextvars import get_contextvars
 
-# Add parent directory to path for shared module import
+from pathlib import Path
+import sys
+
+# Standardized path discovery via shared utility
 try:
+    from shared.paths import ensure_shared_importable
+    ensure_shared_importable()
+except ImportError:
+    # Fallback if shared/paths not yet in sys.path
     _parent_dir = str(Path(__file__).resolve().parents[3])
-    sys.path.insert(0, _parent_dir)
-    # Clear any cached 'shared' module from graph/compliance services to avoid shadowing
-    _stale = [k for k in sys.modules if k == 'shared' or k.startswith('shared.')]
-    for k in _stale:
-        # Only clear if it points to a different shared package (not repo root)
-        mod = sys.modules[k]
-        mod_file = getattr(mod, '__file__', '') or ''
-        if mod_file and _parent_dir not in mod_file:
-            del sys.modules[k]
-except IndexError:
-    pass
+    if _parent_dir not in sys.path:
+        sys.path.insert(0, _parent_dir)
+    from shared.paths import ensure_shared_importable
+    ensure_shared_importable()
 
 from shared.schemas import (
     ExtractionPayload,
@@ -228,34 +228,16 @@ def _convert_entities_to_extraction(
 
 
 def _load_schema() -> Draft7Validator:
-    # Try to find data-schemas by walking up the tree
-    current = Path(__file__).resolve()
-    repo_root = None
+    """Load JSON schema using standardized project path discovery."""
+    from shared.paths import project_root
     
-    # Check up to 4 levels up
-    for i in range(5):
-        candidate = current.parents[i] if i < len(current.parents) else None
-        if candidate and (candidate / "data-schemas").exists():
-            repo_root = candidate
-            break
-            
-    if not repo_root:
-        # Fallback for Docker specific path if not found in parents
-        if Path("/app/data-schemas").exists():
-            repo_root = Path("/app")
-        else:
-             # Last ditch: try to use the hardcoded relative path that works locally
-             # even if exists() check failed for some reason (symlinks?)
-             try:
-                 repo_root = Path(__file__).resolve().parents[3]
-             except IndexError:
-                 pass
-
-    if not repo_root or not (repo_root / "data-schemas").exists():
-        logger.error("schema_not_found", search_start=str(current))
-        raise FileNotFoundError("Could not find data-schemas/events/nlp.extracted.schema.json")
-
+    repo_root = project_root()
     schema_path = repo_root / "data-schemas" / "events" / "nlp.extracted.schema.json"
+    
+    if not schema_path.exists():
+        logger.error("schema_not_found", path=str(schema_path))
+        raise FileNotFoundError(f"Could not find schema at {schema_path}")
+
     schema = json.loads(schema_path.read_text())
     return Draft7Validator(schema)
 
@@ -379,21 +361,19 @@ def stop_consumer() -> None:
     _shutdown_event.set()
 
 
+from shared.observability import setup_standalone_observability
+tracer = setup_standalone_observability("nlp-consumer")
+
 def run_consumer() -> None:
-    # Ensure all output topics exist (including DLQ)
+    # Ensure topics exist
     _ensure_topic(TOPIC_GRAPH_UPDATE)
     _ensure_topic(TOPIC_NEEDS_REVIEW)
     _ensure_topic(TOPIC_DLQ)
-    _ensure_topic(settings.topic_out)  # Keep legacy topic for backward compat
 
     def safe_json_deserializer(v):
         try:
-            if v is None:
-                return None
-            return json.loads(v.decode("utf-8"))
+            return json.loads(v.decode("utf-8")) if v else None
         except Exception:
-            # Return raw bytes or None to indicate failure, but don't crash loop
-            # We'll handle None/bytes in the loop
             return None
 
     consumer = KafkaConsumer(
@@ -408,28 +388,20 @@ def run_consumer() -> None:
         bootstrap_servers=settings.kafka_bootstrap,
         key_serializer=lambda v: v.encode("utf-8"),
         value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
-        linger_ms=50,
-        retries=5,
         acks="all",
     )
 
-    validator = _load_schema()
-
     while not _shutdown_event.is_set():
-        message = consumer.poll(timeout_ms=500)
-        if not message:
+        messages = consumer.poll(timeout_ms=500)
+        if not messages:
             continue
-        for records in message.values():
+        for records in messages.values():
             for record in records:
-                evt = record.value
-                if evt is None:
-                    continue
-                doc_id = (
-                    evt.get("document_id")
-                    or evt.get("doc_id")
-                    or evt.get("doc_hash")
-                    or evt.get("content_hash")
-                )
+                with tracer.start_as_current_span("process_message", attributes={"kafka.topic": record.topic}):
+                    evt = record.value
+                    if not evt: continue
+                    
+                    doc_id = evt.get("document_id") or evt.get("doc_id") or "unknown"
                 doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
                 norm_path = evt.get("normalized_s3_path")
                 inline_text = evt.get("text_clean")

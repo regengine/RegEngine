@@ -1,9 +1,15 @@
-"""
-Database session management.
-"""
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+import sys
+from pathlib import Path
+
+# Standardized path discovery
+_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.database import create_shared_engine, get_session_factory, get_db_generator
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 # Database URL from environment
 DATABASE_URL = os.getenv(
@@ -11,27 +17,10 @@ DATABASE_URL = os.getenv(
     "postgresql://regengine:regengine@localhost:5432/regengine_admin"
 )
 
-# Production-ready connection pool configuration
-# Added as part of Platform Audit remediation (P0 priority)
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,                    # Validate connections before use (detect stale connections)
-    pool_size=10,                          # Base connection pool size
-    max_overflow=20,                       # Allow burst to 30 total connections
-    pool_recycle=3600,                     # Recycle connections after 1 hour
-    connect_args={
-        'connect_timeout': 10,             # Connection timeout (seconds)
-        'options': '-c statement_timeout=30000'  # PostgreSQL query timeout (30s)
-    },
-    echo_pool=os.getenv("DEBUG", "false").lower() == "true"  # Pool debugging in dev
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Use shared engine and session factory
+engine = create_shared_engine(DATABASE_URL)
+SessionLocal = get_session_factory(engine)
 
-
-def get_db() -> Session:
-    """Get database session for dependency injection."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def get_db():
+    """Get database session for dependency injection using shared resilience logic."""
+    yield from get_db_generator(SessionLocal)

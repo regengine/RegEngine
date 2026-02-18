@@ -6,7 +6,7 @@ const { Client } = pg;
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ id: '_build' }];
+    return [{ id: 'item_static' }];
 };
 
 // Mock data as fallback

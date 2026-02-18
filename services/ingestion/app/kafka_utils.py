@@ -26,30 +26,23 @@ def get_schema_registry_client() -> SchemaRegistryClient:
     return SchemaRegistryClient({'url': 'http://schema-registry:8081'}) # Make configurable
 
 def load_schema(schema_name: str) -> str:
-    """Load Avro schema from the schemas directory.
+    """Load Avro schema using standardized project path discovery."""
+    from shared.paths import project_root, ensure_shared_importable
+    ensure_shared_importable()
+    
+    repo_root = project_root()
+    # Support both Docker (/app/schemas) and local development
+    schema_paths = [
+        repo_root / "schemas" / schema_name,
+        Path("/app/schemas") / schema_name
+    ]
 
-    Supports both Docker container paths and local development paths.
-    """
-    # Try Docker container path first (schemas are copied to /app/schemas during build)
-    schema_dir = os.getenv("SCHEMA_DIR", "/app/schemas")
-    docker_path = os.path.join(schema_dir, schema_name)
+    for path in schema_paths:
+        if path.exists():
+            return path.read_text()
 
-    if os.path.exists(docker_path):
-        with open(docker_path, "r") as f:
-            return f.read()
-
-    # Fallback to relative path for local development
-    local_path = os.path.join(os.path.dirname(__file__), "../../../schemas", schema_name)
-    if os.path.exists(local_path):
-        with open(local_path, "r") as f:
-            return f.read()
-
-    # Log both attempted paths for debugging
-    logger.error("schema_file_not_found",
-                 schema_name=schema_name,
-                 docker_path=docker_path,
-                 local_path=local_path)
-    raise FileNotFoundError(f"Schema file not found: {schema_name}. Tried: {docker_path}, {local_path}")
+    logger.error("schema_file_not_found", schema_name=schema_name, attempted=[str(p) for p in schema_paths])
+    raise FileNotFoundError(f"Schema file not found: {schema_name}")
 
 @lru_cache(maxsize=1)
 def get_producer() -> SerializingProducer:

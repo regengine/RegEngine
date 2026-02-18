@@ -147,7 +147,7 @@ class PrimordialUnityCore:
 class SwarmTuner:
     """
     Adaptive engine for tuning swarm performance.
-    v9: Primordial Unity & The Absolute Beyond.
+    v9: Primordial Unity.
     """
     def __init__(self):
         self.performance_history = []

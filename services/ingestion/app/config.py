@@ -44,6 +44,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return cached settings instance."""
     settings = Settings()
-    if not settings.api_key and settings.auth_test_bypass_token:
-        settings.api_key = settings.auth_test_bypass_token
     return settings

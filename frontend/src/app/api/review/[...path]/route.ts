@@ -9,7 +9,7 @@ const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
     // Return a dummy path to satisfy Next.js static export requirement for catch-all
-    return [{ path: ['_build'] }];
+    return [{ path: ['static_proxy'] }];
 };
 
 export async function GET(

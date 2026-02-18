@@ -5,7 +5,7 @@ const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ path: ['_build'] }];
+    return [{ path: ['static_proxy'] }];
 };
 
 export async function GET(

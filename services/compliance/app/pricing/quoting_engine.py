@@ -30,7 +30,7 @@ class SubscriptionTier(Enum):
 class QuotingEngine:
     """
     Orchestrates the commercial value calculation for RegEngine services.
-    v7: The Final Weave - Primordial Value Realization.
+    v7: Primordial Value Realization.
     """
     
     BASE_AUDIT_FEE = Decimal("5000.00")

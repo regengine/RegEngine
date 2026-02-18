@@ -5,7 +5,7 @@ const OPPORTunity_URL = process.env.OPPORTUNITY_SERVICE_URL || 'http://localhost
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ path: ['_build'] }];
+    return [{ path: ['static_proxy'] }];
 };
 
 export async function GET(
