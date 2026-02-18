@@ -12,6 +12,7 @@ from jsonschema import Draft7Validator, ValidationError
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaTimeoutError, TopicAlreadyExistsError
+from opentelemetry import trace, propagate
 from prometheus_client import Counter
 from structlog.contextvars import get_contextvars
 
@@ -48,12 +49,12 @@ logger = structlog.get_logger("nlp-consumer")
 
 try:
     MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
+    POISON_PILL_COUNTER = Counter("nlp_poison_pill_total", "Count of malformed Kafka messages")
 except ValueError:
     # Metric already registered (happens during test re-imports)
     from prometheus_client import REGISTRY
     MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("nlp_messages_total")
-    if MESSAGES_COUNTER is None:
-        MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("nlp_messages")
+    POISON_PILL_COUNTER = REGISTRY._names_to_collectors.get("nlp_poison_pill_total")
 
 _shutdown_event = threading.Event()
 
@@ -333,23 +334,35 @@ def _route_extraction(
 
 def _send_to_dlq(
     producer: KafkaProducer,
-    event: dict,
+    event: any,
     error: str,
     doc_id: str | None = None,
+    headers: list | None = None,
 ) -> None:
     """Send a failed message to the dead letter queue for manual inspection."""
     try:
-        dlq_payload = {
-            "original_event": event,
-            "error": error,
-            "failed_at": _now_iso(),
-            "source_topic": settings.topic_in if settings else "ingest.normalized",
-            "retry_count": _retry_counts.get(doc_id or "unknown", 0),
-        }
+        # If event is already a dict, use it. If it's bytes (poison pill), wrap it.
+        if isinstance(event, dict):
+            payload = {
+                "original_event": event,
+                "error": error,
+                "failed_at": _now_iso(),
+                "source_topic": settings.topic_in if settings else "ingest.normalized",
+                "retry_count": _retry_counts.get(doc_id or "unknown", 0),
+            }
+        else:
+            payload = {
+                "raw_payload": str(event),
+                "error": error,
+                "failed_at": _now_iso(),
+                "is_poison_pill": True,
+            }
+
         producer.send(
             TOPIC_DLQ,
             key=doc_id or "unknown",
-            value=dlq_payload,
+            value=payload,
+            headers=headers or [],
         )
         producer.flush(timeout=1.0)
         logger.info("message_sent_to_dlq", document_id=doc_id, error=error)
@@ -370,23 +383,17 @@ def run_consumer() -> None:
     _ensure_topic(TOPIC_NEEDS_REVIEW)
     _ensure_topic(TOPIC_DLQ)
 
-    def safe_json_deserializer(v):
-        try:
-            return json.loads(v.decode("utf-8")) if v else None
-        except Exception:
-            return None
-
+    # Use raw consumer to handle poison pills manually
     consumer = KafkaConsumer(
         settings.topic_in,
         bootstrap_servers=settings.kafka_bootstrap,
-        value_deserializer=safe_json_deserializer,
         enable_auto_commit=False,
         auto_offset_reset="earliest",
         group_id="nlp-service",
     )
     producer = KafkaProducer(
         bootstrap_servers=settings.kafka_bootstrap,
-        key_serializer=lambda v: v.encode("utf-8"),
+        key_serializer=lambda v: v.encode("utf-8") if isinstance(v, str) else v,
         value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
         acks="all",
     )
@@ -397,11 +404,31 @@ def run_consumer() -> None:
             continue
         for records in messages.values():
             for record in records:
-                with tracer.start_as_current_span("process_message", attributes={"kafka.topic": record.topic}):
-                    evt = record.value
+                # Standardized Trace Injection
+                with tracer.start_as_current_span(
+                    "nlp.process_message", 
+                    attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
+                ) as span:
+                    # Capture trace context for DLQ headers
+                    headers = []
+                    propagate.inject(headers)
+                    # Convert OTel list of tuples to Kafka list of tuples (headers)
+                    kafka_headers = [(k, v.encode("utf-8")) for k, v in headers]
+
+                    raw_value = record.value
+                    try:
+                        evt = json.loads(raw_value.decode("utf-8")) if raw_value else {}
+                    except Exception as exc:
+                        logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
+                        POISON_PILL_COUNTER.inc()
+                        _send_to_dlq(producer, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
+                        consumer.commit()
+                        continue
+
                     if not evt: continue
                     
                     doc_id = evt.get("document_id") or evt.get("doc_id") or "unknown"
+                    span.set_attribute("document_id", doc_id)
                 doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
                 norm_path = evt.get("normalized_s3_path")
                 inline_text = evt.get("text_clean")
@@ -490,7 +517,7 @@ def run_consumer() -> None:
                             retries=_retry_counts[retry_key],
                             error=str(exc),
                         )
-                        _send_to_dlq(producer, evt, str(exc), doc_id)
+                        _send_to_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
                         _retry_counts.pop(retry_key, None)
                         consumer.commit()  # Don't re-process
                     else:
@@ -507,7 +534,7 @@ def run_consumer() -> None:
                         document_id=doc_id,
                         error=str(exc),
                     )
-                    _send_to_dlq(producer, evt, str(exc), doc_id)
+                    _send_to_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
                     consumer.commit()  # Don't re-process unexpected failures
                     MESSAGES_COUNTER.labels(status="error").inc()
     consumer.close()

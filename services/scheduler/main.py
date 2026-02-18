@@ -38,10 +38,10 @@ from app.metrics import metrics
 from app.models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
 from app.notifications import WebhookNotifier
 from app.scrapers import (
-    BaseScraper,
     FDAImportAlertsScraper,
     FDARecallsScraper,
     FDAWarningLettersScraper,
+    InternalDiscoveryScraper,
 )
 from app.state import StateManager
 from app.fda_fsma_transformer import get_fsma_transformer
@@ -114,6 +114,14 @@ class SchedulerService:
                 circuit_registry.get_or_create(
                     "fda_recalls",
                     failure_threshold=self.settings.circuit_breaker_failure_threshold,
+                    recovery_timeout=self.settings.circuit_breaker_recovery_timeout,
+                ),
+            ),
+            SourceType.REGULATORY_DISCOVERY: (
+                InternalDiscoveryScraper(),
+                circuit_registry.get_or_create(
+                    "regulatory_discovery",
+                    failure_threshold=3,
                     recovery_timeout=self.settings.circuit_breaker_recovery_timeout,
                 ),
             ),
@@ -373,6 +381,20 @@ class SchedulerService:
             "job_scheduled",
             job_id="fda_recalls",
             interval_minutes=settings.fda_recalls_interval,
+        )
+
+        # Regulatory Discovery - daily (Nightly)
+        self.scheduler.add_job(
+            lambda: self.run_scraper(SourceType.REGULATORY_DISCOVERY),
+            trigger=IntervalTrigger(minutes=settings.regulatory_discovery_interval),
+            id="regulatory_discovery",
+            name="Regulatory Discovery Bulk Sync",
+            replace_existing=True,
+        )
+        logger.info(
+            "job_scheduled",
+            job_id="regulatory_discovery",
+            interval_minutes=settings.regulatory_discovery_interval,
         )
 
         # State cleanup - daily

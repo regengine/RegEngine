@@ -21,7 +21,23 @@ router = APIRouter()
 # Versioned API router for graph endpoints
 v1_router = APIRouter(prefix="/v1", tags=["v1"])
 
+from .routers import arbitrage, labels, lineage_traversal, regulations
+from .routers.fsma import trace_router, science_router, recall_router, metrics_router
+
 logger = structlog.get_logger("graph-api")
+
+v1_router.include_router(regulations.router, prefix="/regulations", tags=["regulations"])
+v1_router.include_router(arbitrage.router, prefix="/arbitrage", tags=["arbitrage"])
+v1_router.include_router(labels.router, prefix="/labels", tags=["labels"])
+v1_router.include_router(lineage_traversal.router, prefix="/lineage", tags=["lineage"])
+
+# FSMA sub-routers
+v1_router.include_router(trace_router, prefix="/fsma/traceability", tags=["fsma-traceability"])
+v1_router.include_router(science_router, prefix="/fsma/science", tags=["fsma-science"])
+v1_router.include_router(recall_router, prefix="/fsma/recall", tags=["fsma-recall"])
+v1_router.include_router(metrics_router, prefix="/fsma/metrics", tags=["fsma-metrics"])
+
+router.include_router(v1_router)
 
 
 @router.get("/health")
