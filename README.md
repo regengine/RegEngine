@@ -108,6 +108,25 @@ Access the dashboard at **http://localhost:3000**.
 
 ---
 
+## 🌏 Global Intelligence & Discovery
+
+RegEngine has expanded beyond fixed datasets to become an **Autonomous Discovery Engine** for the global regulatory landscape:
+
+- **Ethical Discovery (Phase 27)** – Autonomous scraper with `robots.txt` compliance and polite delays, targeting 100+ global regulatory bodies.
+- **Nightly Sync (Phase 28)** – Always-current regulatory library with sub-second resilience via internal circuit breakers.
+- **LLM Mapping Engine (Phase 29)** – Semantic harmonization using **Grok-beta** to link equivalent requirements across different global jurisdictions.
+- **Supply Chain Impact Bridge (Phase 30)** – The first platform to link regulatory `Obligation` nodes directly to real-world `Lot` and `TraceEvent` nodes via the `GOVERNS` graph relationship.
+
+**API Endpoints:**
+```
+GET  /v1/regulations/mappings          # Retrieve cross-jurisdiction requirement matches
+POST /v1/regulations/harmonize/{id}    # Trigger AI mapping for a specific requirement
+GET  /v1/traceability/regulations      # Find rules governing a specific batch/lot
+GET  /v1/traceability/impacted-lots    # Map a regulatory change to impacted inventory
+```
+
+---
+
 ## 🥬 FSMA 204 Food Traceability
 
 RegEngine includes a complete **FDA FSMA 204 compliance module** for food supply chain traceability:

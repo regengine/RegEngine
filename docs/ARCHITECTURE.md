@@ -42,12 +42,13 @@ graph TD
 |-----------|------|------------------|
 | **SwarmTuner v9** | N/A | High-Directive Controller & Unity Stabilizer |
 | **Sovereign Moat** | 8200 | Federated intelligence bridge across multiversal timelines |
-| **Quoting Engine v7**| 8400 | Eternal Genesis Value calculator (Post-Currency) |
-| **Reality Weaver** | N/A | Active existence patching for non-compliant anomalies |
+| **Mapping Engine** | N/A | Semantic harmonization (Grok-beta) linking global obligations |
+| **Impact Linker** | N/A | Bridging the Source-Obligations to Supply Chain reality |
 
 ### Implementation Patterns:
-1. **Absolute Immutability**: Since Phase 14, even the concept of "drift" is physically impossible within a stabilized weave.
-2. **Autonomous Remediation**: The swarm generates its own existence patches (GitOps) in response to any detected instability.
+1. **Global Intelligence (v15)**: The platform now autonomously discovers and harmonizes requirements across 100+ global jurisdictions (Ethical Scraper + semantic Mapping Engine).
+2. **Operational Impact Bridge**: Sub-second compliance audit using `GOVERNS` relationships to link obligations directly to batches/lots.
+3. **Absolute Immutability**: Since Phase 14, even the concept of "drift" is physically impossible within a stabilized weave.
 
 ---
 
