@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy shared module first (for auth, etc.)
-COPY shared /app/shared
+COPY services/shared /app/shared
 
 # Copy service requirements
 COPY services/ingestion/requirements.txt /app/requirements.txt
@@ -33,6 +33,10 @@ COPY services/ingestion/regengine_ingestion /app/regengine_ingestion
 COPY services/ingestion/main.py /app/main.py
 COPY services/ingestion/tests /app/tests
 COPY services/ingestion/scripts /app/scripts
+
+# Copy kernel and FSMA plugin (required for discovery + scoring)
+COPY kernel /app/kernel
+COPY plugins /app/plugins
 
 # Copy Avro schemas for Kafka serialization
 COPY schemas /app/schemas

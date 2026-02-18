@@ -532,4 +532,50 @@ def extract_company_prefix(gtin: str) -> str:
     """
     normalized = normalize_gtin(gtin, 14)
     # Skip indicator digit, take next 7 digits as approximate prefix
-    return normalized[1:8]
+# =============================================================================
+# FSMA 204 TRACEABILITY PLAN VALIDATION
+# =============================================================================
+
+def validate_traceability_plan_completeness(plan_data: dict) -> dict:
+    """
+    Validate if a Traceability Plan meets FSMA 204 requirements (21 CFR 1.1315).
+    
+    A plan must include:
+    1. Description of procedures used to maintain records.
+    2. Description of procedures used to identify foods on the FTL.
+    3. Description of how traceability lot codes (TLC) are assigned.
+    4. A point of contact for the plan.
+    """
+    required_sections = {
+        "record_procedures": "Description of record-keeping procedures",
+        "ftl_identification_procedures": "Procedures for identifying FTL foods",
+        "tlc_assignment_method": "Method for assigning Traceability Lot Codes",
+        "point_of_contact": "Point of contact information"
+    }
+    
+    findings = []
+    missing_sections = []
+    
+    for key, description in required_sections.items():
+        if key not in plan_data or not plan_data[key]:
+            missing_sections.append(description)
+            findings.append({
+                "requirement": key,
+                "status": "MISSING",
+                "impact": "CRITICAL" if key != "point_of_contact" else "HIGH"
+            })
+        else:
+            findings.append({
+                "requirement": key,
+                "status": "PRESENT",
+                "length": len(str(plan_data[key]))
+            })
+            
+    is_compliant = len(missing_sections) == 0
+    
+    return {
+        "is_compliant": is_compliant,
+        "missing_requirements": missing_sections,
+        "findings": findings,
+        "compliance_score": 100.0 if is_compliant else (1.0 - (len(missing_sections) / len(required_sections))) * 100.0
+    }

@@ -97,3 +97,17 @@ class FDAIngestRequest(BaseModel):
 
     vertical: str = Field(..., description="Regulatory vertical")
     max_documents: int = Field(default=10, ge=1, le=100)
+
+
+class DiscoveryQueueItem(BaseModel):
+    """Item in the manual discovery queue."""
+
+    body: str
+    url: str
+    index: int
+
+
+class BulkDiscoveryRequest(BaseModel):
+    """Request payload for bulk discovery operations."""
+
+    indices: List[int]

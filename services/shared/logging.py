@@ -41,7 +41,6 @@ def setup_logging():
         
     logging.basicConfig(
         format="%(message)s", 
-        stream=None, 
         level=level, 
         handlers=handlers
     )

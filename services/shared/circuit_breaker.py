@@ -166,10 +166,23 @@ class CircuitBreaker:
                     raise
             return sync_wrapper
 
-    def call(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-        """Execute a function with circuit breaker protection."""
-        wrapped = self(func)
-        return wrapped(*args, **kwargs)
+    async def call(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Execute a function with circuit breaker protection (supports sync and async)."""
+        self._total_calls += 1
+        self._check_state()
+        try:
+            if asyncio.iscoroutinefunction(func):
+                result = await func(*args, **kwargs)
+            else:
+                result = func(*args, **kwargs)
+                if asyncio.iscoroutine(result):
+                    result = await result
+            
+            self._record_success()
+            return result
+        except self.exceptions as exc:
+            self._record_failure(exc)
+            raise
 
     def reset(self) -> None:
         """Manually reset the circuit breaker to closed state."""

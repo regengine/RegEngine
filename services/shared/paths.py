@@ -59,8 +59,8 @@ def data_schemas_dir() -> Path:
 # ── sys.path helpers ──────────────────────────────────────────────
 
 def ensure_shared_importable() -> None:
-    """Add ``services/shared`` (and ``services/``) to ``sys.path`` if missing."""
-    for p in (str(shared_dir()), str(services_dir())):
+    """Add ``kernel``, ``services/shared`` (and ``services/``) to ``sys.path`` if missing."""
+    for p in (str(project_root()), str(shared_dir()), str(services_dir())):
         if p not in sys.path:
             sys.path.insert(0, p)
 

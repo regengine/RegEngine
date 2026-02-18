@@ -241,6 +241,36 @@ class APIClient {
     return data;
   }
 
+  // Discovery Queue (Phase 31)
+  async getDiscoveryQueue(): Promise<any[]> {
+    const { data } = await this.ingestionClient.get('/v1/ingest/discovery/queue');
+    return data;
+  }
+
+  async approveDiscovery(index: number): Promise<any> {
+    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/approve', null, {
+      params: { index }
+    });
+    return data;
+  }
+
+  async rejectDiscovery(index: number): Promise<any> {
+    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/reject', null, {
+      params: { index }
+    });
+    return data;
+  }
+
+  async bulkApproveDiscovery(indices: number[]): Promise<any> {
+    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/bulk-approve', { indices });
+    return data;
+  }
+
+  async bulkRejectDiscovery(indices: number[]): Promise<any> {
+    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/bulk-reject', { indices });
+    return data;
+  }
+
   // Opportunity API
   async getOpportunityHealth(): Promise<HealthCheckResponse> {
     const { data } = await this.opportunityClient.get('/health');

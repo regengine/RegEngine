@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 import structlog
 
 from ..neo4j_utils import Neo4jClient
+from shared.auth import require_api_key, APIKey
 
 logger = structlog.get_logger("graph-regulations")
 router = APIRouter()
@@ -15,7 +16,8 @@ router = APIRouter()
 async def list_regulations(
     jurisdiction: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100)
+    limit: int = Query(50, ge=1, le=100),
+    api_key: APIKey = Depends(require_api_key),
 ):
     """List all ingested regulations in the graph with optional filter."""
     async with Neo4jClient() as client:
@@ -41,7 +43,8 @@ async def list_regulations(
 async def get_regulation_sections(
     name: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500)
+    limit: int = Query(100, ge=1, le=500),
+    api_key: APIKey = Depends(require_api_key),
 ):
     """Retrieve all sections for a specific regulation."""
     async with Neo4jClient() as client:
@@ -61,7 +64,8 @@ async def get_regulation_sections(
 async def get_regulation_citations(
     name: str,
     skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500)
+    limit: int = Query(100, ge=1, le=500),
+    api_key: APIKey = Depends(require_api_key),
 ):
     """Retrieve all citations mentioned in a regulation."""
     async with Neo4jClient() as client:
@@ -79,7 +83,8 @@ async def get_regulation_citations(
 async def search_regulations(
     q: str = Query(..., min_length=2),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100)
+    limit: int = Query(50, ge=1, le=100),
+    api_key: APIKey = Depends(require_api_key),
 ):
     """Full-text search across all codified regulation sections."""
     async with Neo4jClient() as client:
@@ -112,7 +117,8 @@ async def get_requirement_mappings(
     obligation_id: Optional[str] = Query(None),
     regulation: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100)
+    limit: int = Query(50, ge=1, le=100),
+    api_key: APIKey = Depends(require_api_key),
 ):
     """Retrieve semantic mappings between requirements (cross-jurisdiction)."""
     async with Neo4jClient() as client:
@@ -144,9 +150,12 @@ async def get_requirement_mappings(
 
 
 @router.post("/harmonize/{obligation_id}")
-async def harmonize_requirement(obligation_id: str):
+async def harmonize_requirement(
+    obligation_id: str,
+    api_key: APIKey = Depends(require_api_key),
+):
     """Trigger LLM-based semantic mapping for a specific requirement."""
-    from shared.graph.mapping_engine import MappingEngine
+    from kernel.graph import MappingEngine
     from ..config import settings
     
     engine = MappingEngine(

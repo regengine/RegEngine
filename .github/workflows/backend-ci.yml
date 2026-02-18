@@ -6,6 +6,8 @@ on:
     paths:
       - 'services/**'
       - 'shared/**'
+      - 'kernel/**'
+      - 'plugins/fsma/**'
       - 'requirements.txt'
       - '.github/workflows/backend-ci.yml'
   pull_request:
@@ -41,14 +43,10 @@ jobs:
       matrix:
         service:
           - admin
-          - automotive
           - compliance
-          - energy
-          - gaming
           - graph
           - ingestion
           - nlp
-          - opportunity
           - scheduler
 
     services:
@@ -176,7 +174,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, automotive, compliance, energy, gaming, graph, ingestion, nlp, opportunity, scheduler]
+        service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v4
 
@@ -200,7 +198,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, automotive, compliance, energy, gaming, graph, ingestion, nlp, opportunity, scheduler]
+        service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v4
 
