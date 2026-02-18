@@ -72,6 +72,10 @@ class SchedulerSettings(BaseSettings):
         default=1440,
         description="Regulatory Discovery bulk sync interval in minutes (Nightly)",
     )
+    discovery_timeout_seconds: int = Field(
+        default=300,
+        description="Timeout for regulatory discovery requests",
+    )
 
     # Webhooks
     webhook_urls: str = Field(

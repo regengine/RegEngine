@@ -120,73 +120,78 @@ class DatabaseManager:
                 document.storage_key
             ))
     
-    def get_document(self, document_id: str) -> Optional[dict]:
+    def get_document(self, document_id: str, tenant_id: str) -> Optional[dict]:
         """
-        Retrieve document by ID.
-        
+        Retrieve document by ID, scoped to the calling tenant.
+
         Args:
             document_id: Document identifier
-            
+            tenant_id: Tenant identifier (required for isolation)
+
         Returns:
             Document dict or None
         """
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT * FROM ingestion.documents
-                WHERE id = %s
-            """, (document_id,))
+                WHERE id = %s AND tenant_id = %s
+            """, (document_id, tenant_id))
             return cur.fetchone()
 
-    def get_document_by_hash(self, content_sha256: str) -> Optional[dict]:
+    def get_document_by_hash(self, content_sha256: str, tenant_id: str) -> Optional[dict]:
         """
-        Retrieve document by content hash.
-        
+        Retrieve document by content hash, scoped to the calling tenant.
+
         Args:
             content_sha256: SHA-256 hash of document content
-            
+            tenant_id: Tenant identifier (required for isolation)
+
         Returns:
             Document dict or None
         """
         with self.conn.cursor() as cur:
             cur.execute("""
                 SELECT * FROM ingestion.documents
-                WHERE content_sha256 = %s
-            """, (content_sha256,))
+                WHERE content_sha256 = %s AND tenant_id = %s
+            """, (content_sha256, tenant_id))
             return cur.fetchone()
     
     def search_documents(
         self,
+        tenant_id: str,
         vertical: Optional[str] = None,
         source_type: Optional[str] = None,
         limit: int = 100,
         offset: int = 0
     ) -> List[dict]:
         """
-        Search documents with filters.
-        
+        Search documents with filters, scoped to the calling tenant.
+
         Args:
+            tenant_id: Tenant identifier (required for isolation)
             vertical: Filter by vertical
             source_type: Filter by source type
-            limit: Maximum results
+            limit: Maximum results (capped at 500)
             offset: Pagination offset
-            
+
         Returns:
             List of document dicts
         """
-        query = "SELECT * FROM ingestion.documents WHERE 1=1"
-        params = []
-        
+        limit = min(limit, 500)  # Hard cap — prevent full-table dumps
+        query = "SELECT * FROM ingestion.documents WHERE tenant_id = %s"
+        params = [tenant_id]
+
         if vertical:
             query += " AND vertical = %s"
             params.append(vertical)
-        
+
         if source_type:
             query += " AND source_type = %s"
             params.append(source_type)
-        
+
         query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
         params.extend([limit, offset])
-        
+
         with self.conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()

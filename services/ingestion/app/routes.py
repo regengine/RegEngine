@@ -13,16 +13,17 @@ import uuid
 from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, List
 from urllib.parse import urlparse
 
 import requests
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from confluent_kafka.admin import AdminClient
 from requests import Response
+import redis
 
 # Add shared module to path
 # In Docker: shared is at /app/shared/, service is at /app/
@@ -35,7 +36,7 @@ from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 
 from .config import get_settings
 from .kafka_utils import send
-from .models import IngestRequest, DirectIngestRequest, NormalizedDocument, NormalizedEvent
+from .models import IngestRequest, DirectIngestRequest, NormalizedDocument, NormalizedEvent, DiscoveryQueueItem
 from .normalization import normalize_document
 from .s3_utils import put_bytes, put_json
 from .scrapers.state_generic import StateRegistryScraper as GenericStateScraper
@@ -207,8 +208,9 @@ from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
 import tempfile
 import httpx
-from shared.graph.regulation_loader import RegulationLoader
-from shared.regulation_discovery import discovery, REGULATORY_BODIES
+from kernel.obligation.regulation_loader import RegulationLoader
+from kernel.discovery import discovery
+from plugins.fsma.sources import FSMA_SOURCES
 
 ADAPTORS: dict[str, AdaptorRegistryScraper] = {
     "nydfs": NYDFSScraper(),
@@ -360,23 +362,201 @@ async def get_ingestion_status(job_id: str):
     return response
 
 
-@router.post("/v1/ingest/all-regulations")
-async def ingest_all_regulations(background_tasks: BackgroundTasks):
-    """Trigger a bulk discovery and ingestion scan across all registered regulatory bodies."""
-    job_id = str(uuid.uuid4())
-    count = 0
-    for body, sources in REGULATORY_BODIES.items():
-        for source_type, url in sources.items():
-            if url and isinstance(url, str) and url.startswith("http"):
-                background_tasks.add_task(discovery.scrape, body, url)
-                count += 1
+@router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])
+async def get_discovery_queue():
+    """Retrieve all items in the manual discovery queue."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
     
-    logger.info("bulk_ingestion_triggered", job_id=job_id, sources=count)
+    # manual_upload_queue is a Redis list
+    items = r.lrange("manual_upload_queue", 0, -1)
+    results = []
+    for i, item in enumerate(items):
+        try:
+            val = item.decode("utf-8")
+            if ":" in val:
+                body, url = val.split(":", 1)
+                results.append(DiscoveryQueueItem(body=body, url=url, index=i))
+        except Exception:
+            continue
+    return results
+
+
+@router.post("/v1/ingest/discovery/approve")
+async def approve_discovery(
+    index: int,
+    background_tasks: BackgroundTasks,
+    api_key: APIKey = Depends(require_api_key)
+):
+    """Approve a discovery item and trigger a scrape."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    
+    # Get the item at the specific index
+    item = r.lindex("manual_upload_queue", index)
+    if not item:
+        raise HTTPException(status_code=404, detail="Discovery item not found at index")
+    
+    val = item.decode("utf-8")
+    body, url = val.split(":", 1)
+    
+    # Remove it from the queue (using a safer approach would be better, but LREM with count 1 is standard)
+    # Note: index-based deletion is tricky in Redis if the list changes. 
+    # For now, we'll use LREM which might delete a different item if values are identical.
+    r.lrem("manual_upload_queue", 1, item)
+    
+    # Trigger the scrape
+    background_tasks.add_task(discovery.scrape, body, url)
+    
+    logger.info("discovery_approved", body=body, url=url, tenant_id=api_key.tenant_id)
+    return {"status": "approved", "body": body, "url": url}
+
+
+@router.post("/v1/ingest/discovery/reject")
+async def reject_discovery(
+    index: int,
+    api_key: APIKey = Depends(require_api_key)
+):
+    """Reject and remove a discovery item from the queue."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    
+    item = r.lindex("manual_upload_queue", index)
+    if not item:
+        raise HTTPException(status_code=404, detail="Discovery item not found at index")
+    
+    r.lrem("manual_upload_queue", 1, item)
+    logger.info("discovery_rejected", index=index, tenant_id=api_key.tenant_id)
+    return {"status": "rejected", "index": index}
+
+
+@router.post("/v1/ingest/discovery/bulk-approve")
+async def bulk_approve_discovery(
+    payload: BulkDiscoveryRequest,
+    background_tasks: BackgroundTasks,
+    api_key: APIKey = Depends(require_api_key)
+):
+    """Approve multiple discovery items and trigger scrapes."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    
+    approved = []
+    # Sort indices descending to avoid shifting if we were using LPOP/LREM by index
+    # Since we LREM by value, indices change as we go.
+    # BEST: Get all values first.
+    items_to_process = []
+    for index in payload.indices:
+        item = r.lindex("manual_upload_queue", index)
+        if item:
+            items_to_process.append(item)
+            
+    for item in items_to_process:
+        val = item.decode("utf-8")
+        body, url = val.split(":", 1)
+        r.lrem("manual_upload_queue", 1, item)
+        background_tasks.add_task(discovery.scrape, body, url)
+        approved.append({"body": body, "url": url})
+            
+    logger.info("bulk_discovery_approved", count=len(approved), tenant_id=api_key.tenant_id)
+    return {"status": "approved", "count": len(approved), "items": approved}
+
+
+@router.post("/v1/ingest/discovery/bulk-reject")
+async def bulk_reject_discovery(
+    payload: BulkDiscoveryRequest,
+    api_key: APIKey = Depends(require_api_key)
+):
+    """Reject and remove multiple discovery items from the queue."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    
+    items_to_remove = []
+    for index in payload.indices:
+        item = r.lindex("manual_upload_queue", index)
+        if item:
+            items_to_remove.append(item)
+            
+    rejected_count = 0
+    for item in items_to_remove:
+        r.lrem("manual_upload_queue", 1, item)
+        rejected_count += 1
+            
+    logger.info("bulk_discovery_rejected", count=rejected_count, tenant_id=api_key.tenant_id)
+    return {"status": "rejected", "count": rejected_count}
+
+
+@router.post("/v1/ingest/all-regulations")
+async def ingest_all_regulations(
+    background_tasks: BackgroundTasks,
+    api_key: APIKey = Depends(require_api_key),
+):
+    """
+    Trigger an FDA-scoped, idempotent regulatory ingestion run.
+
+    Sources are limited to the curated FSMA_SOURCES list (eCFR Title 21,
+    Federal Register FSMA notices, FDA guidance pages). Each source is
+    deduplicated via ETag + SHA-256 content hash — unchanged documents
+    are skipped without re-parsing.
+    """
+    job_id = str(uuid.uuid4())
+    started_at = time.time()
+
+    logger.info(
+        "fsma_ingestion_triggered",
+        job_id=job_id,
+        sources=len(FSMA_SOURCES),
+        tenant_id=api_key.tenant_id,
+    )
+
+    # Run all sources concurrently (each scrape has its own 2 s polite delay)
+    tasks = [
+        discovery.scrape(
+            body=source["name"],
+            source_url=source["url"],
+            source_type=source["type"],
+            jurisdiction=source["jurisdiction"],
+        )
+        for source in FSMA_SOURCES
+    ]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Tally structured summary
+    summary: dict[str, int] = {
+        "sources_attempted": len(FSMA_SOURCES),
+        "queued_manual": 0,
+        "unchanged": 0,
+        "ingested": 0,
+        "failed": 0,
+    }
+    for r in results:
+        if isinstance(r, Exception):
+            summary["failed"] += 1
+        else:
+            status = r.get("status", "failed")
+            if status == "queued_manual":
+                summary["queued_manual"] += 1
+            elif status == "unchanged":
+                summary["unchanged"] += 1
+            elif status == "ingested":
+                summary["ingested"] += 1
+            else:
+                summary["failed"] += 1
+
+    duration_ms = int((time.time() - started_at) * 1000)
+
+    logger.info(
+        "fsma_ingestion_complete",
+        job_id=job_id,
+        duration_ms=duration_ms,
+        **summary,
+    )
+
     return {
         "job_id": job_id,
-        "status": "queued_full_scan",
-        "bodies": len(REGULATORY_BODIES),
-        "total_sources": count
+        "status": "complete",
+        "jurisdiction": "FDA",
+        "duration_ms": duration_ms,
+        **summary,
     }
 
 

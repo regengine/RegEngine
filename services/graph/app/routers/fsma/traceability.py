@@ -170,7 +170,7 @@ async def get_governing_regulations_endpoint(
     api_key=Depends(require_api_key),
 ):
     """Find all regulations governing a specific Lot."""
-    from shared.graph.traceability_linker import TraceabilityLinker
+    from kernel.graph_traceability import TraceabilityLinker
     from ...config import settings
     
     linker = TraceabilityLinker(
@@ -195,7 +195,7 @@ async def get_impacted_lots_endpoint(
     api_key=Depends(require_api_key),
 ):
     """Find all lots impacted by a specific regulatory obligation."""
-    from shared.graph.traceability_linker import TraceabilityLinker
+    from kernel.graph_traceability import TraceabilityLinker
     from ...config import settings
     
     linker = TraceabilityLinker(
@@ -220,7 +220,7 @@ async def link_obligation_endpoint(
     api_key=Depends(require_api_key),
 ):
     """Trigger automated linking of a regulation to supply chain events."""
-    from shared.graph.traceability_linker import TraceabilityLinker
+    from kernel.graph_traceability import TraceabilityLinker
     from ...config import settings
     
     linker = TraceabilityLinker(

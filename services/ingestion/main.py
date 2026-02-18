@@ -45,7 +45,7 @@ app = FastAPI(
 # Production Hardening Middleware (Phase 18)
 add_security(app)
 add_rate_limiting(app)
-add_observability(app)
+add_observability(app, service_name="ingestion-service")
 
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
@@ -58,7 +58,7 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-app.include_router(ingestion_router, prefix="/api/v1")
+app.include_router(ingestion_router)
 
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router

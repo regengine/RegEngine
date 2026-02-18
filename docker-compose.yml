@@ -164,8 +164,9 @@ services:
       # CORS origins for frontend access (comma-separated)
       CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
     volumes:
-      - ./services/ingestion/app:/app/services/ingestion/app
-      - ./services/shared:/app/services/shared
+      - ./services/ingestion/app:/app/app
+      - ./services/ingestion/main.py:/app/main.py
+      - ./services/shared:/app/shared
     deploy:
       resources:
         limits:
