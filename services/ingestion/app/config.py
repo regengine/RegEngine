@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
 
+    # Neo4j Graph Database
+    neo4j_uri: str = Field(default="bolt://neo4j:7687", alias="NEO4J_URI")
+    neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
+    neo4j_password: str = Field(default="password", alias="NEO4J_PASSWORD")
+
+    # AI & Cache
+    groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")
+    redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

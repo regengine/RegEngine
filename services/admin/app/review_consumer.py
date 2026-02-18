@@ -14,12 +14,17 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 if TYPE_CHECKING:
     from .metrics import HallucinationTracker
 
-import structlog
-from kafka import KafkaConsumer, KafkaProducer
-from kafka.admin import KafkaAdminClient, NewTopic
-from kafka.errors import TopicAlreadyExistsError
+from opentelemetry import trace, propagate
 from prometheus_client import Counter, Histogram
 from tenacity import retry, stop_after_attempt, wait_exponential
+
+try:
+    REVIEW_MESSAGES_COUNTER = Counter("review_messages_total", "Review queue messages processed", ["status"])
+    POISON_PILL_COUNTER = Counter("review_poison_pill_total", "Count of malformed review messages")
+except ValueError:
+    from prometheus_client import REGISTRY
+    REVIEW_MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("review_messages_total")
+    POISON_PILL_COUNTER = REGISTRY._names_to_collectors.get("review_poison_pill_total")
 
 # Add shared module to path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -86,16 +91,24 @@ def _get_dlq_producer(bootstrap: str) -> KafkaProducer:
     return _dlq_producer
 
 
-def _send_to_dlq(bootstrap: str, event: Dict[str, Any], error: str) -> None:
+def _send_to_dlq(bootstrap: str, event: any, error: str, headers: list | None = None) -> None:
     """Send failed message to dead letter queue."""
     try:
         producer = _get_dlq_producer(bootstrap)
-        dlq_payload = {
-            "original_event": event,
-            "error": error,
-            "failed_at": datetime.now(timezone.utc).isoformat(),
-        }
-        producer.send(TOPIC_DLQ, value=dlq_payload)
+        if isinstance(event, dict):
+            dlq_payload = {
+                "original_event": event,
+                "error": error,
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        else:
+            dlq_payload = {
+                "raw_payload": str(event),
+                "error": error,
+                "failed_at": datetime.now(timezone.utc).isoformat(),
+                "is_poison_pill": True,
+            }
+        producer.send(TOPIC_DLQ, value=dlq_payload, headers=headers or [])
         producer.flush(timeout=5.0)
         logger.info("message_sent_to_dlq", error=error)
     except Exception as exc:  # pragma: no cover - infra dependent
@@ -179,7 +192,6 @@ def run_consumer() -> None:
     consumer = KafkaConsumer(
         TOPIC_NEEDS_REVIEW,
         bootstrap_servers=bootstrap,
-        value_deserializer=lambda v: json.loads(v.decode("utf-8")),
         enable_auto_commit=False,
         auto_offset_reset="earliest",
         group_id="admin-review-consumer",
@@ -197,9 +209,16 @@ def run_consumer() -> None:
 
         for records in messages.values():
             for record in records:
-                with tracer.start_as_current_span("admin_review.process_message") as span:
-                    span.set_attribute("message.offset", record.offset)
-                    _process_record(record, tracker, bootstrap)
+                with tracer.start_as_current_span(
+                    "admin_review.process_message",
+                    attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
+                ) as span:
+                    # Propagate trace context to DLQ headers
+                    headers = []
+                    propagate.inject(headers)
+                    kafka_headers = [(k, v.encode("utf-8")) for k, v in headers]
+
+                    _process_record(record, tracker, bootstrap, kafka_headers)
 
         consumer.commit()  # commit once per poll batch
 
@@ -208,10 +227,20 @@ def run_consumer() -> None:
     logger.info("review_consumer_stopped")
 
 
-def _process_record(record, tracker: "HallucinationTracker", bootstrap: str) -> None:
+def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kafka_headers: list) -> None:
     """Process a single Kafka record."""
-    evt = record.value
+    raw_value = record.value
     start_time = time.perf_counter()
+    
+    # 1. Handle Deserialization (Poison Pill Detection)
+    try:
+        evt = json.loads(raw_value.decode("utf-8")) if raw_value else {}
+    except Exception as exc:
+        logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
+        POISON_PILL_COUNTER.inc()
+        _send_to_dlq(bootstrap, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
+        return
+
     try:
         result = _extract_and_record(evt, tracker)
         elapsed = time.perf_counter() - start_time
@@ -229,7 +258,7 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str) -> 
         REVIEW_LATENCY_HISTOGRAM.labels(outcome="error").observe(elapsed)
         logger.exception("review_consumer_error", error=str(exc), event=evt)
         REVIEW_MESSAGES_COUNTER.labels(status="error").inc()
-        _send_to_dlq(bootstrap, evt, str(exc))
+        _send_to_dlq(bootstrap, evt, str(exc), headers=kafka_headers)
 
 
 def _extract_and_record(evt: Dict[str, Any], tracker) -> Dict[str, Any]:

@@ -11,7 +11,15 @@ processors:
     limit_percentage: 80
     spike_limit_percentage: 25
   probabilistic_sampler:
-    sampling_percentage: 20 # Keep 20% of traces globally
+    sampling_percentage: 20
+  filter/dlq:
+    error_mode: ignore
+    logs:
+      include:
+        match_type: regexp
+        record_attributes:
+          - key: message
+            value: ".*(sent_to_dlq|poison_pill).*"
 
 exporters:
   jaeger:
@@ -22,6 +30,8 @@ exporters:
     endpoint: 0.0.0.0:8889
   logging:
     loglevel: info
+  logging/dlq:
+    loglevel: warn
 
 service:
   pipelines:
@@ -35,5 +45,5 @@ service:
       exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [logging]
+      processors: [memory_limiter, filter/dlq, batch]
+      exporters: [logging, logging/dlq]

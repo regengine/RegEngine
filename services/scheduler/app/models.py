@@ -18,6 +18,7 @@ class SourceType(str, Enum):
     FDA_RECALL = "fda_recall"
     STATE_REGISTRY = "state_registry"
     FEDERAL_REGISTER = "federal_register"
+    REGULATORY_DISCOVERY = "regulatory_discovery"
 
 
 class EnforcementSeverity(str, Enum):

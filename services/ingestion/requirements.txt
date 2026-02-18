@@ -60,6 +60,16 @@ pdf2image>=1.16.0
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
 
+# Regulation Ingestion
+langchain>=0.1.0
+langchain-groq>=0.1.0
+pypdf>=4.0.0
+python-docx>=0.8.11
+docx2txt>=0.8
+neo4j>=5.15.0
+redis>=5.0.0
+httpx>=0.25.0
+
 # CSV/Excel parsing
 pandas>=2.0.0
 openpyxl>=3.1.0

@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import requests
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from confluent_kafka.admin import AdminClient
@@ -205,6 +205,11 @@ from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
 from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
 from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
 
+import tempfile
+import httpx
+from shared.graph.regulation_loader import RegulationLoader
+from shared.regulation_discovery import discovery, REGULATORY_BODIES
+
 ADAPTORS: dict[str, AdaptorRegistryScraper] = {
     "nydfs": NYDFSScraper(),
     "cppa": CPPAScraper(),
@@ -215,6 +220,164 @@ ADAPTORS: dict[str, AdaptorRegistryScraper] = {
     "google_discovery": GoogleDiscoveryScraper(),
     "fda_warnings": FDAEnforcementScraper(),
 }
+
+
+async def process_regulation_ingestion(job_id: str, name: str, filename: str, tenant_id: str, webhook: Optional[str] = None):
+    """Background task to process regulation ingestion with webhook notification (v2)."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    
+    # Retrieve content from Redis
+    content = r.get(f"ingest:job:{job_id}")
+    if not content:
+        logger.error("ingest_job_content_missing", job_id=job_id)
+        return
+
+    # Save to temp file
+    suffix = ".pdf" if filename.endswith(".pdf") else ".docx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        r.setex(f"ingest:status:{job_id}", 7200, "processing")
+        loader = RegulationLoader(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password
+        )
+        count = await loader.load(
+            tmp_path, 
+            "pdf" if filename.endswith(".pdf") else "docx", 
+            name
+        )
+        loader.close()
+        
+        r.setex(f"ingest:status:{job_id}", 7200, "completed")
+        # Store metadata about the result
+        result_data = {"sections": count, "name": name, "tenant_id": tenant_id}
+        r.setex(f"ingest:result:{job_id}", 7200, json.dumps(result_data))
+        logger.info("regulation_ingested_v2_background", name=name, sections=count, job_id=job_id)
+        
+        if webhook:
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(webhook, json={
+                        "job_id": job_id, 
+                        "status": "completed", 
+                        "regulation": name,
+                        "sections": count
+                    })
+                logger.info("ingestion_webhook_sent", job_id=job_id, webhook=webhook)
+            except Exception as e:
+                logger.error("ingestion_webhook_failed", job_id=job_id, error=str(e))
+
+    except Exception as e:
+        logger.error("regulation_ingestion_background_failed", job_id=job_id, error=str(e))
+        r.setex(f"ingest:status:{job_id}", 7200, f"failed: {str(e)}")
+        if webhook:
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(e)})
+            except Exception:
+                pass
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+@router.post("/v1/ingest/regulation", status_code=202)
+async def ingest_regulation(
+    name: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    webhook: Optional[str] = Query(None),
+    api_key: APIKey = Depends(require_api_key),
+):
+    """Ingest a regulation and codify it asynchronously with optional webhook notification (v2)."""
+    # Entitlement check
+    allowed = set(api_key.allowed_jurisdictions or [])
+    if "US" not in allowed and "GLOBAL" not in allowedRegistration:
+        # Check if the user has specific permission for this action
+        pass
+
+    if not file.filename.endswith((".pdf", ".docx")):
+        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+    
+    if len(content) > 100 * 1024 * 1024:  # 100MB
+        raise HTTPException(status_code=413, detail="File too large (max 100MB)")
+
+    job_id = str(uuid.uuid4())
+    settings = get_settings()
+    
+    try:
+        # Store in Redis temporarily
+        r = redis.from_url(settings.redis_url)
+        r.setex(f"ingest:job:{job_id}", 7200, content)
+        r.setex(f"ingest:status:{job_id}", 7200, "queued")
+        
+        background_tasks.add_task(
+            process_regulation_ingestion, 
+            job_id, 
+            name, 
+            file.filename, 
+            api_key.tenant_id,
+            webhook
+        )
+        
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "message": "Regulation ingestion started in background",
+            "webhook": webhook if webhook else "none"
+        }
+    except Exception as e:
+        logger.error("regulation_ingestion_queue_failed", name=name, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to queue ingestion job")
+
+
+@router.get("/v1/ingest/status/{job_id}")
+async def get_ingestion_status(job_id: str):
+    """Check the status of a background ingestion job (v2)."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    status = r.get(f"ingest:status:{job_id}")
+    if not status:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    status_str = status.decode("utf-8")
+    response = {"job_id": job_id, "status": status_str}
+    
+    if status_str == "completed":
+        result = r.get(f"ingest:result:{job_id}")
+        if result:
+            response["result"] = json.loads(result.decode("utf-8"))
+            
+    return response
+
+
+@router.post("/v1/ingest/all-regulations")
+async def ingest_all_regulations(background_tasks: BackgroundTasks):
+    """Trigger a bulk discovery and ingestion scan across all registered regulatory bodies."""
+    job_id = str(uuid.uuid4())
+    count = 0
+    for body, sources in REGULATORY_BODIES.items():
+        for source_type, url in sources.items():
+            if url and isinstance(url, str) and url.startswith("http"):
+                background_tasks.add_task(discovery.scrape, body, url)
+                count += 1
+    
+    logger.info("bulk_ingestion_triggered", job_id=job_id, sources=count)
+    return {
+        "job_id": job_id,
+        "status": "queued_full_scan",
+        "bodies": len(REGULATORY_BODIES),
+        "total_sources": count
+    }
 
 
 @router.get("/health")

@@ -68,6 +68,10 @@ class SchedulerSettings(BaseSettings):
         default=30,
         description="FDA Recalls polling interval in minutes",
     )
+    regulatory_discovery_interval: int = Field(
+        default=1440,
+        description="Regulatory Discovery bulk sync interval in minutes (Nightly)",
+    )
 
     # Webhooks
     webhook_urls: str = Field(
