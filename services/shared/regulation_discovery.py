@@ -18,42 +18,42 @@ logger = structlog.get_logger("regulation-discovery")
 # Registry of regulatory bodies and their official sources
 REGULATORY_BODIES = {
     # Americas
-    "FDA": {"api": "https://api.fda.gov", "bulk": "https://www.accessdata.fda.gov", "rss": "https://www.fda.gov/rss"},
-    "Health-Canada": {"api": "https://api.canada.ca", "bulk": "https://health-products.canada.ca/api"},
-    "ANVISA": {"source": "https://www.gov.br/anvisa", "region": "Brazil"},
-    "COFEPRIS": {"source": "https://www.gob.mx/cofepris", "region": "Mexico"},
-    "INVIMA": {"source": "https://www.invima.gov.co", "region": "Colombia"},
+    "FDA": {"api": "https://api.fda.gov", "bulk": "https://www.accessdata.fda.gov", "rss": "https://www.fda.gov/rss", "scope": "Food,Medical"},
+    "Health-Canada": {"api": "https://api.canada.ca", "bulk": "https://health-products.canada.ca/api", "scope": "Health"},
+    "ANVISA": {"source": "https://www.gov.br/anvisa", "region": "Brazil", "scope": "Medical"},
+    "COFEPRIS": {"source": "https://www.gob.mx/cofepris", "region": "Mexico", "scope": "Medical"},
+    "INVIMA": {"source": "https://www.invima.gov.co", "region": "Colombia", "scope": "Medical"},
     
     # Europe
-    "EMA": {"api": "https://api.ema.europa.eu", "bulk": "https://www.ema.europa.eu/en/documents"},
-    "MHRA": {"api": "https://api.mhra.gov.uk", "bulk": "https://www.gov.uk/government/organisations/mhra"},
-    "BfArM": {"source": "https://www.bfarm.de", "region": "Germany"},
-    "ANSM": {"source": "https://ansm.sante.fr", "region": "France"},
-    "AIFA": {"source": "https://www.aifa.gov.it", "region": "Italy"},
-    "AEMPS": {"source": "https://www.aemps.gob.es", "region": "Spain"},
-    "ECHA": {"api": "https://echa.europa.eu/api", "bulk": "https://echa.europa.eu/data"},
+    "EMA": {"api": "https://api.ema.europa.eu", "bulk": "https://www.ema.europa.eu/en/documents", "scope": "Medical"},
+    "MHRA": {"api": "https://api.mhra.gov.uk", "bulk": "https://www.gov.uk/government/organisations/mhra", "scope": "Medical"},
+    "BfArM": {"source": "https://www.bfarm.de", "region": "Germany", "scope": "Medical"},
+    "ANSM": {"source": "https://ansm.sante.fr", "region": "France", "scope": "Medical"},
+    "AIFA": {"source": "https://www.aifa.gov.it", "region": "Italy", "scope": "Medical"},
+    "AEMPS": {"source": "https://www.aemps.gob.es", "region": "Spain", "scope": "Medical"},
+    "ECHA": {"api": "https://echa.europa.eu/api", "bulk": "https://echa.europa.eu/data", "scope": "Chemical"},
     
     # Asia & Oceania
-    "PMDA": {"api": "https://www.pmda.go.jp/api", "bulk": "https://www.pmda.go.jp/english/data"},
-    "NMPA": {"source": "https://www.nmpa.gov.cn", "region": "China"},
-    "HAS": {"source": "https://www.hsa.gov.sg", "region": "Singapore"},
-    "TGA": {"api": "https://api.tga.gov.au", "bulk": "https://www.tga.gov.au/data-feeds"},
-    "MFDS": {"source": "https://www.mfds.go.kr", "region": "South Korea"},
-    "CDSCO": {"source": "https://cdsco.gov.in", "region": "India"},
-    "Medsafe": {"source": "https://www.medsafe.govt.nz", "region": "New Zealand"},
+    "PMDA": {"api": "https://www.pmda.go.jp/api", "bulk": "https://www.pmda.go.jp/english/data", "scope": "Medical"},
+    "NMPA": {"source": "https://www.nmpa.gov.cn", "region": "China", "scope": "Medical"},
+    "HAS": {"source": "https://www.hsa.gov.sg", "region": "Singapore", "scope": "Medical"},
+    "TGA": {"api": "https://api.tga.gov.au", "bulk": "https://www.tga.gov.au/data-feeds", "scope": "Medical"},
+    "MFDS": {"source": "https://www.mfds.go.kr", "region": "South Korea", "scope": "Medical"},
+    "CDSCO": {"source": "https://cdsco.gov.in", "region": "India", "scope": "Medical"},
+    "Medsafe": {"source": "https://www.medsafe.govt.nz", "region": "New Zealand", "scope": "Medical"},
     
     # Africa & Middle East
-    "SAHPRA": {"source": "https://www.sahpra.org.za", "region": "South Africa"},
-    "SFDA": {"api": "https://api.sfda.gov.sa", "bulk": "https://www.sfda.gov.sa/en/data"},
-    "EFDA": {"source": "http://www.efda.gov.et", "region": "Ethiopia"},
-    "MOH-Israel": {"source": "https://www.health.gov.il", "region": "Israel"},
+    "SAHPRA": {"source": "https://www.sahpra.org.za", "region": "South Africa", "scope": "Medical"},
+    "SFDA": {"api": "https://api.sfda.gov.sa", "bulk": "https://www.sfda.gov.sa/en/data", "scope": "Food,Medical"},
+    "EFDA": {"source": "http://www.efda.gov.et", "region": "Ethiopia", "scope": "Medical"},
+    "MOH-Israel": {"source": "https://www.health.gov.il", "region": "Israel", "scope": "Health"},
     
     # Global/Standard Bodies
-    "WHO": {"bulk": "https://www.who.int/publications", "rss": "https://www.who.int/rss"},
-    "ISO": {"source": "https://www.iso.org", "standard": True},
-    "ICH": {"source": "https://www.ich.org", "standard": True},
-    "HIPAA": {"source": "https://www.hhs.gov/hipaa", "manual": True},
-    "NERC": {"api": "https://www.nerc.com", "bulk": "https://www.nerc.com/pa/Stand"},
+    "WHO": {"bulk": "https://www.who.int/publications", "rss": "https://www.who.int/rss", "scope": "Global Health"},
+    "ISO": {"source": "https://www.iso.org", "standard": True, "scope": "Standards"},
+    "ICH": {"source": "https://www.ich.org", "standard": True, "scope": "Medical"},
+    "HIPAA": {"source": "https://www.hhs.gov/hipaa", "manual": True, "scope": "Privacy"},
+    "NERC": {"api": "https://www.nerc.com", "bulk": "https://www.nerc.com/pa/Stand", "scope": "Energy"},
     
     # Adding placeholders for 70+ more to reach 100+ target
     **{f"Body_{i}": {"manual": True} for i in range(1, 75)}
