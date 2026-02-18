@@ -1,108 +1,71 @@
-"""Shared observability module for RegEngine.
-
-Provides conditional OpenTelemetry initialization. If the OTel SDK is not
-installed, all functions degrade to no-ops so services can boot without
-the tracing dependency.
-"""
-
+from opentelemetry import trace, baggage, _logs as logs
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from fastapi import FastAPI
 import os
-from typing import Any, Optional
 
-import structlog
-
-logger = structlog.get_logger("observability")
-
-# Conditional OTel import — services work fine without it
-_OTEL_AVAILABLE = False
-try:
-    from opentelemetry import trace
-    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-
-    _OTEL_AVAILABLE = True
-except ImportError:
-    trace = None  # type: ignore[assignment]
-    logger.info("opentelemetry_not_installed", hint="pip install opentelemetry-sdk to enable tracing")
-
-
-def setup_telemetry(service_name: str, app: Optional[Any] = None) -> None:
-    """
-    Setup OpenTelemetry for a microservice.
-
-    If the OTel SDK is not installed, this function logs a warning and returns
-    immediately. Services continue to operate without tracing.
-
-    Args:
-        service_name: Name of the service for tracing
-        app: Optional FastAPI app for auto-instrumentation
-    """
-    if not _OTEL_AVAILABLE:
-        logger.warning(
-            "telemetry_skipped",
-            service_name=service_name,
-            reason="opentelemetry not installed",
-        )
-        return
-
-    # Check if telemetry is explicitly disabled
-    if os.getenv("OTEL_ENABLED", "true").lower() in ("false", "0", "no"):
-        logger.info("telemetry_disabled_by_env", service_name=service_name)
-        return
-
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
-
-    # Configure resource
-    resource = Resource(attributes={
-        SERVICE_NAME: service_name
+def get_shared_resource(service_name: str):
+    """Standardized resource with K8s Downward API metadata."""
+    return Resource.create({
+        "service.name": service_name,
+        "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
+        "deployment.environment": os.getenv("ENV", "dev"),
+        "service.instance.id": os.getenv("HOSTNAME", "unknown"),
+        "k8s.pod.name": os.getenv("K8S_POD_NAME"),
+        "k8s.namespace.name": os.getenv("K8S_NAMESPACE"),
+        "k8s.container.name": os.getenv("K8S_CONTAINER_NAME"),
     })
 
-    # Set up tracer provider
-    provider = TracerProvider(resource=resource)
+def add_observability(app: FastAPI, service_name: str):
+    """Unified entry point for FastAPI OTel (Tracing + Baggage + Logs)."""
+    resource = get_shared_resource(service_name)
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
 
-    # Configure OTLP exporter
+    # 1. Tracing
+    sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
+    trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
+    trace.set_tracer_provider(trace_provider)
+    trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+    trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+
+    # 2. Logging (OTLP)
+    log_provider = LoggerProvider(resource=resource)
+    logs.set_logger_provider(log_provider)
+    log_exporter = OTLPLogExporter(endpoint=endpoint)
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+
+    # Enable W3C Baggage propagation globally
     try:
-        exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
-        processor = BatchSpanProcessor(exporter)
-        provider.add_span_processor(processor)
+        from opentelemetry import baggage
+        baggage.set_baggage_propagator()
+    except Exception:
+        pass
 
-        # Set global tracer provider
-        trace.set_tracer_provider(provider)
+    FastAPIInstrumentor.instrument_app(app)
 
-        logger.info("telemetry_initialized", service_name=service_name, endpoint=otlp_endpoint)
+def setup_standalone_observability(service_name: str):
+    """Setup OTel for workers and consumers (no FastAPI app)."""
+    resource = get_shared_resource(service_name)
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
 
-        # Instrument FastAPI if provided
-        if app:
-            FastAPIInstrumentor.instrument_app(app)
-            logger.info("fastapi_instrumented", service_name=service_name)
+    # 1. Tracing
+    sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
+    trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
+    trace.set_tracer_provider(trace_provider)
+    trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+    trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
 
-    except Exception as e:
-        logger.warning("telemetry_initialization_failed", error=str(e))
-
-
-def get_tracer(name: str) -> Any:
-    """Get a tracer instance for the given name.
-
-    Returns a no-op tracer if OpenTelemetry is not available.
-    """
-    if not _OTEL_AVAILABLE or trace is None:
-        # Return a minimal no-op object
-        class _NoOpTracer:
-            def start_span(self, *args: Any, **kwargs: Any) -> "_NoOpSpan":
-                return _NoOpSpan()
-
-        class _NoOpSpan:
-            def __enter__(self) -> "_NoOpSpan":
-                return self
-
-            def __exit__(self, *args: Any) -> None:
-                pass
-
-            def set_attribute(self, *args: Any) -> None:
-                pass
-
-        return _NoOpTracer()
-
-    return trace.get_tracer(name)
+    # 2. Logging (OTLP)
+    log_provider = LoggerProvider(resource=resource)
+    logs.set_logger_provider(log_provider)
+    log_exporter = OTLPLogExporter(endpoint=endpoint)
+    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+    
+    return trace.get_tracer(service_name)

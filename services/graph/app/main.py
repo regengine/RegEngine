@@ -1,97 +1,72 @@
-"""
-FastAPI Application Entry Point for Graph Service
-"""
-
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
 import sys
 from pathlib import Path
 
-# Add shared utilities
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(_SERVICES_DIR))
-from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+# Standardized path discovery
+# _SERVICES_DIR should be 'services/'
+_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
 
-from .routes import router, v1_router
-from .fsma_routes import fsma_router
-from .routers.arbitrage import arbitrage_router
-from .routers.lineage_traversal import router as lineage_router
+# _GRAPH_DIR should be 'services/graph/'
+_GRAPH_DIR = Path(__file__).resolve().parent.parent
+if str(_GRAPH_DIR) not in sys.path:
+    sys.path.insert(0, str(_GRAPH_DIR))
 
-logger = structlog.get_logger("graph-api")
+# Ensure shared utilities are importable
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+
+# Production Hardening (Phase 18)
+from shared.logging import setup_logging
+from shared.middleware.security import add_security
+from shared.rate_limit import add_rate_limiting
+from shared.observability import add_observability
+
+# Initialize standardized logging
+logger = setup_logging()
+
+# Local imports (using absolute-style imports from 'app' package inside graph service)
+from app.routes import router as graph_router
+from app.config import settings
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("graph_service_startup")
+    yield
+    # Shutdown
+    logger.info("graph_service_shutdown")
 
 app = FastAPI(
     title="Graph Service",
-    description="Neo4j-backed regulatory knowledge graph",
+    description="Knowledge graph and fact linkage service",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
+# Production Hardening Middleware (Phase 18)
+add_security(app)
+add_rate_limiting(app)
+add_observability(app)
 
-# CORS Helpers
-def get_allowed_origins():
-    import os
-    origins = os.getenv("CORS_ORIGINS", "*")
-    return origins.split(",") if "," in origins else [origins]
-
-def should_allow_credentials():
-    return True
-
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=get_allowed_origins(),
-    allow_credentials=should_allow_credentials(),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
-
-# Per-tenant rate limiting (Sprint 16)
-from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-# Mount routers
-app.include_router(router, tags=["health"])  # Health/metrics at root
-app.include_router(v1_router, tags=["v1"])  # General v1 endpoints
-app.include_router(fsma_router, prefix="/fsma", tags=["fsma"])  # FSMA-specific
-app.include_router(arbitrage_router, tags=["arbitrage"])  # Arbitrage detection
-app.include_router(lineage_router, tags=["lineage"])  # Fact version history
+app.include_router(graph_router, prefix="/api/v1")
 
+# Standardized Health & Readiness (Phase 17)
+from shared.health import HealthCheck, install_health_router
 
-@app.on_event("startup")
-async def startup_event():
-    """Application startup tasks"""
-    logger.info("graph_service_starting", version="1.0.0")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown tasks"""
-    logger.info("graph_service_shutting_down")
-
-
-# Root endpoint
-@app.get("/")
-async def root():
-    """Service information"""
-    return {
-        "service": "RegEngine Graph Service",
-        "version": "1.0.0",
-        "status": "operational",
-        "endpoints": {
-            "health": "/health",
-            "metrics": "/metrics",
-            "docs": "/docs",
-            "arbitrage": "/graph/arbitrage?framework_from=X&framework_to=Y",
-            "gaps": "/graph/gaps?current_framework=X&target_framework=Y",
-            "relationships": "/graph/frameworks/{id}/relationships",
-            "frameworks": "/graph/frameworks",
-            "fsma": "/fsma/*",
-        },
-    }
+health = HealthCheck(service_name="graph-service")
+install_health_router(app, service_name="graph-service", health_check=health)

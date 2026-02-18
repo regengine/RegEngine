@@ -1,88 +1,71 @@
-"""
-Ingestion Service - FastAPI Application Entry Point
-
-This module creates the FastAPI application and configures:
-- CORS for frontend access
-- Health check endpoint
-- API routes from routes.py
-"""
-
-from __future__ import annotations
-
-import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import sys
 from pathlib import Path
 
-# Centralised path resolution
-_srv = str(Path(__file__).resolve().parent.parent)
-if _srv not in sys.path:
-    sys.path.insert(0, _srv)
+# Standardized path discovery
+_SERVICES_DIR = Path(__file__).resolve().parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+# Ensure shared utilities are importable
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 
-from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
-from shared.observability import setup_telemetry
-from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+# Production Hardening (Phase 18)
+from shared.logging import setup_logging
+from shared.middleware.security import add_security
+from shared.rate_limit import add_rate_limiting
+from shared.observability import add_observability
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import structlog
+# Initialize standardized logging
+logger = setup_logging()
 
-from app.routes import router
+# Local imports (using absolute-style imports from app package)
+from app.config import get_settings
+settings = get_settings()
+from app.routes import router as ingestion_router
 
-logger = structlog.get_logger("ingestion")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("ingestion_service_startup")
+    yield
+    # Shutdown
+    logger.info("ingestion_service_shutdown")
 
-# Create FastAPI app
 app = FastAPI(
-    title="RegEngine Ingestion Service",
-    description="Document ingestion and normalization service for RegEngine",
+    title="Ingestion Service",
+    description="Regulatory document ingestion and processing",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
-# Setup OpenTelemetry
-setup_telemetry("ingestion-service", app)
+# Production Hardening Middleware (Phase 18)
+add_security(app)
+add_rate_limiting(app)
+add_observability(app)
 
-# Add tenant isolation middleware
+from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
-
-# Configure CORS for frontend access
-# In development, allow localhost:3000
-# In production, this should be restricted to your domain
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
-)
 
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-# Include the API routes
-app.include_router(router)
+app.include_router(ingestion_router, prefix="/api/v1")
 
-# Health check
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "service": "ingestion-service", "version": "1.0.0"}
+# Standardized Health & Readiness (Phase 17)
+from shared.health import HealthCheck, install_health_router
 
-@app.get("/ready")
-async def readiness():
-    return {"status": "ready", "service": "ingestion-service"}
+health = HealthCheck(service_name="ingestion-service")
+install_health_router(app, service_name="ingestion-service", health_check=health)
 
-# Startup event
-@app.on_event("startup")
-async def startup():
-    logger.info("ingestion_service_starting", cors_origins=cors_origins)
-
-# Shutdown event
-@app.on_event("shutdown") 
-async def shutdown():
-    logger.info("ingestion_service_shutting_down")
+@app.get("/")
+async def root():
+    return {"message": "Ingestion Service Operational"}

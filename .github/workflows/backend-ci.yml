@@ -210,7 +210,7 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t regengine-${{ matrix.service }}:test \
-            -f services/${{ matrix.service }}/Dockerfile .
+            -f services/${{ matrix.service }}/Dockerfile services/${{ matrix.service }}
 
       - name: Verify image starts
         run: |

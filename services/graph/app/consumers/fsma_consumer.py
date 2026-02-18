@@ -60,17 +60,17 @@ def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -
     except Exception as e:
         logger.critical("dlq_emission_failed", error=str(e))
 
-# Add parent directory to path for shared module import
-# Robustly find project root by looking for 'shared' directory
-current_path = Path(__file__).resolve()
-project_root = current_path.parent
-while not (project_root / "shared").exists():
-    if project_root == project_root.parent:
-        # Fallback to brittle method if 'shared' not found (container edge case)
-        project_root = current_path.parents[4]
-        break
-    project_root = project_root.parent
-sys.path.insert(0, str(project_root))
+# Standardized path discovery via shared utility
+try:
+    from shared.paths import ensure_shared_importable
+    ensure_shared_importable()
+except ImportError:
+    # Fallback if shared/paths not yet in sys.path
+    _parent_dir = str(Path(__file__).resolve().parents[3])
+    if _parent_dir not in sys.path:
+        sys.path.insert(0, _parent_dir)
+    from shared.paths import ensure_shared_importable
+    ensure_shared_importable()
 
 from services.graph.app.config import settings
 from services.graph.app.fsma_audit import log_extraction
@@ -151,12 +151,13 @@ def stop_consumer() -> None:
 
 
 def _load_schema_str() -> str:
-    """Load Avro schema from file."""
+    """Load Avro schema from file using standardized discovery."""
+    from shared.paths import project_root
     try:
-        schema_path = Path(__file__).resolve().parents[4] / "schemas" / "fsma_trace_event.avsc"
+        schema_path = project_root() / "schemas" / "fsma_trace_event.avsc"
         return schema_path.read_text()
     except Exception as e:
-        logger.warning("schema_file_load_error", error=str(e), info="Falling back to string")
+        logger.warning("schema_file_load_error", error=str(e), info="Falling back to minimal string")
         # Fallback minimal schema if file missing - primarily for testing without file
         return """
         {

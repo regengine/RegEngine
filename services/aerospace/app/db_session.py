@@ -1,32 +1,26 @@
-"""
-Database session management for Aerospace service.
-"""
+import os
+import sys
+from pathlib import Path
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator
+# Standardized path discovery
+_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
 
-from .config import settings
+from shared.database import create_shared_engine, get_session_factory, get_db_generator
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
-# Create engine with connection pooling
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-    connect_args={'connect_timeout': 10}
+# Database URL from environment
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://regengine:regengine@postgres:5432/regengine_admin"
 )
 
-# Session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Use shared engine and session factory
+engine = create_shared_engine(DATABASE_URL)
+SessionLocal = get_session_factory(engine)
 
-
-def get_db() -> Generator[Session, None, None]:
-    """
-    Dependency for FastAPI to get database session.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def get_db():
+    """Get database session for dependency injection using shared resilience logic."""
+    yield from get_db_generator(SessionLocal)

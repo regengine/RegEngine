@@ -6,7 +6,7 @@ const { Client } = pg;
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ tenantId: '_build', snapshotId: '_build' }];
+    return [{ tenantId: 'tenant_static', snapshotId: 'verify_static' }];
 };
 
 interface Props {

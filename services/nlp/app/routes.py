@@ -1,7 +1,9 @@
+import structlog
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+logger = structlog.get_logger("nlp.test")
 router = APIRouter()
 
 

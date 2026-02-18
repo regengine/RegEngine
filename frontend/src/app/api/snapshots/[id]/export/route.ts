@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ id: '_build' }];
+    return [{ id: 'export_static' }];
 };
 
 // Mock export data

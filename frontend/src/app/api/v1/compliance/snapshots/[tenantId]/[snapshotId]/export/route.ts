@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // Required for static export
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
-    return [{ tenantId: '_build', snapshotId: '_build' }];
+    return [{ tenantId: 'tenant_static', snapshotId: 'export_static' }];
 };
 
 interface Props {

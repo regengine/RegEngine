@@ -22,7 +22,10 @@ from prometheus_client import Counter, Histogram
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Add shared module to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+
+from shared.observability import setup_standalone_observability
+tracer = setup_standalone_observability("admin-review-consumer")
 
 from .config import get_settings
 from .metrics import get_hallucination_tracker
@@ -194,7 +197,9 @@ def run_consumer() -> None:
 
         for records in messages.values():
             for record in records:
-                _process_record(record, tracker, bootstrap)
+                with tracer.start_as_current_span("admin_review.process_message") as span:
+                    span.set_attribute("message.offset", record.offset)
+                    _process_record(record, tracker, bootstrap)
 
         consumer.commit()  # commit once per poll batch
 

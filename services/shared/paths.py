@@ -50,11 +50,17 @@ def shared_dir() -> Path:
     return project_root() / "services" / "shared"
 
 
+@lru_cache(maxsize=1)
+def data_schemas_dir() -> Path:
+    """Return the ``data-schemas/`` directory at project root."""
+    return project_root() / "data-schemas"
+
+
 # ── sys.path helpers ──────────────────────────────────────────────
 
 def ensure_shared_importable() -> None:
     """Add ``services/shared`` (and ``services/``) to ``sys.path`` if missing."""
-    for p in (str(shared_dir()), str(services_dir()), str(project_root())):
+    for p in (str(shared_dir()), str(services_dir())):
         if p not in sys.path:
             sys.path.insert(0, p)
 
