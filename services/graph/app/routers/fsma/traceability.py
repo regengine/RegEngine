@@ -163,3 +163,76 @@ async def lot_timeline_endpoint(
     except Exception as e:
         logger.exception("timeline_error", tlc=tlc, error=str(e))
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+@router.get("/traceability/regulations")
+async def get_governing_regulations_endpoint(
+    lot_tlc: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    api_key=Depends(require_api_key),
+):
+    """Find all regulations governing a specific Lot."""
+    from shared.graph.traceability_linker import TraceabilityLinker
+    from ...config import settings
+    
+    linker = TraceabilityLinker(
+        uri=settings.neo4j_uri,
+        user=settings.neo4j_user,
+        password=settings.neo4j_password
+    )
+    try:
+        regulations = await linker.get_governing_regulations(lot_tlc, str(tenant_id))
+        await linker.close()
+        return {"lot_tlc": lot_tlc, "regulations": regulations}
+    except Exception as e:
+        await linker.close()
+        logger.error("get_governing_regulations_failed", lot_tlc=lot_tlc, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/traceability/impacted-lots")
+async def get_impacted_lots_endpoint(
+    obligation_id: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    api_key=Depends(require_api_key),
+):
+    """Find all lots impacted by a specific regulatory obligation."""
+    from shared.graph.traceability_linker import TraceabilityLinker
+    from ...config import settings
+    
+    linker = TraceabilityLinker(
+        uri=settings.neo4j_uri,
+        user=settings.neo4j_user,
+        password=settings.neo4j_password
+    )
+    try:
+        lots = await linker.get_impacted_lots(obligation_id, str(tenant_id))
+        await linker.close()
+        return {"obligation_id": obligation_id, "impacted_lots": lots}
+    except Exception as e:
+        await linker.close()
+        logger.error("get_impacted_lots_failed", obligation_id=obligation_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/traceability/link/{obligation_id}")
+async def link_obligation_endpoint(
+    obligation_id: str,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    api_key=Depends(require_api_key),
+):
+    """Trigger automated linking of a regulation to supply chain events."""
+    from shared.graph.traceability_linker import TraceabilityLinker
+    from ...config import settings
+    
+    linker = TraceabilityLinker(
+        uri=settings.neo4j_uri,
+        user=settings.neo4j_user,
+        password=settings.neo4j_password
+    )
+    try:
+        links = await linker.link_obligation_to_traceability(obligation_id, str(tenant_id))
+        await linker.close()
+        return {"status": "linked", "links_created": len(links), "links": links}
+    except Exception as e:
+        await linker.close()
+        logger.error("link_obligation_failed", obligation_id=obligation_id, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
