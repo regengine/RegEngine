@@ -79,7 +79,25 @@ const MOCK_ALERTS_BY_TENANT: Record<string, MockAlert[]> = {
         },
     ],
     // Driscoll's - Berries supplier
-    '00000000-0000-0000-0000-000000000004': [],
+    '00000000-0000-0000-0000-000000000004': [
+        {
+            id: 'alert-003',
+            title: 'KDE Data Gap: Missing Harvest Date for Strawberries (LOT-2026-Q2)',
+            summary: 'Several strawberry lots are missing required Key Data Elements (harvest date, farm ID) for FSMA 204 §1.1455 compliance. Corrective action needed before next FDA inspection window.',
+            severity: 'MEDIUM',
+            severity_emoji: '🔔',
+            countdown_seconds: hoursToSeconds(72),
+            countdown_display: '72h 0m',
+            is_expired: false,
+            status: 'ACTIVE',
+            required_actions: [
+                { action: 'Audit LOT-2026-Q2 records for missing harvest dates', completed: false },
+                { action: 'Contact Watsonville Farms to supply missing farm IDs', completed: false },
+                { action: 'Update KDE records in RegEngine before inspection window', completed: false },
+            ],
+            created_at: new Date().toISOString(),
+        },
+    ],
     // Default / System
     '00000000-0000-0000-0000-000000000001': [],
 };
@@ -91,6 +109,7 @@ function getMockStatus(tenantId: string) {
 
     const criticalCount = alerts.filter(a => a.severity === 'CRITICAL').length;
     const highCount = alerts.filter(a => a.severity === 'HIGH').length;
+    const mediumCount = alerts.filter(a => a.severity === 'MEDIUM').length;
     const totalActive = alerts.length;
 
     let status: 'COMPLIANT' | 'AT_RISK' | 'NON_COMPLIANT';
@@ -98,13 +117,20 @@ function getMockStatus(tenantId: string) {
     let statusLabel: string;
 
     if (criticalCount > 0) {
+        // RED — active FDA recall / class I issue
         status = 'NON_COMPLIANT';
         statusEmoji = '🚨';
         statusLabel = 'Non-Compliant';
-    } else if (highCount > 0 || totalActive > 0) {
+    } else if (highCount > 0) {
+        // ORANGE — supplier alert or high-urgency action required
         status = 'AT_RISK';
         statusEmoji = '⚠️';
         statusLabel = 'At Risk';
+    } else if (mediumCount > 0) {
+        // MEDIUM — data gaps or corrective action needed, but no active recall
+        status = 'AT_RISK';
+        statusEmoji = '🔔';
+        statusLabel = 'Action Needed';
     } else {
         status = 'COMPLIANT';
         statusEmoji = '✅';
@@ -122,6 +148,8 @@ function getMockStatus(tenantId: string) {
         last_status_change: new Date().toISOString(),
         active_alert_count: totalActive,
         critical_alert_count: criticalCount,
+        high_alert_count: highCount,
+        medium_alert_count: mediumCount,
         completeness_score: 0.85,
         countdown_seconds: nextAlert?.countdown_seconds || null,
         countdown_display: nextAlert?.countdown_display || null,

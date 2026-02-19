@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { useAuth } from '@/lib/auth-context';
 import { useComplianceScore } from '@/hooks/use-fsma';
+import { FSMA_204_ENFORCEMENT_FLOOR, FSMA_204_CITATION } from '@/lib/fsma-tools-data';
 
 import {
     Shield,
@@ -174,7 +175,9 @@ export default function FSMAPilotDashboard() {
     const { apiKey } = useAuth();
     const { data: score, isLoading, isError } = useComplianceScore(apiKey || '');
 
-    const deadline = new Date('2028-07-01');
+    // July 20, 2028 — FDA enforcement floor per Congressional directive
+    // (Original compliance date was Jan 20, 2026; enforcement extended to Jul 20, 2028 floor)
+    const deadline = new Date(FSMA_204_ENFORCEMENT_FLOOR);
     const today = new Date();
     const daysLeft = Math.ceil((deadline.getTime() - today.getTime()) / 86_400_000);
 
@@ -259,7 +262,7 @@ export default function FSMAPilotDashboard() {
                                 {/* Ring */}
                                 <div className="relative shrink-0">
                                     {isLoading ? (
-                                        <Skeleton className="rounded-full" style={{ width: 180, height: 180 }} />
+                                        <Skeleton className="rounded-full w-[180px] h-[180px]" />
                                     ) : (
                                         <>
                                             <ScoreRing score={score?.overall_score ?? 0} size={180} />

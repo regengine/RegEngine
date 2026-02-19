@@ -8,6 +8,7 @@ import { DemoProgressProvider } from '@/components/onboarding/DemoProgress';
 import { useState } from 'react';
 
 import { Toaster } from '@/components/ui/toaster';
+import { CSPostHogProvider } from './posthog-provider';
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const [queryClient] = useState(() => new QueryClient({
@@ -20,17 +21,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }));
 
     return (
-        <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-                <TenantProvider>
-                    <DemoProgressProvider>
-                        <TourProvider>
-                            {children}
-                            <Toaster />
-                        </TourProvider>
-                    </DemoProgressProvider>
-                </TenantProvider>
-            </AuthProvider>
-        </QueryClientProvider>
+        <CSPostHogProvider>
+            <QueryClientProvider client={queryClient}>
+                <AuthProvider>
+                    <TenantProvider>
+                        <DemoProgressProvider>
+                            <TourProvider>
+                                {children}
+                                <Toaster />
+                            </TourProvider>
+                        </DemoProgressProvider>
+                    </TenantProvider>
+                </AuthProvider>
+            </QueryClientProvider>
+        </CSPostHogProvider>
     );
 }
