@@ -43,7 +43,6 @@ jobs:
       matrix:
         service:
           - admin
-          - compliance
           - graph
           - ingestion
           - nlp
@@ -174,7 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, compliance, graph, ingestion, nlp, scheduler]
+        service: [admin, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v4
 
@@ -198,7 +197,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, compliance, graph, ingestion, nlp, scheduler]
+        # Note: compliance service removed — no services/compliance directory exists.
+        # context is repo root so Dockerfiles can COPY shared/, kernel/, plugins/, etc.
+        service: [admin, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v4
 
@@ -206,9 +207,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
+        # Use repo root as build context so absolute COPY paths resolve correctly.
+        # All non-scheduler Dockerfiles reference shared/, services/<svc>/, kernel/, etc.
         run: |
           docker build -t regengine-${{ matrix.service }}:test \
-            -f services/${{ matrix.service }}/Dockerfile services/${{ matrix.service }}
+            -f services/${{ matrix.service }}/Dockerfile .
 
       - name: Verify image starts
         run: |

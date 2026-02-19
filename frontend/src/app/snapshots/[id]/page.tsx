@@ -20,7 +20,7 @@ interface PageProps {
 // Fetch snapshot from backend API
 async function getSnapshot(id: string) {
     // Guard against build-time fetch
-    if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+    if (id === '_build' || process.env.REGENGINE_DEPLOY_MODE === 'static') {
         return {
             id: '_build',
             facility_name: 'Build Snapshot',
