@@ -231,3 +231,63 @@ export interface KDEQualityMetrics {
   trend: 'IMPROVING' | 'STABLE' | 'DEGRADING';
   missing_kde_counts: Record<string, number>;
 }
+
+// ============================================================================
+// V2 Applicability & Exemption Wizard Types
+// Matches /v1/fsma/wizard/* endpoints
+// ============================================================================
+
+export interface FTLCategory {
+  id: string;
+  name: string;
+  examples: string;
+  exclusions: string | null;
+  covered: boolean;
+  outbreak_frequency: 'HIGH' | 'MODERATE' | 'N/A';
+  ctes: string[];
+  cfr_sections: string;
+  kdes: string[];
+}
+
+export interface WizardExemptionDefinition {
+  id: string;
+  name: string;
+  citation: string;
+  exemption_type: 'FULL';
+  description: string;
+}
+
+export interface FTLCategoriesResponse {
+  categories: FTLCategory[];
+  total: number;
+  covered_count: number;
+  exemption_definitions: WizardExemptionDefinition[];
+  regulatory_reference: string;
+  compliance_deadline: string;
+  enforcement_note: string;
+}
+
+export interface WizardApplicabilityRequest {
+  selections: string[];
+}
+
+export interface WizardApplicabilityResult {
+  is_applicable: boolean;
+  covered_categories: FTLCategory[];
+  not_covered_categories: string[];
+  high_outbreak_count: number;
+  reason: string;
+}
+
+export interface WizardExemptionRequest {
+  /** Map of exemption ID → boolean answer (true = Yes, false = No, omit = unanswered) */
+  answers: Record<string, boolean>;
+}
+
+export interface WizardExemptionResult {
+  status: 'EXEMPT' | 'NOT_EXEMPT';
+  is_exempt: boolean;
+  active_exemptions: WizardExemptionDefinition[];
+  unanswered_count: number;
+}
+

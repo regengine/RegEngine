@@ -382,6 +382,52 @@ async def get_discovery_queue():
     return results
 
 
+@router.get("/v1/ingest/manual-queue")
+async def get_manual_queue(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    api_key: APIKey = Depends(require_api_key),
+):
+    """Retrieve items from the tenant-scoped manual upload queue.
+
+    Reads from ``manual_upload_queue:{tenant_id}`` — each tenant sees only
+    their own pending uploads, preventing cross-tenant data leakage.
+    """
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    tenant_id = api_key.tenant_id
+
+    queue_key = f"manual_upload_queue:{tenant_id}"
+    total = r.llen(queue_key)
+    raw_items = r.lrange(queue_key, skip, skip + limit - 1)
+
+    items = []
+    for i, raw in enumerate(raw_items):
+        try:
+            val = raw.decode("utf-8")
+            if ":" in val:
+                body, url = val.split(":", 1)
+                items.append({"index": skip + i, "body": body, "url": url})
+            else:
+                items.append({"index": skip + i, "body": val, "url": None})
+        except Exception:
+            continue
+
+    logger.info(
+        "manual_queue_fetched",
+        tenant_id=tenant_id,
+        total=total,
+        returned=len(items),
+    )
+    return {
+        "tenant_id": tenant_id,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": items,
+    }
+
+
 @router.post("/v1/ingest/discovery/approve")
 async def approve_discovery(
     index: int,
