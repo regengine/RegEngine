@@ -20,6 +20,7 @@ from .routers.fsma import (
     recall,
     science,
     traceability,
+    wizard,
 )
 
 fsma_router = APIRouter(prefix="/v1/fsma", tags=["FSMA 204"])
@@ -32,3 +33,4 @@ fsma_router.include_router(audit.router)
 fsma_router.include_router(recall.router)
 fsma_router.include_router(identifiers.router)
 fsma_router.include_router(metrics.router)
+fsma_router.include_router(wizard.router)  # Public: V2 Applicability & Exemption Wizard
