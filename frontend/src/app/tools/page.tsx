@@ -10,7 +10,8 @@ import {
     CheckCircle2,
     ArrowRight,
     ShieldCheck,
-    Zap
+    Zap,
+    TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -18,6 +19,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const TOOLS = [
+    {
+        id: 'roi-calculator',
+        title: 'Regulatory ROI Calculator',
+        description: 'Quantify the financial impact of manual compliance vs. the RegEngine platform with our personalized ROI engine.',
+        icon: TrendingUp,
+        color: 'var(--re-brand)',
+        tag: 'Strategy',
+        status: 'featured'
+    },
     {
         id: 'exemption-qualifier',
         title: 'Exemption Qualifier',
