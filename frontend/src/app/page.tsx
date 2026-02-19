@@ -83,6 +83,15 @@ function ChevronDown({ size = 16 }: { size?: number }) {
   );
 }
 
+function TrendingUp({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+      <polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+}
+
 /* ───────────────────────── INDUSTRY DATA ───────────────────────── */
 
 const industries = [
@@ -603,7 +612,7 @@ export default function RegEngineLanding() {
             </span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "16px" }}>
             {[
               {
                 title: "FTL Coverage Checker",
@@ -628,6 +637,14 @@ export default function RegEngineLanding() {
                 href: "/retailer-readiness",
                 cta: "Assess Your Readiness →",
                 badge: "Free",
+              },
+              {
+                title: "Regulatory ROI Calculator",
+                description: "Quantify the financial impact of manual compliance vs. the RegEngine platform with our personalized ROI engine.",
+                icon: <TrendingUp size={20} />,
+                href: "/tools/roi-calculator",
+                cta: "Calculate Your ROI →",
+                badge: "Featured",
               },
             ].map((tool, i) => (
               <a
