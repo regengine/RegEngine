@@ -13,6 +13,11 @@ const nextConfig = {
     async redirects() {
         return [
             {
+                source: '/ftl-checker',
+                destination: '/tools/ftl-checker',
+                permanent: true,
+            },
+            {
                 source: '/walmart-readiness',
                 destination: '/retailer-readiness',
                 permanent: true,
@@ -64,9 +69,6 @@ const sentryWebpackPluginOptions = {
 
     // Route Sentry requests through a Next.js rewrite to bypass ad blockers
     tunnelRoute: "/monitoring",
-
-    // Disable Sentry telemetry during build
-    disableLogger: true,
 
     // Automatically tree-shake Sentry logger in production
     hideSourceMaps: true,
