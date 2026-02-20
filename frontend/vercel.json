@@ -1,10 +1,10 @@
 {
     "version": 2,
     "public": true,
-    "buildCommand": "cd frontend && npm install && npm run build",
-    "installCommand": "cd frontend && npm install",
+    "buildCommand": "npm run build",
+    "installCommand": "npm install",
     "framework": "nextjs",
-    "outputDirectory": "frontend/.next",
+    "outputDirectory": ".next",
     "regions": [
         "sfo1"
     ],
