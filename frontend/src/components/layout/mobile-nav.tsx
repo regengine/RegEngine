@@ -31,9 +31,9 @@ export function MobileNav() {
             title: "Free Tools",
             items: [
                 { href: "/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-green-500" },
-                { href: "/tools/bias-checker", label: "Bias Checker", icon: Users, iconClass: "text-rose-500" },
-                { href: "/tools/obligation-scanner", label: "Obligation Scanner", icon: Shield, iconClass: "text-amber-500" },
-                { href: "/tools/notice-validator", label: "Notice Validator", icon: FileText, iconClass: "text-blue-500" },
+                { href: "/tools/exemption-qualifier", label: "Exemption Qualifier", icon: Shield, iconClass: "text-amber-500" },
+                { href: "/tools/recall-readiness", label: "Recall Readiness", icon: CheckCircle, iconClass: "text-cyan-500" },
+                { href: "/tools", label: "View All Tools →", icon: Scan, iconClass: "text-emerald-400" },
             ]
         },
         {

@@ -31,6 +31,7 @@ import {
   Cog,
   Gamepad2,
   Scan,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -202,7 +203,7 @@ export function Header() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Free Compliance Tools</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">FSMA 204 Compliance Tools</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/ftl-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
                   <Leaf className="h-4 w-4 text-green-500" />
@@ -212,32 +213,31 @@ export function Header() {
                   </div>
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Finance AI Governance</DropdownMenuLabel>
               <DropdownMenuItem asChild>
-                <Link href="/tools/bias-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Users className="h-4 w-4 text-rose-500" />
-                  <div>
-                    <div className="font-medium">Bias Checker</div>
-                    <div className="text-xs text-muted-foreground">Disparate Impact & 80% Rule</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/tools/obligation-scanner" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                <Link href="/tools/exemption-qualifier" className="cursor-pointer w-full flex items-center gap-3 py-2">
                   <Shield className="h-4 w-4 text-amber-500" />
                   <div>
-                    <div className="font-medium">Obligation Scanner</div>
-                    <div className="text-xs text-muted-foreground">Regulatory obligation mapping</div>
+                    <div className="font-medium">Exemption Qualifier</div>
+                    <div className="text-xs text-muted-foreground">Check FSMA 204 exemption eligibility</div>
                   </div>
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/tools/notice-validator" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <FileText className="h-4 w-4 text-blue-500" />
+                <Link href="/tools/recall-readiness" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <ShieldCheck className="h-4 w-4 text-cyan-500" />
                   <div>
-                    <div className="font-medium">Notice Validator</div>
-                    <div className="text-xs text-muted-foreground">Adverse action notice check</div>
+                    <div className="font-medium">Recall Readiness Score</div>
+                    <div className="text-xs text-muted-foreground">Grade your 24-hour retrieval capability</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/tools" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Scan className="h-4 w-4 text-emerald-400" />
+                  <div>
+                    <div className="font-medium text-primary">View All 7 Tools →</div>
+                    <div className="text-xs text-muted-foreground">Full FSMA compliance toolkit</div>
                   </div>
                 </Link>
               </DropdownMenuItem>
