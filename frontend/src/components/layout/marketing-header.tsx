@@ -4,17 +4,17 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 const TOOL_ITEMS = [
-    { emoji: "🥬", label: "FTL Coverage Checker", desc: "Check if your products are on the FDA Food Traceability List", href: "/ftl-checker" },
-    { emoji: "🛡️", label: "Exemption Qualifier", desc: "Check FSMA 204 exemption eligibility", href: "/tools/exemption-qualifier" },
-    { emoji: "📋", label: "Recall Readiness Score", desc: "Grade your 24-hour retrieval capability", href: "/tools/recall-readiness" },
+    { emoji: "📊", label: "FSMA Dashboard", desc: "Consolidated compliance command center", href: "/tools/fsma-unified" },
+    { emoji: "🔍", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified?tab=anomaly" },
+    { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/fsma-unified?tab=graph" },
+    { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
 ];
 
 const MORE_TOOLS = [
-    { label: "KDE Completeness Checker", href: "/tools/kde-checker" },
-    { label: "TLC Validator", href: "/tools/tlc-validator" },
-    { label: "CTE Coverage Mapper", href: "/tools/cte-mapper" },
-    { label: "24-Hour Drill Simulator", href: "/tools/drill-simulator" },
-    { label: "ROI Calculator", href: "/tools/roi-calculator" },
+    { label: "ROI Calculator", href: "/tools/roi-calculator", emoji: "💰" },
+    { label: "Exemption Qualifier", href: "/tools/exemption-qualifier", emoji: "🛡️" },
+    { label: "KDE Completeness Checker", href: "/tools/kde-checker", emoji: "📋" },
+    { label: "Recall Readiness Score", href: "/tools/recall-readiness", emoji: "📈" },
 ];
 
 export function MarketingHeader() {
@@ -284,14 +284,16 @@ export function MarketingHeader() {
                                 href={tool.href}
                                 onClick={() => setMobileOpen(false)}
                                 style={{
-                                    display: "block",
-                                    padding: "8px 0 8px 26px",
-                                    fontSize: "13px",
-                                    color: "var(--re-text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                    padding: "8px 0 8px 10px",
                                     textDecoration: "none",
+                                    borderBottom: "1px solid rgba(255,255,255,0.02)",
                                 }}
                             >
-                                {tool.label}
+                                <span style={{ fontSize: "14px" }}>{tool.emoji}</span>
+                                <div style={{ fontSize: "13px", color: "var(--re-text-muted)" }}>{tool.label}</div>
                             </Link>
                         ))}
                         <Link

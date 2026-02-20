@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 # Add shared utilities (portable path resolution)
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from shared.middleware import get_current_tenant_id
 
 router = APIRouter(tags=["Science"])

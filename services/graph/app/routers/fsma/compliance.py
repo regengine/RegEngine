@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 # Add shared utilities (portable path resolution)
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from shared.middleware import get_current_tenant_id
 from shared.fsma_plan_builder import (
     FirmInfo,
@@ -888,6 +888,7 @@ class ComplianceScoreResponse(BaseModel):
 
 @router.get("/score", response_model=ComplianceScoreResponse)
 async def get_compliance_score(
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
     """Return a tenant-scoped compliance score for the FSMA pilot dashboard.
@@ -902,7 +903,6 @@ async def get_compliance_score(
 
     Falls back to a plausible demo payload when the tenant has no graph data.
     """
-    tenant_id = api_key.tenant_id
     generated_at = datetime.utcnow().isoformat() + "Z"
 
     try:
@@ -927,7 +927,7 @@ async def get_compliance_score(
                         avg_effectiveness,
                         fresh_evidence
                     """,
-                    tenant_id=tenant_id,
+                    tenant_id=str(tenant_id),
                 )
                 row = await result.single()
 
@@ -940,7 +940,7 @@ async def get_compliance_score(
         # If tenant has no data yet, return a demo payload so the UI is useful
         if total_obligations == 0:
             return ComplianceScoreResponse(
-                tenant_id=tenant_id,
+                tenant_id=str(tenant_id),
                 overall_score=78.5,
                 obligation_coverage=82.0,
                 control_effectiveness=76.0,
@@ -962,7 +962,7 @@ async def get_compliance_score(
         overall = round(math.pow(dims[0] * dims[1] * dims[2], 1 / 3), 1)
 
         return ComplianceScoreResponse(
-            tenant_id=tenant_id,
+            tenant_id=str(tenant_id),
             overall_score=overall,
             obligation_coverage=round(obligation_coverage, 1),
             control_effectiveness=round(control_effectiveness, 1),
@@ -978,7 +978,7 @@ async def get_compliance_score(
         logger.error("compliance_score_failed", tenant_id=tenant_id, error=str(exc))
         # Surface a demo payload so the pilot dashboard never white-screens
         return ComplianceScoreResponse(
-            tenant_id=tenant_id,
+            tenant_id=str(tenant_id),
             overall_score=78.5,
             obligation_coverage=82.0,
             control_effectiveness=76.0,

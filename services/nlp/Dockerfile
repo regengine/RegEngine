@@ -15,8 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 
 
-# Copy shared code
-COPY shared /app/shared
+# Copy shared modules
+COPY services/shared /app/shared
 
 # Copy service code
 # We expect the context to be the project root

@@ -162,36 +162,44 @@ def _tracker():
 async def health():
     """Deep health check endpoint with dependency verification."""
     import os
-    from shared.health import (
-        HealthChecker,
-        create_postgres_check,
-        create_redis_check,
-    )
+    from shared.health import HealthCheck
 
-    checker = HealthChecker(service_name="admin-api", version="0.4.0")
+    checker = HealthCheck(service_name="admin-api")
 
-    # Add PostgreSQL check
-    # Use DATABASE_URL or ADMIN_DATABASE_URL (both should point to admin DB)
+    # PostgreSQL check
     admin_db_url = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
     if admin_db_url:
-        logger.info("health_check_postgres_configured", url_host=admin_db_url.split("@")[-1].split("/")[0] if "@" in admin_db_url else "local")
-        checker.add_check("postgresql", create_postgres_check(admin_db_url))
-    else:
-        # Fallback to SQLite (no explicit check needed for local file, or add one if supported)
-        # Just ensure we don't fail on missing Postgres
-        logger.warning("health_check_postgres_not_configured_using_sqlite_fallback")
-        pass
+        async def check_postgres():
+            try:
+                # Basic connection check
+                import psycopg
+                # Strip sqlalchemy prefix if present
+                conn_info = admin_db_url.replace("postgresql+psycopg://", "postgresql://")
+                async with await psycopg.AsyncConnection.connect(conn_info) as conn:
+                    await conn.execute("SELECT 1")
+                return {"status": "healthy"}
+            except Exception as e:
+                return {"status": "unhealthy", "error": str(e)}
+        
+        checker.add_dependency("postgresql", check_postgres)
 
-    # Add Redis check if configured
+    # Redis check
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
-        checker.add_check("redis", create_redis_check(redis_url))
+        async def check_redis():
+            try:
+                import redis.asyncio as redis
+                r = redis.from_url(redis_url)
+                await r.ping()
+                return {"status": "healthy"}
+            except Exception as e:
+                return {"status": "unhealthy", "error": str(e)}
+        
+        checker.add_dependency("redis", check_redis)
 
-    result = await checker.check_all(timeout=10.0)
-
-    from fastapi.responses import JSONResponse
-    status_code = 200 if result.status.value == "healthy" else 503
-    return JSONResponse(content=result.to_dict(), status_code=status_code)
+    result = await checker.check()
+    status_code = 200 if result.get("status") == "healthy" else 503
+    return result, status_code
 
 
 @router.get("/ready")

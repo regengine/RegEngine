@@ -52,7 +52,7 @@ class FileCategory(str, Enum):
 @dataclass
 class FileUploadConfig:
     """File upload configuration."""
-    max_size_bytes: int = 10 * 1024 * 1024  # 10MB
+    max_size_bytes: int = 512 * 1024 * 1024  # 512MB
     allowed_extensions: Set[str] = field(default_factory=lambda: {
         ".jpg", ".jpeg", ".png", ".gif", ".webp",  # Images
         ".pdf", ".doc", ".docx", ".xls", ".xlsx",  # Documents

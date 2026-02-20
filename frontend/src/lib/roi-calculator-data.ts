@@ -72,9 +72,13 @@ export const calculateROI = (answers: Record<string, any>) => {
     const riskReduction = annualRevenue * 0.0005 * 0.90;
 
     // 3. Operational Efficiency (Weekly Records * 0.5 minutes saved * $75/hr * 52 weeks)
-    const operationalEfficiency = (weeklyRecords * 0.5 / 60) * 75 * 52 * 0.95;
+    const rawOperationalEfficiency = (weeklyRecords * 0.5 / 60) * 75 * 52 * 0.95;
 
-    const totalBenefit = laborSavings + riskReduction + operationalEfficiency;
+    // Cap operational efficiency at 35% of the total benefit to avoid overly optimistic results
+    const baseBenefit = laborSavings + riskReduction;
+    const operationalEfficiency = Math.min(rawOperationalEfficiency, baseBenefit * 0.35);
+
+    const totalBenefit = baseBenefit + operationalEfficiency;
 
     // Estimated platform cost
     let platformCost = 25000;

@@ -22,7 +22,7 @@ from ..queries import arbitrage_queries
 
 logger = structlog.get_logger("graph-api.arbitrage")
 
-arbitrage_router = APIRouter(prefix="/graph", tags=["arbitrage"])
+arbitrage_router = APIRouter(tags=["arbitrage"])
 
 
 @arbitrage_router.get("/arbitrage", response_model=ArbitrageResponse)

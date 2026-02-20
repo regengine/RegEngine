@@ -30,9 +30,12 @@ export function MobileNav() {
         {
             title: "Free Tools",
             items: [
-                { href: "/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-green-500" },
-                { href: "/tools/exemption-qualifier", label: "Exemption Qualifier", icon: Shield, iconClass: "text-amber-500" },
-                { href: "/tools/recall-readiness", label: "Recall Readiness", icon: CheckCircle, iconClass: "text-cyan-500" },
+                { href: "/tools/fsma-unified", label: "FSMA Dashboard", icon: Shield, iconClass: "text-green-500" },
+                { href: "/tools/fsma-unified?tab=anomaly", label: "Anomaly Simulator", icon: Activity, iconClass: "text-red-400" },
+                { href: "/tools/fsma-unified?tab=graph", label: "Knowledge Graph", icon: Database, iconClass: "text-blue-400" },
+                { href: "/tools/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-emerald-500" },
+                { href: "/tools/roi-calculator", label: "ROI Calculator", icon: TrendingUp, iconClass: "text-amber-500" },
+                { href: "/tools/exemption-qualifier", label: "Exemption Qualifier", icon: CheckCircle, iconClass: "text-orange-500" },
                 { href: "/tools", label: "View All Tools →", icon: Scan, iconClass: "text-emerald-400" },
             ]
         },

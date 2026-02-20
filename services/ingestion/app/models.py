@@ -111,3 +111,5 @@ class BulkDiscoveryRequest(BaseModel):
     """Request payload for bulk discovery operations."""
 
     indices: List[int]
+
+BulkDiscoveryRequest.model_rebuild()

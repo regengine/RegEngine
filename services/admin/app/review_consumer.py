@@ -14,34 +14,46 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 if TYPE_CHECKING:
     from .metrics import HallucinationTracker
 
+import structlog
 from opentelemetry import trace, propagate
 from prometheus_client import Counter, Histogram
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 try:
-    REVIEW_MESSAGES_COUNTER = Counter("review_messages_total", "Review queue messages processed", ["status"])
-    POISON_PILL_COUNTER = Counter("review_poison_pill_total", "Count of malformed review messages")
+    REVIEW_MESSAGES_COUNTER = Counter(
+        "review_messages_total", "Review queue messages processed", ["status"]
+    )
+    POISON_PILL_COUNTER = Counter(
+        "review_poison_pill_total", "Count of malformed review messages"
+    )
 except ValueError:
     from prometheus_client import REGISTRY
+
     REVIEW_MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("review_messages_total")
     POISON_PILL_COUNTER = REGISTRY._names_to_collectors.get("review_poison_pill_total")
 
 # Add shared module to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+_CURRENT_DIR = Path(__file__).resolve().parent
+_APP_ROOT = _CURRENT_DIR.parent
+_SHARED_DIR = _APP_ROOT / "shared"
+
+if _SHARED_DIR.exists():
+    if str(_APP_ROOT) not in sys.path:
+        sys.path.insert(0, str(_APP_ROOT))
+else:
+    # Fallback to absolute docker path if exists
+    if os.path.exists("/app/shared"):
+        if "/app" not in sys.path:
+            sys.path.insert(0, "/app")
 
 from shared.observability import setup_standalone_observability
+
 tracer = setup_standalone_observability("admin-review-consumer")
 
 from .config import get_settings
 from .metrics import get_hallucination_tracker
 
 logger = structlog.get_logger("review-consumer")
-
-REVIEW_MESSAGES_COUNTER = Counter(
-    "review_messages_total",
-    "Review queue messages processed",
-    ["status"],
-)
 
 REVIEW_LATENCY_HISTOGRAM = Histogram(
     "review_message_latency_seconds",

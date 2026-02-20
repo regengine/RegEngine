@@ -4,7 +4,10 @@ import os
 from typing import Any, Dict, List, Optional
 
 import structlog
-from langchain.prompts import PromptTemplate
+try:
+    from langchain_core.prompts import PromptTemplate
+except ImportError:
+    from langchain.prompts import PromptTemplate
 try:
     from langchain_groq import ChatGroq
 except ImportError:

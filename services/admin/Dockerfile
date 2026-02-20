@@ -14,7 +14,7 @@ COPY services/admin/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy shared code
-COPY shared /app/shared
+COPY services/shared /app/shared
 
 # Copy service code
 COPY services/admin/app /app/app

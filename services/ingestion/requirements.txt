@@ -64,6 +64,9 @@ lxml>=4.9.0
 
 # Regulation Ingestion
 langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-community>=0.1.0
+langchain-text-splitters>=0.0.1
 langchain-groq>=0.1.0
 pypdf>=4.0.0
 python-docx>=0.8.11

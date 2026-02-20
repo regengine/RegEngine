@@ -104,3 +104,74 @@ export const FSMA_CTES = {
         ]
     }
 };
+import {
+    Leaf,
+    ShieldCheck,
+    TrendingUp,
+    Shield,
+    ClipboardList,
+    FlaskConical,
+    Truck,
+    Timer,
+    AlertTriangle,
+    Network
+} from 'lucide-react';
+
+export const FREE_TOOLS = [
+    {
+        id: 'ftl-checker',
+        title: 'FTL Coverage Checker',
+        description: 'Verify if your food products are on the FDA Food Traceability List.',
+        icon: Leaf,
+        href: '/tools/ftl-checker'
+    },
+    {
+        id: 'fsma-unified',
+        title: 'Unified FSMA Dashboard',
+        description: 'Anomalies and Knowledge Graph command center.',
+        icon: ShieldCheck,
+        href: '/tools/fsma-unified'
+    },
+    {
+        id: 'roi-calculator',
+        title: 'Regulatory ROI Calculator',
+        description: 'Quantify your savings from compliance automation.',
+        icon: TrendingUp,
+        href: '/tools/roi-calculator'
+    },
+    {
+        id: 'exemption-qualifier',
+        title: 'Exemption Qualifier',
+        description: 'Check your eligibility for FSMA 204 exemptions.',
+        icon: Shield,
+        href: '/tools/exemption-qualifier'
+    },
+    {
+        id: 'kde-checker',
+        title: 'KDE Completeness Checker',
+        description: 'Build your customized KDE checklist.',
+        icon: ClipboardList,
+        href: '/tools/kde-checker'
+    },
+    {
+        id: 'tlc-validator',
+        title: 'TLC Validator',
+        description: 'Validate your Traceability Lot Code uniqueness.',
+        icon: FlaskConical,
+        href: '/tools/tlc-validator'
+    },
+    {
+        id: 'cte-mapper',
+        title: 'CTE Coverage Mapper',
+        description: 'Map your supply chain data exchange nodes.',
+        icon: Truck,
+        href: '/tools/cte-mapper'
+    },
+    {
+        id: 'drill-simulator',
+        title: '24-Hour Drill Simulator',
+        description: 'Test your record retrieval speed.',
+        icon: Timer,
+        href: '/tools/drill-simulator'
+    }
+];

@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { RelatedTools } from "@/components/layout/related-tools";
+import { FREE_TOOLS } from "@/lib/fsma-tools-data";
 import {
     CheckCircle2,
     XCircle,
@@ -84,6 +87,7 @@ const FTL_CATEGORIES = [
     {
         id: 'leafy-greens-fresh',
         name: 'Leafy Greens (fresh, intact)',
+        category: 'Produce',
         icon: Leaf,
         examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens',
         exclusions: 'Does not include whole head cabbages (green, red, savoy) or banana/grape/tree leaves. See fresh-cut leafy greens for pre-cut/bagged products.',
@@ -96,6 +100,7 @@ const FTL_CATEGORIES = [
     {
         id: 'leafy-greens-fresh-cut',
         name: 'Leafy Greens (fresh-cut)',
+        category: 'Produce',
         icon: Leaf,
         examples: 'Bagged salad mix, spring mix, pre-washed spinach, chopped romaine, salad kits',
         exclusions: 'Does not include dried or frozen leafy greens',
@@ -108,6 +113,7 @@ const FTL_CATEGORIES = [
     {
         id: 'tomatoes',
         name: 'Tomatoes',
+        category: 'Produce',
         icon: Apple,
         examples: 'Fresh tomatoes (not canned or dried)',
         covered: true,
@@ -119,6 +125,7 @@ const FTL_CATEGORIES = [
     {
         id: 'peppers',
         name: 'Peppers',
+        category: 'Produce',
         icon: Apple,
         examples: 'Bell peppers, jalapeños, chili peppers (fresh)',
         covered: true,
@@ -130,6 +137,7 @@ const FTL_CATEGORIES = [
     {
         id: 'cucumbers',
         name: 'Cucumbers',
+        category: 'Produce',
         icon: Apple,
         examples: 'Fresh cucumbers',
         covered: true,
@@ -141,6 +149,7 @@ const FTL_CATEGORIES = [
     {
         id: 'herbs',
         name: 'Fresh Herbs',
+        category: 'Produce',
         icon: Leaf,
         examples: 'Cilantro, parsley, basil (fresh cut)',
         exclusions: 'Note: Herbs in 21 CFR 112.2(a)(1), such as dill, are exempt under §1.1305(e)',
@@ -153,6 +162,7 @@ const FTL_CATEGORIES = [
     {
         id: 'melons',
         name: 'Melons',
+        category: 'Produce',
         icon: Apple,
         examples: 'Cantaloupe, honeydew, watermelon',
         covered: true,
@@ -164,6 +174,7 @@ const FTL_CATEGORIES = [
     {
         id: 'tropical-fruits',
         name: 'Tropical Tree Fruits',
+        category: 'Produce',
         icon: Apple,
         examples: 'Mangoes, papayas, mamey, guava',
         exclusions: 'Does not include: bananas, pineapple, dates (non-tree); coconut (tree nut); avocado (pit fruit); or citrus',
@@ -176,6 +187,7 @@ const FTL_CATEGORIES = [
     {
         id: 'sprouts',
         name: 'Sprouts',
+        category: 'Produce',
         icon: Leaf,
         examples: 'Alfalfa, bean, broccoli sprouts',
         covered: true,
@@ -187,6 +199,7 @@ const FTL_CATEGORIES = [
     {
         id: 'fresh-cut-fruits',
         name: 'Fresh-Cut Fruits',
+        category: 'Produce',
         icon: Apple,
         examples: 'Pre-cut fruit mixes, fruit cups',
         covered: true,
@@ -198,6 +211,7 @@ const FTL_CATEGORIES = [
     {
         id: 'fresh-cut-vegetables',
         name: 'Fresh-Cut Vegetables (non-leafy)',
+        category: 'Produce',
         icon: Apple,
         examples: 'Veggie trays, pre-cut carrots, celery sticks, broccoli florets',
         covered: true,
@@ -207,19 +221,9 @@ const FTL_CATEGORIES = [
         kdes: ['Traceability Lot Code (TLC)', 'Location Identifier (GLN)', 'Date/Time', 'Quantity & UOM', 'Product Description', 'Reference Document Type & Number', 'Input TLCs', 'New TLC Assigned']
     },
     {
-        id: 'deli-salads',
-        name: 'Ready-to-Eat Deli Salads',
-        icon: Apple,
-        examples: 'Egg salad, seafood salad, pasta salad, potato salad',
-        covered: true,
-        outbreakFrequency: 'MODERATE',
-        ctes: ['Receiving', 'Transformation', 'Shipping'],
-        cfrSections: '§1.1340, §1.1345, §1.1350',
-        kdes: ['Traceability Lot Code (TLC)', 'Location Identifier (GLN)', 'Date/Time', 'Quantity & UOM', 'Product Description', 'Reference Document Type & Number', 'Input TLCs', 'New TLC Assigned']
-    },
-    {
         id: 'finfish-histamine',
         name: 'Finfish — Scombrotoxin/Histamine-Forming',
+        category: 'Seafood',
         icon: Fish,
         examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack, bonito',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
@@ -232,6 +236,7 @@ const FTL_CATEGORIES = [
     {
         id: 'finfish-ciguatoxin',
         name: 'Finfish — Ciguatoxin-Associated',
+        category: 'Seafood',
         icon: Fish,
         examples: 'Barracuda, grouper, snapper, moray eel (tropical reef species)',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
@@ -244,6 +249,7 @@ const FTL_CATEGORIES = [
     {
         id: 'finfish-other',
         name: 'Finfish — Other (fresh/frozen/previously frozen)',
+        category: 'Seafood',
         icon: Fish,
         examples: 'Salmon, cod, halibut, tilapia, trout, bass, swordfish',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
@@ -256,6 +262,7 @@ const FTL_CATEGORIES = [
     {
         id: 'finfish-smoked',
         name: 'Smoked Finfish',
+        category: 'Seafood',
         icon: Fish,
         examples: 'Smoked salmon, lox, kippered herring, smoked trout, smoked whitefish',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
@@ -268,6 +275,7 @@ const FTL_CATEGORIES = [
     {
         id: 'crustaceans',
         name: 'Crustaceans',
+        category: 'Seafood',
         icon: Fish,
         examples: 'Shrimp, crab, lobster, crawfish',
         covered: true,
@@ -279,6 +287,7 @@ const FTL_CATEGORIES = [
     {
         id: 'molluscan-shellfish',
         name: 'Molluscan Shellfish (bivalves)',
+        category: 'Seafood',
         icon: Fish,
         examples: 'Oysters, clams, mussels, scallops',
         exclusions: 'Except when product consists entirely of shucked adductor muscle. Raw bivalves under NSSP may be exempt per §1.1305(f)',
@@ -289,8 +298,21 @@ const FTL_CATEGORIES = [
         kdes: ['Traceability Lot Code (TLC)', 'Location Identifier (GLN)', 'Date/Time', 'Quantity & UOM', 'Product Description', 'Reference Document Type & Number', 'Harvest Area', 'Harvest Tag', 'NSSP Dealer Certificate']
     },
     {
+        id: 'deli-salads',
+        name: 'Ready-to-Eat Deli Salads',
+        category: 'Other',
+        icon: Apple,
+        examples: 'Egg salad, seafood salad, pasta salad, potato salad',
+        covered: true,
+        outbreakFrequency: 'MODERATE',
+        ctes: ['Receiving', 'Transformation', 'Shipping'],
+        cfrSections: '§1.1340, §1.1345, §1.1350',
+        kdes: ['Traceability Lot Code (TLC)', 'Location Identifier (GLN)', 'Date/Time', 'Quantity & UOM', 'Product Description', 'Reference Document Type & Number', 'Input TLCs', 'New TLC Assigned']
+    },
+    {
         id: 'eggs',
         name: 'Shell Eggs',
+        category: 'Eggs',
         icon: Egg,
         examples: 'Whole shell eggs (chicken, duck)',
         exclusions: 'Farms with fewer than 3,000 laying hens are exempt per §1.1305(a)(2)',
@@ -303,6 +325,7 @@ const FTL_CATEGORIES = [
     {
         id: 'nut-butters',
         name: 'Nut Butters',
+        category: 'Other',
         icon: Nut,
         examples: 'Peanut butter, almond butter',
         covered: true,
@@ -314,6 +337,7 @@ const FTL_CATEGORIES = [
     {
         id: 'cheese-fresh-soft',
         name: 'Fresh Soft Cheese',
+        category: 'Dairy',
         icon: Milk,
         examples: 'Queso fresco, ricotta, mascarpone, cottage cheese, cream cheese, panela, boursin',
         exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., cheddar, parmesan, aged cotija) are excluded from the FTL',
@@ -326,6 +350,7 @@ const FTL_CATEGORIES = [
     {
         id: 'cheese-soft-ripened',
         name: 'Soft Ripened & Semi-Soft Cheese',
+        category: 'Dairy',
         icon: Milk,
         examples: 'Brie, camembert, monterey jack, muenster, gouda, havarti, oaxaca, feta',
         exclusions: 'Hard cheeses per 21 CFR 133.150 are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39%',
@@ -338,6 +363,7 @@ const FTL_CATEGORIES = [
     {
         id: 'cheese-unpasteurized',
         name: 'Cheese Made from Unpasteurized Milk (non-hard)',
+        category: 'Dairy',
         icon: Milk,
         examples: 'Raw-milk brie, raw-milk feta, raw-milk camembert, artisanal raw-milk soft cheeses',
         exclusions: 'Hard cheeses aged 60+ days per 21 CFR 133.150 are excluded even if made from unpasteurized milk',
@@ -350,6 +376,7 @@ const FTL_CATEGORIES = [
     {
         id: 'canned-goods',
         name: 'Canned/Processed',
+        category: 'Other',
         icon: Apple,
         examples: 'Canned vegetables, frozen dinners, dried products',
         exclusions: 'Once food leaves fresh form (dried, frozen, canned), it is off the FTL',
@@ -362,6 +389,7 @@ const FTL_CATEGORIES = [
     {
         id: 'bakery',
         name: 'Bakery Products',
+        category: 'Other',
         icon: Apple,
         examples: 'Bread, pastries, cookies',
         covered: false,
@@ -373,6 +401,7 @@ const FTL_CATEGORIES = [
     {
         id: 'beverages',
         name: 'Beverages',
+        category: 'Other',
         icon: Apple,
         examples: 'Juices, sodas, water',
         covered: false,
@@ -454,7 +483,7 @@ interface CheckerResult {
     qualifyingExemptions: typeof EXEMPTION_QUESTIONS;
 }
 
-export default function FTLCheckerPage() {
+export function FTLCheckerClient() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -466,6 +495,8 @@ export default function FTLCheckerPage() {
     const [emailSubmitted, setEmailSubmitted] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeFilter, setActiveFilter] = useState<'All' | 'Seafood' | 'Produce' | 'Dairy' | 'Eggs' | 'Other'>('All');
     const { toast } = useToast();
 
     // Hydrate state from URL on initial load
@@ -597,7 +628,15 @@ export default function FTLCheckerPage() {
     const coveragePercent = results.totalSelected > 0 ? Math.round((results.coveredCount / results.totalSelected) * 100) : 0;
 
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, fontFamily: T.sans, color: T.textBody }}>
+        <div style={{ minHeight: '100vh', background: T.bg, fontFamily: T.sans, color: T.textBody, padding: '24px' }}>
+            <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+                <Breadcrumbs
+                    items={[
+                        { label: "Free Tools", href: "/tools" },
+                        { label: "FTL Checker" }
+                    ]}
+                />
+            </div>
             <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
             {/* Noise Overlay */}
@@ -646,45 +685,82 @@ export default function FTLCheckerPage() {
                     {currentStep === 'categories' && (
                         <motion.div key="selector" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                             <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
-                                <div className="mb-6">
-                                    <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                        <Search size={20} className="text-re-brand" /> Select Your Product Categories
-                                    </h2>
-                                    <p className="text-sm text-re-text-muted m-0">Choose all the food categories your company handles</p>
+                                <div className="mb-6 space-y-4">
+                                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                                        <div>
+                                            <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <Search size={20} className="text-re-brand" /> Select Your Product Categories
+                                            </h2>
+                                            <p className="text-sm text-re-text-muted m-0">Choose all the food categories your company handles</p>
+                                        </div>
+                                        <div className="relative w-full md:w-64">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--re-text-dim)]" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search products (e.g. shrimp)"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                className="w-full bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] rounded-xl py-2 pl-9 pr-4 text-sm focus:outline-none focus:border-[var(--re-brand)] transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Filter Chips */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {(['All', 'Seafood', 'Produce', 'Dairy', 'Eggs', 'Other'] as const).map(f => (
+                                            <button
+                                                key={f}
+                                                onClick={() => setActiveFilter(f)}
+                                                className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${activeFilter === f
+                                                    ? 'bg-[var(--re-brand)] text-white'
+                                                    : 'bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] hover:text-[var(--re-text-secondary)] border border-[var(--re-border-default)]'
+                                                    }`}
+                                            >
+                                                {f === 'Seafood' ? '🦀 Seafood' : f === 'Produce' ? '🥬 Produce' : f === 'Dairy' ? '🧀 Dairy' : f === 'Eggs' ? '🥚 Eggs' : f}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-                                    {FTL_CATEGORIES.map(category => {
-                                        const Icon = category.icon;
-                                        const isSelected = selectedCategories.includes(category.id);
-                                        return (
-                                            <div
-                                                key={category.id}
-                                                onClick={() => toggleCategory(category.id)}
-                                                style={{
-                                                    padding: '16px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.15s',
-                                                    background: isSelected ? T.accentBg : T.surface,
-                                                    border: `2px solid ${isSelected ? T.accent : T.border}`,
-                                                }}
-                                            >
-                                                <div className="flex items-start gap-3">
-                                                    <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `2px solid ${isSelected ? T.accent : T.textDim}`, background: isSelected ? T.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
-                                                        {isSelected && <CheckCircle2 size={12} style={{ color: T.bg }} />}
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                            <Icon size={14} style={{ color: isSelected ? T.accent : T.textDim }} />
-                                                            <span style={{ fontWeight: 500, color: T.textPrimary, fontSize: '14px' }}>{category.name}</span>
-                                                            <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim, border: `1px solid ${category.covered ? T.successBorder : T.border}` }}>
-                                                                {category.covered ? 'On FTL' : 'Not on FTL'}
-                                                            </span>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', maxHeight: '500px', overflowY: 'auto', paddingRight: '8px' }} className="re-scrollbar">
+                                    {FTL_CATEGORIES
+                                        .filter(c => {
+                                            const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                c.examples.toLowerCase().includes(searchTerm.toLowerCase());
+                                            const matchesFilter = activeFilter === 'All' || c.category === activeFilter;
+                                            return matchesSearch && matchesFilter;
+                                        })
+                                        .map(category => {
+                                            const Icon = category.icon;
+                                            const isSelected = selectedCategories.includes(category.id);
+                                            return (
+                                                <div
+                                                    key={category.id}
+                                                    onClick={() => toggleCategory(category.id)}
+                                                    style={{
+                                                        padding: '16px', borderRadius: '10px', cursor: 'pointer', transition: 'all 0.15s',
+                                                        background: isSelected ? T.accentBg : T.surface,
+                                                        border: `2px solid ${isSelected ? T.accent : T.border}`,
+                                                    }}
+                                                >
+                                                    <div className="flex items-start gap-3">
+                                                        <div style={{ width: '18px', height: '18px', borderRadius: '4px', border: `2px solid ${isSelected ? T.accent : T.textDim}`, background: isSelected ? T.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
+                                                            {isSelected && <CheckCircle2 size={12} style={{ color: T.bg }} />}
                                                         </div>
-                                                        <p style={{ fontSize: '12px', color: T.textMuted, marginTop: '4px', lineHeight: 1.4 }}>{category.examples}</p>
+                                                        <div className="flex-1">
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <Icon size={14} style={{ color: isSelected ? T.accent : T.textDim }} />
+                                                                <span style={{ fontWeight: 500, color: T.textPrimary, fontSize: '14px' }}>{category.name}</span>
+                                                                <span style={{ fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: '4px', background: category.covered ? T.successBg : T.elevated, color: category.covered ? T.accent : T.textDim, border: `1px solid ${category.covered ? T.successBorder : T.border}` }}>
+                                                                    {category.covered ? 'On FTL' : 'Not on FTL'}
+                                                                </span>
+                                                            </div>
+                                                            <p style={{ fontSize: '12px', color: T.textMuted, marginTop: '4px', lineHeight: 1.4 }}>{category.examples}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
                                 </div>
 
                                 <div className="mt-6 flex items-center justify-between">
@@ -1021,6 +1097,10 @@ export default function FTLCheckerPage() {
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                <RelatedTools
+                    tools={FREE_TOOLS.filter(t => ['exemption-qualifier', 'kde-checker', 'cte-mapper'].includes(t.id))}
+                />
             </div>
         </div>
     );
