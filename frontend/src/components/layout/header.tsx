@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import {
   Activity,
@@ -58,6 +58,19 @@ import { MobileNav } from './mobile-nav';
 export function Header() {
   const { apiKey, clearCredentials, isOnboarded } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleMouseEnter = (name: string) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setOpenDropdown(name);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setOpenDropdown(null);
+    }, 200);
+  };
 
   const adminHealth = useAdminHealth();
   const ingestionHealth = useIngestionHealth();
@@ -111,15 +124,28 @@ export function Header() {
 
         <nav className="items-center space-x-1 hidden md:flex">
           {/* Data & Ingestion */}
-          <DropdownMenu modal={false}>
+          <DropdownMenu
+            modal={false}
+            open={openDropdown === 'data'}
+            onOpenChange={(open) => setOpenDropdown(open ? 'data' : null)}
+          >
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                onMouseEnter={() => handleMouseEnter('data')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <Database className="h-4 w-4 text-blue-500" />
                 <span>Data</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent
+              align="start"
+              className="w-64"
+              onMouseEnter={() => handleMouseEnter('data')}
+              onMouseLeave={handleMouseLeave}
+            >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Data Management</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/ingest" className="cursor-pointer w-full flex items-center gap-3 py-2">
@@ -143,15 +169,28 @@ export function Header() {
           </DropdownMenu>
 
           {/* Compliance Suite */}
-          <DropdownMenu modal={false}>
+          <DropdownMenu
+            modal={false}
+            open={openDropdown === 'compliance'}
+            onOpenChange={(open) => setOpenDropdown(open ? 'compliance' : null)}
+          >
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                onMouseEnter={() => handleMouseEnter('compliance')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <CheckCircle className="h-4 w-4 text-emerald-500" />
                 <span>Compliance</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent
+              align="start"
+              className="w-64"
+              onMouseEnter={() => handleMouseEnter('compliance')}
+              onMouseLeave={handleMouseLeave}
+            >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Compliance Suite</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/compliance" className="cursor-pointer w-full flex items-center gap-3 py-2">
@@ -194,15 +233,28 @@ export function Header() {
 
 
           {/* Free Tools */}
-          <DropdownMenu modal={false}>
+          <DropdownMenu
+            modal={false}
+            open={openDropdown === 'tools'}
+            onOpenChange={(open) => setOpenDropdown(open ? 'tools' : null)}
+          >
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                onMouseEnter={() => handleMouseEnter('tools')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <Scan className="h-4 w-4 text-cyan-500" />
                 <span>Tools</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent
+              align="start"
+              className="w-64"
+              onMouseEnter={() => handleMouseEnter('tools')}
+              onMouseLeave={handleMouseLeave}
+            >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">FSMA 204 Compliance Tools</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/ftl-checker" className="cursor-pointer w-full flex items-center gap-3 py-2">
@@ -247,13 +299,22 @@ export function Header() {
 
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                onMouseEnter={() => handleMouseEnter('verticals')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <Activity className="h-4 w-4 text-pink-500" />
                 <span>Verticals</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64 max-h-[500px] overflow-y-auto">
+            <DropdownMenuContent
+              align="start"
+              className="w-64 max-h-[500px] overflow-y-auto"
+              onMouseEnter={() => handleMouseEnter('verticals')}
+              onMouseLeave={handleMouseLeave}
+            >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Industry Frameworks</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/verticals/aerospace" className="cursor-pointer w-full flex items-center gap-3 py-2">
@@ -376,15 +437,28 @@ export function Header() {
           </Link>
 
           {/* Admin & Settings */}
-          <DropdownMenu modal={false}>
+          <DropdownMenu
+            modal={false}
+            open={openDropdown === 'admin'}
+            onOpenChange={(open) => setOpenDropdown(open ? 'admin' : null)}
+          >
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none">
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                onMouseEnter={() => handleMouseEnter('admin')}
+                onMouseLeave={handleMouseLeave}
+              >
                 <Settings className="h-4 w-4 text-slate-500" />
                 <span>Admin</span>
                 <ChevronDown className="h-3 w-3 opacity-50" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
+            <DropdownMenuContent
+              align="start"
+              className="w-64"
+              onMouseEnter={() => handleMouseEnter('admin')}
+              onMouseLeave={handleMouseLeave}
+            >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Administration</DropdownMenuLabel>
               <DropdownMenuItem asChild>
                 <Link href="/admin" className="cursor-pointer w-full flex items-center gap-3 py-2">
