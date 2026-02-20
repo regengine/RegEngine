@@ -50,7 +50,7 @@ app = FastAPI(
 # Production Hardening Middleware (Phase 18)
 add_security(app)
 add_rate_limiting(app)
-add_observability(app)
+add_observability(app, service_name="graph-service")
 
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware

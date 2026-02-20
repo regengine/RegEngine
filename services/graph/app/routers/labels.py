@@ -28,7 +28,7 @@ from ..models.fsma_nodes import CTEType
 from ..neo4j_utils import Neo4jClient
 
 # ✅ KEEP: Versioning & Logging
-router = APIRouter(prefix="/v1/labels", tags=["Traceability Labels"])
+router = APIRouter(tags=["Traceability Labels"])
 logger = structlog.get_logger("label-inception")
 TRACEABILITY_DOMAIN = os.getenv("TRACEABILITY_DOMAIN", "https://trace.regengine.ai")
 

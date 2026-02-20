@@ -167,6 +167,8 @@ services:
       - ./services/ingestion/app:/app/app
       - ./services/ingestion/main.py:/app/main.py
       - ./services/shared:/app/shared
+      - ./kernel:/app/kernel
+      - ./plugins:/app/plugins
     deploy:
       resources:
         limits:
@@ -228,6 +230,7 @@ services:
       <<: *env_common
       # Override for async API key store (requires asyncpg driver)
       DATABASE_URL: postgresql+asyncpg://regengine:regengine@postgres:5432/regengine_admin
+      AUTH_TEST_BYPASS_TOKEN: dev-bypass-token
     deploy:
       resources:
         limits:
@@ -244,6 +247,10 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    volumes:
+      - ./services/graph/app:/app/app
+      - ./services/graph/main.py:/app/main.py
+      - ./services/shared:/app/shared
     ports:
       - "8200:8200"
 

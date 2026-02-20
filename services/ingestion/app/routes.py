@@ -36,7 +36,7 @@ from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 
 from .config import get_settings
 from .kafka_utils import send
-from .models import IngestRequest, DirectIngestRequest, NormalizedDocument, NormalizedEvent, DiscoveryQueueItem
+from .models import IngestRequest, DirectIngestRequest, NormalizedDocument, NormalizedEvent, DiscoveryQueueItem, BulkDiscoveryRequest
 from .normalization import normalize_document
 from .s3_utils import put_bytes, put_json
 from .scrapers.state_generic import StateRegistryScraper as GenericStateScraper
@@ -310,7 +310,7 @@ async def ingest_regulation(
     if not content:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
     
-    if len(content) > 100 * 1024 * 1024:  # 100MB
+    if len(content) > 512 * 1024 * 1024:  # 512MB
         raise HTTPException(status_code=413, detail="File too large (max 100MB)")
 
     job_id = str(uuid.uuid4())

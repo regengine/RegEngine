@@ -230,7 +230,7 @@ class APIClient {
           'X-RegEngine-API-Key': apiKey,
           'Content-Type': 'multipart/form-data'
         },
-        timeout: 60000 // Longer timeout for files
+        timeout: 300000 // Longer timeout for large files (5 minutes)
       }
     );
     return response.data;

@@ -169,7 +169,7 @@ export function IngestionModal({ open, onOpenChange, vertical }: IngestionModalP
                                                 <div className="text-sm font-medium">
                                                     {file ? file.name : 'Click to select file'}
                                                 </div>
-                                                {!file && <div className="text-xs text-muted-foreground mt-2">Max size: 20MB</div>}
+                                                {!file && <div className="text-xs text-muted-foreground mt-2">Max size: 512MB</div>}
                                             </label>
                                         </div>
                                     </TabsContent>

@@ -6,8 +6,12 @@ from pathlib import Path
 
 # Standardized path discovery
 _SERVICES_DIR = Path(__file__).resolve().parent.parent
+_APP_ROOT = Path(__file__).resolve().parent
+
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
 
 # Ensure shared utilities are importable
 from shared.paths import ensure_shared_importable

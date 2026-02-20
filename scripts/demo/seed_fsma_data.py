@@ -748,16 +748,98 @@ def seed_to_kafka(kafka_bootstrap: str = "localhost:9092") -> None:
     print(f"Sent {len(events)} demo events to Kafka")
 
 
+def seed_to_neo4j(
+    neo4j_uri: str = "bolt://localhost:7687",
+    password: str = "password",
+    tenant_id: str = "00000000-0000-0000-0000-000000000000"
+) -> None:
+    """Generate demo events and send directly to Neo4j."""
+    try:
+        from neo4j import GraphDatabase
+    except ImportError:
+        print("neo4j-driver not installed. Run: pip install neo4j")
+        return
+
+    events = generate_demo_events()
+    driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", password))
+
+    with driver.session() as session:
+        print(f"Seeding {len(events)} events to Neo4j for tenant {tenant_id}...")
+        for event in events:
+            # Create/Merge Document
+            doc_id = f"demo-{event['event_id']}"
+            session.run("""
+                MERGE (d:Document {document_id: $doc_id})
+                SET d.document_type = 'DEMO',
+                    d.tenant_id = $tenant_id,
+                    d.timestamp = $ts
+            """, doc_id=doc_id, tenant_id=tenant_id, ts=datetime.utcnow().isoformat() + "Z")
+
+            # Create/Merge TraceEvent & Evidence
+            evt_id = f"{doc_id}-cte-0"
+            session.run("""
+                MERGE (e:TraceEvent {event_id: $evt_id})
+                SET e:Evidence,
+                    e.type = $type,
+                    e.event_date = $date,
+                    e.timestamp = datetime(),
+                    e.confidence = 0.95,
+                    e.tenant_id = $tenant_id
+            """, evt_id=evt_id, type=event["cte_type"], date=event["event_timestamp"], tenant_id=tenant_id)
+
+            # Link Document -> Event
+            session.run("""
+                MATCH (d:Document {document_id: $doc_id})
+                MATCH (e:TraceEvent {event_id: $evt_id})
+                MERGE (d)-[:EVIDENCES]->(e)
+            """, doc_id=doc_id, evt_id=evt_id)
+
+            # Create/Merge Lot
+            if event.get("tlc"):
+                session.run("""
+                    MERGE (l:Lot {tlc: $tlc})
+                    SET l.product_description = $product,
+                        l.quantity = $qty,
+                        l.unit_of_measure = $unit,
+                        l.tenant_id = $tenant_id
+                    WITH l
+                    MATCH (e:TraceEvent {event_id: $evt_id})
+                    MERGE (l)-[:UNDERWENT]->(e)
+                """, tlc=event["tlc"], product=event.get("product_description"),
+                     qty=event.get("quantity"), unit=event.get("unit_of_measure"),
+                     tenant_id=tenant_id, evt_id=evt_id)
+
+            # Create/Merge Obligation & Control (for Compliance Score)
+            # This is critical for the Compliance Dashboard
+            session.run("""
+                MERGE (o:Obligation {tenant_id: $tenant_id, id: 'FSMA-204-OBL-1'})
+                SET o.name = 'Traceability Recordkeeping', o.score = 1.0
+                MERGE (c:Control {tenant_id: $tenant_id, id: 'FSMA-204-CTRL-1'})
+                SET c.name = 'Digital Traceability Log', c.effectiveness_score = 0.85
+                MERGE (o)-[:REQUIRES]->(c)
+                WITH c
+                MATCH (e:TraceEvent {event_id: $evt_id})
+                MERGE (c)-[:PROVEN_BY]->(e)
+            """, tenant_id=tenant_id, evt_id=evt_id)
+
+    driver.close()
+    print(f"Successfully seeded Neo4j for tenant {tenant_id}")
+
+
 if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="FSMA 204 Demo Seeder v3 — Recall-Based")
-    parser.add_argument("--output", choices=["json", "kafka"], default="json")
+    parser.add_argument("--output", choices=["json", "kafka", "neo4j"], default="json")
     parser.add_argument("--kafka-bootstrap", default="localhost:9092")
+    parser.add_argument("--neo4j-password", default="password")
+    parser.add_argument("--tenant-id", default="00000000-0000-0000-0000-000000000000")
     parser.add_argument("--json-path", default="demo_fsma_events.json")
 
     args = parser.parse_args()
     if args.output == "json":
         seed_to_json(args.json_path)
-    else:
+    elif args.output == "kafka":
         seed_to_kafka(args.kafka_bootstrap)
+    else:
+        seed_to_neo4j(password=args.neo4j_password, tenant_id=args.tenant_id)

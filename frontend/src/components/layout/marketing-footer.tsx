@@ -34,7 +34,7 @@ export function MarketingFooter() {
                     margin: "0 auto",
                     padding: "48px 24px 32px",
                     display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr 1fr",
+                    gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
                     gap: "40px",
                 }}
             >
@@ -101,17 +101,48 @@ export function MarketingFooter() {
 
                 <div>
                     <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
-                        Industries
+                        Free Tools
                     </h4>
-                    {industries.map((ind) => (
+                    {[
+                        { label: "FSMA Dashboard", href: "/tools/fsma-unified" },
+                        { label: "Anomaly Simulator", href: "/tools/fsma-unified?tab=anomaly" },
+                        { label: "Knowledge Graph", href: "/tools/fsma-unified?tab=graph" },
+                        { label: "FTL Checker", href: "/tools/ftl-checker" },
+                        { label: "ROI Calculator", href: "/tools/roi-calculator" },
+                        { label: "Exemption Qualifier", href: "/tools/exemption-qualifier" },
+                        { label: "KDE Builder", href: "/tools/kde-checker" },
+                    ].map((link) => (
                         <Link
-                            key={ind.name}
-                            href={ind.href}
-                            className="text-[13px] text-re-text-tertiary no-underline mb-2.5 block"
+                            key={link.label}
+                            href={link.href}
+                            style={{
+                                display: "block",
+                                fontSize: "13px",
+                                color: "var(--re-text-tertiary)",
+                                textDecoration: "none",
+                                marginBottom: "10px",
+                            }}
                         >
-                            {ind.name}
+                            {link.label}
                         </Link>
                     ))}
+                </div>
+
+                <div>
+                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
+                        Industries
+                    </h4>
+                    <div className="grid grid-cols-1 gap-y-2.5">
+                        {industries.slice(0, 8).map((ind) => (
+                            <Link
+                                key={ind.name}
+                                href={ind.href}
+                                className="text-[13px] text-re-text-tertiary no-underline block"
+                            >
+                                {ind.name}
+                            </Link>
+                        ))}
+                    </div>
                 </div>
 
                 <div>

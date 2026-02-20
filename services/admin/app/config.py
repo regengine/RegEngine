@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
 
     # File upload limits
-    max_upload_size_mb: int = Field(default=10, alias="MAX_UPLOAD_SIZE_MB")
+    max_upload_size_mb: int = Field(default=512, alias="MAX_UPLOAD_SIZE_MB")
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

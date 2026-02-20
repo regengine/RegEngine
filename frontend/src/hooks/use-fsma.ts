@@ -56,7 +56,7 @@ async function fsmaFetch<T>(
 export function useForwardTrace(tlc: string, apiKey: string, enabled = true) {
   return useQuery({
     queryKey: ['fsma', 'trace', 'forward', tlc],
-    queryFn: () => fsmaFetch<TraceResult>(`/trace/forward/${encodeURIComponent(tlc)}`, apiKey),
+    queryFn: () => fsmaFetch<TraceResult>(`/traceability/trace/forward/${encodeURIComponent(tlc)}`, apiKey),
     enabled: enabled && !!tlc && !!apiKey,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -65,7 +65,7 @@ export function useForwardTrace(tlc: string, apiKey: string, enabled = true) {
 export function useBackwardTrace(tlc: string, apiKey: string, enabled = true) {
   return useQuery({
     queryKey: ['fsma', 'trace', 'backward', tlc],
-    queryFn: () => fsmaFetch<TraceResult>(`/trace/backward/${encodeURIComponent(tlc)}`, apiKey),
+    queryFn: () => fsmaFetch<TraceResult>(`/traceability/trace/backward/${encodeURIComponent(tlc)}`, apiKey),
     enabled: enabled && !!tlc && !!apiKey,
     staleTime: 30 * 1000,
   });
@@ -74,7 +74,7 @@ export function useBackwardTrace(tlc: string, apiKey: string, enabled = true) {
 export function useTimeline(tlc: string, apiKey: string, enabled = true) {
   return useQuery({
     queryKey: ['fsma', 'timeline', tlc],
-    queryFn: () => fsmaFetch<{ events: TraceResult['events'] }>(`/timeline/${encodeURIComponent(tlc)}`, apiKey),
+    queryFn: () => fsmaFetch<{ events: TraceResult['events'] }>(`/traceability/timeline/${encodeURIComponent(tlc)}`, apiKey),
     enabled: enabled && !!tlc && !!apiKey,
     staleTime: 30 * 1000,
   });
@@ -136,7 +136,7 @@ export function useExportRecallContacts(apiKey: string) {
 export function useMassBalance(tlc: string, apiKey: string, enabled = true) {
   return useQuery({
     queryKey: ['fsma', 'mass-balance', tlc],
-    queryFn: () => fsmaFetch<MassBalanceResult>(`/mass-balance/${encodeURIComponent(tlc)}`, apiKey),
+    queryFn: () => fsmaFetch<MassBalanceResult>(`/science/mass-balance/${encodeURIComponent(tlc)}`, apiKey),
     enabled: enabled && !!tlc && !!apiKey,
     staleTime: 60 * 1000,
   });
@@ -303,7 +303,7 @@ export function useAcknowledgeAlert(apiKey: string) {
 export function useFSMADashboard(apiKey: string) {
   return useQuery({
     queryKey: ['fsma', 'dashboard'],
-    queryFn: () => fsmaFetch<FSMADashboard>('/dashboard', apiKey),
+    queryFn: () => fsmaFetch<FSMADashboard>('/metrics/dashboard', apiKey),
     enabled: !!apiKey,
     refetchInterval: 30 * 1000,
   });
@@ -313,7 +313,7 @@ export function useFSMAHealth() {
   return useQuery({
     queryKey: ['fsma', 'health'],
     queryFn: async () => {
-      const response = await fetch(`${GRAPH_API_BASE}/health`);
+      const response = await fetch(`${GRAPH_API_BASE}/metrics/health`);
       if (!response.ok) throw new Error('FSMA service unhealthy');
       return response.json();
     },
@@ -458,7 +458,7 @@ export interface ComplianceScoreResult {
 export function useComplianceScore(apiKey: string) {
   return useQuery<ComplianceScoreResult>({
     queryKey: ['fsma', 'compliance-score', apiKey],
-    queryFn: () => fsmaFetch<ComplianceScoreResult>('/score', apiKey),
+    queryFn: () => fsmaFetch<ComplianceScoreResult>('/compliance/score', apiKey),
     enabled: !!apiKey,
     staleTime: 60_000, // 60s — score is expensive to compute
     retry: 1,

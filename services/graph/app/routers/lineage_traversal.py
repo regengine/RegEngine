@@ -17,10 +17,10 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ...neo4j_utils import Neo4jClient
+from ..neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id
 
 router = APIRouter(tags=["Lineage"])

@@ -56,10 +56,25 @@ async function proxyRequest(
             }
         }
 
-        const response = await fetch(
-            `${COMPLIANCE_URL}/fsma-204/${path}${queryString}`,
-            fetchOptions
-        );
+        const GRAPH_SERVICE_URL = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
+
+        // Decide which backend to target
+        let targetUrl: string;
+        if (
+            path.startsWith('compliance/') ||
+            path.startsWith('traceability/') ||
+            path.startsWith('recall/') ||
+            path.startsWith('science/') ||
+            path.startsWith('metrics/')
+        ) {
+            // These are handled by the Graph Service (fixed in Phase 29)
+            targetUrl = `${GRAPH_SERVICE_URL}/v1/fsma/${path}${queryString}`;
+        } else {
+            // Default: Wizard V2 (Compliance Service)
+            targetUrl = `${COMPLIANCE_URL}/fsma-204/${path}${queryString}`;
+        }
+
+        const response = await fetch(targetUrl, fetchOptions);
 
         const data = await response.json().catch(() => ({}));
 
