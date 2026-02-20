@@ -283,7 +283,7 @@ describe('API Client - Energy Service', () => {
             mockedAxios.create.mockReturnValueOnce(mockClient);
 
             // Simulate setting access token
-            const config = {
+            const config: { headers: Record<string, string> } = {
                 headers: {},
             };
 
@@ -294,7 +294,7 @@ describe('API Client - Energy Service', () => {
         });
 
         it('includes API key header', () => {
-            const config = {
+            const config: { headers: Record<string, string> } = {
                 headers: {},
             };
 
@@ -304,7 +304,7 @@ describe('API Client - Energy Service', () => {
         });
 
         it('includes tenant ID when set', () => {
-            const config = {
+            const config: { headers: Record<string, string> } = {
                 headers: {},
             };
 
