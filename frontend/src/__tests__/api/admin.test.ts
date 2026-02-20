@@ -43,6 +43,7 @@ describe('API Client - Admin Service', () => {
                     email: 'test@example.com',
                     name: 'Test User',
                     is_sysadmin: false,
+                    status: 'active',
                 },
                 tenant_id: 'tenant-123',
             };
@@ -73,6 +74,7 @@ describe('API Client - Admin Service', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };

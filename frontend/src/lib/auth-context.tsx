@@ -21,6 +21,7 @@ interface AuthContextType {
   clearCredentials: () => void;
   login: (token: string, user: User, tenantId?: string) => void;
   logout: () => void;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -191,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCredentials,
         login,
         logout,
+        isAuthenticated: !!user && !!accessToken,
       }}
     >
       {children}

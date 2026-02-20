@@ -67,6 +67,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -103,6 +104,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -126,6 +128,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -149,6 +152,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -174,6 +178,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -203,6 +208,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -232,6 +238,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -266,6 +273,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-123',
                 role_id: 'role-1',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
@@ -294,6 +302,7 @@ describe('useAuth Hook', () => {
                 tenant_id: 'tenant-456',
                 role_id: 'role-admin',
                 is_active: true,
+                status: 'active',
                 created_at: '2026-01-01T00:00:00Z',
                 updated_at: '2026-01-27T00:00:00Z',
             };
