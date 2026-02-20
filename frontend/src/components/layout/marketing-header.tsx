@@ -1,8 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 
+const TOOL_ITEMS = [
+    { emoji: "🥬", label: "FTL Coverage Checker", desc: "Check if your products are on the FDA Food Traceability List", href: "/ftl-checker" },
+    { emoji: "🛡️", label: "Exemption Qualifier", desc: "Check FSMA 204 exemption eligibility", href: "/tools/exemption-qualifier" },
+    { emoji: "📋", label: "Recall Readiness Score", desc: "Grade your 24-hour retrieval capability", href: "/tools/recall-readiness" },
+];
+
+const MORE_TOOLS = [
+    { label: "KDE Completeness Checker", href: "/tools/kde-checker" },
+    { label: "TLC Validator", href: "/tools/tlc-validator" },
+    { label: "CTE Coverage Mapper", href: "/tools/cte-mapper" },
+    { label: "24-Hour Drill Simulator", href: "/tools/drill-simulator" },
+    { label: "ROI Calculator", href: "/tools/roi-calculator" },
+];
+
 export function MarketingHeader() {
+    const [mobileOpen, setMobileOpen] = useState(false);
+
     return (
         <nav
             style={{
@@ -47,7 +64,8 @@ export function MarketingHeader() {
                     </span>
                 </Link>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
+                {/* Desktop Nav */}
+                <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
                     {[
                         { label: "Product", href: "/#product" },
                         { label: "Industries", href: "/#industries" },
@@ -113,7 +131,7 @@ export function MarketingHeader() {
                                 border: "1px solid rgba(255,255,255,0.08)",
                                 borderRadius: "10px",
                                 padding: "8px 0",
-                                minWidth: "240px",
+                                minWidth: "280px",
                                 opacity: 0,
                                 pointerEvents: "none" as const,
                                 transform: "translateY(4px)",
@@ -123,57 +141,175 @@ export function MarketingHeader() {
                             }}
                         >
                             <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
-                                Food Safety
+                                FSMA 204 Compliance Tools
                             </div>
-                            <Link href="/ftl-checker" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                            {TOOL_ITEMS.map((tool) => (
+                                <Link key={tool.href} href={tool.href} className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
+                                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                                >
+                                    <span className="text-sm">{tool.emoji}</span>
+                                    <div>
+                                        <div className="text-[13px] font-medium text-re-text-primary">{tool.label}</div>
+                                        <div className="text-[11px] text-re-text-muted">{tool.desc}</div>
+                                    </div>
+                                </Link>
+                            ))}
+                            <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "6px 12px" }} />
+                            <Link href="/tools" className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
                                 onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                 onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                             >
-                                <span className="text-sm">🥬</span>
+                                <span className="text-sm">🧰</span>
                                 <div>
-                                    <div className="text-[13px] font-medium text-re-text-primary">FTL Checker</div>
-                                    <div className="text-[11px] text-re-text-muted">FSMA 204 Food Traceability</div>
-                                </div>
-                            </Link>
-                            <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "4px 12px" }} />
-                            <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
-                                Finance AI Governance
-                            </div>
-                            <Link href="/tools/bias-checker" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
-                                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
-                                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                            >
-                                <span className="text-sm">⚖️</span>
-                                <div>
-                                    <div className="text-[13px] font-medium text-re-text-primary">Bias Checker</div>
-                                    <div className="text-[11px] text-re-text-muted">Disparate Impact & 80% Rule</div>
-                                </div>
-                            </Link>
-                            <Link href="/tools/obligation-scanner" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
-                                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
-                                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                            >
-                                <span className="text-sm">🔍</span>
-                                <div>
-                                    <div className="text-[13px] font-medium text-re-text-primary">Obligation Scanner</div>
-                                    <div className="text-[11px] text-re-text-muted">Regulatory obligation mapping</div>
-                                </div>
-                            </Link>
-                            <Link href="/tools/notice-validator" className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
-                                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
-                                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                            >
-                                <span className="text-sm">📋</span>
-                                <div>
-                                    <div className="text-[13px] font-medium text-re-text-primary">Notice Validator</div>
-                                    <div className="text-[11px] text-re-text-muted">Adverse action notice check</div>
+                                    <div className="text-[13px] font-semibold text-re-brand">View All Tools →</div>
+                                    <div className="text-[11px] text-re-text-muted">7 free FSMA compliance tools</div>
                                 </div>
                             </Link>
                         </div>
                     </div>
                 </div>
+
+                {/* Mobile Hamburger */}
+                <button
+                    className="marketing-mobile-toggle"
+                    onClick={() => setMobileOpen(!mobileOpen)}
+                    aria-label="Toggle navigation menu"
+                    style={{
+                        display: "none",
+                        background: "transparent",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: "6px",
+                        padding: "6px 10px",
+                        cursor: "pointer",
+                        color: "var(--re-text-primary)",
+                        fontSize: "18px",
+                        lineHeight: 1,
+                    }}
+                >
+                    {mobileOpen ? "✕" : "☰"}
+                </button>
             </div>
+
+            {/* Mobile Menu Panel */}
+            {mobileOpen && (
+                <div
+                    className="marketing-mobile-menu"
+                    style={{
+                        display: "none",
+                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                        background: "rgba(6,9,15,0.97)",
+                        padding: "16px 24px 24px",
+                        maxHeight: "calc(100vh - 56px)",
+                        overflowY: "auto",
+                    }}
+                >
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {[
+                            { label: "Product", href: "/#product" },
+                            { label: "Industries", href: "/#industries" },
+                            { label: "Developers", href: "/#developers" },
+                            { label: "Pricing", href: "/pricing" },
+                        ].map((item) => (
+                            <Link
+                                key={item.label}
+                                href={item.href}
+                                onClick={() => setMobileOpen(false)}
+                                style={{
+                                    fontSize: "15px",
+                                    color: "var(--re-text-secondary, #a1a1aa)",
+                                    textDecoration: "none",
+                                    fontWeight: 500,
+                                    padding: "10px 0",
+                                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                }}
+                            >
+                                {item.label}
+                            </Link>
+                        ))}
+                    </div>
+
+                    <div style={{ marginTop: "16px" }}>
+                        <div style={{
+                            fontSize: "10px",
+                            fontWeight: 600,
+                            letterSpacing: "0.12em",
+                            textTransform: "uppercase" as const,
+                            color: "var(--re-text-muted)",
+                            marginBottom: "8px",
+                        }}>
+                            FSMA 204 Compliance Tools
+                        </div>
+                        {TOOL_ITEMS.map((tool) => (
+                            <Link
+                                key={tool.href}
+                                href={tool.href}
+                                onClick={() => setMobileOpen(false)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                    padding: "10px 0",
+                                    textDecoration: "none",
+                                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                }}
+                            >
+                                <span style={{ fontSize: "16px" }}>{tool.emoji}</span>
+                                <div>
+                                    <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--re-text-primary)" }}>{tool.label}</div>
+                                    <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>{tool.desc}</div>
+                                </div>
+                            </Link>
+                        ))}
+                        {MORE_TOOLS.map((tool) => (
+                            <Link
+                                key={tool.href}
+                                href={tool.href}
+                                onClick={() => setMobileOpen(false)}
+                                style={{
+                                    display: "block",
+                                    padding: "8px 0 8px 26px",
+                                    fontSize: "13px",
+                                    color: "var(--re-text-muted)",
+                                    textDecoration: "none",
+                                }}
+                            >
+                                {tool.label}
+                            </Link>
+                        ))}
+                        <Link
+                            href="/tools"
+                            onClick={() => setMobileOpen(false)}
+                            style={{
+                                display: "block",
+                                marginTop: "8px",
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                color: "var(--re-brand)",
+                                textDecoration: "none",
+                                padding: "10px 0",
+                            }}
+                        >
+                            View All Tools →
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {/* Responsive CSS */}
+            <style jsx>{`
+                @media (max-width: 768px) {
+                    .marketing-desktop-nav {
+                        display: none !important;
+                    }
+                    .marketing-mobile-toggle {
+                        display: block !important;
+                    }
+                    .marketing-mobile-menu {
+                        display: block !important;
+                    }
+                }
+            `}</style>
         </nav>
     );
 }
-
