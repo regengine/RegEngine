@@ -19,6 +19,23 @@ const MORE_TOOLS = [
 
 export function MarketingHeader() {
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [toolsOpen, setToolsOpen] = useState(false);
+    const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null);
+
+    const handleToolsEnter = () => {
+        if (closeTimeout) {
+            clearTimeout(closeTimeout);
+            setCloseTimeout(null);
+        }
+        setToolsOpen(true);
+    };
+
+    const handleToolsLeave = () => {
+        const timeout = setTimeout(() => {
+            setToolsOpen(false);
+        }, 500); // Increased delay for slow movement
+        setCloseTimeout(timeout);
+    };
 
     return (
         <nav
@@ -91,18 +108,8 @@ export function MarketingHeader() {
 
                     {/* Free Tools Dropdown */}
                     <div style={{ position: "relative" }}
-                        onMouseEnter={(e) => {
-                            const dropdown = e.currentTarget.querySelector('[data-tools-dropdown]') as HTMLElement;
-                            if (dropdown) dropdown.style.opacity = '1';
-                            if (dropdown) dropdown.style.pointerEvents = 'auto';
-                            if (dropdown) dropdown.style.transform = 'translateY(0)';
-                        }}
-                        onMouseLeave={(e) => {
-                            const dropdown = e.currentTarget.querySelector('[data-tools-dropdown]') as HTMLElement;
-                            if (dropdown) dropdown.style.opacity = '0';
-                            if (dropdown) dropdown.style.pointerEvents = 'none';
-                            if (dropdown) dropdown.style.transform = 'translateY(4px)';
-                        }}
+                        onMouseEnter={handleToolsEnter}
+                        onMouseLeave={handleToolsLeave}
                     >
                         <span
                             style={{
@@ -126,46 +133,56 @@ export function MarketingHeader() {
                                 position: "absolute",
                                 top: "100%",
                                 right: 0,
-                                marginTop: "8px",
-                                background: "rgba(15,20,30,0.97)",
-                                border: "1px solid rgba(255,255,255,0.08)",
+                                paddingTop: "60px", // Large bridge to cover gaps
+                                marginTop: "-30px", // Move container up to overlap hit area
+                                background: "none",
+                                border: "none",
                                 borderRadius: "10px",
-                                padding: "8px 0",
-                                minWidth: "280px",
-                                opacity: 0,
-                                pointerEvents: "none" as const,
-                                transform: "translateY(4px)",
-                                transition: "all 0.2s ease",
-                                backdropFilter: "blur(20px)",
-                                boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+                                opacity: toolsOpen ? 1 : 0,
+                                pointerEvents: toolsOpen ? "auto" : "none",
+                                transform: toolsOpen ? "translateY(0)" : "translateY(10px)",
+                                transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)", // Smoother transition
+                                zIndex: 100,
                             }}
                         >
-                            <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
-                                FSMA 204 Compliance Tools
-                            </div>
-                            {TOOL_ITEMS.map((tool) => (
-                                <Link key={tool.href} href={tool.href} className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                            <div
+                                style={{
+                                    background: "rgba(15,20,30,0.98)",
+                                    border: "1px solid rgba(255,255,255,0.08)",
+                                    borderRadius: "12px",
+                                    padding: "8px 0",
+                                    minWidth: "280px",
+                                    backdropFilter: "blur(24px)",
+                                    boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+                                }}
+                            >
+                                <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
+                                    FSMA 204 Compliance Tools
+                                </div>
+                                {TOOL_ITEMS.map((tool) => (
+                                    <Link key={tool.href} href={tool.href} className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
+                                        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
+                                    >
+                                        <span className="text-sm">{tool.emoji}</span>
+                                        <div>
+                                            <div className="text-[13px] font-medium text-re-text-primary">{tool.label}</div>
+                                            <div className="text-[11px] text-re-text-muted">{tool.desc}</div>
+                                        </div>
+                                    </Link>
+                                ))}
+                                <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "6px 12px" }} />
+                                <Link href="/tools" className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
                                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                     onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                                 >
-                                    <span className="text-sm">{tool.emoji}</span>
+                                    <span className="text-sm">🧰</span>
                                     <div>
-                                        <div className="text-[13px] font-medium text-re-text-primary">{tool.label}</div>
-                                        <div className="text-[11px] text-re-text-muted">{tool.desc}</div>
+                                        <div className="text-[13px] font-semibold text-re-brand">View All Tools →</div>
+                                        <div className="text-[11px] text-re-text-muted">7 free FSMA compliance tools</div>
                                     </div>
                                 </Link>
-                            ))}
-                            <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "6px 12px" }} />
-                            <Link href="/tools" className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
-                                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
-                                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
-                            >
-                                <span className="text-sm">🧰</span>
-                                <div>
-                                    <div className="text-[13px] font-semibold text-re-brand">View All Tools →</div>
-                                    <div className="text-[11px] text-re-text-muted">7 free FSMA compliance tools</div>
-                                </div>
-                            </Link>
+                            </div>
                         </div>
                     </div>
                 </div>
