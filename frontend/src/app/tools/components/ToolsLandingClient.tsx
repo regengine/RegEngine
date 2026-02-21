@@ -225,21 +225,15 @@ export function ToolsLandingClient() {
                 </div>
 
                 <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
                     transition={{ delay: 0.8 }}
                     className="mt-20 p-8 rounded-3xl border border-[var(--re-border-default)] bg-gradient-to-br from-[var(--re-surface-card)] to-[var(--re-surface-elevated)] text-center space-y-6"
                 >
-                    <div className="flex justify-center -space-x-3">
-                        {[1, 2, 3, 4].map(i => (
-                            <div key={i} className="w-12 h-12 rounded-full border-4 border-[var(--re-surface-card)] bg-[var(--re-surface-elevated)] flex items-center justify-center font-bold text-xs">
-                                {String.fromCharCode(64 + i)}
-                            </div>
-                        ))}
-                    </div>
                     <h2 className="text-2xl font-bold">Need a Custom Compliance Blueprint?</h2>
                     <p className="text-[var(--re-text-tertiary)] max-w-xl mx-auto text-sm">
-                        Join 450+ companies using RegEngine to automate their Rule 204 recordkeeping.
+                        Be among the first companies to automate their Rule 204 recordkeeping with RegEngine.
                         Schedule a session with an expert to map your specific supply chain risks.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">

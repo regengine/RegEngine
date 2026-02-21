@@ -238,7 +238,6 @@ export default function WhitePapersPage() {
                                 <ul className="space-y-2 text-sm text-gray-700">
                                     <li>• Cost-benefit analysis</li>
                                     <li>• Competitive comparison table</li>
-                                    <li>• Customer success story</li>
                                     <li>• Implementation methodology</li>
                                 </ul>
                             </CardContent>
