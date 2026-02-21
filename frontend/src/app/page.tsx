@@ -309,6 +309,7 @@ export default function RegEngineLanding() {
             traceability data
             <br />
             <span className="text-re-brand">in 24 hours.</span>
+            <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-re-brand transition-colors align-super" title="21 CFR § 1.1455(c) Requirement">[FDA]</a>
           </h1>
 
           <p

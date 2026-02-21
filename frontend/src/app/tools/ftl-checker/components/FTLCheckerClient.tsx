@@ -1049,8 +1049,8 @@ export function FTLCheckerClient() {
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
                                         {[
                                             { num: 1, title: 'Critical Tracking Events (CTEs)', desc: 'You must record events for: Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation of FTL foods.', cfrLink: 'https://www.ecfr.gov/current/title-21/section-1.1325', cfrLabel: '§1.1325–§1.1350' },
-                                            { num: 2, title: '24-Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.' },
-                                            { num: 3, title: 'Traceability Lot Codes (TLCs)', desc: 'Each lot must have a unique code that links all events across your supply chain.' },
+                                            { num: 2, title: '24-Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)', cfrLabel: '§1.1455(c)' },
+                                            { num: 3, title: 'Traceability Lot Codes (TLCs)', desc: 'Each lot must have a unique code that links all events across your supply chain.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1320', cfrLabel: '§1.1320' },
                                         ].map(item => (
                                             <div key={item.num}>
                                                 <h4 style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px' }}>
