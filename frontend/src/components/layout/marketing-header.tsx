@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
+import Image from 'next/image';
+
 const TOOL_ITEMS = [
     { emoji: "📊", label: "FSMA Dashboard", desc: "Consolidated compliance command center", href: "/tools/fsma-unified" },
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
@@ -62,25 +64,14 @@ export function MarketingHeader() {
                 }}
             >
                 <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-                    <div
-                        style={{
-                            width: "8px",
-                            height: "8px",
-                            borderRadius: "50%",
-                            background: "var(--re-brand)",
-                            boxShadow: "0 0 10px rgba(16,185,129,0.4)",
-                        }}
+                    <Image
+                        src="/logo-dark.png"
+                        alt="RegEngine"
+                        width={140}
+                        height={32}
+                        style={{ objectFit: "contain" }}
+                        priority
                     />
-                    <span
-                        style={{
-                            fontSize: "14px",
-                            fontWeight: 700,
-                            letterSpacing: "0.06em",
-                            color: "var(--re-text-primary)",
-                        }}
-                    >
-                        REGENGINE
-                    </span>
                 </Link>
 
                 {/* Desktop Nav */}
