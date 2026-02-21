@@ -44,18 +44,18 @@ type TraceMode = "forward" | "backward" | "bidirectional";
 type Viewport = { scale: number; panX: number; panY: number };
 
 const NTS: Record<NodeType, { color: string; dim: string; icon: string; kde: string }> = {
-    Supplier: { color: "#58a6ff", dim: "#0d2240", icon: "🏭", kde: "Source" },
-    Facility: { color: "#10b981", dim: "#064e3b", icon: "🏗️", kde: "Location" },
-    Product: { color: "#f59e0b", dim: "#451a03", icon: "📦", kde: "Product" },
-    Lot: { color: "#a78bfa", dim: "#2e1065", icon: "🔖", kde: "Traceability Lot" },
-    CTE: { color: "#22d3ee", dim: "#083344", icon: "📍", kde: "Critical Tracking Event" },
-    Location: { color: "#ec4899", dim: "#500724", icon: "📌", kde: "Ship-to/Ship-from" },
+    Supplier: { color: "var(--re-info)", dim: "rgba(14, 165, 233, 0.15)", icon: "🏭", kde: "Source" },
+    Facility: { color: "var(--re-brand)", dim: "rgba(34, 197, 94, 0.15)", icon: "🏗️", kde: "Location" },
+    Product: { color: "var(--re-warning)", dim: "rgba(245, 158, 11, 0.15)", icon: "📦", kde: "Product" },
+    Lot: { color: "var(--re-purple)", dim: "rgba(168, 85, 247, 0.15)", icon: "🔖", kde: "Traceability Lot" },
+    CTE: { color: "var(--re-cyan)", dim: "rgba(6, 182, 212, 0.15)", icon: "📍", kde: "Critical Tracking Event" },
+    Location: { color: "var(--re-danger)", dim: "rgba(239, 68, 68, 0.15)", icon: "📌", kde: "Ship-to/Ship-from" },
 };
 
 const ETS: Record<EdgeType, { color: string; dash: boolean }> = {
-    Supplies: { color: "#58a6ff", dash: false }, Contains: { color: "#a78bfa", dash: false },
-    Transforms: { color: "#f59e0b", dash: false }, ShipsTo: { color: "#10b981", dash: false },
-    TracedFrom: { color: "#22d3ee", dash: true }, LocatedAt: { color: "#ec4899", dash: true },
+    Supplies: { color: "var(--re-info)", dash: false }, Contains: { color: "var(--re-purple)", dash: false },
+    Transforms: { color: "var(--re-warning)", dash: false }, ShipsTo: { color: "var(--re-brand)", dash: false },
+    TracedFrom: { color: "var(--re-cyan)", dash: true }, LocatedAt: { color: "var(--re-danger)", dash: true },
 };
 
 function nodeR(t: NodeType) { return t === "Facility" ? 20 : t === "Supplier" || t === "Product" ? 18 : t === "Location" ? 14 : 16; }
@@ -162,6 +162,11 @@ export function SupplyChainKnowledgeGraphBuilder() {
         const canvas = canvasRef.current; if (!canvas) return; const ctx = canvas.getContext("2d"); if (!ctx) return;
         const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, rect = canvas.getBoundingClientRect();
         const w = Math.floor(rect.width * dpr), h = Math.floor(rect.height * dpr);
+
+        // Helper to resolve CSS variables into actual hex/rgba strings for Canvas
+        const rootStyles = getComputedStyle(document.documentElement);
+        const resolveColor = (c: string) => c.startsWith('var(') ? rootStyles.getPropertyValue(c.slice(4, -1)).trim() : c;
+
         if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, rect.width, rect.height);
         ctx.save(); ctx.translate(vp.panX, vp.panY); ctx.scale(vp.scale, vp.scale);
@@ -176,8 +181,23 @@ export function SupplyChainKnowledgeGraphBuilder() {
         for (const e of visEdges) {
             const a = nodes.find(n => n.id === e.from), b = nodes.find(n => n.id === e.to); if (!a || !b) continue;
             const hl = trace?.edges.has(e.id), sel = selEdge === e.id, dim = trace && !hl && !sel, es = ETS[e.type] || ETS.Supplies;
+            const bColor = resolveColor(es.color);
             ctx.lineWidth = sel ? 3 : hl ? 2.5 : 1.2;
-            ctx.strokeStyle = sel ? "rgba(99,102,241,0.9)" : hl ? es.color : dim ? es.color + "30" : es.color + "55";
+
+            // Reconstruct rgba strings for transparency handling
+            const [baseHex, alpha] = bColor.startsWith('#') && bColor.length === 9
+                ? [bColor.slice(0, 7), parseInt(bColor.slice(7), 16) / 255]
+                : [bColor, 1];
+
+            // A helper to create rgba strings from hex + custom opacity
+            const hexToRgba = (hex: string, a: number) => {
+                const r = parseInt(hex.slice(1, 3), 16) || 0;
+                const g = parseInt(hex.slice(3, 5), 16) || 0;
+                const b = parseInt(hex.slice(5, 7), 16) || 0;
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+            };
+
+            ctx.strokeStyle = sel ? "rgba(99,102,241,0.9)" : hl ? bColor : dim ? hexToRgba(baseHex, 0.2) : hexToRgba(baseHex, 0.4);
             if (es.dash) ctx.setLineDash([6, 4]); else ctx.setLineDash([]);
             ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); ctx.setLineDash([]);
             const dx = b.x - a.x, dy = b.y - a.y, dist = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / dist, uy = dy / dist;
@@ -188,9 +208,19 @@ export function SupplyChainKnowledgeGraphBuilder() {
         // Nodes
         for (const n of visNodes) {
             const r = nodeR(n.type), sel2 = selNode === n.id, hl = trace?.nodes.has(n.id), dim = trace && trace.nodes.size > 0 && !hl && !sel2, s = NTS[n.type];
-            if (sel2 || hl) { ctx.beginPath(); ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2); ctx.fillStyle = s.color + "22"; ctx.fill(); }
+            const sColor = resolveColor(s.color);
+
+            // Reconstruct rgba for hex
+            const hexToRgba = (hex: string, a: number) => {
+                const r = parseInt(hex.slice(1, 3), 16) || 0;
+                const g = parseInt(hex.slice(3, 5), 16) || 0;
+                const b = parseInt(hex.slice(5, 7), 16) || 0;
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+            };
+
+            if (sel2 || hl) { ctx.beginPath(); ctx.arc(n.x, n.y, r + 8, 0, Math.PI * 2); ctx.fillStyle = hexToRgba(sColor, 0.15); ctx.fill(); }
             ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = dim ? "rgba(15,23,42,0.6)" : s.dim; ctx.fill();
-            ctx.lineWidth = sel2 ? 2.5 : 1.5; ctx.strokeStyle = dim ? "rgba(148,163,184,0.2)" : sel2 ? "#fff" : s.color; ctx.stroke();
+            ctx.lineWidth = sel2 ? 2.5 : 1.5; ctx.strokeStyle = dim ? "rgba(148,163,184,0.2)" : sel2 ? "#fff" : sColor; ctx.stroke();
             ctx.font = "14px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = dim ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.9)"; ctx.fillText(s.icon, n.x, n.y);
             ctx.font = "11px ui-sans-serif"; ctx.fillStyle = dim ? "rgba(148,163,184,0.3)" : "rgba(226,232,240,0.95)"; ctx.textBaseline = "top";
             ctx.fillText(n.label, n.x, n.y + r + 5);
@@ -235,8 +265,25 @@ export function SupplyChainKnowledgeGraphBuilder() {
                             <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="w-[240px] rounded-2xl pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
                             <Select value={trMode} onValueChange={v => setTrMode(v as any)}><SelectTrigger className="w-[160px] rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="forward">→ Forward</SelectItem><SelectItem value="backward">← Backward</SelectItem><SelectItem value="bidirectional">↔ Both</SelectItem></SelectContent></Select>
                         </div>
-                        <div ref={containerRef} className="h-[520px] w-full overflow-hidden rounded-3xl border" style={{ background: "#0a0e17" }}>
-                            <canvas ref={canvasRef} className="h-full w-full" style={{ cursor: dragId ? "grabbing" : "crosshair" }} onWheel={onWheel} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} />
+                        <div ref={containerRef} className="h-[520px] w-full overflow-hidden rounded-3xl border bg-[var(--re-surface-base)] relative">
+                            <canvas
+                                ref={canvasRef}
+                                className="h-full w-full outline-none focus:ring-2 focus:ring-[var(--re-brand)] focus:ring-inset"
+                                style={{ cursor: dragId ? "grabbing" : "crosshair" }}
+                                onWheel={onWheel}
+                                onMouseDown={onDown}
+                                onMouseMove={onMove}
+                                onMouseUp={onUp}
+                                onMouseLeave={onUp}
+                                tabIndex={0}
+                                role="img"
+                                aria-label="Interactive visual representation of the Supply Chain Knowledge Graph. Use the mouse to pan, zoom, and explore nodes such as Suppliers and Critical Tracking Events."
+                            >
+                                <p className="p-4 text-sm text-[var(--re-text-muted)]">
+                                    Your browser does not support the HTML5 canvas element, or screen reader mode is active.
+                                    This widget allows visual exploration of {visNodes.length} supply chain nodes and {visEdges.length} tracking events connecting them.
+                                </p>
+                            </canvas>
                         </div>
                     </div>
                     <div className="md:col-span-3 space-y-3">

@@ -1,15 +1,20 @@
 'use client';
 
 import React from "react";
-import { motion } from "framer-motion";
-import { AlertTriangle } from "lucide-react";
+import { Network } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { AnomalyDetectionSimulator } from "./AnomalySimulator";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { RelatedTools } from "@/components/layout/related-tools";
 import { FREE_TOOLS } from "@/lib/fsma-tools-data";
+import { KnowledgeGraphErrorBoundary } from "./KnowledgeGraphErrorBoundary";
 
-export function UnifiedDashboardClient() {
+const SupplyChainKnowledgeGraphBuilder = dynamic(
+    () => import("./KnowledgeGraph").then(mod => mod.SupplyChainKnowledgeGraphBuilder),
+    { ssr: false }
+);
+
+export function KnowledgeGraphClient() {
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
             <div className="mx-auto max-w-7xl space-y-6">
@@ -20,7 +25,7 @@ export function UnifiedDashboardClient() {
                         <li><Link href="/tools" className="hover:text-[var(--re-brand)] transition-colors">Free Tools</Link></li>
                         <li aria-hidden="true" className="text-muted-foreground/40">/</li>
                         <li aria-current="page" className="font-medium text-foreground">
-                            Anomaly Detection Simulator
+                            Supply Chain Knowledge Graph
                         </li>
                     </ol>
                 </nav>
@@ -28,27 +33,32 @@ export function UnifiedDashboardClient() {
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
                         <div className="text-3xl font-semibold tracking-tight">
-                            RegEngine • Anomaly Detection Simulator
+                            RegEngine • Supply Chain Knowledge Graph
                         </div>
                         <div className="mt-1 text-sm text-muted-foreground">
-                            Technical demo for FSMA 204 cold-chain anomaly simulations.
+                            Interactive visual builder for designing FSMA 204 compliant supply chain networks.
                         </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Badge className="bg-[var(--re-brand)] rounded-xl py-1 px-3">
+                            <Network className="mr-2 h-4 w-4 inline" />
+                            Graph Editor Active
+                        </Badge>
                     </div>
                 </div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                >
-                    <AnomalyDetectionSimulator />
-                </motion.div>
+                <div className="mt-6">
+                    <KnowledgeGraphErrorBoundary>
+                        <SupplyChainKnowledgeGraphBuilder />
+                    </KnowledgeGraphErrorBoundary>
+                </div>
 
-                <div className="rounded-3xl border p-4 md:p-6">
+                <div className="rounded-3xl border p-4 md:p-6 mt-8">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div>
                             <div className="text-sm font-medium">Compliance Note</div>
                             <div className="text-sm text-muted-foreground">
-                                These demos showcase how RegEngine handles high-integrity data under 21 CFR Part 1.
+                                This demo showcases how RegEngine handles high-integrity data under 21 CFR Part 1.
                                 Full production mode includes ERP connectors and immutable traceability packets.
                             </div>
                         </div>
@@ -57,7 +67,7 @@ export function UnifiedDashboardClient() {
                 </div>
 
                 <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['knowledge-graph', 'ftl-checker', 'roi-calculator', 'recall-readiness'].includes(t.id))}
+                    tools={FREE_TOOLS.filter(t => ['fsma-unified', 'ftl-checker', 'cte-mapper'].includes(t.id))}
                 />
             </div>
         </div>

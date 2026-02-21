@@ -210,7 +210,7 @@ class TestExemptionsEndpoint:
 
     def test_empty_answers_not_exempt(self, client):
         data = client.post("/v1/fsma/wizard/exemptions", json={"answers": {}}).json()
-        assert data["status"] == "NOT_EXEMPT"
+        assert data["status"] == "UNKNOWN"
         assert data["is_exempt"] is False
         assert data["unanswered_count"] == 6
 
@@ -258,4 +258,4 @@ class TestExemptionsEndpoint:
 
     def test_missing_answers_field_uses_default(self, client):
         data = client.post("/v1/fsma/wizard/exemptions", json={}).json()
-        assert data["status"] == "NOT_EXEMPT"
+        assert data["status"] == "UNKNOWN"

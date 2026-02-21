@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Calculator, Download, ArrowRight, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { Calculator, Download, ArrowRight, TrendingUp, AlertCircle, CheckCircle, Settings2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -14,6 +14,14 @@ export default function EntertainmentROICalculatorPage() {
     const [annualViolationFines, setAnnualViolationFines] = useState(150000);
     const [insurancePremium, setInsurancePremium] = useState(200000);
     const [avgCrewSize, setAvgCrewSize] = useState(75);
+
+    // Advanced Settings (LOGIC-001 Mitigation)
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [violationProb, setViolationProb] = useState(15);
+    const [shutdownProb, setShutdownProb] = useState(30);
+    const [avgShutdownDays, setAvgShutdownDays] = useState(2);
+    const [hoursPerCrew, setHoursPerCrew] = useState(2);
+    const [pcosBaseCost, setPcosBaseCost] = useState(60000);
 
     // Calculate ROI
     const calculateROI = () => {
@@ -33,9 +41,8 @@ export default function EntertainmentROICalculatorPage() {
         const violationPrevention = annualViolationFines * 0.8 * unionComplexity; // 80% reduction
 
         // 2. Production Shut-Down Avoidance (scales with production count + budget)
-        const violationProbPerProduction = 0.15; // 15% chance per production
-        const shutdownProbability = 0.3; // 30% of violations lead to shutdowns
-        const avgShutdownDays = 2;
+        const violationProbPerProduction = violationProb / 100;
+        const shutdownProbability = shutdownProb / 100;
         const shutdownReduction = 0.9; // 90% reduction
 
         const shutdownAvoidance = productions * violationProbPerProduction * shutdownProbability * avgShutdownDays * costPerDay * shutdownReduction;
@@ -44,7 +51,6 @@ export default function EntertainmentROICalculatorPage() {
         const insuranceSavings = insurancePremium * 0.15; // 15% reduction
 
         // 4. Crew Verification Time Savings
-        const hoursPerCrew = 2;
         const costPerHour = 75;
         const timeReduction = 0.98; // 98% reduction (2 hours -> 2 minutes)
 
@@ -53,10 +59,10 @@ export default function EntertainmentROICalculatorPage() {
         // Total benefits
         const totalBenefit = violationPrevention + shutdownAvoidance + insuranceSavings + crewVerificationSavings;
 
-        // PCOS Cost (tiered by production count)
-        let pcosCost = 60000; // base
-        if (productions >= 16) pcosCost = 150000;
-        else if (productions >= 6) pcosCost = 100000;
+        // PCOS Cost (tiered by production count, anchored to base cost)
+        let pcosCost = pcosBaseCost;
+        if (productions >= 16) pcosCost = Math.max(150000, pcosBaseCost);
+        else if (productions >= 6) pcosCost = Math.max(100000, pcosBaseCost);
 
         const netBenefit = totalBenefit - pcosCost;
         const paybackMonths = (pcosCost / totalBenefit) * 12;
@@ -230,6 +236,75 @@ export default function EntertainmentROICalculatorPage() {
                                             <span>500</span>
                                         </div>
                                     </div>
+
+                                    {/* Advanced Settings Toggle */}
+                                    <div className="pt-4 border-t">
+                                        <button
+                                            onClick={() => setShowAdvanced(!showAdvanced)}
+                                            className="flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors"
+                                        >
+                                            <Settings2 className="h-4 w-4" />
+                                            {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+                                            {showAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                        </button>
+                                    </div>
+
+                                    {/* Advanced Settings Panel */}
+                                    {showAdvanced && (
+                                        <div className="space-y-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-900 border animate-in slide-in-from-top-2">
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">
+                                                    Violation Probability per Prod: {violationProb}%
+                                                </label>
+                                                <input
+                                                    type="range" min="1" max="50"
+                                                    value={violationProb} onChange={(e) => setViolationProb(Number(e.target.value))}
+                                                    className="w-full h-1"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">
+                                                    Shut-Down Probability (on Violation): {shutdownProb}%
+                                                </label>
+                                                <input
+                                                    type="range" min="5" max="100" step="5"
+                                                    value={shutdownProb} onChange={(e) => setShutdownProb(Number(e.target.value))}
+                                                    className="w-full h-1"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">
+                                                    Verification Hours per Crew Member: {hoursPerCrew} hrs
+                                                </label>
+                                                <input
+                                                    type="range" min="0.5" max="10" step="0.5"
+                                                    value={hoursPerCrew} onChange={(e) => setHoursPerCrew(Number(e.target.value))}
+                                                    className="w-full h-1"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">
+                                                    Average Shut-Down Duration: {avgShutdownDays} days
+                                                </label>
+                                                <input
+                                                    type="range" min="0.5" max="14" step="0.5"
+                                                    value={avgShutdownDays} onChange={(e) => setAvgShutdownDays(Number(e.target.value))}
+                                                    className="w-full h-1"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium mb-1">
+                                                    PCOS Baseline Annual Cost: ${(pcosBaseCost / 1000).toFixed(0)}K
+                                                </label>
+                                                <input
+                                                    type="range" min="10000" max="250000" step="10000"
+                                                    value={pcosBaseCost} onChange={(e) => setPcosBaseCost(Number(e.target.value))}
+                                                    className="w-full h-1"
+                                                />
+                                                <p className="text-[10px] text-muted-foreground mt-1">Volume pricing tiers scale up from this baseline.</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
@@ -408,9 +483,9 @@ export default function EntertainmentROICalculatorPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm space-y-2">
-                                <p><strong>Assumption:</strong> 15% violation probability per production (Producers Guild 2023 survey)</p>
-                                <p><strong>Shut-down probability:</strong> 30% of violations lead to production halts</p>
-                                <p><strong>Average shut-down:</strong> 2 days at budget-adjusted daily rate ($50K–$500K)</p>
+                                <p><strong>Assumption:</strong> Defaults to 15% violation probability per production (Producers Guild survey)</p>
+                                <p><strong>Shut-down probability:</strong> Defaults to 30% of violations leading to halts</p>
+                                <p><strong>Average shut-down:</strong> Defaults to 2 days at budget-adjusted daily rate</p>
                                 <p><strong>PCOS reduction:</strong> 90% (database-enforced prevention)</p>
                             </CardContent>
                         </Card>
@@ -423,10 +498,10 @@ export default function EntertainmentROICalculatorPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="text-sm space-y-2">
-                                <p><strong>Manual process:</strong> 2 hours per crew member (union calls, reference checks)</p>
+                                <p><strong>Manual process:</strong> {hoursPerCrew} hours per crew member (union calls, reference checks)</p>
                                 <p><strong>PCOS process:</strong> 30 seconds (automated verification)</p>
                                 <p><strong>Cost per hour:</strong> $75 (production coordinator hourly rate)</p>
-                                <p><strong>Time reduction:</strong> 98% (2 hours → 30 seconds)</p>
+                                <p><strong>Time reduction:</strong> 98% (automated verification vs manual checking)</p>
                             </CardContent>
                         </Card>
 

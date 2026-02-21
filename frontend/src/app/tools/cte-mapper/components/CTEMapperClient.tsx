@@ -2,6 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
+import { usePostHog } from 'posthog-js/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion } from 'framer-motion';
 import { ArrowDown, Truck, Factory, Warehouse, ShoppingCart, Send, Info, ChevronRight } from 'lucide-react';
@@ -72,6 +73,8 @@ const RoleIcon = ({ role, className }: { role: string; className?: string }) => 
 };
 
 export function CTEMapperClient() {
+    const posthog = usePostHog();
+
     const renderResults = (answers: Record<string, any>) => {
         const { user_role, source_role, destination_role } = answers;
 
@@ -181,6 +184,15 @@ export function CTEMapperClient() {
             <FSMAToolShell
                 config={CTE_MAPPER_CONFIG}
                 renderResults={renderResults}
+                onLeadCapture={(lead) => {
+                    if (lead.email) {
+                        posthog?.capture('cte_mapped', {
+                            email: lead.email,
+                            answers: lead.answers
+                        });
+                        posthog?.identify(lead.email, { email: lead.email });
+                    }
+                }}
             />
 
             <div className="max-w-3xl mx-auto">

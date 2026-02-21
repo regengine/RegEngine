@@ -76,16 +76,16 @@ export function VerificationWidget({ substationId }: VerificationWidgetProps) {
 
     if (error) {
         return (
-            <Card className="border-yellow-500">
+            <Card className="border-muted bg-muted/20">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-yellow-600">
+                    <CardTitle className="flex items-center gap-2 text-muted-foreground text-base">
                         <AlertTriangle className="h-5 w-5" />
-                        Verification Unavailable
+                        Verification Status Unavailable
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground">
-                        Unable to fetch verification status. Click "Run Verification" to check chain integrity.
+                        Unable to fetch real-time verification status. Click "Run Verification" on the dashboard to check chain integrity.
                     </p>
                 </CardContent>
             </Card>

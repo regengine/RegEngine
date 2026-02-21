@@ -2,6 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
+import { usePostHog } from 'posthog-js/react';
 import { motion } from 'framer-motion';
 import { Timer, AlertTriangle, ShieldCheck, Zap, Ghost, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,8 @@ const DRILL_TOOL_CONFIG: ToolConfig = {
 };
 
 export function DrillSimulatorClient() {
+    const posthog = usePostHog();
+
     const calculateResult = (answers: Record<string, any>) => {
         let totalHours = 0;
         DRILL_TOOL_CONFIG.stages.questions.forEach(q => {
@@ -156,6 +159,15 @@ export function DrillSimulatorClient() {
             <FSMAToolShell
                 config={DRILL_TOOL_CONFIG}
                 renderResults={calculateResult}
+                onLeadCapture={(lead) => {
+                    if (lead.email) {
+                        posthog?.capture('drill_simulated', {
+                            email: lead.email,
+                            answers: lead.answers
+                        });
+                        posthog?.identify(lead.email, { email: lead.email });
+                    }
+                }}
             />
 
             <div className="max-w-3xl mx-auto">

@@ -33,4 +33,5 @@ export interface LeadData {
     intentScore: number;
     toolId: string;
     resultsSummary: string;
+    answers?: Record<string, any>;
 }

@@ -127,10 +127,17 @@ export const FREE_TOOLS = [
     },
     {
         id: 'fsma-unified',
-        title: 'Unified FSMA Dashboard',
-        description: 'Anomalies and Knowledge Graph command center.',
-        icon: ShieldCheck,
+        title: 'Anomaly Detection Simulator',
+        description: 'Test cold-chain anomaly detection and alerting.',
+        icon: AlertTriangle,
         href: '/tools/fsma-unified'
+    },
+    {
+        id: 'knowledge-graph',
+        title: 'Supply Chain Knowledge Graph',
+        description: 'Interactive tracing graph for FSMA networks.',
+        icon: Network,
+        href: '/tools/knowledge-graph'
     },
     {
         id: 'roi-calculator',

@@ -93,7 +93,8 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                 email,
                 toolId: config.id,
                 intentScore: 50, // Placeholder scoring
-                resultsSummary: 'User completed the flow'
+                resultsSummary: 'User completed the flow',
+                answers
             });
         }
         trackToolEvent('LEAD_CAPTURE', { email });

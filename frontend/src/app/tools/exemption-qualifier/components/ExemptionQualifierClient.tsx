@@ -2,6 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
+import { usePostHog } from 'posthog-js/react';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertTriangle, Info, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
@@ -79,6 +80,8 @@ const EXEMPTION_TOOL_CONFIG: ToolConfig = {
 };
 
 export function ExemptionQualifierClient() {
+    const posthog = usePostHog();
+
     const evaluateResults = (answers: Record<string, any>) => {
         const { op_type, turnover, farm_purchase, kill_step, rcr_produce } = answers;
 
@@ -167,6 +170,15 @@ export function ExemptionQualifierClient() {
             <FSMAToolShell
                 config={EXEMPTION_TOOL_CONFIG}
                 renderResults={evaluateResults}
+                onLeadCapture={(lead) => {
+                    if (lead.email) {
+                        posthog?.capture('exemption_qualified', {
+                            email: lead.email,
+                            answers: lead.answers
+                        });
+                        posthog?.identify(lead.email, { email: lead.email });
+                    }
+                }}
             />
 
             <div className="max-w-3xl mx-auto">

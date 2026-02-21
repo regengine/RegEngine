@@ -2,6 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ROI_CALCULATOR_CONFIG, calculateROI } from '@/lib/roi-calculator-data';
+import { usePostHog } from 'posthog-js/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Calculator,
@@ -19,6 +20,8 @@ import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 export function ROICalculatorClient() {
+    const posthog = usePostHog();
+
     const renderResults = (answers: Record<string, any>) => {
         const results = calculateROI(answers);
 
@@ -140,6 +143,13 @@ export function ROICalculatorClient() {
                     renderResults={renderResults}
                     onLeadCapture={(lead) => {
                         console.log('[ROI_LEAD_CAPTURE]', lead);
+                        if (lead.email) {
+                            posthog?.capture('roi_calculated', {
+                                email: lead.email,
+                                answers: lead.answers
+                            });
+                            posthog?.identify(lead.email, { email: lead.email });
+                        }
                     }}
                 />
 

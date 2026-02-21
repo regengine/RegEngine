@@ -17,15 +17,18 @@ import {
     RefreshCw,
     MoreHorizontal,
     Eye,
-    Settings,
     Trash2,
     Sparkles,
     Mail,
+    ShieldAlert,
+    Settings
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth-context';
+import { useRouter } from 'next/navigation';
 
 // Mock data for demo
 const mockKPIs = {
@@ -136,11 +139,39 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function OwnerDashboard() {
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const { user, isHydrated } = useAuth();
+    const router = useRouter();
+    const [isAuthorized, setIsAuthorized] = useState(false);
+
+    useEffect(() => {
+        if (!isHydrated) return;
+
+        // SEC-006 Mitigation: Restrict to explicit owner emails
+        const AUTHORIZED_EMAILS = ['owner@regengine.co', 'chris.sellers@regengine.co'];
+
+        if (!user || !user.email || !AUTHORIZED_EMAILS.includes(user.email)) {
+            console.warn('[SECURITY] Unauthorized access attempt to Executive Dashboard');
+            router.push('/tools');
+        } else {
+            setIsAuthorized(true);
+        }
+    }, [user, isHydrated, router]);
 
     const handleRefresh = () => {
         setIsRefreshing(true);
         setTimeout(() => setIsRefreshing(false), 1500);
     };
+
+    if (!isHydrated || !isAuthorized) {
+        return (
+            <div className="min-h-screen bg-[#06090f] flex items-center justify-center">
+                <div className="animate-pulse flex flex-col items-center">
+                    <ShieldAlert className="h-10 w-10 text-[var(--re-brand)] mb-4" />
+                    <p className="text-[var(--re-text-muted)] tracking-widest uppercase text-sm">Verifying Executive Clearance...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#06090f] p-8 text-slate-200">
