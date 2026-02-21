@@ -16,7 +16,7 @@ import {
     FSMA_204_CITATION
 } from '@/lib/fsma-tools-data';
 
-const CALENDLY_LINK = 'https://calendly.com/regengine/fsma-strategy';
+const CALENDLY_LINK = 'https://calendly.com/regengine/fsma-strategy-session';
 
 interface FSMAToolShellProps {
     config: ToolConfig;
