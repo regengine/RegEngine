@@ -185,7 +185,6 @@ export function ToolsLandingClient() {
                                         <div className="flex justify-between items-start">
                                             <div className="p-3 rounded-2xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] group-hover:border-[var(--re-border-subtle)] transition-colors">
                                                 <tool.icon className="h-6 w-6" style={{ color: tool.color }} />
-                                                <div className="text-[8px] opacity-20">[REGENGINE-TOOLS-V11]</div>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 {tool.status === 'featured' && (
@@ -232,7 +231,6 @@ export function ToolsLandingClient() {
                     className="mt-20 p-8 rounded-3xl border border-[var(--re-border-default)] bg-gradient-to-br from-[var(--re-surface-card)] to-[var(--re-surface-elevated)] text-center space-y-6"
                 >
                     <div className="flex justify-center -space-x-3">
-                        <div className="text-[10px] text-[var(--re-text-disabled)] mb-4">[REGENGINE-TOOLS-V11]</div>
                         {[1, 2, 3, 4].map(i => (
                             <div key={i} className="w-12 h-12 rounded-full border-4 border-[var(--re-surface-card)] bg-[var(--re-surface-elevated)] flex items-center justify-center font-bold text-xs">
                                 {String.fromCharCode(64 + i)}
