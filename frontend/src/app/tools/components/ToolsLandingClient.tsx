@@ -13,7 +13,9 @@ import {
     Zap,
     TrendingUp,
     Leaf,
-    Search
+    Search,
+    Users,
+    FileText
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -21,6 +23,33 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const TOOLS = [
+    {
+        id: 'bias-checker',
+        title: 'AI Model Bias Checker',
+        description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
+        icon: Users,
+        color: '#71717a',
+        tag: 'Soon',
+        status: 'coming-soon'
+    },
+    {
+        id: 'obligation-scanner',
+        title: 'Regulatory Obligation Scanner',
+        description: 'Instantly map your financial product features to applicable US regulations across ECOA, TILA, and FCRA.',
+        icon: Shield,
+        color: '#71717a',
+        tag: 'Soon',
+        status: 'coming-soon'
+    },
+    {
+        id: 'notice-validator',
+        title: 'Notice Validator (A-F)',
+        description: 'Paste your adverse action notice text to receive a compliance grade based on 11 critical regulatory requirements.',
+        icon: FileText,
+        color: '#71717a',
+        tag: 'Soon',
+        status: 'coming-soon'
+    },
     {
         id: 'ftl-checker',
         title: 'FTL Coverage Checker',
@@ -114,7 +143,7 @@ export function ToolsLandingClient() {
                         animate={{ opacity: 1, y: 0 }}
                         className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-xs font-bold uppercase tracking-widest"
                     >
-                        <Zap className="h-3 w-3" /> Free FSMA 204 Toolkit
+                        <Zap className="h-3 w-3" /> Free Compliance Toolkit
                     </motion.div>
                     <motion.h1
                         initial={{ opacity: 0, y: 20 }}
@@ -130,7 +159,7 @@ export function ToolsLandingClient() {
                         transition={{ delay: 0.2 }}
                         className="text-xl text-[var(--re-text-tertiary)] max-w-2xl mx-auto"
                     >
-                        Stop guessing about FSMA 204. Our free, interactive tools help you benchmark your readiness and identify critical gaps in minutes.
+                        Stop guessing about compliance. Our free, interactive tools help you benchmark your readiness and identify critical gaps across Food Safety and Finance in minutes.
                     </motion.p>
                 </div>
 
@@ -141,12 +170,15 @@ export function ToolsLandingClient() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 * idx }}
-                            whileHover={{ y: -8 }}
-                            className={tool.status === 'featured' ? 'md:col-span-2' : ''}
+                            whileHover={tool.status === 'coming-soon' ? {} : { y: -8 }}
+                            className={`${tool.status === 'featured' ? 'md:col-span-2' : ''} ${tool.status === 'coming-soon' ? 'opacity-60 cursor-not-allowed' : ''}`}
                         >
-                            <Link href={`/tools/${tool.id}`}>
-                                <Card className={`h-full border-[var(--re-border-default)] bg-[var(--re-surface-card)] hover:border-[var(--re-border-subtle)] transition-all group cursor-pointer overflow-hidden ${tool.status === 'featured' ? 'ring-1 ring-[var(--re-brand-muted)] shadow-[0_0_20px_-12px_rgba(var(--re-brand-rgb,34,197,94),0.3)]' : ''
-                                    }`}>
+                            <Link
+                                href={tool.status === 'coming-soon' ? '#' : `/tools/${tool.id}`}
+                                className={tool.status === 'coming-soon' ? 'pointer-events-none' : ''}
+                            >
+                                <Card className={`h-full border-[var(--re-border-default)] bg-[var(--re-surface-card)] transition-all group overflow-hidden ${tool.status === 'featured' ? 'ring-1 ring-[var(--re-brand-muted)] shadow-[0_0_20px_-12px_rgba(var(--re-brand-rgb,34,197,94),0.3)]' : ''
+                                    } ${tool.status !== 'coming-soon' ? 'hover:border-[var(--re-border-subtle)] cursor-pointer' : ''}`}>
                                     <div className="h-1.5 w-full" style={{ background: tool.color }} />
                                     <CardHeader className="space-y-4">
                                         <div className="flex justify-between items-start">
@@ -177,8 +209,12 @@ export function ToolsLandingClient() {
                                         </div>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="flex items-center text-sm font-bold text-[var(--re-brand)] opacity-0 group-hover:opacity-100 transition-opacity translate-x-[-10px] group-hover:translate-x-0">
-                                            Launch Tool <ArrowRight className="ml-2 h-4 w-4" />
+                                        <div className={`flex items-center text-sm font-bold transition-all ${tool.status === 'coming-soon'
+                                                ? 'text-[var(--re-text-muted)] opacity-100'
+                                                : 'text-[var(--re-brand)] opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0'
+                                            }`}>
+                                            {tool.status === 'coming-soon' ? 'Available in Q2' : 'Launch Tool'}
+                                            <ArrowRight className="ml-2 h-4 w-4" />
                                         </div>
                                     </CardContent>
                                 </Card>

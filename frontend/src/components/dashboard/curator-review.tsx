@@ -71,7 +71,7 @@ export function CuratorReview() {
   if (error) {
     return (
       <div className="p-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
-        Unable to load review queue. Please ensure you are connected with a valid Admin API Key.
+        Unable to load review queue. Please verify service connectivity.
       </div>
     );
   }

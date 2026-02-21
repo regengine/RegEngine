@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 
 import requests
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query, Form
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from confluent_kafka.admin import AdminClient
@@ -717,7 +717,7 @@ def _process_and_emit(
 
     # 1.6. Deduplication Check (Phase 4)
     if db_manager:
-        existing = db_manager.get_document_by_hash(content_sha256)
+        existing = db_manager.get_document_by_hash(content_sha256, tenant_id=tenant_id)
         if existing:
             document_id = str(existing['id'])
             normalized_uri = existing['storage_key']
@@ -931,6 +931,85 @@ async def ingest_direct(
             job.completed_at = datetime.utcnow()
             db_manager.update_job(job)
         logger.exception("ingestion_error", error=str(exc)); raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/v1/ingest/file", response_model=NormalizedEvent)
+async def ingest_file(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    source_system: str = Form("generic"),
+    vertical: Optional[str] = Form(None),
+    api_key: APIKey = Depends(require_api_key),
+) -> NormalizedEvent:
+    """Ingest a single document from a file upload (v2)."""
+    endpoint = "ingest_file"
+    start_time = time.perf_counter()
+    tenant_id = api_key.tenant_id or "00000000-0000-0000-0000-000000000000"
+    job_id = str(uuid.uuid4())
+    
+    logger.info("ingest_file_request", filename=file.filename, tenant_id=tenant_id, job_id=job_id)
+    
+    db_manager = get_db_manager()
+    audit_logger = None
+    if db_manager:
+        db_manager.connect()
+        db_manager.set_tenant_context(tenant_id)
+        audit_logger = AuditLogger(job_id, db_connection=db_manager)
+        job = IngestionJob(
+            job_id=job_id,
+            vertical=vertical or "unknown",
+            source_type="file_upload",
+            status=JobStatus.RUNNING,
+            started_at=datetime.utcnow(),
+            config={"filename": file.filename}
+        )
+        try:
+            db_manager.insert_job(job)
+        except Exception as e:
+            logger.error("job_db_init_failed", job_id=job_id, error=str(e))
+
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+            
+        content_type = file.content_type or "application/octet-stream"
+        
+        event = _process_and_emit(
+            raw_bytes=content,
+            url_str=f"http://upload.internal/{file.filename}",
+            source_system=source_system,
+            tenant_id=tenant_id,
+            content_type=content_type,
+            job_id=job_id,
+            audit_logger=audit_logger,
+            db_manager=db_manager,
+            vertical=vertical or "unknown"
+        )
+        
+        if db_manager:
+            job.status = JobStatus.COMPLETED
+            job.completed_at = datetime.utcnow()
+            job.documents_processed = 1
+            job.documents_succeeded = 1
+            db_manager.update_job(job)
+
+        REQUEST_COUNTER.labels(endpoint=endpoint, status="200").inc()
+        REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
+        return event
+    except Exception as exc:
+        logger.exception("ingest_file_failed", job_id=job_id, error=str(exc))
+        if db_manager:
+            job.status = JobStatus.FAILED
+            job.error_message = str(exc)
+            job.completed_at = datetime.utcnow()
+            db_manager.update_job(job)
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(exc)}")
+    finally:
+        if db_manager:
+            db_manager.close()
 
 
 @router.post("/v1/ingest/url", response_model=NormalizedEvent)
