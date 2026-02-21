@@ -189,7 +189,7 @@ export function RecallReadinessClient() {
                             <AlertTriangle className="h-4 w-4 text-[var(--re-warning)]" /> Regulatory Risks
                         </h4>
                         <ul className="text-xs space-y-3 text-[var(--re-text-tertiary)]">
-                            <li>• Potential citations for 21 CFR §1.1455 violations</li>
+                            <li>• Potential citations for <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455" target="_blank" rel="noopener noreferrer" className="text-[var(--re-brand)] hover:underline">21 CFR §1.1455</a> violations</li>
                             <li>• Delayed response times during active recalls</li>
                             <li>• Operational chaos during FDA audits</li>
                         </ul>

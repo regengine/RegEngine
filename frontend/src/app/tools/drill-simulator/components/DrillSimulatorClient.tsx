@@ -132,7 +132,7 @@ export function DrillSimulatorClient() {
                         <div>
                             <h4 className="font-bold text-[var(--re-danger)]">Critical Failure Point</h4>
                             <p className="text-xs leading-relaxed text-[var(--re-text-primary)]">
-                                FDA 21 CFR §1.1455 requires an electronic sortable spreadsheet within 24 hours of request.
+                                FDA 21 CFR §1.1455 <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors align-super" title="21 CFR § 1.1455(c)">[FDA]</a> requires an electronic sortable spreadsheet within 24 hours of request.
                                 Your manual processes are causing a "bottleneck" that puts your entire operation at risk.
                             </p>
                         </div>

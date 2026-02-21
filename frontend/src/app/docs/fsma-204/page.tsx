@@ -84,9 +84,9 @@ export default function FSMA204GuidePage() {
                     </h2>
                     <p className="re-body">
                         The FDA Food Safety Modernization Act Section 204 (FSMA 204) requires companies handling foods on
-                        the <strong className="text-re-text-primary">Food Traceability List (FTL)</strong> to maintain standardized
-                        traceability records. In a recall, you must provide the FDA with a sortable spreadsheet within
-                        <strong className="text-re-text-primary"> 24 hours</strong>.
+                        the <strong className="text-re-text-primary">Food Traceability List (FTL)</strong> <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="FDA Food Traceability List">[FDA]</a> to maintain standardized
+                        traceability records <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1320" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="21 CFR § 1.1320-1.1350 Requirement">[FDA]</a>. In a recall, you must provide the FDA with a sortable spreadsheet within
+                        <strong className="text-re-text-primary"> 24 hours</strong> <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="21 CFR § 1.1455(c) Requirement">[FDA]</a>.
                     </p>
 
                     <div style={{
@@ -260,8 +260,8 @@ export default function FSMA204GuidePage() {
                         FDA Request Mode
                     </h2>
                     <p className="re-body">
-                        When the FDA requests traceability data during a recall, you have <strong className="text-re-text-primary">24 hours</strong> to
-                        provide an electronic sortable spreadsheet per 21 CFR 1.1455(b)(3). RegEngine generates this with one API call:
+                        When the FDA requests traceability data during a recall, you have <strong className="text-re-text-primary">24 hours</strong> <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="21 CFR § 1.1455(c) Requirement">[FDA]</a> to
+                        provide an electronic sortable spreadsheet per 21 CFR 1.1455(c). RegEngine generates this with one API call:
                     </p>
 
                     <div style={{
