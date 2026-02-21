@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 const industries = [
     { name: "Food & Beverage", href: "/ftl-checker" },
@@ -40,17 +41,13 @@ export function MarketingFooter() {
             >
                 <div>
                     <Link href="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", textDecoration: "none" }}>
-                        <div
-                            style={{
-                                width: "6px",
-                                height: "6px",
-                                borderRadius: "50%",
-                                background: "var(--re-brand)",
-                            }}
+                        <Image
+                            src="/logo-dark.png"
+                            alt="RegEngine"
+                            width={120}
+                            height={28}
+                            style={{ objectFit: "contain" }}
                         />
-                        <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--re-text-primary)", letterSpacing: "0.06em" }}>
-                            REGENGINE
-                        </span>
                     </Link>
                     <p style={{ fontSize: "13px", color: "var(--re-text-disabled)", lineHeight: 1.6, margin: "0 0 16px", maxWidth: "280px" }}>
                         API-first regulatory compliance. Built by a founder who's done federal
