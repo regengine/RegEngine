@@ -1131,7 +1131,12 @@ class FSMAApplicabilityEngine:
                 active.append(definition)
 
         is_exempt = len(active) > 0
-        status = "EXEMPT" if is_exempt else "NOT_EXEMPT"
+        if is_exempt:
+            status = "EXEMPT"
+        elif unanswered > 0:
+            status = "UNKNOWN"
+        else:
+            status = "NOT_EXEMPT"
 
         return {
             "status": status,

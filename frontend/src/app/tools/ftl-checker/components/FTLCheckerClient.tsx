@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { usePostHog } from 'posthog-js/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { RelatedTools } from "@/components/layout/related-tools";
@@ -486,6 +487,7 @@ interface CheckerResult {
 export function FTLCheckerClient() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const posthog = usePostHog();
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [currentStep, setCurrentStep] = useState<'categories' | 'exemptions' | 'results'>('categories');
     const [exemptionAnswers, setExemptionAnswers] = useState<Record<string, boolean | null>>({});
@@ -596,7 +598,18 @@ export function FTLCheckerClient() {
         if (email) {
             localStorage.setItem('ftl_checker_email', email);
             setEmailSubmitted(true);
-            toast({ title: "Report on its way!", description: "Check your inbox for the full FTL compliance report." });
+
+            // Capture lead
+            const results = getResults();
+            posthog?.capture('ftl_report_requested', {
+                email: email,
+                categories_selected: selectedCategories,
+                covered_count: results.coveredCount,
+                risk_level: results.coveredCount > 0 ? 'HIGH' : 'LOW'
+            });
+            posthog?.identify(email, { email: email });
+
+            toast({ title: "We'll be in touch!", description: "A member of our team will review your coverage and reach out shortly." });
         }
     };
 
@@ -1013,8 +1026,8 @@ export function FTLCheckerClient() {
                                             ) : (
                                                 <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }}>
                                                     <CheckCircle2 size={32} style={{ margin: '0 auto 8px' }} />
-                                                    <p style={{ fontWeight: 600, margin: 0 }}>Report Sent!</p>
-                                                    <p style={{ fontSize: '13px', opacity: 0.8, margin: '4px 0 0' }}>Check your inbox</p>
+                                                    <p style={{ fontWeight: 600, margin: 0 }}>Request Received!</p>
+                                                    <p style={{ fontSize: '13px', opacity: 0.8, margin: '4px 0 0' }}>We'll be in touch shortly</p>
                                                 </div>
                                             )}
                                         </>

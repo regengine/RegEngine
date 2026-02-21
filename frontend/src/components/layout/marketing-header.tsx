@@ -6,15 +6,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 const TOOL_ITEMS = [
-    { emoji: "📊", label: "FSMA Dashboard", desc: "Consolidated compliance command center", href: "/tools/fsma-unified" },
+    { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
-    { emoji: "🔍", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified?tab=anomaly" },
-    { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/fsma-unified?tab=graph" },
+    { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/knowledge-graph" },
 ];
 
 const MORE_TOOLS = [
-    { label: "Anomaly Simulator", href: "/tools/fsma-unified?tab=anomaly", emoji: "🔍" },
-    { label: "Knowledge Graph", href: "/tools/fsma-unified?tab=graph", emoji: "🧠" },
     { label: "ROI Calculator", href: "/tools/roi-calculator", emoji: "💰" },
     { label: "Exemption Qualifier", href: "/tools/exemption-qualifier", emoji: "🛡️" },
     { label: "KDE Completeness Checker", href: "/tools/kde-checker", emoji: "📋" },

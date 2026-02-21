@@ -2,6 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
+import { usePostHog } from 'posthog-js/react';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Search, AlertTriangle, CheckCircle2, FlaskConical, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,8 @@ const TLC_VALIDATOR_CONFIG: ToolConfig = {
 };
 
 export function TLCValidatorClient() {
+    const posthog = usePostHog();
+
     const analyzeTLC = (answers: Record<string, any>) => {
         const tlc = (answers.tlc_input || '').trim();
         if (!tlc) return null;
@@ -132,6 +135,15 @@ export function TLCValidatorClient() {
             <FSMAToolShell
                 config={TLC_VALIDATOR_CONFIG}
                 renderResults={analyzeTLC}
+                onLeadCapture={(lead) => {
+                    if (lead.email) {
+                        posthog?.capture('tlc_validated', {
+                            email: lead.email,
+                            answers: lead.answers
+                        });
+                        posthog?.identify(lead.email, { email: lead.email });
+                    }
+                }}
             />
 
             <div className="max-w-3xl mx-auto">

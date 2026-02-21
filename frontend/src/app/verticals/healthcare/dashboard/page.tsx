@@ -164,9 +164,10 @@ export default function HealthcareDashboardPage() {
                                     overallStatus === "yellow" ? "text-yellow-800" :
                                         "text-gray-800"
                                 }`}>
-                                {overallStatus === "green" ? "SAFE TO OPERATE" :
-                                    overallStatus === "red" ? "UNSAFE TO OPERATE" :
-                                        overallStatus === "yellow" ? "ATTENTION REQUIRED" : "LOADING..."}
+                                {loading ? "LOADING..." :
+                                    overallStatus === "green" ? "SAFE TO OPERATE" :
+                                        overallStatus === "red" ? "UNSAFE TO OPERATE" :
+                                            overallStatus === "yellow" ? "ATTENTION REQUIRED" : "UNAVAILABLE"}
                             </h2>
                         </div>
                     </div>

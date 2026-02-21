@@ -2,6 +2,7 @@
 
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
+import { usePostHog } from 'posthog-js/react';
 import { FSMA_FTL_CATEGORIES, FSMA_CTES } from '@/lib/fsma-tools-data';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +41,8 @@ const KDE_CHECKER_CONFIG: ToolConfig = {
 };
 
 export function KDECheckerClient() {
+    const posthog = usePostHog();
+
     const renderResults = (answers: Record<string, any>) => {
         const { category, ctes } = answers;
         const categoryName = FSMA_FTL_CATEGORIES.find(c => c.id === category)?.name || 'Selected Category';
@@ -117,6 +120,15 @@ export function KDECheckerClient() {
             <FSMAToolShell
                 config={KDE_CHECKER_CONFIG}
                 renderResults={renderResults}
+                onLeadCapture={(lead) => {
+                    if (lead.email) {
+                        posthog?.capture('kde_checked', {
+                            email: lead.email,
+                            answers: lead.answers
+                        });
+                        posthog?.identify(lead.email, { email: lead.email });
+                    }
+                }}
             />
 
             <div className="max-w-3xl mx-auto">
