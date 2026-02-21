@@ -124,9 +124,7 @@ export function ErrorFallback({ error, onReset, showDetails = false }: ErrorFall
           <p className="text-xs text-center text-muted-foreground">
             If this keeps happening, please{' '}
             <a
-              href="https://github.com/anthropics/claude-code/issues"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="mailto:support@regengine.co?subject=Bug%20Report"
               className="text-primary hover:underline"
             >
               report the issue
