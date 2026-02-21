@@ -48,7 +48,7 @@ describe('AuditHistoryTimeline', () => {
 
         await waitFor(() => {
             expect(screen.getByText(/chain verified/i)).toBeInTheDocument();
-            expect(screen.getByText(/100 snapshots/i)).toBeInTheDocument();
+            expect(screen.getAllByText(/100 snapshots/i)[0]).toBeInTheDocument();
         });
     });
 

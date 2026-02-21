@@ -21,6 +21,7 @@ vi.mock('@/lib/api-client', () => ({
         setAccessToken: vi.fn(),
         setUser: vi.fn(),
         login: vi.fn(),
+        setCurrentTenant: vi.fn(),
     },
 }));
 
@@ -29,10 +30,10 @@ const localStorageMock = (() => {
     let store: Record<string, string> = {};
 
     return {
-        getItem: (key: string) => store[key] || null,
-        setItem: (key: string, value: string) => { store[key] = value; },
-        removeItem: (key: string) => { delete store[key]; },
-        clear: () => { store = {}; },
+        getItem: vi.fn((key: string) => store[key] || null),
+        setItem: vi.fn((key: string, value: string) => { store[key] = value.toString(); }),
+        removeItem: vi.fn((key: string) => { delete store[key]; }),
+        clear: vi.fn(() => { store = {}; }),
     };
 })();
 
@@ -72,8 +73,8 @@ describe('useAuth Hook', () => {
                 updated_at: '2026-01-27T00:00:00Z',
             };
 
-            localStorageMock.setItem('user', JSON.stringify(mockUser));
-            localStorageMock.setItem('accessToken', 'test-token');
+            localStorageMock.setItem('regengine_user', JSON.stringify(mockUser));
+            localStorageMock.setItem('regengine_access_token', 'test-token');
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -139,8 +140,8 @@ describe('useAuth Hook', () => {
                 result.current.login('test-token', mockUser, 'tenant-123');
             });
 
-            expect(localStorageMock.getItem('accessToken')).toBe('test-token');
-            expect(localStorageMock.getItem('user')).toBe(JSON.stringify(mockUser));
+            expect(localStorageMock.getItem('regengine_access_token')).toBe('test-token');
+            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
         });
 
         it('calls apiClient.setAccessToken on login', () => {
