@@ -105,7 +105,7 @@ const industries = [
   },
   {
     name: "Energy",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "NERC CIP compliance, FERC regulatory tracking, pipeline safety (49 CFR 192/195), and emissions reporting.",
     regulations: ["NERC CIP", "FERC", "EPA Clean Air Act"],
     link: "/verticals/energy",
@@ -113,7 +113,7 @@ const industries = [
   },
   {
     name: "Nuclear",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "NRC 10 CFR compliance, safety analysis reports, inspection readiness, and decommissioning requirements.",
     regulations: ["10 CFR 50", "NRC RG 1.174", "IAEA Safety Standards"],
     link: "/verticals/nuclear",
@@ -121,7 +121,7 @@ const industries = [
   },
   {
     name: "Finance",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "SEC reporting, SOX compliance, AML/KYC regulatory tracking, and cross-jurisdiction harmonization.",
     regulations: ["SOX", "Dodd-Frank", "EU DORA", "Basel III"],
     link: "/verticals/finance",
@@ -129,7 +129,7 @@ const industries = [
   },
   {
     name: "Healthcare",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "HIPAA compliance monitoring, FDA device regulations, CMS conditions of participation, and state licensure tracking.",
     regulations: ["HIPAA", "21 CFR 820", "CMS CoP", "HITECH"],
     link: "/verticals/healthcare",
@@ -137,7 +137,7 @@ const industries = [
   },
   {
     name: "Manufacturing",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "OSHA compliance, EPA environmental permits, ISO standard tracking, and supply chain due diligence.",
     regulations: ["OSHA 29 CFR 1910", "EPA RCRA", "ISO 9001/14001"],
     link: "/verticals/manufacturing",
@@ -145,7 +145,7 @@ const industries = [
   },
   {
     name: "Automotive",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "NHTSA safety standards, EPA emissions compliance, IATF 16949, and EV battery regulations.",
     regulations: ["FMVSS", "EPA Tier 3", "EU Euro 7"],
     link: "/verticals/automotive",
@@ -153,7 +153,7 @@ const industries = [
   },
   {
     name: "Aerospace",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "FAA airworthiness directives, ITAR/EAR export controls, AS9100 quality, and EASA harmonization.",
     regulations: ["FAR Part 21", "ITAR", "AS9100", "EASA CS"],
     link: "/verticals/aerospace",
@@ -161,7 +161,7 @@ const industries = [
   },
   {
     name: "Construction",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "OSHA construction standards, building code tracking, environmental permits, and prevailing wage compliance.",
     regulations: ["OSHA 29 CFR 1926", "IBC/IRC", "EPA Stormwater"],
     link: "/verticals/construction",
@@ -169,7 +169,7 @@ const industries = [
   },
   {
     name: "Gaming",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "State gaming commission regulations, AML compliance, responsible gaming requirements, and multi-jurisdiction licensing.",
     regulations: ["State Gaming Acts", "FinCEN", "NIGC MICS"],
     link: "/verticals/gaming",
@@ -177,7 +177,7 @@ const industries = [
   },
   {
     name: "Entertainment",
-    status: "live" as const,
+    status: "coming-soon" as const,
     description: "FCC broadcast compliance, content rating requirements, IP/licensing regulations, and labor law (SAG-AFTRA, IATSE).",
     regulations: ["FCC Rules", "COPPA", "DMCA", "State Film Incentives"],
     link: "/verticals/entertainment",

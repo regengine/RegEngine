@@ -5,17 +5,17 @@ import Image from 'next/image';
 
 const industries = [
     { name: "Food & Beverage", href: "/ftl-checker" },
-    { name: "Energy", href: "/verticals/energy" },
-    { name: "Nuclear", href: "/verticals/nuclear" },
-    { name: "Finance", href: "/verticals/finance" },
-    { name: "Healthcare", href: "/verticals/healthcare" },
-    { name: "Manufacturing", href: "/verticals/manufacturing" },
-    { name: "Construction", href: "/verticals/construction" },
-    { name: "Aerospace", href: "/verticals/aerospace" },
-    { name: "Automotive", href: "/verticals/automotive" },
-    { name: "Gaming", href: "/verticals/gaming" },
-    { name: "Entertainment", href: "/verticals/entertainment" },
-    { name: "Technology", href: "/verticals/technology" },
+    { name: "Energy", href: "/verticals/energy", comingSoon: true },
+    { name: "Nuclear", href: "/verticals/nuclear", comingSoon: true },
+    { name: "Finance", href: "/verticals/finance", comingSoon: true },
+    { name: "Healthcare", href: "/verticals/healthcare", comingSoon: true },
+    { name: "Manufacturing", href: "/verticals/manufacturing", comingSoon: true },
+    { name: "Construction", href: "/verticals/construction", comingSoon: true },
+    { name: "Aerospace", href: "/verticals/aerospace", comingSoon: true },
+    { name: "Automotive", href: "/verticals/automotive", comingSoon: true },
+    { name: "Gaming", href: "/verticals/gaming", comingSoon: true },
+    { name: "Entertainment", href: "/verticals/entertainment", comingSoon: true },
+    { name: "Technology", href: "/verticals/technology", comingSoon: true },
 ];
 
 export function MarketingFooter() {
@@ -134,9 +134,14 @@ export function MarketingFooter() {
                             <Link
                                 key={ind.name}
                                 href={ind.href}
-                                className="text-[13px] text-re-text-tertiary no-underline block"
+                                className="text-[13px] text-re-text-tertiary no-underline flex items-center gap-1.5"
                             >
                                 {ind.name}
+                                {ind.comingSoon && (
+                                    <span style={{ fontSize: "9px", color: "var(--re-text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                        Soon
+                                    </span>
+                                )}
                             </Link>
                         ))}
                     </div>
