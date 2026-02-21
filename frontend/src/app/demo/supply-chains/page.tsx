@@ -377,8 +377,8 @@ export default function SupplyChainExplorerPage() {
                         Supply Chain Explorer
                     </h1>
                     <p style={{ fontSize: '17px', color: 'var(--re-text-muted)', lineHeight: 1.6, maxWidth: '640px', margin: 0 }}>
-                        Explore 3 real-world recall scenarios modeled on FDA enforcement actions. Every record is
-                        cryptographically hashed and independently verifiable — this is what FSMA 204 compliance looks like in practice.
+                        Explore 3 real-world recall scenarios modeled on FDA enforcement actions. This demo uses mock case study data inspired by real supply chain events — every record is
+                        cryptographically hashed and independently verifiable.
                     </p>
                 </div>
             </section>
