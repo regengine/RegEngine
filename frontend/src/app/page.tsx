@@ -310,7 +310,6 @@ export default function RegEngineLanding() {
             <br />
             <span className="text-re-brand">in 24 hours.</span>
           </h1>
-          <div className="text-[10px] opacity-10 mb-4">[REGENGINE-HOME-V11]</div>
 
           <p
             style={{
