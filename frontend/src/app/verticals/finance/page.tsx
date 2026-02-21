@@ -495,6 +495,41 @@ export default function FinancePage() {
         </section>
       )}
 
+      {/* Free Tools Section */}
+      <section className="section" id="tools">
+        <div className="container">
+          <div className="section-label">FREE INTERACTIVE TOOLS</div>
+          <h2 className="section-title">Benchmark your compliance in minutes.</h2>
+          <p className="section-subtitle">
+            No API keys required. Use our interactive tools to calculate bias ratios,
+            map obligations, or grade your adverse action notices instantly.
+          </p>
+
+          <div className="challenge-grid opacity-75">
+            <div className="challenge-card cursor-not-allowed grayscale">
+              <span className="badge badge-secondary severity">SOON</span>
+              <h3>AI Model Bias Checker</h3>
+              <p>Input approval rates across demographic groups to compute Disparate Impact Ratios (DIR) and 80% Rule compliance.</p>
+              <div className="mt-4 text-muted-foreground text-sm font-semibold">Coming in Q2 →</div>
+            </div>
+
+            <div className="challenge-card cursor-not-allowed grayscale">
+              <span className="badge badge-secondary severity">SOON</span>
+              <h3>Regulatory Obligation Scanner</h3>
+              <p>Select your product type and features to instantly map applied regulations across ECOA, TILA, and FCRA.</p>
+              <div className="mt-4 text-muted-foreground text-sm font-semibold">Coming in Q2 →</div>
+            </div>
+
+            <div className="challenge-card cursor-not-allowed grayscale">
+              <span className="badge badge-secondary severity">SOON</span>
+              <h3>Adverse Action Notice Validator</h3>
+              <p>Paste your denial notice text to get an instant compliance grade (A-F) based on 11 critical ECOA/FCRA requirements.</p>
+              <div className="mt-4 text-muted-foreground text-sm font-semibold">Coming in Q2 →</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Challenges */}
       <section className="section" id="challenges">
         <div className="container">

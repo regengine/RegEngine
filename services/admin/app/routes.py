@@ -173,8 +173,13 @@ async def health():
             try:
                 # Basic connection check
                 import psycopg
-                # Strip sqlalchemy prefix if present
-                conn_info = admin_db_url.replace("postgresql+psycopg://", "postgresql://")
+                # Robustly strip SQLAlchemy-style dialect prefixes for direct psycopg connection
+                conn_info = admin_db_url
+                for prefix in ["postgresql+psycopg://", "postgresql+asyncpg://", "postgresql+psycopg2://"]:
+                    if conn_info.startswith(prefix):
+                        conn_info = conn_info.replace(prefix, "postgresql://")
+                        break
+                
                 async with await psycopg.AsyncConnection.connect(conn_info) as conn:
                     await conn.execute("SELECT 1")
                 return {"status": "healthy"}
@@ -395,6 +400,18 @@ def list_flagged_extraction_records(
         "next_cursor": result["next_cursor"],
         "has_more": result["has_more"],
     }
+
+
+@v1_router.get("/review/items")
+def list_review_items_alias(
+    status: str = Query("PENDING"),
+    limit: int = Query(50, ge=1, le=500),
+    _: bool = Depends(verify_admin_key),
+):
+    """Alias for /admin/review/flagged-extractions to support legacy frontend calls."""
+    tracker = _tracker()
+    result = tracker.list_hallucinations(status=status, limit=limit)
+    return result["items"]
 
 
 @v1_router.post("/admin/tenants", response_model=TenantCreateResponse, status_code=status.HTTP_201_CREATED)

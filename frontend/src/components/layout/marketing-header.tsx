@@ -5,12 +5,14 @@ import Link from 'next/link';
 
 const TOOL_ITEMS = [
     { emoji: "📊", label: "FSMA Dashboard", desc: "Consolidated compliance command center", href: "/tools/fsma-unified" },
+    { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
     { emoji: "🔍", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified?tab=anomaly" },
     { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/fsma-unified?tab=graph" },
-    { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
 ];
 
 const MORE_TOOLS = [
+    { label: "Anomaly Simulator", href: "/tools/fsma-unified?tab=anomaly", emoji: "🔍" },
+    { label: "Knowledge Graph", href: "/tools/fsma-unified?tab=graph", emoji: "🧠" },
     { label: "ROI Calculator", href: "/tools/roi-calculator", emoji: "💰" },
     { label: "Exemption Qualifier", href: "/tools/exemption-qualifier", emoji: "🛡️" },
     { label: "KDE Completeness Checker", href: "/tools/kde-checker", emoji: "📋" },
@@ -157,7 +159,7 @@ export function MarketingHeader() {
                                 }}
                             >
                                 <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
-                                    FSMA 204 Compliance Tools
+                                    Featured Compliance Tools
                                 </div>
                                 {TOOL_ITEMS.map((tool) => (
                                     <Link key={tool.href} href={tool.href} className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
@@ -179,7 +181,7 @@ export function MarketingHeader() {
                                     <span className="text-sm">🧰</span>
                                     <div>
                                         <div className="text-[13px] font-semibold text-re-brand">View All Tools →</div>
-                                        <div className="text-[11px] text-re-text-muted">7 free FSMA compliance tools</div>
+                                        <div className="text-[11px] text-re-text-muted">10 free compliance tools</div>
                                     </div>
                                 </Link>
                             </div>
@@ -309,7 +311,8 @@ export function MarketingHeader() {
                                 padding: "10px 0",
                             }}
                         >
-                            View All Tools →
+                            <div>View All 7 Tools →</div>
+                            <p>Full FSMA compliance toolkit</p>
                         </Link>
                     </div>
                 </div>

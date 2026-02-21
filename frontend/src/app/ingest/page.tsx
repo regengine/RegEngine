@@ -336,7 +336,7 @@ export default function IngestPage() {
               </form>
 
               {/* Success Message */}
-              {ingestMutation.isSuccess && (
+              {(ingestMutation.isSuccess || ingestFileMutation.isSuccess) && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -349,10 +349,10 @@ export default function IngestPage() {
                         Document Ingested Successfully
                       </h4>
                       <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                        Document ID: <code className="font-mono">{ingestMutation.data?.document_id}</code>
+                        Document ID: <code className="font-mono">{(ingestMutation.data?.document_id || ingestFileMutation.data?.document_id)}</code>
                       </p>
                       <p className="text-sm text-green-700 dark:text-green-300">
-                        {ingestMutation.data?.message}
+                        {(ingestMutation.data?.message || ingestFileMutation.data?.message || 'The document has been successfully uploaded and sent for processing.')}
                       </p>
 
                       {/* Next Steps */}
@@ -386,7 +386,9 @@ export default function IngestPage() {
                             variant="ghost"
                             onClick={() => {
                               setUrl('');
+                              setFile(null);
                               ingestMutation.reset();
+                              ingestFileMutation.reset();
                             }}
                           >
                             Ingest Another
@@ -452,7 +454,7 @@ export default function IngestPage() {
               )}
 
               {/* Error Message */}
-              {ingestMutation.isError && (
+              {(ingestMutation.isError || ingestFileMutation.isError) && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -465,7 +467,7 @@ export default function IngestPage() {
                         Ingestion Failed
                       </h4>
                       <p className="text-sm text-red-700 dark:text-red-300 mt-1">
-                        {ingestMutation.error?.message || 'An error occurred during ingestion'}
+                        {(ingestMutation.error as any)?.message || (ingestFileMutation.error as any)?.message || 'An error occurred during ingestion'}
                       </p>
                       <p className="text-sm text-red-700 dark:text-red-300 mt-2">
                         Common issues:
