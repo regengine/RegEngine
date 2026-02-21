@@ -540,39 +540,39 @@ export default function FinancePage() {
             for bank branches. The gap between your velocity and their expectations is where risk lives.
           </p>
 
-          <div className="challenge-grid">
-            <div className="challenge-card">
-              <span className="badge badge-high severity">HIGH</span>
+          <div className="challenge-grid opacity-80">
+            <div className="challenge-card grayscale">
+              <span className="badge badge-secondary severity">PLANNED</span>
               <h3>AI Model Bias Detection</h3>
               <p>ECOA requires proving your credit models don't discriminate. Our Bias Engine evaluates DIR,
                 80% rule, and statistical significance across protected classes — automatically on every model version.</p>
             </div>
-            <div className="challenge-card">
-              <span className="badge badge-high severity">HIGH</span>
+            <div className="challenge-card grayscale">
+              <span className="badge badge-secondary severity">PLANNED</span>
               <h3>Model Drift Monitoring</h3>
               <p>SR 11-7 model risk management requires continuous monitoring. Our Drift Engine tracks PSI,
                 KL/JS divergence across features — alerting when models deviate from training distribution.</p>
             </div>
-            <div className="challenge-card">
-              <span className="badge badge-high severity">HIGH</span>
+            <div className="challenge-card grayscale">
+              <span className="badge badge-secondary severity">PLANNED</span>
               <h3>Regulatory Obligation Coverage</h3>
               <p>{stats?.obligations_total || 21} obligations across ECOA, TILA, FCRA, UDAAP, and OCC AI/ML guidance.
                 Our ROE evaluates every decision against applicable requirements — zero manual mapping.</p>
             </div>
-            <div className="challenge-card">
-              <span className="badge badge-medium severity">MEDIUM</span>
+            <div className="challenge-card grayscale">
+              <span className="badge badge-secondary severity">PLANNED</span>
               <h3>Evidence Chain Integrity</h3>
               <p>Auditors need proof controls existed at specific timestamps. Evidence V3 creates cryptographic
                 hash chains with Merkle roots — tamper detection built-in.</p>
             </div>
-            <div className="challenge-card">
-              <span className="badge badge-hot severity">LIVE</span>
+            <div className="challenge-card grayscale">
+              <span className="badge badge-hot severity">BETA</span>
               <h3>Real-Time Compliance Scoring</h3>
               <p>Snapshot service computes weighted compliance across bias (30%), drift (20%), documentation (25%),
                 and regulatory mapping (25%) — from your API, not quarterly reports.</p>
             </div>
-            <div className="challenge-card">
-              <span className="badge badge-new severity">NEW</span>
+            <div className="challenge-card grayscale">
+              <span className="badge badge-secondary severity">PLANNED</span>
               <h3>Graph-Based Audit Trails</h3>
               <p>Neo4j persistence with decision → model → obligation → evidence relationships.
                 Cypher queries for chain traversal and violation analysis.</p>
