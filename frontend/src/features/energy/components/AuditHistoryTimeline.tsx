@@ -34,6 +34,10 @@ export function AuditHistoryTimeline({ substationId, maxItems = 5 }: AuditHistor
             }
             const result = await response.json();
 
+            if (result.verified === 0 && result.corrupted === 0) {
+                return [];
+            }
+
             // Transform the response into history events
             return [{
                 id: '1',

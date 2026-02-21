@@ -1,6 +1,6 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -8,8 +8,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Database, Shield, Link2 } from 'lucide-react';
 
 interface SnapshotDetailModalProps {
-    snapshotId: string;
+    snapshotId: string | null;
     onClose: () => void;
+    defaultTab?: string;
 }
 
 interface SnapshotDetail {
@@ -58,7 +59,7 @@ function CryptoField({ label, value, link }: { label: string; value: string; lin
     );
 }
 
-export function SnapshotDetailModal({ snapshotId, onClose }: SnapshotDetailModalProps) {
+export function SnapshotDetailModal({ snapshotId, onClose, defaultTab = 'overview' }: SnapshotDetailModalProps) {
     const { data, isLoading } = useQuery<SnapshotDetail>({
         queryKey: ['snapshot-detail', snapshotId],
         queryFn: async () => {
@@ -81,6 +82,9 @@ export function SnapshotDetailModal({ snapshotId, onClose }: SnapshotDetailModal
                         <Database className="h-5 w-5" />
                         Snapshot Details
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Detailed view of snapshot assets and cryptographic verification hashes.
+                    </DialogDescription>
                 </DialogHeader>
 
                 {isLoading ? (
@@ -90,7 +94,7 @@ export function SnapshotDetailModal({ snapshotId, onClose }: SnapshotDetailModal
                         <Skeleton className="h-32 w-full" />
                     </div>
                 ) : data ? (
-                    <Tabs defaultValue="overview" className="w-full">
+                    <Tabs defaultValue={defaultTab} className="w-full">
                         <TabsList className="grid w-full grid-cols-3">
                             <TabsTrigger value="overview">Overview</TabsTrigger>
                             <TabsTrigger value="assets">Assets</TabsTrigger>

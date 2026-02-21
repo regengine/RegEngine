@@ -54,7 +54,6 @@ export function VerificationWidget({ substationId }: VerificationWidgetProps) {
             return response.json();
         },
         refetchInterval: 60000, // Refresh every minute
-        retry: 2,
     });
 
     if (isLoading) {
