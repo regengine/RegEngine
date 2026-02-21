@@ -1,4 +1,5 @@
 'use client';
+// Redeploy trigger: 2026-02-21T00:55:00Z
 
 import { motion } from 'framer-motion';
 import {
@@ -210,8 +211,8 @@ export function ToolsLandingClient() {
                                     </CardHeader>
                                     <CardContent>
                                         <div className={`flex items-center text-sm font-bold transition-all ${tool.status === 'coming-soon'
-                                                ? 'text-[var(--re-text-muted)] opacity-100'
-                                                : 'text-[var(--re-brand)] opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0'
+                                            ? 'text-[var(--re-text-muted)] opacity-100'
+                                            : 'text-[var(--re-brand)] opacity-0 group-hover:opacity-100 translate-x-[-10px] group-hover:translate-x-0'
                                             }`}>
                                             {tool.status === 'coming-soon' ? 'Available in Q2' : 'Launch Tool'}
                                             <ArrowRight className="ml-2 h-4 w-4" />
