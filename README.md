@@ -58,7 +58,7 @@ python3 -m pytest tests/test_fsma_applicability_engine.py services/graph/tests/t
 # cypher-shell -f migrations/fts_index.cypher
 ```
 
-See `docs/FSMA-pilot.md` for the current customer pilot workflow.
+See `docs/FSMA-operations.md` for the current FSMA compliance workflow.
 
 ---
 
