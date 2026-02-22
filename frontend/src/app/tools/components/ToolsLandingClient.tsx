@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const TOOLS = [
-    // --- 1. Featured FSMA 204 Core Tools ---
+    // --- ROW 1: FSMA Essential ---
     {
         id: 'ftl-checker',
         title: 'FTL Coverage Checker',
@@ -35,6 +35,26 @@ const TOOLS = [
         status: 'featured'
     },
     {
+        id: 'recall-readiness',
+        title: 'Recall Readiness Score',
+        description: 'Get an A-F grade on your ability to meet the FDA 24-hour records retrieval mandate.',
+        icon: ShieldCheck,
+        color: 'var(--re-brand)',
+        tag: 'Operations',
+        status: 'standard'
+    },
+
+    // --- ROW 2: FSMA Core ---
+    {
+        id: 'kde-checker',
+        title: 'KDE Completeness Checker',
+        description: 'Generate your customized Key Data Element (KDE) checklist based on your specific FTL product and trading role.',
+        icon: ClipboardList,
+        color: 'var(--re-info)',
+        tag: 'Data Quality',
+        status: 'standard'
+    },
+    {
         id: 'fsma-unified',
         title: 'Unified FSMA Dashboard',
         description: 'A consolidated command center for all your FSMA 204 compliance tools, scoring, and readiness metrics.',
@@ -43,6 +63,8 @@ const TOOLS = [
         tag: 'Command Center',
         status: 'featured'
     },
+
+    // --- ROW 3: FSMA Strategy ---
     {
         id: 'roi-calculator',
         title: 'Regulatory ROI Calculator',
@@ -51,6 +73,26 @@ const TOOLS = [
         color: 'var(--re-brand)',
         tag: 'Strategy',
         status: 'featured'
+    },
+    {
+        id: 'tlc-validator',
+        title: 'TLC Validator',
+        description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDAs requirement for uniqueness.',
+        icon: FlaskConical,
+        color: 'var(--re-brand)',
+        tag: 'Data Integrity',
+        status: 'standard'
+    },
+
+    // --- ROW 4: FSMA Compliance & Mapping ---
+    {
+        id: 'cte-mapper',
+        title: 'CTE Coverage Mapper',
+        description: 'Visualize your supply chain nodes to see exactly who owes whom data for every transaction.',
+        icon: Truck,
+        color: 'var(--re-brand)',
+        tag: 'Integration',
+        status: 'standard'
     },
     {
         id: 'exemption-qualifier',
@@ -62,14 +104,14 @@ const TOOLS = [
         status: 'featured'
     },
 
-    // --- 2. Finance Vertical Suite ---
+    // --- ROW 5: Advanced Simulation & Finance Start ---
     {
-        id: 'bias-checker',
-        title: 'AI Model Bias Checker',
-        description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
-        icon: Users,
-        color: 'var(--re-brand)',
-        tag: 'Finance',
+        id: 'drill-simulator',
+        title: '24-Hour Drill Simulator',
+        description: 'A scenario-based quest to see if your manual processes can survive a real FDA outbreak investigation.',
+        icon: Timer,
+        color: 'var(--re-danger)',
+        tag: 'Simulation',
         status: 'featured'
     },
     {
@@ -81,6 +123,8 @@ const TOOLS = [
         tag: 'Finance',
         status: 'standard'
     },
+
+    // --- ROW 6: Finance Suite ---
     {
         id: 'notice-validator',
         title: 'Notice Validator (A-F)',
@@ -90,52 +134,14 @@ const TOOLS = [
         tag: 'Finance',
         status: 'standard'
     },
-
-    // --- 3. Standard FSMA Operations ---
     {
-        id: 'recall-readiness',
-        title: 'Recall Readiness Score',
-        description: 'Get an A-F grade on your ability to meet the FDA 24-hour records retrieval mandate.',
-        icon: ShieldCheck,
+        id: 'bias-checker',
+        title: 'AI Model Bias Checker',
+        description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
+        icon: Users,
         color: 'var(--re-brand)',
-        tag: 'Operations',
-        status: 'standard'
-    },
-    {
-        id: 'kde-checker',
-        title: 'KDE Completeness Checker',
-        description: 'Generate your customized Key Data Element (KDE) checklist based on your specific FTL product and trading role.',
-        icon: ClipboardList,
-        color: 'var(--re-info)',
-        tag: 'Data Quality',
-        status: 'standard'
-    },
-    {
-        id: 'tlc-validator',
-        title: 'TLC Validator',
-        description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDAs requirement for uniqueness.',
-        icon: FlaskConical,
-        color: 'var(--re-brand)',
-        tag: 'Data Integrity',
-        status: 'standard'
-    },
-    {
-        id: 'cte-mapper',
-        title: 'CTE Coverage Mapper',
-        description: 'Visualize your supply chain nodes to see exactly who owes whom data for every transaction.',
-        icon: Truck,
-        color: 'var(--re-brand)',
-        tag: 'Integration',
-        status: 'standard'
-    },
-    {
-        id: 'drill-simulator',
-        title: '24-Hour Drill Simulator',
-        description: 'A scenario-based quest to see if your manual processes can survive a real FDA outbreak investigation.',
-        icon: Timer,
-        color: 'var(--re-danger)',
-        tag: 'Simulation',
-        status: 'standard'
+        tag: 'Finance',
+        status: 'featured'
     }
 ];
 
