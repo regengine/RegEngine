@@ -5,17 +5,17 @@ import Image from 'next/image';
 
 const industries = [
     { name: "Food & Beverage", href: "/ftl-checker" },
-    { name: "Energy", href: "/verticals/energy", comingSoon: true },
-    { name: "Nuclear", href: "/verticals/nuclear", comingSoon: true },
-    { name: "Finance", href: "/verticals/finance", comingSoon: true },
-    { name: "Healthcare", href: "/verticals/healthcare", comingSoon: true },
-    { name: "Manufacturing", href: "/verticals/manufacturing", comingSoon: true },
-    { name: "Construction", href: "/verticals/construction", comingSoon: true },
-    { name: "Aerospace", href: "/verticals/aerospace", comingSoon: true },
-    { name: "Automotive", href: "/verticals/automotive", comingSoon: true },
-    { name: "Gaming", href: "/verticals/gaming", comingSoon: true },
-    { name: "Entertainment", href: "/verticals/entertainment", comingSoon: true },
-    { name: "Technology", href: "/verticals/technology", comingSoon: true },
+    { name: "Energy", comingSoon: true },
+    { name: "Nuclear", comingSoon: true },
+    { name: "Finance", comingSoon: true },
+    { name: "Healthcare", comingSoon: true },
+    { name: "Manufacturing", comingSoon: true },
+    { name: "Construction", comingSoon: true },
+    { name: "Aerospace", comingSoon: true },
+    { name: "Automotive", comingSoon: true },
+    { name: "Gaming", comingSoon: true },
+    { name: "Entertainment", comingSoon: true },
+    { name: "Technology", comingSoon: true },
 ];
 
 export function MarketingFooter() {
@@ -50,8 +50,7 @@ export function MarketingFooter() {
                         />
                     </Link>
                     <p style={{ fontSize: "13px", color: "var(--re-text-disabled)", lineHeight: 1.6, margin: "0 0 16px", maxWidth: "280px" }}>
-                        API-first regulatory compliance. Built by a founder who's done federal
-                        compliance for 20 years — not a marketing team.
+                        API-first regulatory compliance.
                     </p>
                     <div style={{ fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", color: "var(--re-text-disabled)" }}>
                         FSMA 204 Deadline: July 20, 2028
@@ -131,18 +130,27 @@ export function MarketingFooter() {
                     </h4>
                     <div className="grid grid-cols-1 gap-y-2.5">
                         {industries.slice(0, 8).map((ind) => (
-                            <Link
-                                key={ind.name}
-                                href={ind.href}
-                                className="text-[13px] text-re-text-tertiary no-underline flex items-center gap-1.5"
-                            >
-                                {ind.name}
-                                {ind.comingSoon && (
-                                    <span style={{ fontSize: "9px", color: "var(--re-text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                        Soon
-                                    </span>
-                                )}
-                            </Link>
+                            ind.href ? (
+                                <Link
+                                    key={ind.name}
+                                    href={ind.href}
+                                    className="text-[13px] text-re-text-tertiary no-underline flex items-center gap-1.5"
+                                >
+                                    {ind.name}
+                                </Link>
+                            ) : (
+                                <span
+                                    key={ind.name}
+                                    className="text-[13px] text-re-text-disabled flex items-center gap-1.5 cursor-not-allowed"
+                                >
+                                    {ind.name}
+                                    {ind.comingSoon && (
+                                        <span style={{ fontSize: "9px", color: "var(--re-text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                            Soon
+                                        </span>
+                                    )}
+                                </span>
+                            )
                         ))}
                     </div>
                 </div>
