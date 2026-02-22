@@ -70,6 +70,7 @@ class NormalizedEvent(BaseModel):
     source_url: HttpUrl
     raw_s3_path: str
     normalized_s3_path: str
+    text_s3_uri: Optional[str] = None  # Claim Check pointer for payloads > 1MB
     timestamp: datetime
     content_sha256: str
     is_duplicate: bool = False

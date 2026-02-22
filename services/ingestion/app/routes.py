@@ -843,7 +843,7 @@ def _process_and_emit(
         except Exception as db_exc:
             logger.warning("document_db_insert_failed", error=str(db_exc))
 
-    # 8. Kafka Emission
+    # 8. Kafka Emission & Claim Check Pattern
     event = NormalizedEvent(
         event_id=event_id,
         document_id=document_id,
@@ -858,6 +858,15 @@ def _process_and_emit(
     )
 
     try:
+        payload_bytes = json.dumps(event.model_dump(mode="json")).encode("utf-8")
+        
+        # If payload exceeds 1MB Kafka limit, execute Claim Check pattern
+        if len(payload_bytes) > 1024 * 1024:
+            logger.info("kafka_claim_check_triggered", document_id=document_id, size=len(payload_bytes))
+            text_key = f"normalized-text/{document_id}/{event_id}.txt"
+            text_uri = put_bytes(settings.processed_bucket, text_key, parsed_text.encode("utf-8"))
+            event.text_s3_uri = text_uri
+            
         send(
             settings.kafka_topic_normalized,
             event.model_dump(mode="json"),
@@ -1056,14 +1065,13 @@ async def ingest_url(
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
-        response = await asyncio.to_thread(_fetch, url_str)
-        content_type = response.headers.get("Content-Type", "application/octet-stream")
+        raw_bytes, content_type = await _fetch(url_str)
         
         if audit_logger:
-            audit_logger.log_fetch(url_str, "success", http_status=response.status_code)
+            audit_logger.log_fetch(url_str, "success", http_status=200)
 
         event = _process_and_emit(
-            raw_bytes=response.content,
+            raw_bytes=raw_bytes,
             url_str=url_str,
             source_system=payload.source_system,
             tenant_id=tenant_id,
@@ -1317,7 +1325,9 @@ async def list_sources(api_key: APIKey = Depends(require_api_key)):
     }
 
 
-def _fetch(url: str) -> Response:
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB hard limit
+
+async def _fetch(url: str) -> tuple[bytes, str]:
     parsed = urlparse(url)
     host = parsed.hostname
     if not host:
@@ -1328,7 +1338,6 @@ def _fetch(url: str) -> Response:
     if not addresses:
         raise HTTPException(status_code=400, detail="No valid addresses for host")
 
-    # Use compliant headers for government sites (SEC requires Declared Application/Contact)
     headers = {
         "User-Agent": "RegEngine/1.0 (Integration_Testing; admin@regengine.io)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
@@ -1339,41 +1348,31 @@ def _fetch(url: str) -> Response:
         "Upgrade-Insecure-Requests": "1",
     }
 
+    raw_bytes = bytearray()
+    content_type = "application/octet-stream"
+    
     try:
-        response = requests.get(
-            url,
-            timeout=60,  # Increased timeout for large federal documents
-            allow_redirects=True,
-            headers=headers,
-        )
-    except requests.RequestException as exc:  # pragma: no cover - network dependent
+        import httpx
+        async with httpx.AsyncClient(http2=True, follow_redirects=True, timeout=60.0) as client:
+            async with client.stream("GET", url, headers=headers) as response:
+                if response.status_code >= 400:
+                    logger.warning("ingest_fetch_status", url=url, status=response.status_code)
+                    raise HTTPException(status_code=502, detail="Source system returned error")
+                    
+                content_type = response.headers.get("Content-Type", content_type)
+                
+                # Enforce stream limits to prevent OOM
+                async for chunk in response.aiter_bytes():
+                    raw_bytes.extend(chunk)
+                    if len(raw_bytes) > MAX_FILE_SIZE:
+                        logger.error("payload_too_large", url=url, size=len(raw_bytes))
+                        raise HTTPException(status_code=413, detail="Payload Too Large (Exceeds 50MB)")
+
+    except httpx.RequestError as exc:
         logger.error("ingest_fetch_failed", url=url, error=str(exc))
-        raise HTTPException(
-            status_code=502, detail="Failed to fetch source URL"
-        ) from exc
+        raise HTTPException(status_code=502, detail="Failed to fetch source URL") from exc
 
-    # Validate the actual IP connected to prevent DNS rebinding
-    try:
-        if response.raw and hasattr(response.raw, "_connection"):
-            conn = response.raw._connection
-            if hasattr(conn, "sock") and conn.sock:
-                peer_addr = conn.sock.getpeername()[0]
-                peer_ip = ip_address(peer_addr)
-                if any(peer_ip in network for network in PROHIBITED_NETWORKS):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Connection to prohibited network detected",
-                    )
-    except (AttributeError, OSError):
-        # If we can't validate post-connection, log warning but allow
-        # since pre-validation already occurred
-        logger.warning("unable_to_validate_peer_address", url=url)
-
-    if response.status_code >= 400:
-        logger.warning("ingest_fetch_status", url=url, status=response.status_code)
-        raise HTTPException(status_code=502, detail="Source system returned error")
-
-    return response
+    return bytes(raw_bytes), content_type
 
 
 def _validate_url(url: str) -> None:
