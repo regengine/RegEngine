@@ -84,23 +84,29 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 except ValueError:
                     logger.warning(f"Invalid tenant_id in JWT: {tenant_id_str}")
         
-        # Method 2: From custom header (service-to-service)
+        # Method 2: From custom header (Internal/Service-to-service ONLY)
+        # WARNING: This is a potential spoofing vector if not stripped at the gateway.
+        # We only trust this header if we are in a 'trusted' internal context.
         tenant_header = request.headers.get("X-RegEngine-Tenant-ID")
         if tenant_header:
-            try:
-                return uuid.UUID(tenant_header)
-            except ValueError:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid tenant ID format in header: {tenant_header}"
-                )
+            # Check for internal shared secret for service-to-service trust
+            internal_secret = request.headers.get("X-RegEngine-Internal-Secret")
+            # In a real prod env, this would be validated against a secret store/config
+            is_internal = internal_secret == "trusted-internal-v1" # Placeholder for validation logic
+            
+            if is_internal:
+                try:
+                    return uuid.UUID(tenant_header)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid tenant ID format in header: {tenant_header}"
+                    )
+            else:
+                logger.warning(f"Rejected unauthenticated X-RegEngine-Tenant-ID header from {request.client.host}")
         
         # Method 3: From API key (future implementation)
-        # api_key = request.headers.get("X-API-Key")
-        # if api_key:
-        #     tenant_id = await self._lookup_tenant_from_api_key(api_key)
-        #     if tenant_id:
-        #         return tenant_id
+        # ... existing lookup logic ...
         
         return None
 
