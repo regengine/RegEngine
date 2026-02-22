@@ -131,7 +131,14 @@ export default function SnapshotsPage() {
             const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}`);
             if (response.ok) {
                 const data = await response.json();
-                setSnapshots(data);
+                // Handle both direct array and paginated {items: []} format
+                if (Array.isArray(data)) {
+                    setSnapshots(data);
+                } else if (data && Array.isArray(data.items)) {
+                    setSnapshots(data.items);
+                } else {
+                    setSnapshots([]);
+                }
             }
         } catch (error) {
             console.log('Using mock snapshots (backend unavailable)');
