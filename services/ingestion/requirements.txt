@@ -7,7 +7,7 @@ pydantic-settings>=2.1.0
 
 # HTTP & networking
 requests>=2.31.0
-httpx>=0.25.0
+httpx[http2]>=0.25.0
 feedparser>=6.0.0
 redis==5.0.1
 
