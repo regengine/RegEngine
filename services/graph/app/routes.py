@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 # Add shared utilities (portable path resolution)
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id
 from shared.auth import require_api_key
 

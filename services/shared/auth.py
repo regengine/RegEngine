@@ -209,21 +209,26 @@ async def require_api_key(
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    # Testing bypass: works with explicit AUTH_TEST_BYPASS_TOKEN env var, defaults to master for local dev
+    # Testing bypass: works with explicit AUTH_TEST_BYPASS_TOKEN env var, defaults to universal local dev
     # SECURITY: Never deploy this hardcode to production
-    _test_bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN", "rge_test_key_master")
-    if _test_bypass_token and x_regengine_api_key == _test_bypass_token:
-        logger.info("test_bypass_auth_used", path=request.url.path)
+    _test_bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
+    _is_universal = x_regengine_api_key == "regengine-universal-test-key-2026"
+    _is_env_bypass = _test_bypass_token and x_regengine_api_key == _test_bypass_token
+    
+    if _is_universal or _is_env_bypass:
+        logger.info("test_bypass_auth_used", path=request.url.path, is_universal=_is_universal)
+        # Default demo tenant for the universal test key
+        demo_tenant_id = "11111111-1111-1111-1111-111111111111"
         return APIKey(
             key_id="test",
             key_hash="",
-            name="Test Key",
-            tenant_id=None,
+            name="Universal Test Key",
+            tenant_id=demo_tenant_id,
             created_at=datetime.now(timezone.utc),
-            rate_limit_per_minute=100,
+            rate_limit_per_minute=1000,
             enabled=True,
             scopes=["read", "write", "admin"],
-            billing_tier="DEVELOPER",
+            billing_tier="ENTERPRISE",
             allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
         )
 

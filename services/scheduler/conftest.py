@@ -8,3 +8,14 @@ import os
 os.environ.setdefault("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+
+# --- Standardized Bootstrap ---
+import sys
+from pathlib import Path
+_SERVICES_DIR = Path(__file__).resolve().parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+# ------------------------------

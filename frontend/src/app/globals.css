@@ -126,3 +126,12 @@
     white-space: nowrap;
     border-width: 0;
 }
+
+/* native barcode scanner support */
+body.barcode-scanner-active {
+    visibility: hidden;
+}
+
+body.barcode-scanner-active .barcode-scanner-ui {
+    visibility: visible;
+}

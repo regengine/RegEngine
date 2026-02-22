@@ -7,8 +7,7 @@ from typing import Tuple
 
 import boto3
 
-# Add shared module to path for validation
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+# Import shared utilities
 from shared.url_validation import PathTraversalError, validate_s3_uri
 
 from .text_loader import load_artifact

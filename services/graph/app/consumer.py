@@ -21,8 +21,6 @@ import time
 import uuid
 
 # Add parent directory to path for shared module import
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-
 from shared.schemas import GraphEvent
 
 from .config import settings

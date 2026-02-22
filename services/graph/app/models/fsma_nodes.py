@@ -305,6 +305,7 @@ class Document:
     document_id: str
     document_type: str  # BOL, INVOICE, PRODUCTION_LOG
     source_uri: Optional[str] = None  # S3 or file path
+    raw_content: Optional[str] = None  # Storage for Base64 or specific fact extraction results
     extraction_timestamp: Optional[str] = None
     tenant_id: Optional[str] = None
 
@@ -317,6 +318,8 @@ class Document:
         }
         if self.source_uri:
             props["source_uri"] = self.source_uri
+        if self.raw_content:
+            props["raw_content"] = self.raw_content
         if self.extraction_timestamp:
             props["extraction_timestamp"] = self.extraction_timestamp
         if self.tenant_id:

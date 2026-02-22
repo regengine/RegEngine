@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to scan GS1-128 barcodes and capture Bill of Lading (BOL) documents for traceability.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>The photo library is used to select existing BOL documents for upload.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>The photo library is used to save captured BOL documents.</string>
 </dict>
 </plist>

@@ -1,11 +1,17 @@
-"""FastAPI application entrypoint for the admin service."""
-
-from __future__ import annotations
-
+import sys
 import os
 import threading
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from pathlib import Path
+_SERVICE_DIR = Path(__file__).resolve().parent
+_SERVICES_DIR = _SERVICE_DIR.parent
+if str(_SERVICE_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICE_DIR))
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+# ------------------------------
 
 import structlog
 from app.api_overlay import router as overlay_router
@@ -13,6 +19,8 @@ from app.config import get_settings
 from app.logging_config import configure_logging
 from app.routes import router, v1_router
 from app.compliance_routes import router as compliance_router
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Optional
 from fastapi import FastAPI
 # from shared.correlation import CorrelationIdMiddleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -191,7 +199,7 @@ app.include_router(audit_router)
 # ---------------------------------------------------------------------------
 # Optional background consumer for nlp.needs_review → HallucinationTracker
 # ---------------------------------------------------------------------------
-_consumer_thread: threading.Thread | None = None
+_consumer_thread: Optional[threading.Thread] = None
 
 
 def _start_review_consumer() -> None:

@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import List
 from uuid import UUID
 
-# Use APP_HOME env var or calculate from file location
-_app_home = os.environ.get("APP_HOME", str(Path(__file__).resolve().parents[4]))
-sys.path.insert(0, _app_home)
+# Standardized path discovery via shared utility
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from shared.schemas import ExtractionPayload, ObligationType, Threshold
 

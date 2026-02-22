@@ -14,3 +14,14 @@ os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "admin")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("LOG_LEVEL", "INFO")
 os.environ.setdefault("AUTH_SECRET_KEY", "dev_secret_key_change_me")
+
+# --- Standardized Bootstrap ---
+import sys
+from pathlib import Path
+_SERVICES_DIR = Path(__file__).resolve().parent.parent
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+# ------------------------------

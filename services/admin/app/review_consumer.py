@@ -32,19 +32,9 @@ except ValueError:
     REVIEW_MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("review_messages_total")
     POISON_PILL_COUNTER = REGISTRY._names_to_collectors.get("review_poison_pill_total")
 
-# Add shared module to path
-_CURRENT_DIR = Path(__file__).resolve().parent
-_APP_ROOT = _CURRENT_DIR.parent
-_SHARED_DIR = _APP_ROOT / "shared"
-
-if _SHARED_DIR.exists():
-    if str(_APP_ROOT) not in sys.path:
-        sys.path.insert(0, str(_APP_ROOT))
-else:
-    # Fallback to absolute docker path if exists
-    if os.path.exists("/app/shared"):
-        if "/app" not in sys.path:
-            sys.path.insert(0, "/app")
+# Standardized path discovery via shared utility
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from shared.observability import setup_standalone_observability
 

@@ -14,10 +14,9 @@ import structlog
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, Session
 
-# Import from scheduler
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+# Standardized path discovery via shared utility
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from scheduler.app.models import EnforcementItem, EnforcementSeverity, SourceType
 from scheduler.app.config import get_settings

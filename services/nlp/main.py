@@ -4,14 +4,19 @@ import sys
 import threading
 import os
 
-# Standardized path discovery
-_SERVICES_DIR = Path(__file__).resolve().parent.parent
+# --- Standardized Bootstrap ---
+import sys
+from pathlib import Path
+_SERVICE_DIR = Path(__file__).resolve().parent
+_SERVICES_DIR = _SERVICE_DIR.parent
+if str(_SERVICE_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICE_DIR))
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
-# Ensure shared utilities are importable
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
+# ------------------------------
 
 # Production Hardening (Phase 18)
 from shared.logging import setup_logging
@@ -61,7 +66,7 @@ app = FastAPI(
 # Production Hardening Middleware (Phase 18)
 add_security(app)
 add_rate_limiting(app)
-add_observability(app)
+add_observability(app, service_name="nlp-service")
 
 from shared.middleware import TenantContextMiddleware, RequestIDMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware

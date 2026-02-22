@@ -3,6 +3,7 @@ import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
 import { MarketingFooter } from '@/components/layout/marketing-footer'
 import { Analytics } from '@vercel/analytics/react'
+import { PWAElements } from '@/components/mobile/PWAElements'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -45,6 +46,7 @@ export default function RootLayout({
           </main>
           <MarketingFooter />
         </Providers>
+        <PWAElements />
         <Analytics />
       </body>
     </html>
