@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -555,6 +556,28 @@ def export_snapshot(
     except Exception as e:
         logger.error("export_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/snapshots/{tenant_id}/{snapshot_id}/audit-pack", dependencies=[Depends(PermissionChecker("audit.read"))])
+def get_audit_pack(
+    tenant_id: str,
+    snapshot_id: str,
+    session=Depends(get_session),
+) -> Response:
+    """Generate and return a Zero-Trust Audit Pack ZIP."""
+    service = ComplianceServiceSync(session)
+    try:
+        content, filename = service.generate_audit_pack(UUID(snapshot_id))
+        return Response(
+            content=content,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("audit_pack_generation_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/snapshots/{tenant_id}/{snapshot_id}/attest", dependencies=[Depends(PermissionChecker("audit.create"))])

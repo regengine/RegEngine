@@ -1529,6 +1529,15 @@ class PCOSComplianceSnapshotModel(Base):
 
     project_state = Column(JSONB, nullable=False, default=dict)
 
+    content_hash = Column(String(64))
+    status_snapshot = Column(JSONB, default=dict)
+    alerts_snapshot = Column(JSONB, default=list)
+    profile_snapshot = Column(JSONB, default=dict)
+
+    is_verified = Column(Boolean, default=False)
+    verified_at = Column(DateTime(timezone=True))
+    verified_by = Column(String(100))
+
     is_attested = Column(Boolean, default=False)
     attested_at = Column(DateTime(timezone=True))
     attested_by = Column(GUID(), ForeignKey("users.id"))
@@ -1546,6 +1555,43 @@ class PCOSComplianceSnapshotModel(Base):
         Index("idx_snapshots_project", "project_id"),
         Index("idx_snapshots_type", "snapshot_type"),
     )
+
+    @classmethod
+    def compute_hash(cls, status: Dict, alerts: List, profile: Dict) -> str:
+        """Compute a deterministic hash of the snapshot state."""
+        import hashlib
+        import json
+        payload = {
+            "status": status,
+            "alerts": sorted(alerts, key=lambda x: str(x.get("id", ""))),
+            "profile": profile
+        }
+        encoded = json.dumps(payload, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def verify_integrity(self) -> bool:
+        """Verify the stored hash against recomputed state."""
+        computed = self.compute_hash(
+            self.status_snapshot or {},
+            self.alerts_snapshot or [],
+            self.profile_snapshot or {}
+        )
+        return self.content_hash == computed
+
+    def to_export_dict(self) -> Dict[str, Any]:
+        """Convert to audit-ready export dictionary."""
+        return {
+            "snapshot_id": str(self.id),
+            "snapshot_name": self.snapshot_name,
+            "status": self.compliance_status,
+            "score": self.overall_score,
+            "created_at": self.created_at.isoformat(),
+            "content_hash": self.content_hash,
+            "integrity_verified": self.is_verified,
+            "is_attested": self.is_attested,
+            "attested_at": self.attested_at.isoformat() if self.attested_at else None,
+            "attested_by": str(self.attested_by) if self.attested_by else None,
+        }
 
 
 class PCOSAuditEventModel(Base):
