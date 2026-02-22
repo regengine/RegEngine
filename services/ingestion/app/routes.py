@@ -770,9 +770,13 @@ def _process_and_emit(
         except (json.JSONDecodeError, ValueError) as e:
             logger.debug("json_parse_skipped", url=url_str, error=str(e))
             
-    normalized, document_id, _ = normalize_document(
-        raw_json, raw_bytes, url_str, content_type
-    )
+    try:
+        normalized, document_id, _ = normalize_document(
+            raw_json, raw_bytes, url_str, content_type
+        )
+    except Exception as e:
+        logger.error("normalization_failed", url=url_str, error=str(e))
+        raise HTTPException(status_code=422, detail=f"Document parsing/normalization failed: {str(e)}")
     
     # 5. Enrich with metadata
     normalized["parsed_text"] = parsed_text
@@ -1324,12 +1328,12 @@ def _fetch(url: str) -> Response:
     if not addresses:
         raise HTTPException(status_code=400, detail="No valid addresses for host")
 
-    # Use browser-like headers to avoid 403 errors from government sites
+    # Use compliant headers for government sites (SEC requires Declared Application/Contact)
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "RegEngine/1.0 (Integration_Testing; admin@regengine.io)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate",
         "DNT": "1",
         "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
@@ -1338,7 +1342,7 @@ def _fetch(url: str) -> Response:
     try:
         response = requests.get(
             url,
-            timeout=10,
+            timeout=60,  # Increased timeout for large federal documents
             allow_redirects=True,
             headers=headers,
         )
