@@ -29,27 +29,27 @@ const TOOLS = [
         title: 'AI Model Bias Checker',
         description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
         icon: Users,
-        color: '#71717a',
-        tag: 'Soon',
-        status: 'coming-soon'
+        color: 'var(--re-brand)',
+        tag: 'Finance',
+        status: 'featured'
     },
     {
         id: 'obligation-scanner',
         title: 'Regulatory Obligation Scanner',
         description: 'Instantly map your financial product features to applicable US regulations across ECOA, TILA, and FCRA.',
         icon: Shield,
-        color: '#71717a',
-        tag: 'Soon',
-        status: 'coming-soon'
+        color: 'var(--re-brand)',
+        tag: 'Finance',
+        status: 'standard'
     },
     {
         id: 'notice-validator',
         title: 'Notice Validator (A-F)',
         description: 'Paste your adverse action notice text to receive a compliance grade based on 11 critical regulatory requirements.',
         icon: FileText,
-        color: '#71717a',
-        tag: 'Soon',
-        status: 'coming-soon'
+        color: 'var(--re-brand)',
+        tag: 'Finance',
+        status: 'standard'
     },
     {
         id: 'ftl-checker',
