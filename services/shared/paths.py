@@ -59,18 +59,31 @@ def data_schemas_dir() -> Path:
 # ── sys.path helpers ──────────────────────────────────────────────
 
 def ensure_shared_importable() -> None:
-    """Add ``kernel``, ``services/shared`` (and ``services/``) to ``sys.path`` if missing."""
-    for p in (str(project_root()), str(shared_dir()), str(services_dir())):
+    """Add project root, kernel, and services directories to ``sys.path``.
+    
+    This is the primary bootstrap mechanism for all RegEngine services.
+    It ensures that ``from shared import ...`` and ``from app import ...`` 
+    work consistently across local development, pytest, and Docker.
+    """
+    root = str(project_root())
+    shared = str(shared_dir())
+    services = str(services_dir())
+    
+    # Order matters: we want specific service overrides but also shared access
+    for p in (root, shared, services):
         if p not in sys.path:
+            # We insert at 0 to ensure our localized paths take precedence over 
+            # any system-installed packages with physical name collisions
             sys.path.insert(0, p)
 
-
-def ensure_path(*extra: str | Path) -> None:
-    """Add arbitrary paths to ``sys.path`` if not already present."""
-    for p in extra:
-        s = str(Path(p).resolve())
-        if s not in sys.path:
-            sys.path.insert(0, s)
+def add_to_path(path: str | Path, at_front: bool = True) -> None:
+    """Add a specific path to ``sys.path`` if not already present."""
+    p = str(Path(path).resolve())
+    if p not in sys.path:
+        if at_front:
+            sys.path.insert(0, p)
+        else:
+            sys.path.append(p)
 
 
 # ── Resource resolution ──────────────────────────────────────────

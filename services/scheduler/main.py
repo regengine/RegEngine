@@ -28,8 +28,19 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.interval import IntervalTrigger
 from pytz import utc
 
-# Add parent directory to path for shared imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# --- Standardized Bootstrap ---
+import sys
+from pathlib import Path
+_SERVICE_DIR = Path(__file__).resolve().parent
+_SERVICES_DIR = _SERVICE_DIR.parent
+if str(_SERVICE_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICE_DIR))
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+# ------------------------------
 
 from app.config import get_settings
 from app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry

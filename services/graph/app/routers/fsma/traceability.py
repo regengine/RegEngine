@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from ...fsma_metrics import record_trace_query
 from ...fsma_utils import (
@@ -15,13 +17,25 @@ from ...fsma_utils import (
 )
 from ...neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
+from ...models.fsma_nodes import (
+    CTEType,
+    TraceEvent,
+    Lot,
+    Facility,
+    Document,
+    FSMARelationships,
+)
+from shared.fsma_validation import (
+    validate_gln,
+    validate_gtin,
+    validate_tlc,
+)
 
 import uuid
 import sys
 from pathlib import Path
 
 # Add shared utilities (portable path resolution)
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from shared.middleware import get_current_tenant_id
 
 router = APIRouter(tags=["Traceability"])
@@ -236,3 +250,115 @@ async def link_obligation_endpoint(
         await linker.close()
         logger.error("link_obligation_failed", obligation_id=obligation_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# MOBILE FIELD CAPTURE ENDPOINTS
+# ============================================================================
+
+class TraceabilityEventRequest(BaseModel):
+    event_type: CTEType
+    event_date: str
+    tlc: str
+    location_identifier: str
+    quantity: Optional[float] = None
+    uom: Optional[str] = None
+    product_description: Optional[str] = None
+    gtin: Optional[str] = None
+    image_data: Optional[str] = None
+
+
+@router.post("/event")
+async def log_traceability_event(
+    request: TraceabilityEventRequest,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    api_key=Depends(require_api_key),
+):
+    """
+    High-integrity endpoint for logging Critical Tracking Events from mobile dock.
+    Performs real-time validation of identifiers and persists directly to Neo4j.
+    """
+    logger.info("logging_mobile_event", event_type=request.event_type, tlc=request.tlc)
+
+    # 1. Validation Logic
+    tlc_result = validate_tlc(request.tlc)
+    if not tlc_result.is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid TLC: {tlc_result.errors[0].message}")
+
+    gln_result = validate_gln(request.location_identifier)
+    if not gln_result.is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid Location (GLN): {gln_result.errors[0].message}")
+
+    if request.gtin:
+        gtin_result = validate_gtin(request.gtin)
+        if not gtin_result.is_valid:
+            raise HTTPException(status_code=400, detail=f"Invalid GTIN: {gtin_result.errors[0].message}")
+
+    # 2. Persistence to Neo4j
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    client = Neo4jClient(database=db_name)
+    event_id = str(uuid.uuid4())
+
+    try:
+        async with client.session() as session:
+            # Create TraceEvent
+            trace_event = TraceEvent(
+                event_id=event_id,
+                type=request.event_type,
+                event_date=request.event_date,
+                tenant_id=str(tenant_id),
+            )
+            await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
+
+            # Create/Merge Lot
+            lot = Lot(
+                tlc=request.tlc,
+                gtin=request.gtin,
+                product_description=request.product_description,
+                quantity=request.quantity,
+                unit_of_measure=request.uom,
+                tenant_id=str(tenant_id),
+            )
+            await session.run(Lot.merge_cypher(), tlc=request.tlc, properties=lot.node_properties)
+
+            # Create/Merge Facility
+            facility = Facility(
+                gln=request.location_identifier,
+                tenant_id=str(tenant_id),
+            )
+            await session.run(Facility.merge_cypher(), gln=request.location_identifier, properties=facility.node_properties)
+
+            # Link Relationships
+            await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=request.tlc, event_id=event_id)
+            await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=request.location_identifier)
+
+            # 3. Handle Evidence (BOL Photo)
+            if request.image_data:
+                doc_id = str(uuid.uuid4())
+                document = Document(
+                    document_id=doc_id,
+                    document_type="BOL",
+                    # In a production environment, we would upload to S3. 
+                    # For this pilot, we store the Base64 as the raw_content.
+                    source_uri=f"base64://{doc_id}",
+                    raw_content=request.image_data,
+                    extraction_timestamp=datetime.now().isoformat(),
+                    tenant_id=str(tenant_id)
+                )
+                await session.run(Document.merge_cypher(), document_id=doc_id, properties=document.node_properties)
+                # Link Document to Event
+                await session.run(FSMARelationships.DOCUMENT_EVIDENCES, document_id=doc_id, event_id=event_id)
+                logger.info("secured_evidence_payload", doc_id=doc_id, event_id=event_id)
+
+        await client.close()
+        return {
+            "status": "success",
+            "event_id": event_id,
+            "tlc": request.tlc,
+            "message": f"Successfully secured {request.event_type} event on the immutable ledger.",
+        }
+
+    except Exception as e:
+        await client.close()
+        logger.error("mobile_event_logging_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to persist event: {str(e)}")

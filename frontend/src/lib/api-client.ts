@@ -20,6 +20,8 @@ import type {
   InviteCreate,
   AcceptInviteRequest,
   AnalysisSummary,
+  TraceabilityEventRequest,
+  TraceabilityEventResponse,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -347,6 +349,11 @@ class APIClient {
 
   async getLabelsHealth(): Promise<HealthCheckResponse> {
     const { data } = await this.graphClient.get('/v1/labels/health');
+    return data;
+  }
+
+  async logTraceabilityEvent(request: TraceabilityEventRequest): Promise<TraceabilityEventResponse> {
+    const { data } = await this.graphClient.post('/api/v1/fsma/traceability/event', request);
     return data;
   }
 

@@ -61,16 +61,8 @@ def send_to_dlq(topic: str, original_msg: bytes, reason: str, error: str = "") -
         logger.critical("dlq_emission_failed", error=str(e))
 
 # Standardized path discovery via shared utility
-try:
-    from shared.paths import ensure_shared_importable
-    ensure_shared_importable()
-except ImportError:
-    # Fallback if shared/paths not yet in sys.path
-    _parent_dir = str(Path(__file__).resolve().parents[3])
-    if _parent_dir not in sys.path:
-        sys.path.insert(0, _parent_dir)
-    from shared.paths import ensure_shared_importable
-    ensure_shared_importable()
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from services.graph.app.config import settings
 from services.graph.app.fsma_audit import log_extraction

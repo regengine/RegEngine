@@ -15,10 +15,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 import html
 
-# Centralised path resolution — replaces hardcoded Docker /app/shared path
-_srv = str(Path(__file__).resolve().parent.parent.parent)
-if _srv not in sys.path:
-    sys.path.insert(0, _srv)
+# Centralised path resolution
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 

@@ -6,8 +6,7 @@ from pathlib import Path
 import requests
 import structlog
 
-# Add shared module to path for URL validation
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
+# Import shared utilities
 from shared.url_validation import SSRFError, validate_url
 
 logger = structlog.get_logger("text-loader")

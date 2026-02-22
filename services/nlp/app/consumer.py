@@ -20,16 +20,8 @@ from pathlib import Path
 import sys
 
 # Standardized path discovery via shared utility
-try:
-    from shared.paths import ensure_shared_importable
-    ensure_shared_importable()
-except ImportError:
-    # Fallback if shared/paths not yet in sys.path
-    _parent_dir = str(Path(__file__).resolve().parents[3])
-    if _parent_dir not in sys.path:
-        sys.path.insert(0, _parent_dir)
-    from shared.paths import ensure_shared_importable
-    ensure_shared_importable()
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
 
 from shared.schemas import (
     ExtractionPayload,

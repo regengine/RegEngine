@@ -22,7 +22,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 # Import the engine from the kernel (portable path resolution)
-sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 from kernel.reporting.fsma_engine import FSMAApplicabilityEngine
 
 router = APIRouter(prefix="/wizard", tags=["FSMA 204 Wizard"])

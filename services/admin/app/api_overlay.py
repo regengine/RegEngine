@@ -16,10 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 # Add shared module to path
-# In Docker: shared is at /app/shared/, service is at /app/
-sys.path.insert(0, "/app/shared")
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "shared"))
-
 from shared.auth import APIKey, require_api_key
 from shared.tenant_models import (
     ControlMapping,
@@ -32,8 +28,9 @@ from shared.tenant_models import (
 
 # Try to import overlay utilities - may not be available in all environments
 try:
-    # Add graph service path for overlay utilities
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "graph/app"))
+    # Use standardized path helper for cross-service import
+    from shared.paths import add_to_path
+    add_to_path(Path(__file__).resolve().parents[2] / "graph" / "app")
     from overlay_resolver import OverlayResolver
     from overlay_writer import OverlayWriter
     OVERLAY_AVAILABLE = True

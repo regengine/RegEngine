@@ -217,3 +217,22 @@ export interface AnalysisSummary {
     critical_risks: AnalysisRisk[];
 }
 
+// Traceability
+export interface TraceabilityEventRequest {
+    event_type: string;
+    event_date: string;
+    tlc: string;
+    location_identifier: string;
+    quantity?: number;
+    uom?: string;
+    product_description?: string;
+    gtin?: string;
+    image_data?: string; // Base64 encoded image
+}
+
+export interface TraceabilityEventResponse {
+    status: string;
+    event_id: string;
+    tlc: string;
+    message: string;
+}

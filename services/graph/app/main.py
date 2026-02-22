@@ -4,20 +4,19 @@ from fastapi.middleware.cors import CORSMiddleware
 import sys
 from pathlib import Path
 
-# Standardized path discovery
-# _SERVICES_DIR should be 'services/'
-_SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
+# --- Standardized Bootstrap ---
+import sys
+from pathlib import Path
+_SERVICE_DIR = Path(__file__).resolve().parents[1]
+_SERVICES_DIR = _SERVICE_DIR.parent
+if str(_SERVICE_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICE_DIR))
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
-# _GRAPH_DIR should be 'services/graph/'
-_GRAPH_DIR = Path(__file__).resolve().parent.parent
-if str(_GRAPH_DIR) not in sys.path:
-    sys.path.insert(0, str(_GRAPH_DIR))
-
-# Ensure shared utilities are importable
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
+# ------------------------------
 
 # Production Hardening (Phase 18)
 from shared.logging import setup_logging
