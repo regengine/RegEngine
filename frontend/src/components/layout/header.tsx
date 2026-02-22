@@ -316,50 +316,50 @@ export function Header() {
               onMouseLeave={handleMouseLeave}
             >
               <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Industry Frameworks</DropdownMenuLabel>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/aerospace" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Plane className="h-4 w-4 text-sky-500" />
                   <div>
-                    <div className="font-medium">Aerospace</div>
+                    <div className="font-medium">Aerospace <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">AS9100 & NADCAP</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/automotive" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Car className="h-4 w-4 text-red-500" />
                   <div>
-                    <div className="font-medium">Automotive</div>
+                    <div className="font-medium">Automotive <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">IATF 16949 & PPAP</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/construction" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Building className="h-4 w-4 text-stone-500" />
                   <div>
-                    <div className="font-medium">Construction</div>
+                    <div className="font-medium">Construction <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">ISO 19650 & OSHA</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/energy" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Zap className="h-4 w-4 text-blue-500" />
                   <div>
-                    <div className="font-medium">Energy</div>
+                    <div className="font-medium">Energy <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">Grid Asset Topology</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/entertainment" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Film className="h-4 w-4 text-violet-500" />
                   <div>
-                    <div className="font-medium">Entertainment (PCOS)</div>
+                    <div className="font-medium">Entertainment (PCOS) <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">Production compliance suite</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/verticals/food-safety" className="cursor-pointer w-full flex items-center gap-3 py-2">
@@ -370,59 +370,59 @@ export function Header() {
                   </div>
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/finance" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Key className="h-4 w-4 text-amber-500" />
                   <div>
-                    <div className="font-medium">Finance</div>
+                    <div className="font-medium">Finance <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">Reconciliation Command</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/gaming" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Gamepad2 className="h-4 w-4 text-purple-500" />
                   <div>
-                    <div className="font-medium">Gaming</div>
+                    <div className="font-medium">Gaming <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">Live Risk Feed</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/healthcare" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Activity className="h-4 w-4 text-pink-500" />
                   <div>
-                    <div className="font-medium">Healthcare</div>
+                    <div className="font-medium">Healthcare <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">Clinical Risk Monitor</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/manufacturing" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Cog className="h-4 w-4 text-gray-500" />
                   <div>
-                    <div className="font-medium">Manufacturing</div>
+                    <div className="font-medium">Manufacturing <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">ISO 9001 & IATF 16949</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/nuclear" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <Atom className="h-4 w-4 text-orange-500" />
                   <div>
-                    <div className="font-medium">Nuclear</div>
+                    <div className="font-medium">Nuclear <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">NRC Compliance Evidence</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/technology" className="cursor-pointer w-full flex items-center gap-3 py-2">
+              <DropdownMenuItem disabled>
+                <div className="w-full flex items-center gap-3 py-2 opacity-50 cursor-not-allowed">
                   <ServerIcon className="h-4 w-4 text-slate-500" />
                   <div>
-                    <div className="font-medium">Technology</div>
+                    <div className="font-medium">Technology <span className="text-[9px] uppercase font-bold text-muted-foreground ml-1 ring-1 ring-muted px-1 rounded">Soon</span></div>
                     <div className="text-xs text-muted-foreground">Trust Center</div>
                   </div>
-                </Link>
+                </div>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
