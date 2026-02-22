@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 
 const industries = [
     { name: "Food & Beverage", href: "/ftl-checker" },
@@ -19,6 +20,13 @@ const industries = [
 ];
 
 export function MarketingFooter() {
+    const pathname = usePathname();
+
+    // Hide global footer on standalone mobile app routes
+    if (pathname === '/fsma/field-capture') {
+        return null;
+    }
+
     return (
         <footer
             style={{

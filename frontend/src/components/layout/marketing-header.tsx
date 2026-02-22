@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-
+import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 
 const TOOL_ITEMS = [
@@ -19,9 +19,15 @@ const MORE_TOOLS = [
 ];
 
 export function MarketingHeader() {
+    const pathname = usePathname();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [toolsOpen, setToolsOpen] = useState(false);
     const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null);
+
+    // Hide global header on the standalone mobile app routes
+    if (pathname === '/fsma/field-capture') {
+        return null;
+    }
 
     const handleToolsEnter = () => {
         if (closeTimeout) {
