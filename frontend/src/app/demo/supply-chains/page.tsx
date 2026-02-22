@@ -228,6 +228,16 @@ function XIcon({ size = 14 }: { size?: number }) {
     );
 }
 
+function DownloadIcon({ size = 16 }: { size?: number }) {
+    return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+    );
+}
+
 /* ───────────────────────── FACILITY TYPE → ICON MAPPING ───────────────────────── */
 
 function getFacilityIcon(type: string) {
@@ -262,6 +272,43 @@ export default function SupplyChainExplorerPage() {
         setSelectedChain(id);
         setExpandedFacility(null);
         setShowCteTimeline(false);
+    };
+
+    const handleExportFDA = () => {
+        const headers = ['TLC', 'Event Date', 'CTE Type', 'CFR Reference', 'Facility Name', 'Facility GLN', 'Product GTIN', 'Item Description', 'Quantity'];
+        const rows = [headers.join(',')];
+
+        chain.cteFlow.forEach((step, index) => {
+            const facility = chain.facilities.find(f => f.name === step.facility) || chain.facilities[0];
+            const product = chain.products[0]; // Simplification for demo CSV
+
+            // Faux date spread over the last 14 days
+            const eventDate = new Date();
+            eventDate.setDate(eventDate.getDate() - (chain.cteFlow.length - index));
+
+            const row = [
+                `TLC-${product.gtin}-${eventDate.toISOString().split('T')[0].replace(/-/g, '')}`,
+                eventDate.toISOString(),
+                `${step.cte}`,
+                `${step.cfr}`,
+                `"${facility.name}"`,
+                `${facility.gln}`,
+                `${product.gtin}`,
+                `"${product.name}"`,
+                `100` // Mock qty
+            ];
+            rows.push(row.join(','));
+        });
+
+        const csvContent = rows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `FDA_Request_${chain.id}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     return (
@@ -502,6 +549,53 @@ export default function SupplyChainExplorerPage() {
                             <div style={{ fontSize: '10px', color: 'var(--re-text-disabled)', fontFamily: "'JetBrains Mono', monospace", marginTop: '2px' }}>{stat.sub}</div>
                         </div>
                     ))}
+                </div>
+
+                {/* ─── FDA EXPORT SECTION ─── */}
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '24px',
+                        background: `linear-gradient(135deg, ${chain.accentColor}10, transparent)`,
+                        border: `1px solid ${chain.accentColor}30`,
+                        borderRadius: '12px',
+                        marginBottom: '40px',
+                    }}
+                >
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--re-text-primary)', margin: 0 }}>FDA 24-Hour Request Export</h2>
+                            <span style={{ fontSize: '10px', background: 'rgba(16,185,129,0.15)', color: 'var(--re-brand)', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>21 CFR §1.1455</span>
+                        </div>
+                        <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: 0, maxWidth: '500px' }}>
+                            Simulate fulfilling an FDA regulatory request. Instantly download a compliant, electronic sortable spreadsheet containing all CTE records.
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleExportFDA}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '12px 24px',
+                            background: chain.accentColor,
+                            color: '#000',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            boxShadow: `0 4px 12px ${chain.accentColor}40`,
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
+                        onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+                    >
+                        <DownloadIcon size={18} />
+                        Generate FDA Spreadsheet
+                    </button>
                 </div>
 
                 {/* CTE Flow Diagram */}
