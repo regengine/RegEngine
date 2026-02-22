@@ -24,33 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const TOOLS = [
-    {
-        id: 'bias-checker',
-        title: 'AI Model Bias Checker',
-        description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
-        icon: Users,
-        color: 'var(--re-brand)',
-        tag: 'Finance',
-        status: 'featured'
-    },
-    {
-        id: 'obligation-scanner',
-        title: 'Regulatory Obligation Scanner',
-        description: 'Instantly map your financial product features to applicable US regulations across ECOA, TILA, and FCRA.',
-        icon: Shield,
-        color: 'var(--re-brand)',
-        tag: 'Finance',
-        status: 'standard'
-    },
-    {
-        id: 'notice-validator',
-        title: 'Notice Validator (A-F)',
-        description: 'Paste your adverse action notice text to receive a compliance grade based on 11 critical regulatory requirements.',
-        icon: FileText,
-        color: 'var(--re-brand)',
-        tag: 'Finance',
-        status: 'standard'
-    },
+    // --- 1. Featured FSMA 204 Core Tools ---
     {
         id: 'ftl-checker',
         title: 'FTL Coverage Checker',
@@ -87,6 +61,37 @@ const TOOLS = [
         tag: 'Compliance',
         status: 'featured'
     },
+
+    // --- 2. Finance Vertical Suite ---
+    {
+        id: 'bias-checker',
+        title: 'AI Model Bias Checker',
+        description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
+        icon: Users,
+        color: 'var(--re-brand)',
+        tag: 'Finance',
+        status: 'featured'
+    },
+    {
+        id: 'obligation-scanner',
+        title: 'Regulatory Obligation Scanner',
+        description: 'Instantly map your financial product features to applicable US regulations across ECOA, TILA, and FCRA.',
+        icon: Shield,
+        color: 'var(--re-brand)',
+        tag: 'Finance',
+        status: 'standard'
+    },
+    {
+        id: 'notice-validator',
+        title: 'Notice Validator (A-F)',
+        description: 'Paste your adverse action notice text to receive a compliance grade based on 11 critical regulatory requirements.',
+        icon: FileText,
+        color: 'var(--re-brand)',
+        tag: 'Finance',
+        status: 'standard'
+    },
+
+    // --- 3. Standard FSMA Operations ---
     {
         id: 'recall-readiness',
         title: 'Recall Readiness Score',
