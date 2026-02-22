@@ -90,8 +90,12 @@ class ParserRegistry:
         parser = self.get_parser(content_type, content)
         
         if parser:
-            text = parser.parse(content, metadata)
-            return text, parser.get_parser_name()
+            try:
+                text = parser.parse(content, metadata)
+                return text, parser.get_parser_name()
+            except Exception as e:
+                # Provide graceful degradation instead of a 500 error
+                return f"Error extracting content via {parser.get_parser_name()}: {str(e)}", f"{parser.get_parser_name()}_failed"
         
         # Fallback to UTF-8 decode
         try:

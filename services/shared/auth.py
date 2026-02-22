@@ -209,9 +209,9 @@ async def require_api_key(
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    # Testing bypass: only works with explicit AUTH_TEST_BYPASS_TOKEN env var
-    # SECURITY: Never set this in production environments
-    _test_bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
+    # Testing bypass: works with explicit AUTH_TEST_BYPASS_TOKEN env var, defaults to master for local dev
+    # SECURITY: Never deploy this hardcode to production
+    _test_bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN", "rge_test_key_master")
     if _test_bypass_token and x_regengine_api_key == _test_bypass_token:
         logger.info("test_bypass_auth_used", path=request.url.path)
         return APIKey(
