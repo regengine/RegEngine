@@ -114,12 +114,14 @@ export function Header() {
           <Link href="/" className="flex items-center space-x-2">
             <Activity className="h-6 w-6 text-primary" />
             <span className="text-xl font-bold">RegEngine</span>
+            <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border-emerald-500/20 px-1.5 py-0 h-4 rounded-full">BETA</Badge>
           </Link>
         </div>
 
         <Link href="/" className="hidden md:flex items-center space-x-2 smooth-transition hover:scale-105">
           <Activity className="h-6 w-6 text-primary" />
           <span className="text-xl font-bold">RegEngine</span>
+          <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border-emerald-500/20 px-1.5 py-0 h-4 rounded-full">BETA</Badge>
         </Link>
 
         <nav className="items-center space-x-1 hidden md:flex">
