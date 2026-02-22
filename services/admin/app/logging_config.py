@@ -55,7 +55,4 @@ def configure_logging(level: str = "INFO") -> None:
     )
     
     # Configure standard library logging to match
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(message)s",
-    )
+    logging.root.setLevel(getattr(logging, level.upper(), logging.INFO))

@@ -159,6 +159,7 @@ def _tracker():
 async def health():
     """Deep health check endpoint with dependency verification."""
     import os
+    from fastapi.responses import JSONResponse
     from shared.health import HealthCheck
 
     checker = HealthCheck(service_name="admin-api")
@@ -200,8 +201,8 @@ async def health():
         checker.add_dependency("redis", check_redis)
 
     result = await checker.check()
-    status_code = 200 if result.get("status") == "healthy" else 503
-    return result, status_code
+    sc = 200 if result.get("status") == "healthy" else 503
+    return JSONResponse(content=result, status_code=sc)
 
 
 @router.get("/ready")
