@@ -6,6 +6,7 @@ import { useTenant } from '@/lib/tenant-context';
 import {
     Camera,
     Shield,
+    ShieldCheck,
     CheckCircle2,
     XCircle,
     Download,
@@ -127,7 +128,7 @@ export default function SnapshotsPage() {
 
     const fetchSnapshots = async () => {
         try {
-            const response = await fetch(`/api/v1/compliance/snapshots/${tenantId}`);
+            const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}`);
             if (response.ok) {
                 const data = await response.json();
                 setSnapshots(data);
@@ -145,7 +146,7 @@ export default function SnapshotsPage() {
 
         setCreating(true);
         try {
-            const response = await fetch(`/api/v1/compliance/snapshots/${tenantId}`, {
+            const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -172,7 +173,7 @@ export default function SnapshotsPage() {
         if (!attestingSnapshotId || !attestName.trim() || !attestTitle.trim()) return;
 
         try {
-            const response = await fetch(`/api/v1/compliance/snapshots/${tenantId}/${attestingSnapshotId}/attest`, {
+            const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}/${attestingSnapshotId}/attest`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -196,7 +197,7 @@ export default function SnapshotsPage() {
     const verifySnapshot = async (snapshotId: string) => {
         try {
             const response = await fetch(
-                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=${encodeURIComponent(userEmail)}`
+                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/verify?verified_by=${encodeURIComponent(userEmail)}`
             );
 
             if (response.ok) {
@@ -210,10 +211,33 @@ export default function SnapshotsPage() {
         }
     };
 
+    const downloadAuditPack = async (snapshotId: string, snapshotName: string) => {
+        try {
+            const response = await fetch(
+                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/audit-pack`
+            );
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ZeroTrust-AuditPack-${snapshotName.replace(/\s+/g, '-')}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            } else {
+                console.error('Failed to download audit pack');
+            }
+        } catch (error) {
+            console.error('Failed to download audit pack:', error);
+        }
+    };
+
     const exportSnapshot = async (snapshotId: string, snapshotName: string) => {
         try {
             const response = await fetch(
-                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/export`
+                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/export`
             );
 
             if (response.ok) {
@@ -269,7 +293,7 @@ export default function SnapshotsPage() {
     const refreezeSnapshot = async (snapshotId: string) => {
         try {
             const response = await fetch(
-                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/refreeze`,
+                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/refreeze`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -288,7 +312,7 @@ export default function SnapshotsPage() {
     const getFdaResponse = async (snapshotId: string) => {
         try {
             const response = await fetch(
-                `/api/v1/compliance/snapshots/${tenantId}/${snapshotId}/fda-response`
+                `/api/admin/v1/compliance/snapshots/${tenantId}/${snapshotId}/fda-response`
             );
 
             if (response.ok) {
@@ -314,7 +338,7 @@ export default function SnapshotsPage() {
 
         try {
             const response = await fetch(
-                `/api/v1/compliance/snapshots/${tenantId}/diff?snapshot_a=${selectedForDiff[0]}&snapshot_b=${selectedForDiff[1]}`
+                `/api/admin/v1/compliance/snapshots/${tenantId}/diff?snapshot_a=${selectedForDiff[0]}&snapshot_b=${selectedForDiff[1]}`
             );
 
             if (response.ok) {
@@ -464,6 +488,12 @@ export default function SnapshotsPage() {
                                                     AUTO-TRIGGERED
                                                 </span>
                                             )}
+                                            {snapshot.integrity_verified && (
+                                                <span className="flex items-center gap-1.5 px-3 py-1 bg-green-500/10 text-green-400 text-xs font-bold rounded-full border border-green-500/30 shadow-sm shadow-green-500/20">
+                                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                                    INTEGRITY VERIFIED
+                                                </span>
+                                            )}
                                             {snapshot.is_attested ? (
                                                 <span className="flex items-center gap-1 text-green-400 text-sm">
                                                     <CheckCircle2 className="h-4 w-4" />
@@ -574,11 +604,19 @@ export default function SnapshotsPage() {
                                                 Verify
                                             </button>
                                             <button
+                                                onClick={() => downloadAuditPack(snapshot.id, snapshot.snapshot_name)}
+                                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all font-bold shadow-lg shadow-purple-500/20 border border-purple-400/30"
+                                                title="Generate Zero-Trust Audit Pack"
+                                            >
+                                                <ShieldCheck className="h-4 w-4" />
+                                                Audit Pack
+                                            </button>
+                                            <button
                                                 onClick={() => exportSnapshot(snapshot.id, snapshot.snapshot_name)}
                                                 className="flex items-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition-all"
                                             >
                                                 <Download className="h-4 w-4" />
-                                                Export
+                                                PDF
                                             </button>
                                         </div>
                                     </div>
