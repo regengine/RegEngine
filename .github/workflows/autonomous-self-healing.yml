@@ -50,5 +50,4 @@ jobs:
           # Set flag to tell the swarm we are in CI and should commit changes
           REGENGINE_CI_AUTO_FIX: "true"
         run: |
-          LOG_CONTENT=$(cat failure_snippet.txt)
-          python3 -m regengine.swarm troubleshoot --logs "$LOG_CONTENT"
+          cat failure_snippet.txt | python3 -m regengine.swarm troubleshoot --log-file -

@@ -20,7 +20,7 @@ class TestDeduplicationLogic:
         }
         
         doc_hash = "test-hash"
-        result = db_manager.get_document_by_hash(doc_hash)
+        result = db_manager.get_document_by_hash(doc_hash, tenant_id="00000000-0000-0000-0000-000000000001")
         
         assert result["id"] == "existing-id"
         assert result["storage_key"] == "s3://existing-path"

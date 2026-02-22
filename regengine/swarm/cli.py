@@ -188,13 +188,26 @@ def cmd_troubleshoot(args) -> None:
     """Run the CI resilience agent to troubleshoot and heal failures."""
     import asyncio
     from regengine.swarm.coordinator import AgentSwarm
-    
-    print(f"🧬 CI Resilience Agent — Analyzing logs...\n")
-    
+
+    # Resolve log content: --log-file takes precedence over --logs
+    logs: str = ""
+    if getattr(args, "log_file", None):
+        if args.log_file == "-":
+            logs = sys.stdin.read()
+        else:
+            with open(args.log_file, "r") as fh:
+                logs = fh.read()
+    elif getattr(args, "logs", None):
+        logs = args.logs
+    else:
+        print("❌ Error: Provide --logs or --log-file")
+        sys.exit(1)
+
+    print(f"🧬 CI Resilience Agent — Analyzing {len(logs)} chars of logs...\n")
+
     swarm = AgentSwarm()
-    # Troubleshoot is async in coordinator
-    result = asyncio.run(swarm.troubleshoot(args.logs))
-    
+    result = asyncio.run(swarm.troubleshoot(logs))
+
     print("\n" + "═" * 60)
     print(f"📊 Diagnosis: {result.status}")
     print(f"   Root Cause: {result.plan.get('root_cause') if result.plan else 'Unknown'}")
@@ -362,7 +375,8 @@ def main() -> None:
 
     # ── troubleshoot ──
     ts_parser = subparsers.add_parser("troubleshoot", help="Troubleshoot and fix CI failures")
-    ts_parser.add_argument("--logs", required=True, help="CI failure logs/snippet")
+    ts_parser.add_argument("--logs", help="CI failure logs/snippet (string)")
+    ts_parser.add_argument("--log-file", help="Path to log file, or '-' for stdin")
     ts_parser.set_defaults(func=cmd_troubleshoot)
 
     # ── status ──
