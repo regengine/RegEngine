@@ -3,18 +3,18 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
-    AlertTriangle,
-    CheckCircle2,
-    XCircle,
-    Shield,
-    BarChart3,
-    Scale,
-    ArrowRight,
-    Plus,
-    Trash2,
-    RotateCcw,
-    Download,
-    Info,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Shield,
+  BarChart3,
+  Scale,
+  ArrowRight,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Download,
+  Info,
 } from 'lucide-react';
 
 /* ─────────────────────────────────────────────────────────────
@@ -22,36 +22,36 @@ import {
    ───────────────────────────────────────────────────────────── */
 
 interface DemographicGroup {
-    id: string;
-    name: string;
-    approved: number;
-    denied: number;
+  id: string;
+  name: string;
+  approved: number;
+  denied: number;
 }
 
 interface BiasResult {
-    groupName: string;
-    approvalRate: number;
-    dir: number;
-    passes80: boolean;
-    severity: 'pass' | 'warning' | 'fail';
+  groupName: string;
+  approvalRate: number;
+  dir: number;
+  passes80: boolean;
+  severity: 'pass' | 'warning' | 'fail';
 }
 
 interface AnalysisResult {
-    referenceGroup: string;
-    referenceRate: number;
-    results: BiasResult[];
-    overallPass: boolean;
-    applicableRegs: RegCitation[];
-    totalApplicants: number;
-    timestamp: string;
+  referenceGroup: string;
+  referenceRate: number;
+  results: BiasResult[];
+  overallPass: boolean;
+  applicableRegs: RegCitation[];
+  totalApplicants: number;
+  timestamp: string;
 }
 
 interface RegCitation {
-    id: string;
-    regulation: string;
-    citation: string;
-    requirement: string;
-    relevance: string;
+  id: string;
+  regulation: string;
+  citation: string;
+  requirement: string;
+  relevance: string;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -59,78 +59,78 @@ interface RegCitation {
    ───────────────────────────────────────────────────────────── */
 
 const APPLICABLE_REGULATIONS: RegCitation[] = [
-    {
-        id: 'ecoa-prohibited',
-        regulation: 'ECOA — Prohibited Basis Discrimination',
-        citation: '12 CFR 1002.4(a)',
-        requirement: 'Creditor shall not discriminate against any applicant on a prohibited basis (race, color, religion, national origin, sex, marital status, age).',
-        relevance: 'Disparate Impact Ratio below 0.80 may indicate discriminatory outcomes requiring investigation.',
-    },
-    {
-        id: 'ecoa-adverse',
-        regulation: 'ECOA — Adverse Action Notice',
-        citation: '12 CFR 1002.9(a)(1)',
-        requirement: 'Must provide adverse action notice within 30 days with specific reasons for denial.',
-        relevance: 'High denial rates in specific groups must be accompanied by individualized reason codes.',
-    },
-    {
-        id: 'occ-bias',
-        regulation: 'OCC AI/ML Bias Testing',
-        citation: 'OCC Bulletin 2023-XX §3',
-        requirement: 'Banks must test AI/ML models for bias and discriminatory outcomes, particularly for consumer-facing applications.',
-        relevance: 'DIR analysis is a standard method for satisfying this requirement.',
-    },
-    {
-        id: 'sr-11-7',
-        regulation: 'SR 11-7 — Ongoing Monitoring',
-        citation: 'SR 11-7 Section III.C',
-        requirement: 'Models should be subject to ongoing monitoring to determine whether they are performing as intended.',
-        relevance: 'Bias monitoring is a component of model risk management under SR 11-7.',
-    },
-    {
-        id: 'fcra-accuracy',
-        regulation: 'FCRA — Accuracy Requirement',
-        citation: '15 U.S.C. § 1681e(b)',
-        requirement: 'Reasonable procedures to assure maximum possible accuracy of consumer report information.',
-        relevance: 'Inaccurate data can introduce bias — accuracy is a prerequisite for fair lending.',
-    },
+  {
+    id: 'ecoa-prohibited',
+    regulation: 'ECOA — Prohibited Basis Discrimination',
+    citation: '12 CFR 1002.4(a)',
+    requirement: 'Creditor shall not discriminate against any applicant on a prohibited basis (race, color, religion, national origin, sex, marital status, age).',
+    relevance: 'Disparate Impact Ratio below 0.80 may indicate discriminatory outcomes requiring investigation.',
+  },
+  {
+    id: 'ecoa-adverse',
+    regulation: 'ECOA — Adverse Action Notice',
+    citation: '12 CFR 1002.9(a)(1)',
+    requirement: 'Must provide adverse action notice within 30 days with specific reasons for denial.',
+    relevance: 'High denial rates in specific groups must be accompanied by individualized reason codes.',
+  },
+  {
+    id: 'occ-bias',
+    regulation: 'OCC AI/ML Bias Testing',
+    citation: 'OCC Bulletin 2023-XX §3',
+    requirement: 'Banks must test AI/ML models for bias and discriminatory outcomes, particularly for consumer-facing applications.',
+    relevance: 'DIR analysis is a standard method for satisfying this requirement.',
+  },
+  {
+    id: 'sr-11-7',
+    regulation: 'SR 11-7 — Ongoing Monitoring',
+    citation: 'SR 11-7 Section III.C',
+    requirement: 'Models should be subject to ongoing monitoring to determine whether they are performing as intended.',
+    relevance: 'Bias monitoring is a component of model risk management under SR 11-7.',
+  },
+  {
+    id: 'fcra-accuracy',
+    regulation: 'FCRA — Accuracy Requirement',
+    citation: '15 U.S.C. § 1681e(b)',
+    requirement: 'Reasonable procedures to assure maximum possible accuracy of consumer report information.',
+    relevance: 'Inaccurate data can introduce bias — accuracy is a prerequisite for fair lending.',
+  },
 ];
 
 const DEMO_GROUPS: DemographicGroup[] = [
-    { id: '1', name: 'White', approved: 7200, denied: 2800 },
-    { id: '2', name: 'Black', approved: 5800, denied: 4200 },
-    { id: '3', name: 'Hispanic', approved: 6100, denied: 3900 },
-    { id: '4', name: 'Asian', approved: 7400, denied: 2600 },
-    { id: '5', name: 'Native American', approved: 5500, denied: 4500 },
+  { id: '1', name: 'White', approved: 7200, denied: 2800 },
+  { id: '2', name: 'Black', approved: 5800, denied: 4200 },
+  { id: '3', name: 'Hispanic', approved: 6100, denied: 3900 },
+  { id: '4', name: 'Asian', approved: 7400, denied: 2600 },
+  { id: '5', name: 'Native American', approved: 5500, denied: 4500 },
 ];
 
 const PRESET_SCENARIOS = [
-    {
-        name: 'Credit Card Approvals',
-        description: 'Consumer credit card application outcomes by race/ethnicity',
-        groups: DEMO_GROUPS,
-    },
-    {
-        name: 'Auto Loan Pricing',
-        description: 'Auto loan approval rates showing potential markup disparities',
-        groups: [
-            { id: '1', name: 'White', approved: 8100, denied: 1900 },
-            { id: '2', name: 'Black', approved: 6300, denied: 3700 },
-            { id: '3', name: 'Hispanic', approved: 6800, denied: 3200 },
-            { id: '4', name: 'Asian', approved: 8300, denied: 1700 },
-        ],
-    },
-    {
-        name: 'Mortgage Lending',
-        description: 'Home mortgage approval decisions across demographic groups',
-        groups: [
-            { id: '1', name: 'White', approved: 6800, denied: 3200 },
-            { id: '2', name: 'Black', approved: 4900, denied: 5100 },
-            { id: '3', name: 'Hispanic', approved: 5300, denied: 4700 },
-            { id: '4', name: 'Asian', approved: 7100, denied: 2900 },
-            { id: '5', name: 'Native Hawaiian/Pacific Islander', approved: 5100, denied: 4900 },
-        ],
-    },
+  {
+    name: 'Credit Card Approvals',
+    description: 'Consumer credit card application outcomes by race/ethnicity',
+    groups: DEMO_GROUPS,
+  },
+  {
+    name: 'Auto Loan Pricing',
+    description: 'Auto loan approval rates showing potential markup disparities',
+    groups: [
+      { id: '1', name: 'White', approved: 8100, denied: 1900 },
+      { id: '2', name: 'Black', approved: 6300, denied: 3700 },
+      { id: '3', name: 'Hispanic', approved: 6800, denied: 3200 },
+      { id: '4', name: 'Asian', approved: 8300, denied: 1700 },
+    ],
+  },
+  {
+    name: 'Mortgage Lending',
+    description: 'Home mortgage approval decisions across demographic groups',
+    groups: [
+      { id: '1', name: 'White', approved: 6800, denied: 3200 },
+      { id: '2', name: 'Black', approved: 4900, denied: 5100 },
+      { id: '3', name: 'Hispanic', approved: 5300, denied: 4700 },
+      { id: '4', name: 'Asian', approved: 7100, denied: 2900 },
+      { id: '5', name: 'Native Hawaiian/Pacific Islander', approved: 5100, denied: 4900 },
+    ],
+  },
 ];
 
 let nextId = 10;
@@ -140,93 +140,97 @@ let nextId = 10;
    ───────────────────────────────────────────────────────────── */
 
 export default function BiasCheckerPage() {
-    const [groups, setGroups] = useState<DemographicGroup[]>(DEMO_GROUPS);
-    const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-    const [activePreset, setActivePreset] = useState<number>(0);
+  const freshGroups = () => DEMO_GROUPS.map(g => ({ ...g }));
+  const [groups, setGroups] = useState<DemographicGroup[]>(freshGroups);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [activePreset, setActivePreset] = useState<number>(0);
+  const [inputKey, setInputKey] = useState(0); // Forces React to remount inputs on reset
 
-    /* ── Handlers ── */
+  /* ── Handlers ── */
 
-    const addGroup = useCallback(() => {
-        setGroups(prev => [...prev, {
-            id: String(nextId++),
-            name: '',
-            approved: 0,
-            denied: 0,
-        }]);
-    }, []);
+  const addGroup = useCallback(() => {
+    setGroups(prev => [...prev, {
+      id: String(nextId++),
+      name: '',
+      approved: 0,
+      denied: 0,
+    }]);
+  }, []);
 
-    const removeGroup = useCallback((id: string) => {
-        setGroups(prev => prev.filter(g => g.id !== id));
-    }, []);
+  const removeGroup = useCallback((id: string) => {
+    setGroups(prev => prev.filter(g => g.id !== id));
+  }, []);
 
-    const updateGroup = useCallback((id: string, field: keyof DemographicGroup, value: string | number) => {
-        setGroups(prev => prev.map(g =>
-            g.id === id ? { ...g, [field]: field === 'name' ? value : Math.max(0, Number(value)) } : g
-        ));
-    }, []);
+  const updateGroup = useCallback((id: string, field: keyof DemographicGroup, value: string | number) => {
+    setGroups(prev => prev.map(g =>
+      g.id === id ? { ...g, [field]: field === 'name' ? value : Math.max(0, Number(value)) } : g
+    ));
+  }, []);
 
-    const loadPreset = useCallback((index: number) => {
-        setActivePreset(index);
-        setGroups(PRESET_SCENARIOS[index].groups.map(g => ({ ...g })));
-        setAnalysis(null);
-    }, []);
+  const loadPreset = useCallback((index: number) => {
+    setActivePreset(index);
+    setGroups(PRESET_SCENARIOS[index].groups.map(g => ({ ...g })));
+    setAnalysis(null);
+    setInputKey(k => k + 1);
+  }, []);
 
-    const reset = useCallback(() => {
-        setGroups(DEMO_GROUPS.map(g => ({ ...g })));
-        setAnalysis(null);
-        setActivePreset(0);
-    }, []);
+  const reset = useCallback(() => {
+    setGroups(freshGroups());
+    setAnalysis(null);
+    setActivePreset(0);
+    setInputKey(k => k + 1);
+  }, []);
 
-    /* ── Analysis Engine ── */
+  /* ── Analysis Engine ── */
 
-    const runAnalysis = useCallback(() => {
-        const validGroups = groups.filter(g => g.name && (g.approved + g.denied) > 0);
-        if (validGroups.length < 2) return;
+  const runAnalysis = useCallback(() => {
+    const validGroups = groups.filter(g => g.name && (g.approved + g.denied) > 0);
+    if (validGroups.length < 2) return;
 
-        // Calculate approval rates
-        const rates = validGroups.map(g => ({
-            ...g,
-            total: g.approved + g.denied,
-            rate: g.approved / (g.approved + g.denied),
-        }));
+    // Calculate approval rates
+    const rates = validGroups.map(g => ({
+      ...g,
+      total: g.approved + g.denied,
+      rate: g.approved / (g.approved + g.denied),
+    }));
 
-        // Reference group = highest approval rate (most favored)
-        const reference = rates.reduce((best, g) => g.rate > best.rate ? g : best, rates[0]);
+    // Reference group = highest approval rate (most favored)
+    const reference = rates.reduce((best, g) => g.rate > best.rate ? g : best, rates[0]);
 
-        const results: BiasResult[] = rates.map(g => {
-            const dir = reference.rate > 0 ? g.rate / reference.rate : 0;
-            const passes80 = dir >= 0.80;
-            let severity: 'pass' | 'warning' | 'fail' = 'pass';
-            if (dir < 0.80) severity = 'fail';
-            else if (dir < 0.90) severity = 'warning';
+    const results: BiasResult[] = rates.map(g => {
+      const dir = reference.rate > 0 ? g.rate / reference.rate : 0;
+      const passes80 = dir >= 0.80;
+      let severity: 'pass' | 'warning' | 'fail' = 'pass';
+      if (dir < 0.80) severity = 'fail';
+      else if (dir < 0.90) severity = 'warning';
 
-            return {
-                groupName: g.name,
-                approvalRate: Math.round(g.rate * 10000) / 100,
-                dir: Math.round(dir * 1000) / 1000,
-                passes80,
-                severity,
-            };
-        });
+      return {
+        groupName: g.name,
+        approvalRate: Math.round(g.rate * 10000) / 100,
+        dir: Math.round(dir * 1000) / 1000,
+        passes80,
+        severity,
+      };
+    });
 
-        const overallPass = results.every(r => r.passes80);
+    const overallPass = results.every(r => r.passes80);
 
-        setAnalysis({
-            referenceGroup: reference.name,
-            referenceRate: Math.round(reference.rate * 10000) / 100,
-            results,
-            overallPass,
-            applicableRegs: APPLICABLE_REGULATIONS,
-            totalApplicants: rates.reduce((sum, g) => sum + g.total, 0),
-            timestamp: new Date().toISOString(),
-        });
-    }, [groups]);
+    setAnalysis({
+      referenceGroup: reference.name,
+      referenceRate: Math.round(reference.rate * 10000) / 100,
+      results,
+      overallPass,
+      applicableRegs: APPLICABLE_REGULATIONS,
+      totalApplicants: rates.reduce((sum, g) => sum + g.total, 0),
+      timestamp: new Date().toISOString(),
+    });
+  }, [groups]);
 
-    /* ── Render ── */
+  /* ── Render ── */
 
-    return (
-        <>
-            <style jsx global>{`
+  return (
+    <>
+      <style jsx global>{`
         :root {
           --bc-bg: #09090b;
           --bc-surface: #0f0f13;
@@ -713,261 +717,261 @@ export default function BiasCheckerPage() {
         }
       `}</style>
 
-            <div className="bc-page">
-                {/* Header */}
-                <header className="bc-header">
-                    <div className="bc-container">
-                        <div className="bc-breadcrumb">
-                            <Link href="/">RegEngine</Link>
-                            <span>/</span>
-                            <Link href="/verticals/finance">Finance</Link>
-                            <span>/</span>
-                            <span>Bias Checker</span>
-                        </div>
-
-                        <div className="bc-title-row">
-                            <div>
-                                <div className="bc-badge-free">
-                                    <Shield size={12} />
-                                    Free Tool
-                                </div>
-                                <h1>AI Model Bias Checker</h1>
-                                <p className="bc-subtitle">
-                                    Input your model&apos;s approval and denial counts by demographic group.
-                                    Get instant Disparate Impact Ratio analysis with regulatory citations.
-                                </p>
-                            </div>
-                            <div style={{ flexShrink: 0, paddingTop: '2rem' }}>
-                                <Scale size={48} strokeWidth={1} color="var(--bc-accent)" />
-                            </div>
-                        </div>
-                    </div>
-                </header>
-
-                <main className="bc-container">
-                    {/* Preset Scenarios */}
-                    <div className="bc-section-label" style={{ marginTop: '2rem' }}>PRESET SCENARIOS</div>
-                    <div className="bc-presets">
-                        {PRESET_SCENARIOS.map((preset, i) => (
-                            <button
-                                key={i}
-                                className={`bc-preset-btn ${activePreset === i ? 'active' : ''}`}
-                                onClick={() => loadPreset(i)}
-                            >
-                                {preset.name}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Input Table */}
-                    <div className="bc-input-section">
-                        <div className="bc-section-label">DEMOGRAPHIC GROUPS</div>
-                        <table className="bc-table">
-                            <thead>
-                                <tr>
-                                    <th style={{ width: '30%' }}>Group Name</th>
-                                    <th style={{ width: '22%' }}>Approved</th>
-                                    <th style={{ width: '22%' }}>Denied</th>
-                                    <th style={{ width: '18%', textAlign: 'right' }}>Rate</th>
-                                    <th style={{ width: '8%' }}></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {groups.map(g => {
-                                    const total = g.approved + g.denied;
-                                    const rate = total > 0 ? ((g.approved / total) * 100).toFixed(1) : '—';
-                                    return (
-                                        <tr key={g.id}>
-                                            <td>
-                                                <input
-                                                    className="bc-input bc-input-name"
-                                                    type="text"
-                                                    placeholder="Group name"
-                                                    value={g.name}
-                                                    onChange={e => updateGroup(g.id, 'name', e.target.value)}
-                                                />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    className="bc-input"
-                                                    type="number"
-                                                    min="0"
-                                                    value={g.approved || ''}
-                                                    onChange={e => updateGroup(g.id, 'approved', e.target.value)}
-                                                />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    className="bc-input"
-                                                    type="number"
-                                                    min="0"
-                                                    value={g.denied || ''}
-                                                    onChange={e => updateGroup(g.id, 'denied', e.target.value)}
-                                                />
-                                            </td>
-                                            <td className="bc-rate-preview">{rate}%</td>
-                                            <td>
-                                                {groups.length > 2 && (
-                                                    <button className="bc-remove-btn" onClick={() => removeGroup(g.id)}>
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="bc-actions">
-                        <button
-                            className="bc-btn bc-btn-primary"
-                            onClick={runAnalysis}
-                            disabled={groups.filter(g => g.name && (g.approved + g.denied) > 0).length < 2}
-                        >
-                            <BarChart3 size={16} />
-                            Run Bias Analysis
-                        </button>
-                        <button className="bc-btn bc-btn-secondary" onClick={addGroup}>
-                            <Plus size={16} />
-                            Add Group
-                        </button>
-                        <button className="bc-btn bc-btn-secondary" onClick={reset}>
-                            <RotateCcw size={16} />
-                            Reset
-                        </button>
-                    </div>
-
-                    {/* Results */}
-                    {analysis && (
-                        <div className="bc-results">
-                            {/* Overall Result */}
-                            <div className="bc-section-label">ANALYSIS RESULTS</div>
-                            <div className={`bc-overall ${analysis.overallPass ? 'bc-overall-pass' : 'bc-overall-fail'}`}>
-                                <div className="bc-overall-icon">
-                                    {analysis.overallPass ? (
-                                        <CheckCircle2 size={36} color="var(--bc-pass)" />
-                                    ) : (
-                                        <XCircle size={36} color="var(--bc-fail)" />
-                                    )}
-                                </div>
-                                <div>
-                                    <h3>
-                                        {analysis.overallPass
-                                            ? '80% Rule — All Groups Pass'
-                                            : '80% Rule Violation Detected'
-                                        }
-                                    </h3>
-                                    <p>
-                                        Reference group: <strong>{analysis.referenceGroup}</strong> ({analysis.referenceRate}% approval rate).
-                                        {' '}{analysis.totalApplicants.toLocaleString()} total applicants analyzed.
-                                        {!analysis.overallPass && (
-                                            <> <strong>{analysis.results.filter(r => !r.passes80).length} group(s)</strong> fall below the 80% threshold.</>
-                                        )}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Per-Group Cards */}
-                            <div className="bc-result-grid">
-                                {analysis.results.map((r, i) => (
-                                    <div key={i} className={`bc-result-card ${r.severity}`}>
-                                        <div className="bc-result-name">{r.groupName}</div>
-                                        <div className="bc-result-metric">
-                                            <span className="bc-result-label">Approval Rate</span>
-                                            <span className="bc-result-value">{r.approvalRate}%</span>
-                                        </div>
-                                        <div className="bc-result-dir" style={{
-                                            color: r.severity === 'pass' ? 'var(--bc-pass)'
-                                                : r.severity === 'warning' ? 'var(--bc-warn)'
-                                                    : 'var(--bc-fail)'
-                                        }}>
-                                            {r.dir.toFixed(3)}
-                                        </div>
-                                        <div className="bc-result-metric">
-                                            <span className="bc-result-label">Disparate Impact Ratio</span>
-                                        </div>
-                                        <div style={{ marginTop: '0.5rem' }}>
-                                            <span className={`bc-result-badge ${r.severity === 'pass' ? 'bc-badge-pass'
-                                                    : r.severity === 'warning' ? 'bc-badge-warn'
-                                                        : 'bc-badge-fail'
-                                                }`}>
-                                                {r.severity === 'pass' ? '✓ PASS' : r.severity === 'warning' ? '⚠ MARGINAL' : '✗ FAIL'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Applicable Regulations */}
-                            <div className="bc-regs">
-                                <div className="bc-section-label">APPLICABLE REGULATIONS</div>
-                                {analysis.applicableRegs.map((reg) => (
-                                    <div key={reg.id} className="bc-reg-card">
-                                        <div className="bc-reg-header">
-                                            <span className="bc-reg-name">{reg.regulation}</span>
-                                            <span className="bc-reg-cite">{reg.citation}</span>
-                                        </div>
-                                        <div className="bc-reg-req">{reg.requirement}</div>
-                                        <div className="bc-reg-relevance">{reg.relevance}</div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* CTA */}
-                            <div className="bc-cta">
-                                <h3>Want Continuous Bias Monitoring?</h3>
-                                <p>
-                                    RegEngine&apos;s Bias Engine runs DIR, 80% rule, and statistical significance analysis
-                                    automatically on every model version — integrated directly into your CI/CD pipeline.
-                                </p>
-                                <Link href="/verticals/finance" className="bc-cta-btn">
-                                    Explore Finance API <ArrowRight size={16} />
-                                </Link>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Methodology */}
-                    <div className="bc-method">
-                        <h3><Info size={16} /> Methodology</h3>
-                        <p>
-                            The <strong>Disparate Impact Ratio (DIR)</strong> compares the approval rate of each
-                            demographic group against the most favored group (reference group). A ratio below
-                            0.80 indicates potential disparate impact under the EEOC/CFPB four-fifths rule.
-                        </p>
-                        <div className="bc-formula">
-                            DIR = (Approval Rate of Group) / (Approval Rate of Reference Group)
-                        </div>
-                        <p>
-                            The <strong>80% Rule</strong> (four-fifths rule) states that a selection rate for any
-                            group that is less than 80% (4/5) of the rate for the group with the highest rate
-                            constitutes evidence of adverse impact. This standard is referenced in EEOC Uniform
-                            Guidelines (29 CFR 1607.4D) and applied by CFPB in fair lending examinations.
-                        </p>
-                        <p style={{ marginBottom: 0 }}>
-                            <strong>Note:</strong> This tool provides a preliminary assessment only. A comprehensive
-                            fair lending analysis requires regression modeling, matched-pair testing, and legal review.
-                            Results should be validated with your compliance team.
-                        </p>
-                    </div>
-
-                    {/* Footer */}
-                    <footer className="bc-footer">
-                        <p className="bc-footer-text">
-                            This tool is provided free of charge for educational and preliminary assessment purposes.
-                            It does not constitute legal advice. Disparate impact analysis should be conducted in
-                            consultation with qualified fair lending counsel. RegEngine Inc. © {new Date().getFullYear()}.
-                            <br />
-                            <Link href="/verticals/finance" style={{ color: 'var(--bc-accent)' }}>
-                                ← Back to Finance Vertical
-                            </Link>
-                        </p>
-                    </footer>
-                </main>
+      <div className="bc-page">
+        {/* Header */}
+        <header className="bc-header">
+          <div className="bc-container">
+            <div className="bc-breadcrumb">
+              <Link href="/">RegEngine</Link>
+              <span>/</span>
+              <Link href="/verticals/finance">Finance</Link>
+              <span>/</span>
+              <span>Bias Checker</span>
             </div>
-        </>
-    );
+
+            <div className="bc-title-row">
+              <div>
+                <div className="bc-badge-free">
+                  <Shield size={12} />
+                  Free Tool
+                </div>
+                <h1>AI Model Bias Checker</h1>
+                <p className="bc-subtitle">
+                  Input your model&apos;s approval and denial counts by demographic group.
+                  Get instant Disparate Impact Ratio analysis with regulatory citations.
+                </p>
+              </div>
+              <div style={{ flexShrink: 0, paddingTop: '2rem' }}>
+                <Scale size={48} strokeWidth={1} color="var(--bc-accent)" />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="bc-container">
+          {/* Preset Scenarios */}
+          <div className="bc-section-label" style={{ marginTop: '2rem' }}>PRESET SCENARIOS</div>
+          <div className="bc-presets">
+            {PRESET_SCENARIOS.map((preset, i) => (
+              <button
+                key={i}
+                className={`bc-preset-btn ${activePreset === i ? 'active' : ''}`}
+                onClick={() => loadPreset(i)}
+              >
+                {preset.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Input Table */}
+          <div className="bc-input-section">
+            <div className="bc-section-label">DEMOGRAPHIC GROUPS</div>
+            <table className="bc-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '30%' }}>Group Name</th>
+                  <th style={{ width: '22%' }}>Approved</th>
+                  <th style={{ width: '22%' }}>Denied</th>
+                  <th style={{ width: '18%', textAlign: 'right' }}>Rate</th>
+                  <th style={{ width: '8%' }}></th>
+                </tr>
+              </thead>
+              <tbody key={inputKey}>
+                {groups.map(g => {
+                  const total = g.approved + g.denied;
+                  const rate = total > 0 ? ((g.approved / total) * 100).toFixed(1) : '—';
+                  return (
+                    <tr key={g.id}>
+                      <td>
+                        <input
+                          className="bc-input bc-input-name"
+                          type="text"
+                          placeholder="Group name"
+                          value={g.name}
+                          onChange={e => updateGroup(g.id, 'name', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="bc-input"
+                          type="number"
+                          min="0"
+                          value={g.approved || ''}
+                          onChange={e => updateGroup(g.id, 'approved', e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="bc-input"
+                          type="number"
+                          min="0"
+                          value={g.denied || ''}
+                          onChange={e => updateGroup(g.id, 'denied', e.target.value)}
+                        />
+                      </td>
+                      <td className="bc-rate-preview">{rate}%</td>
+                      <td>
+                        {groups.length > 2 && (
+                          <button className="bc-remove-btn" onClick={() => removeGroup(g.id)}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="bc-actions">
+            <button
+              className="bc-btn bc-btn-primary"
+              onClick={runAnalysis}
+              disabled={groups.filter(g => g.name && (g.approved + g.denied) > 0).length < 2}
+            >
+              <BarChart3 size={16} />
+              Run Bias Analysis
+            </button>
+            <button className="bc-btn bc-btn-secondary" onClick={addGroup}>
+              <Plus size={16} />
+              Add Group
+            </button>
+            <button className="bc-btn bc-btn-secondary" onClick={reset}>
+              <RotateCcw size={16} />
+              Reset
+            </button>
+          </div>
+
+          {/* Results */}
+          {analysis && (
+            <div className="bc-results">
+              {/* Overall Result */}
+              <div className="bc-section-label">ANALYSIS RESULTS</div>
+              <div className={`bc-overall ${analysis.overallPass ? 'bc-overall-pass' : 'bc-overall-fail'}`}>
+                <div className="bc-overall-icon">
+                  {analysis.overallPass ? (
+                    <CheckCircle2 size={36} color="var(--bc-pass)" />
+                  ) : (
+                    <XCircle size={36} color="var(--bc-fail)" />
+                  )}
+                </div>
+                <div>
+                  <h3>
+                    {analysis.overallPass
+                      ? '80% Rule — All Groups Pass'
+                      : '80% Rule Violation Detected'
+                    }
+                  </h3>
+                  <p>
+                    Reference group: <strong>{analysis.referenceGroup}</strong> ({analysis.referenceRate}% approval rate).
+                    {' '}{analysis.totalApplicants.toLocaleString()} total applicants analyzed.
+                    {!analysis.overallPass && (
+                      <> <strong>{analysis.results.filter(r => !r.passes80).length} group(s)</strong> fall below the 80% threshold.</>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Per-Group Cards */}
+              <div className="bc-result-grid">
+                {analysis.results.map((r, i) => (
+                  <div key={i} className={`bc-result-card ${r.severity}`}>
+                    <div className="bc-result-name">{r.groupName}</div>
+                    <div className="bc-result-metric">
+                      <span className="bc-result-label">Approval Rate</span>
+                      <span className="bc-result-value">{r.approvalRate}%</span>
+                    </div>
+                    <div className="bc-result-dir" style={{
+                      color: r.severity === 'pass' ? 'var(--bc-pass)'
+                        : r.severity === 'warning' ? 'var(--bc-warn)'
+                          : 'var(--bc-fail)'
+                    }}>
+                      {r.dir.toFixed(3)}
+                    </div>
+                    <div className="bc-result-metric">
+                      <span className="bc-result-label">Disparate Impact Ratio</span>
+                    </div>
+                    <div style={{ marginTop: '0.5rem' }}>
+                      <span className={`bc-result-badge ${r.severity === 'pass' ? 'bc-badge-pass'
+                        : r.severity === 'warning' ? 'bc-badge-warn'
+                          : 'bc-badge-fail'
+                        }`}>
+                        {r.severity === 'pass' ? '✓ PASS' : r.severity === 'warning' ? '⚠ MARGINAL' : '✗ FAIL'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Applicable Regulations */}
+              <div className="bc-regs">
+                <div className="bc-section-label">APPLICABLE REGULATIONS</div>
+                {analysis.applicableRegs.map((reg) => (
+                  <div key={reg.id} className="bc-reg-card">
+                    <div className="bc-reg-header">
+                      <span className="bc-reg-name">{reg.regulation}</span>
+                      <span className="bc-reg-cite">{reg.citation}</span>
+                    </div>
+                    <div className="bc-reg-req">{reg.requirement}</div>
+                    <div className="bc-reg-relevance">{reg.relevance}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTA */}
+              <div className="bc-cta">
+                <h3>Want Continuous Bias Monitoring?</h3>
+                <p>
+                  RegEngine&apos;s Bias Engine runs DIR, 80% rule, and statistical significance analysis
+                  automatically on every model version — integrated directly into your CI/CD pipeline.
+                </p>
+                <Link href="/verticals/finance" className="bc-cta-btn">
+                  Explore Finance API <ArrowRight size={16} />
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Methodology */}
+          <div className="bc-method">
+            <h3><Info size={16} /> Methodology</h3>
+            <p>
+              The <strong>Disparate Impact Ratio (DIR)</strong> compares the approval rate of each
+              demographic group against the most favored group (reference group). A ratio below
+              0.80 indicates potential disparate impact under the EEOC/CFPB four-fifths rule.
+            </p>
+            <div className="bc-formula">
+              DIR = (Approval Rate of Group) / (Approval Rate of Reference Group)
+            </div>
+            <p>
+              The <strong>80% Rule</strong> (four-fifths rule) states that a selection rate for any
+              group that is less than 80% (4/5) of the rate for the group with the highest rate
+              constitutes evidence of adverse impact. This standard is referenced in EEOC Uniform
+              Guidelines (29 CFR 1607.4D) and applied by CFPB in fair lending examinations.
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              <strong>Note:</strong> This tool provides a preliminary assessment only. A comprehensive
+              fair lending analysis requires regression modeling, matched-pair testing, and legal review.
+              Results should be validated with your compliance team.
+            </p>
+          </div>
+
+          {/* Footer */}
+          <footer className="bc-footer">
+            <p className="bc-footer-text">
+              This tool is provided free of charge for educational and preliminary assessment purposes.
+              It does not constitute legal advice. Disparate impact analysis should be conducted in
+              consultation with qualified fair lending counsel. RegEngine Inc. © {new Date().getFullYear()}.
+              <br />
+              <Link href="/verticals/finance" style={{ color: 'var(--bc-accent)' }}>
+                ← Back to Finance Vertical
+              </Link>
+            </p>
+          </footer>
+        </main>
+      </div>
+    </>
+  );
 }
