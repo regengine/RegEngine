@@ -31,7 +31,6 @@ const jsonLd = {
             { "@type": "ListItem", "position": 4, "url": "https://regengine.vercel.app/tools/obligation-scanner", "name": "Regulatory Obligation Scanner" },
             { "@type": "ListItem", "position": 5, "url": "https://regengine.vercel.app/tools/notice-validator", "name": "Adverse Action Notice Validator" },
             { "@type": "ListItem", "position": 6, "url": "https://regengine.vercel.app/tools/roi-calculator", "name": "Regulatory ROI Calculator" },
-            { "@type": "ListItem", "position": 7, "url": "https://regengine.vercel.app/tools/exemption-qualifier", "name": "Exemption Qualifier" }
         ]
     }
 };

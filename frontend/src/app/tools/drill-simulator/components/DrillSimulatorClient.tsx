@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { Timer, AlertTriangle, ShieldCheck, Zap, Ghost, AlertCircle, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
@@ -145,9 +146,11 @@ export function DrillSimulatorClient() {
                         RegEngine users respond to FDA requests in seconds, not days. Prevent administrative chaos and inventory loss.
                     </p>
                     <div className="flex gap-4 w-full justify-center">
-                        <Button className="bg-[var(--re-brand)] px-8 h-10">
-                            Get Demo <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
+                        <Link href="/demo/supply-chains">
+                            <Button className="bg-[var(--re-brand)] px-8 h-10">
+                                View a Perfect Trace <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        </Link>
                     </div>
                 </div>
             </div>

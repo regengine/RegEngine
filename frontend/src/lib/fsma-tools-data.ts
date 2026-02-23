@@ -147,13 +147,6 @@ export const FREE_TOOLS = [
         href: '/tools/roi-calculator'
     },
     {
-        id: 'exemption-qualifier',
-        title: 'Exemption Qualifier',
-        description: 'Check your eligibility for FSMA 204 exemptions.',
-        icon: Shield,
-        href: '/tools/exemption-qualifier'
-    },
-    {
         id: 'kde-checker',
         title: 'KDE Completeness Checker',
         description: 'Build your customized KDE checklist.',

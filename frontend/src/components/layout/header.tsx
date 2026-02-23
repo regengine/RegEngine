@@ -268,15 +268,6 @@ export function Header() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/tools/exemption-qualifier" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Shield className="h-4 w-4 text-amber-500" />
-                  <div>
-                    <div className="font-medium">Exemption Qualifier</div>
-                    <div className="text-xs text-muted-foreground">Check FSMA 204 exemption eligibility</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
                 <Link href="/tools/recall-readiness" className="cursor-pointer w-full flex items-center gap-3 py-2">
                   <ShieldCheck className="h-4 w-4 text-cyan-500" />
                   <div>
@@ -290,7 +281,7 @@ export function Header() {
                 <Link href="/tools" className="cursor-pointer w-full flex items-center gap-3 py-2">
                   <Scan className="h-4 w-4 text-emerald-400" />
                   <div>
-                    <div className="font-medium text-primary">View All 7 Tools →</div>
+                    <div className="font-medium text-primary">View All Tools →</div>
                     <div className="text-xs text-muted-foreground">Full FSMA compliance toolkit</div>
                   </div>
                 </Link>

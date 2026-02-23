@@ -13,7 +13,6 @@ const TOOL_ITEMS = [
 
 const MORE_TOOLS = [
     { label: "ROI Calculator", href: "/tools/roi-calculator", emoji: "💰" },
-    { label: "Exemption Qualifier", href: "/tools/exemption-qualifier", emoji: "🛡️" },
     { label: "KDE Completeness Checker", href: "/tools/kde-checker", emoji: "📋" },
     { label: "Recall Readiness Score", href: "/tools/recall-readiness", emoji: "📈" },
 ];
@@ -176,7 +175,7 @@ export function MarketingHeader() {
                                     <span className="text-sm">🧰</span>
                                     <div>
                                         <div className="text-[13px] font-semibold text-re-brand">View All Tools →</div>
-                                        <div className="text-[11px] text-re-text-muted">10 free compliance tools</div>
+                                        <div className="text-[11px] text-re-text-muted">Explore the compliance toolkit</div>
                                     </div>
                                 </Link>
                             </div>
@@ -306,8 +305,7 @@ export function MarketingHeader() {
                                 padding: "10px 0",
                             }}
                         >
-                            <div>View All 7 Tools →</div>
-                            <p>Full FSMA compliance toolkit</p>
+                            <div style={{ color: "var(--re-brand)" }}>View All Tools →</div>
                         </Link>
                     </div>
                 </div>

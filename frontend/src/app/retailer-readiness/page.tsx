@@ -300,7 +300,7 @@ export default function RetailerSuppliersPage() {
                         </span>
                         <span className="text-[13px] text-re-text-muted">days until FDA deadline</span>
                     </div>
-                    <Link href="#assessment">
+                    <Link href="/tools/recall-readiness">
                         <button
                             onClick={() => trackEvent('sticky_cta_click')}
                             style={{
@@ -342,7 +342,7 @@ export default function RetailerSuppliersPage() {
                             Major retailers are evaluating suppliers <strong className="text-re-warning">right now</strong>.
                             Get a personalized gap analysis before your next category review.
                         </p>
-                        <Link href="#assessment">
+                        <Link href="/tools/recall-readiness">
                             <button
                                 onClick={() => { setShowExitIntent(false); trackEvent('exit_intent_cta_click'); }}
                                 style={{
@@ -453,7 +453,7 @@ export default function RetailerSuppliersPage() {
                 </div>
 
                 <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="#assessment">
+                    <Link href="/tools/recall-readiness">
                         <button style={{
                             background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
                             color: '#000', fontWeight: 600, padding: '14px 28px', fontSize: 15,
