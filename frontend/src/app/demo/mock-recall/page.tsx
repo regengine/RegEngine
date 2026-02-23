@@ -147,7 +147,7 @@ export default function MockRecallPage() {
         setIsDownloading(true);
         try {
             const report = generateFDA204Report();
-            const blob = new Blob([report], { type: 'text/plain' });
+            const blob = new Blob(['\uFEFF', report], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

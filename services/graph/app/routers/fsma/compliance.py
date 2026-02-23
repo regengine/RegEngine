@@ -135,7 +135,7 @@ async def export_fda_request_sheet(
         logger.info("fda_request_export_completed", count=len(events))
         
         return StreamingResponse(
-            io.BytesIO(csv_content.encode("utf-8")),
+            io.BytesIO(b"\xef\xbb\xbf" + csv_content.encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
@@ -469,7 +469,7 @@ async def export_trace_csv(
         )
 
         return StreamingResponse(
-            io.BytesIO(csv_content.encode("utf-8")),
+            io.BytesIO(b"\xef\xbb\xbf" + csv_content.encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
@@ -546,7 +546,7 @@ async def export_recall_contacts(
         )
 
         return StreamingResponse(
-            io.BytesIO(csv_content.encode("utf-8")),
+            io.BytesIO(b"\xef\xbb\xbf" + csv_content.encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
@@ -702,7 +702,7 @@ async def export_gaps_csv(
         filename = f"fsma_compliance_gaps_{timestamp}.csv"
 
         return StreamingResponse(
-            io.BytesIO(csv_content.encode("utf-8")),
+            io.BytesIO(b"\xef\xbb\xbf" + csv_content.encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
