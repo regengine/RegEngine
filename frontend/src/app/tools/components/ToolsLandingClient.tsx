@@ -205,7 +205,7 @@ export function ToolsLandingClient() {
                                 <Activity className="h-3 w-3" /> Brand Verified Flow
                             </div>
                             <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter leading-none mb-1">
-                                FSMA 204 <span className="text-[var(--re-brand)]">Compliance</span> Journey
+                                FSMA 204 <span className="bg-gradient-to-r from-[var(--re-brand)] to-emerald-400 bg-clip-text text-transparent">Compliance</span> Journey
                             </h2>
                             <p className="text-[var(--re-text-tertiary)] font-bold text-lg flex items-center gap-2 opacity-80">
                                 The definitive path to industrial certainty
