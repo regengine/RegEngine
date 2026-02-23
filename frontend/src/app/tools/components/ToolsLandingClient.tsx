@@ -3,6 +3,7 @@
 
 import { motion } from 'framer-motion';
 import {
+    Activity,
     Shield,
     ClipboardList,
     Truck,
@@ -32,7 +33,8 @@ const FSMA_JOURNEY = [
         description: 'Instantly verify if your food products are covered by FDA FSMA 204 requirements using our 23-tier high-integrity standard.',
         icon: Leaf,
         color: 'var(--re-brand)',
-        tag: 'Essential'
+        tag: 'Essential',
+        status: 'featured'
     },
     {
         step: 2,
@@ -42,7 +44,8 @@ const FSMA_JOURNEY = [
         description: 'Quickly determine your FSMA 204 compliance status and eligibility for small business or other exemptions.',
         icon: Shield,
         color: 'var(--re-brand)',
-        tag: 'Compliance'
+        tag: 'Compliance',
+        status: 'standard'
     },
     {
         step: 3,
@@ -52,7 +55,8 @@ const FSMA_JOURNEY = [
         description: 'Visualize your supply chain nodes to see exactly who owes whom data for every transaction.',
         icon: Truck,
         color: 'var(--re-info)',
-        tag: 'Integration'
+        tag: 'Integration',
+        status: 'beta'
     },
     {
         step: 4,
@@ -62,7 +66,8 @@ const FSMA_JOURNEY = [
         description: 'Generate your customized Key Data Element (KDE) checklist based on your specific FTL product and trading role.',
         icon: ClipboardList,
         color: 'var(--re-info)',
-        tag: 'Data Quality'
+        tag: 'Data Quality',
+        status: 'beta'
     },
     {
         step: 5,
@@ -72,7 +77,8 @@ const FSMA_JOURNEY = [
         description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDA\'s requirement for uniqueness.',
         icon: FlaskConical,
         color: 'var(--re-brand)',
-        tag: 'Data Integrity'
+        tag: 'Data Integrity',
+        status: 'standard'
     },
     {
         step: 6,
@@ -82,7 +88,8 @@ const FSMA_JOURNEY = [
         description: 'Get an A-F grade on your ability to meet the FDA 24-hour records retrieval mandate.',
         icon: ShieldCheck,
         color: 'var(--re-brand)',
-        tag: 'Operations'
+        tag: 'Operations',
+        status: 'standard'
     },
     {
         step: 7,
@@ -92,7 +99,8 @@ const FSMA_JOURNEY = [
         description: 'A scenario-based quest to see if your manual processes can survive a real FDA outbreak investigation.',
         icon: Timer,
         color: 'var(--re-danger)',
-        tag: 'Simulation'
+        tag: 'Simulation',
+        status: 'beta'
     },
     {
         step: 8,
@@ -103,7 +111,8 @@ const FSMA_JOURNEY = [
         icon: LayoutDashboard,
         color: 'var(--re-brand)',
         tag: 'Strategic',
-        isFeatured: true
+        isFeatured: true,
+        status: 'featured'
     }
 ];
 
@@ -114,7 +123,8 @@ const FINANCE_TOOLS = [
         description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
         icon: Users,
         color: 'var(--re-brand)',
-        tag: 'Finance'
+        tag: 'Finance',
+        status: 'beta'
     },
     {
         id: 'notice-validator',
@@ -122,7 +132,8 @@ const FINANCE_TOOLS = [
         description: 'Paste your adverse action notice text to receive a compliance grade based on 11 critical regulatory requirements.',
         icon: FileText,
         color: 'var(--re-brand)',
-        tag: 'Finance'
+        tag: 'Finance',
+        status: 'standard'
     },
     {
         id: 'obligation-scanner',
@@ -130,7 +141,8 @@ const FINANCE_TOOLS = [
         description: 'Instantly map your financial product features to applicable US regulations across ECOA, TILA, and FCRA.',
         icon: Shield,
         color: 'var(--re-brand)',
-        tag: 'Finance'
+        tag: 'Finance',
+        status: 'standard'
     }
 ];
 
@@ -178,13 +190,26 @@ export function ToolsLandingClient() {
 
                 {/* FSMA Journey Section */}
                 <div className="mb-32">
-                    <div className="flex items-center gap-4 mb-12">
-                        <div className="h-12 w-12 rounded-2xl bg-[var(--re-brand)] flex items-center justify-center text-white shadow-lg">
-                            <ShieldCheck className="h-6 w-6" />
+                    <div className="flex items-center gap-6 mb-16 px-4">
+                        <div className="relative group">
+                            <div className="absolute -inset-2 bg-gradient-to-r from-[var(--re-brand)] to-emerald-400 rounded-full blur opacity-40 group-hover:opacity-60 transition duration-1000 group-hover:duration-200" />
+                            <div className="relative h-16 w-16 rounded-full bg-[var(--re-brand)] flex items-center justify-center text-white shadow-2xl border-4 border-white dark:border-gray-800">
+                                <Activity className="h-9 w-9" />
+                            </div>
+                            <div className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center shadow-md">
+                                <span className="w-3 h-3 rounded-full bg-[var(--re-brand)] animate-ping" />
+                            </div>
                         </div>
                         <div>
-                            <h2 className="text-3xl font-black italic uppercase tracking-tighter">FSMA 204 Compliance Journey</h2>
-                            <p className="text-[var(--re-text-tertiary)] font-bold">A sequential path to regulatory certainty</p>
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-[10px] font-black uppercase tracking-[0.2em] mb-2 border border-[var(--re-brand-muted)]">
+                                <Activity className="h-3 w-3" /> Brand Verified Flow
+                            </div>
+                            <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter leading-none mb-1">
+                                FSMA 204 <span className="text-[var(--re-brand)]">Compliance</span> Journey
+                            </h2>
+                            <p className="text-[var(--re-text-tertiary)] font-bold text-lg flex items-center gap-2 opacity-80">
+                                The definitive path to industrial certainty
+                            </p>
                         </div>
                     </div>
 
@@ -219,6 +244,7 @@ export function ToolsLandingClient() {
                                                     <div className="flex items-center gap-3 mb-2">
                                                         <Badge variant="outline" className="text-[10px] uppercase font-black text-[var(--re-brand)] border-[var(--re-brand-muted)]">
                                                             {tool.tag}
+                                                            {tool.status === 'beta' && ' (BETA)'}
                                                         </Badge>
                                                         <span className="text-[var(--re-text-muted)] text-xs font-bold uppercase tracking-widest md:hidden">Step {tool.step}</span>
                                                     </div>
@@ -264,14 +290,19 @@ export function ToolsLandingClient() {
                             {FINANCE_TOOLS.map((tool) => (
                                 <Link key={tool.id} href={`/tools/${tool.id}`}>
                                     <Card className="p-6 border-[var(--re-border-default)] bg-[var(--re-surface-card)] hover:border-blue-500/50 transition-all group">
-                                        <div className="flex gap-4">
-                                            <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-[var(--re-surface-elevated)] flex items-center justify-center border border-[var(--re-border-default)] group-hover:bg-blue-500 group-hover:text-white transition-colors">
-                                                <tool.icon className="h-5 w-5" />
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div className={`p-4 rounded-2xl bg-white dark:bg-gray-800 shadow-xl border border-[var(--re-surface-border)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                                                <tool.icon className="h-6 w-6" style={{ color: tool.color }} />
                                             </div>
-                                            <div>
-                                                <h3 className="font-bold group-hover:text-blue-500 transition-colors">{tool.title}</h3>
-                                                <p className="text-xs text-[var(--re-text-tertiary)] mt-1">{tool.description}</p>
+                                            <div className="flex flex-col items-end gap-2">
+                                                {tool.status === 'beta' && (
+                                                    <Badge className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)] text-white text-[9px] font-black uppercase tracking-widest px-1.5 py-0 h-4 rounded-full">BETA</Badge>
+                                                )}
                                             </div>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold group-hover:text-blue-500 transition-colors">{tool.title}</h3>
+                                            <p className="text-xs text-[var(--re-text-tertiary)] mt-1">{tool.description}</p>
                                         </div>
                                     </Card>
                                 </Link>
