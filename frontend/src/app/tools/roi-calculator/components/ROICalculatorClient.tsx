@@ -182,7 +182,7 @@ export function ROICalculatorClient() {
                 </div>
 
                 <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['fsma-unified', 'exemption-qualifier', 'drill-simulator'].includes(t.id))}
+                    tools={FREE_TOOLS.filter(t => ['fsma-unified', 'recall-readiness', 'drill-simulator'].includes(t.id))}
                 />
             </div>
         </div>

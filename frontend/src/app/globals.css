@@ -67,10 +67,22 @@
         --re-brand: #10b981;
         --re-brand-dark: #059669;
         --re-brand-light: #34d399;
+        --re-brand-muted: rgba(16, 185, 129, 0.1);
+
+        /* Stage Colors (Semantic) */
+        --re-discovery: #3b82f6;
+        /* blue-500 */
+        --re-decomposition: #10b981;
+        /* brand */
+        --re-linkage: #a855f7;
+        /* purple-500 */
+        --re-evidence: #f59e0b;
+        /* amber-500 */
 
         /* Surfaces */
         --re-surface-base: #06090f;
         --re-surface-card: #0c1017;
+        --re-surface-border: #1e293b;
         --re-surface-elevated: #111827;
         --re-surface-overlay: rgba(6, 9, 15, 0.80);
 

@@ -35,7 +35,6 @@ export function MobileNav() {
                 { href: "/tools/fsma-unified?tab=graph", label: "Knowledge Graph", icon: Database, iconClass: "text-blue-400" },
                 { href: "/tools/ftl-checker", label: "FTL Checker", icon: Leaf, iconClass: "text-emerald-500" },
                 { href: "/tools/roi-calculator", label: "ROI Calculator", icon: TrendingUp, iconClass: "text-amber-500" },
-                { href: "/tools/exemption-qualifier", label: "Exemption Qualifier", icon: CheckCircle, iconClass: "text-orange-500" },
                 { href: "/tools", label: "View All Tools →", icon: Scan, iconClass: "text-emerald-400" },
             ]
         },

@@ -1112,7 +1112,7 @@ export function FTLCheckerClient() {
                 </AnimatePresence>
 
                 <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['exemption-qualifier', 'kde-checker', 'cte-mapper'].includes(t.id))}
+                    tools={FREE_TOOLS.filter(t => ['recall-readiness', 'kde-checker', 'roi-calculator'].includes(t.id))}
                 />
             </div>
         </div>

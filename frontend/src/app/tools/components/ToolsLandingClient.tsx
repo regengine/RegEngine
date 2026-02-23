@@ -20,7 +20,7 @@ import {
     FileText
 } from 'lucide-react';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -38,17 +38,6 @@ const FSMA_JOURNEY = [
     },
     {
         step: 2,
-        id: 'exemption-qualifier',
-        title: 'Eligibility',
-        toolTitle: 'Exemption Qualifier',
-        description: 'Quickly determine your FSMA 204 compliance status and eligibility for small business or other exemptions.',
-        icon: Shield,
-        color: 'var(--re-brand)',
-        tag: 'Compliance',
-        status: 'standard'
-    },
-    {
-        step: 3,
         id: 'cte-mapper',
         title: 'Traceability Foundation',
         toolTitle: 'CTE Coverage Mapper',
@@ -59,7 +48,7 @@ const FSMA_JOURNEY = [
         status: 'beta'
     },
     {
-        step: 4,
+        step: 3,
         id: 'kde-checker',
         title: 'Data Integrity',
         toolTitle: 'KDE Completeness Checker',
@@ -70,7 +59,7 @@ const FSMA_JOURNEY = [
         status: 'beta'
     },
     {
-        step: 5,
+        step: 4,
         id: 'tlc-validator',
         title: 'Compliance Validation',
         toolTitle: 'TLC Validator',
@@ -81,7 +70,7 @@ const FSMA_JOURNEY = [
         status: 'standard'
     },
     {
-        step: 6,
+        step: 5,
         id: 'recall-readiness',
         title: 'Readiness Benchmark',
         toolTitle: 'Recall Readiness Score',
@@ -92,7 +81,7 @@ const FSMA_JOURNEY = [
         status: 'standard'
     },
     {
-        step: 7,
+        step: 6,
         id: 'drill-simulator',
         title: 'Live Simulation',
         toolTitle: '24-Hour Drill Simulator',
@@ -103,7 +92,7 @@ const FSMA_JOURNEY = [
         status: 'beta'
     },
     {
-        step: 8,
+        step: 7,
         id: 'fsma-unified',
         title: 'Command Center',
         toolTitle: 'Unified FSMA Dashboard',
@@ -122,7 +111,7 @@ const FINANCE_TOOLS = [
         title: 'AI Model Bias Checker',
         description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
         icon: Users,
-        color: 'var(--re-brand)',
+        color: 'var(--re-info)',
         tag: 'Finance',
         status: 'beta'
     },
@@ -159,7 +148,7 @@ const STRATEGIC_TOOLS = [
 
 export function ToolsLandingClient() {
     return (
-        <div className="min-h-screen py-20 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+        <div className="re-page min-h-screen py-20 px-4">
             <div className="max-w-7xl mx-auto">
                 {/* Header Section */}
                 <div className="text-center mb-24 space-y-4">
@@ -174,7 +163,7 @@ export function ToolsLandingClient() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="text-4xl md:text-7xl font-black mb-6"
+                        className="text-4xl md:text-7xl re-heading-industrial mb-6"
                     >
                         Master the <span className="text-[var(--re-brand)]">Flow</span>
                     </motion.h1>
@@ -182,7 +171,7 @@ export function ToolsLandingClient() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
-                        className="text-xl text-[var(--re-text-tertiary)] max-w-3xl mx-auto"
+                        className="text-xl text-[var(--re-text-tertiary)] max-w-3xl mx-auto font-bold"
                     >
                         Stop guessing about compliance. Follow our logical blueprints to benchmark your readiness and identify critical gaps in minutes.
                     </motion.p>
@@ -204,8 +193,8 @@ export function ToolsLandingClient() {
                             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-[10px] font-black uppercase tracking-[0.2em] mb-2 border border-[var(--re-brand-muted)]">
                                 <Activity className="h-3 w-3" /> Brand Verified Flow
                             </div>
-                            <h2 className="text-4xl md:text-5xl font-black italic uppercase tracking-tighter leading-none mb-1">
-                                FSMA 204 <span className="bg-gradient-to-r from-[var(--re-brand)] to-emerald-400 bg-clip-text text-transparent">Compliance</span> Journey
+                            <h2 className="text-4xl md:text-5xl re-heading-industrial mb-1">
+                                FSMA 204 <span className="bg-gradient-to-r from-[var(--re-brand)] to-emerald-400 bg-clip-text text-transparent italic">Compliance</span> Journey
                             </h2>
                             <p className="text-[var(--re-text-tertiary)] font-bold text-lg flex items-center gap-2 opacity-80">
                                 The definitive path to industrial certainty
@@ -214,8 +203,8 @@ export function ToolsLandingClient() {
                     </div>
 
                     <div className="relative">
-                        {/* Connecting Line for Journey */}
-                        <div className="absolute left-[23px] top-6 bottom-6 w-0.5 bg-gradient-to-b from-[var(--re-brand)] via-[var(--re-info)] to-[var(--re-brand-muted)] hidden md:block" />
+                        {/* Standardized Connecting Line */}
+                        <div className="absolute left-[23px] top-6 bottom-6 re-journey-line hidden md:block" />
 
                         <div className="space-y-12">
                             {FSMA_JOURNEY.map((tool, idx) => (
@@ -227,13 +216,13 @@ export function ToolsLandingClient() {
                                     transition={{ delay: idx * 0.1 }}
                                     className={`relative pl-0 md:pl-16 ${tool.isFeatured ? 'md:col-span-2' : ''}`}
                                 >
-                                    {/* Journey Step Marker */}
-                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-[var(--re-surface-card)] border-4 border-[var(--re-brand)] flex items-center justify-center font-black text-lg z-10 hidden md:flex">
+                                    {/* Standardized Journey Step Marker */}
+                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 re-journey-step-marker hidden md:flex">
                                         {tool.step}
                                     </div>
 
                                     <Link href={`/tools/${tool.id}`}>
-                                        <Card className={`group relative overflow-hidden border-[var(--re-border-default)] bg-[var(--re-surface-card)] transition-all hover:border-[var(--re-brand)] hover:shadow-[0_20px_40px_-15px_rgba(34,197,94,0.15)] ${tool.isFeatured ? 'ring-2 ring-[var(--re-brand)]' : ''}`}>
+                                        <div className={`group relative overflow-hidden border-[var(--re-border-default)] bg-[var(--re-surface-card)] transition-all rounded-3xl hover:border-[var(--re-brand)] hover:shadow-[0_20px_40px_-15px_rgba(34,197,94,0.15)] ${tool.isFeatured ? 'ring-2 ring-[var(--re-brand)]' : 'border'}`}>
                                             <div className="flex flex-col md:flex-row gap-8 p-8">
                                                 <div className="flex-shrink-0">
                                                     <div className="w-16 h-16 rounded-2xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] flex items-center justify-center group-hover:bg-[var(--re-brand)] group-hover:text-white transition-all duration-300">
@@ -242,7 +231,7 @@ export function ToolsLandingClient() {
                                                 </div>
                                                 <div className="flex-grow">
                                                     <div className="flex items-center gap-3 mb-2">
-                                                        <Badge variant="outline" className="text-[10px] uppercase font-black text-[var(--re-brand)] border-[var(--re-brand-muted)]">
+                                                        <Badge variant="outline" className="text-[10px] uppercase font-black text-[var(--re-brand)] border-[var(--re-brand-muted)] rounded-full">
                                                             {tool.tag}
                                                             {tool.status === 'beta' && ' (BETA)'}
                                                         </Badge>
@@ -252,7 +241,7 @@ export function ToolsLandingClient() {
                                                         <span className="text-[var(--re-text-tertiary)] group-hover:text-[var(--re-brand)] transition-colors">{tool.title}:</span>
                                                         <span>{tool.toolTitle}</span>
                                                     </h3>
-                                                    <p className="text-[var(--re-text-tertiary)] leading-relaxed max-w-3xl">
+                                                    <p className="text-[var(--re-text-tertiary)] font-medium leading-relaxed max-w-3xl">
                                                         {tool.description}
                                                     </p>
                                                 </div>
@@ -268,7 +257,7 @@ export function ToolsLandingClient() {
                                                     Strategic Outcome
                                                 </div>
                                             )}
-                                        </Card>
+                                        </div>
                                     </Link>
                                 </motion.div>
                             ))}
@@ -281,17 +270,17 @@ export function ToolsLandingClient() {
                     {/* Finance Section */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-4 mb-2">
-                            <div className="h-10 w-10 rounded-xl bg-blue-500 flex items-center justify-center text-white shadow-lg">
+                            <div className="h-10 w-10 rounded-xl bg-[var(--re-info)] flex items-center justify-center text-white shadow-lg">
                                 <Users className="h-5 w-5" />
                             </div>
-                            <h2 className="text-2xl font-black italic uppercase tracking-tighter">Finance & Lending</h2>
+                            <h2 className="text-2xl re-heading-industrial !italic !tracking-tighter">Finance & Lending</h2>
                         </div>
                         <div className="grid gap-4">
                             {FINANCE_TOOLS.map((tool) => (
                                 <Link key={tool.id} href={`/tools/${tool.id}`}>
-                                    <Card className="p-6 border-[var(--re-border-default)] bg-[var(--re-surface-card)] hover:border-blue-500/50 transition-all group">
+                                    <div className="p-6 border border-[var(--re-border-default)] bg-[var(--re-surface-card)] rounded-2xl hover:border-[var(--re-info)] transition-all group">
                                         <div className="flex justify-between items-start mb-6">
-                                            <div className={`p-4 rounded-2xl bg-white dark:bg-gray-800 shadow-xl border border-[var(--re-surface-border)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
+                                            <div className={`p-4 rounded-2xl bg-[var(--re-surface-elevated)] shadow-xl border border-[var(--re-surface-border)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
                                                 <tool.icon className="h-6 w-6" style={{ color: tool.color }} />
                                             </div>
                                             <div className="flex flex-col items-end gap-2">
@@ -301,10 +290,10 @@ export function ToolsLandingClient() {
                                             </div>
                                         </div>
                                         <div>
-                                            <h3 className="font-bold group-hover:text-blue-500 transition-colors">{tool.title}</h3>
-                                            <p className="text-xs text-[var(--re-text-tertiary)] mt-1">{tool.description}</p>
+                                            <h3 className="font-bold group-hover:text-[var(--re-info)] transition-colors">{tool.title}</h3>
+                                            <p className="text-xs text-[var(--re-text-tertiary)] font-medium mt-1">{tool.description}</p>
                                         </div>
-                                    </Card>
+                                    </div>
                                 </Link>
                             ))}
                         </div>
@@ -313,25 +302,25 @@ export function ToolsLandingClient() {
                     {/* Strategic Section */}
                     <div className="space-y-8">
                         <div className="flex items-center gap-4 mb-2">
-                            <div className="h-10 w-10 rounded-xl bg-purple-500 flex items-center justify-center text-white shadow-lg">
+                            <div className="h-10 w-10 rounded-xl bg-[var(--re-linkage)] flex items-center justify-center text-white shadow-lg">
                                 <TrendingUp className="h-5 w-5" />
                             </div>
-                            <h2 className="text-2xl font-black italic uppercase tracking-tighter">Business Strategy</h2>
+                            <h2 className="text-2xl re-heading-industrial !italic !tracking-tighter">Business Strategy</h2>
                         </div>
                         <div className="grid gap-4">
                             {STRATEGIC_TOOLS.map((tool) => (
                                 <Link key={tool.id} href={`/tools/${tool.id}`}>
-                                    <Card className="p-6 border-[var(--re-border-default)] bg-[var(--re-surface-card)] hover:border-purple-500/50 transition-all group">
+                                    <div className="p-6 border border-[var(--re-border-default)] bg-[var(--re-surface-card)] rounded-2xl hover:border-[var(--re-linkage)] transition-all group">
                                         <div className="flex gap-4">
-                                            <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-[var(--re-surface-elevated)] flex items-center justify-center border border-[var(--re-border-default)] group-hover:bg-purple-500 group-hover:text-white transition-colors">
+                                            <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-[var(--re-surface-elevated)] flex items-center justify-center border border-[var(--re-border-default)] group-hover:bg-[var(--re-linkage)] group-hover:text-white transition-colors">
                                                 <tool.icon className="h-5 w-5" />
                                             </div>
                                             <div>
-                                                <h3 className="font-bold group-hover:text-purple-500 transition-colors">{tool.title}</h3>
-                                                <p className="text-xs text-[var(--re-text-tertiary)] mt-1">{tool.description}</p>
+                                                <h3 className="font-bold group-hover:text-[var(--re-linkage)] transition-colors">{tool.title}</h3>
+                                                <p className="text-xs text-[var(--re-text-tertiary)] font-medium mt-1">{tool.description}</p>
                                             </div>
                                         </div>
-                                    </Card>
+                                    </div>
                                 </Link>
                             ))}
                         </div>
@@ -343,15 +332,15 @@ export function ToolsLandingClient() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
-                    className="mt-32 p-12 rounded-[2rem] border border-[var(--re-border-default)] bg-gradient-to-br from-[var(--re-surface-card)] via-[var(--re-surface-elevated)] to-[var(--re-brand-muted)] text-center relative overflow-hidden"
+                    className="re-card-lp text-center p-12 mt-32"
                 >
                     <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--re-brand)] opacity-5 blur-[100px] -mr-32 -mt-32" />
                     <div className="relative z-10 space-y-8">
                         <div className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--re-brand)] text-white shadow-2xl">
                             <CheckCircle2 className="h-8 w-8" />
                         </div>
-                        <h2 className="text-3xl md:text-5xl font-black">Ready to Automate the Flow?</h2>
-                        <p className="text-[var(--re-text-tertiary)] max-w-2xl mx-auto text-lg">
+                        <h2 className="text-3xl md:text-5xl font-black re-heading-industrial">Ready to Automate the Flow?</h2>
+                        <p className="text-[var(--re-text-tertiary)] max-w-2xl mx-auto text-lg font-bold">
                             Move beyond interactive tools to a fully automated Compliance Control Center.
                             RegEngine manages your KDEs, monitors your CTEs, and guarantees audit readiness.
                         </p>

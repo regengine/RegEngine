@@ -76,8 +76,8 @@ export function MarketingFooter() {
                         { label: "Supply Chain Explorer", href: "/demo/supply-chains" },
                         { label: "Ingest Documents", href: "/ingest" },
                         { label: "FSMA Dashboard", href: "/fsma" },
-                        { label: "FTL Checker", href: "/ftl-checker", badge: "Free" },
-                        { label: "Retailer Readiness", href: "/retailer-readiness" },
+                        { label: "FTL Checker", href: "/tools/ftl-checker", badge: "Free" },
+                        { label: "Retailer Readiness", href: "/tools/retailer-readiness" },
                         { label: "API Docs", href: "/docs" },
                         { label: "Pricing", href: "/pricing" },
                     ].map((link) => (
@@ -114,7 +114,6 @@ export function MarketingFooter() {
                         { label: "Knowledge Graph", href: "/tools/fsma-unified?tab=graph" },
                         { label: "FTL Checker", href: "/tools/ftl-checker" },
                         { label: "ROI Calculator", href: "/tools/roi-calculator" },
-                        { label: "Exemption Qualifier", href: "/tools/exemption-qualifier" },
                         { label: "KDE Builder", href: "/tools/kde-checker" },
                     ].map((link) => (
                         <Link

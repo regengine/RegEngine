@@ -22,6 +22,16 @@ const nextConfig = {
                 destination: '/retailer-readiness',
                 permanent: true,
             },
+            {
+                source: '/tools/exemption-qualifier',
+                destination: '/tools/ftl-checker?step=exemptions',
+                permanent: true,
+            },
+            {
+                source: '/tools/supply-chain-explorer',
+                destination: '/demo/supply-chains',
+                permanent: true,
+            },
         ];
     },
     async rewrites() {
