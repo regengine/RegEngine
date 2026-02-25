@@ -105,6 +105,18 @@ app.include_router(billing_router)
 from app.alerts import router as alerts_router
 app.include_router(alerts_router)
 
+# Onboarding
+from app.onboarding import router as onboarding_router
+app.include_router(onboarding_router)
+
+# Recall Readiness Report
+from app.recall_report import router as recall_router
+app.include_router(recall_router)
+
+# Supplier Management
+from app.supplier_mgmt import router as supplier_mgmt_router
+app.include_router(supplier_mgmt_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
