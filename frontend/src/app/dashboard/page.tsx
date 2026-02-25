@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { useEffect, useMemo } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +13,8 @@ import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { getTenantDashboard, type TenantDashboard } from '@/lib/mock-dashboard-data';
 import { useSystemStatus, useSystemMetrics } from '@/hooks/use-api';
-import { useMemo } from 'react';
+import { SystemHealthWidget } from '@/components/dashboard/system-health-widget';
+import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
 import {
     Shield,
     Upload,
@@ -22,7 +25,6 @@ import {
     Activity,
     Clock,
     ArrowRight,
-    Zap,
     BarChart3,
     Building2,
     Truck,
@@ -146,13 +148,6 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
         },
     ];
 };
-
-import { SystemHealthWidget } from '@/components/dashboard/system-health-widget';
-import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-
-// ... (imports)
 
 export default function DashboardPage() {
     const { user, isHydrated } = useAuth()

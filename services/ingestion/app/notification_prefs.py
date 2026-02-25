@@ -8,7 +8,6 @@ delivery channels, quiet hours, and escalation rules.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
