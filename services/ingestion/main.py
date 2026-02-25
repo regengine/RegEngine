@@ -65,6 +65,22 @@ install_exception_handlers(app)
 
 app.include_router(ingestion_router)
 
+# Webhook Ingestion (Sprint: Pilot-Ready Platform)
+from app.webhook_router import router as webhook_router
+app.include_router(webhook_router)
+
+# CSV Templates & Import
+from app.csv_templates import router as csv_router
+app.include_router(csv_router)
+
+# IoT Import (Sensitech TempTale)
+from app.sensitech_parser import router as sensitech_router
+app.include_router(sensitech_router)
+
+# Compliance Score
+from app.compliance_score import router as score_router
+app.include_router(score_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
