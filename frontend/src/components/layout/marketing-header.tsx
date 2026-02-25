@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
+import { useAuth } from '@/lib/auth-context';
 
 const TOOL_ITEMS = [
     { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
@@ -15,6 +16,9 @@ const MORE_TOOLS = [
     { label: "ROI Calculator", href: "/tools/roi-calculator", emoji: "💰" },
     { label: "KDE Completeness Checker", href: "/tools/kde-checker", emoji: "📋" },
     { label: "Recall Readiness Score", href: "/tools/recall-readiness", emoji: "📈" },
+    { label: "SOP Generator", href: "/tools/sop-generator", emoji: "📄" },
+    { label: "FDA Mock Drill", href: "/tools/drill-simulator", emoji: "🚨" },
+    { label: "Data Import Hub", href: "/tools/data-import", emoji: "📥" },
 ];
 
 export function MarketingHeader() {
@@ -22,9 +26,10 @@ export function MarketingHeader() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [toolsOpen, setToolsOpen] = useState(false);
     const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null);
+    const { user } = useAuth();
 
-    // Hide global header on the standalone mobile app routes
-    if (pathname === '/fsma/field-capture') {
+    // Hide global header on dashboard, app, and standalone mobile routes
+    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard')) {
         return null;
     }
 
@@ -181,6 +186,56 @@ export function MarketingHeader() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Auth-aware buttons */}
+                    {user ? (
+                        <Link
+                            href="/dashboard"
+                            style={{
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                color: "var(--re-text-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                            }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
+                        >
+                            Dashboard
+                        </Link>
+                    ) : (
+                        <>
+                            <Link
+                                href="/login"
+                                style={{
+                                    fontSize: "13px",
+                                    fontWeight: 500,
+                                    color: "var(--re-text-muted)",
+                                    textDecoration: "none",
+                                    transition: "color 0.2s",
+                                }}
+                                onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                                onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
+                            >
+                                Log In
+                            </Link>
+                            <Link
+                                href="/onboarding"
+                                style={{
+                                    fontSize: "13px",
+                                    fontWeight: 600,
+                                    color: "var(--re-surface-base)",
+                                    background: "linear-gradient(135deg, var(--re-brand), #3b82f6)",
+                                    padding: "7px 18px",
+                                    borderRadius: "6px",
+                                    textDecoration: "none",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                Get Started →
+                            </Link>
+                        </>
+                    )}
                 </div>
 
                 {/* Mobile Hamburger */}
