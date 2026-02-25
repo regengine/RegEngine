@@ -71,6 +71,17 @@ const FSMA_JOURNEY = [
     },
     {
         step: 5,
+        id: 'readiness-assessment',
+        title: 'Compliance Readiness',
+        toolTitle: 'FSMA 204 Readiness Assessment',
+        description: 'Score your facility\'s compliance readiness across product coverage, CTEs, KDEs, and system capabilities. Get an actionable gap report.',
+        icon: CheckCircle2,
+        color: 'var(--re-brand)',
+        tag: 'Assessment',
+        status: 'standard'
+    },
+    {
+        step: 6,
         id: 'recall-readiness',
         title: 'Readiness Benchmark',
         toolTitle: 'Recall Readiness Score',
@@ -81,7 +92,7 @@ const FSMA_JOURNEY = [
         status: 'standard'
     },
     {
-        step: 6,
+        step: 7,
         id: 'drill-simulator',
         title: 'Live Simulation',
         toolTitle: '24-Hour Drill Simulator',
@@ -92,7 +103,7 @@ const FSMA_JOURNEY = [
         status: 'beta'
     },
     {
-        step: 7,
+        step: 8,
         id: 'fsma-unified',
         title: 'Command Center',
         toolTitle: 'Unified FSMA Dashboard',

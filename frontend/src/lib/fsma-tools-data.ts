@@ -114,7 +114,8 @@ import {
     Truck,
     Timer,
     AlertTriangle,
-    Network
+    Network,
+    CheckCircle2
 } from 'lucide-react';
 
 export const FREE_TOOLS = [
@@ -127,8 +128,8 @@ export const FREE_TOOLS = [
     },
     {
         id: 'fsma-unified',
-        title: 'Anomaly Detection Simulator',
-        description: 'Test cold-chain anomaly detection and alerting.',
+        title: 'AI-Powered Cold Chain Monitor',
+        description: 'Detect temperature excursions and supply chain anomalies.',
         icon: AlertTriangle,
         href: '/tools/fsma-unified'
     },
@@ -138,6 +139,13 @@ export const FREE_TOOLS = [
         description: 'Interactive tracing graph for FSMA networks.',
         icon: Network,
         href: '/tools/knowledge-graph'
+    },
+    {
+        id: 'readiness-assessment',
+        title: 'FSMA 204 Readiness Assessment',
+        description: 'Score your compliance readiness across products, CTEs, KDEs, and systems.',
+        icon: CheckCircle2,
+        href: '/tools/readiness-assessment'
     },
     {
         id: 'roi-calculator',
@@ -173,5 +181,12 @@ export const FREE_TOOLS = [
         description: 'Test your record retrieval speed.',
         icon: Timer,
         href: '/tools/drill-simulator'
+    },
+    {
+        id: 'recall-readiness',
+        title: 'Recall Readiness Score',
+        description: 'Get an A-F grade on your 24-hour records retrieval mandate.',
+        icon: ShieldCheck,
+        href: '/tools/recall-readiness'
     }
 ];

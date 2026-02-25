@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { ROICalculatorClient } from "./components/ROICalculatorClient";
-import { Breadcrumbs } from "@/components/layout/breadcrumbs";
+import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
@@ -34,17 +34,9 @@ const jsonLd = {
 
 export default function ROICalculatorPage() {
     return (
-        <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+        <Suspense fallback={<div>Loading...</div>}>
             <JSONLD data={jsonLd} />
-            <div className="max-w-7xl mx-auto">
-                <Breadcrumbs
-                    items={[
-                        { label: "Free Tools", href: "/tools" },
-                        { label: "ROI Calculator" }
-                    ]}
-                />
-                <ROICalculatorClient />
-            </div>
-        </div>
+            <ROICalculatorClient />
+        </Suspense>
     );
 }
