@@ -1,183 +1,292 @@
 'use client';
 
-import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
-import { ToolConfig } from '@/types/fsma-tools';
-import { usePostHog } from 'posthog-js/react';
-import { motion } from 'framer-motion';
-import { Timer, AlertTriangle, ShieldCheck, Zap, Ghost, AlertCircle, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import { RelatedTools } from '@/components/layout/related-tools';
-import { FREE_TOOLS } from '@/lib/fsma-tools-data';
+import {
+    ShieldAlert,
+    Play,
+    CheckCircle2,
+    XCircle,
+    AlertTriangle,
+    FileText,
+    ArrowRight,
+    Clock,
+} from 'lucide-react';
 
-const DRILL_TOOL_CONFIG: ToolConfig = {
-    id: 'drill-simulator',
-    title: '24-Hour Drill Simulator',
-    description: 'Simulate a real-time FDA request for FSMA 204 records. Can your team beat the clock?',
-    icon: 'Timer',
-    stages: {
-        questions: [
-            {
-                id: 'scenario',
-                text: 'Scenario: FDA reports a potential Salmonella link in Cantaloupes. They need records for Lot #CT-2024-X1. Where do you start?',
-                type: 'select',
-                options: [
-                    { label: 'Search the digital ERP/WMS', value: 'digital', weight: 0.5 },
-                    { label: 'Locate the paper Bill of Lading folder', value: 'paper', weight: 4 },
-                    { label: 'Wait for the shift manager to arrive', value: 'wait', weight: 8 },
-                ]
-            },
-            {
-                id: 'tlc_source',
-                text: 'You found the receiving record, but the Traceability Lot Code Source is missing. How do you find it?',
-                type: 'select',
-                options: [
-                    { label: 'Email the supplier and wait', value: 'email', weight: 12 },
-                    { label: 'Check the incoming GS1-128 barcode log', value: 'barcode', weight: 1 },
-                    { label: 'Call the driver who delivered it', value: 'call', weight: 6 },
-                ]
-            },
-            {
-                id: 'compilation',
-                text: 'FDA wants the "Sortable Spreadsheet" format. How do you compile the 14 required KDEs?',
-                type: 'select',
-                options: [
-                    { label: 'Manual data entry into Excel', value: 'manual', weight: 10 },
-                    { label: 'Run a pre-configured report', value: 'report', weight: 0.5 },
-                    { label: 'Copy-paste from PDF invoices', value: 'copy_paste', weight: 6 },
-                ]
-            },
-            {
-                id: 'verification',
-                text: 'One shipment was split into two transformations. How do you link the new TLC to the old one?',
-                type: 'select',
-                options: [
-                    { label: 'Check the production log book', value: 'log', weight: 4 },
-                    { label: 'Digital lineage lookup', value: 'digital', weight: 0.1 },
-                    { label: 'Ask the production lead to remember', value: 'memory', weight: 24 },
-                ]
-            }
-        ],
-        leadGate: {
-            title: 'Get Your Drill Results & Playbook',
-            description: 'We will send you a breakdown of your "Simulated Response Cost" and a 24-hour drill playbook for your team.',
-            cta: 'Send My Playbook'
-        }
-    }
-};
+type DrillPhase = 'ready' | 'active' | 'checklist' | 'graded';
+
+const SCENARIOS = [
+    {
+        title: 'Outbreak Investigation — Romaine Lettuce',
+        description:
+            'FDA has identified a potential Salmonella link. Provide all traceability records for the flagged lot within 24 hours.',
+        targetProduct: 'Romaine Lettuce',
+        targetTLC: 'ROM-0226-A1-001',
+        citation: '21 CFR 1.1455(a)',
+    },
+    {
+        title: 'Routine Compliance Check — Fresh Tomatoes',
+        description:
+            'Routine FSMA 204 assessment. Demonstrate ability to trace product from receipt through distribution.',
+        targetProduct: 'Roma Tomatoes',
+        targetTLC: 'TOM-0226-F3-001',
+        citation: '21 CFR 1.1455(a)',
+    },
+    {
+        title: 'Retailer-Initiated Trace — Atlantic Salmon',
+        description:
+            'Temperature excursion flagged on imported seafood. Full chain-of-custody records requested.',
+        targetProduct: 'Atlantic Salmon Fillets',
+        targetTLC: 'SAL-0226-B1-007',
+        citation: '21 CFR 1.1455(a), 21 CFR 1.1325(c)',
+    },
+];
+
+const CHECKLIST_ITEMS = [
+    { id: 'lot_genealogy', label: 'Lot Genealogy', description: 'Can trace lot from farm to current location', points: 20 },
+    { id: 'electronic_records', label: 'Electronic Records', description: 'Records in electronic, sortable format', points: 20 },
+    { id: 'all_ctes', label: 'All CTEs Present', description: 'Ship, Receive, and Transformation events tracked', points: 15 },
+    { id: 'all_kdes', label: 'All KDEs Present', description: 'GLN, TLC source, timestamps on every event', points: 15 },
+    { id: 'chain_verification', label: 'Chain Integrity', description: 'SHA-256 hash chain verified end-to-end', points: 15 },
+    { id: 'epcis_export', label: 'EPCIS 2.0 Export', description: 'Can export in GS1 JSON-LD format', points: 15 },
+];
+
+function formatTime(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
 
 export function DrillSimulatorClient() {
-    const posthog = usePostHog();
+    const [phase, setPhase] = useState<DrillPhase>('ready');
+    const [selectedScenario, setSelectedScenario] = useState(0);
+    const [timeRemaining, setTimeRemaining] = useState(24 * 60 * 60);
+    const [startTime, setStartTime] = useState<Date | null>(null);
+    const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+    const [grade, setGrade] = useState<{ score: number; grade: string; feedback: string[] } | null>(null);
 
-    const calculateResult = (answers: Record<string, any>) => {
-        let totalHours = 0;
-        DRILL_TOOL_CONFIG.stages.questions.forEach(q => {
-            const selected = answers[q.id];
-            const opt = q.options?.find(o => o.value === selected);
-            if (opt?.weight) totalHours += opt.weight;
+    useEffect(() => {
+        if (phase !== 'active' && phase !== 'checklist') return;
+        const interval = setInterval(() => {
+            setTimeRemaining((prev) => Math.max(0, prev - 1));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [phase]);
+
+    const handleStartDrill = useCallback(() => {
+        setPhase('active');
+        setStartTime(new Date());
+        setTimeRemaining(24 * 60 * 60);
+        setChecklist({});
+        setGrade(null);
+    }, []);
+
+    const handleToggleItem = useCallback((id: string) => {
+        setChecklist((prev) => ({ ...prev, [id]: !prev[id] }));
+    }, []);
+
+    const handleSubmitGrade = useCallback(() => {
+        let score = 0;
+        const feedback: string[] = [];
+
+        CHECKLIST_ITEMS.forEach((item) => {
+            if (checklist[item.id]) {
+                score += item.points;
+            } else {
+                feedback.push(`Missing: ${item.label} — ${item.description}`);
+            }
         });
 
-        const isFail = totalHours > 24;
-        const color = isFail ? 'var(--re-danger)' : 'var(--re-brand)';
+        const elapsed = startTime ? (Date.now() - startTime.getTime()) / 1000 : 0;
+        const elapsedHours = elapsed / 3600;
+        if (elapsedHours <= 1) {
+            feedback.unshift('Excellent — responded in under 1 hour');
+        } else if (elapsedHours <= 4) {
+            feedback.unshift('Good — responded within 4 hours');
+        }
 
-        return (
-            <div className="space-y-8">
-                <div className="text-center py-6">
-                    <motion.div
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className="inline-flex items-center justify-center w-32 h-32 rounded-full border-4 mb-4 relative overflow-hidden"
-                        style={{ borderColor: color }}
-                    >
-                        <div
-                            className="absolute bottom-0 left-0 right-0 bg-red-500/20 transition-all duration-1000"
-                            style={{ height: `${Math.min(100, (totalHours / 24) * 100)}%` }}
-                        />
-                        <div className="relative flex flex-col items-center">
-                            <span className="text-4xl font-black" style={{ color }}>{totalHours.toFixed(1)}h</span>
-                            <span className="text-[10px] uppercase font-bold tracking-widest opacity-60">Total Time</span>
-                        </div>
-                    </motion.div>
-                    <h3 className="text-2xl font-bold">
-                        {isFail ? '24-Hour Deadline Missed' : 'Compliance Target Met'}
-                    </h3>
-                    <p className="text-[var(--re-text-tertiary)] mt-1">
-                        {isFail
-                            ? 'You exceeded the FDA-mandated response window.'
-                            : 'You successfully Beat the Clock.'}
-                    </p>
-                </div>
+        const letterGrade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F';
+        setGrade({ score, grade: letterGrade, feedback });
+        setPhase('graded');
+    }, [checklist, startTime]);
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] text-center">
-                        <Zap className="h-5 w-5 mx-auto mb-2 text-[var(--re-warning)]" />
-                        <div className="text-lg font-bold">{(totalHours * 125).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</div>
-                        <div className="text-[10px] uppercase text-[var(--re-text-muted)]">Estimated Labor Cost</div>
-                    </div>
-                    <div className="p-4 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] text-center">
-                        <Ghost className="h-5 w-5 mx-auto mb-2 text-[var(--re-danger)]" />
-                        <div className="text-lg font-bold">{isFail ? 'CRITICAL' : 'LOW'}</div>
-                        <div className="text-[10px] uppercase text-[var(--re-text-muted)]">Inventory Spoilage Risk</div>
-                    </div>
-                    <div className="p-4 rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] text-center">
-                        <ShieldCheck className="h-5 w-5 mx-auto mb-2 text-[var(--re-brand)]" />
-                        <div className="text-lg font-bold">{isFail ? 'P0 SITUATION' : 'READY'}</div>
-                        <div className="text-[10px] uppercase text-[var(--re-text-muted)]">Audit Readiness</div>
-                    </div>
-                </div>
-
-                {isFail && (
-                    <div className="p-4 rounded-xl border border-[var(--re-danger)]/20 bg-[var(--re-danger-muted)] flex items-start gap-4">
-                        <AlertCircle className="h-6 w-6 text-[var(--re-danger)] shrink-0" />
-                        <div>
-                            <h4 className="font-bold text-[var(--re-danger)]">Critical Failure Point</h4>
-                            <p className="text-xs leading-relaxed text-[var(--re-text-primary)]">
-                                FDA 21 CFR §1.1455 <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[var(--re-text-muted)] hover:text-[var(--re-brand)] transition-colors align-super" title="21 CFR § 1.1455(c)">[FDA]</a> requires an electronic sortable spreadsheet within 24 hours of request.
-                                Your manual processes are causing a "bottleneck" that puts your entire operation at risk.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex flex-col items-center text-center">
-                    <h4 className="font-bold mb-2">Cut your response time to 1 minute</h4>
-                    <p className="text-xs text-[var(--re-text-secondary)] mb-6 max-w-sm">
-                        RegEngine users respond to FDA requests in seconds, not days. Prevent administrative chaos and inventory loss.
-                    </p>
-                    <div className="flex gap-4 w-full justify-center">
-                        <Link href="/demo/supply-chains">
-                            <Button className="bg-[var(--re-brand)] px-8 h-10">
-                                View a Perfect Trace <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    const scenario = SCENARIOS[selectedScenario];
+    const urgencyColor = timeRemaining < 3600 ? 'text-red-500' : timeRemaining < 14400 ? 'text-amber-500' : 'text-[var(--re-brand)]';
 
     return (
-        <div className="min-h-screen py-20 px-4" style={{ background: 'var(--re-surface-base)' }}>
-            <FSMAToolShell
-                config={DRILL_TOOL_CONFIG}
-                renderResults={calculateResult}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('drill_simulated', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
-                }}
-            />
+        <FreeToolPageShell
+            title="Mock Audit Drill"
+            subtitle="Simulate an FDA traceability records request. Test your 24-hour response readiness under realistic conditions."
+            relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
+        >
+            <AnimatePresence mode="wait">
+                {phase === 'ready' && (
+                    <motion.div key="ready" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {SCENARIOS.map((s, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setSelectedScenario(i)}
+                                    className={`text-left p-4 rounded-xl border transition-all ${selectedScenario === i
+                                            ? 'border-[var(--re-brand)] bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)] shadow-lg'
+                                            : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] hover:border-[var(--re-brand)]'
+                                        }`}
+                                >
+                                    <div className="text-sm font-bold mb-2">{s.title}</div>
+                                    <div className="text-xs text-muted-foreground mb-3">{s.description}</div>
+                                    <Badge variant="outline" className="text-[8px] uppercase tracking-widest">{s.citation}</Badge>
+                                </button>
+                            ))}
+                        </div>
+                        <Button
+                            onClick={handleStartDrill}
+                            className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white h-12 px-8 rounded-xl text-base font-bold"
+                        >
+                            <Play className="mr-2 h-5 w-5" />
+                            Start Drill — 24 Hour Timer Begins
+                        </Button>
+                    </motion.div>
+                )}
 
-            <div className="max-w-3xl mx-auto">
-                <RelatedTools
-                    tools={FREE_TOOLS.filter(t => ['recall-readiness', 'kde-checker', 'roi-calculator'].includes(t.id))}
-                />
-            </div>
-        </div>
+                {phase === 'active' && (
+                    <motion.div key="active" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <Card className="border-red-500/30 bg-red-500/5">
+                            <CardContent className="py-8">
+                                <div className="flex flex-col items-center text-center gap-4">
+                                    <ShieldAlert className="h-12 w-12 text-red-500" />
+                                    <h2 className="text-xl font-bold">FDA RECORDS REQUEST</h2>
+                                    <div className={`text-5xl font-mono font-bold ${urgencyColor}`}>
+                                        {formatTime(timeRemaining)}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">Time Remaining</div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-[var(--re-border-default)]">
+                            <CardHeader>
+                                <CardTitle className="text-base">{scenario.title}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground">{scenario.description}</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                        <div className="text-xs text-muted-foreground">Target Product</div>
+                                        <div className="text-sm font-bold">{scenario.targetProduct}</div>
+                                    </div>
+                                    <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                        <div className="text-xs text-muted-foreground">Lot Code</div>
+                                        <div className="text-sm font-mono font-bold">{scenario.targetTLC}</div>
+                                    </div>
+                                </div>
+                                <Button
+                                    onClick={() => setPhase('checklist')}
+                                    className="w-full bg-[var(--re-brand)] hover:brightness-110 text-white h-12 rounded-xl font-bold"
+                                >
+                                    I Have My Records — Grade My Response
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                )}
+
+                {phase === 'checklist' && (
+                    <motion.div key="checklist" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-lg font-bold">Response Checklist</h2>
+                            <div className={`flex items-center gap-2 text-sm font-mono font-bold ${urgencyColor}`}>
+                                <Clock className="h-4 w-4" /> {formatTime(timeRemaining)}
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            {CHECKLIST_ITEMS.map((item) => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => handleToggleItem(item.id)}
+                                    className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-4 ${checklist[item.id]
+                                            ? 'border-emerald-500/50 bg-emerald-500/5'
+                                            : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] hover:border-[var(--re-brand)]'
+                                        }`}
+                                >
+                                    {checklist[item.id] ? (
+                                        <CheckCircle2 className="h-6 w-6 text-emerald-500 flex-shrink-0" />
+                                    ) : (
+                                        <div className="h-6 w-6 rounded-full border-2 border-[var(--re-border-default)] flex-shrink-0" />
+                                    )}
+                                    <div className="flex-1">
+                                        <div className="text-sm font-medium">{item.label}</div>
+                                        <div className="text-xs text-muted-foreground">{item.description}</div>
+                                    </div>
+                                    <Badge variant="outline" className="text-[9px]">{item.points} pts</Badge>
+                                </button>
+                            ))}
+                        </div>
+                        <Button
+                            onClick={handleSubmitGrade}
+                            className="w-full bg-[var(--re-brand)] hover:brightness-110 text-white h-12 rounded-xl font-bold"
+                        >
+                            Submit for Grading
+                        </Button>
+                    </motion.div>
+                )}
+
+                {phase === 'graded' && grade && (
+                    <motion.div key="graded" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
+                        <Card className={`border-2 ${grade.score >= 70 ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
+                            <CardContent className="py-10">
+                                <div className="flex flex-col items-center text-center gap-4">
+                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring' }}>
+                                        {grade.score >= 70 ? (
+                                            <CheckCircle2 className="h-16 w-16 text-emerald-500" />
+                                        ) : (
+                                            <XCircle className="h-16 w-16 text-red-500" />
+                                        )}
+                                    </motion.div>
+                                    <div>
+                                        <div className="text-6xl font-bold" style={{ color: grade.score >= 70 ? 'var(--re-brand)' : '#ef4444' }}>
+                                            {grade.grade}
+                                        </div>
+                                        <div className="text-lg text-muted-foreground">{grade.score}/100</div>
+                                    </div>
+                                    <Badge className={grade.score >= 70 ? 'bg-emerald-600' : 'bg-red-600'}>
+                                        {grade.score >= 70 ? 'PASSED — Audit Ready' : 'FAILED — Action Required'}
+                                    </Badge>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-[var(--re-border-default)]">
+                            <CardHeader>
+                                <CardTitle className="text-base">Feedback</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <ul className="space-y-2">
+                                    {grade.feedback.map((item, i) => (
+                                        <li key={i} className="flex items-start gap-2 text-sm">
+                                            {item.startsWith('Missing') ? (
+                                                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                                            ) : (
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                            )}
+                                            <span>{item}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </CardContent>
+                        </Card>
+
+                        <Button onClick={() => setPhase('ready')} variant="outline" className="rounded-xl">
+                            Run Another Drill
+                        </Button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </FreeToolPageShell>
     );
 }

@@ -34,17 +34,9 @@ const jsonLd = {
 
 export default function DrillSimulatorPage() {
     return (
-        <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+        <>
             <JSONLD data={jsonLd} />
-            <div className="max-w-7xl mx-auto">
-                <Breadcrumbs
-                    items={[
-                        { label: "Free Tools", href: "/tools" },
-                        { label: "24-Hour Drill Simulator" }
-                    ]}
-                />
-                <DrillSimulatorClient />
-            </div>
-        </div>
+            <DrillSimulatorClient />
+        </>
     );
 }

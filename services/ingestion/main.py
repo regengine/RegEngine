@@ -85,6 +85,10 @@ app.include_router(score_router)
 from app.supplier_portal import router as portal_router
 app.include_router(portal_router)
 
+# Mock Audit Mode
+from app.mock_audit import router as audit_router
+app.include_router(audit_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
