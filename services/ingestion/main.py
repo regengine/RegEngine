@@ -89,6 +89,14 @@ app.include_router(portal_router)
 from app.mock_audit import router as audit_router
 app.include_router(audit_router)
 
+# SOP Generator
+from app.sop_generator import router as sop_router
+app.include_router(sop_router)
+
+# EPCIS & FDA Export
+from app.epcis_export import router as export_router
+app.include_router(export_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
