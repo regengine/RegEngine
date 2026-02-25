@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { DashboardBreadcrumb } from '@/components/dashboard/breadcrumb';
 import {
     BarChart3,
     Bell,
@@ -37,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Sidebar */}
             <aside className="hidden md:flex flex-col w-60 border-r border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] flex-shrink-0">
                 <div className="p-4 border-b border-[var(--re-border-default)]">
-                    <Link href="/dashboard/compliance" className="flex items-center gap-2">
+                    <Link href="/dashboard" className="flex items-center gap-2">
                         <Activity className="h-5 w-5 text-[var(--re-brand)]" />
                         <span className="font-bold text-sm">Command Center</span>
                     </Link>
@@ -96,6 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Main content */}
             <main className="flex-1 md:pt-0 pt-14 overflow-y-auto">
+                <DashboardBreadcrumb />
                 {children}
             </main>
         </div>

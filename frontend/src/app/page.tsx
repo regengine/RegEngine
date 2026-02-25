@@ -360,6 +360,50 @@ export default function RegEngineLanding() {
         </div>
       </section>
 
+      {/* ─── PLATFORM CAPABILITIES ─── */}
+      <section id="product" className="relative z-[2] max-w-[1120px] mx-auto py-[80px] px-6">
+        <div className="text-center mb-12">
+          <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
+            Compliance Command Center
+          </span>
+          <h2 className="text-[32px] font-bold text-[var(--re-text-primary)] mt-3 mb-3 tracking-[-0.01em]">
+            Everything You Need to <span className="text-[var(--re-brand)]">Stay Compliant</span>
+          </h2>
+          <p className="text-base text-[var(--re-text-muted)] max-w-[520px] mx-auto">
+            Real-time monitoring, automated alerts, supplier management, and audit-ready exports — all in one platform.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            { title: 'Compliance Dashboard', desc: 'Real-time score with automated grading across CTEs, KDEs, and supply chain integrity.', href: '/dashboard/compliance', icon: <ShieldCheck size={20} /> },
+            { title: 'Smart Alerts', desc: 'Configurable alerts for missing data, temperature excursions, and approaching deadlines.', href: '/dashboard/alerts', icon: <Activity size={20} /> },
+            { title: 'Recall Readiness', desc: '6-dimension assessment scoring your ability to respond to FDA within 24 hours.', href: '/dashboard/recall-report', icon: <Truck size={20} /> },
+            { title: 'Supplier Portal', desc: 'No-login CTE submission for suppliers. Track compliance across your entire network.', href: '/dashboard/suppliers', icon: <Network size={20} /> },
+            { title: 'Product Catalog', desc: 'Manage FTL-covered products with CTE tracking, GTIN/SKU, and supplier mapping.', href: '/dashboard/products', icon: <Database size={20} /> },
+            { title: 'Audit Trail', desc: 'Immutable, SHA-256 hashed event log for every action. Tamper-proof by design.', href: '/dashboard/audit-log', icon: <Hash size={20} /> },
+          ].map((item, i) => (
+            <Link
+              key={i}
+              href={item.href}
+              className="p-6 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl transition-all duration-300 flex flex-col hover:-translate-y-1 hover:border-[var(--re-brand-muted)] hover:shadow-[0_12px_24px_-10px_rgba(16,185,129,0.15)]"
+            >
+              <div className="text-[var(--re-brand)] mb-4">{item.icon}</div>
+              <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">{item.title}</h3>
+              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed flex-grow">{item.desc}</p>
+            </Link>
+          ))}
+        </div>
+
+        <div className="text-center mt-10">
+          <Link href="/onboarding">
+            <Button size="lg" className="h-14 px-10 rounded-3xl bg-gradient-to-r from-[var(--re-brand)] to-blue-500 text-white text-base font-bold shadow-xl hover:scale-105 transition-transform group">
+              Get Started Free <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+
       {/* ─── INDUSTRIES GRID ─── */}
       <section id="industries" className="relative z-[2] max-w-[1120px] mx-auto py-[100px] px-6">
         <div className="text-center mb-16">
