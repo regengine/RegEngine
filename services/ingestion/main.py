@@ -101,6 +101,10 @@ app.include_router(export_router)
 from app.stripe_billing import router as billing_router
 app.include_router(billing_router)
 
+# Alerts & Notifications
+from app.alerts import router as alerts_router
+app.include_router(alerts_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
