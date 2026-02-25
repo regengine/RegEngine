@@ -22,8 +22,8 @@ const industries = [
 export function MarketingFooter() {
     const pathname = usePathname();
 
-    // Hide global footer on standalone mobile app routes
-    if (pathname === '/fsma/field-capture') {
+    // Hide global footer on standalone mobile app and dashboard routes
+    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard')) {
         return null;
     }
 
