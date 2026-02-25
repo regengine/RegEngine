@@ -117,6 +117,18 @@ app.include_router(recall_router)
 from app.supplier_mgmt import router as supplier_mgmt_router
 app.include_router(supplier_mgmt_router)
 
+# Audit Log
+from app.audit_log import router as audit_log_router
+app.include_router(audit_log_router)
+
+# Product Catalog
+from app.product_catalog import router as product_catalog_router
+app.include_router(product_catalog_router)
+
+# Notification Preferences
+from app.notification_prefs import router as notification_prefs_router
+app.include_router(notification_prefs_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
