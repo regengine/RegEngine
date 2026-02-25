@@ -81,6 +81,10 @@ app.include_router(sensitech_router)
 from app.compliance_score import router as score_router
 app.include_router(score_router)
 
+# Supplier Portal
+from app.supplier_portal import router as portal_router
+app.include_router(portal_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
