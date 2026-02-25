@@ -129,6 +129,14 @@ app.include_router(product_catalog_router)
 from app.notification_prefs import router as notification_prefs_router
 app.include_router(notification_prefs_router)
 
+# Team Management
+from app.team_mgmt import router as team_mgmt_router
+app.include_router(team_mgmt_router)
+
+# Settings
+from app.settings import router as settings_router
+app.include_router(settings_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
