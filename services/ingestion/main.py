@@ -97,6 +97,10 @@ app.include_router(sop_router)
 from app.epcis_export import router as export_router
 app.include_router(export_router)
 
+# Stripe Billing
+from app.stripe_billing import router as billing_router
+app.include_router(billing_router)
+
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
 
