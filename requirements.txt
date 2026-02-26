@@ -13,7 +13,7 @@ httpx==0.26.0
 redis==5.0.1
 slowapi==0.1.9
 prometheus-fastapi-instrumentator==7.0.0
-python-multipart==0.0.20
+python-multipart>=0.0.22
 anyio==3.7.1
 kafka-python==2.0.2
 tenacity==8.2.3
