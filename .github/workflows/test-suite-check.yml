@@ -2,8 +2,20 @@ name: Test Suite Health Check
 
 on:
   pull_request:
+    paths:
+      - 'services/**'
+      - 'shared/**'
+      - 'kernel/**'
+      - 'requirements.txt'
+      - '.github/workflows/test-suite-check.yml'
   push:
     branches: [main, develop]
+    paths:
+      - 'services/**'
+      - 'shared/**'
+      - 'kernel/**'
+      - 'requirements.txt'
+      - '.github/workflows/test-suite-check.yml'
 
 permissions:
   contents: read
