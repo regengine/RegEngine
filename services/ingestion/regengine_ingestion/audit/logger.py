@@ -72,7 +72,7 @@ class AuditLogger:
         
         # Write to JSONL file
         if self.audit_file:
-            with open(self.audit_file, "a") as f:
+            with open(self.audit_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry.to_dict()) + "\n")
         
         # Write to database

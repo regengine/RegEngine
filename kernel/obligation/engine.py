@@ -61,7 +61,7 @@ class RegulatoryEngine:
         if not obligations_path.exists():
             raise FileNotFoundError(f"obligations.yaml not found at {obligations_path}")
         
-        with open(obligations_path) as f:
+        with open(obligations_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         
         obligations = [

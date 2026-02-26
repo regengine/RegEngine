@@ -123,7 +123,7 @@ class FringeCalculator:
         """Load fringe and tax tables from YAML."""
         try:
             if self.tables_path.exists():
-                with open(self.tables_path, 'r') as f:
+                with open(self.tables_path, 'r', encoding='utf-8') as f:
                     data = yaml.safe_load(f)
                     self.fringe_rates = data.get("fringe_rates", {})
                     self.payroll_taxes = data.get("payroll_taxes", {})

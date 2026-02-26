@@ -47,7 +47,7 @@ class HIPAAAuditLogger:
         logger.info(f"AUDIT_PHI: {entry.model_dump_json()}")
         
         # Also write to a local secure audit file for persistence in this environment
-        with open("hipaa_audit_trail.log", "a") as f:
+        with open("hipaa_audit_trail.log", "a", encoding="utf-8") as f:
             f.write(entry.model_dump_json() + "\n")
 
     @staticmethod
@@ -62,5 +62,5 @@ class HIPAAAuditLogger:
             actor=actor
         )
         logger.info(f"AUDIT_ACCESS: {entry.model_dump_json()}")
-        with open("hipaa_audit_trail.log", "a") as f:
+        with open("hipaa_audit_trail.log", "a", encoding="utf-8") as f:
             f.write(entry.model_dump_json() + "\n")

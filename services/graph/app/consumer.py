@@ -134,7 +134,7 @@ def generate_provision_hash(doc_hash: str, text: str) -> str:
 
 def load_schema(schema_name: str) -> str:
     path = os.path.join(os.path.dirname(__file__), "../../../schemas", schema_name)
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
 def _ensure_topic(topic: str) -> None:

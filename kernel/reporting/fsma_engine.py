@@ -95,7 +95,7 @@ class FSMA204ComplianceEngine:
         if not definition_path.exists():
             raise FileNotFoundError(f"FSMA definition file not found: {definition_path}")
 
-        with open(definition_path, "r") as handle:
+        with open(definition_path, "r", encoding="utf-8") as handle:
             data = yaml.safe_load(handle)
 
         self.rule_metadata = data.get("metadata", {})

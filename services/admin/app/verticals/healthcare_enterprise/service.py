@@ -23,7 +23,7 @@ class HealthcareEnterpriseService:
         """
         current_dir = Path(__file__).parent
         json_path = current_dir / "data" / "crm_v1.json"
-        with open(json_path, "r") as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     async def create_crm_project(

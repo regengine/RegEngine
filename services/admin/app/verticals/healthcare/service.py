@@ -80,7 +80,7 @@ class HealthcareVerticalService:
         current_dir = Path(__file__).parent
         json_path = current_dir / "data" / "mscf_v1.json"
         
-        with open(json_path, "r") as f:
+        with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     def _get_applicable_rules(self, metadata: HealthcareProjectMetadata) -> List[Dict[str, Any]]:
