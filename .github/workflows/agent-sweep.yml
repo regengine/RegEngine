@@ -102,7 +102,6 @@ jobs:
           retention-days: 90
 
       - name: Create issue if findings
-        if: always()
         run: |
           if grep -q "⚠️" security-report.md; then
             BODY=$(cat security-report.md)
@@ -173,7 +172,6 @@ jobs:
           retention-days: 90
 
       - name: Create issue if findings
-        if: always()
         run: |
           if grep -q "⚠️" ui-report.md; then
             BODY=$(cat ui-report.md)
