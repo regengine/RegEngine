@@ -65,6 +65,13 @@ install_exception_handlers(app)
 
 app.include_router(ingestion_router)
 
+# Decomposed sub-routers (extracted from routes.py god file)
+from app.routes_scraping import router as scraping_router
+app.include_router(scraping_router)
+
+from app.routes_discovery import router as discovery_router
+app.include_router(discovery_router)
+
 # Webhook Ingestion (Sprint: Pilot-Ready Platform)
 from app.webhook_router import router as webhook_router
 app.include_router(webhook_router)
