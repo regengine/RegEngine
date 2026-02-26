@@ -231,7 +231,7 @@ def validate_snapshot_contract_functions_exist(
     snapshot_logic_path = f"verticals/{vertical_name}/snapshot_logic.py"
     
     try:
-        with open(snapshot_logic_path) as f:
+        with open(snapshot_logic_path, encoding="utf-8") as f:
             content = f.read()
         
         # Check if function is defined

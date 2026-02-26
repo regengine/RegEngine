@@ -88,7 +88,7 @@ def init_db(db_host, db_name, db_user, db_password):
             click.echo(f"❌ Migration file not found: {migration_file}")
             return
         
-        with open(migration_file) as f:
+        with open(migration_file, encoding="utf-8") as f:
             sql = f.read()
         
         # Execute migration
@@ -170,7 +170,7 @@ def status(job_id, data_path):
     click.echo(f"  Audit log: {audit_file}")
     
     # Count audit entries
-    with open(audit_file) as f:
+    with open(audit_file, encoding="utf-8") as f:
         lines = f.readlines()
     
     click.echo(f"  Audit entries: {len(lines)}")

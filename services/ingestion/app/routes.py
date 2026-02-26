@@ -940,6 +940,9 @@ async def ingest_direct(
             job.completed_at = datetime.utcnow()
             db_manager.update_job(job)
         logger.exception("ingestion_error", error=str(exc)); raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if db_manager:
+            db_manager.close()
 
 
 @router.post("/v1/ingest/file", response_model=NormalizedEvent)

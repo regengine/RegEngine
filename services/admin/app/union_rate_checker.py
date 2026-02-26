@@ -183,7 +183,7 @@ class UnionRateChecker:
             base_path = Path(__file__).parent.parent.parent
             rate_tables_path = base_path / "industry_plugins" / "production_ca_la" / "union_rate_tables.yaml"
         
-        with open(rate_tables_path, "r") as f:
+        with open(rate_tables_path, "r", encoding="utf-8") as f:
             self._data = yaml.safe_load(f)
         
         self.version = self._data.get("version", "unknown")

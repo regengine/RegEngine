@@ -73,7 +73,7 @@ def load_schema(schema_name):
     if SCHEMA_DIR:
         schema_path = os.path.join(SCHEMA_DIR, schema_name)
         if os.path.exists(schema_path):
-            with open(schema_path, 'r') as f:
+            with open(schema_path, 'r', encoding='utf-8') as f:
                 return f.read()
     # Fallback paths
     paths = [
@@ -83,7 +83,7 @@ def load_schema(schema_name):
     ]
     for p in paths:
         if os.path.exists(p):
-            with open(p, 'r') as f:
+            with open(p, 'r', encoding='utf-8') as f:
                 return f.read()
     raise FileNotFoundError(f"Schema {schema_name} not found (searched: SCHEMA_DIR={SCHEMA_DIR}, {paths})")
 

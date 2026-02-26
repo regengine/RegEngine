@@ -161,7 +161,7 @@ class VerticalCompiler:
         if not vertical_path.exists():
             raise FileNotFoundError(f"vertical.yaml not found at {vertical_path}")
         
-        with open(vertical_path) as f:
+        with open(vertical_path, encoding="utf-8") as f:
             vertical_data = yaml.safe_load(f)
         
         vertical_meta = VerticalMetadata(**vertical_data)
@@ -171,7 +171,7 @@ class VerticalCompiler:
         if not obligations_path.exists():
             raise FileNotFoundError(f"obligations.yaml not found at {obligations_path}")
         
-        with open(obligations_path) as f:
+        with open(obligations_path, encoding="utf-8") as f:
             obligations_data = yaml.safe_load(f)
         
         obligations = [
@@ -217,7 +217,7 @@ class VerticalCompiler:
         routes_file = output_dir / "routes.py"
         routes_code = generate_fastapi_routes(vertical_meta, obligations)
         
-        with open(routes_file, 'w') as f:
+        with open(routes_file, 'w', encoding='utf-8') as f:
             f.write(routes_code)
         
         logger.info(f"Generated routes: {routes_file}")
@@ -231,7 +231,7 @@ class VerticalCompiler:
         models_file = output_dir / "models.py"
         models_code = generate_pydantic_models(vertical_meta, obligations)
         
-        with open(models_file, 'w') as f:
+        with open(models_file, 'w', encoding='utf-8') as f:
             f.write(models_code)
         
         logger.info(f"Generated models: {models_file}")
@@ -250,14 +250,14 @@ class VerticalCompiler:
         nodes_file = output_dir / "graph_nodes.py"
         nodes_code = generate_graph_nodes(vertical_meta, obligations)
         
-        with open(nodes_file, 'w') as f:
+        with open(nodes_file, 'w', encoding='utf-8') as f:
             f.write(nodes_code)
         
         # Generate relationships
         rels_file = output_dir / "graph_relationships.py"
         rels_code = generate_graph_relationships(vertical_meta, obligations)
         
-        with open(rels_file, 'w') as f:
+        with open(rels_file, 'w', encoding='utf-8') as f:
             f.write(rels_code)
         
         logger.info(f"Generated graph bindings: {nodes_file}, {rels_file}")
@@ -271,7 +271,7 @@ class VerticalCompiler:
         snapshot_file = output_dir / "snapshot_adapter.py"
         snapshot_code = generate_snapshot_adapter(vertical_meta, obligations)
         
-        with open(snapshot_file, 'w') as f:
+        with open(snapshot_file, 'w', encoding='utf-8') as f:
             f.write(snapshot_code)
         
         logger.info(f"Generated snapshot adapter: {snapshot_file}")
@@ -316,7 +316,7 @@ class VerticalCompiler:
             openapi_spec_file = self.output_dir / "openapi.json"
             
             if openapi_spec_file.exists():
-                with open(openapi_spec_file, 'r') as f:
+                with open(openapi_spec_file, 'r', encoding='utf-8') as f:
                     spec = json.load(f)
                 
                 # Merge paths
@@ -333,7 +333,7 @@ class VerticalCompiler:
                         "description": f"{vertical_name.capitalize()} vertical endpoints"
                     })
                 
-                with open(openapi_spec_file, 'w') as f:
+                with open(openapi_spec_file, 'w', encoding='utf-8') as f:
                     json.dump(spec, f, indent=2)
                 
                 logger.info(f"Updated OpenAPI spec for {vertical_name}")

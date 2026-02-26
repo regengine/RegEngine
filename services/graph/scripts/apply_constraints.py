@@ -46,7 +46,7 @@ def apply_constraints():
         print(f"Error: Constraints file not found: {constraints_file}")
         sys.exit(1)
     
-    with open(constraints_file, 'r') as f:
+    with open(constraints_file, 'r', encoding='utf-8') as f:
         cypher_content = f.read()
     
     # Split into individual statements (by semicolon)

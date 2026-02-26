@@ -80,7 +80,7 @@ class ComplianceChecklistEngine:
             if not checklist_file.exists():
                 continue
 
-            with open(checklist_file, "r") as f:
+            with open(checklist_file, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f)
                 industry = data.get("industry")
                 checklists = data.get("checklists", [])

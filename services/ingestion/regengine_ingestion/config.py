@@ -102,7 +102,7 @@ class IngestionConfig:
     @classmethod
     def from_yaml(cls, path: Path) -> "IngestionConfig":
         """Load configuration from YAML file."""
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         
         # Convert nested dicts to dataclass instances
@@ -126,7 +126,7 @@ class FrameworkConfig:
     @classmethod
     def from_yaml(cls, path: Path) -> "FrameworkConfig":
         """Load framework configuration from YAML."""
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         
         # Convert nested structures

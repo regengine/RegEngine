@@ -94,7 +94,7 @@ class ComplianceIntegration:
         """Find tenants whose product profile matches the enforcement item."""
         # Query tenant product profiles
         result = session.execute(
-            "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers FROM tenant_product_profile"
+            "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers FROM tenant_product_profile LIMIT 1000"
         )
         
         matching = []
