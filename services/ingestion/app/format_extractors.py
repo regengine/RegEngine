@@ -656,8 +656,8 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
                 return "edi"
             elif text_sample.startswith("UNA") or text_sample.startswith("UNB"):
                 return "edi"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("format_detection_error", error=str(e))
     
     return "unknown"
 

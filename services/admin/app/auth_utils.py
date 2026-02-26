@@ -4,9 +4,30 @@ import jwt
 from passlib.context import CryptContext
 import os
 import secrets
+import logging
 
-# Configuration (Env vars should be set in production)
-SECRET_KEY = os.getenv("AUTH_SECRET_KEY", secrets.token_urlsafe(32))
+_logger = logging.getLogger("auth_utils")
+
+# ──────────────────────────────────────────────────────────────
+# JWT Secret Key — MUST be set in production.
+# In development, falls back to a random key (sessions won't
+# survive restarts, which is acceptable for local dev).
+# ──────────────────────────────────────────────────────────────
+_env_secret = os.getenv("AUTH_SECRET_KEY")
+if not _env_secret:
+    _is_production = os.getenv("REGENGINE_ENV", "").lower() == "production"
+    if _is_production:
+        raise RuntimeError(
+            "AUTH_SECRET_KEY must be set in production. "
+            "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(64))'"
+        )
+    _env_secret = secrets.token_urlsafe(32)
+    _logger.warning(
+        "AUTH_SECRET_KEY not set — using ephemeral key. "
+        "Sessions will NOT survive restarts. Set AUTH_SECRET_KEY for persistence."
+    )
+
+SECRET_KEY = _env_secret
 ALGORITHM = "HS256"
 
 # Session timeout configuration (configurable via env vars)

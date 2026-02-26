@@ -15,7 +15,7 @@ Usage:
     client = ServiceAuthClient(
         service_id="nlp-service",
         target_service="graph-service",
-        secret_key="shared-secret",
+        secret_key=os.environ["SERVICE_AUTH_SECRET"],
     )
     
     # Make authenticated requests
