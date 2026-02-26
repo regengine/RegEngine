@@ -1,5 +1,0 @@
-# Core dependencies — pinned for reproducible builds
-neo4j==5.16.0
-pydantic==2.5.0
-structlog==24.1.0
-confluent-kafka==2.13.0

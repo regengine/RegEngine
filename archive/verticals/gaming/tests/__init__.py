@@ -1,3 +1,0 @@
-"""
-Gaming service tests.
-"""

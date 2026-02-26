@@ -1,2 +1,0 @@
-services/energy/README.md:309:**TODO:** Integrate with Admin service JWT authentication
-services/energy/README.md:318:    current_user: User = Depends(get_current_user),  # TODO
