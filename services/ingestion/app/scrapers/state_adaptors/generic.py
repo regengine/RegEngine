@@ -12,6 +12,8 @@ from typing import Iterable, Optional
 
 from .base import FetchedItem, Source, StateRegistryScraper
 
+import logging
+logger = logging.getLogger("ingestion.scraper.generic")
 
 class GenericRSSScraper(StateRegistryScraper):
     """Generic RSS feed scraper for state regulatory feeds.
@@ -60,7 +62,8 @@ class GenericRSSScraper(StateRegistryScraper):
                 content_bytes=resp.content,
                 content_type=resp.headers.get("Content-Type"),
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("generic_fetch_failed", url=source.url, error=str(e))
             return FetchedItem(
                 source=source,
                 content_bytes=b"",
@@ -125,8 +128,8 @@ class GenericListScraper(StateRegistryScraper):
                     jurisdiction_code=self.jurisdiction,
                     metadata={"source_page": self.list_url},
                 )
-        except Exception:
-            # Return empty on failure - caller should handle retries
+        except Exception as e:
+            logger.warning("generic_discover_failed", url=self.list_url, error=str(e))
             return
 
     def fetch(self, source: Source) -> FetchedItem:
@@ -143,7 +146,8 @@ class GenericListScraper(StateRegistryScraper):
                 content_bytes=resp.content,
                 content_type=resp.headers.get("Content-Type"),
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("generic_fetch_with_fallback_failed", url=source.url, error=str(e))
             return FetchedItem(
                 source=source,
                 content_bytes=b"",

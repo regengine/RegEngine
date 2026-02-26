@@ -275,8 +275,8 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(e)})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("webhook_notification_failed", error=str(e))
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -371,7 +371,8 @@ async def get_discovery_queue():
             if ":" in val:
                 body, url = val.split(":", 1)
                 results.append(DiscoveryQueueItem(body=body, url=url, index=i))
-        except Exception:
+        except Exception as e:
+            logger.debug("discovery_queue_parse_skip", index=i, error=str(e))
             continue
     return results
 
@@ -404,7 +405,8 @@ async def get_manual_queue(
                 items.append({"index": skip + i, "body": body, "url": url})
             else:
                 items.append({"index": skip + i, "body": val, "url": None})
-        except Exception:
+        except Exception as e:
+            logger.debug("manual_queue_parse_skip", index=skip + i, error=str(e))
             continue
 
     logger.info(
