@@ -66,3 +66,14 @@ frontend/build_log.txt
 audit-findings-*.md
 .vercel
 .env*.local
+
+# Agent / Swarm memory
+.swarm_memory/
+
+# Build cache & reports
+frontend/tsconfig.tsbuildinfo
+frontend/playwright-report/
+*.bak
+
+# Archived verticals (deprecated)
+archive/

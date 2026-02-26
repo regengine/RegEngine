@@ -23,7 +23,7 @@ class MappingEngine:
         self,
         uri: str = "bolt://localhost:7687",
         user: str = "neo4j",
-        password: str = "password"
+        password: str = os.getenv("NEO4J_PASSWORD", "")
     ):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         self.llm = None

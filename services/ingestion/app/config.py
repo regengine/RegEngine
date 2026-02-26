@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # Neo4j Graph Database
     neo4j_uri: str = Field(default="bolt://neo4j:7687", alias="NEO4J_URI")
     neo4j_user: str = Field(default="neo4j", alias="NEO4J_USER")
-    neo4j_password: str = Field(default="password", alias="NEO4J_PASSWORD")
+    neo4j_password: str = Field(default="", alias="NEO4J_PASSWORD")
 
     # AI & Cache
     groq_api_key: Optional[str] = Field(default=None, alias="GROQ_API_KEY")

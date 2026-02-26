@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from neo4j import GraphDatabase
@@ -17,7 +18,7 @@ class RegulationLoader:
         self, 
         uri: str = "bolt://localhost:7687", 
         user: str = "neo4j", 
-        password: str = "password"
+        password: str = os.getenv("NEO4J_PASSWORD", "")
     ):
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
