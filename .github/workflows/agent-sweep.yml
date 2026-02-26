@@ -236,7 +236,6 @@ jobs:
           retention-days: 90
 
       - name: Create issue if findings
-        if: always()
         run: |
           if grep -q "⚠️" infra-report.md; then
             BODY=$(cat infra-report.md)
