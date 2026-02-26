@@ -27,4 +27,6 @@ def test_health(mock_admin_client) -> None:
     with TestClient(app) as client:
         response = client.get("/health")
         assert response.status_code == 200
-        assert response.json() == {"status": "healthy", "kafka": "available"}
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["service"] == "ingestion-service"

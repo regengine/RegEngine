@@ -1,5 +1,9 @@
 
 import pytest
+
+# Skip if testcontainers is not installed (requires Docker, not available in standard CI)
+tc = pytest.importorskip("testcontainers")
+
 from testcontainers.postgres import PostgresContainer
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker

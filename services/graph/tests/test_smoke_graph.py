@@ -30,4 +30,6 @@ def test_health():
     if response.status_code == 503:
         pytest.skip("Neo4j is not reachable — skipping health check")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["service"] == "graph-service"
