@@ -16,12 +16,19 @@ from . import pcos_models  # noqa: F401
 logger = structlog.get_logger("admin-db")
 
 
+def _sqlalchemy_url(url: str) -> str:
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg://", 1)
+    return url
+
+
 def _create_engine():
     """Create the Admin database engine for core tables (users, tenants, roles)."""
     database_url = os.getenv("ADMIN_DATABASE_URL")
     if database_url:
+        sqlalchemy_url = _sqlalchemy_url(database_url)
         logger.info("admin_database_configured", url=database_url.split("@")[-1])
-        return create_engine(database_url, pool_pre_ping=True, future=True)
+        return create_engine(sqlalchemy_url, pool_pre_ping=True, future=True)
 
     fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./admin.db")
     logger.warning(
@@ -40,15 +47,16 @@ def _create_entertainment_engine():
     """
     database_url = os.getenv("ENTERTAINMENT_DATABASE_URL")
     if database_url:
+        sqlalchemy_url = _sqlalchemy_url(database_url)
         logger.info("entertainment_database_configured", url=database_url.split("@")[-1])
-        return create_engine(database_url, pool_pre_ping=True, future=True)
+        return create_engine(sqlalchemy_url, pool_pre_ping=True, future=True)
     
     # Fallback: construct from ADMIN_DATABASE_URL by replacing database name
     admin_url = os.getenv("ADMIN_DATABASE_URL", "")
     if admin_url and "regengine_admin" in admin_url:
         entertainment_url = admin_url.replace("regengine_admin", "entertainment")
         logger.info("entertainment_database_derived_from_admin", url=entertainment_url.split("@")[-1])
-        return create_engine(entertainment_url, pool_pre_ping=True, future=True)
+        return create_engine(_sqlalchemy_url(entertainment_url), pool_pre_ping=True, future=True)
     
     logger.warning("entertainment_database_url_missing_pcos_operations_may_fail")
     # Return same engine as fallback (won't work  but prevents crash)
