@@ -52,7 +52,7 @@ backoff~=2.2.1
 # ============================================
 
 # PDF text extraction
-pdfminer.six~=20251230
+pdfminer.six==20251230
 
 # PDF OCR fallback (requires system tesseract + poppler)
 pytesseract~=0.3.10

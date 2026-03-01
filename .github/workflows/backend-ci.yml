@@ -86,16 +86,14 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-      minio:
-        image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+      localstack:
+        image: localstack/localstack:3
         env:
-          MINIO_ROOT_USER: ci-minio-key
-          MINIO_ROOT_PASSWORD: ci-minio-secret
-        command: server /data
+          SERVICES: s3
         ports:
-          - 9000:9000
+          - 4566:4566
         options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-cmd "curl -f http://localhost:4566/_localstack/health"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -146,9 +144,9 @@ jobs:
           NEO4J_USER: neo4j
           NEO4J_PASSWORD: test-password-for-ci
           ADMIN_MASTER_KEY: test-master-key-for-ci
-          OBJECT_STORAGE_ACCESS_KEY_ID: ci-minio-key
-          OBJECT_STORAGE_SECRET_ACCESS_KEY: ci-minio-secret
-          OBJECT_STORAGE_ENDPOINT_URL: http://localhost:9000
+          OBJECT_STORAGE_ACCESS_KEY_ID: ci-test-key
+          OBJECT_STORAGE_SECRET_ACCESS_KEY: ci-test-secret
+          OBJECT_STORAGE_ENDPOINT_URL: http://localhost:4566
           PYTHONDONTWRITEBYTECODE: 1
         run: |
           export PYTHONPATH=$PYTHONPATH:$(pwd)

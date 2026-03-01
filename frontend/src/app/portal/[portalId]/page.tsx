@@ -1,7 +1,8 @@
-// Required for Next.js static export (output: 'export') compatibility
-// Portal pages are dynamic — no static pre-rendering needed
+export const dynamic = "force-static";
+
+// Static export in CI requires at least one concrete dynamic path.
 export function generateStaticParams() {
-    return [];
+    return [{ portalId: "preview" }];
 }
 
 import SupplierPortalPage from './SupplierPortalPage';
