@@ -488,66 +488,6 @@ export default function RegEngineLanding() {
         </div>
       </section>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="border-t border-white/[0.04] py-20 px-6 bg-black/20">
-        <div className="max-w-[1120px] mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12">
-          <div className="max-w-[280px]">
-            <div className="flex items-center gap-2.5 mb-6">
-              <div className="w-8 h-8 bg-[var(--re-brand)] rounded-lg flex items-center justify-center text-white font-extrabold text-lg">
-                R
-              </div>
-              <span className="text-xl font-bold text-[var(--re-text-primary)] tracking-[-0.02em]">
-                RegEngine
-              </span>
-            </div>
-            <p className="text-sm text-[var(--re-text-disabled)] leading-relaxed">
-              The infrastructure layer for global regulatory intelligence. Deterministic, verifiable,
-              and built for industrial scale.
-            </p>
-          </div>
-
-          {[
-            {
-              title: "Intelligence",
-              links: ["FTL Checker", "Supply Chain Explorer", "Compliance Graph", "FDA Recall Simulator"],
-            },
-            {
-              title: "Platform",
-              links: ["Documentation", "API Reference", "Architecture", "Security"],
-            },
-            {
-              title: "Verticals",
-              links: ["Food & Beverage", "Energy", "Healthcare", "Finance"],
-            },
-          ].map((col, i) => (
-            <div key={i}>
-              <h4 className="text-[12px] font-bold text-[var(--re-text-primary)] uppercase tracking-widest mb-6">
-                {col.title}
-              </h4>
-              <div className="flex flex-col gap-3">
-                {col.links.map((link, li) => (
-                  <Link
-                    key={li}
-                    href="#"
-                    className="text-sm text-[var(--re-text-disabled)] hover:text-[var(--re-brand)] transition-colors"
-                  >
-                    {link}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="max-w-[1120px] mx-auto mt-16 pt-8 border-t border-white/[0.04] flex flex-wrap justify-between items-center gap-6 text-[12px] text-[var(--re-text-disabled)] re-mono">
-          <div>© 2026 RegEngine Inc. Made in SF.</div>
-          <div className="flex gap-6">
-            <Link href="#" className="hover:text-[var(--re-text-secondary)]">Privacy</Link>
-            <Link href="#" className="hover:text-[var(--re-text-secondary)]">Terms</Link>
-            <Link href="#" className="hover:text-[var(--re-text-secondary)]">Status</Link>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
