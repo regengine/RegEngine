@@ -24,7 +24,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Phase 1: Core Infrastructure (databases, messaging, storage)
 log_info "Phase 1/3: Starting core infrastructure..."
-docker-compose up -d postgres redis neo4j redpanda localstack
+docker-compose up -d postgres redis neo4j redpanda minio
 
 log_info "Waiting for infrastructure to initialize (15s)..."
 sleep 15

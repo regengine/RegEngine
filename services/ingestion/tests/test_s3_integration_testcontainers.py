@@ -1,23 +1,28 @@
-
 import pytest
-from testcontainers.localstack import LocalStackContainer
+from testcontainers.core.container import DockerContainer
 import boto3
-import os
 
 @pytest.fixture(scope="session")
-def localstack_container():
-    """Start a real LocalStack container for S3 integration testing."""
-    with LocalStackContainer("localstack/localstack:3") as localstack:
-        yield localstack
+def minio_container():
+    """Start a real MinIO container for S3 integration testing."""
+    container = DockerContainer("minio/minio:RELEASE.2024-01-16T16-07-38Z")
+    container.with_env("MINIO_ROOT_USER", "minio")
+    container.with_env("MINIO_ROOT_PASSWORD", "minio123")
+    container.with_command("server /data --console-address :9001")
+    container.with_exposed_ports(9000, 9001)
+
+    with container as minio:
+        yield minio
 
 @pytest.fixture
-def s3_client(localstack_container):
+def s3_client(minio_container):
     """Provide a boto3 S3 client pointing to the test container."""
+    endpoint_url = f"http://{minio_container.get_container_host_ip()}:{minio_container.get_exposed_port(9000)}"
     return boto3.client(
         "s3",
-        endpoint_url=localstack_container.get_url(),
-        aws_access_key_id="test",
-        aws_secret_access_key="test",
+        endpoint_url=endpoint_url,
+        aws_access_key_id="minio",
+        aws_secret_access_key="minio123",
         region_name="us-east-1"
     )
 
@@ -39,4 +44,4 @@ def test_s3_ingestion_storage(s3_client):
     retrieved_content = response["Body"].read()
     
     assert retrieved_content == test_content
-    print("✅ S3 integration verified with LocalStack")
+    print("✅ S3 integration verified with MinIO")

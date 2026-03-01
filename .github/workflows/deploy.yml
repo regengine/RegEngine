@@ -1,124 +1,42 @@
-name: Deploy to Production
+name: Deploy to Railway
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target Environment'
-        required: true
-        default: 'production'
-        type: choice
-        options:
-        - production
-        - staging
-
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY_PREFIX: regengine
-  IMAGE_TAG: ${{ github.sha }}
 
 permissions:
-  id-token: write
   contents: read
 
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
 jobs:
-  build-and-push:
-    name: Build & Push Images
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [admin, graph, ingestion, nlp, scheduler]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build, tag, and push image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY_PREFIX }}-${{ matrix.service }}
-        run: |
-          # Build
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -f services/${{ matrix.service }}/Dockerfile .
-          
-          # Push
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          
-          # Tag as latest for convenience
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-  deploy-infra:
-    name: Deploy Infrastructure
-    needs: build-and-push
+  deploy:
+    name: Deploy RegEngine Service
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          terraform_version: 1.5.0
+          node-version: "20"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
 
-      - name: Terraform Init
-        working-directory: infra/terraform
-        run: terraform init
-
-      - name: Terraform Apply
-        working-directory: infra/terraform
+      - name: Deploy to Railway
         env:
-          TF_VAR_image_tag: ${{ env.IMAGE_TAG }}
-          TF_VAR_environment: ${{ inputs.environment || 'production' }}
-          # ECR Registry URL needs to be constructed or passed in. 
-          # Assuming standard AWS format: account_id.dkr.ecr.region.amazonaws.com
-          # We can get account ID from AWS identity
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          ECR_REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY_PREFIX}"
-          
-          terraform apply -auto-approve \
-            -var="ecr_registry=${ECR_REGISTRY}" \
-            -var="image_tag=${IMAGE_TAG}"
-
-  update-services:
-    name: Update ECS Services
-    needs: deploy-infra
-    runs-on: ubuntu-latest
-    steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Force New Deployment
-        run: |
-          CLUSTER_NAME="regengine-${{ inputs.environment || 'production' }}"
-          SERVICES=("admin" "graph" "ingestion" "nlp" "scheduler")
-          
-          for service in "${SERVICES[@]}"; do
-            echo "Updating service $service..."
-            aws ecs update-service --cluster $CLUSTER_NAME --service $service --force-new-deployment > /dev/null
-          done
+          railway up \
+            --ci \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$RAILWAY_ENVIRONMENT_ID" \
+            --service "$RAILWAY_SERVICE_ID"

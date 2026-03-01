@@ -33,7 +33,7 @@ BLOCKED_NETWORKS = [
     ip_network("172.16.0.0/12"),
     ip_network("192.168.0.0/16"),
     ip_network("127.0.0.0/8"),
-    ip_network("169.254.0.0/16"),  # Link-local / AWS metadata
+    ip_network("169.254.0.0/16"),  # Link-local metadata endpoints
     ip_network("::1/128"),
     ip_network("fc00::/7"),  # IPv6 private
     ip_network("fe80::/10"),  # IPv6 link-local
@@ -161,7 +161,7 @@ def validate_s3_key(key: str) -> str:
     if "\x00" in key:
         raise PathTraversalError("S3 key cannot contain null bytes")
     
-    # Validate characters (AWS S3 safe characters)
+    # Validate characters (S3-safe characters)
     if not S3_KEY_PATTERN.match(key):
         raise PathTraversalError(f"S3 key contains invalid characters: {key}")
     
@@ -200,7 +200,7 @@ def validate_s3_uri(uri: str) -> tuple[str, str]:
     if not key:
         raise ValueError("S3 key cannot be empty")
     
-    # Validate bucket name (simplified AWS rules)
+    # Validate bucket name (simplified S3 rules)
     if not re.match(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", bucket):
         raise ValueError(f"Invalid S3 bucket name: {bucket}")
     

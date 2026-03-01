@@ -11,6 +11,16 @@ This directory contains sales and go-to-market materials for RegEngine.
   - Key benefits: 30-50% reduction in manual review time
   - Use cases: EU regulatory changes, board reporting
 
+- **`fsma_supplier_onepager.md`** - FSMA 204 supplier outreach one-pager
+  - Focus: 24-hour FDA response readiness for mid-market food suppliers
+  - Key benefits: faster recall response, EPCIS 2.0 export readiness
+
+- **`fsma_cold_outreach_templates.md`** - cold email templates for FSMA 204 pipeline
+  - Hooks: FTL awareness, retailer pressure, recall response readiness
+
+- **`fsma_investor_brief.md`** - FSMA-focused investor narrative
+  - Focus: wedge, moat, pricing, and pre-seed use of funds
+
 ### Additional Materials (To Be Created)
 
 - **RegTech CTO One-Pager** - OEM licensing pitch

@@ -8,7 +8,7 @@
 
 ## Architecture
 - **Cluster:** 3-node Causal Cluster (Core) + Read Replicas (optional)
-- **Hosting:** AWS EKS / Kubernetes
+- **Hosting:** Kubernetes
 - **Storage:** EBS gp3 (Encrypted)
 
 ## Backup Procedures

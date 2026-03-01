@@ -142,7 +142,7 @@ export const useSecurityControls = (): UseQueryResult<SecurityControl[]> => {
 interface DriftItem {
     id: string;
     resource: string;
-    resourceType: 'EC2' | 'S3' | 'RDS' | 'IAM' | 'Security Group';
+    resourceType: 'VM' | 'OBJECT_STORAGE' | 'DATABASE' | 'IAM' | 'Security Group';
     baseline: string;
     currentState: string;
     driftType: 'security' | 'compliance' | 'operational';
@@ -161,7 +161,7 @@ export const useConfigurationDrift = (limit: number = 5): UseQueryResult<DriftIt
                 {
                     id: 'drift_001',
                     resource: 'prod-web-server-01',
-                    resourceType: 'EC2',
+                    resourceType: 'VM',
                     baseline: 'Ubuntu 22.04 LTS with security hardening',
                     currentState: 'SSH enabled on port 22 (should be disabled)',
                     driftType: 'security',
@@ -171,7 +171,7 @@ export const useConfigurationDrift = (limit: number = 5): UseQueryResult<DriftIt
                 {
                     id: 'drift_002',
                     resource: 'prod-db-backup',
-                    resourceType: 'S3',
+                    resourceType: 'OBJECT_STORAGE',
                     baseline: 'Versioning enabled with 30-day lifecycle',
                     currentState: 'Lifecycle policy changed to 7 days',
                     driftType: 'compliance',
@@ -181,7 +181,7 @@ export const useConfigurationDrift = (limit: number = 5): UseQueryResult<DriftIt
                 {
                     id: 'drift_003',
                     resource: 'prod-database-rds',
-                    resourceType: 'RDS',
+                    resourceType: 'DATABASE',
                     baseline: 'Automated backups with 7-day retention',
                     currentState: 'Backup window modified',
                     driftType: 'operational',
@@ -225,7 +225,7 @@ export const useAccessReviews = (limit: number = 5): UseQueryResult<AccessReview
                     userName: 'John Smith',
                     userEmail: 'john.smith@company.com',
                     accessLevel: 'Admin',
-                    resources: ['Production Database', 'AWS Console'],
+                    resources: ['Production Database', 'Infrastructure Console'],
                     lastReviewDate: '90 days ago',
                     reviewStatus: 'pending',
                     certifier: 'InfoSec Team',
@@ -328,7 +328,7 @@ export const useMonitoringFeed = (limit: number = 5): UseQueryResult<TimelineEve
                     description: 'SSH enabled on prod-web-server-01 (policy violation)',
                     type: 'warning',
                     userName: 'Security Scanner',
-                    metadata: { severity: 'High', resource: 'EC2' },
+                    metadata: { severity: 'High', resource: 'VM' },
                 },
                 {
                     id: '2',

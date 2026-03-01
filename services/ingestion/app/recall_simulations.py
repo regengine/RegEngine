@@ -1,0 +1,301 @@
+"""Recall Simulation Engine API.
+
+Provides synthetic recall scenarios and impact calculations to demonstrate
+FSMA 204 response improvements with RegEngine.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from app.webhook_router import _verify_api_key
+
+logger = logging.getLogger("recall-simulations")
+
+router = APIRouter(prefix="/api/v1/simulations", tags=["Recall Simulations"])
+
+
+RECALL_SCENARIOS = [
+    {
+        "id": "romaine-ecoli",
+        "name": "E. coli O157:H7 in Romaine Lettuce",
+        "contaminant": "E. coli O157:H7",
+        "product_category": "Leafy Greens",
+        "ftl_category": "1",
+        "supply_chain_depth": 4,
+        "total_lots": 47,
+        "affected_lots": 12,
+        "locations_involved": 23,
+        "states_affected": 8,
+        "estimated_cases": 34,
+        "baseline_response_hours": 18,
+        "baseline_data_sources": 7,
+        "baseline_completeness": 0.62,
+        "regengine_response_minutes": 42,
+        "regengine_data_sources": 1,
+        "regengine_completeness": 0.98,
+    },
+    {
+        "id": "shrimp-sulfite",
+        "name": "Undeclared Sulfites in Imported Shrimp",
+        "contaminant": "Undeclared sulfites (allergen)",
+        "product_category": "Seafood",
+        "ftl_category": "8",
+        "supply_chain_depth": 5,
+        "total_lots": 89,
+        "affected_lots": 23,
+        "locations_involved": 41,
+        "states_affected": 14,
+        "estimated_cases": 67,
+        "baseline_response_hours": 36,
+        "baseline_data_sources": 11,
+        "baseline_completeness": 0.41,
+        "regengine_response_minutes": 38,
+        "regengine_data_sources": 1,
+        "regengine_completeness": 0.97,
+    },
+    {
+        "id": "cheese-listeria",
+        "name": "Listeria monocytogenes in Soft Cheese",
+        "contaminant": "Listeria monocytogenes",
+        "product_category": "Dairy",
+        "ftl_category": "4",
+        "supply_chain_depth": 3,
+        "total_lots": 31,
+        "affected_lots": 8,
+        "locations_involved": 15,
+        "states_affected": 5,
+        "estimated_cases": 12,
+        "baseline_response_hours": 14,
+        "baseline_data_sources": 5,
+        "baseline_completeness": 0.71,
+        "regengine_response_minutes": 27,
+        "regengine_data_sources": 1,
+        "regengine_completeness": 0.99,
+    },
+]
+
+
+_simulation_store: dict[str, dict] = {}
+
+
+class RunSimulationRequest(BaseModel):
+    """Run request payload."""
+
+    scenario_id: str = Field(..., description="Simulation scenario identifier")
+
+
+def _generate_supply_chain_graph(scenario: dict) -> dict:
+    location_templates = [
+        "Farm",
+        "Processor",
+        "Distributor",
+        "Retailer",
+        "Restaurant",
+    ]
+    depth = scenario["supply_chain_depth"]
+    node_count = scenario["locations_involved"]
+    states = max(1, scenario["states_affected"])
+
+    nodes = []
+    links = []
+    for idx in range(node_count):
+        location_type = location_templates[min(idx % depth, len(location_templates) - 1)]
+        affected = idx < scenario["affected_lots"]
+        nodes.append(
+            {
+                "id": f"loc-{idx + 1}",
+                "name": f"{location_type} {idx + 1}",
+                "type": location_type.lower(),
+                "state": f"S{(idx % states) + 1}",
+                "affected": affected,
+                "lot_count": max(1, scenario["total_lots"] // max(1, node_count // 2)),
+                "color": "#EF4444" if affected else "#10B981",
+                "size": 10 + (3 if affected else 1),
+            }
+        )
+
+    for idx in range(node_count - 1):
+        links.append(
+            {
+                "source": f"loc-{idx + 1}",
+                "target": f"loc-{idx + 2}",
+                "affected": idx < scenario["affected_lots"],
+                "lot_codes": [f"LOT-{scenario['id'].upper()}-{idx + 1:03d}"],
+            }
+        )
+
+    return {"nodes": nodes, "links": links}
+
+
+def _generate_timeline(scenario: dict) -> list[dict]:
+    return [
+        {
+            "timestamp": "2026-02-26T06:00:00Z",
+            "event": "Contaminant introduced at source lot",
+            "status": "warning",
+        },
+        {
+            "timestamp": "2026-02-26T14:00:00Z",
+            "event": "Impacted lots shipped downstream",
+            "status": "warning",
+        },
+        {
+            "timestamp": "2026-02-27T10:30:00Z",
+            "event": "Signal detected from QA sample",
+            "status": "critical",
+        },
+        {
+            "timestamp": "2026-02-27T11:15:00Z",
+            "event": "Trace path generated and validated",
+            "status": "success",
+        },
+        {
+            "timestamp": "2026-02-27T11:42:00Z",
+            "event": f"Recall package ready for {scenario['name']}",
+            "status": "success",
+        },
+    ]
+
+
+def _calculate_metrics(scenario: dict) -> dict:
+    time_reduction_percent = round(
+        (1 - (scenario["regengine_response_minutes"] / 60) / scenario["baseline_response_hours"]) * 100
+    )
+
+    impact_graph = _generate_supply_chain_graph(scenario)
+    timeline = _generate_timeline(scenario)
+
+    return {
+        "scenario": scenario["name"],
+        "contaminant": scenario["contaminant"],
+        "total_lots_in_system": scenario["total_lots"],
+        "affected_lots": scenario["affected_lots"],
+        "affected_locations": scenario["locations_involved"],
+        "states_affected": scenario["states_affected"],
+        "without_regengine": {
+            "response_time_hours": scenario["baseline_response_hours"],
+            "data_sources_consulted": scenario["baseline_data_sources"],
+            "kde_completeness": scenario["baseline_completeness"],
+            "chain_verified": False,
+            "export_format": "manual_spreadsheet",
+        },
+        "with_regengine": {
+            "response_time_minutes": scenario["regengine_response_minutes"],
+            "data_sources_consulted": scenario["regengine_data_sources"],
+            "kde_completeness": scenario["regengine_completeness"],
+            "chain_verified": True,
+            "export_format": "EPCIS_2.0_XML",
+            "hash_verified": True,
+        },
+        "time_reduction_percent": time_reduction_percent,
+        "supply_chain_graph": impact_graph,
+        "timeline": timeline,
+    }
+
+
+def _get_scenario_or_404(scenario_id: str) -> dict:
+    for scenario in RECALL_SCENARIOS:
+        if scenario["id"] == scenario_id:
+            return scenario
+    raise HTTPException(status_code=404, detail=f"Unknown scenario_id '{scenario_id}'")
+
+
+def _get_simulation_or_404(simulation_id: str) -> dict:
+    simulation = _simulation_store.get(simulation_id)
+    if not simulation:
+        raise HTTPException(status_code=404, detail=f"Simulation '{simulation_id}' not found")
+    return simulation
+
+
+@router.get("/scenarios", summary="List available simulation scenarios")
+async def list_scenarios(_: None = Depends(_verify_api_key)):
+    return {"scenarios": RECALL_SCENARIOS, "total": len(RECALL_SCENARIOS)}
+
+
+@router.post("/run", summary="Run recall simulation")
+async def run_recall_simulation(
+    request: RunSimulationRequest,
+    _: None = Depends(_verify_api_key),
+):
+    scenario = _get_scenario_or_404(request.scenario_id)
+    metrics = _calculate_metrics(scenario)
+    simulation_id = str(uuid4())
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    simulation_record = {
+        "id": simulation_id,
+        "scenario_id": scenario["id"],
+        "created_at": created_at,
+        "metrics": metrics,
+    }
+    _simulation_store[simulation_id] = simulation_record
+
+    logger.info(
+        "recall_simulation_ran simulation_id=%s scenario_id=%s time_reduction_percent=%s",
+        simulation_id,
+        request.scenario_id,
+        metrics["time_reduction_percent"],
+    )
+
+    return simulation_record
+
+
+@router.get("/{simulation_id}", summary="Get simulation result")
+async def get_simulation(
+    simulation_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    return _get_simulation_or_404(simulation_id)
+
+
+@router.get("/{simulation_id}/timeline", summary="Get simulation timeline")
+async def get_simulation_timeline(
+    simulation_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    simulation = _get_simulation_or_404(simulation_id)
+    return {
+        "simulation_id": simulation_id,
+        "timeline": simulation["metrics"]["timeline"],
+    }
+
+
+@router.get("/{simulation_id}/impact-graph", summary="Get simulation impact graph")
+async def get_simulation_impact_graph(
+    simulation_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    simulation = _get_simulation_or_404(simulation_id)
+    graph = simulation["metrics"]["supply_chain_graph"]
+    return {
+        "simulation_id": simulation_id,
+        "nodes": graph["nodes"],
+        "links": graph["links"],
+    }
+
+
+@router.get("/{simulation_id}/export", summary="Export simulation report")
+async def export_simulation(
+    simulation_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    simulation = _get_simulation_or_404(simulation_id)
+    export_payload = {
+        "simulation_id": simulation_id,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "format": "application/json",
+        **simulation,
+    }
+    return JSONResponse(
+        content=export_payload,
+        headers={
+            "Content-Disposition": f'attachment; filename="recall_simulation_{simulation_id}.json"'
+        },
+    )

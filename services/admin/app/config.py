@@ -16,12 +16,21 @@ class Settings(BaseSettings):
     admin_master_key: str
     kafka_bootstrap: str = "redpanda:9092"
 
-    # S3/Storage configuration
+    # Object storage configuration
     pcos_bucket: str = Field(default="reg-engine-pcos-data-dev", alias="PCOS_DATA_BUCKET")
-    aws_endpoint_url: Optional[str] = Field(default=None, alias="AWS_ENDPOINT_URL")
-    aws_region: str = Field(default="us-east-1", alias="AWS_DEFAULT_REGION")
-    aws_access_key_id: Optional[str] = Field(default=None, alias="AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: Optional[str] = Field(default=None, alias="AWS_SECRET_ACCESS_KEY")
+    object_storage_endpoint_url: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_ENDPOINT_URL",
+    )
+    object_storage_region: str = Field(default="us-east-1", alias="OBJECT_STORAGE_REGION")
+    object_storage_access_key_id: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_ACCESS_KEY_ID",
+    )
+    object_storage_secret_access_key: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    )
 
     # File upload limits
     max_upload_size_mb: int = Field(default=512, alias="MAX_UPLOAD_SIZE_MB")

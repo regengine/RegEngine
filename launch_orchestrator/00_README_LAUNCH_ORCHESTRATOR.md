@@ -35,7 +35,7 @@ The launch orchestrator coordinates five domains:
    - 18-month roadmap
 
 5. **Infrastructure & Security**
-   - Terraform-based AWS deployment
+   - Terraform-based Railway deployment
    - Environment strategy (demo, sandbox, production)
    - Logging, monitoring, audit trails
 
@@ -48,7 +48,7 @@ The orchestrator follows this deterministic flow:
 1. **Initialize Launch Context**
    - Load configuration from `launch_orchestrator_spec.yaml`
    - Resolve environment variables and secrets
-   - Validate required services (AWS, email provider, CRM)
+   - Validate required services (platform, email provider, CRM)
 
 2. **Deploy Public Surface**
    - Deploy marketing site and docs

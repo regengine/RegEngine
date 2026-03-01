@@ -29,7 +29,7 @@ def load_s3_artifact(s3_uri: str) -> str:
     """
     Load S3 artifact and return best-effort plain text using the same conversions
     as `load_artifact` by first obtaining a presigned URL when possible.
-    Requires AWS credentials configured in environment or instance profile.
+    Requires object storage credentials configured in environment.
     """
     bucket, key = parse_s3_uri(s3_uri)
     s3 = boto3.client("s3")
@@ -44,7 +44,7 @@ def load_s3_artifact(s3_uri: str) -> str:
     except Exception:
         # Fallback: download bytes and simple decode
         params = {"Bucket": bucket, "Key": key}
-        owner = os.getenv("AWS_EXPECTED_BUCKET_OWNER")
+        owner = os.getenv("OBJECT_STORAGE_EXPECTED_BUCKET_OWNER")
         if owner:
             params["ExpectedBucketOwner"] = owner
         obj = s3.get_object(**params)

@@ -80,13 +80,13 @@ We also store the relationship: `Amendment SUPERSEDES Original`
 ### Q: What's your technical infrastructure cost?
 
 **A**: Current monthly run rate (MVP scale):
-- **AWS**: $500/month (EC2, S3, RDS)
+- **Cloud platform**: $500/month (compute, object storage, database)
 - **Neo4j**: $400/month (Aura Professional)
 - **Third-party APIs**: $200/month (OCR, monitoring)
 - **Total**: ~$1,100/month
 
 At scale (100 customers):
-- **AWS**: $5k/month (autoscaling, CDN)
+- **Cloud platform**: $5k/month (autoscaling, CDN)
 - **Neo4j**: $2k/month (Enterprise tier)
 - **Third-party**: $1k/month
 - **Total**: ~$8k/month
@@ -158,11 +158,11 @@ Sources: Gartner, Forrester, CB Insights
 
 ---
 
-### Q: What if a large player (Google, AWS, Microsoft) enters the space?
+### Q: What if a large player (Google, Microsoft, Salesforce) enters the space?
 
 **A**:
 **Acquisition scenario** (good outcome): If we execute well, we'd be an attractive acquisition target for:
-- AWS (add to their compliance offering)
+- Microsoft (bundle into existing compliance offerings)
 - Salesforce (add to their GRC cloud)
 - Thomson Reuters (modernize their stack)
 
@@ -172,7 +172,7 @@ Sources: Gartner, Forrester, CB Insights
 - We'd have 3-5 year head start by the time they notice the market
 
 **Partnership scenario** (most likely):
-- AWS Marketplace partnership (resell RegEngine via AWS)
+- Cloud marketplace partnership (resell RegEngine via platform marketplaces)
 - Microsoft partnership (integrate with Azure compliance tools)
 
 ---
@@ -453,7 +453,7 @@ Sources: Gartner, Forrester, CB Insights
 | Engineering | 40% | $600k | 3 engineers x $150k x 18 months (incl. benefits) |
 | Sales & Marketing | 30% | $450k | 2 sales hires, outbound tools, demand gen |
 | Data Partnerships | 20% | $300k | Licensing fees for regulatory data sources |
-| Operations | 10% | $150k | Legal, accounting, infrastructure (AWS, etc.) |
+| Operations | 10% | $150k | Legal, accounting, infrastructure (cloud, etc.) |
 | **Total** | **100%** | **$1.5M** | **18-month runway** |
 
 **Milestones**:
@@ -483,7 +483,7 @@ Sources: Gartner, Forrester, CB Insights
 **A**: Three scenarios:
 
 **1. Acquisition** (most likely, 5-7 years):
-- **Acquirers**: Thomson Reuters, Salesforce, AWS, Compliance.ai, Moody's
+- **Acquirers**: Thomson Reuters, Salesforce, Compliance.ai, Moody's
 - **Valuation**: $100M-$500M (5-10x ARR at $20M-$50M ARR)
 - **Rationale**: Strategic acquirer wants regulatory data layer to bolt onto existing GRC platform
 

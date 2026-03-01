@@ -671,7 +671,7 @@ CREATE TABLE IF NOT EXISTS pcos_evidence (
     file_name VARCHAR(255),
     file_size_bytes BIGINT,
     mime_type VARCHAR(100),
-    s3_key TEXT NOT NULL,  -- S3/LocalStack object key
+    s3_key TEXT NOT NULL,  -- S3-compatible object storage key
     
     -- Integrity
     sha256_hash VARCHAR(64),

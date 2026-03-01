@@ -72,7 +72,7 @@ def handler(api_key=Depends(require_api_key)):
 ### Local Stack
 ```bash
 make up              # Start all services (requires NEO4J_PASSWORD, ADMIN_MASTER_KEY env vars)
-make init-local      # Create S3 buckets on LocalStack
+make init-local      # Create S3 buckets on MinIO
 bash scripts/init-demo-keys.sh  # Bootstrap API keys, exports to .api-keys
 source .api-keys     # Load DEMO_KEY and ADMIN_KEY
 ```

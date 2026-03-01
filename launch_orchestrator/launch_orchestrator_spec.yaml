@@ -11,15 +11,15 @@ orchestrator:
     - id: "sales_only"
       description: "Generate GTM assets and outbound campaigns only."
     - id: "infra_only"
-      description: "Provision or update AWS-based environments only."
+      description: "Provision or update platform infrastructure environments only."
     - id: "dry_run"
       description: "Simulate orchestration, generate configs, but do not call external APIs."
 
 environment:
   required_env_vars:
-    - "AWS_ACCESS_KEY_ID"
-    - "AWS_SECRET_ACCESS_KEY"
-    - "AWS_REGION"
+    - "OBJECT_STORAGE_ACCESS_KEY_ID"
+    - "OBJECT_STORAGE_SECRET_ACCESS_KEY"
+    - "OBJECT_STORAGE_REGION"
     - "CRM_API_TOKEN"
     - "EMAIL_PROVIDER_API_KEY"
     - "LINKEDIN_AUTOMATION_TOKEN"
@@ -143,7 +143,7 @@ investor_readiness:
     - "risk_and_mitigation"
 
 infrastructure:
-  provider: "aws"
+  provider: "railway"
   terraform:
     root_module_path: "infra/terraform"
     workspaces:
@@ -152,7 +152,7 @@ infrastructure:
       - "production"
     modules:
       vpc_module_path: "infra/terraform/modules/vpc"
-      ecs_module_path: "infra/terraform/modules/ecs"
+      service_module_path: "infra/terraform/modules/service"
       rds_module_path: "infra/terraform/modules/rds"
       neo4j_module_path: "infra/terraform/modules/neo4j"
       redpanda_module_path: "infra/terraform/modules/redpanda"
@@ -160,7 +160,7 @@ infrastructure:
 logging_and_audit:
   log_level: "INFO"
   sinks:
-    - "cloudwatch"
+    - "platform_logs"
     - "s3"
   events_to_log:
     - "deployment_started"

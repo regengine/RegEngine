@@ -33,7 +33,7 @@ We strongly recommend:
 ## 3. Encryption
 
 - **At Rest**
-  - Storage and databases: encrypted via cloud-native mechanisms (e.g., AWS KMS)
+  - Storage and databases: encrypted via cloud-native mechanisms (e.g., managed KMS)
 - **In Transit**
   - TLS for all external and internal service communication
 

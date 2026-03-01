@@ -7,9 +7,9 @@ import os
 
 # Config - Internal Docker names
 S3_CONFIG = {
-    "endpoint_url": "http://localstack:4566",
-    "aws_access_key_id": "test",
-    "aws_secret_access_key": "test",
+    "endpoint_url": "http://minio:9000",
+    "aws_access_key_id": "minio",
+    "aws_secret_access_key": "minio123",
     "region_name": "us-east-1"
 }
 BUCKET = os.getenv("PROCESSED_DATA_BUCKET", "reg-engine-processed-data-dev")

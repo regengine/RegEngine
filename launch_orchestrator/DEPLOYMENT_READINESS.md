@@ -35,10 +35,10 @@ This document identifies what's complete and what's needed for production deploy
 
 ### Critical (Must Have Before Launch)
 
-1. **Real AWS Credentials**
+1. **Real Platform Credentials**
    - Status: Currently using placeholder values
-   - Action needed: Obtain actual AWS access key/secret with appropriate IAM permissions
-   - Alternative: Use AWS SSO or instance roles for production
+   - Action needed: Obtain actual platform access token/credentials with appropriate permissions
+   - Alternative: Use platform service accounts or workload identity for production
    - Terraform permissions needed: VPC, EC2, S3, RDS, ECR, Secrets Manager, IAM
 
 2. **Domain Name & DNS**
@@ -58,13 +58,13 @@ This document identifies what's complete and what's needed for production deploy
    - Status: Using "change-me-in-production" placeholders
    - Action needed:
      - Generate strong passwords for Neo4j, PostgreSQL
-     - Store in AWS Secrets Manager (not .env files)
+     - Store in managed platform variables (not .env files)
      - Rotate credentials on schedule (90 days)
 
 4. **Email Provider Setup**
    - Status: Placeholder values
    - Action needed:
-     - Choose provider: SendGrid, Mailchimp, AWS SES
+     - Choose provider: SendGrid, Mailchimp, SES-compatible SMTP
      - Obtain API key
      - Configure SPF/DKIM/DMARC records for email deliverability
      - Warm up IP address (if using dedicated IP)
@@ -109,8 +109,8 @@ This document identifies what's complete and what's needed for production deploy
 9. **Security Hardening**
    - Status: Basic auth implemented, needs production hardening
    - Action needed:
-     - Enable WAF (AWS WAF or Cloudflare)
-     - DDoS protection (Cloudflare, AWS Shield)
+     - Enable WAF (Cloudflare or equivalent)
+     - DDoS protection (Cloudflare or equivalent)
      - Secrets rotation automation
      - Vulnerability scanning (Snyk, Dependabot already flagged 2 issues)
      - SOC 2 preparation (if targeting enterprise customers)
@@ -157,7 +157,7 @@ This document identifies what's complete and what's needed for production deploy
 ### Phase 1: Infrastructure Foundation (Week 1)
 **Goal**: Get production infrastructure running
 
-1. **Obtain AWS credentials** (real account with billing)
+1. **Obtain platform credentials** (real account with billing)
 2. **Register domain** (regengine.ai or similar)
 3. **Run Terraform** to provision:
    - VPC with public/private subnets
@@ -170,7 +170,7 @@ This document identifies what's complete and what's needed for production deploy
 6. **Test connectivity**: Can services reach Neo4j? Can we store files in S3?
 
 **Checklist**:
-- [ ] AWS account created with billing enabled
+- [ ] Platform account created with billing enabled
 - [ ] Domain registered and DNS configured
 - [ ] Terraform applied successfully (no errors)
 - [ ] Neo4j accessible from application services
@@ -323,7 +323,7 @@ This document identifies what's complete and what's needed for production deploy
 Before executing `python orchestrator.py --mode full_launch`, ensure:
 
 ### Credentials & Access
-- [ ] AWS credentials set (not placeholders)
+- [ ] Platform credentials set (not placeholders)
 - [ ] Domain registered and DNS configured
 - [ ] SSL certificates provisioned (ACM or Let's Encrypt)
 - [ ] Email provider API key obtained
@@ -400,7 +400,7 @@ Before executing `python orchestrator.py --mode full_launch`, ensure:
 ## 💡 Optimization Opportunities (Post-Launch)
 
 1. **Cost Optimization**
-   - Review AWS bill monthly, eliminate unused resources
+   - Review cloud bill monthly, eliminate unused resources
    - Use Reserved Instances for long-running services (20-40% savings)
    - Implement auto-scaling (scale down during off-hours)
 
@@ -435,7 +435,7 @@ Before executing `python orchestrator.py --mode full_launch`, ensure:
 2. **Managed services or self-hosted?**
    - Neo4j: Aura (managed) vs. self-hosted EC2
    - Monitoring: Datadog (managed) vs. Prometheus (self-hosted)
-   - Email: SendGrid (managed) vs. AWS SES (DIY)
+   - Email: SendGrid (managed) vs. SES-compatible SMTP (DIY)
    - Recommendation: Use managed services for now, optimize later
 
 3. **Staging environment?**
@@ -459,7 +459,7 @@ Based on this assessment, the **next 3 immediate actions** are:
 3. **Action 3**: Document what real credentials are needed and where to obtain them
 
 **Then**:
-4. Provision actual AWS account (or confirm existing account ready)
+4. Provision actual platform account (or confirm existing account ready)
 5. Execute Phase 1 (Infrastructure Foundation)
 6. Execute Phase 2 (Application Deployment)
 

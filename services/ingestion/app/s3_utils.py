@@ -22,10 +22,10 @@ def _client() -> BaseClient:
     session = boto3.session.Session()
     return session.client(
         "s3",
-        region_name=settings.aws_region,
-        endpoint_url=settings.aws_endpoint_url,
-        aws_access_key_id=settings.aws_access_key_id,
-        aws_secret_access_key=settings.aws_secret_access_key,
+        region_name=settings.object_storage_region,
+        endpoint_url=settings.object_storage_endpoint_url,
+        aws_access_key_id=settings.object_storage_access_key_id,
+        aws_secret_access_key=settings.object_storage_secret_access_key,
     )
 
 

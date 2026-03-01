@@ -15,7 +15,7 @@ docker-compose stop \
     opportunity-api compliance-api \
     ingestion-service nlp-service graph-service \
     admin-api \
-    redpanda neo4j redis localstack postgres \
+    redpanda neo4j redis minio postgres \
     2>/dev/null
 
 echo "✅ All services stopped."

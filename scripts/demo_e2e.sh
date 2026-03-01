@@ -3,12 +3,12 @@
 # RegEngine End-to-End Production Readiness Demo
 #
 # This script demonstrates the complete RegEngine platform with all Phase 4-8 features:
-# - Security hardening with AWS Secrets Manager
+# - Security hardening with managed platform secrets
 # - Monitoring with Prometheus/Grafana/Alertmanager
 # - Resilience testing with chaos engineering
 # - Self-service tenant controls UI
 # - Domain-specific document parsing (DORA, SEC SCI, NYDFS)
-# - Production Terraform deployment capabilities
+# - Production platform deployment capabilities
 #
 
 set -e  # Exit on error
@@ -47,8 +47,8 @@ echo -e "  - Alertmanager: http://localhost:9093"
 echo ""
 
 # Step 3: Demonstrate secrets management
-echo -e "${GREEN}[Step 4/8] Demonstrating AWS Secrets Manager integration...${NC}"
-echo -e "${YELLOW}  Note: In production, secrets are fetched from AWS Secrets Manager${NC}"
+echo -e "${GREEN}[Step 4/8] Demonstrating managed secrets integration...${NC}"
+echo -e "${YELLOW}  Note: In production, secrets are fetched from your deployment platform${NC}"
 echo -e "${YELLOW}  Local development uses .env fallback${NC}"
 echo -e "${GREEN}✓ Secrets management configured${NC}"
 echo ""
@@ -113,8 +113,8 @@ echo ""
 echo -e "${GREEN}[Step 8/8] Production Architecture Summary:${NC}"
 echo ""
 echo -e "${BLUE}┌─ Security Hardening (Phase 4) ────────────────────────────┐${NC}"
-echo -e "│ • AWS Secrets Manager integration with rotation Lambda    │"
-echo -e "│ • CloudWatch Logs aggregation for production             │"
+echo -e "│ • Managed secrets integration with rotation workflow      │"
+echo -e "│ • Centralized log aggregation for production             │"
 echo -e "│ • Comprehensive audit logging (20+ event types)           │"
 echo -e "│ • Rate limiting with sliding window algorithm             │"
 echo -e "${BLUE}└───────────────────────────────────────────────────────────┘${NC}"
@@ -148,9 +148,9 @@ echo -e "│ • Threshold extraction with context preservation         │"
 echo -e "${BLUE}└───────────────────────────────────────────────────────────┘${NC}"
 echo ""
 echo -e "${BLUE}┌─ Production Deployment (Phase 8) ─────────────────────────┐${NC}"
-echo -e "│ • Terraform modules: ECS, ALB, RDS, CloudWatch, Secrets  │"
-echo -e "│ • ECS Fargate with auto-scaling and health checks        │"
-echo -e "│ • ALB with HTTPS termination and path-based routing      │"
+echo -e "│ • Platform deployment templates for production services   │"
+echo -e "│ • Auto-scaling services with health checks               │"
+echo -e "│ • HTTPS edge routing with path-based service rules       │"
 echo -e "│ • Infrastructure as Code for full production deployment  │"
 echo -e "${BLUE}└───────────────────────────────────────────────────────────┘${NC}"
 echo ""

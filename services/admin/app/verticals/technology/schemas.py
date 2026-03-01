@@ -9,7 +9,7 @@ class DataClassification(str, Enum):
     RESTRICTED = "restricted"
 
 class HostingProvider(str, Enum):
-    AWS = "aws"
+    CLOUD = "cloud"
     GCP = "gcp"
     AZURE = "azure"
     ON_PREM = "on_prem"

@@ -19,8 +19,8 @@ os.environ.setdefault("NLP_SERVICE_URL", "http://localhost:8002")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 os.environ.setdefault("S3_BUCKET", "test-ingestion-bucket")
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "test-key")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "test-secret")
+os.environ.setdefault("OBJECT_STORAGE_ACCESS_KEY_ID", "test-key")
+os.environ.setdefault("OBJECT_STORAGE_SECRET_ACCESS_KEY", "test-secret")
 os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token")
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
@@ -211,7 +211,7 @@ class TestResolveAndValidate:
                 routes._resolve_and_validate("evil.com")
 
     def test_link_local_169_254_blocked(self, routes):
-        """AWS metadata IP 169.254.169.254 must be blocked."""
+        """Metadata IP 169.254.169.254 must be blocked."""
         with patch.object(routes.socket, "getaddrinfo",
                           return_value=[(2, 1, 6, "", ("169.254.169.254", 0))]):
             with pytest.raises(HTTPException):

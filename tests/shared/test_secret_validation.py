@@ -61,8 +61,8 @@ class TestSecretValidationScript:
         env["REGENGINE_ENV"] = "production"
         env["NEO4J_PASSWORD"] = "my-super-secure-neo4j-pwd-123"
         env["ADMIN_MASTER_KEY"] = "my-super-secure-admin-key-456"
-        env["AWS_ACCESS_KEY_ID"] = "AKIAIOSFODNN7EXAMPLE"
-        env["AWS_SECRET_ACCESS_KEY"] = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        env["OBJECT_STORAGE_ACCESS_KEY_ID"] = "prod-access-key"
+        env["OBJECT_STORAGE_SECRET_ACCESS_KEY"] = "prod-secret-key-123"
         env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
 
         result = subprocess.run(
@@ -93,8 +93,8 @@ class TestSecretValidationScript:
             env["REGENGINE_ENV"] = "production"
             env["NEO4J_PASSWORD"] = insecure_value
             env["ADMIN_MASTER_KEY"] = "valid-admin-key-here-secure"
-            env["AWS_ACCESS_KEY_ID"] = "AKIAIOSFODNN7EXAMPLE"
-            env["AWS_SECRET_ACCESS_KEY"] = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+            env["OBJECT_STORAGE_ACCESS_KEY_ID"] = "prod-access-key"
+            env["OBJECT_STORAGE_SECRET_ACCESS_KEY"] = "prod-secret-key-123"
             env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
 
             result = subprocess.run(
@@ -124,14 +124,14 @@ class TestSecretValidationScript:
         assert result.returncode == 0, f"Should bypass with skip flag. Output: {result.stdout}"
         assert "bypassed" in result.stdout.lower() or "skip" in result.stdout.lower()
 
-    def test_detects_test_aws_credentials_in_production(self):
-        """Should reject 'test' AWS credentials in production."""
+    def test_detects_test_object_storage_credentials_in_production(self):
+        """Should reject 'test' object storage credentials in production."""
         env = os.environ.copy()
         env["REGENGINE_ENV"] = "production"
         env["NEO4J_PASSWORD"] = "valid-password-here"
         env["ADMIN_MASTER_KEY"] = "valid-admin-key-here"
-        env["AWS_ACCESS_KEY_ID"] = "test"
-        env["AWS_SECRET_ACCESS_KEY"] = "test"
+        env["OBJECT_STORAGE_ACCESS_KEY_ID"] = "test"
+        env["OBJECT_STORAGE_SECRET_ACCESS_KEY"] = "test"
         env.pop("REGENGINE_SKIP_SECRET_CHECK", None)
 
         result = subprocess.run(
@@ -141,7 +141,7 @@ class TestSecretValidationScript:
             text=True,
         )
 
-        assert result.returncode == 1, f"Should reject 'test' AWS creds in production. Output: {result.stdout}"
+        assert result.returncode == 1, f"Should reject 'test' object storage creds in production. Output: {result.stdout}"
 
 
 class TestDockerComposeSecrets:
@@ -155,8 +155,8 @@ class TestDockerComposeSecrets:
         # Check for required variable syntax (${VAR:?message})
         assert "NEO4J_PASSWORD:?" in content, "NEO4J_PASSWORD should be required"
         assert "ADMIN_MASTER_KEY:?" in content, "ADMIN_MASTER_KEY should be required"
-        assert "AWS_ACCESS_KEY_ID:?" in content, "AWS_ACCESS_KEY_ID should be required"
-        assert "AWS_SECRET_ACCESS_KEY:?" in content, "AWS_SECRET_ACCESS_KEY should be required"
+        assert "OBJECT_STORAGE_ACCESS_KEY_ID:?" in content, "OBJECT_STORAGE_ACCESS_KEY_ID should be required"
+        assert "OBJECT_STORAGE_SECRET_ACCESS_KEY:?" in content, "OBJECT_STORAGE_SECRET_ACCESS_KEY should be required"
 
     def test_no_insecure_defaults_in_compose(self):
         """docker-compose.yml should not contain insecure default patterns."""

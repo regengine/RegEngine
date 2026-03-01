@@ -9,7 +9,7 @@ logger = structlog.get_logger("s3_utils")
 
 def s3_client():
     settings = get_settings()
-    return boto3.client("s3", endpoint_url=settings.aws_endpoint_url)
+    return boto3.client("s3", endpoint_url=settings.object_storage_endpoint_url)
 
 
 def get_bytes(bucket: str, key: str) -> bytes:

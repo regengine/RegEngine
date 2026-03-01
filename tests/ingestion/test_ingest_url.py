@@ -48,7 +48,7 @@ def ingestion_client(monkeypatch, mock_kafka_producer, mock_s3_client):
     """Provide a TestClient with mocked dependencies."""
     # Mock dependencies before importing the app
     monkeypatch.setenv("REQUIRE_REDIS", "false")
-    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:4566")
+    monkeypatch.setenv("OBJECT_STORAGE_ENDPOINT_URL", "http://localhost:9000")
     monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     
     # Mock the shared auth to accept test keys

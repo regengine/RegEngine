@@ -14,10 +14,10 @@ resources:
 
 images:
   - name: regengine/compliance-service
-    newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/regengine/compliance
+    newName: ghcr.io/regengine/compliance
     newTag: v1.1.0
   - name: regengine/energy-api
-    newName: 123456789012.dkr.ecr.us-east-1.amazonaws.com/regengine/energy
+    newName: ghcr.io/regengine/energy
     newTag: v1.1.0
 
 patchesStrategicMerge:

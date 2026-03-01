@@ -25,14 +25,14 @@ def verify_pipeline():
     except Exception as e:
         print(f"DB Error: {e}")
 
-    # 2. Check S3 (LocalStack)
+    # 2. Check object storage (MinIO)
     print("\n--- S3: Claim Check normalized-text/ ---")
     try:
         s3 = boto3.client(
             "s3",
-            endpoint_url="http://localhost:4566",
-            aws_access_key_id="test",
-            aws_secret_access_key="test",
+            endpoint_url="http://localhost:9000",
+            aws_access_key_id="minioadmin",
+            aws_secret_access_key="minioadmin123",
             region_name="us-east-1"
         )
         response = s3.list_objects_v2(Bucket="reg-engine-processed-data-dev", Prefix="normalized-text/")
