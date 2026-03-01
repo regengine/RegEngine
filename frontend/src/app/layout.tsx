@@ -6,6 +6,8 @@ import { Analytics } from '@vercel/analytics/react'
 import { PWAElements } from '@/components/mobile/PWAElements'
 import type { Metadata } from 'next'
 
+const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
+
 export const metadata: Metadata = {
   title: 'RegEngine — API-First Regulatory Compliance',
   description: 'FSMA 204 compliance platform. Ingest, verify, and export traceability records with cryptographic proof.',
@@ -47,9 +49,8 @@ export default function RootLayout({
           <MarketingFooter />
         </Providers>
         <PWAElements />
-        <Analytics />
+        {enableVercelAnalytics ? <Analytics /> : null}
       </body>
     </html>
   )
 }
-

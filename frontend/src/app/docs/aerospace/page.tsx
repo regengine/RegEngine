@@ -50,9 +50,9 @@ export default function AerospaceDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
-                            We're building comprehensive documentation for the Aerospace vertical
+                            We&apos;re building comprehensive documentation for the Aerospace vertical
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

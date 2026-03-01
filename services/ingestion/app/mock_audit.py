@@ -209,6 +209,7 @@ async def get_drill_status(drill_id: str) -> DrillStatus:
 async def submit_drill_response(
     drill_id: str,
     response: DrillResponse,
+    _: None = Depends(_verify_api_key),
 ) -> DrillGrade:
     """Grade a drill response."""
     drill = _active_drills.get(drill_id)

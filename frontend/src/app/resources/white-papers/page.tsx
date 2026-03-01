@@ -226,7 +226,7 @@ export default function WhitePapersPage() {
                                             {paper.status === 'available' ? (
                                                 <Badge className="bg-emerald-600">Available</Badge>
                                             ) : (
-                                                <Badge variant="outline">Coming Soon</Badge>
+                                                <Badge variant="outline">Planned Release</Badge>
                                             )}
                                         </div>
                                         <CardTitle className="text-xl">{paper.title}</CardTitle>
@@ -269,9 +269,11 @@ export default function WhitePapersPage() {
                                                     </Button>
                                                 </Link>
                                             ) : (
-                                                <Button className="w-full" variant="outline" disabled>
-                                                    Coming Soon
-                                                </Button>
+                                                <Link href="/waitlist">
+                                                    <Button className="w-full" variant="outline">
+                                                        Request Priority Access
+                                                    </Button>
+                                                </Link>
                                             )}
                                         </div>
                                     </CardContent>

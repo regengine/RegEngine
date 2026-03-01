@@ -23,7 +23,7 @@ export default function TriplecertDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
                             Detailed documentation for iso 9001/14001/45001 is under development
                         </CardDescription>

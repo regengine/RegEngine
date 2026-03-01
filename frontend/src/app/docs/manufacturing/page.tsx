@@ -50,9 +50,9 @@ export default function ManufacturingDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
-                            We're building comprehensive documentation for the Manufacturing vertical
+                            We&apos;re building comprehensive documentation for the Manufacturing vertical
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

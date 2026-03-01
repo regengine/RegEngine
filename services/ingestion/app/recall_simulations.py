@@ -25,6 +25,7 @@ RECALL_SCENARIOS = [
     {
         "id": "romaine-ecoli",
         "name": "E. coli O157:H7 in Romaine Lettuce",
+        "description": "Farm to shelf contamination trace across leafy greens distribution.",
         "contaminant": "E. coli O157:H7",
         "product_category": "Leafy Greens",
         "ftl_category": "1",
@@ -44,6 +45,7 @@ RECALL_SCENARIOS = [
     {
         "id": "shrimp-sulfite",
         "name": "Undeclared Sulfites in Imported Shrimp",
+        "description": "Importer and distributor chain trace for seafood allergen risk.",
         "contaminant": "Undeclared sulfites (allergen)",
         "product_category": "Seafood",
         "ftl_category": "8",
@@ -63,6 +65,7 @@ RECALL_SCENARIOS = [
     {
         "id": "cheese-listeria",
         "name": "Listeria monocytogenes in Soft Cheese",
+        "description": "Dairy lot tracing across multi-state retail distribution.",
         "contaminant": "Listeria monocytogenes",
         "product_category": "Dairy",
         "ftl_category": "4",
@@ -139,26 +142,31 @@ def _generate_timeline(scenario: dict) -> list[dict]:
         {
             "timestamp": "2026-02-26T06:00:00Z",
             "event": "Contaminant introduced at source lot",
+            "location": "Source farm",
             "status": "warning",
         },
         {
             "timestamp": "2026-02-26T14:00:00Z",
             "event": "Impacted lots shipped downstream",
+            "location": "Regional distributor",
             "status": "warning",
         },
         {
             "timestamp": "2026-02-27T10:30:00Z",
             "event": "Signal detected from QA sample",
+            "location": "QA laboratory",
             "status": "critical",
         },
         {
             "timestamp": "2026-02-27T11:15:00Z",
             "event": "Trace path generated and validated",
+            "location": "Compliance operations center",
             "status": "success",
         },
         {
             "timestamp": "2026-02-27T11:42:00Z",
             "event": f"Recall package ready for {scenario['name']}",
+            "location": "Regulatory response team",
             "status": "success",
         },
     ]
@@ -200,11 +208,11 @@ def _calculate_metrics(scenario: dict) -> dict:
     }
 
 
-def _get_scenario_or_404(scenario_id: str) -> dict:
+def _get_scenario_or_400(scenario_id: str) -> dict:
     for scenario in RECALL_SCENARIOS:
         if scenario["id"] == scenario_id:
             return scenario
-    raise HTTPException(status_code=404, detail=f"Unknown scenario_id '{scenario_id}'")
+    raise HTTPException(status_code=400, detail=f"Unknown scenario_id '{scenario_id}'")
 
 
 def _get_simulation_or_404(simulation_id: str) -> dict:
@@ -216,15 +224,27 @@ def _get_simulation_or_404(simulation_id: str) -> dict:
 
 @router.get("/scenarios", summary="List available simulation scenarios")
 async def list_scenarios(_: None = Depends(_verify_api_key)):
-    return {"scenarios": RECALL_SCENARIOS, "total": len(RECALL_SCENARIOS)}
+    scenarios = [
+        {
+            "id": item["id"],
+            "name": item["name"],
+            "description": item.get("description"),
+            "product_category": item.get("product_category"),
+            "contaminant": item.get("contaminant"),
+            "baseline_response_hours": item.get("baseline_response_hours"),
+            "regengine_response_minutes": item.get("regengine_response_minutes"),
+        }
+        for item in RECALL_SCENARIOS
+    ]
+    return {"scenarios": scenarios, "total": len(scenarios)}
 
 
-@router.post("/run", summary="Run recall simulation")
+@router.post("/run", status_code=201, summary="Run recall simulation")
 async def run_recall_simulation(
     request: RunSimulationRequest,
     _: None = Depends(_verify_api_key),
 ):
-    scenario = _get_scenario_or_404(request.scenario_id)
+    scenario = _get_scenario_or_400(request.scenario_id)
     metrics = _calculate_metrics(scenario)
     simulation_id = str(uuid4())
     created_at = datetime.now(timezone.utc).isoformat()

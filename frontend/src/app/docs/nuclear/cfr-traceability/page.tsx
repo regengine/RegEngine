@@ -23,7 +23,7 @@ export default function CfrtraceabilityDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
                             Detailed documentation for cfr traceability is under development
                         </CardDescription>

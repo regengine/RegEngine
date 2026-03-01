@@ -75,7 +75,10 @@ export default function SettingsPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-white/40 text-sm">White-label customization coming soon</p>
+                        <p className="text-white/40 text-sm">
+                            White-label customization is available through enterprise onboarding.
+                            Contact the platform team to configure branded domains and theme presets.
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -93,7 +96,10 @@ export default function SettingsPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-white/40 text-sm">Notification settings coming soon</p>
+                        <p className="text-white/40 text-sm">
+                            Notification routing is managed from tenant and user settings.
+                            Use owner alerts to monitor billing, security, and lifecycle events.
+                        </p>
                     </CardContent>
                 </Card>
             </motion.div>

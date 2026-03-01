@@ -99,7 +99,7 @@ export default function HealthcareDocsPage() {
                             padding: '8px 16px',
                             borderBottom: `1px solid ${T.border}`,
                         }}>
-                            <span className="text-xs text-re-text-muted">POST /v1/records (Coming Soon)</span>
+                            <span className="text-xs text-re-text-muted">POST /v1/records (Beta Endpoint)</span>
                         </div>
                         <pre style={{
                             padding: '16px 20px',

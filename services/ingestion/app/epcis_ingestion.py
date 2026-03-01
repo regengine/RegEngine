@@ -9,10 +9,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+from hashlib import sha256
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from app.webhook_router import _verify_api_key
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/api/v1/epcis", tags=["EPCIS 2.0 Ingestion"])
 
 
 _epcis_store: dict[str, dict] = {}
+_epcis_idempotency_index: dict[str, str] = {}
 
 
 def _publish_sync_event(event_name: str, payload: dict) -> None:
@@ -89,6 +92,14 @@ def _validate_epcis(event: dict) -> list[str]:
     return errors
 
 
+def _event_idempotency_key(event: dict) -> str:
+    explicit = event.get("eventID")
+    if explicit:
+        return str(explicit)
+    normalized = json.dumps(event, sort_keys=True, separators=(",", ":"))
+    return sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def _normalize_epcis_to_cte(event: dict) -> dict:
     event_type_map = {
         "urn:epcglobal:cbv:bizstep:receiving": "receiving",
@@ -102,6 +113,7 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
     lot_code, tlc = _extract_lot_data(ilmd)
     epc_list = event.get("epcList", [])
     product_id = epc_list[0] if isinstance(epc_list, list) and epc_list else None
+    biz_step = str(event.get("bizStep") or "")
 
     quantity = None
     unit = None
@@ -111,7 +123,7 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
         unit = quantity_list[0].get("uom")
 
     normalized = {
-        "event_type": event_type_map.get(event.get("bizStep"), "receiving"),
+        "event_type": event_type_map.get(biz_step, "receiving"),
         "epcis_event_type": event.get("type"),
         "epcis_action": event.get("action"),
         "epcis_biz_step": event.get("bizStep"),
@@ -183,10 +195,26 @@ def _compliance_alerts(normalized: dict, kdes: list[dict]) -> list[dict]:
     return alerts
 
 
-def _ingest_single_event(event: dict) -> dict:
+def _ingest_single_event(event: dict) -> tuple[dict, int]:
     errors = _validate_epcis(event)
     if errors:
         raise HTTPException(status_code=400, detail={"errors": errors})
+
+    idempotency_key = _event_idempotency_key(event)
+    existing_event_id = _epcis_idempotency_index.get(idempotency_key)
+    if existing_event_id:
+        existing_record = _epcis_store[existing_event_id]
+        return (
+            {
+                "status": 200,
+                "cte_id": existing_event_id,
+                "validation_status": existing_record["normalized_cte"]["validation_status"],
+                "kde_completeness": existing_record.get("kde_completeness", 1.0),
+                "alerts": existing_record["alerts"],
+                "idempotent": True,
+            },
+            200,
+        )
 
     event_id = str(uuid4())
     normalized = _normalize_epcis_to_cte(event)
@@ -196,6 +224,7 @@ def _ingest_single_event(event: dict) -> dict:
     stored = {
         "id": event_id,
         "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "idempotency_key": idempotency_key,
         "epcis_document": event,
         "normalized_cte": normalized,
         "kdes": kdes,
@@ -216,6 +245,8 @@ def _ingest_single_event(event: dict) -> dict:
     required_count = sum(1 for kde in kdes if kde["required"]) or 1
     populated_required = sum(1 for kde in kdes if kde["required"] and kde["kde_value"])
     kde_completeness = populated_required / required_count
+    stored["kde_completeness"] = round(kde_completeness, 2)
+    _epcis_idempotency_index[idempotency_key] = event_id
 
     logger.info(
         "epcis_event_ingested event_id=%s event_type=%s tlc=%s",
@@ -224,21 +255,26 @@ def _ingest_single_event(event: dict) -> dict:
         normalized["tlc"],
     )
 
-    return {
-        "status": 201,
-        "cte_id": event_id,
-        "validation_status": normalized["validation_status"],
-        "kde_completeness": round(kde_completeness, 2),
-        "alerts": alerts,
-    }
+    return (
+        {
+            "status": 201,
+            "cte_id": event_id,
+            "validation_status": normalized["validation_status"],
+            "kde_completeness": round(kde_completeness, 2),
+            "alerts": alerts,
+            "idempotent": False,
+        },
+        201,
+    )
 
 
-@router.post("/events", summary="Ingest EPCIS 2.0 event")
+@router.post("/events", status_code=201, summary="Ingest EPCIS 2.0 event")
 async def ingest_epcis_event(
     event: dict,
     _: None = Depends(_verify_api_key),
 ):
-    return _ingest_single_event(event)
+    payload, status_code = _ingest_single_event(event)
+    return JSONResponse(content=payload, status_code=status_code)
 
 
 @router.post("/events/batch", summary="Batch ingest EPCIS events")
@@ -246,22 +282,36 @@ async def ingest_epcis_batch(
     request: BatchIngestRequest,
     _: None = Depends(_verify_api_key),
 ):
+    if not request.events:
+        raise HTTPException(status_code=400, detail="Batch ingest requires at least one event")
+
     created: list[dict] = []
     failed: list[dict] = []
+    processed: list[dict] = []
 
     for idx, event in enumerate(request.events):
         try:
-            created.append(_ingest_single_event(event))
+            payload, status_code = _ingest_single_event(event)
+            processed.append({"index": idx, "status_code": status_code, **payload})
+            if status_code == 201:
+                created.append(payload)
         except HTTPException as exc:
             failed.append({"index": idx, "detail": exc.detail})
 
-    return {
+    response_payload = {
         "total": len(request.events),
         "created": len(created),
         "failed": len(failed),
-        "results": created,
+        "results": processed,
         "errors": failed,
     }
+
+    successful = len(processed)
+    if failed and successful:
+        return JSONResponse(content=response_payload, status_code=207)
+    if failed and not successful:
+        return JSONResponse(content=response_payload, status_code=400)
+    return JSONResponse(content=response_payload, status_code=201)
 
 
 @router.get("/events/{event_id}", summary="Get EPCIS event by id")
@@ -276,8 +326,36 @@ async def get_epcis_event(
 
 
 @router.get("/export", summary="Export all ingested events as EPCIS 2.0")
-async def export_epcis_events(_: None = Depends(_verify_api_key)):
-    events = [entry["epcis_document"] for entry in _epcis_store.values()]
+async def export_epcis_events(
+    start_date: str | None = Query(default=None, description="Filter events at or after this ISO timestamp"),
+    end_date: str | None = Query(default=None, description="Filter events before this ISO timestamp"),
+    product_id: str | None = Query(default=None, description="Filter by EPC product identifier"),
+    _: None = Depends(_verify_api_key),
+):
+    def _parse_iso(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        parsed = value.replace("Z", "+00:00")
+        return datetime.fromisoformat(parsed)
+
+    start_dt = _parse_iso(start_date)
+    end_dt = _parse_iso(end_date)
+
+    filtered_records: list[dict] = []
+    for entry in _epcis_store.values():
+        normalized = entry.get("normalized_cte", {})
+        event_time = normalized.get("event_time")
+        if event_time:
+            event_dt = _parse_iso(str(event_time))
+            if start_dt and event_dt and event_dt < start_dt:
+                continue
+            if end_dt and event_dt and event_dt >= end_dt:
+                continue
+        if product_id and normalized.get("product_id") != product_id:
+            continue
+        filtered_records.append(entry)
+
+    events = [entry["epcis_document"] for entry in filtered_records]
     return {
         "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
         "type": "EPCISDocument",
@@ -287,6 +365,11 @@ async def export_epcis_events(_: None = Depends(_verify_api_key)):
         "metadata": {
             "events_count": len(events),
             "source": "regengine-epcis-ingestion",
+            "filters": {
+                "start_date": start_date,
+                "end_date": end_date,
+                "product_id": product_id,
+            },
         },
     }
 

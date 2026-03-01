@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS fsma.suppliers (
     name TEXT NOT NULL,
     gln TEXT,
     contact_email TEXT,
-    compliance_score NUMERIC(5, 2),
+    compliance_score NUMERIC(5, 2) CHECK (compliance_score IS NULL OR (compliance_score >= 0 AND compliance_score <= 100)),
     last_assessed TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('active', 'pending', 'suspended', 'non_compliant')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -172,8 +172,8 @@ CREATE INDEX IF NOT EXISTS idx_fsma_kde_cte ON fsma.key_data_elements(cte_id);
 
 CREATE TABLE IF NOT EXISTS fsma.audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL,
-    user_id UUID,
+    org_id UUID NOT NULL REFERENCES fsma.organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES fsma.users(id) ON DELETE SET NULL,
     entity_type TEXT NOT NULL,
     entity_id UUID NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('create', 'update', 'delete', 'export', 'verify')),
@@ -196,17 +196,17 @@ CREATE INDEX IF NOT EXISTS idx_fsma_audit_time ON fsma.audit_log(created_at);
 CREATE TABLE IF NOT EXISTS fsma.recall_assessments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID NOT NULL REFERENCES fsma.organizations(id) ON DELETE CASCADE,
-    data_completeness NUMERIC(5, 2),
-    response_time NUMERIC(5, 2),
-    supplier_coverage NUMERIC(5, 2),
-    product_coverage NUMERIC(5, 2),
-    chain_integrity NUMERIC(5, 2),
-    export_readiness NUMERIC(5, 2),
+    data_completeness NUMERIC(5, 2) CHECK (data_completeness IS NULL OR (data_completeness >= 0 AND data_completeness <= 100)),
+    response_time NUMERIC(5, 2) CHECK (response_time IS NULL OR (response_time >= 0 AND response_time <= 100)),
+    supplier_coverage NUMERIC(5, 2) CHECK (supplier_coverage IS NULL OR (supplier_coverage >= 0 AND supplier_coverage <= 100)),
+    product_coverage NUMERIC(5, 2) CHECK (product_coverage IS NULL OR (product_coverage >= 0 AND product_coverage <= 100)),
+    chain_integrity NUMERIC(5, 2) CHECK (chain_integrity IS NULL OR (chain_integrity >= 0 AND chain_integrity <= 100)),
+    export_readiness NUMERIC(5, 2) CHECK (export_readiness IS NULL OR (export_readiness >= 0 AND export_readiness <= 100)),
     overall_score NUMERIC(5, 2) GENERATED ALWAYS AS (
         (data_completeness + response_time + supplier_coverage + product_coverage + chain_integrity + export_readiness) / 6
     ) STORED,
     assessed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    assessed_by UUID
+    assessed_by UUID REFERENCES fsma.users(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_fsma_recall_org ON fsma.recall_assessments(org_id);
@@ -219,11 +219,11 @@ CREATE TABLE IF NOT EXISTS fsma.compliance_snapshots (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID NOT NULL REFERENCES fsma.organizations(id) ON DELETE CASCADE,
     snapshot_date DATE NOT NULL,
-    overall_score NUMERIC(5, 2),
-    cte_coverage NUMERIC(5, 2),
-    kde_completeness NUMERIC(5, 2),
-    supplier_score NUMERIC(5, 2),
-    product_score NUMERIC(5, 2),
+    overall_score NUMERIC(5, 2) CHECK (overall_score IS NULL OR (overall_score >= 0 AND overall_score <= 100)),
+    cte_coverage NUMERIC(5, 2) CHECK (cte_coverage IS NULL OR (cte_coverage >= 0 AND cte_coverage <= 100)),
+    kde_completeness NUMERIC(5, 2) CHECK (kde_completeness IS NULL OR (kde_completeness >= 0 AND kde_completeness <= 100)),
+    supplier_score NUMERIC(5, 2) CHECK (supplier_score IS NULL OR (supplier_score >= 0 AND supplier_score <= 100)),
+    product_score NUMERIC(5, 2) CHECK (product_score IS NULL OR (product_score >= 0 AND product_score <= 100)),
     details JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(org_id, snapshot_date)
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS fsma.compliance_alerts (
     entity_id UUID,
     resolved BOOLEAN NOT NULL DEFAULT false,
     resolved_at TIMESTAMPTZ,
-    resolved_by UUID,
+    resolved_by UUID REFERENCES fsma.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

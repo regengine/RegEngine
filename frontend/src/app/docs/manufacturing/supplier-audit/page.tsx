@@ -23,7 +23,7 @@ export default function SupplierauditDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
                             Detailed documentation for supplier audit management is under development
                         </CardDescription>
