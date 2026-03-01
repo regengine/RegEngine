@@ -110,6 +110,9 @@ async def scrape_nydfs(
 
     # Use the specific NYDFS adaptor if available, otherwise fallback to generic
     adaptor = ADAPTORS.get("nydfs")
+    
+    logger.info("scrape_nydfs_triggered", url=url, tenant_id=api_key.tenant_id)
+    
     if adaptor:
         background_tasks.add_task(
             run_state_scrape_job,
@@ -141,6 +144,9 @@ async def scrape_cppa(
     
     # Use CPPA adaptor for specific headers/logic if needed
     adaptor = ADAPTORS.get("cppa")
+    
+    logger.info("scrape_cppa_triggered", url=url, tenant_id=api_key.tenant_id)
+    
     if adaptor:
         background_tasks.add_task(
             run_state_scrape_job,
