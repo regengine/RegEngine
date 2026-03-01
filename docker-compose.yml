@@ -138,6 +138,401 @@ services:
       - ./services/shared:/app/shared
       - ./kernel:/app/kernel
       - ./plugins:/app/plugins
+
+  compliance-api:
+    build:
+      context: .
+      dockerfile: ./services/compliance/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      - admin-api
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8500/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8500:8500"
+
+  energy-api:
+    build:
+      context: .
+      dockerfile: services/energy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8700:8700"
+    environment:
+      DATABASE_URL: "postgresql://regengine:regengine@postgres:5432/energy"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # L-1: Non-standard HEALTHCHECK intervals (10s/30s vs 30s/5s) are intentional -
+    # energy service loads ML models at startup requiring a longer start_period.
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8700/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # volumes:
+    #   - ./services/energy/app:/app/app # Hot reload in dev - TEMPORARILY DISABLED for Phase 0 verification
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  opportunity-api:
+    build:
+      context: .
+      dockerfile: ./services/opportunity/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8300/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    ports:
+      - "8300:8300"
+
+  billing-service:
+    build:
+      context: ./services/billing
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8800:8800"
+    environment:
+      BILLING_PORT: "8800"
+      BILLING_ENV: ${BILLING_ENV:-sandbox}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,https://regengine.co,https://regengine.vercel.app"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8800/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: [ "--config=/etc/otel-collector-config.yaml" ]
+    volumes:
+      - ./infra/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus metrics
+    depends_on:
+      - jaeger
+
+volumes:
+  neo4j_data:
+  postgres_data:
+  redis_data:
+
+  compliance-api:
+    build:
+      context: .
+      dockerfile: ./services/compliance/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      - admin-api
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8500/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8500:8500"
+
+  energy-api:
+    build:
+      context: .
+      dockerfile: services/energy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8700:8700"
+    environment:
+      DATABASE_URL: "postgresql://regengine:regengine@postgres:5432/energy"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # L-1: Non-standard HEALTHCHECK intervals (10s/30s vs 30s/5s) are intentional -
+    # energy service loads ML models at startup requiring a longer start_period.
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8700/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # volumes:
+    #   - ./services/energy/app:/app/app # Hot reload in dev - TEMPORARILY DISABLED for Phase 0 verification
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  opportunity-api:
+    build:
+      context: .
+      dockerfile: ./services/opportunity/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8300/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    ports:
+      - "8300:8300"
+
+  billing-service:
+    build:
+      context: ./services/billing
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8800:8800"
+    environment:
+      BILLING_PORT: "8800"
+      BILLING_ENV: ${BILLING_ENV:-sandbox}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,https://regengine.co,https://regengine.vercel.app"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8800/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    command: [ "--config=/etc/otel-collector-config.yaml" ]
+    volumes:
+      - ./infra/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus metrics
+    depends_on:
+      - jaeger
+
+volumes:
+  neo4j_data:
+  postgres_data:
+  redis_data:
+
+  compliance-api:
+    build:
+      context: .
+      dockerfile: ./services/compliance/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      - admin-api
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8500/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "8500:8500"
+
+  energy-api:
+    build:
+      context: .
+      dockerfile: services/energy/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8700:8700"
+    environment:
+      DATABASE_URL: "postgresql://regengine:regengine@postgres:5432/energy"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # L-1: Non-standard HEALTHCHECK intervals (10s/30s vs 30s/5s) are intentional -
+    # energy service loads ML models at startup requiring a longer start_period.
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8700/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # volumes:
+    #   - ./services/energy/app:/app/app # Hot reload in dev - TEMPORARILY DISABLED for Phase 0 verification
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  opportunity-api:
+    build:
+      context: .
+      dockerfile: ./services/opportunity/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *env_common
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8300/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+    ports:
+      - "8300:8300"
     deploy:
       resources:
         limits:
