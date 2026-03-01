@@ -156,7 +156,9 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-pip install -r requirements-test.txt  # For testing
+
+# Optional: lightweight test-only bootstrap for focused API tests
+pip install -r requirements-dev.txt
 
 # Install Tesseract (macOS)
 brew install tesseract
@@ -183,6 +185,22 @@ pytest --cov=app tests/ --cov-report=html
 
 # View coverage
 open htmlcov/index.html  # macOS
+```
+
+### Lightweight Pytest Bootstrap (Targeted API Tests)
+
+If you only need to run the focused simulation + EPCIS API tests locally, you can use a minimal environment:
+
+```bash
+# from repo root
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r services/ingestion/requirements-dev.txt
+
+python -m pytest \
+  services/ingestion/tests/test_recall_simulations_api.py \
+  services/ingestion/tests/test_epcis_ingestion_api.py
 ```
 
 ## Docker Deployment

@@ -23,7 +23,7 @@ export default function NcrDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
                             Detailed documentation for non-conformance reports is under development
                         </CardDescription>

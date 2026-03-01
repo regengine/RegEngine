@@ -36,7 +36,7 @@ export default function NADCAPDocsPage() {
                         <div className="p-6 bg-sky-50 dark:bg-sky-900/20 rounded-lg border">
                             <Shield className="h-8 w-8 text-sky-600 mb-3" />
                             <p className="text-sm text-muted-foreground">
-                                NADCAP integration documentation is coming soon. Contact sales@regengine.co for special process compliance.
+                                NADCAP integration documentation is in active rollout. Contact sales@regengine.co for special process compliance.
                             </p>
                         </div>
                     </CardContent>

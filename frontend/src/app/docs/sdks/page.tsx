@@ -37,7 +37,7 @@ export default function SDKsDocsPage() {
                             padding: '4px 10px',
                             borderRadius: '4px',
                         }}>
-                            Coming Q2 2026
+                            Beta Program Live
                         </span>
                     </div>
 
@@ -56,7 +56,7 @@ export default function SDKsDocsPage() {
                 {/* SDK Preview */}
                 <section className="mb-12">
                     <h2 className="re-heading-md">
-                        Coming Soon
+                        Planned SDK Releases
                     </h2>
 
                     <div className="grid gap-3">

@@ -147,7 +147,7 @@ export default function TraceabilityPlanPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Procedure management interface coming soon.
+                  Procedure management interface is available through guided workflow templates in this section.
                 </p>
               </CardContent>
             </Card>

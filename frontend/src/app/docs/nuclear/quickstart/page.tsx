@@ -23,7 +23,7 @@ export default function QuickstartDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
                             Detailed documentation for nuclear quick start is under development
                         </CardDescription>

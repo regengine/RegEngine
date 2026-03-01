@@ -56,7 +56,7 @@ export default function FAIDocsPage() {
                 <div className="p-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg border">
                     <FileCheck className="h-8 w-8 text-blue-600 mb-3" />
                     <p className="text-sm text-muted-foreground">
-                        Detailed FAI documentation and API examples are coming soon. Contact sales@regengine.co for early access.
+                        Detailed FAI documentation and API examples are in active rollout. Contact sales@regengine.co for early access.
                     </p>
                 </div>
             </div>

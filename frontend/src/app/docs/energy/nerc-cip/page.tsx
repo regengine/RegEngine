@@ -23,7 +23,7 @@ export default function NerccipDocsPage() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Documentation Coming Soon</CardTitle>
+                        <CardTitle>Documentation Expansion in Progress</CardTitle>
                         <CardDescription>
                             Detailed documentation for nerc cip compliance is under development
                         </CardDescription>

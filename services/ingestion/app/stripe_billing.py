@@ -11,6 +11,8 @@ handling for Stripe payment events. Supports three tiers:
 from __future__ import annotations
 
 import logging
+import hmac
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -238,8 +240,16 @@ async def get_subscription(
     summary="Stripe webhook handler",
     description="Handles Stripe webhook events (checkout.session.completed, invoice.paid, etc.)",
 )
-async def stripe_webhook(request: Request):
+async def stripe_webhook(
+    request: Request,
+    stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
+):
     """Handle Stripe webhook events."""
+    configured_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    if configured_secret:
+        if not stripe_signature or not hmac.compare_digest(stripe_signature, configured_secret):
+            raise HTTPException(status_code=401, detail="Invalid Stripe signature")
+
     body = await request.body()
     # In production: verify signature with stripe.Webhook.construct_event()
 
