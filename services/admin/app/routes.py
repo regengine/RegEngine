@@ -158,6 +158,7 @@ def _tracker():
 @router.get("/health")
 async def health():
     """Deep health check endpoint with dependency verification."""
+    import asyncio
     import os
     from fastapi.responses import JSONResponse
     from shared.health import HealthCheck
@@ -185,6 +186,31 @@ async def health():
                 return {"status": "unhealthy", "error": str(e)}
         
         checker.add_dependency("postgresql", check_postgres)
+
+    # Neo4j check
+    neo4j_uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL")
+    neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+    neo4j_password = os.getenv("NEO4J_PASSWORD")
+    if neo4j_uri:
+        async def check_neo4j():
+            try:
+                if not neo4j_password:
+                    return {"status": "unhealthy", "error": "NEO4J_PASSWORD is not set"}
+
+                from neo4j import GraphDatabase
+
+                def _probe() -> None:
+                    with GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as driver:
+                        driver.verify_connectivity()
+                        with driver.session() as session:
+                            session.run("RETURN 1 AS ok").single()
+
+                await asyncio.to_thread(_probe)
+                return {"status": "healthy"}
+            except Exception as e:
+                return {"status": "unhealthy", "error": str(e)}
+
+        checker.add_dependency("neo4j", check_neo4j)
 
     # Redis check
     redis_url = os.getenv("REDIS_URL")
