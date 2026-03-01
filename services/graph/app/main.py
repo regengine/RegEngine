@@ -29,6 +29,7 @@ logger = setup_logging()
 
 # Local imports (using absolute-style imports from 'app' package inside graph service)
 from app.routes import router as graph_router
+from app.routers.arbitrage import arbitrage_router
 from app.config import settings
 
 @asynccontextmanager
@@ -63,6 +64,23 @@ from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
 app.include_router(graph_router, prefix="/api/v1")
+app.include_router(arbitrage_router, prefix="/graph", tags=["arbitrage-legacy"])
+
+
+@app.get("/")
+async def root():
+    return {
+        "service": "RegEngine Graph Service",
+        "version": app.version,
+        "status": "operational",
+        "endpoints": {
+            "health": "/health",
+            "docs": "/docs",
+            "arbitrage": "/graph/arbitrage",
+            "gaps": "/graph/gaps",
+            "frameworks": "/graph/frameworks",
+        },
+    }
 
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
