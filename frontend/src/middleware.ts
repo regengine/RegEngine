@@ -26,6 +26,7 @@ export function middleware(request: NextRequest) {
         const verticalPathSegment = verticalMatch[1];
         if (!ALLOWED_VERTICALS.includes(verticalPathSegment)) {
             // Unreleased vertical -> Rewrite to waitlist gate
+            console.log(`[Middleware] Rewriting unreleased vertical access: ${pathname} -> /waitlist`);
             const url = request.nextUrl.clone();
             url.pathname = '/waitlist';
             url.searchParams.set('feature', verticalPathSegment);
@@ -39,6 +40,7 @@ export function middleware(request: NextRequest) {
         const docsPathSegment = docsMatch[1];
         if (!ALLOWED_VERTICALS.includes(docsPathSegment)) {
             // Unreleased doc -> Rewrite to waitlist gate
+            console.log(`[Middleware] Rewriting unreleased docs access: ${pathname} -> /waitlist`);
             const url = request.nextUrl.clone();
             url.pathname = '/waitlist';
             url.searchParams.set('feature', docsPathSegment);
