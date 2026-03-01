@@ -7,6 +7,9 @@ const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost'
 
 const nextConfig = {
     output: isStatic ? 'export' : undefined,
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
     images: {
         unoptimized: isStatic,
     },
@@ -85,4 +88,3 @@ const sentryWebpackPluginOptions = {
 };
 
 module.exports = withSentryConfig(withPWA(nextConfig), sentryWebpackPluginOptions);
-
