@@ -14,15 +14,15 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
-from app.webhook_router import ingest_events
+from app.webhook_router import _verify_api_key, ingest_events
 
 logger = logging.getLogger("supplier-portal")
 
@@ -30,6 +30,27 @@ router = APIRouter(prefix="/api/v1/portal", tags=["Supplier Portal"])
 
 # In-memory portal link store (in production: database)
 _portal_links: dict[str, dict] = {}
+
+
+def _get_active_portal_link(portal_id: str) -> dict:
+    link = _portal_links.get(portal_id)
+    if not link:
+        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+
+    expires_at_raw = link.get("expires_at")
+    if not expires_at_raw:
+        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+
+    try:
+        expires_at = datetime.fromisoformat(str(expires_at_raw).replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Portal link has invalid expiry metadata")
+
+    if expires_at <= datetime.now(timezone.utc):
+        _portal_links.pop(portal_id, None)
+        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+
+    return link
 
 
 class CreatePortalLinkRequest(BaseModel):
@@ -87,10 +108,13 @@ class SubmissionResult(BaseModel):
     summary="Create a supplier portal link",
     description="Generate a unique, expiring link that a supplier can use to submit shipping data.",
 )
-async def create_portal_link(request: CreatePortalLinkRequest) -> PortalLinkResponse:
+async def create_portal_link(
+    request: CreatePortalLinkRequest,
+    _: None = Depends(_verify_api_key),
+) -> PortalLinkResponse:
     """Create a supplier portal link."""
     portal_id = secrets.token_urlsafe(16)
-    expires_at = datetime.now(timezone.utc).isoformat()  # Simplified — add days in production
+    expires_at = (datetime.now(timezone.utc) + timedelta(days=request.expires_days)).isoformat()
 
     _portal_links[portal_id] = {
         "tenant_id": request.tenant_id,
@@ -127,9 +151,7 @@ async def create_portal_link(request: CreatePortalLinkRequest) -> PortalLinkResp
 )
 async def get_portal_details(portal_id: str):
     """Get portal link details — used by the frontend to render the form."""
-    link = _portal_links.get(portal_id)
-    if not link:
-        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+    link = _get_active_portal_link(portal_id)
 
     return {
         "portal_id": portal_id,
@@ -153,9 +175,7 @@ async def submit_supplier_data(
     submission: SupplierSubmission,
 ) -> SubmissionResult:
     """Process a supplier submission — no auth required (link-based access)."""
-    link = _portal_links.get(portal_id)
-    if not link:
-        raise HTTPException(status_code=404, detail="Portal link not found or expired")
+    link = _get_active_portal_link(portal_id)
 
     # Build KDEs
     kdes: dict = {

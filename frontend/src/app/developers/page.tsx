@@ -337,19 +337,19 @@ export default function DevelopersPage() {
                                 Resources
                             </h3>
                             <nav className="space-y-2">
-                                <a href="/docs" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                <Link href="/docs" className="flex items-center gap-2 text-gray-400 hover:text-white">
                                     <BookOpen className="h-4 w-4" />
                                     Full Documentation
-                                </a>
+                                </Link>
                                 <Link href="/developers/compliance-verticals" className="flex items-center gap-2 text-gray-400 hover:text-white">
                                     <Shield className="h-4 w-4" />
                                     Compliance Frameworks
                                 </Link>
-                                <a href="/docs/api" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                <Link href="/docs/api" className="flex items-center gap-2 text-gray-400 hover:text-white">
                                     <Code2 className="h-4 w-4" />
                                     API Reference
-                                </a>
-                                <a href="https://github.com/regengine" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                </Link>
+                                <a href="https://github.com/PetrefiedThunder" className="flex items-center gap-2 text-gray-400 hover:text-white">
                                     <Terminal className="h-4 w-4" />
                                     GitHub
                                 </a>
@@ -424,7 +424,7 @@ export default function DevelopersPage() {
                                 <Zap className="h-8 w-8 text-emerald-400 mb-2" />
                                 <CardTitle>5-Minute Quickstart</CardTitle>
                                 <CardDescription className="text-gray-400">
-                                    npm install, add your API key, and you're recording CTEs.
+                                    npm install, add your API key, and you are recording CTEs.
                                     No weeks of onboarding calls.
                                 </CardDescription>
                             </CardHeader>

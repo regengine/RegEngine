@@ -144,7 +144,7 @@ export default function APIKeysPage() {
                             No API Keys Yet
                         </h2>
                         <p className="text-gray-600 dark:text-gray-400 mb-6">
-                            Create your first API key to start using RegEngine's compliance APIs
+                            Create your first API key to start using RegEngine&apos;s compliance APIs
                         </p>
                         <button
                             onClick={() => setShowNewKeyForm(true)}

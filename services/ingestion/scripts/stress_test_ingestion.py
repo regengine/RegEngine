@@ -3,12 +3,13 @@ import aiohttp
 import time
 import json
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("stress_test")
 
-API_KEY = "regengine-universal-test-key-2026"
-INGESTION_URL = "http://localhost:8002/v1/ingest/url"
+API_KEY = os.getenv("REGENGINE_API_KEY", "")
+INGESTION_URL = os.getenv("INGESTION_API_URL", "http://localhost:8002/v1/ingest/url")
 
 TEST_VECTORS = [
     {
@@ -96,6 +97,9 @@ async def send_ingest_request(session, vector):
         return {"vector": vector["name"], "status": "crash", "duration": duration, "error": str(e)}
 
 async def main():
+    if not API_KEY:
+        raise RuntimeError("Set REGENGINE_API_KEY before running stress test.")
+
     logger.info("Initializing RegEngine Ingestion Stress Test")
     logger.info("="*50)
     

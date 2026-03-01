@@ -8,8 +8,8 @@ within 24 hours of request. The compliance deadline is July 20, 2028.
 Major retailers (Walmart, Kroger, Costco) are already pushing suppliers to prove
 traceability readiness before the federal deadline.
 
-Most mid-market suppliers still need 3 to 5 days to gather traceability records,
-and many cannot produce a complete chain at all.
+Most mid-market suppliers still need about 18 hours (and often longer) to gather
+traceability records, and many cannot produce a complete chain at all.
 
 ## What RegEngine Does
 
@@ -36,8 +36,8 @@ RegEngine is API-first FSMA 204 compliance infrastructure that:
 
 ## Get Started
 
-1. Run the free FTL Coverage Checker: `regengine.com/tools/ftl-checker`
-2. Complete the Retailer Readiness Assessment: `regengine.com/retailer-readiness`
+1. Run the free FTL Coverage Checker: `https://regengine.com/tools/ftl-checker`
+2. Complete the Retailer Readiness Assessment: `https://regengine.com/retailer-readiness`
 3. Book a 30-minute compliance gap review
 
 Contact: `chris@regengine.com`

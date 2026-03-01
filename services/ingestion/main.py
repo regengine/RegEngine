@@ -47,6 +47,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+allowed_origins = [
+    origin.strip()
+    for origin in settings.allowed_origins.split(",")
+    if origin.strip()
+]
+if "*" in allowed_origins:
+    allowed_origins = ["http://localhost:3000", "https://regengine.co", "https://www.regengine.co"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-API-Key",
+        "X-RegEngine-API-Key",
+        "X-Requested-With",
+        "X-Request-ID",
+    ],
+)
+
 # Production Hardening Middleware (Phase 18)
 add_security(app)
 add_rate_limiting(app)

@@ -6,6 +6,17 @@ import boto3
 
 def verify_pipeline():
     print("=== Pipeline Verification ===")
+
+    db_password = os.getenv("REGENGINE_DB_PASSWORD", "")
+    minio_key = os.getenv("MINIO_ACCESS_KEY", "")
+    minio_secret = os.getenv("MINIO_SECRET_KEY", "")
+
+    if not db_password:
+        print("DB Error: set REGENGINE_DB_PASSWORD before running this script")
+        return
+    if not minio_key or not minio_secret:
+        print("S3 Error: set MINIO_ACCESS_KEY and MINIO_SECRET_KEY before running this script")
+        return
     
     # 1. Check PostgreSQL
     print("\n--- PostgreSQL: ingestion.documents ---")
@@ -15,7 +26,7 @@ def verify_pipeline():
             port=5432,
             database="regengine_admin",
             user="regengine",
-            password="regengine_password"
+            password=db_password
         )
         cur = conn.cursor()
         cur.execute("SELECT id, title, document_type, content_length FROM ingestion.documents ORDER BY fetch_timestamp DESC LIMIT 5;")
@@ -31,8 +42,8 @@ def verify_pipeline():
         s3 = boto3.client(
             "s3",
             endpoint_url="http://localhost:9000",
-            aws_access_key_id="minioadmin",
-            aws_secret_access_key="minioadmin123",
+            aws_access_key_id=minio_key,
+            aws_secret_access_key=minio_secret,
             region_name="us-east-1"
         )
         response = s3.list_objects_v2(Bucket="reg-engine-processed-data-dev", Prefix="normalized-text/")

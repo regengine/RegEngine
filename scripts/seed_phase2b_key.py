@@ -7,13 +7,16 @@ from datetime import datetime, timezone
 # Config
 DB_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
 KEY_ID = "rge_phase2b"
-SECRET = "testsecret123"
+SECRET = os.environ.get("PHASE2B_API_SECRET", "")
 RAW_KEY = f"{KEY_ID}.{SECRET}"
 
 def hash_key(raw_key):
     return hashlib.sha256(raw_key.encode()).hexdigest()
 
 def seed_key():
+    if not SECRET:
+        raise RuntimeError("Set PHASE2B_API_SECRET before running this script")
+
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
     

@@ -14,6 +14,8 @@ FSMA 204 compliance infrastructure for mid-market food suppliers.
 
 Free compliance tools (FTL Checker, Retailer Readiness Assessment) attract active buyers.
 Each assessment receives founder-led review, turning product usage into high-intent pipeline.
+The recall simulation demonstrates a reproducible 18-hour baseline compressed to 42 minutes with
+98% KDE completeness in synthetic FSMA 204 scenarios.
 
 ## What Is Built
 
@@ -34,8 +36,9 @@ that can be verified with external scripts and reproducible hash-chain checks.
 
 - Free: FTL checking and basic readiness scoring
 - Starter ($299/mo): CTE and KDE tracking, up to 100 products and 10 suppliers
-- Professional ($799/mo): unlimited product and supplier coverage, EPCIS export, recall simulation
-- Enterprise (custom): multi-facility rollout, API integrations, SLA terms
+- Growth ($799/mo): expanded supplier coverage, EPCIS export, recall simulation
+- Scale ($1,999/mo): high-volume ingestion, advanced automation, enterprise SLA
+- Enterprise (custom): multi-facility rollout, custom integrations, contractual support terms
 
 ## Raise
 

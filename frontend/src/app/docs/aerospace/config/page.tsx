@@ -30,7 +30,7 @@ export default function ConfigManagementDocsPage() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-muted-foreground mb-4">
-                            RegEngine's configuration management system provides full traceability for engineering changes,
+                            RegEngine&apos;s configuration management system provides full traceability for engineering changes,
                             ensuring compliance with AS9145 and customer-specific requirements.
                         </p>
                         <div className="p-6 bg-sky-50 dark:bg-sky-900/20 rounded-lg border">

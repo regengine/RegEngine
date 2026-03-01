@@ -183,7 +183,7 @@ export default function OwnerDashboard() {
             >
                 <div>
                     <h1 className="text-3xl font-bold text-white tracking-tight">Executive Dashboard</h1>
-                    <p className="text-slate-400 mt-1">Welcome back. Here's your business overview.</p>
+                    <p className="text-slate-400 mt-1">Welcome back. Here&apos;s your business overview.</p>
                 </div>
                 <Button
                     onClick={handleRefresh}

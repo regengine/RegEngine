@@ -79,7 +79,7 @@ export default function FSMA204AssessmentPage() {
                                 </div>
                                 <div className="flex-1">
                                     <p className="text-sm">
-                                        This assessment evaluates your organization's readiness for FDA FSMA Section 204
+                                        This assessment evaluates your organization&apos;s readiness for FDA FSMA Section 204
                                         Food Traceability requirements. Answer questions about your products, operations,
                                         and current traceability practices to receive a personalized readiness score.
                                     </p>
