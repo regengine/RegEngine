@@ -16,12 +16,16 @@ def deploy_rls_migrations():
         os.system("pip install psycopg2-binary")
         import psycopg2
     
-    # Supabase connection details (from db_test.py)
-    SUPABASE_HOST = "db.magbeerafyxmyuqmbfgv.supabase.co"
-    SUPABASE_PORT = 5432
-    SUPABASE_USER = "postgres"
-    SUPABASE_PASSWORD = "trj.qxe_wxh6QGB@auq"
-    SUPABASE_DB = "postgres"
+    # Supabase connection details
+    SUPABASE_HOST = os.getenv("SUPABASE_HOST", "")
+    SUPABASE_PORT = int(os.getenv("SUPABASE_PORT", "5432"))
+    SUPABASE_USER = os.getenv("SUPABASE_USER", "postgres")
+    SUPABASE_PASSWORD = os.getenv("SUPABASE_PASSWORD", "")
+    SUPABASE_DB = os.getenv("SUPABASE_DB", "postgres")
+
+    if not SUPABASE_HOST or not SUPABASE_PASSWORD:
+        print("❌ Missing required env vars: SUPABASE_HOST and SUPABASE_PASSWORD")
+        return False
 
     
     print("=" * 60)
@@ -68,7 +72,12 @@ def deploy_rls_migrations():
     print("Testing database connection...")
     try:
         cursor.execute("SELECT current_database(), current_user, version();")
-        db, user, version = cursor.fetchone()
+        row = cursor.fetchone()
+        if row is None:
+            print("❌ Connection test failed: no row returned")
+            conn.close()
+            return False
+        db, user, version = row
         print(f"  Database: {db}")
         print(f"  User: {user}")
         print(f"  Version: {version[:50]}...")
@@ -130,7 +139,12 @@ def deploy_rls_migrations():
             WHERE t.schemaname = 'public' 
               AND c.relrowsecurity = true;
         """)
-        rls_count = cursor.fetchone()[0]
+        row = cursor.fetchone()
+        if row is None:
+            print("⚠️  Verification query returned no rows")
+            rls_count = 0
+        else:
+            rls_count = row[0]
         print(f"Tables with RLS enabled: {rls_count}")
         
         if rls_count >= 50:

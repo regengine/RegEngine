@@ -544,7 +544,7 @@ For more information: regengine.co/fsma
                                             variant="outline"
                                             className="border-white text-white hover:bg-white/10"
                                         >
-                                            Check If You're Covered by FSMA 204
+                                            Check If You&apos;re Covered by FSMA 204
                                         </Button>
                                     </Link>
                                 </div>

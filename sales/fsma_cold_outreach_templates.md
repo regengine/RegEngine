@@ -9,7 +9,7 @@ Hi [Name],
 Quick question: do you know which of your products are on the FDA Food Traceability List?
 
 I built a free tool that checks FTL coverage instantly:
-`regengine.com/tools/ftl-checker`
+`https://regengine.com/tools/ftl-checker`
 
 No signup required. Takes about 30 seconds.
 
@@ -32,7 +32,7 @@ Major retailers are requiring FSMA 204 readiness from suppliers ahead of the fed
 I put together a free Retailer Readiness Assessment that scores your current posture
 across six dimensions:
 
-`regengine.com/retailer-readiness`
+`https://regengine.com/retailer-readiness`
 
 It takes about 5 minutes. I personally review each submission and send a short gap analysis.
 
@@ -51,13 +51,13 @@ Hi [Name],
 
 If the FDA requested traceability records tomorrow, how long would it take to deliver complete data?
 
-FSMA 204 requires 24 hours. Most teams estimate 3 to 5 days.
+FSMA 204 requires 24 hours. In our synthetic baseline scenario, most teams still take about 18 hours.
 
 I built RegEngine to close that gap: API-first traceability infrastructure that can produce
-recall-ready records in under an hour.
+recall-ready records in 42 minutes with 98% KDE completeness in the same simulation profile.
 
 Here is a recall simulation using realistic supply-chain patterns:
-`regengine.com/demo/recall-simulation`
+`https://regengine.com/demo/recall-simulation`
 
 Open to a 15-minute conversation to compare against what you are seeing?
 

@@ -2,13 +2,18 @@ import requests
 import hashlib
 import uuid
 import json
+import os
 
 # Configuration
 INGEST_URL = "http://localhost:8002/v1/ingest/url"
-API_KEY = "rge_Zoe_i3b2bqU1AFKbWeqvpw.OuNQxxkEE3uSBqdwBYXWsWolLgwqZ7fQKTTYG5TQlJU"
+API_KEY = os.getenv("REGENGINE_API_KEY", "")
 S3_ENDPOINT = "http://localhost:4566"
 
 def test_hash_integrity():
+    if not API_KEY:
+        print("Set REGENGINE_API_KEY before running this script.")
+        return
+
     # 1. Generate unique URL to ensure new ingestion
     unique_id = str(uuid.uuid4())
     test_url = f"https://httpbin.org/get?unique={unique_id}"

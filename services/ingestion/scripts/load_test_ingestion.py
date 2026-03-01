@@ -1,12 +1,13 @@
 """Load test script for ingestion service."""
 
+import os
 import time
 import requests
 import uuid
 import concurrent.futures
 
-API_URL = "http://localhost:8000/v1/ingest/url"
-API_KEY = "admin"
+API_URL = os.getenv("INGESTION_API_URL", "http://localhost:8000/v1/ingest/url")
+API_KEY = os.getenv("REGENGINE_API_KEY", "")
 
 def ingest_document(i):
     # Use a dummy but unique URL per request to avoid some levels of caching if any
@@ -30,6 +31,9 @@ def ingest_document(i):
         return 500, str(e)
 
 def run_load_test(count=50, concurrency=5):
+    if not API_KEY:
+        raise RuntimeError("Set REGENGINE_API_KEY before running load test.")
+
     print(f"Starting load test: {count} docs, concurrency {concurrency}")
     
     results = []

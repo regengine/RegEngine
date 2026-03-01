@@ -87,10 +87,10 @@ export default function AboutPage() {
                         About
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
-                        Built by someone who's actually done compliance work
+                        Built by someone who&apos;s actually done compliance work
                     </h1>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: "0 0 16px" }}>
-                        RegEngine isn't a venture-backed team that read about FSMA 204 in a TechCrunch article. It's built by a founder with 20+ years of federal compliance, nonprofit program management, and technical operations experience.
+                        RegEngine isn&apos;t a venture-backed team that read about FSMA 204 in a TechCrunch article. It&apos;s built by a founder with 20+ years of federal compliance, nonprofit program management, and technical operations experience.
                     </p>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
                         The thesis is simple: regulatory compliance is a coordination problem, not an information problem. The rules are public. The challenge is making them machine-readable, cryptographically verifiable, and operationally useful — without requiring a six-figure consulting engagement.
@@ -120,7 +120,7 @@ export default function AboutPage() {
                                 CEO & Technical Founder
                             </p>
                             <p className="text-sm text-re-text-muted leading-relaxed m-0">
-                                20+ years spanning federal government (U.S. Senate), nonprofit program management (Epilepsy Foundation), disaster response (AmeriCorps NCCC / Hurricane Katrina), and tech startups (SeatGeek, RadarFirst, Shift Technologies). President's Volunteer Service Award for lifetime achievement. B.S. Political Science, Portland State University.
+                                20+ years spanning federal government (U.S. Senate), nonprofit program management (Epilepsy Foundation), disaster response (AmeriCorps NCCC / Hurricane Katrina), and tech startups (SeatGeek, RadarFirst, Shift Technologies). President&apos;s Volunteer Service Award for lifetime achievement. B.S. Political Science, Portland State University.
                             </p>
                         </div>
                     </div>

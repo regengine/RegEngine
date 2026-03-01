@@ -1,11 +1,12 @@
 import requests
 import jwt
+import os
 from datetime import datetime, timedelta, timezone
 
 # Target details
 API_BASE_URL = "http://localhost:8400"
 TENANT_ID = "40e74bc9-4087-4612-8d94-215347138a68"
-FORGED_SECRET = "wrong-secret-key-67890"
+FORGED_SECRET = os.getenv("FORGED_JWT_SECRET", "invalid")
 
 def forge_and_test():
     # 1. Create a forged token

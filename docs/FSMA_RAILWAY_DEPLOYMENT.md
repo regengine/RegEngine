@@ -23,6 +23,9 @@ Railway project layout for FSMA-focused deployment:
 - `REDIS_URL`
 - `JWT_SECRET`
 - `HASH_SALT`
+- `API_KEY` (required for protected ingestion endpoints)
+- `ALLOWED_ORIGINS` (comma-separated CORS origins)
+- `STRIPE_WEBHOOK_SECRET` (required when Stripe webhooks are enabled)
 - `OBJECT_STORAGE_ACCESS_KEY_ID`
 - `OBJECT_STORAGE_SECRET_ACCESS_KEY`
 - `OBJECT_STORAGE_REGION`
@@ -30,8 +33,14 @@ Railway project layout for FSMA-focused deployment:
 
 ### Frontend
 
-- `NEXT_PUBLIC_API_URL`
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_ADMIN_PORT`
+- `NEXT_PUBLIC_INGESTION_PORT`
+- `NEXT_PUBLIC_OPPORTUNITY_PORT`
+- `NEXT_PUBLIC_COMPLIANCE_PORT`
 - `NEXT_PUBLIC_STRIPE_KEY` (when billing is enabled)
+- `NEXT_PUBLIC_POSTHOG_KEY` (optional)
+- `NEXT_PUBLIC_POSTHOG_HOST` (optional)
 
 ## Rollout Steps
 
@@ -63,10 +72,19 @@ python services/graph/scripts/fsma_sync_worker.py
 
 - `GET /health`
 - `POST /api/v1/epcis/validate`
+- `POST /api/v1/epcis/ingest`
 - `POST /api/v1/simulations/run`
+
+6. Validate critical frontend routes:
+
+- `/demo/supply-chains`
+- `/demo/recall-simulation`
+- `/tools/ftl-checker`
+- `/retailer-readiness`
 
 ## Notes
 
 - Use Railway managed variables for production secrets.
 - Keep `REGENGINE_ENV=production` for production services.
 - Run a mock recall simulation post-deploy to validate graph and export paths.
+- Keep `AUTH_TEST_BYPASS_TOKEN` unset in production.
