@@ -69,7 +69,7 @@ RegEngine turns unstructured regulations into **machine-readable obligations** a
 ## Integration & Deployment
 
 - **API-first** – easy to integrate with existing systems.
-- **AWS-native deployment** – can run in your environment or as a managed service.
+- **Railway-native deployment** – can run in your environment or as a managed service.
 - **Design partner program** – start in a sandbox to de-risk adoption.
 
 ---

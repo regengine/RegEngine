@@ -8,7 +8,7 @@ Security Features:
 - Unique nonce per encryption operation
 - Key derivation from master secret
 - Tokenization support for display masking
-- AWS KMS integration ready (optional)
+- External KMS integration ready (optional)
 
 Usage:
     from shared.pii_encryption import PIIEncryptor

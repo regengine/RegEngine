@@ -133,10 +133,10 @@ export const financeApiEndpoints: ApiEndpoint[] = [
   -d '{
     "control_id": "CC1.2",
     "control_name": "MFA Required for Admin Access",
-    "evidence_type": "AWS_IAM_POLICY",
+    "evidence_type": "IDENTITY_POLICY",
     "evidence_data": {
       "policy_name": "AdminRequiresMFA",
-      "policy_arn": "arn:aws:iam::123456789012:policy/AdminMFA",
+      "policy_reference": "identity/policies/AdminMFA",
       "mfa_required": true,
       "enabled": true
     },
@@ -162,7 +162,7 @@ export const financeApiEndpoints: ApiEndpoint[] = [
   "snapshot_id": "evid_0193f8a7b2c4d5e6",
   "control_id": "CC1.2",
   "control_name": "MFA Required for Admin Access",
-  "evidence_type": "AWS_IAM_POLICY",
+  "evidence_type": "IDENTITY_POLICY",
   "content_hash": "sha256:a3f5b8c9d2e1f4a7...",
   "sealed": true,
   "created_at": "2024-01-26T10:00:01Z",
@@ -201,8 +201,8 @@ export const financeApiEndpoints: ApiEndpoint[] = [
       "status": "COMPLIANT"
     },
     {
-      "vendor_id": "vnd_aws",
-      "name": "AWS",
+      "vendor_id": "vnd_cloud_host",
+      "name": "Cloud Hosting Provider",
       "soc2_type": "TYPE_II",
       "soc2_expiration": "2024-11-30",
       "risk_score": 10,
@@ -291,7 +291,7 @@ const finance = new FinanceCompliance('rge_your_api_key');
 const snapshot = await finance.evidenceSnapshots.create({
   control_id: 'CC1.2',
   control_name: 'MFA Required for Admin Access',
-  evidence_type: 'AWS_IAM_POLICY',
+  evidence_type: 'IDENTITY_POLICY',
   evidence_data: {
     policy_name: 'AdminRequiresMFA',
     mfa_required: true,
@@ -316,7 +316,7 @@ finance = FinanceCompliance(api_key= 'rge_your_api_key')
 snapshot = finance.evidence_snapshots.create(
     control_id='CC1.2',
     control_name='MFA Required for Admin Access',
-    evidence_type='AWS_IAM_POLICY',
+    evidence_type='IDENTITY_POLICY',
     evidence_data={
         'policy_name': 'AdminRequiresMFA',
         'mfa_required': True,
@@ -344,7 +344,7 @@ func main() {
     snapshot, err := client.EvidenceSnapshots.Create(&finance.EvidenceRequest{
         ControlID: "CC1.2",
         ControlName: "MFA Required for Admin Access",
-        EvidenceType: "AWS_IAM_POLICY",
+        EvidenceType: "IDENTITY_POLICY",
         AuditPeriod: "2024-Q1",
     })
     
@@ -356,4 +356,3 @@ func main() {
 }`,
     },
 ];
-

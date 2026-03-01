@@ -40,6 +40,49 @@ def apply_constraints(neo4j_client: Neo4jClient):
                 FOR (f:Facility) REQUIRE (f.gln, f.tenant_id) IS UNIQUE
             """,
         },
+        # FSMA 204 graph constraints (supply chain model)
+        {
+            "name": "organization_id_unique",
+            "query": """
+                CREATE CONSTRAINT organization_id_unique IF NOT EXISTS
+                FOR (o:Organization) REQUIRE o.id IS UNIQUE
+            """,
+        },
+        {
+            "name": "location_id_unique",
+            "query": """
+                CREATE CONSTRAINT location_id_unique IF NOT EXISTS
+                FOR (l:Location) REQUIRE l.id IS UNIQUE
+            """,
+        },
+        {
+            "name": "location_gln_unique",
+            "query": """
+                CREATE CONSTRAINT location_gln_unique IF NOT EXISTS
+                FOR (l:Location) REQUIRE l.gln IS UNIQUE
+            """,
+        },
+        {
+            "name": "product_id_unique",
+            "query": """
+                CREATE CONSTRAINT product_id_unique IF NOT EXISTS
+                FOR (p:Product) REQUIRE p.id IS UNIQUE
+            """,
+        },
+        {
+            "name": "lot_id_unique",
+            "query": """
+                CREATE CONSTRAINT lot_id_unique IF NOT EXISTS
+                FOR (lot:Lot) REQUIRE lot.id IS UNIQUE
+            """,
+        },
+        {
+            "name": "cte_id_unique",
+            "query": """
+                CREATE CONSTRAINT cte_id_unique IF NOT EXISTS
+                FOR (c:CTE) REQUIRE c.id IS UNIQUE
+            """,
+        },
     ]
 
     indexes = [
@@ -55,6 +98,27 @@ def apply_constraints(neo4j_client: Neo4jClient):
             "query": """
                 CREATE INDEX lot_created_at_index IF NOT EXISTS
                 FOR (l:Lot) ON (l.created_at)
+            """,
+        },
+        {
+            "name": "lot_tlc_index",
+            "query": """
+                CREATE INDEX lot_tlc_index IF NOT EXISTS
+                FOR (lot:Lot) ON (lot.tlc)
+            """,
+        },
+        {
+            "name": "cte_event_type_index",
+            "query": """
+                CREATE INDEX cte_event_type_index IF NOT EXISTS
+                FOR (c:CTE) ON (c.event_type)
+            """,
+        },
+        {
+            "name": "cte_event_time_index",
+            "query": """
+                CREATE INDEX cte_event_time_index IF NOT EXISTS
+                FOR (c:CTE) ON (c.event_time)
             """,
         },
     ]

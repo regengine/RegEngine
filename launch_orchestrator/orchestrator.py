@@ -453,7 +453,7 @@ Contact: sales@regengine.ai
         )
 
     def _deploy_infrastructure(self):
-        """Deploy AWS infrastructure via Terraform"""
+        """Deploy infrastructure via Terraform"""
         logger.info("=== Phase: Infrastructure Deployment ===")
         phase = OrchestrationPhase.INFRA
 

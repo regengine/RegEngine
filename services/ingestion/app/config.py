@@ -24,11 +24,18 @@ class Settings(BaseSettings):
     processed_bucket: str = Field(
         default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET"
     )
-    aws_endpoint_url: Optional[str] = Field(default=None, alias="AWS_ENDPOINT_URL")
-    aws_region: str = Field(default="us-east-1", alias="AWS_DEFAULT_REGION")
-    aws_access_key_id: Optional[str] = Field(default=None, alias="AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: Optional[str] = Field(
-        default=None, alias="AWS_SECRET_ACCESS_KEY"
+    object_storage_endpoint_url: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_ENDPOINT_URL",
+    )
+    object_storage_region: str = Field(default="us-east-1", alias="OBJECT_STORAGE_REGION")
+    object_storage_access_key_id: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_ACCESS_KEY_ID",
+    )
+    object_storage_secret_access_key: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_SECRET_ACCESS_KEY",
     )
     kafka_bootstrap_servers: str = Field(
         default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS"

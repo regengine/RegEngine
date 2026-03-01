@@ -218,8 +218,8 @@ class TestXMLThreatDetector:
         assert result.is_safe is False
         assert XMLThreatType.SSRF in result.threats_detected
     
-    def test_detects_aws_metadata_ssrf(self, detector):
-        """Should detect AWS metadata SSRF."""
+    def test_detects_metadata_endpoint_ssrf(self, detector):
+        """Should detect metadata endpoint SSRF."""
         xml = '<root>http://169.254.169.254/latest/</root>'
         
         result = detector.detect_threats(xml)

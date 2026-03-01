@@ -6,7 +6,7 @@ Automated system for coordinating RegEngine's go-to-market launch across five do
 2. **Sales & GTM** - Outbound campaigns, persona collateral, CRM initialization
 3. **Design Partner Program** - Legal agreements, sandbox provisioning
 4. **Investor Readiness** - Investor memo, pitch materials validation
-5. **Infrastructure** - AWS deployment via Terraform
+5. **Infrastructure** - Railway deployment via Terraform
 
 ## Features
 
@@ -26,9 +26,9 @@ Automated system for coordinating RegEngine's go-to-market launch across five do
 pip install -r requirements.txt
 
 # Set required environment variables
-export AWS_ACCESS_KEY_ID="your-key"
-export AWS_SECRET_ACCESS_KEY="your-secret"
-export AWS_REGION="us-east-1"
+export OBJECT_STORAGE_ACCESS_KEY_ID="your-key"
+export OBJECT_STORAGE_SECRET_ACCESS_KEY="your-secret"
+export OBJECT_STORAGE_REGION="us-east-1"
 export CRM_API_TOKEN="your-crm-token"
 export EMAIL_PROVIDER_API_KEY="your-email-key"
 ```
@@ -124,8 +124,8 @@ launch_orchestrator/
 - Send connection requests + messages
 - Track engagement
 
-### Infrastructure (AWS, Terraform)
-- Deploy VPC, ECS, RDS, Neo4j, Redpanda
+### Infrastructure (Railway, Terraform)
+- Deploy service networking, managed databases, Neo4j, Redpanda
 - Create sandboxes for design partners
 - Configure monitoring and alerting
 
@@ -160,9 +160,9 @@ launch_orchestrator/
 
 ### Phase 6: Infrastructure Deployment
 - Run Terraform for demo/sandbox/production workspaces
-- Deploy ECS services
-- Configure Neo4j, Redpanda, S3
-- Set up CloudWatch monitoring
+- Deploy Railway services
+- Configure Neo4j, Redpanda, object storage
+- Set up platform monitoring
 
 ### Phase 7: Summary Generation
 - Count successful/failed events
@@ -202,7 +202,7 @@ def _deploy_your_feature(self):
 ### Missing Environment Variables
 
 ```
-Error: Missing environment variables: AWS_ACCESS_KEY_ID
+Error: Missing environment variables: OBJECT_STORAGE_ACCESS_KEY_ID
 ```
 
 **Solution**: Set required environment variables (see Prerequisites)
@@ -215,13 +215,13 @@ Error: Missing required config key: orchestrator
 
 **Solution**: Ensure `launch_orchestrator_spec.yaml` has all required sections
 
-### Terraform Deployment Failed
+### Platform Deployment Failed
 
 ```
 Error: Terraform apply failed in workspace: sandbox
 ```
 
-**Solution**: Check AWS credentials, Terraform state, and module configuration
+**Solution**: Check platform credentials, Terraform state, and module configuration
 
 ## Production Checklist
 

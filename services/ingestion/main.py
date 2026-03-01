@@ -104,6 +104,10 @@ app.include_router(sop_router)
 from app.epcis_export import router as export_router
 app.include_router(export_router)
 
+# EPCIS 2.0 Ingestion
+from app.epcis_ingestion import router as epcis_ingestion_router
+app.include_router(epcis_ingestion_router)
+
 # Stripe Billing
 from app.stripe_billing import router as billing_router
 app.include_router(billing_router)
@@ -119,6 +123,10 @@ app.include_router(onboarding_router)
 # Recall Readiness Report
 from app.recall_report import router as recall_router
 app.include_router(recall_router)
+
+# Recall Simulations
+from app.recall_simulations import router as recall_simulations_router
+app.include_router(recall_simulations_router)
 
 # Supplier Management
 from app.supplier_mgmt import router as supplier_mgmt_router

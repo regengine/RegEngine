@@ -1,12 +1,11 @@
-"""AWS Secrets Manager integration for RegEngine.
+"""Secrets access utilities for RegEngine.
 
 This module provides a centralized interface for retrieving secrets from
-AWS Secrets Manager with local development fallback.
+environment variables with optional namespace-based lookups.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from functools import lru_cache
 from typing import Optional
@@ -15,69 +14,47 @@ import structlog
 
 logger = structlog.get_logger("secrets")
 
-# Flag to determine if we should use AWS Secrets Manager
-USE_AWS_SECRETS = os.getenv("USE_AWS_SECRETS", "false").lower() == "true"
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 
 class SecretsManager:
-    """Manages secrets retrieval from AWS Secrets Manager or environment variables."""
+    """Manages secrets retrieval from environment variables."""
 
     def __init__(self, region_name: str = "us-east-1"):
         """Initialize SecretsManager.
 
         Args:
-            region_name: AWS region for Secrets Manager
+            region_name: Retained for backward compatibility
         """
         self.region_name = region_name
-        self._client = None
-
-        if USE_AWS_SECRETS:
-            try:
-                import boto3
-
-                self._client = boto3.client("secretsmanager", region_name=region_name)
-                logger.info(
-                    "secrets_manager_initialized",
-                    region=region_name,
-                    environment=ENVIRONMENT,
-                )
-            except ImportError:
-                logger.warning(
-                    "boto3_not_installed",
-                    message="boto3 not available, falling back to environment variables",
-                )
-                self._client = None
-        else:
-            logger.info(
-                "secrets_manager_disabled",
-                message="Using environment variables for local development",
-            )
+        logger.info(
+            "secrets_manager_initialized",
+            environment=ENVIRONMENT,
+            source="environment_variables",
+        )
 
     @lru_cache(maxsize=128)
     def get_secret(self, secret_name: str) -> dict:
-        """Retrieve secret from AWS Secrets Manager (cached).
+        """Retrieve a namespaced secret from environment variables (cached).
 
         Args:
-            secret_name: Name of the secret in AWS Secrets Manager
+            secret_name: Secret namespace (example: ``regengine/production/database``)
 
         Returns:
             Dict containing secret data
 
         Raises:
-            RuntimeError: If secret retrieval fails
+            RuntimeError: If secret payload is invalid JSON
         """
-        if not self._client:
-            logger.warning(
-                "secrets_manager_unavailable",
-                secret_name=secret_name,
-                message="AWS Secrets Manager not available, returning empty dict",
-            )
+        env_key = f"REGENGINE_SECRET_{secret_name.upper().replace('/', '_')}"
+        raw_value = os.getenv(env_key)
+        if not raw_value:
             return {}
 
         try:
-            response = self._client.get_secret_value(SecretId=secret_name)
-            secret_data = json.loads(response["SecretString"])
+            import json
+
+            secret_data = json.loads(raw_value)
             logger.info("secret_retrieved", secret_name=secret_name)
             return secret_data
         except Exception as exc:
@@ -97,13 +74,6 @@ class SecretsManager:
         Returns:
             Dict with username, password, host, port, database
         """
-        env = environment or ENVIRONMENT
-
-        if USE_AWS_SECRETS and self._client:
-            secret_name = f"regengine/{env}/database"
-            return self.get_secret(secret_name)
-
-        # Fallback to environment variables
         return {
             "username": os.getenv("POSTGRES_USER", "postgres"),
             "password": os.getenv("POSTGRES_PASSWORD", ""),
@@ -121,13 +91,6 @@ class SecretsManager:
         Returns:
             Dict with uri, username, password
         """
-        env = environment or ENVIRONMENT
-
-        if USE_AWS_SECRETS and self._client:
-            secret_name = f"regengine/{env}/neo4j"
-            return self.get_secret(secret_name)
-
-        # Fallback to environment variables
         return {
             "uri": os.getenv("NEO4J_URI", "bolt://localhost:7687"),
             "username": os.getenv("NEO4J_USER", "neo4j"),
@@ -143,13 +106,6 @@ class SecretsManager:
         Returns:
             Dict with bootstrap_servers, username, password, security_protocol
         """
-        env = environment or ENVIRONMENT
-
-        if USE_AWS_SECRETS and self._client:
-            secret_name = f"regengine/{env}/kafka"
-            return self.get_secret(secret_name)
-
-        # Fallback to environment variables
         return {
             "bootstrap_servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
             "username": os.getenv("KAFKA_USERNAME", ""),
@@ -158,26 +114,20 @@ class SecretsManager:
         }
 
     def get_s3_credentials(self, environment: Optional[str] = None) -> dict:
-        """Get S3 credentials and configuration.
+        """Get object storage credentials and configuration.
 
         Args:
             environment: Environment name (production, staging, dev)
 
         Returns:
-            Dict with access_key_id, secret_access_key, region, bucket_prefix
+            Dict with access_key_id, secret_access_key, region, bucket_prefix, endpoint_url
         """
-        env = environment or ENVIRONMENT
-
-        if USE_AWS_SECRETS and self._client:
-            secret_name = f"regengine/{env}/s3"
-            return self.get_secret(secret_name)
-
-        # Fallback to environment variables
         return {
-            "access_key_id": os.getenv("AWS_ACCESS_KEY_ID", ""),
-            "secret_access_key": os.getenv("AWS_SECRET_ACCESS_KEY", ""),
-            "region": os.getenv("AWS_REGION", "us-east-1"),
+            "access_key_id": os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", ""),
+            "secret_access_key": os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", ""),
+            "region": os.getenv("OBJECT_STORAGE_REGION", "us-east-1"),
             "bucket_prefix": os.getenv("S3_BUCKET_PREFIX", "regengine-dev"),
+            "endpoint_url": os.getenv("OBJECT_STORAGE_ENDPOINT_URL", ""),
         }
 
     def get_admin_master_key(self, environment: Optional[str] = None) -> str:
@@ -189,14 +139,6 @@ class SecretsManager:
         Returns:
             Admin master key string
         """
-        env = environment or ENVIRONMENT
-
-        if USE_AWS_SECRETS and self._client:
-            secret_name = f"regengine/{env}/admin"
-            secret_data = self.get_secret(secret_name)
-            return secret_data.get("master_key", "")
-
-        # Fallback to environment variable
         return os.getenv("ADMIN_MASTER_KEY", "dev_master_key_change_in_production")
 
 
@@ -208,7 +150,7 @@ def get_secrets_manager(region_name: str = "us-east-1") -> SecretsManager:
     """Get the global SecretsManager instance.
 
     Args:
-        region_name: AWS region for Secrets Manager
+        region_name: Retained for backward compatibility
 
     Returns:
         SecretsManager instance
@@ -287,8 +229,8 @@ def get_admin_master_key(environment: Optional[str] = None) -> str:
 INSECURE_DEFAULTS = {
     "NEO4J_PASSWORD": ["change-me", "password", "secret", "test", "demo", "default", "neo4j"],
     "ADMIN_MASTER_KEY": ["dev-admin-key", "change-in-production", "test", "demo", "default", "admin", "dev_master_key_change_in_production"],
-    "AWS_ACCESS_KEY_ID": ["test"],
-    "AWS_SECRET_ACCESS_KEY": ["test"],
+    "OBJECT_STORAGE_ACCESS_KEY_ID": ["test"],
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY": ["test"],
 }
 
 
@@ -329,8 +271,8 @@ def validate_production_secrets() -> None:
     if errors:
         error_msg = "Production secret validation FAILED:\n" + "\n".join(f"  - {err}" for err in errors)
         error_msg += "\n\nProduction mode requires secure credentials. Set proper values via:"
-        error_msg += "\n  1. AWS Secrets Manager (set USE_AWS_SECRETS=true)"
-        error_msg += "\n  2. Secure environment variables"
+        error_msg += "\n  1. Railway environment variables"
+        error_msg += "\n  2. Managed secret stores wired to runtime env"
         error_msg += "\n  3. For development, set REGENGINE_ENV=development"
 
         logger.error("production_secrets_validation_failed", errors=errors, environment=env)
@@ -339,22 +281,22 @@ def validate_production_secrets() -> None:
     logger.info("production_secrets_validated", environment=env, checks_passed=len(INSECURE_DEFAULTS))
 
 
-def require_aws_secrets_in_production() -> None:
-    """Ensure AWS Secrets Manager is enabled in production mode.
+def require_secure_secrets_in_production() -> None:
+    """Ensure production mode does not bypass secret validation.
 
     Raises:
-        RuntimeError: If running in production without AWS Secrets Manager
+        RuntimeError: If running in production with secret checks disabled
     """
     env = os.getenv("REGENGINE_ENV", "development")
 
     if env.lower() != "production":
         return
 
-    if not USE_AWS_SECRETS:
+    if os.getenv("REGENGINE_SKIP_SECRET_CHECK", "false").lower() == "true":
         error_msg = (
-            "Production mode requires AWS Secrets Manager integration.\n"
-            "Set USE_AWS_SECRETS=true and configure AWS credentials.\n"
+            "Production mode requires secret validation to stay enabled.\n"
+            "Unset REGENGINE_SKIP_SECRET_CHECK or set it to false.\n"
             "For development, set REGENGINE_ENV=development"
         )
-        logger.error("aws_secrets_required_in_production", environment=env)
+        logger.error("secure_secrets_required_in_production", environment=env)
         raise RuntimeError(error_msg)

@@ -39,26 +39,26 @@ echo "Let's configure your environment interactively."
 echo "Press ENTER to skip any field (will use placeholder value)."
 echo ""
 
-# AWS Configuration
+# Object Storage Configuration
 echo "========================================="
-echo "  AWS Configuration"
+echo "  Object Storage Configuration"
 echo "========================================="
 echo ""
 
-read -p "AWS Access Key ID: " aws_key
-if [ ! -z "$aws_key" ]; then
-    sed -i "s/AWS_ACCESS_KEY_ID=.*/AWS_ACCESS_KEY_ID=$aws_key/" .env
+read -p "Object Storage Access Key ID: " storage_key
+if [ ! -z "$storage_key" ]; then
+    sed -i "s/OBJECT_STORAGE_ACCESS_KEY_ID=.*/OBJECT_STORAGE_ACCESS_KEY_ID=$storage_key/" .env
 fi
 
-read -sp "AWS Secret Access Key: " aws_secret
+read -sp "Object Storage Secret Access Key: " storage_secret
 echo ""
-if [ ! -z "$aws_secret" ]; then
-    sed -i "s/AWS_SECRET_ACCESS_KEY=.*/AWS_SECRET_ACCESS_KEY=$aws_secret/" .env
+if [ ! -z "$storage_secret" ]; then
+    sed -i "s/OBJECT_STORAGE_SECRET_ACCESS_KEY=.*/OBJECT_STORAGE_SECRET_ACCESS_KEY=$storage_secret/" .env
 fi
 
-read -p "AWS Region (default: us-east-1): " aws_region
-if [ ! -z "$aws_region" ]; then
-    sed -i "s/AWS_REGION=.*/AWS_REGION=$aws_region/" .env
+read -p "Object Storage Region (default: us-east-1): " storage_region
+if [ ! -z "$storage_region" ]; then
+    sed -i "s/OBJECT_STORAGE_REGION=.*/OBJECT_STORAGE_REGION=$storage_region/" .env
 fi
 
 echo ""
@@ -110,7 +110,7 @@ echo ""
 echo "Choose email provider:"
 echo "  1) SendGrid"
 echo "  2) Mailchimp"
-echo "  3) AWS SES"
+echo "  3) SES-compatible SMTP"
 echo "  4) Skip (configure manually later)"
 echo ""
 
@@ -137,7 +137,7 @@ case $email_choice in
         ;;
     3)
         sed -i "s/EMAIL_PROVIDER=.*/EMAIL_PROVIDER=ses/" .env
-        echo "Using AWS credentials already configured"
+        echo "Using existing platform credentials already configured"
         ;;
     *)
         echo "Skipping email provider configuration"

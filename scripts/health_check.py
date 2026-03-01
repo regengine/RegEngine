@@ -35,7 +35,7 @@ SERVICES = {
     "Postgres": 5433,
     "Redis": 6379,
     "Neo4j": 7687,
-    "LocalStack": 4566,
+    "MinIO": 9000,
     "Redpanda (Kafka)": 9092,
 }
 

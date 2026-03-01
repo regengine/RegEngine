@@ -92,7 +92,7 @@ RegEngine - Investor Data Room/
 │   ├── IP_Assignment_Agreements.pdf (founders + employees)
 │   ├── Material_Contracts.pdf
 │   │   - Design partner agreements (redacted)
-│   │   - Vendor agreements (AWS, etc.)
+│   │   - Vendor agreements (platform providers, etc.)
 │   │   - Any customer pilots/LOIs
 │   ├── Insurance_Policies.pdf
 │   │   - D&O insurance
@@ -126,7 +126,7 @@ RegEngine - Investor Data Room/
 │   │   - Relationships with regulatory bodies
 │   │   - Content licensing agreements
 │   ├── Technology_Partnerships.pdf
-│   │   - AWS partnership (if applicable)
+│   │   - Cloud platform partnership (if applicable)
 │   │   - Neo4j relationship
 │   └── Channel_Partnerships.pdf (if any)
 │

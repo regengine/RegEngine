@@ -10,7 +10,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    aws_endpoint_url: Optional[str] = Field(default=None, alias="AWS_ENDPOINT_URL")
+    object_storage_endpoint_url: Optional[str] = Field(
+        default=None,
+        alias="OBJECT_STORAGE_ENDPOINT_URL",
+    )
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
     processed_bucket: str = Field(
         default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET"

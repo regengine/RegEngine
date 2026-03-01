@@ -121,7 +121,7 @@ const tech = new TechnologyCompliance('rge_your_api_key');
 
 // Create baseline snapshot
 const baseline = await tech.configSnapshots.create({
-  service: 'AWS_IAM',
+  service: 'IDENTITY_ACCESS',
   config_type: 'SECURITY_POLICY',
   config_data: {
     account_id: '123456789012',
@@ -140,7 +140,7 @@ console.log('✅ Baseline snapshot created:', baseline.snapshot_id);
 const drift = await tech.driftDetection.detect({
   baseline_snapshot_id: baseline.snapshot_id,
   current_config: {
-    service: 'AWS_IAM',
+    service: 'IDENTITY_ACCESS',
     config_data: {
       account_id: '123456789012',
       policies: [{
@@ -179,7 +179,7 @@ console.log('  Changes:', drift.total_changes);`}
                                         Quickstart (5 minutes)
                                     </h3>
                                     <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                        Snapshot AWS IAM configuration
+                                        Snapshot identity access configuration
                                     </p>
                                 </Link>
 

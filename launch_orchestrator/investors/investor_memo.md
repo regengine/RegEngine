@@ -180,7 +180,7 @@ RegEngine is a **regulatory data supply chain** with four core capabilities:
   - Sales: $10k (outbound, demos, onboarding)
   - Marketing: $5k (content, paid ads)
 - **Gross Margin**: 85%
-  - COGS: $9k/customer (AWS infrastructure, support)
+  - COGS: $9k/customer (cloud infrastructure, support)
 - **LTV/CAC Ratio**: 12x (assuming 3-year retention)
 - **Payback Period**: 3 months
 
@@ -358,7 +358,7 @@ Our defensibility comes from:
 - ✅ MVP shipped (4-service microarchitecture)
 - ✅ Authentication + rate limiting implemented
 - ✅ Demo dataset (3 jurisdictions, 25+ obligations)
-- ✅ Docker + AWS deployment foundation
+- ✅ Docker + Railway deployment foundation
 - ✅ Comprehensive documentation
 
 **Business**:
@@ -465,7 +465,7 @@ Our defensibility comes from:
 ### Engineering (40% = $600k)
 - **2 NLP Engineers** ($300k): ML model development, fine-tuning, accuracy improvement
 - **1 Backend Engineer** ($150k): Infrastructure, scalability, performance
-- **Cloud Infrastructure** ($100k): AWS, Neo4j hosting, monitoring tools
+- **Cloud Infrastructure** ($100k): Railway, Neo4j hosting, monitoring tools
 - **Data Partnerships** ($50k): Licensed regulatory content, API access fees
 
 ### Sales & Marketing (30% = $450k)

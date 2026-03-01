@@ -37,8 +37,9 @@ _chain_state: dict[str, str] = {}  # tenant_id -> last_chain_hash
 def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
     """Verify API key if configured."""
     settings = get_settings()
-    if settings.api_key is not None:
-        if not x_api_key or x_api_key != settings.api_key:
+    configured_api_key = getattr(settings, "api_key", None)
+    if configured_api_key is not None:
+        if not x_api_key or x_api_key != configured_api_key:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 

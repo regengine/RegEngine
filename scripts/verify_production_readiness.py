@@ -6,7 +6,7 @@ This script verifies that all critical production-ready fixes are in place:
 1. Texas scraper uses inheritance from GenericRSSScraper
 2. Correlation ID middleware is implemented
 3. Rate limiting enforces Redis in production
-4. Terraform backend is configured for remote state
+4. Railway deployment workflow is configured
 5. Production Docker Compose configuration exists
 
 Usage:
@@ -68,7 +68,7 @@ class ProductionReadinessVerifier:
             self.check_texas_scraper_inheritance,
             self.check_correlation_middleware,
             self.check_rate_limit_security,
-            self.check_terraform_backend,
+            self.check_railway_deployment_workflow,
             self.check_docker_compose_prod,
         ]
 
@@ -274,26 +274,16 @@ class ProductionReadinessVerifier:
                 f"Error reading rate limit file: {e}",
             )
 
-    def check_terraform_backend(self) -> VerificationResult:
-        """Verify Terraform backend is configured for remote state."""
-        name = "Terraform Remote State Backend"
-        # Try multiple locations for main.tf
-        possible_paths = [
-            self.repo_root / "infra/main.tf",
-            self.repo_root / "infra/terraform/main.tf"
-        ]
-        
-        file_path = None
-        for path in possible_paths:
-            if path.exists():
-                file_path = path
-                break
+    def check_railway_deployment_workflow(self) -> VerificationResult:
+        """Verify Railway deployment workflow is configured."""
+        name = "Railway Deployment Workflow"
+        file_path = self.repo_root / ".github/workflows/deploy.yml"
 
-        if not file_path:
+        if not file_path.exists():
             return VerificationResult(
                 name,
                 False,
-                "Terraform main.tf not found",
+                "Deployment workflow not found",
                 f"Expected: {file_path}",
             )
 
@@ -301,54 +291,34 @@ class ProductionReadinessVerifier:
             with open(file_path, "r") as f:
                 content = f.read()
 
-            # Check for backend configuration
-            backend_patterns = [
-                r'backend\s+"s3"',
-                r'bucket\s*=\s*".*terraform.*state',
-                r'dynamodb_table',
-                r'encrypt\s*=\s*true',
+            required_tokens = [
+                "railway",
+                "RAILWAY_TOKEN",
+                "RAILWAY_PROJECT_ID",
+                "RAILWAY_ENVIRONMENT_ID",
             ]
 
-            matches = []
-            for pattern in backend_patterns:
-                if re.search(pattern, content):
-                    matches.append(pattern)
-
-            # Check if backend is commented out
-            backend_match = re.search(r'backend\s+"s3"\s*{', content)
-            if backend_match:
-                # Check if there are comment markers before backend block
-                lines_before = content[:backend_match.start()].split('\n')[-10:]
-                commented = any(line.strip().startswith('#') for line in lines_before if 'backend' in line.lower())
-
-                if commented:
-                    return VerificationResult(
-                        name,
-                        False,
-                        "Terraform backend configuration is commented out",
-                        "Backend block found but appears to be disabled",
-                    )
-
-            if len(matches) >= 3:
-                return VerificationResult(
-                    name,
-                    True,
-                    "Terraform S3 backend is configured",
-                    f"Remote state enabled with DynamoDB locking and encryption",
-                )
-            else:
+            missing = [token for token in required_tokens if token not in content]
+            if missing:
                 return VerificationResult(
                     name,
                     False,
-                    "Incomplete Terraform backend configuration",
-                    f"Found {len(matches)}/4 expected components",
+                    "Deployment workflow is missing required Railway configuration",
+                    f"Missing: {', '.join(missing)}",
                 )
+
+            return VerificationResult(
+                name,
+                True,
+                "Railway deployment workflow is configured",
+                f"Location: {file_path.relative_to(self.repo_root)}",
+            )
 
         except Exception as e:
             return VerificationResult(
                 name,
                 False,
-                f"Error reading Terraform config: {e}",
+                f"Error reading deployment workflow: {e}",
             )
 
     def check_docker_compose_prod(self) -> VerificationResult:

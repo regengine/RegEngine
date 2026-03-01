@@ -99,7 +99,7 @@ class XMLThreatDetector:
         r"http://127\.",
         r"http://0\.",
         r"http://\[::1\]",
-        r"http://169\.254\.",  # AWS metadata
+        r"http://169\.254\.",  # Link-local metadata
         r"http://metadata\.",
         r"http://internal",
         r"dict://",

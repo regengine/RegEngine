@@ -47,7 +47,7 @@ export const technologyIndustryData = {
     challenges: [
         {
             title: 'Manual Screenshot Collection',
-            description: 'Auditors request screenshots of every config change: AWS IAM policies, GitHub branch protection, firewall rules. Teams spend 40+ hours manually screenshotting.',
+            description: 'Auditors request screenshots of every config change: identity access policies, GitHub branch protection, firewall rules. Teams spend 40+ hours manually screenshotting.',
             impact: 'high',
         },
         {
@@ -124,7 +124,7 @@ export const technologyApiEndpoints: ApiEndpoint[] = [
   -H "X-RegEngine-API-Key: rge_your_api_key" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "service": "AWS_IAM",
+    "service": "IDENTITY_ACCESS",
     "config_type": "SECURITY_POLICY",
     "config_data": {
       "account_id": "123456789012",
@@ -143,7 +143,7 @@ export const technologyApiEndpoints: ApiEndpoint[] = [
   }'`,
         responseExample: `{
   "snapshot_id": "cfg_0193f8a7b2c4d5e6",
-  "service": "AWS_IAM",
+  "service": "IDENTITY_ACCESS",
   "content_hash": "sha256:a3f5b8c9d2e1f4a7...",
   "sealed": true,
   "created_at": "2024-01-26T10:00:01Z",
@@ -158,7 +158,7 @@ export const technologyApiEndpoints: ApiEndpoint[] = [
         requiresAuth: true,
         responseExample: `{
   "snapshot_id": "cfg_0193f8a7b2c4d5e6",
-  "service": "AWS_IAM",
+  "service": "IDENTITY_ACCESS",
   "config_type": "SECURITY_POLICY",
   "content_hash": "sha256:a3f5b8c9d2e1f4a7...",
   "sealed": true,
@@ -175,7 +175,7 @@ export const technologyApiEndpoints: ApiEndpoint[] = [
         requestExample: `{
   "baseline_snapshot_id": "cfg_0193f8a7b2c4d5e6",
   "current_config": {
-    "service": "AWS_IAM",
+    "service": "IDENTITY_ACCESS",
     "config_data": { /* current config */ }
   }
 }`,
@@ -303,9 +303,9 @@ export const technologySdkExamples: SdkExample[] = [
 
 const tech = new TechnologyCompliance('rge_your_api_key');
 
-// Snapshot AWS IAM configuration
+// Snapshot identity access configuration
 const snapshot = await tech.configSnapshots.create({
-  service: 'AWS_IAM',
+  service: 'IDENTITY_ACCESS',
   config_type: 'SECURITY_POLICY',
   config_data: {
     account_id: '123456789012',
@@ -329,9 +329,9 @@ console.log('📊 Drift baseline:', snapshot.drift_baseline);`,
 
 tech = TechnologyCompliance(api_key='rge_your_api_key')
 
-# Snapshot AWS IAM configuration
+# Snapshot identity access configuration
 snapshot = tech.config_snapshots.create(
-    service='AWS_IAM',
+    service='IDENTITY_ACCESS',
     config_type='SECURITY_POLICY',
     config_data={
         'account_id': '123456789012',
@@ -360,7 +360,7 @@ func main() {
     client := technology.NewClient("rge_your_api_key")
     
     snapshot, err := client.ConfigSnapshots.Create(&technology.ConfigRequest{
-        Service: "AWS_IAM",
+        Service: "IDENTITY_ACCESS",
         ConfigType: "SECURITY_POLICY",
         ControlMapping: []string{"SOC2_CC6.1", "ISO27001_A.9.2.1"},
     })
