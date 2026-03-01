@@ -620,7 +620,11 @@ def health() -> dict[str, str]:
             }
         )
         admin_client.list_topics(timeout=5)
-        return {"status": "healthy", "kafka": "available"}
+        return {
+            "status": "healthy",
+            "service": "ingestion-service",
+            "kafka": "available",
+        }
     except Exception as exc:
         logger.error("ingestion_health_kafka_unavailable", error=str(exc))
         raise HTTPException(
@@ -1542,4 +1546,3 @@ async def verify_document(document_id: str, api_key: APIKey = Depends(require_ap
         }
     finally:
         db_manager.close()
-

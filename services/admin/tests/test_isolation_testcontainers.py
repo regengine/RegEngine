@@ -8,7 +8,6 @@ from testcontainers.postgres import PostgresContainer
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 import uuid
-import os
 from pathlib import Path
 
 @pytest.fixture(scope="session")
@@ -47,6 +46,15 @@ def apply_migrations(db_engine):
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS auth;"))
         conn.execute(text("CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS 'SELECT ''00000000-0000-0000-0000-000000000000''::UUID' LANGUAGE SQL;"))
         conn.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                    CREATE ROLE authenticated;
+                END IF;
+            END
+            $$;
+        """))
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
                 id UUID PRIMARY KEY,
                 email TEXT,
@@ -82,23 +90,80 @@ def test_rls_isolation_with_testcontainers(db_engine, apply_migrations):
     Session = sessionmaker(bind=db_engine)
     tenant_a = uuid.uuid4()
     tenant_b = uuid.uuid4()
+    slug_a = f"tenant-a-{tenant_a.hex[:8]}"
+    slug_b = f"tenant-b-{tenant_b.hex[:8]}"
     
     with Session() as session:
         # 1. Insert data as a superuser (bypass RLS)
         # We need a table that has RLS enabled. pcos_projects is a good candidate.
         project_id_a = uuid.uuid4()
         project_id_b = uuid.uuid4()
-        
+        company_id_a = uuid.uuid4()
+        company_id_b = uuid.uuid4()
+
+        session.execute(
+            text(
+                """
+                INSERT INTO tenants (id, name, slug, status)
+                VALUES (:id_a, 'Tenant A', :slug_a, 'active'),
+                       (:id_b, 'Tenant B', :slug_b, 'active')
+                ON CONFLICT (id) DO NOTHING
+                """
+            ),
+            {
+                "id_a": tenant_a,
+                "slug_a": slug_a,
+                "id_b": tenant_b,
+                "slug_b": slug_b,
+            },
+        )
+
+        session.execute(
+            text(
+                """
+                INSERT INTO pcos_companies (id, tenant_id, legal_name, entity_type)
+                VALUES (:id_a, :tid_a, 'Company A', 'llc_single_member'),
+                       (:id_b, :tid_b, 'Company B', 'llc_single_member')
+                """
+            ),
+            {
+                "id_a": company_id_a,
+                "tid_a": tenant_a,
+                "id_b": company_id_b,
+                "tid_b": tenant_b,
+            },
+        )
+
         # Disable RLS for insertion or use a superuser session (Testcontainers is superuser)
-        session.execute(text(f"""
-            INSERT INTO pcos_projects (id, tenant_id, name, status) 
-            VALUES (:id, :tid, :name, 'active')
-        """), {"id": project_id_a, "tid": tenant_a, "name": "Project A"})
-        
-        session.execute(text(f"""
-            INSERT INTO pcos_projects (id, tenant_id, name, status) 
-            VALUES (:id, :tid, :name, 'active')
-        """), {"id": project_id_b, "tid": tenant_b, "name": "Project B"})
+        session.execute(
+            text(
+                """
+                INSERT INTO pcos_projects (id, tenant_id, company_id, name, project_type, is_commercial)
+                VALUES (:id, :tid, :company_id, :name, 'commercial', TRUE)
+                """
+            ),
+            {
+                "id": project_id_a,
+                "tid": tenant_a,
+                "company_id": company_id_a,
+                "name": "Project A",
+            },
+        )
+
+        session.execute(
+            text(
+                """
+                INSERT INTO pcos_projects (id, tenant_id, company_id, name, project_type, is_commercial)
+                VALUES (:id, :tid, :company_id, :name, 'commercial', TRUE)
+                """
+            ),
+            {
+                "id": project_id_b,
+                "tid": tenant_b,
+                "company_id": company_id_b,
+                "name": "Project B",
+            },
+        )
         
         session.commit()
         
