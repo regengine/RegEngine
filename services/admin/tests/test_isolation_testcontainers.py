@@ -46,6 +46,18 @@ def apply_migrations(db_engine):
         # Create 'auth' schema and 'uid()' function to mock Supabase environment
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS auth;"))
         conn.execute(text("CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS 'SELECT ''00000000-0000-0000-0000-000000000000''::UUID' LANGUAGE SQL;"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id UUID PRIMARY KEY,
+                email TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+        conn.execute(text("""
+            INSERT INTO users (id, email)
+            VALUES ('00000000-0000-0000-0000-000000000000', 'ci-test-user@regengine.local')
+            ON CONFLICT (id) DO NOTHING;
+        """))
         conn.commit()
         
         for migration in core_migrations:
