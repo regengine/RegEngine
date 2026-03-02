@@ -497,9 +497,13 @@ function FTLScopingView({ facilityId, categories, onRequiredCTEsChange }) {
   );
 }
 
-function CTECaptureView({ requiredCTEs = [] }) {
+function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted }) {
   const availableCTEs = (requiredCTEs.length > 0 ? requiredCTEs : Object.keys(CTE_TYPES)).filter((key) => Boolean(CTE_TYPES[key]));
   const [activeCTE, setActiveCTE] = useState(availableCTEs[0] || "shipping");
+  const [formValues, setFormValues] = useState({});
+  const [submitResult, setSubmitResult] = useState(null);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!availableCTEs.includes(activeCTE)) {
@@ -507,7 +511,57 @@ function CTECaptureView({ requiredCTEs = [] }) {
     }
   }, [availableCTEs, activeCTE]);
 
+  useEffect(() => {
+    setFormValues({});
+    setSubmitResult(null);
+    setError("");
+  }, [activeCTE]);
+
   const cte = CTE_TYPES[activeCTE];
+
+  const setField = (name, value) => {
+    setFormValues((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const inferTLC = () => {
+    return (
+      formValues.traceability_lot_code
+      || formValues.output_tlc
+      || formValues.input_tlc
+      || ""
+    );
+  };
+
+  const submitCTE = async () => {
+    if (!facilityId) {
+      setError("Create a facility first, then submit CTE/KDE events.");
+      return;
+    }
+
+    const tlcCode = inferTLC();
+    if (!tlcCode) {
+      setError("Enter a Traceability Lot Code before submitting.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await apiClient.submitSupplierCTEEvent(facilityId, {
+        cte_type: activeCTE,
+        tlc_code: tlcCode,
+        kde_data: formValues,
+        obligation_ids: [],
+      });
+      setSubmitResult(response);
+      onCTESubmitted?.();
+    } catch (_err) {
+      setError("Could not submit event. Check required fields and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div>
       <SectionTitle sub="Dynamic forms pre-populated with required KDE fields based on CTE type">Step 5: CTE/KDE Data Entry</SectionTitle>
@@ -536,16 +590,40 @@ function CTECaptureView({ requiredCTEs = [] }) {
               <div style={{ fontSize: 11, fontWeight: 600, color: "#333", marginBottom: 2 }}>
                 {f.label} {f.required && <span style={{ color: ERROR }}>*</span>}
               </div>
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 4, padding: "6px 8px", fontSize: 12, color: GRAY, backgroundColor: "#fff" }}>
-                {f.type === "select" ? f.options?.[0] || "Select..." : f.type === "date" ? "2026-03-02" : f.type === "number" ? "0" : ""}
-              </div>
+              {f.type === "select" ? (
+                <select
+                  value={formValues[f.name] || ""}
+                  onChange={(event) => setField(f.name, event.target.value)}
+                  style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "6px 8px", fontSize: 12, color: "#111", backgroundColor: "#fff" }}
+                >
+                  <option value="">Select...</option>
+                  {(f.options || []).map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  value={formValues[f.name] || ""}
+                  onChange={(event) => setField(f.name, event.target.value)}
+                  style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "6px 8px", fontSize: 12, color: "#111", backgroundColor: "#fff" }}
+                />
+              )}
             </div>
           ))}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button style={{ padding: "8px 20px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Submit & Hash (SHA-256)</button>
+          <button onClick={submitCTE} disabled={submitting} style={{ padding: "8px 20px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
+            {submitting ? "Submitting..." : "Submit & Hash (SHA-256)"}
+          </button>
           <button style={{ padding: "8px 20px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Save Draft</button>
         </div>
+        {submitResult && (
+          <div style={{ marginTop: 10, fontSize: 11, color: ACCENT_DARK, backgroundColor: ACCENT_LIGHT, borderRadius: 6, padding: "8px 10px" }}>
+            Event recorded. SHA-256: <code>{submitResult.payload_sha256.slice(0, 16)}...</code> | Merkle seq: <strong>{submitResult.merkle_sequence}</strong>
+          </div>
+        )}
+        {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
       </Card>
       <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
         <div style={{ flex: 1, padding: "8px 12px", borderRadius: 6, backgroundColor: ACCENT_LIGHT, fontSize: 11, color: ACCENT_DARK }}>
@@ -559,35 +637,103 @@ function CTECaptureView({ requiredCTEs = [] }) {
   );
 }
 
-function TLCMgmtView() {
-  const lots = [
-    { code: "TLC-2026-SAL-0001", product: "Baby Spinach, Organic", facility: "Salinas Packhouse", created: "2026-02-28", events: 4, status: "Active" },
-    { code: "TLC-2026-SAL-0002", product: "Spring Mix, Conv.", facility: "Salinas Packhouse", created: "2026-03-01", events: 2, status: "Active" },
-    { code: "TLC-2026-WAT-0001", product: "Romaine Hearts", facility: "Watsonville Farm", created: "2026-02-15", events: 7, status: "Shipped" },
-  ];
+function TLCMgmtView({ facilityId, refreshKey }) {
+  const [lots, setLots] = useState([]);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newLot, setNewLot] = useState({ tlc_code: "", product_description: "" });
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLots = async () => {
+      if (!facilityId) {
+        setLots([]);
+        return;
+      }
+      try {
+        const data = await apiClient.listSupplierTLCs(facilityId);
+        if (!cancelled) {
+          setLots(data || []);
+        }
+      } catch (_err) {
+        if (!cancelled) {
+          setError("Could not load TLCs.");
+        }
+      }
+    };
+    loadLots();
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId, refreshKey]);
+
+  const createLot = async () => {
+    if (!facilityId || !newLot.tlc_code.trim()) {
+      setError("Enter a TLC code and complete facility setup first.");
+      return;
+    }
+    setCreating(true);
+    setError("");
+    try {
+      await apiClient.createSupplierTLC({
+        facility_id: facilityId,
+        tlc_code: newLot.tlc_code.trim(),
+        product_description: newLot.product_description.trim() || undefined,
+        status: "active",
+      });
+      const data = await apiClient.listSupplierTLCs(facilityId);
+      setLots(data || []);
+      setNewLot({ tlc_code: "", product_description: "" });
+    } catch (_err) {
+      setError("Could not create TLC. It may already exist.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div>
       <SectionTitle sub="TLC is the backbone of FSMA 204 - every CTE record links to a TLC">Step 6: Traceability Lot Code Management</SectionTitle>
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Active Traceability Lot Codes</div>
-          <button style={{ padding: "6px 14px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>+ Create New TLC</button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              value={newLot.tlc_code}
+              onChange={(event) => setNewLot((prev) => ({ ...prev, tlc_code: event.target.value }))}
+              placeholder="TLC code"
+              style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }}
+            />
+            <input
+              value={newLot.product_description}
+              onChange={(event) => setNewLot((prev) => ({ ...prev, product_description: event.target.value }))}
+              placeholder="Product"
+              style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }}
+            />
+            <button onClick={createLot} disabled={creating} style={{ padding: "6px 14px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: creating ? 0.7 : 1 }}>
+              {creating ? "Creating..." : "+ Create New TLC"}
+            </button>
+          </div>
         </div>
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" }}>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 0.7fr 0.8fr", padding: "8px 12px", backgroundColor: GRAY_LIGHT, fontSize: 11, fontWeight: 600, color: GRAY }}>
             <div>TLC</div><div>Product</div><div>Facility</div><div>Created</div><div>Events</div><div>Status</div>
           </div>
           {lots.map((lot) => (
-            <div key={lot.code} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 0.7fr 0.8fr", padding: "10px 12px", fontSize: 12, borderTop: `1px solid ${BORDER}`, alignItems: "center" }}>
-              <div style={{ fontFamily: "monospace", fontWeight: 600, color: ACCENT }}>{lot.code}</div>
-              <div>{lot.product}</div>
-              <div style={{ color: GRAY }}>{lot.facility}</div>
-              <div style={{ color: GRAY }}>{lot.created}</div>
-              <div style={{ textAlign: "center" }}>{lot.events}</div>
-              <div><Badge color={lot.status === "Active" ? ACCENT : BLUE}>{lot.status}</Badge></div>
+            <div key={lot.id} style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 0.7fr 0.8fr", padding: "10px 12px", fontSize: 12, borderTop: `1px solid ${BORDER}`, alignItems: "center" }}>
+              <div style={{ fontFamily: "monospace", fontWeight: 600, color: ACCENT }}>{lot.tlc_code}</div>
+              <div>{lot.product_description || "-"}</div>
+              <div style={{ color: GRAY }}>{lot.facility_id.slice(0, 8)}...</div>
+              <div style={{ color: GRAY }}>{(lot.created_at || "").slice(0, 10)}</div>
+              <div style={{ textAlign: "center" }}>{lot.event_count}</div>
+              <div><Badge color={lot.status === "active" ? ACCENT : BLUE}>{lot.status}</Badge></div>
             </div>
           ))}
+          {lots.length === 0 && (
+            <div style={{ padding: "10px 12px", fontSize: 12, color: GRAY }}>No TLCs yet. Create one or submit a CTE with a new TLC code.</div>
+          )}
         </div>
+        {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
       </Card>
       <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: ACCENT_LIGHT, fontSize: 12, color: ACCENT_DARK }}>
         <strong>Graph model:</strong> <code>(TLC)-[:RECORDED_AT]-{">"} (CTE)-[:HAS_KDE]-{">"} (KDE)</code> and <code>(TLC)-[:PRODUCED_AT]-{">"} (Facility)</code>. Forward/backward trace queries traverse these edges.
@@ -786,6 +932,7 @@ export default function SupplierOnboardingFlow() {
   const [facilityId, setFacilityId] = useState(null);
   const [requiredCTEs, setRequiredCTEs] = useState([]);
   const [liveCategories, setLiveCategories] = useState(FTL_CATEGORIES);
+  const [tlcRefreshKey, setTlcRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -826,8 +973,8 @@ export default function SupplierOnboardingFlow() {
     [VIEWS.SUPPLIER_SIGNUP]: <SupplierSignupView />,
     [VIEWS.FACILITY_SETUP]: <FacilitySetupView setView={setView} onFacilityCreated={setFacilityId} />,
     [VIEWS.FTL_SCOPING]: <FTLScopingView facilityId={facilityId} categories={liveCategories} onRequiredCTEsChange={setRequiredCTEs} />,
-    [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} />,
-    [VIEWS.TLC_MGMT]: <TLCMgmtView />,
+    [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} facilityId={facilityId} onCTESubmitted={() => setTlcRefreshKey((prev) => prev + 1)} />,
+    [VIEWS.TLC_MGMT]: <TLCMgmtView facilityId={facilityId} refreshKey={tlcRefreshKey} />,
     [VIEWS.DASHBOARD]: <DashboardView />,
     [VIEWS.FDA_EXPORT]: <FDAExportView />,
     [VIEWS.DATA_MODEL]: <DataModelView />,

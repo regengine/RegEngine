@@ -172,3 +172,34 @@ def test_get_required_ctes_for_facility_flattens_distinct_values():
     assert result["source"] == "neo4j"
     assert len(result["categories"]) == 2
     assert result["required_ctes"] == ["harvesting", "shipping", "receiving"]
+
+
+def test_record_cte_event_writes_expected_payload():
+    driver = _FakeDriver()
+    sync = SupplierGraphSync(enabled=True, driver=driver)
+
+    sync.record_cte_event(
+        tenant_id="tenant-1",
+        facility_id="facility-1",
+        facility_name="Salinas Packhouse",
+        cte_event_id="event-1",
+        cte_type="shipping",
+        event_time="2026-03-02T12:00:00+00:00",
+        tlc_code="TLC-2026-SAL-0001",
+        product_description="Baby Spinach",
+        lot_status="active",
+        kde_data={"quantity": 120, "unit_of_measure": "cases"},
+        payload_sha256="payload-hash",
+        merkle_prev_hash="prev-hash",
+        merkle_hash="merkle-hash",
+        sequence_number=2,
+        obligation_ids=["21cfr_subpart_s_123", "21cfr_subpart_s_456"],
+    )
+
+    assert len(driver.calls) == 1
+    query, params = driver.calls[0]
+    assert "CTEEvent" in query
+    assert params["operation"] == "cte_event_recorded"
+    assert params["cte_event_id"] == "event-1"
+    assert params["merkle_hash"] == "merkle-hash"
+    assert params["obligation_ids"] == ["21cfr_subpart_s_123", "21cfr_subpart_s_456"]
