@@ -178,6 +178,9 @@ app.include_router(invite_router, prefix="/v1")
 from app.user_routes import router as user_router
 app.include_router(user_router, prefix="/v1")
 
+from app.supplier_onboarding_routes import router as supplier_onboarding_router
+app.include_router(supplier_onboarding_router, prefix="/v1")
+
 # Production Compliance OS (CA/LA) — fully decomposed into app/pcos/ package
 from app.pcos import router as pcos_router
 app.include_router(pcos_router)

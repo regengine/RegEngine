@@ -19,6 +19,11 @@ import type {
 
   InviteCreate,
   AcceptInviteRequest,
+  FTLCategory,
+  SupplierFacilityCreateRequest,
+  SupplierFacility,
+  FacilityFTLScopingRequest,
+  FacilityFTLScopingResponse,
   AnalysisSummary,
   TraceabilityEventRequest,
   TraceabilityEventResponse,
@@ -467,6 +472,34 @@ class APIClient {
 
   async acceptInvite(data: AcceptInviteRequest): Promise<void> {
     await this.adminClient.post('/v1/auth/accept-invite', data);
+  }
+
+  async getFTLCategories(): Promise<FTLCategory[]> {
+    const { data } = await this.adminClient.get<{ categories: FTLCategory[] }>('/v1/supplier/ftl-categories');
+    return data.categories || [];
+  }
+
+  async createSupplierFacility(request: SupplierFacilityCreateRequest): Promise<SupplierFacility> {
+    const { data } = await this.adminClient.post<SupplierFacility>('/v1/supplier/facilities', request);
+    return data;
+  }
+
+  async setFacilityFTLCategories(
+    facilityId: string,
+    request: FacilityFTLScopingRequest,
+  ): Promise<FacilityFTLScopingResponse> {
+    const { data } = await this.adminClient.put<FacilityFTLScopingResponse>(
+      `/v1/supplier/facilities/${facilityId}/ftl-categories`,
+      request,
+    );
+    return data;
+  }
+
+  async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
+    const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
+      `/v1/supplier/facilities/${facilityId}/required-ctes`,
+    );
+    return data;
   }
 }
 

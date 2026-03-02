@@ -15,6 +15,15 @@ class _FakeSession:
 
     def run(self, query, params):
         self._sink.append((query, params))
+        return _FakeResult()
+
+
+class _FakeResult:
+    def __init__(self, record=None):
+        self._record = record
+
+    def single(self):
+        return self._record
 
 
 class _FakeDriver:
@@ -23,6 +32,28 @@ class _FakeDriver:
 
     def session(self):
         return _FakeSession(self.calls)
+
+
+class _FakeQuerySession:
+    def __init__(self, record):
+        self._record = record
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def run(self, query, params):
+        return _FakeResult(self._record)
+
+
+class _FakeQueryDriver:
+    def __init__(self, record):
+        self._record = record
+
+    def session(self):
+        return _FakeQuerySession(self._record)
 
 
 def test_from_env_disabled_when_required_neo4j_env_missing(monkeypatch):
@@ -95,3 +126,49 @@ def test_noop_when_sync_disabled():
         role_id="role-1",
         accepted_at=datetime.now(timezone.utc),
     )
+
+
+def test_record_facility_ftl_scoping_writes_expected_payload():
+    driver = _FakeDriver()
+    sync = SupplierGraphSync(enabled=True, driver=driver)
+
+    sync.record_facility_ftl_scoping(
+        tenant_id="tenant-1",
+        facility_id="facility-1",
+        facility_name="Salinas Packhouse",
+        supplier_user_id="user-1",
+        supplier_email="supplier@example.com",
+        street="1200 Abbott St",
+        city="Salinas",
+        state="CA",
+        postal_code="93901",
+        fda_registration_number="12345678901",
+        roles=["Grower", "Packer"],
+        categories=[
+            {"id": "2", "name": "Vegetables (leafy greens)", "ctes": ["harvesting", "shipping"]},
+        ],
+    )
+
+    assert len(driver.calls) == 1
+    query, params = driver.calls[0]
+    assert "SupplierFacility" in query
+    assert params["operation"] == "facility_ftl_scoping"
+    assert params["facility_id"] == "facility-1"
+    assert params["categories"][0]["id"] == "2"
+
+
+def test_get_required_ctes_for_facility_flattens_distinct_values():
+    record = {
+        "categories": [
+            {"id": "2", "name": "Vegetables", "ctes": ["harvesting", "shipping"]},
+            {"id": "5", "name": "Fresh herbs", "ctes": ["shipping", "receiving"]},
+        ]
+    }
+    sync = SupplierGraphSync(enabled=True, driver=_FakeQueryDriver(record))
+
+    result = sync.get_required_ctes_for_facility("facility-1")
+
+    assert result is not None
+    assert result["source"] == "neo4j"
+    assert len(result["categories"]) == 2
+    assert result["required_ctes"] == ["harvesting", "shipping", "receiving"]
