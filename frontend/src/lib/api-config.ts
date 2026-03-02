@@ -37,11 +37,14 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
         return `${gatewayUrl}/${service}`;
     }
 
+    // Prefer same-origin proxy for admin calls when no explicit public admin URL is configured.
+    if (service === 'admin') {
+        return process.env.NEXT_PUBLIC_ADMIN_URL || '/api/admin';
+    }
+
     switch (service) {
         case 'ingestion':
             return process.env.NEXT_PUBLIC_INGESTION_URL || 'http://localhost:8002';
-        case 'admin':
-            return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
         case 'graph':
             return process.env.NEXT_PUBLIC_GRAPH_URL || 'http://localhost:8200';
         case 'opportunity':
@@ -52,4 +55,3 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
             return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
     }
 }
-
