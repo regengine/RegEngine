@@ -118,19 +118,6 @@ const COMMAND_CENTER_FEATURES = [
   },
 ];
 
-const FUTURE_MODULES = [
-  "Energy (NERC CIP, FERC, EPA)",
-  "Nuclear (NRC 10 CFR, IAEA)",
-  "Finance (SOX, Dodd-Frank, Basel III)",
-  "Healthcare (HIPAA, FDA Devices)",
-  "Manufacturing (OSHA, EPA RCRA, ISO)",
-  "Aerospace (FAA, ITAR, EASA)",
-  "Construction (OSHA, IBC/IRC)",
-  "Automotive (NHTSA, EPA Tier 3)",
-  "Gaming (State Gaming, FinCEN)",
-  "Entertainment (FCC, COPPA, DMCA)",
-];
-
 export default function RegEngineLanding() {
   return (
     <div className="re-page overflow-x-hidden">
@@ -156,15 +143,15 @@ export default function RegEngineLanding() {
         </p>
 
         <div className="flex gap-3 flex-wrap">
-          <Link href="/tools/ftl-checker">
+          <Link href="/retailer-readiness">
             <Button size="lg" className="h-16 px-10 rounded-3xl bg-[var(--re-brand)] text-white text-lg font-black italic uppercase shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] group">
-              Check Your Coverage
+              Retailer Readiness Assessment
               <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>
-          <Link href="/demo/recall-simulation">
+          <Link href="/tools/ftl-checker">
             <Button size="lg" variant="outline" className="h-16 px-10 rounded-3xl text-lg font-black italic uppercase border-2 group">
-              See a Recall Simulation
+              Check Your Coverage
               <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>
@@ -177,7 +164,7 @@ export default function RegEngineLanding() {
             { value: "23", label: "FDA categories verified" },
             { value: "EPCIS 2.0", label: "Export ready" },
             { value: "24hr", label: "Recall response window" },
-            { value: "Verifiable", label: "Every record independently verifiable" },
+            { value: "Verifiable", label: "Independent verification tooling included" },
           ].map((stat, idx) => (
             <div
               key={stat.label}
@@ -324,9 +311,9 @@ export default function RegEngineLanding() {
             <div className="p-6 rounded-xl border border-[var(--re-brand-muted)] bg-[rgba(16,185,129,0.08)]">
               <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">With RegEngine</h3>
               <ul className="space-y-2 text-sm text-[var(--re-text-primary)]">
-                <li>Response time: 42 minutes</li>
+                <li>Response time: 42 minutes (synthetic scenario)</li>
                 <li>Data sources: 1 API call</li>
-                <li>Data completeness: 98%</li>
+                <li>Data completeness: 98% (synthetic scenario)</li>
                 <li>Chain of custody: cryptographically verifiable</li>
               </ul>
             </div>
@@ -335,7 +322,7 @@ export default function RegEngineLanding() {
           <div className="p-5 rounded-xl bg-black text-white dark:bg-white dark:text-black flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
             <div>
               <p className="text-4xl font-bold">96%</p>
-              <p className="text-sm opacity-80">Reduction in recall response time</p>
+              <p className="text-sm opacity-80">Reduction in recall response time (synthetic scenario)</p>
             </div>
             <Link href="/demo/recall-simulation">
               <Button className="h-11 px-6 rounded-xl bg-[var(--re-brand)] text-white hover:opacity-95">
@@ -359,9 +346,9 @@ export default function RegEngineLanding() {
             This is infrastructure for operators, not slideware for audits.
           </p>
           <p className="text-sm text-[var(--re-text-secondary)] mt-4">
-            Every Retailer Readiness Assessment gets founder review.
+            Start with a free Retailer Readiness Assessment to identify your highest-risk traceability gaps.
             <Link href="/retailer-readiness" className="text-[var(--re-brand)] hover:underline ml-1">
-              Get your free assessment.
+              Run the assessment.
             </Link>
           </p>
         </div>
@@ -424,30 +411,39 @@ export default function RegEngineLanding() {
         </div>
       </section>
 
-      <section id="future-modules" className="relative z-[2] border-y border-white/[0.04] bg-white/[0.01]">
+      <section className="relative z-[2] border-y border-white/[0.04] bg-white/[0.01]">
         <div className="max-w-[1120px] mx-auto py-[74px] px-6">
-          <h3 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-3">Built for Food. Designed to Scale.</h3>
+          <h3 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-3">Built for FSMA 204.</h3>
           <p className="text-base text-[var(--re-text-muted)] max-w-[760px] leading-relaxed mb-5">
-            RegEngine is vertical-agnostic by architecture. Food traceability is the beachhead.
+            RegEngine is intentionally focused on food traceability and recall readiness until FSMA outcomes are proven in production.
           </p>
 
-          <details className="group rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-            <summary className="cursor-pointer list-none text-sm font-semibold text-[var(--re-text-primary)] flex items-center justify-between">
-              View Future Regulatory Modules
-              <ArrowRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-            </summary>
-            <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-[var(--re-text-muted)]">
-              {FUTURE_MODULES.map((moduleName) => (
-                <li key={moduleName}>{moduleName}</li>
-              ))}
-            </ul>
-            <p className="mt-5 text-sm text-[var(--re-text-secondary)]">
-              Interested in a specific vertical?{" "}
-              <a href="mailto:chris@regengine.com" className="text-[var(--re-brand)] hover:underline">
-                Let us know.
-              </a>
-            </p>
-          </details>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <article className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
+              <h4 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Design Partner Cohort</h4>
+              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                Private alpha access is open for teams solving FSMA 204 traceability workflows right now.
+              </p>
+            </article>
+            <article className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
+              <h4 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Transparent Validation</h4>
+              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                Synthetic recall simulations and open verification scripts make the proof model auditable.
+              </p>
+            </article>
+            <article className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
+              <h4 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Implementation Support</h4>
+              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                Use the Retailer Readiness Assessment and API docs to map gaps before implementation.
+              </p>
+            </article>
+          </div>
+
+          <div className="mt-6">
+            <Link href="/alpha" className="text-sm font-semibold text-[var(--re-brand)] hover:underline">
+              Apply for design partner access
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -464,14 +460,14 @@ export default function RegEngineLanding() {
           </div>
 
           <div className="flex flex-wrap gap-3 mt-7">
-            <Link href="/tools/ftl-checker">
+            <Link href="/retailer-readiness">
               <Button size="lg" className="h-14 px-8 rounded-2xl bg-[var(--re-brand)] text-white font-bold uppercase">
-                Check Your Coverage
+                Retailer Readiness Assessment
               </Button>
             </Link>
-            <Link href="/retailer-readiness">
+            <Link href="/tools/ftl-checker">
               <Button size="lg" variant="outline" className="h-14 px-8 rounded-2xl font-bold uppercase border-2">
-                Retailer Readiness Assessment
+                Check Your Coverage
               </Button>
             </Link>
           </div>
