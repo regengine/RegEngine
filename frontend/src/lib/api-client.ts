@@ -28,6 +28,7 @@ import type {
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
   SupplierComplianceScore,
+  SupplierFDAExportPreviewResponse,
   SupplierTLC,
   SupplierTLCUpsertRequest,
   AnalysisSummary,
@@ -543,6 +544,46 @@ class APIClient {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
     return data;
+  }
+
+  async getSupplierFDAExportPreview(
+    facilityId?: string,
+    limit: number = 25,
+  ): Promise<SupplierFDAExportPreviewResponse> {
+    const { data } = await this.adminClient.get<SupplierFDAExportPreviewResponse>('/v1/supplier/export/fda-records/preview', {
+      params: {
+        ...(facilityId ? { facility_id: facilityId } : {}),
+        limit,
+      },
+    });
+    return data;
+  }
+
+  async downloadSupplierFDARecords(
+    format: 'csv' | 'xlsx',
+    facilityId?: string,
+  ): Promise<{ blob: Blob; filename: string; recordCount: number }> {
+    const response = await this.adminClient.get('/v1/supplier/export/fda-records', {
+      params: {
+        format,
+        ...(facilityId ? { facility_id: facilityId } : {}),
+      },
+      responseType: 'blob',
+    });
+
+    const disposition = response.headers['content-disposition'] as string | undefined;
+    const filenameMatch = disposition?.match(/filename=([^;]+)/i);
+    const parsedFilename = filenameMatch?.[1]?.trim()?.replace(/^"|"$/g, '');
+    const fallbackFilename = `fda_traceability_records.${format}`;
+
+    const recordCountHeader = response.headers['x-fda-record-count'];
+    const parsedRecordCount = Number(recordCountHeader);
+
+    return {
+      blob: response.data as Blob,
+      filename: parsedFilename || fallbackFilename,
+      recordCount: Number.isFinite(parsedRecordCount) ? parsedRecordCount : 0,
+    };
   }
 }
 
