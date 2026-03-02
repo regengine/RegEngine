@@ -43,6 +43,7 @@ jobs:
       matrix:
         service:
           - admin
+          - compliance
           - graph
           - ingestion
           - nlp
@@ -133,6 +134,7 @@ jobs:
       - name: Run tests with coverage
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          COMPLIANCE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_admin
           ENTERTAINMENT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_admin
           ENERGY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/energy
@@ -173,7 +175,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [admin, graph, ingestion, nlp, scheduler]
+        service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v4
 
@@ -197,9 +199,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Note: compliance service removed — no services/compliance directory exists.
         # context is repo root so Dockerfiles can COPY shared/, kernel/, plugins/, etc.
-        service: [admin, graph, ingestion, nlp, scheduler]
+        service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
       - uses: actions/checkout@v4
 

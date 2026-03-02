@@ -1,35 +1,51 @@
-from fastapi import FastAPI
-from services.shared.api_key_store import get_api_key_store
-from services.shared.logger import get_logger
+import sys
+from pathlib import Path
 
-logger = get_logger("compliance-api")
+from fastapi import FastAPI
+
+_SERVICE_DIR = Path(__file__).resolve().parent
+if str(_SERVICE_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICE_DIR))
+
+from app.routes import router as fair_lending_router
+
 
 app = FastAPI(
-    title="Compliance Service",
-    version="1.0.0",
-    description="Compliance and regulatory services",
+    title="RegEngine Fair Lending Compliance OS",
+    version="0.1.0",
+    description=(
+        "API-first Fair Lending Compliance OS focused on ECOA/FHA obligations, "
+        "bias monitoring, model governance, immutable audit artifacts, and executive risk scoring."
+    ),
 )
 
+
 @app.get("/health")
-async def health_check():
-    """Health check endpoint."""
+async def health_check() -> dict:
     return {"status": "healthy", "service": "compliance-api"}
 
+
 @app.get("/")
-async def root():
-    """Root endpoint."""
-    return {"service": "compliance-api", "version": "1.0.0"}
+async def root() -> dict:
+    return {
+        "service": "compliance-api",
+        "product": "RegEngine Fair Lending Compliance OS",
+        "version": app.version,
+        "docs": "/docs",
+        "key_endpoints": {
+            "regulatory_mapping": "/v1/regulatory/map",
+            "fair_lending_analysis": "/v1/fair-lending/analyze",
+            "audit_export": "/v1/audit/export",
+            "risk_summary": "/v1/risk/summary",
+            "model_registry": "/v1/models",
+        },
+    }
 
-@app.on_event("startup")
-async def startup_event():
-    """Startup event."""
-    logger.info("Compliance service starting up")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Shutdown event."""
-    logger.info("Compliance service shutting down")
+app.include_router(fair_lending_router)
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8500)
