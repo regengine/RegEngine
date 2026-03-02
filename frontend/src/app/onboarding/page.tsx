@@ -120,7 +120,7 @@ function ActivationStat({ icon: Icon, label, value, color }: { icon: React.Eleme
 /* ───────────────────────────────────────────────────────────── */
 export default function OnboardingPage() {
   const router = useRouter();
-  const { apiKey, adminKey, tenantId, setApiKey, setAdminKey, setTenantId, completeOnboarding, isOnboarded } = useAuth();
+  const { apiKey, adminKey, tenantId, setApiKey, setAdminKey, setTenantId, completeOnboarding, isOnboarded, isAuthenticated } = useAuth();
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
   const [adminKeyInput, setAdminKeyInput] = useState('');
@@ -375,6 +375,28 @@ export default function OnboardingPage() {
                               </Button>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {isAuthenticated && (
+                      <div className="p-4 rounded-xl border border-[var(--re-border-default)] bg-re-surface-elevated">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div>
+                            <p className="font-medium text-re-text-primary">Internal: Supplier Onboarding Wireframe</p>
+                            <p className="text-sm text-re-text-muted">
+                              Review the 8-step FSMA supplier onboarding flow in a clickable wireframe.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-[var(--re-border-default)]"
+                            onClick={() => router.push('/onboarding/supplier-flow')}
+                          >
+                            Open Flow
+                            <ExternalLink className="ml-2 w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
                     )}
