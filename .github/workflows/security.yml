@@ -256,10 +256,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate audit chain secrets
+        id: validate_audit
+        env:
+          AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
+          AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
+        run: |
+          if [ -z "$AUDIT_API_BASE" ] || [ -z "$AUDIT_TOKEN" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping audit chain check (missing AUDIT_API_BASE or AUDIT_VERIFY_TOKEN)."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run audit chain check
+        if: steps.validate_audit.outputs.ready == 'true'
         env:
           AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
           AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
         run: |
           chmod +x scripts/security/verify_audit_chain.sh
           bash scripts/security/verify_audit_chain.sh
+
+      - name: Audit chain check skipped
+        if: steps.validate_audit.outputs.ready != 'true'
+        run: |
+          echo "Audit chain check skipped due to missing secrets"
