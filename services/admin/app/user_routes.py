@@ -43,6 +43,8 @@ async def list_users(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     # helper for explicit join
     stmt = (
@@ -76,6 +78,8 @@ async def update_user_role(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     # Invariant: Cannot remove last Owner
     # Check if target user has Owner role currently
@@ -122,11 +126,13 @@ async def update_user_role(
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
+        event_type="membership.role_change",
+        event_category="identity_access",
         actor_id=current_user.id,
         action="membership.role_change",
         resource_type="membership",
         resource_id=str(user_id),
-        changes={
+        metadata={
             "old_role": str(old_role_id), 
             "new_role": str(target_role.id)
         }
@@ -142,6 +148,8 @@ async def deactivate_user(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     membership = db.execute(
         select(MembershipModel).where(
@@ -190,11 +198,13 @@ async def deactivate_user(
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
+        event_type="membership.deactivate",
+        event_category="identity_access",
         actor_id=current_user.id,
         action="membership.deactivate",
         resource_type="membership",
         resource_id=str(user_id),
-        changes={"is_active": False}
+        metadata={"is_active": False}
     )
     
     db.commit()
@@ -207,6 +217,8 @@ async def reactivate_user(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     membership = db.execute(
         select(MembershipModel).where(
@@ -223,11 +235,13 @@ async def reactivate_user(
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
+        event_type="membership.reactivate",
+        event_category="identity_access",
         actor_id=current_user.id,
         action="membership.reactivate",
         resource_type="membership",
         resource_id=str(user_id),
-        changes={"is_active": True}
+        metadata={"is_active": True}
     )
     
     db.commit()
@@ -238,6 +252,8 @@ async def list_roles(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     # Return System roles (tenant_id is NULL) AND Custom roles (tenant_id matches)
     # Actually, simplistic RBAC: just show all roles visible to tenant?
@@ -250,5 +266,3 @@ async def list_roles(
     for r in roles:
         results.append(RoleResponse(id=r.id, name=r.name, is_system=r.tenant_id is None))
     return results
-
-

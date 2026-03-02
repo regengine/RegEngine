@@ -134,12 +134,15 @@ async def login(
     # Audit Log
     if active_tenant_id:
         AuditLogger.log_event(
-            db, 
-            active_tenant_id, 
-            "user.login", 
-            "session", 
-            str(session_data.id), 
-            actor_id=user.id
+            db,
+            tenant_id=active_tenant_id,
+            event_type="user.login",
+            action="session.create",
+            event_category="authentication",
+            actor_id=user.id,
+            resource_type="session",
+            resource_id=str(session_data.id),
+            metadata={"session_persisted": session_persisted},
         )
 
     db.commit()
@@ -341,12 +344,15 @@ def register_initial_admin(payload: RegisterRequest, db: Session = Depends(get_s
     
     # Audit Log
     AuditLogger.log_event(
-        db, 
-        new_tenant.id, 
-        "tenant.create", 
-        "tenant", 
-        str(new_tenant.id), 
-        actor_id=new_user.id
+        db,
+        tenant_id=new_tenant.id,
+        event_type="tenant.create",
+        action="tenant.create",
+        event_category="tenant_management",
+        actor_id=new_user.id,
+        resource_type="tenant",
+        resource_id=str(new_tenant.id),
+        metadata={"tenant_name": new_tenant.name},
     )
     db.commit()
     
