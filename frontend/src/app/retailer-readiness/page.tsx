@@ -1126,10 +1126,10 @@ export default function RetailerSuppliersPage() {
                             Founder & CEO, RegEngine
                         </p>
                         <p style={{ fontSize: 14, color: T.textMuted, lineHeight: 1.8, marginBottom: 16 }}>
-                            "I've spent 20 years in federal compliance — not selling software about it, doing it.
-                            I built RegEngine because I watched companies lose contracts over traceability gaps
-                            that a good API could have solved in a weekend. Every assessment I offer is personal.
-                            No sales reps. No BDRs. Just a direct conversation about your supply chain."
+                            Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
+                            I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation.
+                            Your traceability data should be verified, exportable, and ready before anyone asks for it.
+                            Every Retailer Readiness Assessment gets my personal review. No sales team. Just me and your supply chain.
                         </p>
                         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                             {[

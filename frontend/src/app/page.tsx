@@ -342,11 +342,12 @@ export default function RegEngineLanding() {
         <div className="p-7 rounded-2xl border border-[var(--re-surface-border)] bg-white/[0.01]">
           <h2 className="text-[24px] font-bold text-[var(--re-text-primary)] mb-3">Built by someone who knows food compliance</h2>
           <p className="text-sm text-[var(--re-text-muted)] leading-relaxed max-w-[880px]">
-            RegEngine was founded by a food industry operator who saw traceability failures in real supply chains.
-            This is infrastructure for operators, not slideware for audits.
+            Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
+            I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation.
+            Your traceability data should be verified, exportable, and ready before anyone asks for it.
           </p>
           <p className="text-sm text-[var(--re-text-secondary)] mt-4">
-            Start with a free Retailer Readiness Assessment to identify your highest-risk traceability gaps.
+            Every Retailer Readiness Assessment gets my personal review. No sales team. Just me and your supply chain.
             <Link href="/retailer-readiness" className="text-[var(--re-brand)] hover:underline ml-1">
               Run the assessment.
             </Link>
