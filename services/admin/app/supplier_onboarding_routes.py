@@ -196,6 +196,22 @@ class SupplierSocialProofResponse(BaseModel):
     updated_at: str
 
 
+class SupplierFunnelStepSummary(BaseModel):
+    step: str
+    viewed: int
+    completed: int
+    completion_rate_pct: float
+
+
+class SupplierFunnelSummaryResponse(BaseModel):
+    steps: list[SupplierFunnelStepSummary]
+    total_step_views: int
+    total_step_completions: int
+    fda_exports_generated: int
+    demo_resets_completed: int
+    updated_at: str
+
+
 class SupplierFDAExportRow(BaseModel):
     event_id: str
     tlc_code: str
@@ -636,6 +652,93 @@ def _compute_social_proof(db: Session, *, tenant_id: uuid_module.UUID) -> dict[s
         "tlcs_tracked": tlcs_tracked,
         "cte_events_verified": cte_events_verified,
         "fda_exports_generated": fda_exports_generated,
+        "updated_at": _iso_utc(datetime.now(timezone.utc)),
+    }
+
+
+SUPPLIER_FUNNEL_STEP_ORDER = [
+    "buyer_invite",
+    "supplier_signup",
+    "facility_setup",
+    "ftl_scoping",
+    "cte_capture",
+    "tlc_mgmt",
+    "dashboard",
+    "fda_export",
+]
+
+
+def _compute_funnel_summary(db: Session, *, tenant_id: uuid_module.UUID) -> dict[str, Any]:
+    grouped_rows = db.execute(
+        select(
+            SupplierFunnelEventModel.step,
+            SupplierFunnelEventModel.event_name,
+            func.count(SupplierFunnelEventModel.id),
+        )
+        .where(SupplierFunnelEventModel.tenant_id == tenant_id)
+        .group_by(SupplierFunnelEventModel.step, SupplierFunnelEventModel.event_name)
+    ).all()
+
+    viewed_by_step: dict[str, int] = {}
+    completed_by_step: dict[str, int] = {}
+    for step, event_name, count_value in grouped_rows:
+        normalized_step = (step or "").strip().lower()
+        if not normalized_step:
+            continue
+        normalized_event = (event_name or "").strip().lower()
+        count_int = int(count_value or 0)
+        if normalized_event == "step_viewed":
+            viewed_by_step[normalized_step] = viewed_by_step.get(normalized_step, 0) + count_int
+        elif normalized_event == "step_completed":
+            completed_by_step[normalized_step] = completed_by_step.get(normalized_step, 0) + count_int
+
+    ordered_steps = list(SUPPLIER_FUNNEL_STEP_ORDER)
+    discovered_steps = sorted({*viewed_by_step.keys(), *completed_by_step.keys()} - set(ordered_steps))
+    all_steps = ordered_steps + discovered_steps
+
+    step_summaries: list[dict[str, Any]] = []
+    total_views = 0
+    total_completions = 0
+    for step in all_steps:
+        viewed = viewed_by_step.get(step, 0)
+        completed = completed_by_step.get(step, 0)
+        total_views += viewed
+        total_completions += completed
+        completion_rate_pct = round((completed / viewed) * 100, 1) if viewed > 0 else 0.0
+        step_summaries.append(
+            {
+                "step": step,
+                "viewed": viewed,
+                "completed": completed,
+                "completion_rate_pct": completion_rate_pct,
+            }
+        )
+
+    fda_exports_generated = int(
+        db.execute(
+            select(func.count(SupplierFunnelEventModel.id)).where(
+                SupplierFunnelEventModel.tenant_id == tenant_id,
+                SupplierFunnelEventModel.event_name == "fda_export_downloaded",
+            )
+        ).scalar_one()
+        or 0
+    )
+    demo_resets_completed = int(
+        db.execute(
+            select(func.count(SupplierFunnelEventModel.id)).where(
+                SupplierFunnelEventModel.tenant_id == tenant_id,
+                SupplierFunnelEventModel.event_name == "demo_reset_completed",
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    return {
+        "steps": step_summaries,
+        "total_step_views": total_views,
+        "total_step_completions": total_completions,
+        "fda_exports_generated": fda_exports_generated,
+        "demo_resets_completed": demo_resets_completed,
         "updated_at": _iso_utc(datetime.now(timezone.utc)),
     }
 
@@ -1162,6 +1265,19 @@ async def get_supplier_social_proof(
 
     payload = _compute_social_proof(db, tenant_id=tenant_id)
     return SupplierSocialProofResponse(**payload)
+
+
+@router.get("/funnel-summary", response_model=SupplierFunnelSummaryResponse)
+async def get_supplier_funnel_summary(
+    _current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierFunnelSummaryResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    payload = _compute_funnel_summary(db, tenant_id=tenant_id)
+    return SupplierFunnelSummaryResponse(**payload)
 
 
 @router.post("/facilities", response_model=SupplierFacilityResponse)

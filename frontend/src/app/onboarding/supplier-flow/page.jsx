@@ -209,7 +209,14 @@ function FlowStep({ number, title, description, active, onClick, status }) {
   );
 }
 
-function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof }) {
+function formatStepLabel(step) {
+  return String(step || "")
+    .split("_")
+    .map((token) => (token ? token[0].toUpperCase() + token.slice(1) : ""))
+    .join(" ");
+}
+
+function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof, funnelSummary }) {
   const steps = [
     { id: VIEWS.BUYER_INVITE, n: 1, title: "Buyer Sends Invite", desc: "Email invite with unique onboarding link", status: "current" },
     { id: VIEWS.SUPPLIER_SIGNUP, n: 2, title: "Supplier Creates Account", desc: "Name, email, password - minimal friction", status: "pending" },
@@ -256,6 +263,33 @@ function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof }) 
           </Card>
         ))}
       </div>
+
+      <Card style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>Live Funnel Snapshot</div>
+          <div style={{ fontSize: 11, color: GRAY }}>
+            Views: {Number.isFinite(funnelSummary?.total_step_views) ? funnelSummary.total_step_views : "-"} | Completions: {Number.isFinite(funnelSummary?.total_step_completions) ? funnelSummary.total_step_completions : "-"}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", fontSize: 11, color: GRAY, fontWeight: 700, borderBottom: `1px solid ${BORDER}`, paddingBottom: 6 }}>
+          <div>Step</div>
+          <div>Viewed</div>
+          <div>Completed</div>
+          <div>Rate</div>
+        </div>
+        {(funnelSummary?.steps || []).filter((row) => (row.viewed || row.completed)).slice(0, 6).map((row) => (
+          <div key={row.step} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", fontSize: 12, padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ color: "#111", fontWeight: 600 }}>{formatStepLabel(row.step)}</div>
+            <div style={{ color: GRAY }}>{row.viewed}</div>
+            <div style={{ color: GRAY }}>{row.completed}</div>
+            <div style={{ color: row.completion_rate_pct < 60 ? WARN : ACCENT }}>{row.completion_rate_pct}%</div>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: GRAY }}>
+          <div>Demo resets: <strong style={{ color: "#111" }}>{Number.isFinite(funnelSummary?.demo_resets_completed) ? funnelSummary.demo_resets_completed : "-"}</strong></div>
+          <div>FDA exports: <strong style={{ color: "#111" }}>{Number.isFinite(funnelSummary?.fda_exports_generated) ? funnelSummary.fda_exports_generated : "-"}</strong></div>
+        </div>
+      </Card>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {steps.map((s) => (
@@ -1145,6 +1179,7 @@ function APISpecView() {
     { method: "GET", path: "/v1/supplier/export/fda-records", desc: "FDA 24-hour sortable spreadsheet", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/supplier/funnel-events", desc: "Lightweight funnel instrumentation event sink", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/supplier/social-proof", desc: "Real usage counters from Postgres", auth: "Supplier JWT", priority: "P1" },
+    { method: "GET", path: "/v1/supplier/funnel-summary", desc: "Step conversion rollup + demo/export counters", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/export/epcis", desc: "EPCIS 2.0 XML export", auth: "Pro tier", priority: "P2" },
   ];
   return (
@@ -1183,6 +1218,7 @@ export default function SupplierOnboardingFlow() {
   const [liveCategories, setLiveCategories] = useState(FTL_CATEGORIES);
   const [tlcRefreshKey, setTlcRefreshKey] = useState(0);
   const [socialProof, setSocialProof] = useState(null);
+  const [funnelSummary, setFunnelSummary] = useState(null);
   const [demoResetState, setDemoResetState] = useState({ loading: false, message: "", error: "" });
 
   const trackFunnelEvent = (payload) => {
@@ -1197,6 +1233,15 @@ export default function SupplierOnboardingFlow() {
       setSocialProof(payload);
     } catch (_err) {
       // Keep UI usable even if social proof query fails.
+    }
+  };
+
+  const refreshFunnelSummary = async () => {
+    try {
+      const payload = await apiClient.getSupplierFunnelSummary();
+      setFunnelSummary(payload);
+    } catch (_err) {
+      // Keep UI usable even if funnel summary query fails.
     }
   };
 
@@ -1237,6 +1282,25 @@ export default function SupplierOnboardingFlow() {
       cancelled = true;
     };
   }, [tlcRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadFunnelSummary = async () => {
+      try {
+        const payload = await apiClient.getSupplierFunnelSummary();
+        if (!cancelled) {
+          setFunnelSummary(payload);
+        }
+      } catch (_err) {
+        // Keep UI usable even if funnel summary query fails.
+      }
+    };
+
+    loadFunnelSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, tlcRefreshKey]);
 
   useEffect(() => {
     void apiClient.trackSupplierFunnelEvent({
@@ -1281,6 +1345,7 @@ export default function SupplierOnboardingFlow() {
         },
       });
       await refreshSocialProof();
+      await refreshFunnelSummary();
     } catch (_err) {
       setDemoResetState({
         loading: false,
@@ -1312,7 +1377,7 @@ export default function SupplierOnboardingFlow() {
   ];
 
   const viewComponents = {
-    [VIEWS.OVERVIEW]: <OverviewView setView={setView} onRunDemoReset={runDemoReset} demoResetState={demoResetState} socialProof={socialProof} />,
+    [VIEWS.OVERVIEW]: <OverviewView setView={setView} onRunDemoReset={runDemoReset} demoResetState={demoResetState} socialProof={socialProof} funnelSummary={funnelSummary} />,
     [VIEWS.BUYER_INVITE]: <BuyerInviteView />,
     [VIEWS.SUPPLIER_SIGNUP]: <SupplierSignupView />,
     [VIEWS.FACILITY_SETUP]: <FacilitySetupView setView={setView} onFacilityCreated={setFacilityId} onEvent={trackFunnelEvent} />,

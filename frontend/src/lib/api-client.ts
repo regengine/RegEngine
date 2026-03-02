@@ -31,6 +31,7 @@ import type {
   SupplierDemoResetResponse,
   SupplierFunnelEventRequest,
   SupplierFunnelEventResponse,
+  SupplierFunnelSummaryResponse,
   SupplierFDAExportPreviewResponse,
   SupplierSocialProofResponse,
   SupplierTLC,
@@ -602,6 +603,11 @@ class APIClient {
 
   async getSupplierSocialProof(): Promise<SupplierSocialProofResponse> {
     const { data } = await this.adminClient.get<SupplierSocialProofResponse>('/v1/supplier/social-proof');
+    return data;
+  }
+
+  async getSupplierFunnelSummary(): Promise<SupplierFunnelSummaryResponse> {
+    const { data } = await this.adminClient.get<SupplierFunnelSummaryResponse>('/v1/supplier/funnel-summary');
     return data;
   }
 }
