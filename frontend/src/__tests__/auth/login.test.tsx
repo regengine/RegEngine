@@ -266,6 +266,23 @@ describe('LoginPage', () => {
             });
         });
 
+        it('shows string error detail when backend returns plain text', async () => {
+            const user = userEvent.setup();
+            const error = { response: { status: 500, data: '  Upstream admin auth timeout  ' } };
+
+            (apiClient.login as any).mockRejectedValueOnce(error);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/password/i), 'password');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(screen.getByRole('alert')).toHaveTextContent('Upstream admin auth timeout');
+            });
+        });
+
         it('shows generic error for network failures', async () => {
             const user = userEvent.setup();
             const error = new Error('Network error');
