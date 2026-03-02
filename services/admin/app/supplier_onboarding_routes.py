@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import uuid as uuid_module
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -126,6 +126,38 @@ class SupplierTLCResponse(BaseModel):
     created_at: str
 
 
+class SupplierComplianceScoreResponse(BaseModel):
+    score: int
+    coverage_ratio: float
+    freshness_ratio: float
+    integrity_ratio: float
+    required_ctes: int
+    covered_ctes: int
+    stale_ctes: int
+    missing_ctes: int
+    total_events: int
+    evaluated_at: str
+
+
+class SupplierComplianceGap(BaseModel):
+    facility_id: str
+    facility_name: str
+    cte_type: str | None
+    severity: str
+    issue: str
+    reason: str
+    last_seen: str | None = None
+
+
+class SupplierComplianceGapsResponse(BaseModel):
+    gaps: list[SupplierComplianceGap]
+    total: int
+    high: int
+    medium: int
+    low: int
+    evaluated_at: str
+
+
 def _get_supplier_facility_or_404(
     db: Session,
     *,
@@ -172,6 +204,211 @@ def _iso_utc(value: datetime) -> str:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc).isoformat()
     return value.astimezone(timezone.utc).isoformat()
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
+    if not events:
+        return 1.0
+
+    checks = 0
+    valid = 0
+    previous: SupplierCTEEventModel | None = None
+
+    for event in events:
+        checks += 1
+        if previous is None:
+            if int(event.sequence_number) == 1 and event.merkle_prev_hash is None:
+                valid += 1
+        else:
+            expected_sequence = int(previous.sequence_number) + 1
+            if int(event.sequence_number) == expected_sequence and event.merkle_prev_hash == previous.merkle_hash:
+                valid += 1
+        previous = event
+
+    return valid / checks if checks else 1.0
+
+
+def _compute_supplier_compliance(
+    db: Session,
+    *,
+    tenant_id: uuid_module.UUID,
+    supplier_user_id: uuid_module.UUID,
+    facility_id: uuid_module.UUID | None,
+    lookback_days: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    facilities_query = select(SupplierFacilityModel).where(
+        SupplierFacilityModel.tenant_id == tenant_id,
+        SupplierFacilityModel.supplier_user_id == supplier_user_id,
+    )
+    if facility_id is not None:
+        facilities_query = facilities_query.where(SupplierFacilityModel.id == facility_id)
+
+    facilities = db.execute(facilities_query).scalars().all()
+    evaluated_at = datetime.now(timezone.utc)
+    evaluated_at_iso = _iso_utc(evaluated_at)
+    if not facilities:
+        return (
+            {
+                "score": 0,
+                "coverage_ratio": 0.0,
+                "freshness_ratio": 0.0,
+                "integrity_ratio": 1.0,
+                "required_ctes": 0,
+                "covered_ctes": 0,
+                "stale_ctes": 0,
+                "missing_ctes": 0,
+                "total_events": 0,
+                "evaluated_at": evaluated_at_iso,
+            },
+            [],
+        )
+
+    facility_ids = [facility.id for facility in facilities]
+
+    category_rows = db.execute(
+        select(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+            SupplierFacilityFTLCategoryModel.facility_id.in_(facility_ids),
+        )
+    ).scalars().all()
+
+    scoped_events = db.execute(
+        select(SupplierCTEEventModel)
+        .where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+            SupplierCTEEventModel.facility_id.in_(facility_ids),
+        )
+        .order_by(SupplierCTEEventModel.sequence_number.asc())
+    ).scalars().all()
+
+    all_supplier_events = db.execute(
+        select(SupplierCTEEventModel)
+        .where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+        )
+        .order_by(SupplierCTEEventModel.sequence_number.asc())
+    ).scalars().all()
+
+    required_by_facility: dict[uuid_module.UUID, list[str]] = {facility.id: [] for facility in facilities}
+    required_seen_by_facility: dict[uuid_module.UUID, set[str]] = {facility.id: set() for facility in facilities}
+
+    for row in category_rows:
+        for cte in row.required_ctes or []:
+            normalized_cte = str(cte).strip().lower()
+            if not normalized_cte:
+                continue
+            if normalized_cte in required_seen_by_facility[row.facility_id]:
+                continue
+            required_seen_by_facility[row.facility_id].add(normalized_cte)
+            required_by_facility[row.facility_id].append(normalized_cte)
+
+    events_by_facility: dict[uuid_module.UUID, list[SupplierCTEEventModel]] = {facility.id: [] for facility in facilities}
+    for event in scoped_events:
+        events_by_facility[event.facility_id].append(event)
+
+    threshold = evaluated_at - timedelta(days=lookback_days)
+    required_total = 0
+    covered_total = 0
+    fresh_total = 0
+    gap_payloads: list[dict[str, Any]] = []
+
+    for facility in facilities:
+        required_ctes = required_by_facility.get(facility.id, [])
+        if not required_ctes:
+            gap_payloads.append(
+                {
+                    "facility_id": str(facility.id),
+                    "facility_name": facility.name,
+                    "cte_type": None,
+                    "severity": "high",
+                    "issue": "No FTL categories scoped for this facility",
+                    "reason": "ftl_not_scoped",
+                    "last_seen": None,
+                }
+            )
+            continue
+
+        required_total += len(required_ctes)
+        latest_by_cte: dict[str, datetime | None] = {}
+        for event in events_by_facility.get(facility.id, []):
+            normalized_cte = (event.cte_type or "").strip().lower()
+            if not normalized_cte:
+                continue
+            event_time = _as_utc(event.event_time)
+            existing = latest_by_cte.get(normalized_cte)
+            if existing is None:
+                latest_by_cte[normalized_cte] = event_time
+                continue
+            if event_time is not None and event_time > existing:
+                latest_by_cte[normalized_cte] = event_time
+
+        for cte in required_ctes:
+            latest = latest_by_cte.get(cte)
+            if latest is None:
+                gap_payloads.append(
+                    {
+                        "facility_id": str(facility.id),
+                        "facility_name": facility.name,
+                        "cte_type": cte,
+                        "severity": "high",
+                        "issue": f"Missing required {cte} event",
+                        "reason": "required_cte_missing",
+                        "last_seen": None,
+                    }
+                )
+                continue
+
+            covered_total += 1
+            if latest >= threshold:
+                fresh_total += 1
+            else:
+                gap_payloads.append(
+                    {
+                        "facility_id": str(facility.id),
+                        "facility_name": facility.name,
+                        "cte_type": cte,
+                        "severity": "medium",
+                        "issue": f"{cte} event is older than {lookback_days} days",
+                        "reason": "required_cte_stale",
+                        "last_seen": _iso_utc(latest),
+                    }
+                )
+
+    integrity_ratio = _merkle_integrity_ratio(all_supplier_events)
+
+    if required_total == 0:
+        coverage_ratio = 0.0
+        freshness_ratio = 0.0
+        score = 0
+    else:
+        coverage_ratio = covered_total / required_total
+        freshness_ratio = fresh_total / required_total
+        score = int(round(100 * ((coverage_ratio * 0.75) + (freshness_ratio * 0.15) + (integrity_ratio * 0.10))))
+        score = max(0, min(100, score))
+
+    score_payload = {
+        "score": score,
+        "coverage_ratio": round(coverage_ratio, 4),
+        "freshness_ratio": round(freshness_ratio, 4),
+        "integrity_ratio": round(integrity_ratio, 4),
+        "required_ctes": required_total,
+        "covered_ctes": covered_total,
+        "stale_ctes": max(covered_total - fresh_total, 0),
+        "missing_ctes": max(required_total - covered_total, 0),
+        "total_events": len(scoped_events),
+        "evaluated_at": evaluated_at_iso,
+    }
+    return score_payload, gap_payloads
 
 
 @router.get("/ftl-categories")
@@ -578,3 +815,84 @@ async def list_tlcs(
         )
         for lot in lots
     ]
+
+
+@router.get("/compliance-score", response_model=SupplierComplianceScoreResponse)
+async def get_compliance_score(
+    facility_id: str | None = None,
+    lookback_days: int = Query(default=30, ge=1, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierComplianceScoreResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    scoped_facility_id: uuid_module.UUID | None = None
+    if facility_id:
+        try:
+            scoped_facility_id = uuid_module.UUID(facility_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+        _get_supplier_facility_or_404(
+            db,
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            facility_id=scoped_facility_id,
+        )
+
+    score_payload, _ = _compute_supplier_compliance(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+        lookback_days=lookback_days,
+    )
+    return SupplierComplianceScoreResponse(**score_payload)
+
+
+@router.get("/gaps", response_model=SupplierComplianceGapsResponse)
+async def get_compliance_gaps(
+    facility_id: str | None = None,
+    lookback_days: int = Query(default=30, ge=1, le=365),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierComplianceGapsResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    scoped_facility_id: uuid_module.UUID | None = None
+    if facility_id:
+        try:
+            scoped_facility_id = uuid_module.UUID(facility_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+        _get_supplier_facility_or_404(
+            db,
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            facility_id=scoped_facility_id,
+        )
+
+    score_payload, gap_payloads = _compute_supplier_compliance(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+        lookback_days=lookback_days,
+    )
+    gaps = [SupplierComplianceGap(**gap_payload) for gap_payload in gap_payloads]
+
+    high = sum(1 for gap in gaps if gap.severity == "high")
+    medium = sum(1 for gap in gaps if gap.severity == "medium")
+    low = sum(1 for gap in gaps if gap.severity == "low")
+
+    return SupplierComplianceGapsResponse(
+        gaps=gaps,
+        total=len(gaps),
+        high=high,
+        medium=medium,
+        low=low,
+        evaluated_at=score_payload["evaluated_at"],
+    )

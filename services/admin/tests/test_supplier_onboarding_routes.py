@@ -261,3 +261,90 @@ def test_create_and_list_tlcs_with_event_counts(client: TestClient):
     assert len(list_payload_after) == 1
     assert list_payload_after[0]["tlc_code"] == "TLC-2026-SAL-1234"
     assert list_payload_after[0]["event_count"] == 1
+
+
+def test_compliance_score_increases_after_missing_required_cte_submission(client: TestClient):
+    facility_id = _create_facility(client)
+
+    scope_response = client.put(
+        f"/v1/supplier/facilities/{facility_id}/ftl-categories",
+        json={"category_ids": ["1"]},
+    )
+    assert scope_response.status_code == 200
+
+    receiving_response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "receiving",
+            "tlc_code": "TLC-2026-SAL-9910",
+            "kde_data": {"quantity": 15, "unit_of_measure": "cases", "product_description": "Spinach"},
+        },
+    )
+    assert receiving_response.status_code == 200
+
+    shipping_response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-9910",
+            "kde_data": {"quantity": 15, "unit_of_measure": "cases", "product_description": "Spinach"},
+        },
+    )
+    assert shipping_response.status_code == 200
+
+    score_before = client.get(f"/v1/supplier/compliance-score?facility_id={facility_id}")
+    assert score_before.status_code == 200
+    payload_before = score_before.json()
+    assert payload_before["required_ctes"] == 3
+    assert payload_before["covered_ctes"] == 2
+    assert payload_before["missing_ctes"] == 1
+
+    gaps_before = client.get(f"/v1/supplier/gaps?facility_id={facility_id}")
+    assert gaps_before.status_code == 200
+    gaps_payload_before = gaps_before.json()
+    assert gaps_payload_before["high"] >= 1
+    assert any(gap["cte_type"] == "transforming" and gap["reason"] == "required_cte_missing" for gap in gaps_payload_before["gaps"])
+
+    transforming_response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "transforming",
+            "tlc_code": "TLC-2026-SAL-9910",
+            "kde_data": {
+                "input_tlc": "TLC-2026-SAL-9910",
+                "output_tlc": "TLC-2026-SAL-9911",
+                "product_description": "Spinach Mix",
+            },
+        },
+    )
+    assert transforming_response.status_code == 200
+
+    score_after = client.get(f"/v1/supplier/compliance-score?facility_id={facility_id}")
+    assert score_after.status_code == 200
+    payload_after = score_after.json()
+    assert payload_after["required_ctes"] == 3
+    assert payload_after["covered_ctes"] == 3
+    assert payload_after["missing_ctes"] == 0
+    assert payload_after["score"] > payload_before["score"]
+
+    gaps_after = client.get(f"/v1/supplier/gaps?facility_id={facility_id}")
+    assert gaps_after.status_code == 200
+    gaps_payload_after = gaps_after.json()
+    assert all(gap["reason"] != "required_cte_missing" for gap in gaps_payload_after["gaps"])
+
+
+def test_compliance_score_flags_unscoped_facility(client: TestClient):
+    facility_id = _create_facility(client)
+
+    score_response = client.get(f"/v1/supplier/compliance-score?facility_id={facility_id}")
+    assert score_response.status_code == 200
+    score_payload = score_response.json()
+    assert score_payload["score"] == 0
+    assert score_payload["required_ctes"] == 0
+
+    gaps_response = client.get(f"/v1/supplier/gaps?facility_id={facility_id}")
+    assert gaps_response.status_code == 200
+    gaps_payload = gaps_response.json()
+    assert gaps_payload["total"] == 1
+    assert gaps_payload["high"] == 1
+    assert gaps_payload["gaps"][0]["reason"] == "ftl_not_scoped"
