@@ -46,10 +46,6 @@ const nextConfig = {
                 destination: `${apiGatewayUrl}:8002/v1/ingestion/:path*`,
             },
             {
-                source: '/api/admin/:path*',
-                destination: `${apiGatewayUrl}:8400/:path*`,
-            },
-            {
                 source: '/api/auth/:path*',
                 destination: `${apiGatewayUrl}:8400/auth/:path*`,
             },
