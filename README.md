@@ -1,65 +1,111 @@
 # RegEngine
 
-**Multi-tenant regulatory operating system for FDA FSMA compliance.**
+**API-first FSMA 204 compliance infrastructure for recall-ready traceability.**
 
-RegEngine converts statutory obligations into continuously monitored, cryptographically verifiable control systems.
+RegEngine converts supply-chain traceability events into structured, exportable, and independently verifiable compliance records.
 
-### Current Focus
-- **FDA FSMA (21 CFR Parts 1, 11, 117, 204, etc.)** – full ingestion, codification, monitoring, and attestation pipeline.
-- Production-ready kernel for future verticals (plugin architecture).
+## Current Focus
 
-### Core Architecture
-```
-kernel/                  # Universal compliance engine (obligation, control, evidence, monitoring, reporting)
-plugins/fsma/            # FSMA-specific grammar, mappings, report templates
-services/                # ingestion, graph, scheduler, admin
-shared/                  # utilities, models, observability, security
-```
+- **Primary wedge:** Food and Beverage (FSMA 204)
+- **Core outcome:** Generate FDA-sortable traceability records inside the 24-hour response window
+- **Product posture:** FSMA-first execution before broader vertical expansion
 
-### Key Capabilities
-- Automated regulation ingestion (PDF, API, bulk) with ethical discovery
-- Neo4j knowledge graph with obligation → control → evidence mapping
-- **Full-text search** across codified sections and obligations (`/v1/regulations/search`)
-- Tamper-evident evidence vault with SHA-256/Merkle hash chains
-- **Compliance score engine** (obligation coverage × control effectiveness × evidence freshness)
-- Real-time drift detection and compliance scoring
-- Multi-tenant isolation with Row-Level Security
-- OpenTelemetry tracing + structured logging + Prometheus metrics
-- Kafka consumers with poison-pill DLQ resilience
-- **Nightly FSMA sync** job (02:00 UTC, leader-guarded, deduplication via ETag + SHA-256)
+## Recently Shipped (March 2026)
 
-### FSMA 204 V2 Wizard API (public, no auth required)
-| Endpoint | Description |
-|----------|-------------|
-| `GET  /v1/fsma/wizard/ftl-categories` | All 23 Food Traceability List categories + exemption definitions |
-| `POST /v1/fsma/wizard/applicability`  | Evaluate selected FTL categories |
-| `POST /v1/fsma/wizard/exemptions`     | Evaluate answers to the 6 exemption questions |
+- Production auth/login chain stabilized end-to-end:
+  - Same-origin Next.js admin proxy at `frontend/src/app/api/admin/[...path]/route.ts`
+  - Public upstream targeting for Vercel (no private DNS dependency)
+  - Working `/api/auth/login` -> `/api/admin/auth/login` routing
+- Railway Redis service added and wired for persistent sessions:
+  - Refresh token flow restored
+  - Rate limiting and auth session persistence run on Redis
+  - Graceful fallback paths remain in code for degraded scenarios
+- FSMA-first narrative cleanup across marketing surfaces:
+  - Removed broad "Soon" industry signaling from primary marketing footer/nav
+  - Tightened homepage CTA and proof language to food-traceability outcomes
+- New interactive supplier onboarding wireframe route:
+  - `frontend/src/app/onboarding/supplier-flow/page.jsx`
+  - Available in app at `/onboarding/supplier-flow`
+  - Linked from onboarding and gated by authenticated session state
 
-### Pilot Dashboard
-Visit `/fsma/dashboard` for the operator-facing compliance summary:
-- Animated compliance score ring (obligation coverage / control effectiveness / evidence freshness)
-- Live counts of obligations, mapped controls, and evidence items
-- Quick links to FTL Checker, Readiness Assessment, and Traceability Dashboard
-- Demo mode when no graph data exists (always useful from day one)
+## Production Topology
 
-### Quick Start
+- **Frontend + edge:** Vercel (`regengine.co`)
+- **App/API service:** Railway `RegEngine` service (admin/auth API)
+- **Stateful services:** Railway `Postgres`, `neo4j`, `Redis`
+
+This 4-service runtime is the current P0/P1 topology and is intentionally minimal.
+
+## Core Capabilities
+
+- FSMA obligation mapping and traceability workflows
+- Neo4j knowledge graph (`obligation -> control -> evidence`)
+- Tamper-evident evidence model (SHA-256 + hash-chain primitives)
+- Compliance score model (coverage x effectiveness x freshness)
+- Multi-tenant enforcement and audit logging
+- Free FSMA utility tools (FTL checker, readiness flows, simulation tools)
+
+## Supplier Onboarding V1 (In-App Wireframe)
+
+The current onboarding flow design follows this sequence:
+
+1. Buyer invite
+2. Supplier signup
+3. Facility registration
+4. FTL category scoping
+5. CTE/KDE capture
+6. TLC management
+7. Supplier compliance dashboard
+8. FDA export
+
+Route: `/onboarding/supplier-flow`
+
+## Local Development
+
+Start core services:
+
 ```bash
 docker-compose up -d
-cd services/ingestion
-uvicorn app.main:app --reload
 ```
 
-### Running Tests
+Start frontend:
+
 ```bash
-# FSMA engine + wizard routes (62 tests)
-python3 -m pytest tests/test_fsma_applicability_engine.py services/graph/tests/test_fsma_wizard_routes.py -v
-
-# Run Neo4j FTS migration (once, against live instance)
-# cypher-shell -f migrations/fts_index.cypher
+cd frontend
+pnpm dev
 ```
 
-See `docs/FSMA-operations.md` for the current FSMA compliance workflow.
+## Deployment Notes
+
+- Vercel-hosted frontend should use a **public** admin API base URL.
+- Recommended env on Vercel:
+  - `NEXT_PUBLIC_ADMIN_URL=https://<railway-public-domain>`
+- Avoid relying on private/internal hostnames from Vercel runtime routes.
+
+## Validation Commands
+
+Frontend login tests:
+
+```bash
+cd frontend
+pnpm vitest src/__tests__/auth/login.test.tsx
+```
+
+Frontend production build:
+
+```bash
+cd frontend
+pnpm build
+```
+
+## Reference Docs
+
+- FSMA deployment runbook: `docs/FSMA_RAILWAY_DEPLOYMENT.md`
+- FSMA MVP spec: `docs/specs/FSMA_204_MVP_SPEC.md`
+- Fair lending module spec: `docs/specs/FAIR_LENDING_COMPLIANCE_OS_MVP_SPEC.md`
+- SOC2 control mapping (fair lending): `docs/security/SOC2_FAIR_LENDING_CONTROL_MAPPING.md`
+- Investor wedge narrative (fair lending): `docs/whitepapers/FAIR_LENDING_WEDGE_INVESTOR_NARRATIVE.md`
 
 ---
 
-**Status**: Production-ready FSMA wedge · Phase 29 complete · Kernel ready for additional vertical plugins once FSMA revenue is proven.
+Status: Active FSMA wedge execution with production auth stabilized and supplier onboarding V1 flow live in-app.
