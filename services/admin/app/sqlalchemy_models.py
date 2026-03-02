@@ -286,6 +286,29 @@ class SupplierCTEEventModel(Base):
     )
 
 
+class SupplierFunnelEventModel(Base):
+    """Lightweight onboarding funnel analytics events."""
+
+    __tablename__ = "supplier_funnel_events"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=True)
+    event_name = Column(String, nullable=False)
+    step = Column(String, nullable=True)
+    status = Column(String, nullable=True)
+    metadata_ = Column("metadata", JSONType(), nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_supplier_funnel_events_tenant", "tenant_id"),
+        Index("ix_supplier_funnel_events_user", "supplier_user_id"),
+        Index("ix_supplier_funnel_events_event", "event_name"),
+        Index("ix_supplier_funnel_events_created", "created_at"),
+    )
+
+
 class ReviewItemModel(Base):
     """Database model for review queue items with tenant isolation."""
 

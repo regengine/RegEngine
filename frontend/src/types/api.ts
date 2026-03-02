@@ -317,6 +317,39 @@ export interface SupplierFDAExportPreviewResponse {
     total_count: number;
 }
 
+export interface SupplierDemoResetResponse {
+    focus_facility_id: string;
+    focus_required_ctes: string[];
+    seeded_facilities: number;
+    seeded_tlcs: number;
+    seeded_events: number;
+    dashboard_score: number;
+    open_gap_count: number;
+}
+
+export interface SupplierFunnelEventRequest {
+    event_name: string;
+    step?: string;
+    status?: string;
+    facility_id?: string;
+    metadata?: Record<string, unknown>;
+}
+
+export interface SupplierFunnelEventResponse {
+    event_id: string;
+    event_name: string;
+    created_at: string;
+}
+
+export interface SupplierSocialProofResponse {
+    suppliers_onboarded: number;
+    facilities_registered: number;
+    tlcs_tracked: number;
+    cte_events_verified: number;
+    fda_exports_generated: number;
+    updated_at: string;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;

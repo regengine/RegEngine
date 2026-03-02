@@ -31,6 +31,17 @@ const VIEWS = {
   API_SPEC: "api_spec",
 };
 
+const VIEW_STEP_NUMBER = {
+  [VIEWS.BUYER_INVITE]: 1,
+  [VIEWS.SUPPLIER_SIGNUP]: 2,
+  [VIEWS.FACILITY_SETUP]: 3,
+  [VIEWS.FTL_SCOPING]: 4,
+  [VIEWS.CTE_CAPTURE]: 5,
+  [VIEWS.TLC_MGMT]: 6,
+  [VIEWS.DASHBOARD]: 7,
+  [VIEWS.FDA_EXPORT]: 8,
+};
+
 const CTE_TYPES = {
   shipping: {
     label: "Shipping",
@@ -198,7 +209,7 @@ function FlowStep({ number, title, description, active, onClick, status }) {
   );
 }
 
-function OverviewView({ setView }) {
+function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof }) {
   const steps = [
     { id: VIEWS.BUYER_INVITE, n: 1, title: "Buyer Sends Invite", desc: "Email invite with unique onboarding link", status: "current" },
     { id: VIEWS.SUPPLIER_SIGNUP, n: 2, title: "Supplier Creates Account", desc: "Name, email, password - minimal friction", status: "pending" },
@@ -213,6 +224,39 @@ function OverviewView({ setView }) {
   return (
     <div>
       <SectionTitle sub="Click any step to see the detailed screen wireframe and data model">Supplier Onboarding Flow - 8 Steps from Invite to FDA-Ready</SectionTitle>
+      <Card style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#111" }}>One-Click Demo Reset</div>
+            <div style={{ fontSize: 12, color: GRAY }}>Re-seed a realistic supplier chain and jump directly to dashboard (step 7) with a live gap.</div>
+          </div>
+          <button
+            onClick={onRunDemoReset}
+            disabled={demoResetState?.loading}
+            style={{ padding: "10px 16px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: demoResetState?.loading ? 0.7 : 1 }}
+          >
+            {demoResetState?.loading ? "Resetting demo data..." : "Run Demo Reset → Step 7"}
+          </button>
+        </div>
+        {demoResetState?.message && <div style={{ marginTop: 10, fontSize: 12, color: ACCENT }}>{demoResetState.message}</div>}
+        {demoResetState?.error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{demoResetState.error}</div>}
+      </Card>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+        {[
+          { label: "Suppliers", value: socialProof?.suppliers_onboarded },
+          { label: "Facilities", value: socialProof?.facilities_registered },
+          { label: "TLCs", value: socialProof?.tlcs_tracked },
+          { label: "CTE Records", value: socialProof?.cte_events_verified },
+          { label: "FDA Exports", value: socialProof?.fda_exports_generated },
+        ].map((item) => (
+          <Card key={item.label} style={{ textAlign: "center", padding: 10 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, color: ACCENT }}>{Number.isFinite(item.value) ? item.value : "-"}</div>
+            <div style={{ fontSize: 11, color: GRAY }}>{item.label}</div>
+          </Card>
+        ))}
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {steps.map((s) => (
           <FlowStep key={s.id} number={s.n} title={s.title} description={s.desc} status={s.status} onClick={() => setView(s.id)} />
@@ -299,7 +343,7 @@ function SupplierSignupView() {
   );
 }
 
-function FacilitySetupView({ setView, onFacilityCreated }) {
+function FacilitySetupView({ setView, onFacilityCreated, onEvent }) {
   const [form, setForm] = useState({
     name: "",
     street: "",
@@ -329,6 +373,13 @@ function FacilitySetupView({ setView, onFacilityCreated }) {
     try {
       const facility = await apiClient.createSupplierFacility(form);
       onFacilityCreated?.(facility.id);
+      onEvent?.({
+        event_name: "step_completed",
+        step: VIEWS.FACILITY_SETUP,
+        status: "success",
+        facility_id: facility.id,
+        metadata: { role_count: form.roles.length },
+      });
       setView(VIEWS.FTL_SCOPING);
     } catch (e) {
       setError("Could not save facility. Confirm you are logged in and try again.");
@@ -396,7 +447,7 @@ function FacilitySetupView({ setView, onFacilityCreated }) {
   );
 }
 
-function FTLScopingView({ facilityId, categories, onRequiredCTEsChange }) {
+function FTLScopingView({ facilityId, categories, onRequiredCTEsChange, onEvent }) {
   const [selected, setSelected] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -439,6 +490,16 @@ function FTLScopingView({ facilityId, categories, onRequiredCTEsChange }) {
     try {
       const response = await apiClient.setFacilityFTLCategories(facilityId, { category_ids: selected });
       onRequiredCTEsChange?.(response.required_ctes || []);
+      onEvent?.({
+        event_name: "step_completed",
+        step: VIEWS.FTL_SCOPING,
+        status: "success",
+        facility_id: facilityId,
+        metadata: {
+          category_count: selected.length,
+          required_cte_count: (response.required_ctes || []).length,
+        },
+      });
     } catch (_err) {
       setError("Could not save category scoping. Confirm you are logged in and try again.");
     } finally {
@@ -503,7 +564,7 @@ function FTLScopingView({ facilityId, categories, onRequiredCTEsChange }) {
   );
 }
 
-function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted }) {
+function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted, onEvent }) {
   const availableCTEs = (requiredCTEs.length > 0 ? requiredCTEs : Object.keys(CTE_TYPES)).filter((key) => Boolean(CTE_TYPES[key]));
   const [activeCTE, setActiveCTE] = useState(availableCTEs[0] || "shipping");
   const [formValues, setFormValues] = useState({});
@@ -560,6 +621,17 @@ function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted }) {
         obligation_ids: [],
       });
       setSubmitResult(response);
+      onEvent?.({
+        event_name: "cte_submitted",
+        step: VIEWS.CTE_CAPTURE,
+        status: "success",
+        facility_id: facilityId,
+        metadata: {
+          cte_type: activeCTE,
+          tlc_code: tlcCode,
+          merkle_sequence: response.merkle_sequence,
+        },
+      });
       onCTESubmitted?.();
     } catch (_err) {
       setError("Could not submit event. Check required fields and try again.");
@@ -643,7 +715,7 @@ function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted }) {
   );
 }
 
-function TLCMgmtView({ facilityId, refreshKey }) {
+function TLCMgmtView({ facilityId, refreshKey, onEvent }) {
   const [lots, setLots] = useState([]);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -686,6 +758,15 @@ function TLCMgmtView({ facilityId, refreshKey }) {
         tlc_code: newLot.tlc_code.trim(),
         product_description: newLot.product_description.trim() || undefined,
         status: "active",
+      });
+      onEvent?.({
+        event_name: "tlc_created",
+        step: VIEWS.TLC_MGMT,
+        status: "success",
+        facility_id: facilityId,
+        metadata: {
+          tlc_code: newLot.tlc_code.trim(),
+        },
       });
       const data = await apiClient.listSupplierTLCs(facilityId);
       setLots(data || []);
@@ -855,7 +936,7 @@ function DashboardView({ facilityId, refreshKey }) {
   );
 }
 
-function FDAExportView({ facilityId, refreshKey }) {
+function FDAExportView({ facilityId, refreshKey, onEvent }) {
   const [rows, setRows] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -910,6 +991,17 @@ function FDAExportView({ facilityId, refreshKey }) {
       anchor.remove();
       URL.revokeObjectURL(url);
       setStatusMessage(`Downloaded ${recordCount} record${recordCount === 1 ? "" : "s"} as ${filename}.`);
+      onEvent?.({
+        event_name: "fda_export_downloaded",
+        step: VIEWS.FDA_EXPORT,
+        status: "success",
+        facility_id: facilityId || undefined,
+        metadata: {
+          format,
+          record_count: recordCount,
+          filename,
+        },
+      });
     } catch (_err) {
       setError("Could not generate export file.");
     } finally {
@@ -1040,6 +1132,7 @@ function APISpecView() {
   const endpoints = [
     { method: "POST", path: "/v1/admin/invites", desc: "Buyer sends invite (creates PendingSupplier)", auth: "Buyer JWT", priority: "P0" },
     { method: "POST", path: "/v1/auth/accept-invite", desc: "Supplier completes signup from invite token", auth: "Invite token", priority: "P0" },
+    { method: "POST", path: "/v1/supplier/demo/reset", desc: "One-click reset + realistic demo seed + jump to dashboard", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/supplier/facilities", desc: "Register a facility", auth: "Supplier JWT", priority: "P0" },
     { method: "PUT", path: "/v1/supplier/facilities/{id}/ftl-categories", desc: "Set FTL categories for facility", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/supplier/facilities/{id}/required-ctes", desc: "Auto-computed from FTL categories", auth: "Supplier JWT", priority: "P0" },
@@ -1050,6 +1143,8 @@ function APISpecView() {
     { method: "GET", path: "/v1/supplier/gaps", desc: "Missing or stale required CTE coverage", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/supplier/facilities/{id}/cte-events/bulk", desc: "CSV/JSON batch upload", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/supplier/export/fda-records", desc: "FDA 24-hour sortable spreadsheet", auth: "Supplier JWT", priority: "P0" },
+    { method: "POST", path: "/v1/supplier/funnel-events", desc: "Lightweight funnel instrumentation event sink", auth: "Supplier JWT", priority: "P1" },
+    { method: "GET", path: "/v1/supplier/social-proof", desc: "Real usage counters from Postgres", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/export/epcis", desc: "EPCIS 2.0 XML export", auth: "Pro tier", priority: "P2" },
   ];
   return (
@@ -1087,6 +1182,23 @@ export default function SupplierOnboardingFlow() {
   const [requiredCTEs, setRequiredCTEs] = useState([]);
   const [liveCategories, setLiveCategories] = useState(FTL_CATEGORIES);
   const [tlcRefreshKey, setTlcRefreshKey] = useState(0);
+  const [socialProof, setSocialProof] = useState(null);
+  const [demoResetState, setDemoResetState] = useState({ loading: false, message: "", error: "" });
+
+  const trackFunnelEvent = (payload) => {
+    void apiClient.trackSupplierFunnelEvent(payload).catch(() => {
+      // Instrumentation must never block product flow.
+    });
+  };
+
+  const refreshSocialProof = async () => {
+    try {
+      const payload = await apiClient.getSupplierSocialProof();
+      setSocialProof(payload);
+    } catch (_err) {
+      // Keep UI usable even if social proof query fails.
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1107,6 +1219,84 @@ export default function SupplierOnboardingFlow() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadSocialProof = async () => {
+      try {
+        const payload = await apiClient.getSupplierSocialProof();
+        if (!cancelled) {
+          setSocialProof(payload);
+        }
+      } catch (_err) {
+        // Keep UI usable even if social proof query fails.
+      }
+    };
+
+    loadSocialProof();
+    return () => {
+      cancelled = true;
+    };
+  }, [tlcRefreshKey]);
+
+  useEffect(() => {
+    void apiClient.trackSupplierFunnelEvent({
+      event_name: "step_viewed",
+      step: view,
+      status: "viewed",
+      facility_id: facilityId || undefined,
+      metadata: {
+        step_number: VIEW_STEP_NUMBER[view] || null,
+      },
+    }).catch(() => {
+      // Instrumentation failures should never block UI.
+    });
+  }, [view, facilityId]);
+
+  const runDemoReset = async () => {
+    setDemoResetState({ loading: true, message: "", error: "" });
+    try {
+      const payload = await apiClient.resetSupplierDemoData();
+      setFacilityId(payload.focus_facility_id);
+      setRequiredCTEs(payload.focus_required_ctes || []);
+      setTlcRefreshKey((prev) => prev + 1);
+      setView(VIEWS.DASHBOARD);
+
+      setDemoResetState({
+        loading: false,
+        message: `Demo seeded: ${payload.seeded_facilities} facilities, ${payload.seeded_tlcs} TLCs, ${payload.seeded_events} events. Live score ${payload.dashboard_score} with ${payload.open_gap_count} open gap(s).`,
+        error: "",
+      });
+
+      trackFunnelEvent({
+        event_name: "demo_reset_completed",
+        step: VIEWS.OVERVIEW,
+        status: "success",
+        facility_id: payload.focus_facility_id,
+        metadata: {
+          seeded_facilities: payload.seeded_facilities,
+          seeded_tlcs: payload.seeded_tlcs,
+          seeded_events: payload.seeded_events,
+          dashboard_score: payload.dashboard_score,
+          open_gap_count: payload.open_gap_count,
+        },
+      });
+      await refreshSocialProof();
+    } catch (_err) {
+      setDemoResetState({
+        loading: false,
+        message: "",
+        error: "Could not reset demo data. Check auth/tenant context and retry.",
+      });
+      trackFunnelEvent({
+        event_name: "demo_reset_failed",
+        step: VIEWS.OVERVIEW,
+        status: "error",
+        facility_id: facilityId || undefined,
+        metadata: {},
+      });
+    }
+  };
+
   const navItems = [
     { id: VIEWS.OVERVIEW, label: "Overview", icon: "🏠" },
     { id: VIEWS.BUYER_INVITE, label: "1. Invite", icon: "📧" },
@@ -1122,15 +1312,15 @@ export default function SupplierOnboardingFlow() {
   ];
 
   const viewComponents = {
-    [VIEWS.OVERVIEW]: <OverviewView setView={setView} />,
+    [VIEWS.OVERVIEW]: <OverviewView setView={setView} onRunDemoReset={runDemoReset} demoResetState={demoResetState} socialProof={socialProof} />,
     [VIEWS.BUYER_INVITE]: <BuyerInviteView />,
     [VIEWS.SUPPLIER_SIGNUP]: <SupplierSignupView />,
-    [VIEWS.FACILITY_SETUP]: <FacilitySetupView setView={setView} onFacilityCreated={setFacilityId} />,
-    [VIEWS.FTL_SCOPING]: <FTLScopingView facilityId={facilityId} categories={liveCategories} onRequiredCTEsChange={setRequiredCTEs} />,
-    [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} facilityId={facilityId} onCTESubmitted={() => setTlcRefreshKey((prev) => prev + 1)} />,
-    [VIEWS.TLC_MGMT]: <TLCMgmtView facilityId={facilityId} refreshKey={tlcRefreshKey} />,
+    [VIEWS.FACILITY_SETUP]: <FacilitySetupView setView={setView} onFacilityCreated={setFacilityId} onEvent={trackFunnelEvent} />,
+    [VIEWS.FTL_SCOPING]: <FTLScopingView facilityId={facilityId} categories={liveCategories} onRequiredCTEsChange={setRequiredCTEs} onEvent={trackFunnelEvent} />,
+    [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} facilityId={facilityId} onCTESubmitted={() => setTlcRefreshKey((prev) => prev + 1)} onEvent={trackFunnelEvent} />,
+    [VIEWS.TLC_MGMT]: <TLCMgmtView facilityId={facilityId} refreshKey={tlcRefreshKey} onEvent={trackFunnelEvent} />,
     [VIEWS.DASHBOARD]: <DashboardView facilityId={facilityId} refreshKey={tlcRefreshKey + requiredCTEs.length} />,
-    [VIEWS.FDA_EXPORT]: <FDAExportView facilityId={facilityId} refreshKey={tlcRefreshKey + requiredCTEs.length} />,
+    [VIEWS.FDA_EXPORT]: <FDAExportView facilityId={facilityId} refreshKey={tlcRefreshKey + requiredCTEs.length} onEvent={trackFunnelEvent} />,
     [VIEWS.DATA_MODEL]: <DataModelView />,
     [VIEWS.API_SPEC]: <APISpecView />,
   };

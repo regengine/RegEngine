@@ -28,7 +28,11 @@ import type {
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
   SupplierComplianceScore,
+  SupplierDemoResetResponse,
+  SupplierFunnelEventRequest,
+  SupplierFunnelEventResponse,
   SupplierFDAExportPreviewResponse,
+  SupplierSocialProofResponse,
   SupplierTLC,
   SupplierTLCUpsertRequest,
   AnalysisSummary,
@@ -584,6 +588,21 @@ class APIClient {
       filename: parsedFilename || fallbackFilename,
       recordCount: Number.isFinite(parsedRecordCount) ? parsedRecordCount : 0,
     };
+  }
+
+  async resetSupplierDemoData(): Promise<SupplierDemoResetResponse> {
+    const { data } = await this.adminClient.post<SupplierDemoResetResponse>('/v1/supplier/demo/reset', {});
+    return data;
+  }
+
+  async trackSupplierFunnelEvent(request: SupplierFunnelEventRequest): Promise<SupplierFunnelEventResponse> {
+    const { data } = await this.adminClient.post<SupplierFunnelEventResponse>('/v1/supplier/funnel-events', request);
+    return data;
+  }
+
+  async getSupplierSocialProof(): Promise<SupplierSocialProofResponse> {
+    const { data } = await this.adminClient.get<SupplierSocialProofResponse>('/v1/supplier/social-proof');
+    return data;
   }
 }
 

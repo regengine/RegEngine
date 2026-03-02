@@ -15,6 +15,7 @@ from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
+    SupplierFunnelEventModel,
     SupplierTraceabilityLotModel,
     TenantModel,
     UserModel,
@@ -41,6 +42,7 @@ def db_session() -> Session:
         SupplierFacilityFTLCategoryModel.__table__,
         SupplierTraceabilityLotModel.__table__,
         SupplierCTEEventModel.__table__,
+        SupplierFunnelEventModel.__table__,
     ]
     for table in table_bindings:
         table.create(bind=engine)
@@ -419,3 +421,53 @@ def test_fda_export_xlsx_returns_spreadsheet_payload(client: TestClient):
     assert ".xlsx" in response.headers["content-disposition"]
     assert response.headers["x-fda-record-count"] == "1"
     assert response.content[:2] == b"PK"
+
+
+def test_demo_reset_seeds_chain_and_focus_gap(client: TestClient):
+    response = client.post("/v1/supplier/demo/reset")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["seeded_facilities"] == 4
+    assert payload["seeded_tlcs"] >= 3
+    assert payload["seeded_events"] >= 10
+    assert payload["dashboard_score"] < 100
+    assert payload["open_gap_count"] >= 1
+    assert "transforming" in payload["focus_required_ctes"]
+
+    focus_facility_id = payload["focus_facility_id"]
+
+    score_response = client.get(f"/v1/supplier/compliance-score?facility_id={focus_facility_id}")
+    assert score_response.status_code == 200
+    score_payload = score_response.json()
+    assert score_payload["score"] == payload["dashboard_score"]
+
+    gaps_response = client.get(f"/v1/supplier/gaps?facility_id={focus_facility_id}")
+    assert gaps_response.status_code == 200
+    gaps_payload = gaps_response.json()
+    assert any(gap["reason"] == "required_cte_missing" for gap in gaps_payload["gaps"])
+    assert any(gap["cte_type"] == "transforming" for gap in gaps_payload["gaps"])
+
+
+def test_funnel_events_and_social_proof_counts(client: TestClient):
+    initial_response = client.get("/v1/supplier/social-proof")
+    assert initial_response.status_code == 200
+    initial_payload = initial_response.json()
+
+    event_response = client.post(
+        "/v1/supplier/funnel-events",
+        json={
+            "event_name": "fda_export_downloaded",
+            "step": "fda_export",
+            "status": "success",
+            "metadata": {"format": "csv"},
+        },
+    )
+    assert event_response.status_code == 200
+    event_payload = event_response.json()
+    assert event_payload["event_name"] == "fda_export_downloaded"
+
+    social_proof_response = client.get("/v1/supplier/social-proof")
+    assert social_proof_response.status_code == 200
+    social_proof_payload = social_proof_response.json()
+    assert social_proof_payload["fda_exports_generated"] == initial_payload["fda_exports_generated"] + 1
