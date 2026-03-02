@@ -13,13 +13,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoginPage from '@/app/login/page';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
     useRouter: vi.fn(),
+    useSearchParams: vi.fn(),
 }));
 
 // Mock auth context
@@ -37,10 +38,13 @@ vi.mock('@/lib/api-client', () => ({
 describe('LoginPage', () => {
     const mockPush = vi.fn();
     const mockLogin = vi.fn();
+    const mockSearchParamGet = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();
         (useRouter as any).mockReturnValue({ push: mockPush });
+        mockSearchParamGet.mockReturnValue(null);
+        (useSearchParams as any).mockReturnValue({ get: mockSearchParamGet });
         (useAuth as any).mockReturnValue({ login: mockLogin });
     });
 

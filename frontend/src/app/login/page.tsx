@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, Lock, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 
+const LOGIN_PRESETS = [
+    {
+        id: 'qa' as const,
+        label: 'QA Tester',
+        email: 'test@example.com',
+        password: 'password123',
+        access: 'Dashboard and core user flows',
+    },
+    {
+        id: 'admin' as const,
+        label: 'QA Admin',
+        email: 'admin@example.com',
+        password: 'password',
+        access: 'Sysadmin and admin access checks',
+    },
+];
+
+type LoginPreset = (typeof LOGIN_PRESETS)[number]['id'];
+
 export default function LoginPage() {
     // Force HMR update
     const [email, setEmail] = useState('');
@@ -17,7 +36,25 @@ export default function LoginPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const presetParam = searchParams.get('preset');
     const { login } = useAuth();
+
+    const applyPreset = useCallback((presetId: LoginPreset) => {
+        const preset = LOGIN_PRESETS.find((item) => item.id === presetId);
+        if (!preset) {
+            return;
+        }
+        setEmail(preset.email);
+        setPassword(preset.password);
+        setError(null);
+    }, []);
+
+    useEffect(() => {
+        if (presetParam === 'qa' || presetParam === 'admin') {
+            applyPreset(presetParam);
+        }
+    }, [presetParam, applyPreset]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,6 +162,27 @@ export default function LoginPage() {
                                 'Sign In'
                             )}
                         </Button>
+
+                        <div className="rounded-md border bg-slate-100 dark:bg-slate-800/50 p-3 space-y-2">
+                            <p className="text-xs font-semibold tracking-wide uppercase text-slate-700 dark:text-slate-300">
+                                QA Test Credentials
+                            </p>
+                            {LOGIN_PRESETS.map((preset) => (
+                                <button
+                                    key={preset.id}
+                                    type="button"
+                                    onClick={() => applyPreset(preset.id)}
+                                    className="w-full text-left p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-primary/50 transition-colors"
+                                >
+                                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">{preset.access}</p>
+                                    <p className="text-xs font-mono text-slate-700 dark:text-slate-300 mt-1">
+                                        {preset.email} / {preset.password}
+                                    </p>
+                                </button>
+                            ))}
+                        </div>
+
                         <div className="text-center text-sm text-muted-foreground pt-2">
                             <Link href="/" className="hover:text-primary transition-colors flex items-center justify-center gap-2">
                                 <LayoutDashboard className="w-4 h-4" />
