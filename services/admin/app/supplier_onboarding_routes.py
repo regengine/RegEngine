@@ -165,10 +165,16 @@ class SupplierComplianceGapsResponse(BaseModel):
 
 class SupplierDemoResetResponse(BaseModel):
     focus_facility_id: str
+    focus_facility_name: str
     focus_required_ctes: list[str]
+    focus_gap_cte: str | None = None
+    focus_gap_issue: str | None = None
+    focus_gap_reason: str | None = None
     seeded_facilities: int
     seeded_tlcs: int
+    seeded_tlc_codes: list[str]
     seeded_events: int
+    seeded_cte_types: list[str]
     dashboard_score: int
     open_gap_count: int
 
@@ -1199,13 +1205,28 @@ async def reset_supplier_demo(
         lookback_days=30,
     )
 
-    seeded_tlcs = len({str(lot.id) for _, lot, _facility in seeded_records})
+    seeded_tlc_codes = list(dict.fromkeys(lot.tlc_code for _, lot, _facility in seeded_records if lot.tlc_code))
+    seeded_cte_types = list(dict.fromkeys(event.cte_type for event, _lot, _facility in seeded_records if event.cte_type))
+    focus_gap = next(
+        (
+            gap
+            for gap in gap_payloads
+            if gap.get("facility_id") == str(focus_facility.id)
+        ),
+        gap_payloads[0] if gap_payloads else None,
+    )
     return SupplierDemoResetResponse(
         focus_facility_id=str(focus_facility.id),
+        focus_facility_name=focus_facility.name,
         focus_required_ctes=focus_required_ctes,
+        focus_gap_cte=(focus_gap.get("cte_type") if focus_gap else None),
+        focus_gap_issue=(focus_gap.get("issue") if focus_gap else None),
+        focus_gap_reason=(focus_gap.get("reason") if focus_gap else None),
         seeded_facilities=len(facilities_by_key),
-        seeded_tlcs=seeded_tlcs,
+        seeded_tlcs=len(seeded_tlc_codes),
+        seeded_tlc_codes=seeded_tlc_codes,
         seeded_events=len(seeded_records),
+        seeded_cte_types=seeded_cte_types,
         dashboard_score=int(score_payload["score"]),
         open_gap_count=len(gap_payloads),
     )
