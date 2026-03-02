@@ -42,6 +42,23 @@ type OnboardingStep = 'welcome' | 'health' | 'credentials' | 'first-ingest' | 'c
 
 const DEMO_DOCUMENT_URL = 'https://www.ecfr.gov/api/versioner/v1/full/2024-01-01/title-21.xml?chapter=I&subchapter=A&part=1';
 
+const QA_LOGIN_PRESETS = [
+  {
+    id: 'qa' as const,
+    label: 'QA Tester',
+    email: 'test@example.com',
+    password: 'password123',
+    access: 'Dashboard and core QA flows',
+  },
+  {
+    id: 'admin' as const,
+    label: 'QA Admin',
+    email: 'admin@example.com',
+    password: 'password',
+    access: 'Sysadmin and admin tools',
+  },
+];
+
 /* ───────────────────────────────────────────────────────────── */
 /*  Framer Motion Variants                                      */
 /* ───────────────────────────────────────────────────────────── */
@@ -115,10 +132,16 @@ export default function OnboardingPage() {
 
   // Cloud deployment detection — on Vercel, backend services don't exist
   const [isCloudMode, setIsCloudMode] = useState(false);
+  const [showQaPresets, setShowQaPresets] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const host = window.location.hostname;
       setIsCloudMode(host !== 'localhost' && host !== '127.0.0.1');
+
+      const localHost = host === 'localhost' || host === '127.0.0.1';
+      const previewHost = host.endsWith('.vercel.app') || host.includes('staging') || host.includes('preview');
+      const explicitQaMode = process.env.NEXT_PUBLIC_SHOW_QA_CREDENTIALS === 'true';
+      setShowQaPresets(explicitQaMode || localHost || previewHost);
     }
   }, []);
 
@@ -201,6 +224,10 @@ export default function OnboardingPage() {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const goToPresetLogin = (preset: 'qa' | 'admin') => {
+    router.push(`/login?preset=${preset}`);
   };
 
   const steps: { id: OnboardingStep; title: string; number: number }[] = [
@@ -311,6 +338,46 @@ export default function OnboardingPage() {
                         </motion.div>
                       ))}
                     </motion.div>
+
+                    {showQaPresets && (
+                      <div className="p-4 rounded-xl border border-[var(--re-border-default)] bg-re-surface-elevated space-y-3">
+                        <div className="flex items-start gap-3">
+                          <Shield className="w-4 h-4 mt-0.5 text-re-info" />
+                          <div>
+                            <p className="font-medium text-re-text-primary">QA Test Credentials</p>
+                            <p className="text-sm text-re-text-muted">
+                              Use these for QA sign-in and admin-access verification.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          {QA_LOGIN_PRESETS.map((preset) => (
+                            <div
+                              key={preset.id}
+                              className="rounded-lg border border-[var(--re-border-default)] bg-re-surface-card p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-re-text-primary">{preset.label}</p>
+                                <p className="text-xs text-re-text-muted">{preset.access}</p>
+                                <p className="text-xs font-mono text-re-text-secondary mt-1">
+                                  {preset.email} / {preset.password}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="border-[var(--re-border-default)]"
+                                onClick={() => goToPresetLogin(preset.id)}
+                              >
+                                Open Login
+                                <ExternalLink className="ml-2 w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex gap-3">
                       <Button
