@@ -9,7 +9,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.sqlalchemy_models import Base, UserModel
+from app.sqlalchemy_models import (
+    SupplierFacilityFTLCategoryModel,
+    SupplierFacilityModel,
+    TenantModel,
+    UserModel,
+)
 from app.supplier_onboarding_routes import router
 
 
@@ -25,7 +30,14 @@ def db_session() -> Session:
         poolclass=StaticPool,
         future=True,
     )
-    Base.metadata.create_all(bind=engine)
+    table_bindings = [
+        TenantModel.__table__,
+        UserModel.__table__,
+        SupplierFacilityModel.__table__,
+        SupplierFacilityFTLCategoryModel.__table__,
+    ]
+    for table in table_bindings:
+        table.create(bind=engine)
 
     session_local = sessionmaker(
         bind=engine,
@@ -36,6 +48,15 @@ def db_session() -> Session:
     )
     session = session_local()
 
+    session.add(
+        TenantModel(
+            id=TEST_TENANT_ID,
+            name="Test Tenant",
+            slug="test-tenant",
+            status="active",
+            settings={},
+        )
+    )
     session.add(
         UserModel(
             id=TEST_USER_ID,
@@ -51,7 +72,8 @@ def db_session() -> Session:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
+        for table in reversed(table_bindings):
+            table.drop(bind=engine)
         engine.dispose()
 
 
