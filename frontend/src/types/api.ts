@@ -319,10 +319,16 @@ export interface SupplierFDAExportPreviewResponse {
 
 export interface SupplierDemoResetResponse {
     focus_facility_id: string;
+    focus_facility_name: string;
     focus_required_ctes: string[];
+    focus_gap_cte?: string | null;
+    focus_gap_issue?: string | null;
+    focus_gap_reason?: string | null;
     seeded_facilities: number;
     seeded_tlcs: number;
+    seeded_tlc_codes: string[];
     seeded_events: number;
+    seeded_cte_types: string[];
     dashboard_score: number;
     open_gap_count: number;
 }

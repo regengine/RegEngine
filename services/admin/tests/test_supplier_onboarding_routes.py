@@ -430,9 +430,16 @@ def test_demo_reset_seeds_chain_and_focus_gap(client: TestClient):
     payload = response.json()
     assert payload["seeded_facilities"] == 4
     assert payload["seeded_tlcs"] >= 3
+    assert len(payload["seeded_tlc_codes"]) == payload["seeded_tlcs"]
     assert payload["seeded_events"] >= 10
+    assert "shipping" in payload["seeded_cte_types"]
+    assert "transforming" in payload["seeded_cte_types"]
     assert payload["dashboard_score"] < 100
     assert payload["open_gap_count"] >= 1
+    assert payload["focus_facility_name"] == "Salinas Packhouse"
+    assert payload["focus_gap_cte"] == "transforming"
+    assert payload["focus_gap_reason"] == "required_cte_missing"
+    assert "Missing required transforming event" in payload["focus_gap_issue"]
     assert "transforming" in payload["focus_required_ctes"]
 
     focus_facility_id = payload["focus_facility_id"]
