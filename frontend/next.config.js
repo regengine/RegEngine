@@ -47,7 +47,7 @@ const nextConfig = {
             },
             {
                 source: '/api/auth/:path*',
-                destination: `${apiGatewayUrl}:8400/auth/:path*`,
+                destination: '/api/admin/auth/:path*',
             },
             {
                 source: '/api/fsma/:path*',
