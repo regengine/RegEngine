@@ -191,6 +191,50 @@ class InviteModel(Base):
     )
 
 
+class SupplierFacilityModel(Base):
+    """Supplier-operated facilities for onboarding and FSMA scoping."""
+
+    __tablename__ = "supplier_facilities"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    street = Column(String, nullable=False)
+    city = Column(String, nullable=False)
+    state = Column(String, nullable=False)
+    postal_code = Column(String, nullable=False)
+    fda_registration_number = Column(String, nullable=True)
+    roles = Column(JSONType(), nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        Index("ix_supplier_facilities_tenant", "tenant_id"),
+        Index("ix_supplier_facilities_user", "supplier_user_id"),
+    )
+
+
+class SupplierFacilityFTLCategoryModel(Base):
+    """FTL category assignments scoped to supplier facilities."""
+
+    __tablename__ = "supplier_facility_ftl_categories"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=False)
+    category_id = Column(String, nullable=False)
+    category_name = Column(String, nullable=False)
+    required_ctes = Column(JSONType(), nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("facility_id", "category_id", name="uq_supplier_facility_ftl_category"),
+        Index("ix_supplier_ftl_categories_tenant", "tenant_id"),
+        Index("ix_supplier_ftl_categories_facility", "facility_id"),
+    )
+
+
 class ReviewItemModel(Base):
     """Database model for review queue items with tenant isolation."""
 

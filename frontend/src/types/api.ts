@@ -191,6 +191,44 @@ export interface AcceptInviteRequest {
     name: string;
 }
 
+export interface FTLCategory {
+    id: string;
+    name: string;
+    ctes: string[];
+}
+
+export interface SupplierFacilityCreateRequest {
+    name: string;
+    street: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    fda_registration_number?: string;
+    roles: string[];
+}
+
+export interface SupplierFacility {
+    id: string;
+    name: string;
+    street: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    fda_registration_number?: string | null;
+    roles: string[];
+}
+
+export interface FacilityFTLScopingRequest {
+    category_ids: string[];
+}
+
+export interface FacilityFTLScopingResponse {
+    facility_id: string;
+    categories: FTLCategory[];
+    required_ctes: string[];
+    source: string;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;

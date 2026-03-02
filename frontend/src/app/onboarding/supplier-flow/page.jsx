@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api-client";
 
 const ACCENT = "#1B6B4A";
 const ACCENT_LIGHT = "#E8F5EE";
@@ -137,16 +138,16 @@ const CTE_TYPES = {
 };
 
 const FTL_CATEGORIES = [
-  { id: 1, name: "Fruits (fresh-cut)", ctes: ["receiving", "transforming", "shipping"] },
-  { id: 2, name: "Vegetables (leafy greens)", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "transforming", "shipping"] },
-  { id: 3, name: "Shell eggs", ctes: ["initial_packing", "receiving", "shipping"] },
-  { id: 4, name: "Nut butter", ctes: ["receiving", "transforming", "shipping"] },
-  { id: 5, name: "Fresh herbs", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "shipping"] },
-  { id: 6, name: "Finfish (fresh/frozen)", ctes: ["first_receiver", "receiving", "transforming", "shipping"] },
-  { id: 7, name: "Crustaceans (fresh/frozen)", ctes: ["first_receiver", "receiving", "transforming", "shipping"] },
-  { id: 8, name: "Molluscan shellfish", ctes: ["harvesting", "first_receiver", "receiving", "shipping"] },
-  { id: 9, name: "Ready-to-eat deli salads", ctes: ["receiving", "transforming", "shipping"] },
-  { id: 10, name: "Soft & semi-soft cheeses", ctes: ["receiving", "transforming", "shipping"] },
+  { id: "1", name: "Fruits (fresh-cut)", ctes: ["receiving", "transforming", "shipping"] },
+  { id: "2", name: "Vegetables (leafy greens)", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "transforming", "shipping"] },
+  { id: "3", name: "Shell eggs", ctes: ["initial_packing", "receiving", "shipping"] },
+  { id: "4", name: "Nut butter", ctes: ["receiving", "transforming", "shipping"] },
+  { id: "5", name: "Fresh herbs", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "shipping"] },
+  { id: "6", name: "Finfish (fresh/frozen)", ctes: ["first_receiver", "receiving", "transforming", "shipping"] },
+  { id: "7", name: "Crustaceans (fresh/frozen)", ctes: ["first_receiver", "receiving", "transforming", "shipping"] },
+  { id: "8", name: "Molluscan shellfish", ctes: ["harvesting", "first_receiver", "receiving", "shipping"] },
+  { id: "9", name: "Ready-to-eat deli salads", ctes: ["receiving", "transforming", "shipping"] },
+  { id: "10", name: "Soft & semi-soft cheeses", ctes: ["receiving", "transforming", "shipping"] },
 ];
 
 function Badge({ children, color = ACCENT }) {
@@ -292,7 +293,44 @@ function SupplierSignupView() {
   );
 }
 
-function FacilitySetupView() {
+function FacilitySetupView({ setView, onFacilityCreated }) {
+  const [form, setForm] = useState({
+    name: "",
+    street: "",
+    city: "",
+    state: "",
+    postal_code: "",
+    fda_registration_number: "",
+    roles: [],
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const roleOptions = ["Grower", "Packer", "Processor", "Distributor", "Importer"];
+
+  const toggleRole = (role) => {
+    setForm((prev) => ({
+      ...prev,
+      roles: prev.roles.includes(role)
+        ? prev.roles.filter((item) => item !== role)
+        : [...prev.roles, role],
+    }));
+  };
+
+  const saveFacility = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const facility = await apiClient.createSupplierFacility(form);
+      onFacilityCreated?.(facility.id);
+      setView(VIEWS.FTL_SCOPING);
+    } catch (e) {
+      setError("Could not save facility. Confirm you are logged in and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
       <SectionTitle sub="One supplier can have multiple facilities - each with its own FTL scope">Step 3: Facility Registration</SectionTitle>
@@ -300,28 +338,48 @@ function FacilitySetupView() {
         <div style={{ fontSize: 13, fontWeight: 600, color: GRAY, marginBottom: 12 }}>ADD FACILITY (1 of N)</div>
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: 16, backgroundColor: GRAY_LIGHT }}>
           {[
-            { l: "Facility Name", p: "Acme Salinas Packhouse" },
-            { l: "Street Address", p: "1200 Abbott St" },
-            { l: "City, State, ZIP", p: "Salinas, CA 93901" },
-            { l: "FDA Registration Number (if applicable)", p: "12345678901" },
-          ].map((f) => (
-            <div key={f.l} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>{f.l}</div>
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 4, padding: "8px 10px", fontSize: 13, color: GRAY, backgroundColor: "#fff" }}>{f.p}</div>
+            ["Facility Name", "name", "Acme Salinas Packhouse"],
+            ["Street Address", "street", "1200 Abbott St"],
+            ["City", "city", "Salinas"],
+            ["State", "state", "CA"],
+            ["ZIP / Postal Code", "postal_code", "93901"],
+            ["FDA Registration Number (if applicable)", "fda_registration_number", "12345678901"],
+          ].map(([label, key, placeholder]) => (
+            <div key={key} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>{label}</div>
+              <input
+                value={form[key]}
+                onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
+                placeholder={placeholder}
+                style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "8px 10px", fontSize: 13, color: "#111", backgroundColor: "#fff" }}
+              />
             </div>
           ))}
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>Supply Chain Role(s)</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {["Grower", "Packer", "Processor", "Distributor", "Importer"].map((r, i) => (
-                <span key={r} style={{ padding: "4px 10px", borderRadius: 4, fontSize: 12, border: `1px solid ${i < 2 ? ACCENT : BORDER}`, backgroundColor: i < 2 ? ACCENT_LIGHT : "#fff", color: i < 2 ? ACCENT : GRAY, cursor: "pointer", fontWeight: 500 }}>{i < 2 ? "✓ " : ""}{r}</span>
-              ))}
+              {roleOptions.map((role) => {
+                const active = form.roles.includes(role);
+                return (
+                  <button
+                    key={role}
+                    onClick={() => toggleRole(role)}
+                    style={{ padding: "4px 10px", borderRadius: 4, fontSize: 12, border: `1px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT_LIGHT : "#fff", color: active ? ACCENT : GRAY, cursor: "pointer", fontWeight: 500 }}
+                  >
+                    {active ? "✓ " : ""}
+                    {role}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button style={{ padding: "10px 24px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Save & Continue to FTL Scoping</button>
+            <button onClick={saveFacility} disabled={saving} style={{ padding: "10px 24px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+              {saving ? "Saving..." : "Save & Continue to FTL Scoping"}
+            </button>
             <button style={{ padding: "10px 24px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>+ Add Another Facility</button>
           </div>
+          {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
         </div>
       </Card>
       <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: ACCENT_LIGHT, fontSize: 12, color: ACCENT_DARK }}>
@@ -332,8 +390,67 @@ function FacilitySetupView() {
   );
 }
 
-function FTLScopingView() {
-  const [selected, setSelected] = useState([1, 4]);
+function FTLScopingView({ facilityId, categories, onRequiredCTEsChange }) {
+  const [selected, setSelected] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!facilityId) {
+      setSelected([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadExistingScoping = async () => {
+      try {
+        const data = await apiClient.getFacilityRequiredCTEs(facilityId);
+        if (!cancelled) {
+          setSelected((data.categories || []).map((category) => category.id));
+          onRequiredCTEsChange?.(data.required_ctes || []);
+        }
+      } catch (_err) {
+        if (!cancelled) {
+          onRequiredCTEsChange?.([]);
+        }
+      }
+    };
+
+    loadExistingScoping();
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId, onRequiredCTEsChange]);
+
+  const saveScoping = async () => {
+    if (!facilityId) {
+      setError("Create a facility first to scope FTL categories.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    try {
+      const response = await apiClient.setFacilityFTLCategories(facilityId, { category_ids: selected });
+      onRequiredCTEsChange?.(response.required_ctes || []);
+    } catch (_err) {
+      setError("Could not save category scoping. Confirm you are logged in and try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!facilityId) {
+    return (
+      <div>
+        <SectionTitle sub="This is RegEngine's unique advantage - graph-native FTL scoping auto-determines required CTEs">Step 4: FTL Category Scoping</SectionTitle>
+        <Card>
+          <div style={{ fontSize: 13, color: GRAY }}>Create a facility in step 3 before assigning FTL categories.</div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div>
       <SectionTitle sub="This is RegEngine's unique advantage - graph-native FTL scoping auto-determines required CTEs">Step 4: FTL Category Scoping</SectionTitle>
@@ -341,7 +458,7 @@ function FTLScopingView() {
         <div style={{ fontSize: 13, fontWeight: 600, color: GRAY, marginBottom: 8 }}>SELECT FOOD TRACEABILITY LIST CATEGORIES HANDLED AT THIS FACILITY</div>
         <div style={{ fontSize: 12, color: GRAY, marginBottom: 12 }}>Pre-selected based on buyer&apos;s invite. Add or remove as needed.</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {FTL_CATEGORIES.map((cat) => {
+          {(categories?.length ? categories : FTL_CATEGORIES).map((cat) => {
             const active = selected.includes(cat.id);
             return (
               <div key={cat.id} onClick={() => setSelected(active ? selected.filter((s) => s !== cat.id) : [...selected, cat.id])} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, border: `1px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT_LIGHT : "#fff", cursor: "pointer", fontSize: 13 }}>
@@ -358,6 +475,12 @@ function FTLScopingView() {
             );
           })}
         </div>
+        <div style={{ marginTop: 12 }}>
+          <button onClick={saveScoping} disabled={saving} style={{ padding: "8px 18px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving..." : "Save FTL Scoping"}
+          </button>
+        </div>
+        {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
       </Card>
       {selected.length > 0 && (
         <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 6, backgroundColor: BLUE_LIGHT, fontSize: 12, color: "#1E40AF" }}>
@@ -374,16 +497,30 @@ function FTLScopingView() {
   );
 }
 
-function CTECaptureView() {
-  const [activeCTE, setActiveCTE] = useState("shipping");
+function CTECaptureView({ requiredCTEs = [] }) {
+  const availableCTEs = (requiredCTEs.length > 0 ? requiredCTEs : Object.keys(CTE_TYPES)).filter((key) => Boolean(CTE_TYPES[key]));
+  const [activeCTE, setActiveCTE] = useState(availableCTEs[0] || "shipping");
+
+  useEffect(() => {
+    if (!availableCTEs.includes(activeCTE)) {
+      setActiveCTE(availableCTEs[0] || "shipping");
+    }
+  }, [availableCTEs, activeCTE]);
+
   const cte = CTE_TYPES[activeCTE];
   return (
     <div>
       <SectionTitle sub="Dynamic forms pre-populated with required KDE fields based on CTE type">Step 5: CTE/KDE Data Entry</SectionTitle>
       <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-        {Object.entries(CTE_TYPES).map(([key, val]) => (
+        {availableCTEs.map((key) => {
+          const val = CTE_TYPES[key];
+          if (!val) {
+            return null;
+          }
+          return (
           <button key={key} onClick={() => setActiveCTE(key)} style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${activeCTE === key ? ACCENT : BORDER}`, backgroundColor: activeCTE === key ? ACCENT : "#fff", color: activeCTE === key ? "#fff" : GRAY, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{val.icon} {val.label}</button>
-        ))}
+          );
+        })}
       </div>
       <Card>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -601,11 +738,11 @@ function DataModelView() {
 
 function APISpecView() {
   const endpoints = [
-    { method: "POST", path: "/v1/suppliers/invite", desc: "Buyer sends invite (creates PendingSupplier)", auth: "Buyer JWT", priority: "P0" },
-    { method: "POST", path: "/v1/suppliers/onboard", desc: "Supplier completes signup from invite token", auth: "Invite token", priority: "P0" },
-    { method: "POST", path: "/v1/suppliers/{id}/facilities", desc: "Register a facility", auth: "Supplier JWT", priority: "P0" },
-    { method: "PUT", path: "/v1/facilities/{id}/ftl-categories", desc: "Set FTL categories for facility", auth: "Supplier JWT", priority: "P0" },
-    { method: "GET", path: "/v1/facilities/{id}/required-ctes", desc: "Auto-computed from FTL categories", auth: "Supplier JWT", priority: "P0" },
+    { method: "POST", path: "/v1/admin/invites", desc: "Buyer sends invite (creates PendingSupplier)", auth: "Buyer JWT", priority: "P0" },
+    { method: "POST", path: "/v1/auth/accept-invite", desc: "Supplier completes signup from invite token", auth: "Invite token", priority: "P0" },
+    { method: "POST", path: "/v1/supplier/facilities", desc: "Register a facility", auth: "Supplier JWT", priority: "P0" },
+    { method: "PUT", path: "/v1/supplier/facilities/{id}/ftl-categories", desc: "Set FTL categories for facility", auth: "Supplier JWT", priority: "P0" },
+    { method: "GET", path: "/v1/supplier/facilities/{id}/required-ctes", desc: "Auto-computed from FTL categories", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/facilities/{id}/cte-events", desc: "Submit a CTE with KDE data", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/suppliers/{id}/tlcs", desc: "List TLCs with status & event counts", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/suppliers/{id}/tlcs", desc: "Create new TLC", auth: "Supplier JWT", priority: "P0" },
@@ -646,6 +783,28 @@ function APISpecView() {
 
 export default function SupplierOnboardingFlow() {
   const [view, setView] = useState(VIEWS.OVERVIEW);
+  const [facilityId, setFacilityId] = useState(null);
+  const [requiredCTEs, setRequiredCTEs] = useState([]);
+  const [liveCategories, setLiveCategories] = useState(FTL_CATEGORIES);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCatalog = async () => {
+      try {
+        const categories = await apiClient.getFTLCategories();
+        if (!cancelled && Array.isArray(categories) && categories.length > 0) {
+          setLiveCategories(categories);
+        }
+      } catch (_err) {
+        // Keep local fallback if API catalog is unavailable.
+      }
+    };
+
+    loadCatalog();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const navItems = [
     { id: VIEWS.OVERVIEW, label: "Overview", icon: "🏠" },
@@ -665,9 +824,9 @@ export default function SupplierOnboardingFlow() {
     [VIEWS.OVERVIEW]: <OverviewView setView={setView} />,
     [VIEWS.BUYER_INVITE]: <BuyerInviteView />,
     [VIEWS.SUPPLIER_SIGNUP]: <SupplierSignupView />,
-    [VIEWS.FACILITY_SETUP]: <FacilitySetupView />,
-    [VIEWS.FTL_SCOPING]: <FTLScopingView />,
-    [VIEWS.CTE_CAPTURE]: <CTECaptureView />,
+    [VIEWS.FACILITY_SETUP]: <FacilitySetupView setView={setView} onFacilityCreated={setFacilityId} />,
+    [VIEWS.FTL_SCOPING]: <FTLScopingView facilityId={facilityId} categories={liveCategories} onRequiredCTEsChange={setRequiredCTEs} />,
+    [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} />,
     [VIEWS.TLC_MGMT]: <TLCMgmtView />,
     [VIEWS.DASHBOARD]: <DashboardView />,
     [VIEWS.FDA_EXPORT]: <FDAExportView />,

@@ -56,6 +56,45 @@ FOREACH (_ IN CASE WHEN invite IS NULL THEN [] ELSE [1] END |
 """
 
 
+FACILITY_FTL_SCOPING_QUERY = """
+MERGE (supplier:SupplierContact {user_id: $supplier_user_id})
+SET supplier.email = $supplier_email,
+    supplier.tenant_id = $tenant_id,
+    supplier.updated_at = datetime()
+MERGE (facility:SupplierFacility {facility_id: $facility_id})
+SET facility.tenant_id = $tenant_id,
+    facility.name = $facility_name,
+    facility.street = $street,
+    facility.city = $city,
+    facility.state = $state,
+    facility.postal_code = $postal_code,
+    facility.fda_registration_number = $fda_registration_number,
+    facility.roles = $roles,
+    facility.updated_at = datetime()
+MERGE (supplier)-[:OPERATES]->(facility)
+WITH facility
+OPTIONAL MATCH (facility)-[old:HANDLES]->(:FTLCategory)
+DELETE old
+WITH facility
+UNWIND $categories AS category
+MERGE (ftl:FTLCategory {category_id: category.id})
+SET ftl.name = category.name,
+    ftl.required_ctes = category.ctes,
+    ftl.updated_at = datetime()
+MERGE (facility)-[:HANDLES]->(ftl)
+"""
+
+
+FACILITY_REQUIRED_CTES_QUERY = """
+MATCH (facility:SupplierFacility {facility_id: $facility_id})-[:HANDLES]->(ftl:FTLCategory)
+RETURN collect(DISTINCT {
+  id: ftl.category_id,
+  name: ftl.name,
+  ctes: coalesce(ftl.required_ctes, [])
+}) AS categories
+"""
+
+
 def _to_utc_iso(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
@@ -105,6 +144,48 @@ class SupplierGraphSync:
                 operation=params.get("operation", "unknown"),
             )
 
+    def _query_required_ctes(self, facility_id: str) -> Optional[dict[str, Any]]:
+        if not self.enabled or self._driver is None:
+            return None
+
+        try:
+            with self._driver.session() as session:
+                record = session.run(
+                    FACILITY_REQUIRED_CTES_QUERY,
+                    {"facility_id": facility_id},
+                ).single()
+        except Exception as exc:  # pragma: no cover - runtime resilience
+            logger.warning(
+                "supplier_graph_sync_read_failed",
+                error=str(exc),
+                operation="facility_required_ctes",
+            )
+            return None
+
+        if not record:
+            return {
+                "source": "neo4j",
+                "categories": [],
+                "required_ctes": [],
+            }
+
+        categories = record.get("categories") or []
+        required_ctes: list[str] = []
+        seen: set[str] = set()
+
+        for category in categories:
+            for cte in category.get("ctes") or []:
+                if cte in seen:
+                    continue
+                seen.add(cte)
+                required_ctes.append(cte)
+
+        return {
+            "source": "neo4j",
+            "categories": categories,
+            "required_ctes": required_ctes,
+        }
+
     def record_invite_created(
         self,
         *,
@@ -150,6 +231,53 @@ class SupplierGraphSync:
                 "accepted_at": _to_utc_iso(accepted_at),
             },
         )
+
+    def record_facility_ftl_scoping(
+        self,
+        *,
+        tenant_id: str,
+        facility_id: str,
+        facility_name: str,
+        supplier_user_id: str,
+        supplier_email: str,
+        street: str,
+        city: str,
+        state: str,
+        postal_code: str,
+        fda_registration_number: Optional[str],
+        roles: list[str],
+        categories: list[dict[str, Any]],
+    ) -> None:
+        normalized_categories = [
+            {
+                "id": str(category["id"]),
+                "name": category["name"],
+                "ctes": category.get("ctes", []),
+            }
+            for category in categories
+        ]
+
+        self._run(
+            FACILITY_FTL_SCOPING_QUERY,
+            {
+                "operation": "facility_ftl_scoping",
+                "tenant_id": tenant_id,
+                "facility_id": facility_id,
+                "facility_name": facility_name,
+                "supplier_user_id": supplier_user_id,
+                "supplier_email": supplier_email,
+                "street": street,
+                "city": city,
+                "state": state,
+                "postal_code": postal_code,
+                "fda_registration_number": fda_registration_number,
+                "roles": roles,
+                "categories": normalized_categories,
+            },
+        )
+
+    def get_required_ctes_for_facility(self, facility_id: str) -> Optional[dict[str, Any]]:
+        return self._query_required_ctes(facility_id)
 
 
 supplier_graph_sync = SupplierGraphSync.from_env()
