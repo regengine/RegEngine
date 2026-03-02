@@ -79,14 +79,27 @@ export default function LoginPage() {
             }
         } catch (err: unknown) {
             console.error('Login error:', err);
-            // Handle axios-style errors with response property
-            const apiError = err as { response?: { status?: number } };
+            const apiError = err as {
+                response?: { status?: number; data?: { detail?: string; error?: string; message?: string } };
+                message?: string;
+                code?: string;
+            };
+            const errorDetail =
+                apiError.response?.data?.detail ||
+                apiError.response?.data?.error ||
+                apiError.response?.data?.message ||
+                null;
+
             if (apiError.response?.status === 401) {
                 setError('Invalid email or password');
             } else if (apiError.response?.status === 403) {
                 setError('Account access disabled');
+            } else if (apiError.response?.status === 404) {
+                setError('Authentication service unavailable. Please try again shortly.');
+            } else if (apiError.code === 'ERR_NETWORK') {
+                setError('Unable to reach authentication service. Check API configuration and try again.');
             } else {
-                setError('An unexpected error occurred. Please try again.');
+                setError(errorDetail || 'An unexpected error occurred. Please try again.');
             }
         } finally {
             setIsLoading(false);
