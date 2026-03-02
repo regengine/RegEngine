@@ -74,8 +74,13 @@ async function proxyRequest(
     const targetBases = getAdminTargets();
 
     const headers = new Headers();
+    const hasRequestBody = !['GET', 'OPTIONS'].includes(method);
     const contentType = request.headers.get('content-type');
-    if (contentType) headers.set('Content-Type', contentType);
+    if (contentType) {
+      headers.set('Content-Type', contentType);
+    } else if (hasRequestBody) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     const passthroughHeaders = [
       'authorization',
@@ -96,11 +101,12 @@ async function proxyRequest(
       headers,
     };
 
-    let bodyText = '';
-    if (!['GET', 'OPTIONS'].includes(method)) {
-      bodyText = await request.text();
-      if (bodyText) {
-        fetchOptions.body = bodyText;
+    let requestBody: ArrayBuffer | undefined;
+    if (hasRequestBody) {
+      const bodyBuffer = await request.arrayBuffer();
+      if (bodyBuffer.byteLength > 0) {
+        requestBody = bodyBuffer;
+        fetchOptions.body = requestBody;
       }
     }
 
@@ -133,8 +139,8 @@ async function proxyRequest(
         const message = error instanceof Error ? error.message : 'Admin request failed';
         attemptErrors.push(`target=${targetBase} error=${message}`);
 
-        if (!['GET', 'OPTIONS'].includes(method)) {
-          fetchOptions.body = bodyText;
+        if (hasRequestBody && requestBody) {
+          fetchOptions.body = requestBody;
         }
       }
     }
