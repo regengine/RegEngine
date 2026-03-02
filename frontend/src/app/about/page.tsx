@@ -29,7 +29,7 @@ const timeline = [
     {
         year: "2006–2009",
         title: "U.S. Senate — Personal Aide to Senator Jeff Merkley",
-        description: "Managed 150+ town halls with 100% federal compliance. Saw firsthand how regulatory complexity creates coordination failures at scale.",
+        description: "Supported 150+ town halls and constituent engagements statewide. Saw firsthand how regulatory complexity creates coordination failures at scale.",
         tag: "Federal Government",
     },
     {
@@ -41,7 +41,7 @@ const timeline = [
     {
         year: "2013–2023",
         title: "Tech Startups — SeatGeek, RadarFirst, Shift Technologies",
-        description: "Operations and technical roles across ticketing, privacy compliance, and automotive marketplaces. Built the technical foundation for what became RegEngine.",
+        description: "Customer success, account management, and business development across ticketing, privacy compliance, and automotive marketplaces. Saw the compliance coordination problem firsthand from the customer side.",
         tag: "Technology",
     },
     {
@@ -87,10 +87,10 @@ export default function AboutPage() {
                         About
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
-                        Built by someone who&apos;s actually done compliance work
+                        Built by someone who&apos;s seen compliance from every side
                     </h1>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: "0 0 16px" }}>
-                        RegEngine isn&apos;t a venture-backed team that read about FSMA 204 in a TechCrunch article. It&apos;s built by a founder with 20+ years of federal compliance, nonprofit program management, and technical operations experience.
+                        RegEngine isn&apos;t a venture-backed team that read about FSMA 204 in a TechCrunch article. It&apos;s built by a founder with 20+ years across public service, federal government, nonprofit management, and technology.
                     </p>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
                         The thesis is simple: regulatory compliance is a coordination problem, not an information problem. The rules are public. The challenge is making them machine-readable, cryptographically verifiable, and operationally useful — without requiring a six-figure consulting engagement.
@@ -117,7 +117,7 @@ export default function AboutPage() {
                                 Christopher Lee Sellers
                             </h2>
                             <p style={{ fontSize: "14px", color: T.accent, fontWeight: 600, margin: "0 0 12px" }}>
-                                CEO & Technical Founder
+                                CEO & Founder
                             </p>
                             <p className="text-sm text-re-text-muted leading-relaxed m-0">
                                 20+ years spanning federal government (U.S. Senate), nonprofit program management (Epilepsy Foundation), disaster response (AmeriCorps NCCC / Hurricane Katrina), and tech startups (SeatGeek, RadarFirst, Shift Technologies). President&apos;s Volunteer Service Award for lifetime achievement. B.S. Political Science, Portland State University.
