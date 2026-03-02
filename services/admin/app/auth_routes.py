@@ -109,7 +109,17 @@ async def login(
         ip_address=request.client.host if request.client else "0.0.0.0"
     )
     
-    await session_store.create_session(session_data)
+    session_persisted = True
+    try:
+        await session_store.create_session(session_data)
+    except Exception as exc:
+        session_persisted = False
+        logger.warning(
+            "session_store_unavailable",
+            user_id=str(user.id),
+            error=str(exc),
+            fallback="stateless_session",
+        )
 
     # 4. Create Access Token
     access_token_data = {
@@ -134,11 +144,16 @@ async def login(
 
     db.commit()
     
-    logger.info("login_success", user_id=str(user.id), session_id=str(session_data.id))
+    logger.info(
+        "login_success",
+        user_id=str(user.id),
+        session_id=str(session_data.id),
+        session_persisted=session_persisted,
+    )
     
     return TokenResponse(
         access_token=access_token,
-        refresh_token=raw_refresh_token,
+        refresh_token=raw_refresh_token if session_persisted else "",
         tenant_id=active_tenant_id,
         user={"id": str(user.id), "email": user.email, "is_sysadmin": user.is_sysadmin},
         available_tenants=available_tenants
