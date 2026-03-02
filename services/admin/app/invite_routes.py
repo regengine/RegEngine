@@ -16,6 +16,7 @@ from app.audit import AuditLogger
 from app.auth_utils import get_password_hash
 from app.models import TenantContext
 from app.password_policy import validate_password, PasswordPolicyError
+from app.supplier_graph_sync import supplier_graph_sync
 
 router = APIRouter()
 logger = structlog.get_logger("invite_routes")
@@ -130,6 +131,15 @@ async def create_invite(
     
     db.commit()
     db.refresh(new_invite)
+
+    supplier_graph_sync.record_invite_created(
+        tenant_id=str(tenant_id),
+        invite_id=str(new_invite.id),
+        email=new_invite.email,
+        role_id=str(new_invite.role_id),
+        expires_at=new_invite.expires_at,
+        created_by=str(current_user.id),
+    )
 
     # In a real app, send email here.
     # For now, return the link.
@@ -279,7 +289,8 @@ async def accept_invite(
     db.add(membership)
     
     # Update Invite
-    invite.accepted_at = datetime.now(timezone.utc)
+    accepted_at = datetime.now(timezone.utc)
+    invite.accepted_at = accepted_at
     
     # Audit Log (System context? Or User context?)
     # Since user is just created, we can use their ID? Or leave actor null (System).
@@ -298,5 +309,14 @@ async def accept_invite(
     )
     
     db.commit()
+
+    supplier_graph_sync.record_invite_accepted(
+        tenant_id=str(invite.tenant_id),
+        invite_id=str(invite.id),
+        user_id=str(user.id),
+        email=user.email,
+        role_id=str(invite.role_id),
+        accepted_at=accepted_at,
+    )
     
     return {"status": "success", "user_id": str(user.id)}

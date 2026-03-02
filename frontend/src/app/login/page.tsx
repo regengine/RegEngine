@@ -15,17 +15,19 @@ const LOGIN_PRESETS = [
         id: 'qa' as const,
         label: 'QA Tester',
         email: 'test@example.com',
-        password: 'Trace204!User',
         access: 'Dashboard and core user flows',
     },
     {
         id: 'admin' as const,
         label: 'QA Admin',
         email: 'admin@example.com',
-        password: 'Trace204!Apex',
         access: 'Sysadmin and admin access checks',
     },
 ];
+
+const showQaPresets =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.NEXT_PUBLIC_ENABLE_QA_LOGIN_PRESETS === '1';
 
 type LoginPreset = (typeof LOGIN_PRESETS)[number]['id'];
 
@@ -72,7 +74,7 @@ export default function LoginPage() {
             return;
         }
         setEmail(preset.email);
-        setPassword(preset.password);
+        setPassword('');
         setError(null);
     }, []);
 
@@ -202,25 +204,30 @@ export default function LoginPage() {
                             )}
                         </Button>
 
-                        <div className="rounded-md border bg-slate-100 dark:bg-slate-800/50 p-3 space-y-2">
-                            <p className="text-xs font-semibold tracking-wide uppercase text-slate-700 dark:text-slate-300">
-                                QA Test Credentials
-                            </p>
-                            {LOGIN_PRESETS.map((preset) => (
-                                <button
-                                    key={preset.id}
-                                    type="button"
-                                    onClick={() => applyPreset(preset.id)}
-                                    className="w-full text-left p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-primary/50 transition-colors"
-                                >
-                                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</p>
-                                    <p className="text-xs text-slate-600 dark:text-slate-400">{preset.access}</p>
-                                    <p className="text-xs font-mono text-slate-700 dark:text-slate-300 mt-1">
-                                        {preset.email} / {preset.password}
-                                    </p>
-                                </button>
-                            ))}
-                        </div>
+                        {showQaPresets && (
+                            <div className="rounded-md border bg-slate-100 dark:bg-slate-800/50 p-3 space-y-2">
+                                <p className="text-xs font-semibold tracking-wide uppercase text-slate-700 dark:text-slate-300">
+                                    QA Login Presets
+                                </p>
+                                {LOGIN_PRESETS.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        onClick={() => applyPreset(preset.id)}
+                                        className="w-full text-left p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-primary/50 transition-colors"
+                                    >
+                                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">{preset.access}</p>
+                                        <p className="text-xs font-mono text-slate-700 dark:text-slate-300 mt-1">
+                                            {preset.email}
+                                        </p>
+                                    </button>
+                                ))}
+                                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                    Passwords are managed outside client source.
+                                </p>
+                            </div>
+                        )}
 
                         <div className="text-center text-sm text-muted-foreground pt-2">
                             <Link href="/" className="hover:text-primary transition-colors flex items-center justify-center gap-2">

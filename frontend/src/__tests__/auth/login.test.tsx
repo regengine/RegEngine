@@ -75,6 +75,26 @@ describe('LoginPage', () => {
             expect(link).toBeInTheDocument();
             expect(link).toHaveAttribute('href', '/');
         });
+
+        it('does not render hardcoded QA passwords in UI', () => {
+            render(<LoginPage />);
+
+            expect(screen.queryByText(/Trace204!User/i)).not.toBeInTheDocument();
+            expect(screen.queryByText(/Trace204!Apex/i)).not.toBeInTheDocument();
+        });
+
+        it('applies QA preset email without populating password', async () => {
+            const user = userEvent.setup();
+            render(<LoginPage />);
+
+            const passwordInput = screen.getByLabelText(/password/i);
+            await user.type(passwordInput, 'temporary-password');
+
+            await user.click(screen.getByRole('button', { name: /qa tester/i }));
+
+            expect(screen.getByLabelText(/email/i)).toHaveValue('test@example.com');
+            expect(screen.getByLabelText(/password/i)).toHaveValue('');
+        });
     });
 
     describe('Form Validation', () => {
