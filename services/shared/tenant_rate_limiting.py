@@ -2,6 +2,7 @@ from collections import defaultdict
 import os
 import time
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 import uuid
 
 from fastapi import Request
@@ -23,6 +24,22 @@ tenant_rate_limit_hits_total = Counter(
 def record_rate_limit(tenant_id: str, allowed: bool):
     status = "allowed" if allowed else "blocked"
     tenant_rate_limit_hits_total.labels(tenant_id=tenant_id, status=status).inc()
+
+
+def _redact_connection_url(url: str) -> str:
+    try:
+        parsed = urlsplit(url)
+        host = parsed.hostname or "unknown"
+        port = f":{parsed.port}" if parsed.port else ""
+        username = parsed.username or ""
+
+        auth = ""
+        if username:
+            auth = f"{username}:***@"
+
+        return urlunsplit((parsed.scheme, f"{auth}{host}{port}", parsed.path, "", ""))
+    except Exception:
+        return "<redacted>"
 
 
 class _InMemoryBucket:
@@ -81,7 +98,7 @@ except Exception as exc:  # pragma: no cover - defensive fallback
     logger.warning(
         "rate_limit_backend_init_failed",
         backend="redis",
-        redis_url=redis_url,
+        redis_url=_redact_connection_url(redis_url),
         error=str(exc),
         fallback="in_memory",
     )

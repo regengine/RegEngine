@@ -16,7 +16,7 @@ from app.auth_utils import decode_access_token
 from shared.supabase_client import get_supabase
 
 # Redis Session Store
-from app.session_store import RedisSessionStore
+from app.session_store import RedisSessionStore, redact_connection_url
 
 # Define oauth2_scheme (although we use custom login mostly, this helps Swagger UI)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -36,7 +36,7 @@ def get_session_store() -> RedisSessionStore:
     if _session_store is None:
         redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
         _session_store = RedisSessionStore(redis_url)
-        logger.info("session_store_initialized", redis_url=redis_url)
+        logger.info("session_store_initialized", redis_url=redact_connection_url(redis_url))
     return _session_store
 
 

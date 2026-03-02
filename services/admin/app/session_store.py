@@ -20,12 +20,30 @@ import json
 import structlog
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
+from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 from pydantic import BaseModel, Field
 
 import redis.asyncio as redis
 
 logger = structlog.get_logger("session_store")
+
+
+def redact_connection_url(url: str) -> str:
+    """Redact credentials from connection URLs before logging."""
+    try:
+        parsed = urlsplit(url)
+        host = parsed.hostname or "unknown"
+        port = f":{parsed.port}" if parsed.port else ""
+        username = parsed.username or ""
+
+        auth = ""
+        if username:
+            auth = f"{username}:***@"
+
+        return urlunsplit((parsed.scheme, f"{auth}{host}{port}", parsed.path, "", ""))
+    except Exception:
+        return "<redacted>"
 
 
 class SessionData(BaseModel):
@@ -106,7 +124,7 @@ class RedisSessionStore:
         
         logger.info(
             "redis_session_store_init",
-            redis_url=redis_url,
+            redis_url=redact_connection_url(redis_url),
             default_ttl_days=default_ttl_days
         )
     
