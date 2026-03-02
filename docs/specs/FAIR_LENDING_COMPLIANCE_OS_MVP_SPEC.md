@@ -107,3 +107,5 @@ All services publish into a shared Compliance Knowledge Graph (CKG).
 - In-memory MVP store + CKG projection: `services/compliance/app/store.py`
 - SQL schema baseline: `services/compliance/migrations/V1__fair_lending_compliance_os.sql`
 - OpenAPI 3.1 contract: `services/compliance/openapi/fair_lending_openapi.yaml`
+- SOC 2 control mapping: `docs/security/SOC2_FAIR_LENDING_CONTROL_MAPPING.md`
+- Investor wedge narrative: `docs/whitepapers/FAIR_LENDING_WEDGE_INVESTOR_NARRATIVE.md`

@@ -9,7 +9,10 @@ import json
 import os
 from typing import Optional
 
+import requests
 import structlog
+
+from regengine.swarm.sse import collect_openai_stream_text
 
 logger = structlog.get_logger("swarm.llm")
 
@@ -46,9 +49,81 @@ class OpenAIClient(BaseLLMClient):
     def __init__(self, model: str, api_key: str, timeout: int = 60):
         super().__init__(model, timeout)
         from openai import OpenAI
+        self.api_key = api_key
         self.client = OpenAI(api_key=api_key)
 
-    def generate(self, prompt: str, system_prompt: str = "") -> str:
+    def _extract_responses_text(self, payload: dict) -> str:
+        output = payload.get("output", [])
+        if not isinstance(output, list):
+            return ""
+
+        text_parts = []
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content", [])
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if isinstance(block, dict):
+                    text_value = block.get("text")
+                    if isinstance(text_value, str):
+                        text_parts.append(text_value)
+        return "".join(text_parts)
+
+    def _generate_via_responses_stream(self, prompt: str, system_prompt: str = "") -> str:
+        payload = {
+            "model": self.model,
+            "input": prompt,
+            "stream": True,
+            "temperature": 0.1,
+        }
+        if system_prompt:
+            payload["instructions"] = system_prompt
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        with requests.post(
+            "https://api.openai.com/v1/responses",
+            headers=headers,
+            json=payload,
+            stream=True,
+            timeout=self.timeout,
+        ) as response:
+            response.raise_for_status()
+
+            def chunk_iter():
+                for chunk in response.iter_content(chunk_size=2048, decode_unicode=True):
+                    if chunk:
+                        yield chunk
+
+            streamed_text = collect_openai_stream_text(chunk_iter())
+            if streamed_text:
+                return streamed_text
+
+        fallback_payload = {
+            "model": self.model,
+            "input": prompt,
+            "stream": False,
+            "temperature": 0.1,
+        }
+        if system_prompt:
+            fallback_payload["instructions"] = system_prompt
+
+        fallback_response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers=headers,
+            json=fallback_payload,
+            timeout=self.timeout,
+        )
+        fallback_response.raise_for_status()
+        parsed = fallback_response.json()
+        return self._extract_responses_text(parsed)
+
+    def _generate_via_chat_completions(self, prompt: str, system_prompt: str = "") -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -61,6 +136,22 @@ class OpenAIClient(BaseLLMClient):
             timeout=self.timeout,
         )
         return resp.choices[0].message.content or ""
+
+    def generate(self, prompt: str, system_prompt: str = "") -> str:
+        force_responses = os.getenv("OPENAI_USE_RESPONSES_API", "").lower() in {"1", "true", "yes"}
+        prefers_responses = "codex" in self.model.lower() or self.model.lower().startswith("gpt-5")
+
+        if force_responses or prefers_responses:
+            try:
+                return self._generate_via_responses_stream(prompt, system_prompt)
+            except Exception as error:
+                logger.warning(
+                    "openai_responses_stream_failed_fallback_chat",
+                    model=self.model,
+                    error=str(error),
+                )
+
+        return self._generate_via_chat_completions(prompt, system_prompt)
 
 
 class VertexAIClient(BaseLLMClient):
@@ -119,7 +210,7 @@ class MockLLMClient(BaseLLMClient):
             idx = min(self._call_count, len(self._responses) - 1)
             self._call_count += 1
             return self._responses[idx]
-        
+
         # Behavior based on system prompt or prompt content
         if "Planner" in system_prompt or "Planner" in prompt:
             return json.dumps({
@@ -144,16 +235,14 @@ class MockLLMClient(BaseLLMClient):
                 "passed": 5,
                 "failed": 0
             })
-            
+
         # Specific fallback for word 'plan' only if no other role matched
         if "plan" in prompt.lower() and "review" not in prompt.lower():
             return json.dumps({
                 "plan": [{"step": 1, "action": "Analyze service", "files": ["main.py"]}],
                 "files_to_edit": ["main.py"]
             })
-            
-        return json.dumps({"result": "mock response", "verdict": "pass", "status": "completed"})
-            
+
         return json.dumps({"result": "mock response", "verdict": "pass", "status": "completed"})
 
 
@@ -164,6 +253,7 @@ class LLMClientFactory:
         LLM_MODEL       - Model name (default: llama3:8b)
         LLM_TIMEOUT_S   - Timeout in seconds (default: 60)
         OPENAI_API_KEY   - OpenAI API key (activates OpenAI provider)
+        OPENAI_USE_RESPONSES_API - Force Responses API (SSE stream parsing)
         GOOGLE_CLOUD_PROJECT - GCP project ID (activates Vertex AI)
         OLLAMA_HOST      - Ollama endpoint (default: http://localhost:11434)
     """
