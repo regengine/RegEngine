@@ -47,14 +47,12 @@ const QA_LOGIN_PRESETS = [
     id: 'qa' as const,
     label: 'QA Tester',
     email: 'test@example.com',
-    password: 'password123',
     access: 'Dashboard and core QA flows',
   },
   {
     id: 'admin' as const,
     label: 'QA Admin',
     email: 'admin@example.com',
-    password: 'password',
     access: 'Sysadmin and admin tools',
   },
 ];
@@ -346,7 +344,7 @@ export default function OnboardingPage() {
                           <div>
                             <p className="font-medium text-re-text-primary">QA Test Credentials</p>
                             <p className="text-sm text-re-text-muted">
-                              Use these for QA sign-in and admin-access verification.
+                              Use these preset emails for QA sign-in and admin-access verification.
                             </p>
                           </div>
                         </div>
@@ -361,7 +359,7 @@ export default function OnboardingPage() {
                                 <p className="text-sm font-medium text-re-text-primary">{preset.label}</p>
                                 <p className="text-xs text-re-text-muted">{preset.access}</p>
                                 <p className="text-xs font-mono text-re-text-secondary mt-1">
-                                  {preset.email} / {preset.password}
+                                  {preset.email}
                                 </p>
                               </div>
                               <Button
@@ -375,6 +373,9 @@ export default function OnboardingPage() {
                               </Button>
                             </div>
                           ))}
+                          <p className="text-[11px] text-re-text-muted">
+                            Passwords are managed outside client source.
+                          </p>
                         </div>
                       </div>
                     )}
