@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import uuid as uuid_module
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -7,6 +9,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -156,6 +159,58 @@ class SupplierComplianceGapsResponse(BaseModel):
     medium: int
     low: int
     evaluated_at: str
+
+
+class SupplierFDAExportRow(BaseModel):
+    event_id: str
+    tlc_code: str
+    product_description: str | None = None
+    cte_type: str
+    facility_name: str
+    event_time: str
+    quantity: str
+    unit_of_measure: str
+    reference_document: str
+    payload_sha256: str
+    merkle_hash: str
+    merkle_sequence: int
+
+
+class SupplierFDAExportPreviewResponse(BaseModel):
+    rows: list[SupplierFDAExportRow]
+    total_count: int
+
+
+FDA_EXPORT_COLUMN_ORDER = [
+    "event_id",
+    "tlc_code",
+    "product_description",
+    "cte_type",
+    "facility_name",
+    "event_time",
+    "quantity",
+    "unit_of_measure",
+    "reference_document",
+    "payload_sha256",
+    "merkle_hash",
+    "merkle_sequence",
+]
+
+
+FDA_EXPORT_HEADERS = {
+    "event_id": "Event ID",
+    "tlc_code": "Traceability Lot Code",
+    "product_description": "Product Description",
+    "cte_type": "Critical Tracking Event",
+    "facility_name": "Facility",
+    "event_time": "Event Time (UTC)",
+    "quantity": "Quantity",
+    "unit_of_measure": "Unit of Measure",
+    "reference_document": "Reference Document",
+    "payload_sha256": "SHA-256",
+    "merkle_hash": "Merkle Hash",
+    "merkle_sequence": "Merkle Sequence",
+}
 
 
 def _get_supplier_facility_or_404(
@@ -409,6 +464,136 @@ def _compute_supplier_compliance(
         "evaluated_at": evaluated_at_iso,
     }
     return score_payload, gap_payloads
+
+
+def _string_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def _build_fda_export_rows(
+    db: Session,
+    *,
+    tenant_id: uuid_module.UUID,
+    supplier_user_id: uuid_module.UUID,
+    facility_id: uuid_module.UUID | None,
+    tlc_code: str | None,
+    start_time: datetime | None,
+    end_time: datetime | None,
+) -> list[dict[str, Any]]:
+    event_query = (
+        select(
+            SupplierCTEEventModel,
+            SupplierTraceabilityLotModel,
+            SupplierFacilityModel,
+        )
+        .join(SupplierTraceabilityLotModel, SupplierTraceabilityLotModel.id == SupplierCTEEventModel.lot_id)
+        .join(SupplierFacilityModel, SupplierFacilityModel.id == SupplierCTEEventModel.facility_id)
+        .where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.supplier_user_id == supplier_user_id,
+            SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            SupplierTraceabilityLotModel.supplier_user_id == supplier_user_id,
+            SupplierFacilityModel.tenant_id == tenant_id,
+            SupplierFacilityModel.supplier_user_id == supplier_user_id,
+        )
+    )
+
+    if facility_id is not None:
+        event_query = event_query.where(SupplierCTEEventModel.facility_id == facility_id)
+    if tlc_code:
+        event_query = event_query.where(SupplierTraceabilityLotModel.tlc_code == tlc_code)
+
+    normalized_start_time = _as_utc(start_time)
+    normalized_end_time = _as_utc(end_time)
+    if normalized_start_time is not None:
+        event_query = event_query.where(SupplierCTEEventModel.event_time >= normalized_start_time)
+    if normalized_end_time is not None:
+        event_query = event_query.where(SupplierCTEEventModel.event_time <= normalized_end_time)
+
+    event_rows = db.execute(
+        event_query.order_by(SupplierCTEEventModel.event_time.desc(), SupplierCTEEventModel.sequence_number.desc())
+    ).all()
+
+    output_rows: list[dict[str, Any]] = []
+    for event, lot, facility in event_rows:
+        kde_data = event.kde_data if isinstance(event.kde_data, dict) else {}
+        quantity_value = kde_data.get("quantity", kde_data.get("qty", ""))
+        unit_value = kde_data.get("unit_of_measure", kde_data.get("uom", ""))
+        reference_document = (
+            kde_data.get("reference_document")
+            or kde_data.get("reference_document_id")
+            or kde_data.get("bill_of_lading")
+            or kde_data.get("reference_doc")
+            or ""
+        )
+
+        output_rows.append(
+            {
+                "event_id": str(event.id),
+                "tlc_code": lot.tlc_code,
+                "product_description": lot.product_description or kde_data.get("product_description"),
+                "cte_type": event.cte_type,
+                "facility_name": facility.name,
+                "event_time": _iso_utc(_as_utc(event.event_time) or datetime.now(timezone.utc)),
+                "quantity": _string_value(quantity_value),
+                "unit_of_measure": _string_value(unit_value),
+                "reference_document": _string_value(reference_document),
+                "payload_sha256": event.payload_sha256,
+                "merkle_hash": event.merkle_hash,
+                "merkle_sequence": int(event.sequence_number),
+            }
+        )
+
+    return output_rows
+
+
+def _render_fda_export_csv(rows: list[dict[str, Any]]) -> bytes:
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=[FDA_EXPORT_HEADERS[column] for column in FDA_EXPORT_COLUMN_ORDER])
+    writer.writeheader()
+
+    for row in rows:
+        writer.writerow(
+            {
+                FDA_EXPORT_HEADERS[column]: _string_value(row.get(column, ""))
+                for column in FDA_EXPORT_COLUMN_ORDER
+            }
+        )
+
+    return output.getvalue().encode("utf-8")
+
+
+def _render_fda_export_xlsx(rows: list[dict[str, Any]]) -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    workbook = Workbook()
+    worksheet: Any = workbook.active
+    worksheet.title = "FDA Traceability"
+    worksheet.append([FDA_EXPORT_HEADERS[column] for column in FDA_EXPORT_COLUMN_ORDER])
+
+    for row in rows:
+        worksheet.append([_string_value(row.get(column, "")) for column in FDA_EXPORT_COLUMN_ORDER])
+
+    for cell in worksheet[1]:
+        cell.font = Font(bold=True)
+
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+
+    for index, column_name in enumerate(FDA_EXPORT_COLUMN_ORDER, start=1):
+        display_name = FDA_EXPORT_HEADERS[column_name]
+        width = max(len(display_name) + 2, 14)
+        worksheet.column_dimensions[get_column_letter(index)].width = min(width, 42)
+
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
 
 
 @router.get("/ftl-categories")
@@ -895,4 +1080,102 @@ async def get_compliance_gaps(
         medium=medium,
         low=low,
         evaluated_at=score_payload["evaluated_at"],
+    )
+
+
+@router.get("/export/fda-records/preview", response_model=SupplierFDAExportPreviewResponse)
+async def preview_fda_records_export(
+    facility_id: str | None = None,
+    tlc_code: str | None = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
+    limit: int = Query(default=25, ge=1, le=500),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierFDAExportPreviewResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    scoped_facility_id: uuid_module.UUID | None = None
+    if facility_id:
+        try:
+            scoped_facility_id = uuid_module.UUID(facility_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+        _get_supplier_facility_or_404(
+            db,
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            facility_id=scoped_facility_id,
+        )
+
+    rows = _build_fda_export_rows(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+        tlc_code=tlc_code.strip() if tlc_code else None,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+    preview_rows = [SupplierFDAExportRow(**row) for row in rows[:limit]]
+    return SupplierFDAExportPreviewResponse(rows=preview_rows, total_count=len(rows))
+
+
+@router.get("/export/fda-records")
+async def export_fda_records(
+    format: str = Query(default="xlsx", pattern="^(csv|xlsx)$"),
+    facility_id: str | None = None,
+    tlc_code: str | None = None,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> StreamingResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    scoped_facility_id: uuid_module.UUID | None = None
+    if facility_id:
+        try:
+            scoped_facility_id = uuid_module.UUID(facility_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+        _get_supplier_facility_or_404(
+            db,
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            facility_id=scoped_facility_id,
+        )
+
+    rows = _build_fda_export_rows(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+        tlc_code=tlc_code.strip() if tlc_code else None,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if format == "csv":
+        payload = _render_fda_export_csv(rows)
+        filename = f"fda_traceability_records_{timestamp}.csv"
+        media_type = "text/csv"
+    else:
+        payload = _render_fda_export_xlsx(rows)
+        filename = f"fda_traceability_records_{timestamp}.xlsx"
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    return StreamingResponse(
+        io.BytesIO(payload),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-FDA-Record-Count": str(len(rows)),
+        },
     )

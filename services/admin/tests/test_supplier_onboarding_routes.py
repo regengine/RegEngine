@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 from uuid import UUID, uuid4
 
 import pytest
@@ -124,6 +126,29 @@ def _create_facility(client: TestClient) -> str:
     )
     assert response.status_code == 200
     return response.json()["id"]
+
+
+def _create_sample_supplier_event(client: TestClient, facility_id: str, tlc_code: str = "TLC-2026-SAL-7777") -> None:
+    scope_response = client.put(
+        f"/v1/supplier/facilities/{facility_id}/ftl-categories",
+        json={"category_ids": ["1"]},
+    )
+    assert scope_response.status_code == 200
+
+    event_response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "shipping",
+            "tlc_code": tlc_code,
+            "kde_data": {
+                "quantity": 480,
+                "unit_of_measure": "cases",
+                "reference_document": "BOL-9921",
+                "product_description": "Baby Spinach",
+            },
+        },
+    )
+    assert event_response.status_code == 200
 
 
 def test_required_ctes_happy_path_two_categories(client: TestClient):
@@ -348,3 +373,49 @@ def test_compliance_score_flags_unscoped_facility(client: TestClient):
     assert gaps_payload["total"] == 1
     assert gaps_payload["high"] == 1
     assert gaps_payload["gaps"][0]["reason"] == "ftl_not_scoped"
+
+
+def test_fda_export_preview_returns_live_rows(client: TestClient):
+    facility_id = _create_facility(client)
+    _create_sample_supplier_event(client, facility_id, tlc_code="TLC-2026-SAL-8800")
+
+    response = client.get(f"/v1/supplier/export/fda-records/preview?facility_id={facility_id}&limit=10")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_count"] >= 1
+    row = payload["rows"][0]
+    assert row["tlc_code"] == "TLC-2026-SAL-8800"
+    assert row["reference_document"] == "BOL-9921"
+    assert len(row["payload_sha256"]) == 64
+
+
+def test_fda_export_csv_contains_sha256_column(client: TestClient):
+    facility_id = _create_facility(client)
+    _create_sample_supplier_event(client, facility_id, tlc_code="TLC-2026-SAL-8801")
+
+    response = client.get(f"/v1/supplier/export/fda-records?format=csv&facility_id={facility_id}")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert ".csv" in response.headers["content-disposition"]
+
+    csv_text = response.content.decode("utf-8")
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    assert len(rows) == 1
+    assert rows[0]["Traceability Lot Code"] == "TLC-2026-SAL-8801"
+    assert rows[0]["Reference Document"] == "BOL-9921"
+    assert len(rows[0]["SHA-256"]) == 64
+
+
+def test_fda_export_xlsx_returns_spreadsheet_payload(client: TestClient):
+    facility_id = _create_facility(client)
+    _create_sample_supplier_event(client, facility_id, tlc_code="TLC-2026-SAL-8802")
+
+    response = client.get(f"/v1/supplier/export/fda-records?format=xlsx&facility_id={facility_id}")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert ".xlsx" in response.headers["content-disposition"]
+    assert response.headers["x-fda-record-count"] == "1"
+    assert response.content[:2] == b"PK"

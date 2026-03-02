@@ -297,6 +297,26 @@ export interface SupplierComplianceGapsResponse {
     evaluated_at: string;
 }
 
+export interface SupplierFDAExportRow {
+    event_id: string;
+    tlc_code: string;
+    product_description?: string | null;
+    cte_type: string;
+    facility_name: string;
+    event_time: string;
+    quantity: string;
+    unit_of_measure: string;
+    reference_document: string;
+    payload_sha256: string;
+    merkle_hash: string;
+    merkle_sequence: number;
+}
+
+export interface SupplierFDAExportPreviewResponse {
+    rows: SupplierFDAExportRow[];
+    total_count: number;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;

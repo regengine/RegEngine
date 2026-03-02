@@ -855,7 +855,68 @@ function DashboardView({ facilityId, refreshKey }) {
   );
 }
 
-function FDAExportView() {
+function FDAExportView({ facilityId, refreshKey }) {
+  const [rows, setRows] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState(null);
+  const [statusMessage, setStatusMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const preview = await apiClient.getSupplierFDAExportPreview(facilityId || undefined, 50);
+        if (!cancelled) {
+          setRows(preview.rows || []);
+          setTotalCount(preview.total_count || 0);
+        }
+      } catch (_err) {
+        if (!cancelled) {
+          setRows([]);
+          setTotalCount(0);
+          setError("Could not load export preview.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId, refreshKey]);
+
+  const downloadExport = async (format) => {
+    setExportingFormat(format);
+    setStatusMessage("");
+    setError("");
+    try {
+      const { blob, filename, recordCount } = await apiClient.downloadSupplierFDARecords(format, facilityId || undefined);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setStatusMessage(`Downloaded ${recordCount} record${recordCount === 1 ? "" : "s"} as ${filename}.`);
+    } catch (_err) {
+      setError("Could not generate export file.");
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
   return (
     <div>
       <SectionTitle sub="FDA requires electronic sortable spreadsheet within 24 hours of request">Step 8: FDA 24-Hour Export</SectionTitle>
@@ -875,29 +936,51 @@ function FDAExportView() {
           ))}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Export as XLSX (FDA format)</button>
-          <button style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: "#fff", color: ACCENT, border: `1px solid ${ACCENT}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Export as CSV</button>
+          <button
+            onClick={() => downloadExport("xlsx")}
+            disabled={exportingFormat !== null}
+            style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: exportingFormat ? 0.7 : 1 }}
+          >
+            {exportingFormat === "xlsx" ? "Preparing XLSX..." : "Export as XLSX (FDA format)"}
+          </button>
+          <button
+            onClick={() => downloadExport("csv")}
+            disabled={exportingFormat !== null}
+            style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: "#fff", color: ACCENT, border: `1px solid ${ACCENT}`, fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: exportingFormat ? 0.7 : 1 }}
+          >
+            {exportingFormat === "csv" ? "Preparing CSV..." : "Export as CSV"}
+          </button>
           <button style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>EPCIS 2.0 (Pro)</button>
         </div>
+        {statusMessage && <div style={{ marginTop: 10, fontSize: 12, color: ACCENT }}>{statusMessage}</div>}
+        {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
       </Card>
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Export Preview</div>
+        {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Loading live FDA preview rows...</div>}
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", fontSize: 11 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr 1fr 1.5fr 1.5fr 1fr 1fr", padding: "6px 8px", backgroundColor: ACCENT, color: "#fff", fontWeight: 600 }}>
-            <div>TLC</div><div>Product</div><div>CTE</div><div>Location</div><div>Date</div><div>Qty</div><div>Ref Doc</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr", padding: "6px 8px", backgroundColor: ACCENT, color: "#fff", fontWeight: 600 }}>
+            <div>TLC</div><div>Product</div><div>CTE</div><div>Location</div><div>Date</div><div>Qty</div><div>Ref Doc</div><div>SHA-256</div>
           </div>
-          {[
-            ["TLC-2026-SAL-0001", "Baby Spinach, Organic", "Harvest", "Salinas Farm #3", "2026-02-28", "500 lbs", "WO-4401"],
-            ["TLC-2026-SAL-0001", "Baby Spinach, Organic", "Cooling", "Salinas Cooler A", "2026-02-28", "500 lbs", "CR-0228"],
-            ["TLC-2026-SAL-0001", "Baby Spinach, Organic", "Packing", "Salinas Packhouse", "2026-03-01", "480 lbs", "PK-0301"],
-            ["TLC-2026-SAL-0001", "Baby Spinach, Organic", "Shipping", "Salinas Packhouse", "2026-03-01", "480 lbs", "BOL-9921"],
-          ].map((row, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1.5fr 1fr 1.5fr 1.5fr 1fr 1fr", padding: "6px 8px", borderTop: `1px solid ${BORDER}`, backgroundColor: i % 2 ? GRAY_LIGHT : "#fff" }}>
-              {row.map((cell, j) => <div key={j} style={{ fontFamily: j === 0 ? "monospace" : "inherit" }}>{cell}</div>)}
+          {rows.map((row, i) => (
+            <div key={row.event_id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr", padding: "6px 8px", borderTop: `1px solid ${BORDER}`, backgroundColor: i % 2 ? GRAY_LIGHT : "#fff" }}>
+              <div style={{ fontFamily: "monospace" }}>{row.tlc_code}</div>
+              <div>{row.product_description || "-"}</div>
+              <div>{row.cte_type}</div>
+              <div>{row.facility_name}</div>
+              <div>{(row.event_time || "").slice(0, 10)}</div>
+              <div>{row.quantity ? `${row.quantity} ${row.unit_of_measure || ""}`.trim() : "-"}</div>
+              <div>{row.reference_document || "-"}</div>
+              <div style={{ fontFamily: "monospace" }}>{(row.payload_sha256 || "").slice(0, 12)}...</div>
             </div>
           ))}
+          {rows.length === 0 && (
+            <div style={{ padding: "10px 12px", color: GRAY }}>No exportable CTE rows yet. Submit CTE/KDE events first.</div>
+          )}
         </div>
-        <div style={{ marginTop: 8, fontSize: 11, color: GRAY }}>Each row includes SHA-256 hash for tamper verification. Export includes hash manifest file.</div>
+        <div style={{ marginTop: 8, fontSize: 11, color: GRAY }}>
+          {totalCount} total rows eligible for FDA export. Every row includes SHA-256 and Merkle linkage for tamper verification.
+        </div>
       </Card>
     </div>
   );
@@ -966,7 +1049,7 @@ function APISpecView() {
     { method: "GET", path: "/v1/supplier/compliance-score", desc: "Coverage + freshness + chain integrity", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/supplier/gaps", desc: "Missing or stale required CTE coverage", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/supplier/facilities/{id}/cte-events/bulk", desc: "CSV/JSON batch upload", auth: "Supplier JWT", priority: "P1" },
-    { method: "GET", path: "/v1/export/fda-records", desc: "FDA 24-hour sortable spreadsheet", auth: "Any JWT", priority: "P0" },
+    { method: "GET", path: "/v1/supplier/export/fda-records", desc: "FDA 24-hour sortable spreadsheet", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/export/epcis", desc: "EPCIS 2.0 XML export", auth: "Pro tier", priority: "P2" },
   ];
   return (
@@ -1047,7 +1130,7 @@ export default function SupplierOnboardingFlow() {
     [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} facilityId={facilityId} onCTESubmitted={() => setTlcRefreshKey((prev) => prev + 1)} />,
     [VIEWS.TLC_MGMT]: <TLCMgmtView facilityId={facilityId} refreshKey={tlcRefreshKey} />,
     [VIEWS.DASHBOARD]: <DashboardView facilityId={facilityId} refreshKey={tlcRefreshKey + requiredCTEs.length} />,
-    [VIEWS.FDA_EXPORT]: <FDAExportView />,
+    [VIEWS.FDA_EXPORT]: <FDAExportView facilityId={facilityId} refreshKey={tlcRefreshKey + requiredCTEs.length} />,
     [VIEWS.DATA_MODEL]: <DataModelView />,
     [VIEWS.API_SPEC]: <APISpecView />,
   };
