@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from typing import Any
+import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -567,10 +568,116 @@ def _render_fda_export_csv(rows: list[dict[str, Any]]) -> bytes:
     return output.getvalue().encode("utf-8")
 
 
+def _xlsx_column_name(index: int) -> str:
+    name = ""
+    current = index
+    while current > 0:
+        current, remainder = divmod(current - 1, 26)
+        name = chr(65 + remainder) + name
+    return name
+
+
+def _xml_escape(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
+
+
+def _render_fda_export_xlsx_fallback(rows: list[dict[str, Any]]) -> bytes:
+    header_values = [FDA_EXPORT_HEADERS[column] for column in FDA_EXPORT_COLUMN_ORDER]
+    last_column = _xlsx_column_name(len(FDA_EXPORT_COLUMN_ORDER))
+
+    sheet_rows: list[str] = []
+
+    header_cells = []
+    for col_idx, header in enumerate(header_values, start=1):
+        cell_ref = f"{_xlsx_column_name(col_idx)}1"
+        header_cells.append(
+            f"<c r=\"{cell_ref}\" t=\"inlineStr\"><is><t>{_xml_escape(header)}</t></is></c>"
+        )
+    sheet_rows.append(f"<row r=\"1\">{''.join(header_cells)}</row>")
+
+    for row_idx, row in enumerate(rows, start=2):
+        data_cells: list[str] = []
+        for col_idx, column in enumerate(FDA_EXPORT_COLUMN_ORDER, start=1):
+            cell_ref = f"{_xlsx_column_name(col_idx)}{row_idx}"
+            value = _xml_escape(_string_value(row.get(column, "")))
+            data_cells.append(
+                f"<c r=\"{cell_ref}\" t=\"inlineStr\"><is><t>{value}</t></is></c>"
+            )
+        sheet_rows.append(f"<row r=\"{row_idx}\">{''.join(data_cells)}</row>")
+
+    cols_xml_parts: list[str] = []
+    for idx, column in enumerate(FDA_EXPORT_COLUMN_ORDER, start=1):
+        display_name = FDA_EXPORT_HEADERS[column]
+        width = min(max(len(display_name) + 2, 14), 42)
+        cols_xml_parts.append(f"<col min=\"{idx}\" max=\"{idx}\" width=\"{width}\" customWidth=\"1\"/>")
+
+    worksheet_xml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+        "<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/>"
+        "</sheetView></sheetViews>"
+        "<sheetFormatPr defaultRowHeight=\"15\"/>"
+        f"<cols>{''.join(cols_xml_parts)}</cols>"
+        f"<sheetData>{''.join(sheet_rows)}</sheetData>"
+        f"<autoFilter ref=\"A1:{last_column}1\"/>"
+        "</worksheet>"
+    )
+
+    workbook_xml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+        "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+        "<sheets><sheet name=\"FDA Traceability\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+        "</workbook>"
+    )
+
+    root_rels_xml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+        "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>"
+        "</Relationships>"
+    )
+
+    workbook_rels_xml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+        "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+        "</Relationships>"
+    )
+
+    content_types_xml = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+        "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+        "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+        "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+        "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+        "</Types>"
+    )
+
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, mode="w", compression=zipfile.ZIP_DEFLATED) as workbook_zip:
+        workbook_zip.writestr("[Content_Types].xml", content_types_xml)
+        workbook_zip.writestr("_rels/.rels", root_rels_xml)
+        workbook_zip.writestr("xl/workbook.xml", workbook_xml)
+        workbook_zip.writestr("xl/_rels/workbook.xml.rels", workbook_rels_xml)
+        workbook_zip.writestr("xl/worksheets/sheet1.xml", worksheet_xml)
+    return payload.getvalue()
+
+
 def _render_fda_export_xlsx(rows: list[dict[str, Any]]) -> bytes:
-    from openpyxl import Workbook
-    from openpyxl.styles import Font
-    from openpyxl.utils import get_column_letter
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font
+        from openpyxl.utils import get_column_letter
+    except ModuleNotFoundError:
+        return _render_fda_export_xlsx_fallback(rows)
 
     workbook = Workbook()
     worksheet: Any = workbook.active
