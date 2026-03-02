@@ -86,8 +86,8 @@ export function MarketingHeader() {
                 <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
                     {[
                         { label: "Product", href: "/#product" },
-                        { label: "Industries", href: "/#industries" },
-                        { label: "Developers", href: "/#developers" },
+                        { label: "FSMA 204", href: "/retailer-readiness" },
+                        { label: "Developers", href: "/developers" },
                         { label: "Pricing", href: "/pricing" },
                     ].map((item) => (
                         <Link
@@ -275,8 +275,8 @@ export function MarketingHeader() {
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                         {[
                             { label: "Product", href: "/#product" },
-                            { label: "Industries", href: "/#industries" },
-                            { label: "Developers", href: "/#developers" },
+                            { label: "FSMA 204", href: "/retailer-readiness" },
+                            { label: "Developers", href: "/developers" },
                             { label: "Pricing", href: "/pricing" },
                         ].map((item) => (
                             <Link

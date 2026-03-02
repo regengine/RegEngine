@@ -5,18 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 const industries = [
-    { name: "Food & Beverage", href: "/ftl-checker" },
-    { name: "Energy", comingSoon: true },
-    { name: "Nuclear", comingSoon: true },
-    { name: "Finance", comingSoon: true },
-    { name: "Healthcare", comingSoon: true },
-    { name: "Manufacturing", comingSoon: true },
-    { name: "Construction", comingSoon: true },
-    { name: "Aerospace", comingSoon: true },
-    { name: "Automotive", comingSoon: true },
-    { name: "Gaming", comingSoon: true },
-    { name: "Entertainment", comingSoon: true },
-    { name: "Technology", comingSoon: true },
+    { name: "Food & Beverage", href: "/retailer-readiness" },
 ];
 
 export function MarketingFooter() {
@@ -77,7 +66,7 @@ export function MarketingFooter() {
                         { label: "Ingest Documents", href: "/ingest" },
                         { label: "FSMA Dashboard", href: "/fsma" },
                         { label: "FTL Checker", href: "/tools/ftl-checker", badge: "Free" },
-                        { label: "Retailer Readiness", href: "/tools/retailer-readiness" },
+                        { label: "Retailer Readiness", href: "/retailer-readiness" },
                         { label: "API Docs", href: "/docs" },
                         { label: "Pricing", href: "/pricing" },
                     ].map((link) => (
@@ -134,10 +123,10 @@ export function MarketingFooter() {
 
                 <div>
                     <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
-                        Industries
+                        Industry Focus
                     </h4>
                     <div className="grid grid-cols-1 gap-y-2.5">
-                        {industries.slice(0, 8).map((ind) => (
+                        {industries.map((ind) => (
                             ind.href ? (
                                 <Link
                                     key={ind.name}
@@ -194,7 +183,7 @@ export function MarketingFooter() {
                     © 2026 RegEngine Inc. All rights reserved.
                 </span>
                 <span style={{ fontSize: "11px", color: "var(--re-surface-card)", fontFamily: "'JetBrains Mono', monospace" }}>
-                    verify_chain.py — don't trust, verify
+                    verify_chain.py — don&apos;t trust, verify
                 </span>
             </div>
         </footer>
