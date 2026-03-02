@@ -49,9 +49,9 @@ const PRICING_TIERS = [
         cta: 'Start Free Trial',
         features: [
             { text: '1 facility', included: true },
-            { text: '5 supplier portal links', included: true },
+            { text: '5 supplier portal links (full onboarding + FTL scope + CTE capture)', included: true },
             { text: 'CSV upload & manual entry', included: true },
-            { text: 'All 6 CTE types', included: true },
+            { text: 'All 7 CTE types', included: true },
             { text: 'SHA-256 audit trail', included: true },
             { text: 'Compliance score dashboard', included: true },
             { text: 'FDA export (CSV)', included: true },
@@ -73,7 +73,7 @@ const PRICING_TIERS = [
         cta: 'Start Free Trial',
         features: [
             { text: '5 facilities', included: true },
-            { text: 'Unlimited supplier portal links', included: true },
+            { text: 'Unlimited supplier portal links (full onboarding + FTL scope + CTE capture)', included: true },
             { text: 'API + webhook integration', included: true },
             { text: 'IoT temperature monitoring', included: true },
             { text: 'EPCIS 2.0 export (Walmart, Kroger)', included: true },
@@ -112,8 +112,8 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$149/mo', foodlogiq: '$32,000+/yr', repositrak: '$49-179/mo', tracegains: 'Contact Sales' },
-    { feature: 'Time to First CTE', regengine: '5 minutes', foodlogiq: '6-8 weeks', repositrak: '<1 hour*', tracegains: '4-6 weeks' },
+    { feature: 'Starting Price', regengine: '$149/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
+    { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6-8 weeks', repositrak: '<1 hour*', tracegains: '4-6 weeks' },
     { feature: 'Public API Docs', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
     { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
@@ -125,7 +125,7 @@ const FAQ = [
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
     { q: "What's included in the free trial?", a: 'Full access to all features in your selected tier for 14 days. No credit card required to start.' },
     { q: 'Do you offer discounts for annual billing?', a: 'Yes! Save ~17% when you pay annually instead of monthly.' },
-    { q: 'What integrations are available?', a: 'We support GS1 EPCIS 2.0, REST APIs for any ERP/WMS, and pre-built connectors for SAP, Oracle, and common platforms.' },
+    { q: 'What integrations are available?', a: 'We support GS1 EPCIS 2.0 and REST APIs for any ERP/WMS today. SAP and Oracle connectors are on the roadmap.' },
 ];
 
 export default function PricingPage() {
@@ -470,7 +470,7 @@ export default function PricingPage() {
                     </div>
 
                     <p style={{ fontSize: '11px', color: T.textDim, textAlign: 'center', marginTop: '16px' }}>
-                        * ReposiTrak onboarding time is for network registration; full CTE integration varies. Competitor data from public sources as of Jan 2026.
+                        * ReposiTrak pricing shown as $2,148/facility/year (annualized from publicly listed $179/facility/month Traceability Network pricing). ReposiTrak onboarding time is for network registration; full CTE integration varies. Competitor data from public sources as of Jan 2026.
                     </p>
                 </div>
             </section>
@@ -524,7 +524,7 @@ export default function PricingPage() {
                         Ready to Get Started?
                     </h2>
                     <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)', marginBottom: '32px' }}>
-                        14-day free trial. No credit card required. First CTE in 5 minutes.
+                        14-day free trial. No credit card required. First CTE in under 10 minutes.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">

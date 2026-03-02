@@ -38,9 +38,9 @@ PLANS = {
         "stripe_price_id_annual": "price_starter_annual",
         "features": [
             "1 facility",
-            "5 supplier portal links",
+            "5 supplier portal links (full onboarding + FTL scope + CTE capture)",
             "CSV upload & manual entry",
-            "All 6 CTE types",
+            "All 7 CTE types",
             "SHA-256 audit trail",
             "Compliance score dashboard",
             "FDA export (CSV)",
@@ -65,7 +65,7 @@ PLANS = {
         "stripe_price_id_annual": "price_pro_annual",
         "features": [
             "5 facilities",
-            "Unlimited supplier portal links",
+            "Unlimited supplier portal links (full onboarding + FTL scope + CTE capture)",
             "API + webhook integration",
             "IoT temperature monitoring (Sensitech, Tive)",
             "EPCIS 2.0 export (Walmart, Kroger, Costco)",
