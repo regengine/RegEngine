@@ -471,3 +471,36 @@ def test_funnel_events_and_social_proof_counts(client: TestClient):
     assert social_proof_response.status_code == 200
     social_proof_payload = social_proof_response.json()
     assert social_proof_payload["fda_exports_generated"] == initial_payload["fda_exports_generated"] + 1
+
+
+def test_funnel_summary_aggregates_views_and_completions(client: TestClient):
+    events = [
+        {"event_name": "step_viewed", "step": "facility_setup", "status": "viewed"},
+        {"event_name": "step_viewed", "step": "facility_setup", "status": "viewed"},
+        {"event_name": "step_completed", "step": "facility_setup", "status": "success"},
+        {"event_name": "step_viewed", "step": "ftl_scoping", "status": "viewed"},
+        {"event_name": "step_completed", "step": "ftl_scoping", "status": "success"},
+        {"event_name": "step_completed", "step": "ftl_scoping", "status": "success"},
+        {"event_name": "demo_reset_completed", "step": "overview", "status": "success"},
+        {"event_name": "fda_export_downloaded", "step": "fda_export", "status": "success"},
+    ]
+    for payload in events:
+        response = client.post("/v1/supplier/funnel-events", json=payload)
+        assert response.status_code == 200
+
+    summary_response = client.get("/v1/supplier/funnel-summary")
+    assert summary_response.status_code == 200
+    summary_payload = summary_response.json()
+
+    assert summary_payload["total_step_views"] == 3
+    assert summary_payload["total_step_completions"] == 3
+    assert summary_payload["fda_exports_generated"] == 1
+    assert summary_payload["demo_resets_completed"] == 1
+
+    steps_by_name = {row["step"]: row for row in summary_payload["steps"]}
+    assert steps_by_name["facility_setup"]["viewed"] == 2
+    assert steps_by_name["facility_setup"]["completed"] == 1
+    assert steps_by_name["facility_setup"]["completion_rate_pct"] == 50.0
+    assert steps_by_name["ftl_scoping"]["viewed"] == 1
+    assert steps_by_name["ftl_scoping"]["completed"] == 2
+    assert steps_by_name["ftl_scoping"]["completion_rate_pct"] == 200.0

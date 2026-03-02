@@ -350,6 +350,22 @@ export interface SupplierSocialProofResponse {
     updated_at: string;
 }
 
+export interface SupplierFunnelStepSummary {
+    step: string;
+    viewed: number;
+    completed: number;
+    completion_rate_pct: number;
+}
+
+export interface SupplierFunnelSummaryResponse {
+    steps: SupplierFunnelStepSummary[];
+    total_step_views: number;
+    total_step_completions: number;
+    fda_exports_generated: number;
+    demo_resets_completed: number;
+    updated_at: string;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;
