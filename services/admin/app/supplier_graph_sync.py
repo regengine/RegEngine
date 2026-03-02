@@ -95,6 +95,37 @@ RETURN collect(DISTINCT {
 """
 
 
+CTE_EVENT_QUERY = """
+MERGE (facility:SupplierFacility {facility_id: $facility_id})
+SET facility.tenant_id = $tenant_id,
+    facility.name = $facility_name,
+    facility.updated_at = datetime()
+MERGE (lot:TLC {tlc_code: $tlc_code, tenant_id: $tenant_id})
+SET lot.product_description = coalesce($product_description, lot.product_description),
+    lot.status = coalesce($lot_status, lot.status),
+    lot.updated_at = datetime()
+MERGE (lot)-[:PRODUCED_AT]->(facility)
+CREATE (cte:CTEEvent {
+  cte_event_id: $cte_event_id,
+  tenant_id: $tenant_id,
+  cte_type: $cte_type,
+  event_time: datetime($event_time),
+  payload_sha256: $payload_sha256,
+  merkle_hash: $merkle_hash,
+  merkle_prev_hash: $merkle_prev_hash,
+  sequence_number: $sequence_number,
+  kde_data: $kde_data,
+  created_at: datetime()
+})
+MERGE (cte)-[:FOR_LOT]->(lot)
+MERGE (cte)-[:OCCURRED_AT]->(facility)
+WITH cte
+UNWIND $obligation_ids AS obligation_id
+MERGE (obligation:Obligation {obligation_id: obligation_id})
+MERGE (cte)-[:SATISFIES]->(obligation)
+"""
+
+
 def _to_utc_iso(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
@@ -278,6 +309,47 @@ class SupplierGraphSync:
 
     def get_required_ctes_for_facility(self, facility_id: str) -> Optional[dict[str, Any]]:
         return self._query_required_ctes(facility_id)
+
+    def record_cte_event(
+        self,
+        *,
+        tenant_id: str,
+        facility_id: str,
+        facility_name: str,
+        cte_event_id: str,
+        cte_type: str,
+        event_time: str,
+        tlc_code: str,
+        product_description: Optional[str],
+        lot_status: Optional[str],
+        kde_data: dict[str, Any],
+        payload_sha256: str,
+        merkle_prev_hash: Optional[str],
+        merkle_hash: str,
+        sequence_number: int,
+        obligation_ids: list[str],
+    ) -> None:
+        self._run(
+            CTE_EVENT_QUERY,
+            {
+                "operation": "cte_event_recorded",
+                "tenant_id": tenant_id,
+                "facility_id": facility_id,
+                "facility_name": facility_name,
+                "cte_event_id": cte_event_id,
+                "cte_type": cte_type,
+                "event_time": event_time,
+                "tlc_code": tlc_code,
+                "product_description": product_description,
+                "lot_status": lot_status,
+                "kde_data": kde_data,
+                "payload_sha256": payload_sha256,
+                "merkle_prev_hash": merkle_prev_hash,
+                "merkle_hash": merkle_hash,
+                "sequence_number": sequence_number,
+                "obligation_ids": obligation_ids,
+            },
+        )
 
 
 supplier_graph_sync = SupplierGraphSync.from_env()

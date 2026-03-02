@@ -24,6 +24,10 @@ import type {
   SupplierFacility,
   FacilityFTLScopingRequest,
   FacilityFTLScopingResponse,
+  SupplierCTEEventCreateRequest,
+  SupplierCTEEventResponse,
+  SupplierTLC,
+  SupplierTLCUpsertRequest,
   AnalysisSummary,
   TraceabilityEventRequest,
   TraceabilityEventResponse,
@@ -500,6 +504,29 @@ class APIClient {
       `/v1/supplier/facilities/${facilityId}/required-ctes`,
     );
     return data;
+  }
+
+  async submitSupplierCTEEvent(
+    facilityId: string,
+    request: SupplierCTEEventCreateRequest,
+  ): Promise<SupplierCTEEventResponse> {
+    const { data } = await this.adminClient.post<SupplierCTEEventResponse>(
+      `/v1/supplier/facilities/${facilityId}/cte-events`,
+      request,
+    );
+    return data;
+  }
+
+  async createSupplierTLC(request: SupplierTLCUpsertRequest): Promise<SupplierTLC> {
+    const { data } = await this.adminClient.post<SupplierTLC>('/v1/supplier/tlcs', request);
+    return data;
+  }
+
+  async listSupplierTLCs(facilityId?: string): Promise<SupplierTLC[]> {
+    const { data } = await this.adminClient.get<SupplierTLC[]>('/v1/supplier/tlcs', {
+      params: facilityId ? { facility_id: facilityId } : undefined,
+    });
+    return data || [];
   }
 }
 

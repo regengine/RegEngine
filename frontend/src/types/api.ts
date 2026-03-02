@@ -229,6 +229,42 @@ export interface FacilityFTLScopingResponse {
     source: string;
 }
 
+export interface SupplierCTEEventCreateRequest {
+    cte_type: string;
+    tlc_code: string;
+    event_time?: string;
+    kde_data: Record<string, unknown>;
+    obligation_ids?: string[];
+}
+
+export interface SupplierCTEEventResponse {
+    event_id: string;
+    facility_id: string;
+    tlc_code: string;
+    cte_type: string;
+    payload_sha256: string;
+    merkle_hash: string;
+    merkle_prev_hash?: string | null;
+    merkle_sequence: number;
+}
+
+export interface SupplierTLCUpsertRequest {
+    facility_id: string;
+    tlc_code: string;
+    product_description?: string;
+    status?: string;
+}
+
+export interface SupplierTLC {
+    id: string;
+    facility_id: string;
+    tlc_code: string;
+    product_description?: string | null;
+    status: string;
+    event_count: number;
+    created_at: string;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;

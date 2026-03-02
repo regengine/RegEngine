@@ -235,6 +235,57 @@ class SupplierFacilityFTLCategoryModel(Base):
     )
 
 
+class SupplierTraceabilityLotModel(Base):
+    """Supplier-managed traceability lots (TLCs)."""
+
+    __tablename__ = "supplier_traceability_lots"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=False)
+    tlc_code = Column(String, nullable=False)
+    product_description = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="active")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "tlc_code", name="uq_supplier_tlc_per_tenant"),
+        Index("ix_supplier_tlcs_tenant", "tenant_id"),
+        Index("ix_supplier_tlcs_supplier", "supplier_user_id"),
+        Index("ix_supplier_tlcs_facility", "facility_id"),
+    )
+
+
+class SupplierCTEEventModel(Base):
+    """Immutable CTE event log with hash-on-write and Merkle chaining."""
+
+    __tablename__ = "supplier_cte_events"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=False)
+    lot_id = Column(GUID(), ForeignKey("supplier_traceability_lots.id"), nullable=False)
+    cte_type = Column(String, nullable=False)
+    event_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    kde_data = Column(JSONType(), nullable=False, default=dict)
+    payload_sha256 = Column(String, nullable=False)
+    merkle_prev_hash = Column(String, nullable=True)
+    merkle_hash = Column(String, nullable=False)
+    sequence_number = Column(BigInteger, nullable=False)
+    obligation_ids = Column(JSONType(), nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_supplier_cte_events_tenant", "tenant_id"),
+        Index("ix_supplier_cte_events_facility", "facility_id"),
+        Index("ix_supplier_cte_events_lot", "lot_id"),
+        Index("ix_supplier_cte_events_sequence", "tenant_id", "sequence_number"),
+    )
+
+
 class ReviewItemModel(Base):
     """Database model for review queue items with tenant isolation."""
 
