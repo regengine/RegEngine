@@ -119,11 +119,13 @@ async def create_invite(
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
+        event_type="invite.create",
         action="invite.create",
+        event_category="identity_access",
         resource_type="invite",
         resource_id=str(new_invite.id),
         actor_id=current_user.id,
-        changes={"email": invite_data.email, "role_id": str(invite_data.role_id)}
+        metadata={"email": invite_data.email, "role_id": str(invite_data.role_id)}
     )
     
     db.commit()
@@ -149,6 +151,8 @@ async def list_invites(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     stmt = select(InviteModel).where(
         InviteModel.tenant_id == tenant_id,
@@ -179,6 +183,8 @@ async def revoke_invite(
     db: Session = Depends(get_session)
 ):
     tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
     
     invite = db.get(InviteModel, invite_id)
     if not invite or invite.tenant_id != tenant_id:
@@ -192,11 +198,13 @@ async def revoke_invite(
     AuditLogger.log_event(
         db,
         tenant_id=tenant_id,
+        event_type="invite.revoke",
         action="invite.revoke",
+        event_category="identity_access",
         resource_type="invite",
         resource_id=str(invite.id),
         actor_id=current_user.id,
-        changes={"revoked_by": str(current_user.id)}
+        metadata={"revoked_by": str(current_user.id)}
     )
     
     db.commit()
@@ -280,11 +288,13 @@ async def accept_invite(
     AuditLogger.log_event(
         db,
         tenant_id=invite.tenant_id,
+        event_type="invite.accept",
         action="invite.accept",
+        event_category="identity_access",
         resource_type="membership",
         resource_id=str(user.id),
         actor_id=user.id,
-        changes={"role_id": str(invite.role_id)}
+        metadata={"role_id": str(invite.role_id)}
     )
     
     db.commit()
