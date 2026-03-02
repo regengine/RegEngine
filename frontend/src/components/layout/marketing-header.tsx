@@ -220,7 +220,7 @@ export function MarketingHeader() {
                                 Log In
                             </Link>
                             <Link
-                                href="/onboarding"
+                                href="/onboarding/supplier-flow"
                                 style={{
                                     fontSize: "13px",
                                     fontWeight: 600,
