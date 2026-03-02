@@ -15,7 +15,7 @@ const LOGIN_PRESETS = [
         id: 'qa' as const,
         label: 'QA Tester',
         email: 'test@example.com',
-        password: 'password123',
+        password: 'Trace204!User',
         access: 'Dashboard and core user flows',
     },
     {
