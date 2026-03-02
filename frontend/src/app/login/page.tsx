@@ -22,7 +22,7 @@ const LOGIN_PRESETS = [
         id: 'admin' as const,
         label: 'QA Admin',
         email: 'admin@example.com',
-        password: 'password',
+        password: 'Trace204!Apex',
         access: 'Sysadmin and admin access checks',
     },
 ];
