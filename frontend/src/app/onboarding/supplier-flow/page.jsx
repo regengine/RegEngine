@@ -150,6 +150,12 @@ const FTL_CATEGORIES = [
   { id: "10", name: "Soft & semi-soft cheeses", ctes: ["receiving", "transforming", "shipping"] },
 ];
 
+const DASHBOARD_FALLBACK_GAPS = [
+  { cte: "Cooling", issue: "No cooling events recorded for TLC-2026-SAL-0001", severity: "high" },
+  { cte: "Shipping", issue: "Missing reference document for shipment on 2026-02-28", severity: "medium" },
+  { cte: "Receiving", issue: "TLC-2026-WAT-0001 received but no receiving CTE from buyer side", severity: "low" },
+];
+
 function Badge({ children, color = ACCENT }) {
   return (
     <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600, backgroundColor: color === ACCENT ? ACCENT_LIGHT : color === WARN ? WARN_LIGHT : color === ERROR ? ERROR_LIGHT : BLUE_LIGHT, color: color, marginLeft: 6 }}>
@@ -742,22 +748,78 @@ function TLCMgmtView({ facilityId, refreshKey }) {
   );
 }
 
-function DashboardView() {
-  const score = 73;
-  const gaps = [
-    { cte: "Cooling", issue: "No cooling events recorded for TLC-2026-SAL-0001", severity: "high" },
-    { cte: "Shipping", issue: "Missing reference document for shipment on 2026-02-28", severity: "medium" },
-    { cte: "Receiving", issue: "TLC-2026-WAT-0001 received but no receiving CTE from buyer side", severity: "low" },
-  ];
+function DashboardView({ facilityId, refreshKey }) {
+  const [scoreData, setScoreData] = useState(null);
+  const [gaps, setGaps] = useState(DASHBOARD_FALLBACK_GAPS);
+  const [gapTotal, setGapTotal] = useState(DASHBOARD_FALLBACK_GAPS.length);
+  const [tlcCount, setTlcCount] = useState(3);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      if (!facilityId) {
+        if (!cancelled) {
+          setScoreData(null);
+          setGaps(DASHBOARD_FALLBACK_GAPS);
+          setGapTotal(DASHBOARD_FALLBACK_GAPS.length);
+          setTlcCount(3);
+        }
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const [scoreResponse, gapResponse, tlcs] = await Promise.all([
+          apiClient.getSupplierComplianceScore(facilityId),
+          apiClient.getSupplierComplianceGaps(facilityId),
+          apiClient.listSupplierTLCs(facilityId),
+        ]);
+
+        if (!cancelled) {
+          setScoreData(scoreResponse);
+          setGapTotal(gapResponse.total || 0);
+          setTlcCount((tlcs || []).length);
+          setGaps(
+            (gapResponse.gaps || []).map((gap) => ({
+              cte: gap.cte_type ? gap.cte_type.replaceAll("_", " ") : "Scoping",
+              issue: gap.issue,
+              severity: gap.severity,
+            })),
+          );
+        }
+      } catch (_err) {
+        if (!cancelled) {
+          setScoreData(null);
+          setGaps(DASHBOARD_FALLBACK_GAPS);
+          setGapTotal(DASHBOARD_FALLBACK_GAPS.length);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [facilityId, refreshKey]);
+
+  const score = scoreData?.score ?? 73;
+  const cteRecordCount = scoreData?.total_events ?? 13;
   return (
     <div>
       <SectionTitle sub="Supplier sees their compliance posture - coverage × effectiveness × freshness">Step 7: Supplier Dashboard</SectionTitle>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
         {[
           { label: "Compliance Score", value: `${score}%`, color: score >= 80 ? ACCENT : WARN },
-          { label: "Active TLCs", value: "3", color: BLUE },
-          { label: "CTE Records", value: "13", color: ACCENT },
-          { label: "Open Gaps", value: "3", color: ERROR },
+          { label: "Active TLCs", value: `${tlcCount}`, color: BLUE },
+          { label: "CTE Records", value: `${cteRecordCount}`, color: ACCENT },
+          { label: "Open Gaps", value: `${gapTotal}`, color: ERROR },
         ].map((m) => (
           <Card key={m.label} style={{ textAlign: "center", padding: 12 }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: m.color }}>{m.value}</div>
@@ -767,6 +829,7 @@ function DashboardView() {
       </div>
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Compliance Gaps</div>
+        {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Refreshing score from live supplier records...</div>}
         {gaps.map((g, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: g.severity === "high" ? ERROR : g.severity === "medium" ? WARN : GRAY, flexShrink: 0 }} />
@@ -776,9 +839,17 @@ function DashboardView() {
             </div>
           </div>
         ))}
+        {gaps.length === 0 && (
+          <div style={{ fontSize: 12, color: ACCENT }}>No open gaps for scoped CTE obligations.</div>
+        )}
       </Card>
       <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: BLUE_LIGHT, fontSize: 12, color: "#1E40AF" }}>
-        <strong>Score formula:</strong> (obligations covered / total applicable) × (controls with evidence / total controls) × (evidence freshness decay factor). Unique to RegEngine - competitors show pass/fail, you show a gradient.
+        <strong>Score formula:</strong> coverage (75%) + freshness (15%) + chain integrity (10%).
+        {scoreData && (
+          <span>
+            {" "}Live ratios: coverage {(scoreData.coverage_ratio * 100).toFixed(0)}%, freshness {(scoreData.freshness_ratio * 100).toFixed(0)}%, integrity {(scoreData.integrity_ratio * 100).toFixed(0)}%.
+          </span>
+        )}
       </div>
     </div>
   );
@@ -889,12 +960,12 @@ function APISpecView() {
     { method: "POST", path: "/v1/supplier/facilities", desc: "Register a facility", auth: "Supplier JWT", priority: "P0" },
     { method: "PUT", path: "/v1/supplier/facilities/{id}/ftl-categories", desc: "Set FTL categories for facility", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/supplier/facilities/{id}/required-ctes", desc: "Auto-computed from FTL categories", auth: "Supplier JWT", priority: "P0" },
-    { method: "POST", path: "/v1/facilities/{id}/cte-events", desc: "Submit a CTE with KDE data", auth: "Supplier JWT", priority: "P0" },
-    { method: "GET", path: "/v1/suppliers/{id}/tlcs", desc: "List TLCs with status & event counts", auth: "Supplier JWT", priority: "P0" },
-    { method: "POST", path: "/v1/suppliers/{id}/tlcs", desc: "Create new TLC", auth: "Supplier JWT", priority: "P0" },
-    { method: "GET", path: "/v1/suppliers/{id}/compliance-score", desc: "Coverage × effectiveness × freshness", auth: "Supplier JWT", priority: "P1" },
-    { method: "GET", path: "/v1/suppliers/{id}/gaps", desc: "Missing KDEs, incomplete CTEs", auth: "Supplier JWT", priority: "P1" },
-    { method: "POST", path: "/v1/facilities/{id}/cte-events/bulk", desc: "CSV/JSON batch upload", auth: "Supplier JWT", priority: "P1" },
+    { method: "POST", path: "/v1/supplier/facilities/{id}/cte-events", desc: "Submit a CTE with KDE data", auth: "Supplier JWT", priority: "P0" },
+    { method: "GET", path: "/v1/supplier/tlcs", desc: "List TLCs with status & event counts", auth: "Supplier JWT", priority: "P0" },
+    { method: "POST", path: "/v1/supplier/tlcs", desc: "Create new TLC", auth: "Supplier JWT", priority: "P0" },
+    { method: "GET", path: "/v1/supplier/compliance-score", desc: "Coverage + freshness + chain integrity", auth: "Supplier JWT", priority: "P0" },
+    { method: "GET", path: "/v1/supplier/gaps", desc: "Missing or stale required CTE coverage", auth: "Supplier JWT", priority: "P0" },
+    { method: "POST", path: "/v1/supplier/facilities/{id}/cte-events/bulk", desc: "CSV/JSON batch upload", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/export/fda-records", desc: "FDA 24-hour sortable spreadsheet", auth: "Any JWT", priority: "P0" },
     { method: "GET", path: "/v1/export/epcis", desc: "EPCIS 2.0 XML export", auth: "Pro tier", priority: "P2" },
   ];
@@ -975,7 +1046,7 @@ export default function SupplierOnboardingFlow() {
     [VIEWS.FTL_SCOPING]: <FTLScopingView facilityId={facilityId} categories={liveCategories} onRequiredCTEsChange={setRequiredCTEs} />,
     [VIEWS.CTE_CAPTURE]: <CTECaptureView requiredCTEs={requiredCTEs} facilityId={facilityId} onCTESubmitted={() => setTlcRefreshKey((prev) => prev + 1)} />,
     [VIEWS.TLC_MGMT]: <TLCMgmtView facilityId={facilityId} refreshKey={tlcRefreshKey} />,
-    [VIEWS.DASHBOARD]: <DashboardView />,
+    [VIEWS.DASHBOARD]: <DashboardView facilityId={facilityId} refreshKey={tlcRefreshKey + requiredCTEs.length} />,
     [VIEWS.FDA_EXPORT]: <FDAExportView />,
     [VIEWS.DATA_MODEL]: <DataModelView />,
     [VIEWS.API_SPEC]: <APISpecView />,

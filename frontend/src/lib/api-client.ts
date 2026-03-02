@@ -26,6 +26,8 @@ import type {
   FacilityFTLScopingResponse,
   SupplierCTEEventCreateRequest,
   SupplierCTEEventResponse,
+  SupplierComplianceGapsResponse,
+  SupplierComplianceScore,
   SupplierTLC,
   SupplierTLCUpsertRequest,
   AnalysisSummary,
@@ -527,6 +529,20 @@ class APIClient {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
     return data || [];
+  }
+
+  async getSupplierComplianceScore(facilityId?: string): Promise<SupplierComplianceScore> {
+    const { data } = await this.adminClient.get<SupplierComplianceScore>('/v1/supplier/compliance-score', {
+      params: facilityId ? { facility_id: facilityId } : undefined,
+    });
+    return data;
+  }
+
+  async getSupplierComplianceGaps(facilityId?: string): Promise<SupplierComplianceGapsResponse> {
+    const { data } = await this.adminClient.get<SupplierComplianceGapsResponse>('/v1/supplier/gaps', {
+      params: facilityId ? { facility_id: facilityId } : undefined,
+    });
+    return data;
   }
 }
 

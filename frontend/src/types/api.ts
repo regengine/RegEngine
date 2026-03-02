@@ -265,6 +265,38 @@ export interface SupplierTLC {
     created_at: string;
 }
 
+export interface SupplierComplianceScore {
+    score: number;
+    coverage_ratio: number;
+    freshness_ratio: number;
+    integrity_ratio: number;
+    required_ctes: number;
+    covered_ctes: number;
+    stale_ctes: number;
+    missing_ctes: number;
+    total_events: number;
+    evaluated_at: string;
+}
+
+export interface SupplierComplianceGap {
+    facility_id: string;
+    facility_name: string;
+    cte_type?: string | null;
+    severity: string;
+    issue: string;
+    reason: string;
+    last_seen?: string | null;
+}
+
+export interface SupplierComplianceGapsResponse {
+    gaps: SupplierComplianceGap[];
+    total: number;
+    high: number;
+    medium: number;
+    low: number;
+    evaluated_at: string;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;
