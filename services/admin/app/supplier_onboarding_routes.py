@@ -22,6 +22,7 @@ from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
+    SupplierFunnelEventModel,
     SupplierTraceabilityLotModel,
     UserModel,
 )
@@ -162,6 +163,39 @@ class SupplierComplianceGapsResponse(BaseModel):
     evaluated_at: str
 
 
+class SupplierDemoResetResponse(BaseModel):
+    focus_facility_id: str
+    focus_required_ctes: list[str]
+    seeded_facilities: int
+    seeded_tlcs: int
+    seeded_events: int
+    dashboard_score: int
+    open_gap_count: int
+
+
+class SupplierFunnelEventRequest(BaseModel):
+    event_name: str = Field(min_length=3, max_length=80)
+    step: str | None = None
+    status: str | None = None
+    facility_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SupplierFunnelEventResponse(BaseModel):
+    event_id: str
+    event_name: str
+    created_at: str
+
+
+class SupplierSocialProofResponse(BaseModel):
+    suppliers_onboarded: int
+    facilities_registered: int
+    tlcs_tracked: int
+    cte_events_verified: int
+    fda_exports_generated: int
+    updated_at: str
+
+
 class SupplierFDAExportRow(BaseModel):
     event_id: str
     tlc_code: str
@@ -268,6 +302,88 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _persist_supplier_cte_event(
+    db: Session,
+    *,
+    tenant_id: uuid_module.UUID,
+    current_user: UserModel,
+    facility: SupplierFacilityModel,
+    cte_type: str,
+    tlc_code: str,
+    event_time: datetime | None,
+    kde_data: dict[str, Any],
+    obligation_ids: list[str],
+) -> tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel]:
+    normalized_cte_type = cte_type.strip().lower()
+    if normalized_cte_type not in SUPPORTED_CTE_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported cte_type: {cte_type}")
+
+    normalized_tlc_code = tlc_code.strip()
+    if not normalized_tlc_code:
+        raise HTTPException(status_code=400, detail="tlc_code is required")
+
+    normalized_kde_data = kde_data if isinstance(kde_data, dict) else {}
+    normalized_event_time = _as_utc(event_time) or datetime.now(timezone.utc)
+
+    payload = {
+        "facility_id": str(facility.id),
+        "cte_type": normalized_cte_type,
+        "tlc_code": normalized_tlc_code,
+        "event_time": _iso_utc(normalized_event_time),
+        "kde_data": normalized_kde_data,
+    }
+    payload_sha256 = _sha256_json(payload)
+
+    lot = db.execute(
+        select(SupplierTraceabilityLotModel).where(
+            SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
+            SupplierTraceabilityLotModel.tlc_code == normalized_tlc_code,
+        )
+    ).scalar_one_or_none()
+
+    if lot is None:
+        lot = SupplierTraceabilityLotModel(
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            facility_id=facility.id,
+            tlc_code=normalized_tlc_code,
+            product_description=(normalized_kde_data.get("product_description") if isinstance(normalized_kde_data, dict) else None),
+            status="active",
+        )
+        db.add(lot)
+        db.flush()
+
+    previous_event = db.execute(
+        select(SupplierCTEEventModel)
+        .where(SupplierCTEEventModel.tenant_id == tenant_id)
+        .order_by(SupplierCTEEventModel.sequence_number.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    merkle_prev_hash = previous_event.merkle_hash if previous_event else None
+    sequence_number = int(previous_event.sequence_number + 1) if previous_event else 1
+    merkle_hash = _next_merkle_hash(merkle_prev_hash, payload_sha256)
+
+    event = SupplierCTEEventModel(
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=facility.id,
+        lot_id=lot.id,
+        cte_type=normalized_cte_type,
+        event_time=normalized_event_time,
+        kde_data=normalized_kde_data,
+        payload_sha256=payload_sha256,
+        merkle_prev_hash=merkle_prev_hash,
+        merkle_hash=merkle_hash,
+        sequence_number=sequence_number,
+        obligation_ids=obligation_ids,
+    )
+    db.add(event)
+    db.flush()
+    return event, lot
 
 
 def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
@@ -465,6 +581,63 @@ def _compute_supplier_compliance(
         "evaluated_at": evaluated_at_iso,
     }
     return score_payload, gap_payloads
+
+
+def _compute_social_proof(db: Session, *, tenant_id: uuid_module.UUID) -> dict[str, Any]:
+    suppliers_onboarded = int(
+        db.execute(
+            select(func.count(func.distinct(SupplierFacilityModel.supplier_user_id))).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    facilities_registered = int(
+        db.execute(
+            select(func.count(SupplierFacilityModel.id)).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    tlcs_tracked = int(
+        db.execute(
+            select(func.count(SupplierTraceabilityLotModel.id)).where(
+                SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    cte_events_verified = int(
+        db.execute(
+            select(func.count(SupplierCTEEventModel.id)).where(
+                SupplierCTEEventModel.tenant_id == tenant_id,
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    fda_exports_generated = int(
+        db.execute(
+            select(func.count(SupplierFunnelEventModel.id)).where(
+                SupplierFunnelEventModel.tenant_id == tenant_id,
+                SupplierFunnelEventModel.event_name == "fda_export_downloaded",
+            )
+        ).scalar_one()
+        or 0
+    )
+
+    return {
+        "suppliers_onboarded": suppliers_onboarded,
+        "facilities_registered": facilities_registered,
+        "tlcs_tracked": tlcs_tracked,
+        "cte_events_verified": cte_events_verified,
+        "fda_exports_generated": fda_exports_generated,
+        "updated_at": _iso_utc(datetime.now(timezone.utc)),
+    }
 
 
 def _string_value(value: Any) -> str:
@@ -708,6 +881,289 @@ async def get_ftl_categories() -> dict[str, list[dict[str, Any]]]:
     return {"categories": FTL_CATEGORY_CATALOG}
 
 
+@router.post("/demo/reset", response_model=SupplierDemoResetResponse)
+async def reset_supplier_demo(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierDemoResetResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    db.execute(
+        delete(SupplierCTEEventModel).where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.supplier_user_id == current_user.id,
+        )
+    )
+    db.execute(
+        delete(SupplierTraceabilityLotModel).where(
+            SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
+        )
+    )
+    db.execute(
+        delete(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+            SupplierFacilityFTLCategoryModel.facility_id.in_(
+                select(SupplierFacilityModel.id).where(
+                    SupplierFacilityModel.tenant_id == tenant_id,
+                    SupplierFacilityModel.supplier_user_id == current_user.id,
+                )
+            ),
+        )
+    )
+    db.execute(
+        delete(SupplierFunnelEventModel).where(
+            SupplierFunnelEventModel.tenant_id == tenant_id,
+            SupplierFunnelEventModel.supplier_user_id == current_user.id,
+        )
+    )
+    db.execute(
+        delete(SupplierFacilityModel).where(
+            SupplierFacilityModel.tenant_id == tenant_id,
+            SupplierFacilityModel.supplier_user_id == current_user.id,
+        )
+    )
+    db.commit()
+
+    facility_blueprints = [
+        {
+            "key": "grower",
+            "name": "Salinas Valley Grower",
+            "street": "710 Fieldline Rd",
+            "city": "Salinas",
+            "state": "CA",
+            "postal_code": "93908",
+            "fda_registration_number": "10000000001",
+            "roles": ["Grower"],
+            "category_ids": ["2"],
+        },
+        {
+            "key": "cooler",
+            "name": "Monterey Cooling Hub",
+            "street": "420 Chiller Ave",
+            "city": "Monterey",
+            "state": "CA",
+            "postal_code": "93940",
+            "fda_registration_number": "10000000002",
+            "roles": ["Processor"],
+            "category_ids": ["1"],
+        },
+        {
+            "key": "packer",
+            "name": "Salinas Packhouse",
+            "street": "1200 Abbott St",
+            "city": "Salinas",
+            "state": "CA",
+            "postal_code": "93901",
+            "fda_registration_number": "10000000003",
+            "roles": ["Packer"],
+            "category_ids": ["1"],
+        },
+        {
+            "key": "distributor",
+            "name": "East Bay Distribution Center",
+            "street": "55 Logistics Pkwy",
+            "city": "Oakland",
+            "state": "CA",
+            "postal_code": "94621",
+            "fda_registration_number": "10000000004",
+            "roles": ["Distributor"],
+            "category_ids": ["1"],
+        },
+    ]
+
+    facilities_by_key: dict[str, SupplierFacilityModel] = {}
+    categories_by_facility_id: dict[uuid_module.UUID, list[dict[str, Any]]] = {}
+
+    for blueprint in facility_blueprints:
+        facility = SupplierFacilityModel(
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            name=blueprint["name"],
+            street=blueprint["street"],
+            city=blueprint["city"],
+            state=blueprint["state"],
+            postal_code=blueprint["postal_code"],
+            fda_registration_number=blueprint["fda_registration_number"],
+            roles=blueprint["roles"],
+        )
+        db.add(facility)
+        db.flush()
+
+        selected_categories: list[dict[str, Any]] = []
+        for category_id in blueprint["category_ids"]:
+            category = FTL_CATEGORY_LOOKUP.get(category_id)
+            if category is None:
+                raise HTTPException(status_code=500, detail=f"Missing seed FTL category id: {category_id}")
+            selected_categories.append(category)
+            db.add(
+                SupplierFacilityFTLCategoryModel(
+                    tenant_id=tenant_id,
+                    facility_id=facility.id,
+                    category_id=category["id"],
+                    category_name=category["name"],
+                    required_ctes=category["ctes"],
+                )
+            )
+
+        facilities_by_key[blueprint["key"]] = facility
+        categories_by_facility_id[facility.id] = selected_categories
+
+    seed_now = datetime.now(timezone.utc)
+    event_blueprints = [
+        {"facility_key": "grower", "cte_type": "harvesting", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 120, "kde_data": {"quantity": 520, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "HRV-1001"}},
+        {"facility_key": "grower", "cte_type": "cooling", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 116, "kde_data": {"quantity": 520, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "CL-1001"}},
+        {"facility_key": "grower", "cte_type": "initial_packing", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 112, "kde_data": {"quantity": 500, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "IP-1001"}},
+        {"facility_key": "grower", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1002", "hours_ago": 108, "kde_data": {"quantity": 340, "unit_of_measure": "cases", "product_description": "Spring Mix", "reference_document": "RCV-1002"}},
+        {"facility_key": "grower", "cte_type": "transforming", "tlc_code": "TLC-2026-SAL-1002", "hours_ago": 104, "kde_data": {"quantity": 320, "unit_of_measure": "cases", "product_description": "Spring Mix", "reference_document": "XFM-1002"}},
+        {"facility_key": "grower", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1002", "hours_ago": 100, "kde_data": {"quantity": 320, "unit_of_measure": "cases", "product_description": "Spring Mix", "reference_document": "BOL-1002"}},
+        {"facility_key": "cooler", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 96, "kde_data": {"quantity": 500, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "RCV-2001"}},
+        {"facility_key": "cooler", "cte_type": "transforming", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 92, "kde_data": {"quantity": 490, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "XFM-2001"}},
+        {"facility_key": "cooler", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 88, "kde_data": {"quantity": 490, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "BOL-2001"}},
+        {"facility_key": "packer", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 84, "kde_data": {"quantity": 480, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "RCV-3001"}},
+        {"facility_key": "packer", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 80, "kde_data": {"quantity": 470, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "BOL-3001"}},
+        {"facility_key": "packer", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1003", "hours_ago": 76, "kde_data": {"quantity": 260, "unit_of_measure": "cases", "product_description": "Romaine Hearts", "reference_document": "RCV-3003"}},
+        {"facility_key": "packer", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1003", "hours_ago": 72, "kde_data": {"quantity": 250, "unit_of_measure": "cases", "product_description": "Romaine Hearts", "reference_document": "BOL-3003"}},
+        {"facility_key": "distributor", "cte_type": "receiving", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 64, "kde_data": {"quantity": 460, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "RCV-4001"}},
+        {"facility_key": "distributor", "cte_type": "transforming", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 60, "kde_data": {"quantity": 450, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "XFM-4001"}},
+        {"facility_key": "distributor", "cte_type": "shipping", "tlc_code": "TLC-2026-SAL-1001", "hours_ago": 56, "kde_data": {"quantity": 450, "unit_of_measure": "cases", "product_description": "Baby Spinach", "reference_document": "BOL-4001"}},
+    ]
+
+    seeded_records: list[tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel, SupplierFacilityModel]] = []
+    for item in event_blueprints:
+        facility = facilities_by_key[item["facility_key"]]
+        event, lot = _persist_supplier_cte_event(
+            db,
+            tenant_id=tenant_id,
+            current_user=current_user,
+            facility=facility,
+            cte_type=item["cte_type"],
+            tlc_code=item["tlc_code"],
+            event_time=seed_now - timedelta(hours=int(item["hours_ago"])),
+            kde_data=item["kde_data"],
+            obligation_ids=[],
+        )
+        seeded_records.append((event, lot, facility))
+
+    db.commit()
+
+    for facility in facilities_by_key.values():
+        selected_categories = categories_by_facility_id.get(facility.id, [])
+        supplier_graph_sync.record_facility_ftl_scoping(
+            tenant_id=str(tenant_id),
+            facility_id=str(facility.id),
+            facility_name=facility.name,
+            supplier_user_id=str(current_user.id),
+            supplier_email=current_user.email,
+            street=facility.street,
+            city=facility.city,
+            state=facility.state,
+            postal_code=facility.postal_code,
+            fda_registration_number=facility.fda_registration_number,
+            roles=facility.roles or [],
+            categories=selected_categories,
+        )
+
+    for event, lot, facility in seeded_records:
+        supplier_graph_sync.record_cte_event(
+            tenant_id=str(tenant_id),
+            facility_id=str(facility.id),
+            facility_name=facility.name,
+            cte_event_id=str(event.id),
+            cte_type=event.cte_type,
+            event_time=_iso_utc(event.event_time),
+            tlc_code=lot.tlc_code,
+            product_description=lot.product_description,
+            lot_status=lot.status,
+            kde_data=event.kde_data or {},
+            payload_sha256=event.payload_sha256,
+            merkle_prev_hash=event.merkle_prev_hash,
+            merkle_hash=event.merkle_hash,
+            sequence_number=int(event.sequence_number),
+            obligation_ids=event.obligation_ids or [],
+        )
+
+    focus_facility = facilities_by_key["packer"]
+    focus_categories = categories_by_facility_id.get(focus_facility.id, [])
+    focus_required_ctes = _derive_required_ctes(focus_categories)
+    score_payload, gap_payloads = _compute_supplier_compliance(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=focus_facility.id,
+        lookback_days=30,
+    )
+
+    seeded_tlcs = len({str(lot.id) for _, lot, _facility in seeded_records})
+    return SupplierDemoResetResponse(
+        focus_facility_id=str(focus_facility.id),
+        focus_required_ctes=focus_required_ctes,
+        seeded_facilities=len(facilities_by_key),
+        seeded_tlcs=seeded_tlcs,
+        seeded_events=len(seeded_records),
+        dashboard_score=int(score_payload["score"]),
+        open_gap_count=len(gap_payloads),
+    )
+
+
+@router.post("/funnel-events", response_model=SupplierFunnelEventResponse)
+async def create_supplier_funnel_event(
+    request: SupplierFunnelEventRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierFunnelEventResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    scoped_facility_id: uuid_module.UUID | None = None
+    if request.facility_id:
+        try:
+            scoped_facility_id = uuid_module.UUID(request.facility_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+        _get_supplier_facility_or_404(
+            db,
+            tenant_id=tenant_id,
+            supplier_user_id=current_user.id,
+            facility_id=scoped_facility_id,
+        )
+
+    event = SupplierFunnelEventModel(
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+        event_name=request.event_name.strip().lower(),
+        step=(request.step.strip().lower() if request.step else None),
+        status=(request.status.strip().lower() if request.status else None),
+        metadata_=request.metadata,
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    return SupplierFunnelEventResponse(
+        event_id=str(event.id),
+        event_name=event.event_name,
+        created_at=_iso_utc(event.created_at),
+    )
+
+
+@router.get("/social-proof", response_model=SupplierSocialProofResponse)
+async def get_supplier_social_proof(
+    _current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierSocialProofResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    payload = _compute_social_proof(db, tenant_id=tenant_id)
+    return SupplierSocialProofResponse(**payload)
+
+
 @router.post("/facilities", response_model=SupplierFacilityResponse)
 async def create_supplier_facility(
     request: SupplierFacilityCreateRequest,
@@ -897,70 +1353,17 @@ async def submit_cte_event(
         facility_id=facility_uuid,
     )
 
-    cte_type = request.cte_type.strip().lower()
-    if cte_type not in SUPPORTED_CTE_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported cte_type: {request.cte_type}")
-
-    tlc_code = request.tlc_code.strip()
-    if not tlc_code:
-        raise HTTPException(status_code=400, detail="tlc_code is required")
-
-    event_time = request.event_time or datetime.now(timezone.utc)
-    payload = {
-        "facility_id": str(facility.id),
-        "cte_type": cte_type,
-        "tlc_code": tlc_code,
-        "event_time": _iso_utc(event_time),
-        "kde_data": request.kde_data,
-    }
-    payload_sha256 = _sha256_json(payload)
-
-    lot = db.execute(
-        select(SupplierTraceabilityLotModel).where(
-            SupplierTraceabilityLotModel.tenant_id == tenant_id,
-            SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
-            SupplierTraceabilityLotModel.tlc_code == tlc_code,
-        )
-    ).scalar_one_or_none()
-
-    if lot is None:
-        lot = SupplierTraceabilityLotModel(
-            tenant_id=tenant_id,
-            supplier_user_id=current_user.id,
-            facility_id=facility.id,
-            tlc_code=tlc_code,
-            product_description=(request.kde_data.get("product_description") if isinstance(request.kde_data, dict) else None),
-            status="active",
-        )
-        db.add(lot)
-        db.flush()
-
-    previous_event = db.execute(
-        select(SupplierCTEEventModel)
-        .where(SupplierCTEEventModel.tenant_id == tenant_id)
-        .order_by(SupplierCTEEventModel.sequence_number.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-
-    merkle_prev_hash = previous_event.merkle_hash if previous_event else None
-    sequence_number = int(previous_event.sequence_number + 1) if previous_event else 1
-    merkle_hash = _next_merkle_hash(merkle_prev_hash, payload_sha256)
-
-    event = SupplierCTEEventModel(
+    event, lot = _persist_supplier_cte_event(
+        db,
         tenant_id=tenant_id,
-        supplier_user_id=current_user.id,
-        facility_id=facility.id,
-        lot_id=lot.id,
-        cte_type=cte_type,
-        event_time=event_time,
+        current_user=current_user,
+        facility=facility,
+        cte_type=request.cte_type,
+        tlc_code=request.tlc_code,
+        event_time=request.event_time,
         kde_data=request.kde_data,
-        payload_sha256=payload_sha256,
-        merkle_prev_hash=merkle_prev_hash,
-        merkle_hash=merkle_hash,
-        sequence_number=sequence_number,
         obligation_ids=request.obligation_ids,
     )
-    db.add(event)
     db.commit()
     db.refresh(event)
 
@@ -969,7 +1372,7 @@ async def submit_cte_event(
         facility_id=str(facility.id),
         facility_name=facility.name,
         cte_event_id=str(event.id),
-        cte_type=cte_type,
+        cte_type=event.cte_type,
         event_time=_iso_utc(event.event_time),
         tlc_code=lot.tlc_code,
         product_description=lot.product_description,
