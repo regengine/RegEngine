@@ -127,27 +127,13 @@ export function MarketingFooter() {
                     </h4>
                     <div className="grid grid-cols-1 gap-y-2.5">
                         {industries.map((ind) => (
-                            ind.href ? (
-                                <Link
-                                    key={ind.name}
-                                    href={ind.href}
-                                    className="text-[13px] text-re-text-tertiary no-underline flex items-center gap-1.5"
-                                >
-                                    {ind.name}
-                                </Link>
-                            ) : (
-                                <span
-                                    key={ind.name}
-                                    className="text-[13px] text-re-text-disabled flex items-center gap-1.5 cursor-not-allowed"
-                                >
-                                    {ind.name}
-                                    {ind.comingSoon && (
-                                        <span style={{ fontSize: "9px", color: "var(--re-text-disabled)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                            Soon
-                                        </span>
-                                    )}
-                                </span>
-                            )
+                            <Link
+                                key={ind.name}
+                                href={ind.href}
+                                className="text-[13px] text-re-text-tertiary no-underline flex items-center gap-1.5"
+                            >
+                                {ind.name}
+                            </Link>
                         ))}
                     </div>
                 </div>
