@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ADMIN_URL =
-  process.env.ADMIN_SERVICE_URL || process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
+const DEFAULT_ADMIN_URL = 'http://localhost:8400';
+const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
 export const dynamic = 'force-static';
 export const generateStaticParams = async () => {
@@ -71,7 +71,7 @@ async function proxyRequest(
 
     const path = pathParts.join('/');
     const queryString = new URL(request.url).search;
-    const targetUrl = `${ADMIN_URL}/${path}${queryString}`;
+    const targetBases = getAdminTargets();
 
     const headers = new Headers();
     const contentType = request.headers.get('content-type');
@@ -96,28 +96,133 @@ async function proxyRequest(
       headers,
     };
 
+    let bodyText = '';
     if (!['GET', 'OPTIONS'].includes(method)) {
-      const bodyText = await request.text();
+      bodyText = await request.text();
       if (bodyText) {
         fetchOptions.body = bodyText;
       }
     }
 
-    const response = await fetch(targetUrl, fetchOptions);
-    const responseText = await response.text();
+    const attemptErrors: string[] = [];
 
-    const outgoingHeaders = new Headers();
-    const responseContentType = response.headers.get('content-type');
-    if (responseContentType) outgoingHeaders.set('Content-Type', responseContentType);
-    const disposition = response.headers.get('content-disposition');
-    if (disposition) outgoingHeaders.set('Content-Disposition', disposition);
+    for (const targetBase of targetBases) {
+      const targetUrl = `${stripTrailingSlash(targetBase)}/${path}${queryString}`;
+      try {
+        const response = await fetch(targetUrl, fetchOptions);
+        if (shouldRetryResponse(response)) {
+          attemptErrors.push(
+            `target=${targetBase} status=${response.status} reason=${response.headers.get('x-vercel-error') || 'vercel_error'}`,
+          );
+          continue;
+        }
 
-    return new NextResponse(responseText, {
-      status: response.status,
-      headers: outgoingHeaders,
-    });
+        const responseText = await response.text();
+
+        const outgoingHeaders = new Headers();
+        const responseContentType = response.headers.get('content-type');
+        if (responseContentType) outgoingHeaders.set('Content-Type', responseContentType);
+        const disposition = response.headers.get('content-disposition');
+        if (disposition) outgoingHeaders.set('Content-Disposition', disposition);
+
+        return new NextResponse(responseText, {
+          status: response.status,
+          headers: outgoingHeaders,
+        });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Admin request failed';
+        attemptErrors.push(`target=${targetBase} error=${message}`);
+
+        if (!['GET', 'OPTIONS'].includes(method)) {
+          fetchOptions.body = bodyText;
+        }
+      }
+    }
+
+    return NextResponse.json(
+      {
+        error: 'Unable to reach admin service',
+        details: attemptErrors,
+      },
+      { status: 502 },
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Admin request failed';
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+function getAdminTargets(): string[] {
+  const candidates: string[] = [];
+  const publicAdminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
+  const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const internalAdminUrl = process.env.ADMIN_SERVICE_URL;
+
+  if (publicAdminUrl) {
+    candidates.push(publicAdminUrl);
+  }
+
+  if (publicApiBase) {
+    candidates.push(`${stripTrailingSlash(publicApiBase)}/admin`);
+  }
+
+  const runningOnVercel = Boolean(
+    process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV,
+  );
+  if (internalAdminUrl && (!runningOnVercel || isPublicAdminHost(internalAdminUrl))) {
+    candidates.push(internalAdminUrl);
+  }
+
+  if (candidates.length === 0) {
+    candidates.push(DEFAULT_ADMIN_URL);
+  }
+
+  return Array.from(new Set(candidates.map((candidate) => stripTrailingSlash(candidate))));
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function shouldRetryResponse(response: Response): boolean {
+  const vercelErrorHeader = response.headers.get('x-vercel-error') || '';
+  return vercelErrorHeader.includes(VERCEL_PRIVATE_DNS_ERROR);
+}
+
+function isPublicAdminHost(urlValue: string): boolean {
+  try {
+    const parsed = new URL(urlValue);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return false;
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '::1' ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal') ||
+      !hostname.includes('.')
+    ) {
+      return false;
+    }
+
+    if (hostname.startsWith('10.')) {
+      return false;
+    }
+
+    if (hostname.startsWith('192.168.')) {
+      return false;
+    }
+
+    const secondOctet = Number(hostname.split('.')[1]);
+    if (hostname.startsWith('172.') && secondOctet >= 16 && secondOctet <= 31) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
   }
 }

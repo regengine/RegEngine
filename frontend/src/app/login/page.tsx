@@ -29,6 +29,32 @@ const LOGIN_PRESETS = [
 
 type LoginPreset = (typeof LOGIN_PRESETS)[number]['id'];
 
+function extractApiErrorMessage(data: unknown): string | null {
+    if (typeof data === 'string') {
+        return sanitizeErrorMessage(data);
+    }
+
+    if (!data || typeof data !== 'object') {
+        return null;
+    }
+
+    const payload = data as { detail?: unknown; error?: unknown; message?: unknown };
+    const candidate = payload.detail ?? payload.error ?? payload.message;
+    if (typeof candidate !== 'string') {
+        return null;
+    }
+
+    return sanitizeErrorMessage(candidate);
+}
+
+function sanitizeErrorMessage(message: string): string {
+    const cleaned = message.replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+        return 'Authentication request failed';
+    }
+    return cleaned.length > 220 ? `${cleaned.slice(0, 217)}...` : cleaned;
+}
+
 export default function LoginPage() {
     // Force HMR update
     const [email, setEmail] = useState('');
@@ -80,15 +106,11 @@ export default function LoginPage() {
         } catch (err: unknown) {
             console.error('Login error:', err);
             const apiError = err as {
-                response?: { status?: number; data?: { detail?: string; error?: string; message?: string } };
+                response?: { status?: number; data?: unknown };
                 message?: string;
                 code?: string;
             };
-            const errorDetail =
-                apiError.response?.data?.detail ||
-                apiError.response?.data?.error ||
-                apiError.response?.data?.message ||
-                null;
+            const errorDetail = extractApiErrorMessage(apiError.response?.data);
 
             if (apiError.response?.status === 401) {
                 setError('Invalid email or password');
@@ -96,8 +118,12 @@ export default function LoginPage() {
                 setError('Account access disabled');
             } else if (apiError.response?.status === 404) {
                 setError('Authentication service unavailable. Please try again shortly.');
+            } else if (apiError.response?.status === 502) {
+                setError('Authentication service is unreachable. Please try again shortly.');
             } else if (apiError.code === 'ERR_NETWORK') {
                 setError('Unable to reach authentication service. Check API configuration and try again.');
+            } else if (apiError.message?.includes('DNS_HOSTNAME_RESOLVED_PRIVATE')) {
+                setError('Authentication service is misconfigured for public access.');
             } else {
                 setError(errorDetail || 'An unexpected error occurred. Please try again.');
             }
