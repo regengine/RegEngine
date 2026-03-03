@@ -78,7 +78,7 @@ describe('DashboardPage', () => {
             expect(screen.queryByRole('main')).not.toBeInTheDocument();
         });
 
-        it('redirects to login when not authenticated', () => {
+        it('redirects to login when not authenticated', async () => {
             (useAuth as any).mockReturnValue({
                 user: null,
                 isHydrated: true,
@@ -89,8 +89,8 @@ describe('DashboardPage', () => {
 
             render(<DashboardPage />);
 
-            waitFor(() => {
-                expect(mockPush).toHaveBeenCalledWith('/login');
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/login?next=%2Fdashboard');
             });
         });
 

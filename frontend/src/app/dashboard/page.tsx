@@ -156,13 +156,9 @@ export default function DashboardPage() {
 
     useEffect(() => {
         if (isHydrated && !user) {
-            router.push('/login');
+            router.push(`/login?next=${encodeURIComponent('/dashboard')}`);
         }
     }, [isHydrated, user, router]);
-
-    if (!isHydrated || !user) {
-        return null;
-    }
 
     // Get tenant-specific dashboard data (mock for tenant context)
     const dashboardData = useMemo<TenantDashboard | null>(() => {
@@ -194,6 +190,10 @@ export default function DashboardPage() {
             pendingReviews: 0,
         };
     }, [systemMetrics, dashboardData]);
+
+    if (!isHydrated || !user) {
+        return null;
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
