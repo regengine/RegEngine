@@ -372,6 +372,54 @@ export interface SupplierFunnelSummaryResponse {
     updated_at: string;
 }
 
+export interface SupplierBulkUploadParseResponse {
+    session_id: string;
+    status: string;
+    detected_format: string;
+    facilities: number;
+    ftl_scopes: number;
+    tlcs: number;
+    events: number;
+    warnings: string[];
+}
+
+export interface SupplierBulkUploadValidationError {
+    section: string;
+    row: number;
+    message: string;
+}
+
+export interface SupplierBulkUploadValidationPreview {
+    facilities_to_create: number;
+    facilities_to_update: number;
+    ftl_scopes_to_upsert: number;
+    tlcs_to_create: number;
+    tlcs_to_update: number;
+    events_to_chain: number;
+    errors: SupplierBulkUploadValidationError[];
+    can_commit: boolean;
+}
+
+export interface SupplierBulkUploadValidateResponse {
+    session_id: string;
+    status: string;
+    preview: SupplierBulkUploadValidationPreview;
+}
+
+export interface SupplierBulkUploadCommitResponse {
+    session_id: string;
+    status: string;
+    summary: Record<string, unknown>;
+}
+
+export interface SupplierBulkUploadStatusResponse {
+    session_id: string;
+    status: string;
+    preview?: SupplierBulkUploadValidationPreview | null;
+    summary?: Record<string, unknown> | null;
+    error?: string | null;
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;
