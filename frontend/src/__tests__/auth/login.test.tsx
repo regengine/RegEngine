@@ -45,7 +45,7 @@ describe('LoginPage', () => {
         (useRouter as any).mockReturnValue({ push: mockPush });
         mockSearchParamGet.mockReturnValue(null);
         (useSearchParams as any).mockReturnValue({ get: mockSearchParamGet });
-        (useAuth as any).mockReturnValue({ login: mockLogin });
+        (useAuth as any).mockReturnValue({ login: mockLogin, user: null, isHydrated: true });
     });
 
     describe('Rendering', () => {
@@ -212,6 +212,58 @@ describe('LoginPage', () => {
             });
         });
 
+        it('redirects to provided safe next path for regular users', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return '/dashboard/fsma';
+                return null;
+            });
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard/fsma');
+            });
+        });
+
+        it('falls back to dashboard when next path is unsafe', async () => {
+            const user = userEvent.setup();
+            const mockResponse = {
+                access_token: 'test-token',
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                tenant_id: 'tenant-123',
+            };
+
+            mockSearchParamGet.mockImplementation((key: string) => {
+                if (key === 'next') return 'https://example.com/phish';
+                return null;
+            });
+
+            (apiClient.login as any).mockResolvedValueOnce(mockResponse);
+
+            render(<LoginPage />);
+
+            await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+            await user.type(screen.getByLabelText(/password/i), 'password123');
+            await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard');
+            });
+        });
+
         it('redirects to sysadmin dashboard for admin users', async () => {
             const user = userEvent.setup();
             const mockResponse = {
@@ -230,6 +282,20 @@ describe('LoginPage', () => {
 
             await waitFor(() => {
                 expect(mockPush).toHaveBeenCalledWith('/sysadmin');
+            });
+        });
+
+        it('redirects authenticated users away from login on mount', async () => {
+            (useAuth as any).mockReturnValue({
+                login: mockLogin,
+                user: { id: '123', email: 'test@example.com', is_sysadmin: false },
+                isHydrated: true,
+            });
+
+            render(<LoginPage />);
+
+            await waitFor(() => {
+                expect(mockPush).toHaveBeenCalledWith('/dashboard');
             });
         });
     });
