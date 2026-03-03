@@ -128,7 +128,20 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         yield test_client
 
 
-def test_bulk_upload_parse_validate_commit_happy_path(client: TestClient, db_session: Session):
+def test_bulk_upload_parse_validate_commit_happy_path(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import app.supplier_cte_service as cte_service
+
+    lock_calls = {"count": 0}
+
+    def _track_lock(*_args, **_kwargs):
+        lock_calls["count"] += 1
+
+    monkeypatch.setattr(cte_service, "_acquire_tenant_merkle_lock", _track_lock)
+
     csv_payload = """record_type,name,street,city,state,postal_code,roles,facility_name,category_id,tlc_code,product_description,status,cte_type,event_time,kde_data
 facility,Salinas Packhouse,1200 Abbott St,Salinas,CA,93901,"Grower,Packer",,,,,,,,
 ftl_scope,,,,,,,Salinas Packhouse,2,,,,,,
@@ -152,6 +165,13 @@ event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z
     assert validate_payload["preview"]["can_commit"] is True
     assert validate_payload["preview"]["events_to_chain"] == 1
 
+    validated_status_response = client.get(f"/v1/supplier/bulk-upload/status/{session_id}")
+    assert validated_status_response.status_code == 200
+    validated_status_payload = validated_status_response.json()
+    assert validated_status_payload["status"] == "validated"
+    assert validated_status_payload["preview"] is not None
+    assert validated_status_payload["preview"]["can_commit"] is True
+
     commit_response = client.post(f"/v1/supplier/bulk-upload/commit?session_id={session_id}")
     assert commit_response.status_code == 200
     commit_payload = commit_response.json()
@@ -170,3 +190,71 @@ event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z
     assert len(total_events) == 1
     assert total_events[0].merkle_prev_hash is None
     assert int(total_events[0].sequence_number) == 1
+    assert lock_calls["count"] == 1
+
+
+def test_bulk_upload_validate_blocks_unknown_facility_reference(client: TestClient):
+    csv_payload = """record_type,facility_name,category_id
+ftl_scope,Unknown Facility,2
+"""
+
+    parse_response = client.post(
+        "/v1/supplier/bulk-upload/parse",
+        files={"file": ("supplier.csv", csv_payload.encode("utf-8"), "text/csv")},
+    )
+    assert parse_response.status_code == 200
+    session_id = parse_response.json()["session_id"]
+
+    validate_response = client.post(f"/v1/supplier/bulk-upload/validate?session_id={session_id}")
+    assert validate_response.status_code == 200
+    validate_payload = validate_response.json()
+    assert validate_payload["preview"]["can_commit"] is False
+    assert any(
+        "Unknown facility_name reference" in error["message"]
+        for error in validate_payload["preview"]["errors"]
+    )
+
+
+def test_bulk_upload_commit_succeeds_when_graph_sync_fails(
+    client: TestClient,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import app.bulk_upload.transaction_manager as tx_manager
+
+    def _raise_graph_sync(**_kwargs):
+        raise RuntimeError("neo4j unavailable")
+
+    monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", _raise_graph_sync)
+
+    csv_payload = """record_type,name,street,city,state,postal_code,roles,facility_name,category_id,tlc_code,product_description,status,cte_type,event_time,kde_data
+facility,Salinas Packhouse,1200 Abbott St,Salinas,CA,93901,"Grower,Packer",,,,,,,,
+ftl_scope,,,,,,,Salinas Packhouse,2,,,,,,
+tlc,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,Baby Spinach,active,,,
+event,,,,,,,Salinas Packhouse,,TLC-2026-SAL-1001,,,shipping,2026-03-03T12:00:00Z,"{""quantity"": 120, ""unit_of_measure"": ""cases"", ""product_description"": ""Baby Spinach""}"
+"""
+
+    parse_response = client.post(
+        "/v1/supplier/bulk-upload/parse",
+        files={"file": ("supplier.csv", csv_payload.encode("utf-8"), "text/csv")},
+    )
+    assert parse_response.status_code == 200
+    session_id = parse_response.json()["session_id"]
+
+    validate_response = client.post(f"/v1/supplier/bulk-upload/validate?session_id={session_id}")
+    assert validate_response.status_code == 200
+    assert validate_response.json()["preview"]["can_commit"] is True
+
+    commit_response = client.post(f"/v1/supplier/bulk-upload/commit?session_id={session_id}")
+    assert commit_response.status_code == 200
+    commit_payload = commit_response.json()
+    assert commit_payload["status"] == "completed"
+    assert commit_payload["summary"]["events_chained"] == 1
+    assert commit_payload["summary"]["sync_warning_count"] == 1
+
+    status_response = client.get(f"/v1/supplier/bulk-upload/status/{session_id}")
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "completed"
+
+    total_events = db_session.execute(select(SupplierCTEEventModel)).scalars().all()
+    assert len(total_events) == 1

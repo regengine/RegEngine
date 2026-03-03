@@ -236,6 +236,20 @@ export default function BulkUploadPage() {
           {commitResult && (
             <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
               <p className="font-semibold">Commit Complete</p>
+              <p className="mt-1 text-xs">
+                Facilities create/update: {commitResult.summary.facilities_created}/{commitResult.summary.facilities_updated} | TLC create/update:{' '}
+                {commitResult.summary.tlcs_created}/{commitResult.summary.tlcs_updated} | Events chained: {commitResult.summary.events_chained}
+              </p>
+              {commitResult.summary.sync_warning_count > 0 && (
+                <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                  <p className="font-semibold">Graph sync warnings ({commitResult.summary.sync_warning_count})</p>
+                  <ul className="mt-1 list-disc pl-5">
+                    {commitResult.summary.sync_warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <pre className="mt-2 overflow-x-auto text-xs">{JSON.stringify(commitResult.summary, null, 2)}</pre>
             </div>
           )}
@@ -244,6 +258,11 @@ export default function BulkUploadPage() {
             <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <p className="font-semibold text-slate-900">Latest Status: {statusResult.status}</p>
               {statusResult.error && <p className="mt-1 text-red-700">{statusResult.error}</p>}
+              {statusResult.summary && statusResult.summary.sync_warning_count > 0 && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Graph sync warnings: {statusResult.summary.sync_warning_count}. See commit summary details above.
+                </p>
+              )}
             </div>
           )}
         </div>
