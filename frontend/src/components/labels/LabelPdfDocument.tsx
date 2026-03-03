@@ -138,7 +138,11 @@ export const LabelPdfDocument: React.FC<LabelPdfDocumentProps> = ({
 
             <View style={styles.qrContainer}>
               {qrDataUrls[label.serial] && (
-                <Image src={qrDataUrls[label.serial]} style={styles.qrImage} />
+                <Image
+                  src={qrDataUrls[label.serial]}
+                  style={styles.qrImage}
+                  alt={`QR code for serial ${label.serial}`}
+                />
               )}
             </View>
 

@@ -54,7 +54,7 @@ export function IngestionModal({ open, onOpenChange, vertical }: IngestionModalP
         setMessage('');
 
         try {
-            let result; // eslint-disable-line @typescript-eslint/no-unused-vars
+            let result;
             if (activeTab === 'url') {
                 if (!url) return;
                 result = await ingestUrlMutation.mutateAsync({ apiKey, url, sourceSystem });
