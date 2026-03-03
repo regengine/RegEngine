@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 
 import { apiClient } from '@/lib/api-client';
@@ -22,6 +22,15 @@ export default function BulkUploadPage() {
 
   const canCommit = useMemo(() => Boolean(validateResult?.preview?.can_commit), [validateResult]);
 
+  const onFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    setFile(event.target.files?.[0] || null);
+    setParseResult(null);
+    setValidateResult(null);
+    setCommitResult(null);
+    setStatusResult(null);
+    setError(null);
+  };
+
   const onParseAndValidate = async () => {
     if (!file) {
       setError('Choose a file before uploading.');
@@ -29,6 +38,8 @@ export default function BulkUploadPage() {
     }
     setIsBusy(true);
     setError(null);
+    setParseResult(null);
+    setValidateResult(null);
     setCommitResult(null);
     setStatusResult(null);
 
@@ -155,7 +166,7 @@ export default function BulkUploadPage() {
           <input
             type="file"
             accept=".csv,.xlsx,.json,.pdf"
-            onChange={(event) => setFile(event.target.files?.[0] || null)}
+            onChange={onFileSelected}
             className="block w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-700"
           />
 
