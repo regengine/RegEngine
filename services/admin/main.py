@@ -181,6 +181,9 @@ app.include_router(user_router, prefix="/v1")
 from app.supplier_onboarding_routes import router as supplier_onboarding_router
 app.include_router(supplier_onboarding_router, prefix="/v1")
 
+from app.bulk_upload.routes import router as bulk_upload_router
+app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
+
 # Production Compliance OS (CA/LA) — fully decomposed into app/pcos/ package
 from app.pcos import router as pcos_router
 app.include_router(pcos_router)

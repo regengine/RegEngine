@@ -32,6 +32,10 @@ import type {
   SupplierFunnelEventRequest,
   SupplierFunnelEventResponse,
   SupplierFunnelSummaryResponse,
+  SupplierBulkUploadCommitResponse,
+  SupplierBulkUploadParseResponse,
+  SupplierBulkUploadStatusResponse,
+  SupplierBulkUploadValidateResponse,
   SupplierFDAExportPreviewResponse,
   SupplierSocialProofResponse,
   SupplierTLC,
@@ -609,6 +613,60 @@ class APIClient {
   async getSupplierFunnelSummary(): Promise<SupplierFunnelSummaryResponse> {
     const { data } = await this.adminClient.get<SupplierFunnelSummaryResponse>('/v1/supplier/funnel-summary');
     return data;
+  }
+
+  async parseSupplierBulkUpload(file: File): Promise<SupplierBulkUploadParseResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await this.adminClient.post<SupplierBulkUploadParseResponse>(
+      '/v1/supplier/bulk-upload/parse',
+      formData,
+    );
+    return data;
+  }
+
+  async validateSupplierBulkUpload(sessionId: string): Promise<SupplierBulkUploadValidateResponse> {
+    const { data } = await this.adminClient.post<SupplierBulkUploadValidateResponse>(
+      '/v1/supplier/bulk-upload/validate',
+      null,
+      { params: { session_id: sessionId } },
+    );
+    return data;
+  }
+
+  async commitSupplierBulkUpload(sessionId: string): Promise<SupplierBulkUploadCommitResponse> {
+    const { data } = await this.adminClient.post<SupplierBulkUploadCommitResponse>(
+      '/v1/supplier/bulk-upload/commit',
+      null,
+      { params: { session_id: sessionId } },
+    );
+    return data;
+  }
+
+  async getSupplierBulkUploadStatus(sessionId: string): Promise<SupplierBulkUploadStatusResponse> {
+    const { data } = await this.adminClient.get<SupplierBulkUploadStatusResponse>(
+      `/v1/supplier/bulk-upload/status/${sessionId}`,
+    );
+    return data;
+  }
+
+  async downloadSupplierBulkUploadTemplate(
+    format: 'csv' | 'xlsx',
+  ): Promise<{ blob: Blob; filename: string }> {
+    const response = await this.adminClient.get('/v1/supplier/bulk-upload/template', {
+      params: { format },
+      responseType: 'blob',
+    });
+
+    const disposition = response.headers['content-disposition'] as string | undefined;
+    const filenameMatch = disposition?.match(/filename=([^;]+)/i);
+    const parsedFilename = filenameMatch?.[1]?.trim()?.replace(/^"|"$/g, '');
+    const fallbackFilename = `supplier_bulk_upload_template.${format}`;
+
+    return {
+      blob: response.data as Blob,
+      filename: parsedFilename || fallbackFilename,
+    };
   }
 }
 

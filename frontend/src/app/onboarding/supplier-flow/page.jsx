@@ -487,6 +487,11 @@ function FacilitySetupView({ setView, onFacilityCreated, onEvent }) {
             </button>
             <button style={{ padding: "10px 24px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>+ Add Another Facility</button>
           </div>
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            <a href="/onboarding/bulk-upload" style={{ color: BLUE, fontWeight: 600, textDecoration: "none" }}>
+              Or upload facilities, TLCs, and CTE events in bulk -&gt;
+            </a>
+          </div>
           {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
         </div>
       </Card>
@@ -1192,7 +1197,11 @@ function APISpecView() {
     { method: "POST", path: "/v1/supplier/tlcs", desc: "Create new TLC", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/supplier/compliance-score", desc: "Coverage + freshness + chain integrity", auth: "Supplier JWT", priority: "P0" },
     { method: "GET", path: "/v1/supplier/gaps", desc: "Missing or stale required CTE coverage", auth: "Supplier JWT", priority: "P0" },
-    { method: "POST", path: "/v1/supplier/facilities/{id}/cte-events/bulk", desc: "CSV/JSON batch upload", auth: "Supplier JWT", priority: "P1" },
+    { method: "POST", path: "/v1/supplier/bulk-upload/parse", desc: "Upload CSV/XLSX/JSON/PDF into parse session", auth: "Supplier JWT", priority: "P1" },
+    { method: "POST", path: "/v1/supplier/bulk-upload/validate", desc: "Dependency-ordered validation preview before commit", auth: "Supplier JWT", priority: "P1" },
+    { method: "POST", path: "/v1/supplier/bulk-upload/commit", desc: "Idempotent upsert + tenant-wide Merkle-parity CTE append", auth: "Supplier JWT", priority: "P1" },
+    { method: "GET", path: "/v1/supplier/bulk-upload/status/{session_id}", desc: "Check parse/validate/commit session status", auth: "Supplier JWT", priority: "P1" },
+    { method: "GET", path: "/v1/supplier/bulk-upload/template", desc: "Download CSV/XLSX onboarding template", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/supplier/export/fda-records", desc: "FDA 24-hour sortable spreadsheet", auth: "Supplier JWT", priority: "P0" },
     { method: "POST", path: "/v1/supplier/funnel-events", desc: "Lightweight funnel instrumentation event sink", auth: "Supplier JWT", priority: "P1" },
     { method: "GET", path: "/v1/supplier/social-proof", desc: "Real usage counters from Postgres", auth: "Supplier JWT", priority: "P1" },
