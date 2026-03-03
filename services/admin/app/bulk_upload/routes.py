@@ -59,22 +59,46 @@ class BulkUploadValidateResponse(BaseModel):
     preview: BulkUploadValidationPreview
 
 
+class BulkUploadCommitSummary(BaseModel):
+    facilities_created: int = 0
+    facilities_updated: int = 0
+    ftl_scopes_upserted: int = 0
+    tlcs_created: int = 0
+    tlcs_updated: int = 0
+    events_chained: int = 0
+    last_merkle_hash: str | None = None
+    sync_warning_count: int = 0
+    sync_warnings: list[str] = Field(default_factory=list)
+
+
 class BulkUploadCommitResponse(BaseModel):
     session_id: str
     status: str
-    summary: dict[str, Any]
+    summary: BulkUploadCommitSummary
 
 
 class BulkUploadStatusResponse(BaseModel):
     session_id: str
     status: str
-    preview: dict[str, Any] | None = None
-    summary: dict[str, Any] | None = None
+    preview: BulkUploadValidationPreview | None = None
+    summary: BulkUploadCommitSummary | None = None
     error: str | None = None
 
 
 def _iso_utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _coerce_commit_summary(value: Any) -> BulkUploadCommitSummary:
+    if isinstance(value, dict):
+        return BulkUploadCommitSummary(**value)
+    return BulkUploadCommitSummary()
+
+
+def _coerce_validation_preview(value: Any) -> BulkUploadValidationPreview | None:
+    if isinstance(value, dict):
+        return BulkUploadValidationPreview(**value)
+    return None
 
 
 def _tenant_and_user(db: Session, current_user: UserModel) -> tuple[uuid_module.UUID, UserModel]:
@@ -151,10 +175,11 @@ async def validate_bulk_upload(
         validation_errors=errors,
     )
 
-    can_commit = bool(preview.get("can_commit"))
+    preview_model = BulkUploadValidationPreview(**preview)
+    can_commit = preview_model.can_commit
     session_data["status"] = "validated" if can_commit else "parsed"
     session_data["normalized_data"] = normalized
-    session_data["validation_preview"] = preview
+    session_data["validation_preview"] = preview_model.model_dump()
     session_data["error"] = None
     session_data["updated_at"] = _iso_utc_now()
     await session_store.update_session(str(tenant_id), str(user.id), session_id, session_data)
@@ -162,7 +187,7 @@ async def validate_bulk_upload(
     return BulkUploadValidateResponse(
         session_id=session_id,
         status=session_data["status"],
-        preview=BulkUploadValidationPreview(**preview),
+        preview=preview_model,
     )
 
 
@@ -179,10 +204,11 @@ async def commit_bulk_upload(
 
     current_status = str(session_data.get("status") or "")
     if current_status == "completed":
+        summary_payload = _coerce_commit_summary(session_data.get("commit_summary"))
         return BulkUploadCommitResponse(
             session_id=session_id,
             status="completed",
-            summary=session_data.get("commit_summary") or {},
+            summary=summary_payload,
         )
     if current_status == "processing":
         raise HTTPException(status_code=409, detail="Commit already in progress")
@@ -208,15 +234,16 @@ async def commit_bulk_upload(
         await session_store.update_session(str(tenant_id), str(user.id), session_id, session_data)
         raise HTTPException(status_code=400, detail=f"Bulk commit failed: {exc}") from exc
 
+    summary_payload = _coerce_commit_summary(summary).model_dump()
     session_data["status"] = "completed"
-    session_data["commit_summary"] = summary
+    session_data["commit_summary"] = summary_payload
     session_data["updated_at"] = _iso_utc_now()
     await session_store.update_session(str(tenant_id), str(user.id), session_id, session_data)
 
     return BulkUploadCommitResponse(
         session_id=session_id,
         status="completed",
-        summary=summary,
+        summary=_coerce_commit_summary(summary_payload),
     )
 
 
@@ -234,8 +261,12 @@ async def get_bulk_upload_status(
     return BulkUploadStatusResponse(
         session_id=session_id,
         status=str(session_data.get("status") or "unknown"),
-        preview=session_data.get("validation_preview"),
-        summary=session_data.get("commit_summary"),
+        preview=_coerce_validation_preview(session_data.get("validation_preview")),
+        summary=(
+            _coerce_commit_summary(session_data.get("commit_summary"))
+            if session_data.get("commit_summary") is not None
+            else None
+        ),
         error=session_data.get("error"),
     )
 

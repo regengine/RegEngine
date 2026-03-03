@@ -10,6 +10,19 @@ from fastapi import HTTPException, UploadFile
 
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".json", ".pdf"}
+DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+READ_CHUNK_BYTES = 1024 * 1024
+
+
+def _max_upload_bytes() -> int:
+    raw_value = os.getenv("SUPPLIER_BULK_UPLOAD_MAX_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)).strip()
+    try:
+        parsed = int(raw_value)
+    except ValueError:
+        return DEFAULT_MAX_UPLOAD_BYTES
+    if parsed <= 0:
+        return DEFAULT_MAX_UPLOAD_BYTES
+    return parsed
 
 
 def _normalize_key(value: str) -> str:
@@ -185,6 +198,10 @@ def _parse_csv_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
         _classify_row(parsed, normalized_row, warnings=warnings)
 
 
+def _append_non_object_warning(warnings: list[str], section_name: str, index: int) -> None:
+    warnings.append(f"Skipped non-object row in {section_name} section at index {index}")
+
+
 def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
     try:
         payload = json.loads(content.decode("utf-8"))
@@ -198,25 +215,39 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
         events = payload.get("events") or []
 
         if isinstance(facilities, list):
-            for row in facilities:
-                _classify_row(parsed, _normalize_row({**(row or {}), "record_type": "facility"}), warnings=warnings)
+            for index, row in enumerate(facilities, start=1):
+                if not isinstance(row, dict):
+                    _append_non_object_warning(warnings, "facilities", index)
+                    continue
+                _classify_row(parsed, _normalize_row({**row, "record_type": "facility"}), warnings=warnings)
         if isinstance(ftl_scopes, list):
-            for row in ftl_scopes:
-                _classify_row(parsed, _normalize_row({**(row or {}), "record_type": "ftl_scope"}), warnings=warnings)
+            for index, row in enumerate(ftl_scopes, start=1):
+                if not isinstance(row, dict):
+                    _append_non_object_warning(warnings, "ftl_scopes", index)
+                    continue
+                _classify_row(parsed, _normalize_row({**row, "record_type": "ftl_scope"}), warnings=warnings)
         if isinstance(tlcs, list):
-            for row in tlcs:
-                _classify_row(parsed, _normalize_row({**(row or {}), "record_type": "tlc"}), warnings=warnings)
+            for index, row in enumerate(tlcs, start=1):
+                if not isinstance(row, dict):
+                    _append_non_object_warning(warnings, "tlcs", index)
+                    continue
+                _classify_row(parsed, _normalize_row({**row, "record_type": "tlc"}), warnings=warnings)
         if isinstance(events, list):
-            for row in events:
-                _classify_row(parsed, _normalize_row({**(row or {}), "record_type": "event"}), warnings=warnings)
+            for index, row in enumerate(events, start=1):
+                if not isinstance(row, dict):
+                    _append_non_object_warning(warnings, "events", index)
+                    continue
+                _classify_row(parsed, _normalize_row({**row, "record_type": "event"}), warnings=warnings)
         if not any(isinstance(section, list) and section for section in [facilities, ftl_scopes, tlcs, events]):
             _classify_row(parsed, _normalize_row(payload), warnings=warnings)
         return
 
     if isinstance(payload, list):
-        for row in payload:
+        for index, row in enumerate(payload, start=1):
             if isinstance(row, dict):
                 _classify_row(parsed, _normalize_row(row), warnings=warnings)
+            else:
+                _append_non_object_warning(warnings, "json_array", index)
         return
 
     raise HTTPException(status_code=400, detail="JSON must be an object or array")
@@ -308,7 +339,23 @@ async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported file format")
 
-    content = await file.read()
+    max_bytes = _max_upload_bytes()
+    chunks: list[bytes] = []
+    total_bytes = 0
+
+    while True:
+        chunk = await file.read(READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        total_bytes += len(chunk)
+        if total_bytes > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded file exceeds max size of {max_bytes} bytes",
+            )
+        chunks.append(chunk)
+
+    content = b"".join(chunks)
     if not content:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 

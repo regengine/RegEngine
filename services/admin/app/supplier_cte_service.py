@@ -14,6 +14,7 @@ from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityModel,
     SupplierTraceabilityLotModel,
+    TenantModel,
     UserModel,
 )
 
@@ -54,6 +55,16 @@ def _next_merkle_hash(prev_hash: str | None, payload_sha256: str) -> str:
     else:
         seed = f"{prev_hash}:{payload_sha256}"
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+def _acquire_tenant_merkle_lock(db: Session, tenant_id: uuid_module.UUID) -> None:
+    tenant_row = db.execute(
+        select(TenantModel.id)
+        .where(TenantModel.id == tenant_id)
+        .with_for_update()
+    ).scalar_one_or_none()
+    if tenant_row is None:
+        raise HTTPException(status_code=400, detail="Tenant not found")
 
 
 def _persist_supplier_cte_event(
@@ -111,6 +122,8 @@ def _persist_supplier_cte_event(
         )
         db.add(lot)
         db.flush()
+
+    _acquire_tenant_merkle_lock(db, tenant_id)
 
     previous_event = db.execute(
         select(SupplierCTEEventModel)

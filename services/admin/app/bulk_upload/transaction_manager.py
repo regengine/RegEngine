@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
+import structlog
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,9 @@ from app.sqlalchemy_models import (
     SupplierTraceabilityLotModel,
     UserModel,
 )
+
+
+logger = structlog.get_logger("bulk_upload.transaction_manager")
 
 
 def _normalize_text(value: Any) -> str:
@@ -72,6 +76,15 @@ def build_validation_preview(
         )
     ).scalars().all()
     existing_keys = {_facility_identity_key(row.__dict__) for row in existing_facilities}
+    known_facility_names = {
+        _normalize_text(facility.name).lower()
+        for facility in existing_facilities
+        if _normalize_text(facility.name)
+    }
+    for row in facilities:
+        name = _normalize_text(row.get("name")).lower()
+        if name:
+            known_facility_names.add(name)
 
     facilities_to_create = 0
     facilities_to_update = 0
@@ -80,6 +93,26 @@ def build_validation_preview(
             facilities_to_update += 1
         else:
             facilities_to_create += 1
+
+    preview_errors = list(validation_errors)
+    for section_name, rows in [
+        ("ftl_scope", ftl_scopes),
+        ("tlc", tlcs),
+        ("event", events),
+    ]:
+        for row_number, row in enumerate(rows, start=1):
+            facility_name = _normalize_text(row.get("facility_name")).lower()
+            if not facility_name:
+                continue
+            if facility_name in known_facility_names:
+                continue
+            preview_errors.append(
+                {
+                    "section": section_name,
+                    "row": row_number,
+                    "message": f"Unknown facility_name reference: {row.get('facility_name')}",
+                }
+            )
 
     tlc_codes = {_normalize_text(row.get("tlc_code")) for row in tlcs if _normalize_text(row.get("tlc_code"))}
     if tlc_codes:
@@ -118,8 +151,8 @@ def build_validation_preview(
         "tlcs_to_create": tlcs_to_create,
         "tlcs_to_update": tlcs_to_update,
         "events_to_chain": len(events),
-        "errors": validation_errors,
-        "can_commit": len(validation_errors) == 0,
+        "errors": preview_errors,
+        "can_commit": len(preview_errors) == 0,
     }
 
 
@@ -319,45 +352,65 @@ def execute_bulk_commit(
         db.rollback()
         raise
 
+    sync_warnings: list[str] = []
+
     for facility_id, categories in categories_by_facility.items():
         facility = next((f for f in facilities_by_name.values() if f.id == facility_id), None)
         if facility is None:
             continue
-        supplier_graph_sync.record_facility_ftl_scoping(
-            tenant_id=str(tenant_id),
-            facility_id=str(facility.id),
-            facility_name=facility.name,
-            supplier_user_id=str(current_user.id),
-            supplier_email=current_user.email,
-            street=facility.street,
-            city=facility.city,
-            state=facility.state,
-            postal_code=facility.postal_code,
-            fda_registration_number=facility.fda_registration_number,
-            roles=facility.roles or [],
-            categories=categories,
-        )
+        try:
+            supplier_graph_sync.record_facility_ftl_scoping(
+                tenant_id=str(tenant_id),
+                facility_id=str(facility.id),
+                facility_name=facility.name,
+                supplier_user_id=str(current_user.id),
+                supplier_email=current_user.email,
+                street=facility.street,
+                city=facility.city,
+                state=facility.state,
+                postal_code=facility.postal_code,
+                fda_registration_number=facility.fda_registration_number,
+                roles=facility.roles or [],
+                categories=categories,
+            )
+        except Exception as exc:  # pragma: no cover - external dependency failure
+            logger.warning(
+                "bulk_upload_facility_graph_sync_failed",
+                tenant_id=str(tenant_id),
+                facility_id=str(facility.id),
+                error=str(exc),
+            )
+            sync_warnings.append(f"facility_scoping:{facility.id}")
 
     for event, lot, facility in emitted_event_rows:
-        supplier_graph_sync.record_cte_event(
-            tenant_id=str(tenant_id),
-            facility_id=str(facility.id),
-            facility_name=facility.name,
-            cte_event_id=str(event.id),
-            cte_type=event.cte_type,
-            event_time=_iso_utc(event.event_time),
-            tlc_code=lot.tlc_code,
-            product_description=lot.product_description,
-            lot_status=lot.status,
-            kde_data=event.kde_data or {},
-            payload_sha256=event.payload_sha256,
-            merkle_prev_hash=event.merkle_prev_hash,
-            merkle_hash=event.merkle_hash,
-            sequence_number=int(event.sequence_number),
-            obligation_ids=event.obligation_ids or [],
-        )
+        try:
+            supplier_graph_sync.record_cte_event(
+                tenant_id=str(tenant_id),
+                facility_id=str(facility.id),
+                facility_name=facility.name,
+                cte_event_id=str(event.id),
+                cte_type=event.cte_type,
+                event_time=_iso_utc(event.event_time),
+                tlc_code=lot.tlc_code,
+                product_description=lot.product_description,
+                lot_status=lot.status,
+                kde_data=event.kde_data or {},
+                payload_sha256=event.payload_sha256,
+                merkle_prev_hash=event.merkle_prev_hash,
+                merkle_hash=event.merkle_hash,
+                sequence_number=int(event.sequence_number),
+                obligation_ids=event.obligation_ids or [],
+            )
+        except Exception as exc:  # pragma: no cover - external dependency failure
+            logger.warning(
+                "bulk_upload_event_graph_sync_failed",
+                tenant_id=str(tenant_id),
+                cte_event_id=str(event.id),
+                error=str(exc),
+            )
+            sync_warnings.append(f"cte_event:{event.id}")
 
-    return {
+    summary = {
         "facilities_created": facilities_created,
         "facilities_updated": facilities_updated,
         "ftl_scopes_upserted": ftl_scopes_upserted,
@@ -366,3 +419,7 @@ def execute_bulk_commit(
         "events_chained": len(emitted_event_rows),
         "last_merkle_hash": emitted_event_rows[-1][0].merkle_hash if emitted_event_rows else None,
     }
+    if sync_warnings:
+        summary["sync_warning_count"] = len(sync_warnings)
+        summary["sync_warnings"] = sync_warnings
+    return summary

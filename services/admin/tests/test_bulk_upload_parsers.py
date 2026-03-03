@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import io
 
+import pytest
+from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from app.bulk_upload.parsers import parse_incoming_file
@@ -69,3 +71,43 @@ def test_parse_json_sections_payload():
     assert len(parsed["ftl_scopes"]) == 1
     assert len(parsed["tlcs"]) == 1
     assert len(parsed["events"]) == 1
+
+
+def test_parse_json_sections_skips_non_object_rows():
+    payload = b"""
+{
+  "facilities": [
+    123,
+    {
+      "name": "Salinas Packhouse",
+      "street": "1200 Abbott St",
+      "city": "Salinas",
+      "state": "CA",
+      "postal_code": "93901",
+      "roles": ["Grower", "Packer"]
+    }
+  ],
+  "ftl_scopes": [
+    {"facility_name": "Salinas Packhouse", "category_id": "2"}
+  ]
+}
+"""
+
+    upload_file = _make_upload_file("supplier.json", payload, "application/json")
+    parsed = asyncio.run(parse_incoming_file(upload_file))
+
+    assert parsed["detected_format"] == "json"
+    assert len(parsed["facilities"]) == 1
+    assert len(parsed["ftl_scopes"]) == 1
+    assert any("facilities section at index 1" in warning for warning in parsed["warnings"])
+
+
+def test_parse_rejects_oversized_upload(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("SUPPLIER_BULK_UPLOAD_MAX_BYTES", "16")
+    upload_file = _make_upload_file("supplier.csv", b"record_type\nfacility\n", "text/csv")
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(parse_incoming_file(upload_file))
+
+    assert exc_info.value.status_code == 413
+    assert "max size of 16 bytes" in str(exc_info.value.detail)

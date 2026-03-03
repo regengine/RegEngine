@@ -406,17 +406,29 @@ export interface SupplierBulkUploadValidateResponse {
     preview: SupplierBulkUploadValidationPreview;
 }
 
+export interface SupplierBulkUploadCommitSummary {
+    facilities_created: number;
+    facilities_updated: number;
+    ftl_scopes_upserted: number;
+    tlcs_created: number;
+    tlcs_updated: number;
+    events_chained: number;
+    last_merkle_hash: string | null;
+    sync_warning_count: number;
+    sync_warnings: string[];
+}
+
 export interface SupplierBulkUploadCommitResponse {
     session_id: string;
     status: string;
-    summary: Record<string, unknown>;
+    summary: SupplierBulkUploadCommitSummary;
 }
 
 export interface SupplierBulkUploadStatusResponse {
     session_id: string;
     status: string;
     preview?: SupplierBulkUploadValidationPreview | null;
-    summary?: Record<string, unknown> | null;
+    summary?: SupplierBulkUploadCommitSummary | null;
     error?: string | null;
 }
 
