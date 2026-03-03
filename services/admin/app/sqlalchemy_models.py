@@ -279,10 +279,10 @@ class SupplierCTEEventModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
+        UniqueConstraint("tenant_id", "sequence_number", name="uq_supplier_cte_events_tenant_sequence"),
         Index("ix_supplier_cte_events_tenant", "tenant_id"),
         Index("ix_supplier_cte_events_facility", "facility_id"),
         Index("ix_supplier_cte_events_lot", "lot_id"),
-        Index("ix_supplier_cte_events_sequence", "tenant_id", "sequence_number"),
     )
 
 
