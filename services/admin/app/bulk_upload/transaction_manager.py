@@ -287,6 +287,10 @@ def execute_bulk_commit(
                     existing_lot.status = incoming_status
                 tlcs_updated += 1
 
+        # Session autoflush is disabled in production settings/tests, so flush TLC
+        # upserts before event queries to avoid duplicate same-TLC inserts.
+        db.flush()
+
         sorted_events = sorted(
             events_payload,
             key=lambda item: (
