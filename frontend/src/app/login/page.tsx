@@ -7,7 +7,7 @@ import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Lock, LayoutDashboard } from 'lucide-react';
+import { Loader2, Lock, LayoutDashboard, ArrowRight, ShieldCheck, CalendarClock, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 
 const LOGIN_PRESETS = [
@@ -57,8 +57,23 @@ function sanitizeErrorMessage(message: string): string {
     return cleaned.length > 220 ? `${cleaned.slice(0, 217)}...` : cleaned;
 }
 
+function resolveSafeNextPath(nextPath: string | null): string | null {
+    if (!nextPath) {
+        return null;
+    }
+
+    const trimmed = nextPath.trim();
+    if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
+        return null;
+    }
+    if (trimmed.startsWith('/login')) {
+        return null;
+    }
+
+    return trimmed;
+}
+
 export default function LoginPage() {
-    // Force HMR update
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +81,7 @@ export default function LoginPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const presetParam = searchParams.get('preset');
+    const nextParam = searchParams.get('next');
     const { login } = useAuth();
 
     const applyPreset = useCallback((presetId: LoginPreset) => {
@@ -99,12 +115,9 @@ export default function LoginPage() {
                 response.tenant_id
             );
 
-            // Redirect based on role
-            if (response.user.is_sysadmin) {
-                router.push('/sysadmin');
-            } else {
-                router.push('/dashboard');
-            }
+            const safeNextPath = resolveSafeNextPath(nextParam);
+            const fallbackPath = response.user.is_sysadmin ? '/sysadmin' : '/dashboard';
+            router.push(safeNextPath || fallbackPath);
         } catch (err: unknown) {
             console.error('Login error:', err);
             const apiError = err as {
@@ -135,109 +148,183 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md shadow-lg border-t-4 border-t-primary">
-                <CardHeader className="space-y-1">
-                    <div className="flex justify-center mb-4">
-                        <div className="p-3 bg-primary/10 rounded-full">
-                            <Lock className="w-8 h-8 text-primary" />
-                        </div>
-                    </div>
-                    <CardTitle className="text-2xl font-bold text-center">Welcome back</CardTitle>
-                    <CardDescription className="text-center">
-                        Sign in to your RegEngine account
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {error && (
-                            <div
-                                id="login-error"
-                                role="alert"
-                                aria-live="polite"
-                                className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md animate-in fade-in slide-in-from-top-2"
-                            >
-                                {error}
-                            </div>
-                        )}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
-                                Email
-                            </label>
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="name@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                disabled={isLoading}
-                                required
-                                autoComplete="email"
-                                aria-invalid={!!error}
-                                aria-describedby={error ? "login-error" : undefined}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
-                                Password
-                            </label>
-                            <Input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                disabled={isLoading}
-                                required
-                                autoComplete="current-password"
-                                aria-invalid={!!error}
-                                aria-describedby={error ? "login-error" : undefined}
-                            />
-                        </div>
-                        <Button className="w-full" type="submit" disabled={isLoading}>
-                            {isLoading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Signing in...
-                                </>
-                            ) : (
-                                'Sign In'
-                            )}
-                        </Button>
+        <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
+            <div className="pointer-events-none absolute inset-0">
+                <div className="absolute -top-16 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[var(--re-brand)]/10 blur-3xl" />
+                <div className="absolute right-12 top-28 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
+            </div>
 
-                        {showQaPresets && (
-                            <div className="rounded-md border bg-slate-100 dark:bg-slate-800/50 p-3 space-y-2">
-                                <p className="text-xs font-semibold tracking-wide uppercase text-slate-700 dark:text-slate-300">
-                                    QA Login Presets
-                                </p>
-                                {LOGIN_PRESETS.map((preset) => (
-                                    <button
-                                        key={preset.id}
-                                        type="button"
-                                        onClick={() => applyPreset(preset.id)}
-                                        className="w-full text-left p-2 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-primary/50 transition-colors"
-                                    >
-                                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</p>
-                                        <p className="text-xs text-slate-600 dark:text-slate-400">{preset.access}</p>
-                                        <p className="text-xs font-mono text-slate-700 dark:text-slate-300 mt-1">
-                                            {preset.email}
-                                        </p>
-                                    </button>
-                                ))}
-                                <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                                    Passwords are managed outside client source.
-                                </p>
-                            </div>
-                        )}
+            <section className="relative z-[1] mx-auto max-w-6xl px-6 py-14 lg:py-20">
+                <div className="grid items-stretch gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                    <div className="rounded-3xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/70 p-8 shadow-[0_20px_80px_rgba(0,0,0,0.25)] lg:p-10">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--re-brand)]">
+                            RegEngine Beta
+                        </div>
 
-                        <div className="text-center text-sm text-muted-foreground pt-2">
-                            <Link href="/" className="hover:text-primary transition-colors flex items-center justify-center gap-2">
-                                <LayoutDashboard className="w-4 h-4" />
-                                Return to public site
+                        <h1 className="mt-4 text-3xl font-bold leading-tight text-[var(--re-text-primary)] lg:text-4xl">
+                            API-first regulatory compliance.
+                        </h1>
+                        <p className="mt-3 max-w-[58ch] text-sm leading-relaxed text-[var(--re-text-muted)] lg:text-base">
+                            Sign in to continue your FSMA 204 workflow, run traceability checks, and export audit-ready records with cryptographic proof.
+                        </p>
+
+                        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-black/20 p-3">
+                                <div className="mb-1 inline-flex items-center gap-2 text-xs font-semibold text-[var(--re-text-primary)]">
+                                    <CalendarClock className="h-3.5 w-3.5 text-[var(--re-brand)]" />
+                                    Deadline Focus
+                                </div>
+                                <p className="text-xs text-[var(--re-text-muted)]">FSMA 204 deadline: July 20, 2028</p>
+                            </div>
+                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-black/20 p-3">
+                                <div className="mb-1 inline-flex items-center gap-2 text-xs font-semibold text-[var(--re-text-primary)]">
+                                    <GitBranch className="h-3.5 w-3.5 text-[var(--re-brand)]" />
+                                    Verifiable by Design
+                                </div>
+                                <p className="text-xs text-[var(--re-text-muted)]"><code>verify_chain.py</code> - do not trust, verify.</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-7 space-y-3">
+                            {[
+                                'Capture and validate all 7 FSMA 204 CTE types',
+                                'Track supplier onboarding and compliance gaps in real time',
+                                'Generate FDA-ready exports without manual spreadsheet cleanup',
+                            ].map((item) => (
+                                <div key={item} className="flex items-start gap-3">
+                                    <ShieldCheck className="mt-0.5 h-4 w-4 text-[var(--re-brand)]" />
+                                    <p className="text-sm text-[var(--re-text-secondary)]">{item}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-8 flex flex-wrap items-center gap-3 text-xs text-[var(--re-text-muted)]">
+                            <span>New to RegEngine?</span>
+                            <Link href="/onboarding" className="inline-flex items-center gap-1 rounded-full border border-[var(--re-brand)]/40 px-3 py-1 font-semibold text-[var(--re-brand)] transition hover:bg-[var(--re-brand)]/10">
+                                Get Started
+                                <ArrowRight className="h-3 w-3" />
                             </Link>
                         </div>
-                    </form>
-                </CardContent>
-            </Card>
+                    </div>
+
+                    <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95 shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
+                        <CardHeader className="space-y-1 pb-4">
+                            <div className="mb-3 flex justify-center">
+                                <div className="rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 p-3">
+                                    <Lock className="h-7 w-7 text-[var(--re-brand)]" />
+                                </div>
+                            </div>
+                            <CardTitle className="text-center text-2xl font-bold text-[var(--re-text-primary)]">Welcome back</CardTitle>
+                            <CardDescription className="text-center text-[var(--re-text-muted)]">
+                                Sign in to your RegEngine account
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                {error && (
+                                    <div
+                                        id="login-error"
+                                        role="alert"
+                                        aria-live="polite"
+                                        className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                    >
+                                        {error}
+                                    </div>
+                                )}
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
+                                        Email
+                                    </label>
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        placeholder="name@example.com"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        disabled={isLoading}
+                                        required
+                                        autoComplete="email"
+                                        aria-invalid={!!error}
+                                        aria-describedby={error ? 'login-error' : undefined}
+                                        className="h-11"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="password">
+                                        Password
+                                    </label>
+                                    <Input
+                                        id="password"
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        disabled={isLoading}
+                                        required
+                                        autoComplete="current-password"
+                                        aria-invalid={!!error}
+                                        aria-describedby={error ? 'login-error' : undefined}
+                                        className="h-11"
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs text-[var(--re-text-muted)]">
+                                    <Link href="/accept-invite" className="transition hover:text-[var(--re-brand)]">
+                                        Have an invite?
+                                    </Link>
+                                    <a href="mailto:chris@regengine.co?subject=RegEngine%20Login%20Help" className="transition hover:text-[var(--re-brand)]">
+                                        Need login help?
+                                    </a>
+                                </div>
+
+                                <Button className="h-11 w-full" type="submit" disabled={isLoading}>
+                                    {isLoading ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Signing in...
+                                        </>
+                                    ) : (
+                                        'Sign In'
+                                    )}
+                                </Button>
+
+                                {showQaPresets && (
+                                    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
+                                            QA Login Presets
+                                        </p>
+                                        {LOGIN_PRESETS.map((preset) => (
+                                            <button
+                                                key={preset.id}
+                                                type="button"
+                                                onClick={() => applyPreset(preset.id)}
+                                                className="w-full rounded border border-slate-200 bg-white p-2 text-left transition-colors hover:border-primary/50 dark:border-slate-700 dark:bg-slate-900"
+                                            >
+                                                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-400">{preset.access}</p>
+                                                <p className="mt-1 text-xs font-mono text-slate-700 dark:text-slate-300">
+                                                    {preset.email}
+                                                </p>
+                                            </button>
+                                        ))}
+                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                                            Passwords are managed outside client source.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="pt-2 text-center text-sm text-muted-foreground">
+                                    <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-primary">
+                                        <LayoutDashboard className="h-4 w-4" />
+                                        Return to public site
+                                    </Link>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            </section>
         </div>
     );
 }
