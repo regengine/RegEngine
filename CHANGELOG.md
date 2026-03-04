@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.6.0 — Phase 3 Onboarding UX Redesign
+
+- **Onboarding Hub (WS1)**
+  - Replaced `/onboarding` redirect behavior with a dedicated onboarding hub page.
+  - Added two clear paths: guided wizard (`/onboarding/supplier-flow`) and bulk upload (`/onboarding/bulk-upload`).
+- **Dark Theme Migration (WS2/WS3)**
+  - Migrated onboarding supplier flow visuals from hardcoded/light styles to shared `--re-*` design tokens.
+  - Updated bulk upload page to tokenized dark styling and removed legacy `slate-*`/`emerald-*` class usage.
+- **Navigation Unification (WS4/WS5)**
+  - Added `frontend/src/app/onboarding/layout.tsx` onboarding shell with consistent top navigation.
+  - Hid marketing header/footer on onboarding routes to maintain focused flow context.
+  - Added cross-links between marketing, onboarding, and dashboard, including dashboard bridge links and a supplier completion CTA to `/dashboard`.
+- **Validation**
+  - Verified with `npm run lint` and `npm run build` after implementation.
+
 ## v0.5.0 — Billing Platform Audit Remediation
 
 - **Security Middleware (P0)**
