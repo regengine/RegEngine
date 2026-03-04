@@ -10,6 +10,7 @@ import { apiClient } from '@/lib/api-client';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AcceptInvitePage() {
+    const MIN_PASSWORD_LENGTH = 12;
     const router = useRouter();
     const searchParams = useSearchParams();
     const token = searchParams.get('token');
@@ -37,8 +38,8 @@ export default function AcceptInvitePage() {
             return;
         }
 
-        if (password.length < 8) {
-            setError("Password must be at least 8 characters");
+        if (password.length < MIN_PASSWORD_LENGTH) {
+            setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
             return;
         }
 
@@ -122,7 +123,7 @@ export default function AcceptInvitePage() {
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
                                     required
-                                    minLength={8}
+                                    minLength={MIN_PASSWORD_LENGTH}
                                 />
                             </div>
 
@@ -133,7 +134,7 @@ export default function AcceptInvitePage() {
                                     value={confirmPassword}
                                     onChange={e => setConfirmPassword(e.target.value)}
                                     required
-                                    minLength={8}
+                                    minLength={MIN_PASSWORD_LENGTH}
                                 />
                             </div>
 
