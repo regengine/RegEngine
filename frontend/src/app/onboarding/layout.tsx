@@ -2,9 +2,9 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 import { useAuth } from '@/lib/auth-context';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 
 export default function OnboardingLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -34,24 +34,12 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
           }}
         >
           <Link href="/" className="flex items-center gap-2.5 no-underline">
-            <Image
-              src="/logo-dark.png"
-              alt="RegEngine"
-              width={120}
-              height={28}
-              className="hidden md:block"
-              style={{ objectFit: 'contain' }}
-              priority
-            />
-            <Image
-              src="/logo-dark.png"
-              alt="RegEngine"
-              width={32}
-              height={32}
-              className="md:hidden"
-              style={{ objectFit: 'contain' }}
-              priority
-            />
+            <span className="hidden md:inline-flex">
+              <RegEngineWordmark size="sm" />
+            </span>
+            <span className="md:hidden inline-flex">
+              <RegEngineWordmark size="sm" showText={false} />
+            </span>
             <span className="ml-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
               Beta
             </span>

@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import Image from 'next/image';
 import { useAuth } from '@/lib/auth-context';
 import { MARKETING_FREE_TOOLS, MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 
 export function MarketingHeader() {
     const pathname = usePathname();
@@ -126,14 +126,7 @@ export function MarketingHeader() {
                 }}
             >
                 <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
-                    <Image
-                        src="/logo-dark.png"
-                        alt="RegEngine"
-                        width={140}
-                        height={32}
-                        style={{ objectFit: "contain" }}
-                        priority
-                    />
+                    <RegEngineWordmark size="md" />
                     <span className="ml-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">Beta</span>
                 </Link>
 
