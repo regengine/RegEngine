@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { generateBrandedPDF, type PDFSection } from '@/lib/pdf-report';
 
 interface AuditPack {
     generated_at: string;
@@ -72,16 +73,114 @@ export function AuditPackDownload({ projectId }: Props) {
         }
     }
 
-    function downloadAsJSON() {
+    function downloadAsPDF() {
         if (!auditPack) return;
 
-        const blob = new Blob([JSON.stringify(auditPack, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `audit-pack-${projectId}-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const sections: PDFSection[] = [
+            { type: 'heading', text: 'Project Summary', level: 2 },
+            {
+                type: 'keyValue',
+                pairs: [
+                    { key: 'Project Name', value: auditPack.project.project_name },
+                    { key: 'Project Code', value: auditPack.project.project_code },
+                    {
+                        key: 'Gate State',
+                        value: auditPack.project.gate_state,
+                        status:
+                            auditPack.project.gate_state === 'greenlit'
+                                ? 'success'
+                                : auditPack.project.gate_state === 'approved'
+                                    ? 'warning'
+                                    : 'neutral',
+                    },
+                    { key: 'Risk Score', value: `${auditPack.project.risk_score}` },
+                    { key: 'Pack Version', value: auditPack.pack_version },
+                    { key: 'Generated At', value: new Date(auditPack.generated_at).toLocaleString() },
+                ],
+            },
+        ];
+
+        if (auditPack.compliance_summary) {
+            sections.push({ type: 'divider' });
+            sections.push({ type: 'heading', text: 'Compliance Summary', level: 2 });
+            sections.push({
+                type: 'keyValue',
+                pairs: [
+                    {
+                        key: 'Overall Status',
+                        value: auditPack.compliance_summary.overall_status,
+                        status: auditPack.compliance_summary.overall_status.toLowerCase().includes('pass')
+                            ? 'success'
+                            : auditPack.compliance_summary.overall_status.toLowerCase().includes('fail')
+                                ? 'danger'
+                                : 'warning',
+                    },
+                    { key: 'Overall Score', value: `${auditPack.compliance_summary.overall_score}%` },
+                    { key: 'Rules Evaluated', value: `${auditPack.compliance_summary.metrics.total_rules_evaluated}` },
+                    { key: 'Passed', value: `${auditPack.compliance_summary.metrics.passed}`, status: 'success' },
+                    { key: 'Failed', value: `${auditPack.compliance_summary.metrics.failed}`, status: 'danger' },
+                    { key: 'Warnings', value: `${auditPack.compliance_summary.metrics.warnings}`, status: 'warning' },
+                ],
+            });
+        }
+
+        if (auditPack.budget_summary) {
+            sections.push({ type: 'divider' });
+            sections.push({ type: 'heading', text: 'Budget Summary', level: 2 });
+            sections.push({
+                type: 'keyValue',
+                pairs: [
+                    { key: 'Grand Total', value: `$${auditPack.budget_summary.grand_total.toLocaleString()}` },
+                    { key: 'Line Items', value: `${auditPack.budget_summary.line_item_count}` },
+                ],
+            });
+        }
+
+        if (auditPack.evidence_inventory && auditPack.evidence_inventory.length > 0) {
+            sections.push({ type: 'divider' });
+            sections.push({ type: 'heading', text: 'Evidence Inventory', level: 2 });
+            sections.push({
+                type: 'table',
+                headers: ['Evidence ID', 'Title', 'Type', 'File Name'],
+                rows: auditPack.evidence_inventory.map((evidence) => [
+                    evidence.evidence_id,
+                    evidence.title,
+                    evidence.document_type,
+                    evidence.file_name,
+                ]),
+            });
+        }
+
+        const packWithExtras = auditPack as AuditPack & {
+            rule_evaluations?: Array<Record<string, unknown>>;
+        };
+        if (packWithExtras.rule_evaluations && packWithExtras.rule_evaluations.length > 0) {
+            const rows = packWithExtras.rule_evaluations;
+            const headers = Array.from(
+                new Set(rows.flatMap((row) => Object.keys(row))),
+            ).slice(0, 6);
+
+            sections.push({ type: 'divider' });
+            sections.push({ type: 'heading', text: 'Rule Evaluations', level: 2 });
+            sections.push({
+                type: 'table',
+                headers: headers.map((header) => header.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())),
+                rows: rows.slice(0, 40).map((row) => headers.map((header) => String(row[header] ?? '-'))),
+            });
+        }
+
+        generateBrandedPDF({
+            title: 'Audit Pack Report',
+            subtitle: `${auditPack.project.project_name} (${auditPack.project.project_code})`,
+            reportType: 'RegEngine Audit Pack',
+            sections,
+            footer: {
+                left: 'Confidential',
+                right: 'regengine.co',
+                legalLine: 'Generated from RegEngine audit pack data',
+            },
+            filename: `audit-pack-${projectId}-${new Date().toISOString().split('T')[0]}`,
+        });
     }
 
     return (
@@ -233,17 +332,10 @@ export function AuditPackDownload({ projectId }: Props) {
                         {/* Download Buttons */}
                         <div className="flex gap-3 pt-4 border-t border-slate-100">
                             <button
-                                onClick={downloadAsJSON}
+                                onClick={downloadAsPDF}
                                 className="flex-1 py-2 bg-slate-100 text-slate-700 font-medium rounded-lg hover:bg-slate-200 flex items-center justify-center gap-2"
                             >
-                                📄 Download JSON
-                            </button>
-                            <button
-                                disabled
-                                className="flex-1 py-2 bg-slate-100 text-slate-400 font-medium rounded-lg cursor-not-allowed flex items-center justify-center gap-2"
-                                title="Coming soon"
-                            >
-                                📑 Download PDF
+                                📑 Download PDF Report
                             </button>
                         </div>
                     </div>

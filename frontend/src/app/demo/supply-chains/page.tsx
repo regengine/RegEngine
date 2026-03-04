@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import { generateBrandedPDF } from '@/lib/pdf-report';
 
 /* ───────────────────────── CONSTANTS ───────────────────────── */
 
@@ -275,40 +276,49 @@ export default function SupplyChainExplorerPage() {
     };
 
     const handleExportFDA = () => {
-        const headers = ['TLC', 'Event Date', 'CTE Type', 'CFR Reference', 'Facility Name', 'Facility GLN', 'Product GTIN', 'Item Description', 'Quantity'];
-        const rows = [headers.join(',')];
+        const headers = ['TLC', 'Timestamp', 'CTE', 'CFR', 'Facility', 'GLN', 'GTIN', 'Product', 'Qty'];
+        const tableRows: string[][] = [];
 
         chain.cteFlow.forEach((step, index) => {
             const facility = chain.facilities.find(f => f.name === step.facility) || chain.facilities[0];
-            const product = chain.products[0]; // Simplification for demo CSV
+            const product = chain.products[0];
 
             // Faux date spread over the last 14 days
             const eventDate = new Date();
             eventDate.setDate(eventDate.getDate() - (chain.cteFlow.length - index));
 
-            const row = [
+            tableRows.push([
                 `TLC-${product.gtin}-${eventDate.toISOString().split('T')[0].replace(/-/g, '')}`,
                 eventDate.toISOString(),
-                `${step.cte}`,
-                `${step.cfr}`,
-                `"${facility.name}"`,
-                `${facility.gln}`,
-                `${product.gtin}`,
-                `"${product.name}"`,
-                `100` // Mock qty
-            ];
-            rows.push(row.join(','));
+                step.cte,
+                step.cfr,
+                facility.name,
+                facility.gln,
+                product.gtin,
+                product.name,
+                '100',
+            ]);
         });
 
-        const csvContent = rows.join('\n');
-        const blob = new Blob(['\uFEFF', csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `FDA_Request_${chain.id}_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        generateBrandedPDF({
+            title: `FDA Request - ${chain.title}`,
+            subtitle: `Chain ID: ${chain.id}`,
+            reportType: 'FDA FSMA 204 - Traceability Data Export',
+            sections: [
+                { type: 'heading', text: 'Traceability Events', level: 2 },
+                {
+                    type: 'table',
+                    headers,
+                    rows: tableRows,
+                },
+            ],
+            footer: {
+                left: 'Confidential',
+                right: 'regengine.co',
+                legalLine: 'FDA FSMA 204 - 21 CFR Part 1 Subpart S',
+            },
+            filename: `FDA_Request_${chain.id}_${new Date().toISOString().split('T')[0]}`,
+        });
     };
 
     return (
@@ -570,7 +580,7 @@ export default function SupplyChainExplorerPage() {
                             <span style={{ fontSize: '10px', background: 'rgba(16,185,129,0.15)', color: 'var(--re-brand)', padding: '2px 8px', borderRadius: '12px', fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>21 CFR §1.1455</span>
                         </div>
                         <p style={{ fontSize: '13px', color: 'var(--re-text-muted)', margin: 0, maxWidth: '500px' }}>
-                            Simulate fulfilling an FDA regulatory request. Instantly download a compliant, electronic sortable spreadsheet containing all CTE records.
+                            Simulate fulfilling an FDA regulatory request. Instantly download a branded compliance PDF containing all CTE records.
                         </p>
                     </div>
                     <button
@@ -594,7 +604,7 @@ export default function SupplyChainExplorerPage() {
                         onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
                     >
                         <DownloadIcon size={18} />
-                        Generate FDA Spreadsheet
+                        Generate FDA PDF
                     </button>
                 </div>
 

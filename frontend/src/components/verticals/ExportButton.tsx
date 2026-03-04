@@ -18,9 +18,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
+import { generateBrandedPDF, type PDFSection } from '@/lib/pdf-report';
 
 export interface ExportData {
     title: string;
@@ -62,92 +61,56 @@ export function ExportButton({
     const exportToPDF = async () => {
         try {
             setIsExporting(true);
-            const doc = new jsPDF();
-            let yPosition = 20;
 
-            // Title
-            doc.setFontSize(20);
-            doc.text(data.title, 20, yPosition);
-            yPosition += 10;
+            const sections: PDFSection[] = [];
 
-            // Subtitle
-            if (data.subtitle) {
-                doc.setFontSize(12);
-                doc.setTextColor(100, 100, 100);
-                doc.text(data.subtitle, 20, yPosition);
-                yPosition += 10;
-            }
-
-            // Generated Date
-            doc.setFontSize(10);
-            doc.text(`Generated: ${new Date().toLocaleString()}`, 20, yPosition);
-            yPosition += 15;
-
-            // Metrics
             if (data.metrics && data.metrics.length > 0) {
-                doc.setFontSize(14);
-                doc.setTextColor(0, 0, 0);
-                doc.text('Key Metrics', 20, yPosition);
-                yPosition += 10;
-
-                const metricsData = data.metrics.map((m) => [
-                    m.label,
-                    String(m.value),
-                    m.helpText || '',
-                ]);
-
-                autoTable(doc, {
-                    startY: yPosition,
-                    head: [['Metric', 'Value', 'Description']],
-                    body: metricsData,
-                    theme: 'grid',
-                    headStyles: { fillColor: [66, 139, 202] },
+                sections.push({ type: 'heading', text: 'Key Metrics', level: 2 });
+                sections.push({
+                    type: 'table',
+                    headers: ['Metric', 'Value', 'Description'],
+                    rows: data.metrics.map((metric) => [
+                        metric.label,
+                        String(metric.value),
+                        metric.helpText || '-',
+                    ]),
                 });
-
-                yPosition = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable).finalY + 15;
             }
 
-            // Tables
             if (data.tables && data.tables.length > 0) {
-                for (const table of data.tables) {
-                    if (yPosition > 250) {
-                        doc.addPage();
-                        yPosition = 20;
-                    }
-
-                    doc.setFontSize(14);
-                    doc.setTextColor(0, 0, 0);
-                    doc.text(table.title, 20, yPosition);
-                    yPosition += 8;
-
-                    autoTable(doc, {
-                        startY: yPosition,
-                        head: [table.headers],
-                        body: table.rows,
-                        theme: 'striped',
-                        headStyles: { fillColor: [66, 139, 202] },
+                data.tables.forEach((table) => {
+                    sections.push({ type: 'heading', text: table.title, level: 2 });
+                    sections.push({
+                        type: 'table',
+                        headers: table.headers,
+                        rows: table.rows.map((row) => row.map((cell) => String(cell))),
                     });
-
-                    yPosition = ((doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable).finalY + 15;
-                }
+                });
             }
 
-            // Metadata footer
-            if (data.metadata) {
-                const pageCount = doc.getNumberOfPages();
-                for (let i = 1; i <= pageCount; i++) {
-                    doc.setPage(i);
-                    doc.setFontSize(8);
-                    doc.setTextColor(150, 150, 150);
-                    doc.text(
-                        `RegEngine Compliance Report - Page ${i} of ${pageCount}`,
-                        20,
-                        285
-                    );
-                }
+            if (data.metadata && Object.keys(data.metadata).length > 0) {
+                sections.push({ type: 'heading', text: 'Metadata', level: 2 });
+                sections.push({
+                    type: 'keyValue',
+                    pairs: Object.entries(data.metadata).map(([key, value]) => ({
+                        key,
+                        value: String(value),
+                    })),
+                });
             }
 
-            doc.save(`${sanitizeFilename(filename)}.pdf`);
+            generateBrandedPDF({
+                title: data.title,
+                subtitle: data.subtitle,
+                reportType: 'RegEngine Compliance Report',
+                sections,
+                footer: {
+                    left: 'Confidential',
+                    right: 'regengine.co',
+                    legalLine: 'RegEngine Compliance Report',
+                },
+                filename: sanitizeFilename(filename),
+            });
         } catch (error) {
             console.error('PDF export failed:', error);
         } finally {

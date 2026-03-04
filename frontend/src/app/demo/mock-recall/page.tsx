@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
+import { generateBrandedPDF } from '@/lib/pdf-report';
 
 // Mock contamination scenarios
 const SCENARIOS = [
@@ -146,16 +147,80 @@ export default function MockRecallPage() {
     const handleDownloadReport = async () => {
         setIsDownloading(true);
         try {
-            const report = generateFDA204Report();
-            const blob = new Blob(['\uFEFF', report], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `FDA-204-Report-${scenario.lot}-${new Date().toISOString().split('T')[0]}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const tracedNodes = SUPPLY_CHAIN.filter((node) => traceState.tracedNodes.includes(node.id));
+
+            generateBrandedPDF({
+                title: 'FDA FSMA 204 Traceability Report',
+                subtitle: 'Forward Trace - Mock Recall Drill',
+                reportType: 'FDA FSMA 204 - Recall Simulation',
+                sections: [
+                    { type: 'heading', text: 'Contamination Scenario', level: 2 },
+                    {
+                        type: 'keyValue',
+                        pairs: [
+                            { key: 'Product', value: scenario.product },
+                            { key: 'Contaminant', value: scenario.contaminant },
+                            { key: 'Origin', value: scenario.origin },
+                            { key: 'Traceability Lot Code (TLC)', value: scenario.lot },
+                            {
+                                key: 'Severity',
+                                value: scenario.severity,
+                                status: scenario.severity === 'CRITICAL' ? 'danger' : 'warning',
+                            },
+                        ],
+                    },
+                    { type: 'divider' },
+                    { type: 'heading', text: 'Trace Summary', level: 2 },
+                    {
+                        type: 'keyValue',
+                        pairs: [
+                            { key: 'Trace Direction', value: 'FORWARD' },
+                            { key: 'Trace Time', value: `${traceState.elapsedSeconds} seconds` },
+                            { key: 'Total Events Traced', value: String(SUPPLY_CHAIN.length) },
+                            { key: 'Impacted Locations', value: String(impactedRetailers + impactedRestaurants) },
+                            { key: 'States Affected', value: '3 (AZ, TX, CA)' },
+                            {
+                                key: 'FDA 24-Hour Requirement',
+                                value: `MET (${traceState.elapsedSeconds}s)`,
+                                status: 'success',
+                            },
+                        ],
+                    },
+                    { type: 'divider' },
+                    { type: 'heading', text: 'Supply Chain Trace Results', level: 2 },
+                    {
+                        type: 'table',
+                        headers: ['#', 'Node', 'Type', 'Location', 'Timestamp', 'Status'],
+                        rows: tracedNodes.map((node, index) => [
+                            String(index + 1),
+                            node.label,
+                            node.type,
+                            node.location,
+                            node.time,
+                            'IMPACTED',
+                        ]),
+                    },
+                    { type: 'divider' },
+                    { type: 'heading', text: 'Key Data Elements (KDEs)', level: 2 },
+                    {
+                        type: 'keyValue',
+                        pairs: [
+                            { key: 'TLC', value: scenario.lot },
+                            { key: 'Product Description', value: scenario.product },
+                            { key: 'Nodes Traced', value: String(SUPPLY_CHAIN.length) },
+                            { key: 'Location Identifiers (GLNs)', value: 'All facilities identified' },
+                            { key: 'Event Timestamps', value: 'All CTEs logged' },
+                        ],
+                    },
+                ],
+                footer: {
+                    left: 'Confidential - Mock Recall Drill',
+                    right: 'regengine.co',
+                    legalLine: 'FDA FSMA 204 - 21 CFR Part 1 Subpart S',
+                },
+                filename: `FDA-204-Report-${scenario.lot}-${new Date().toISOString().split('T')[0]}`,
+            });
+
             toast({
                 title: "Report Downloaded",
                 description: "Your FDA 204 compliance report has been saved.",
@@ -169,67 +234,6 @@ export default function MockRecallPage() {
         } finally {
             setIsDownloading(false);
         }
-    };
-
-    const generateFDA204Report = () => {
-        const date = new Date().toLocaleString();
-        const tracedNodes = SUPPLY_CHAIN.filter(n => traceState.tracedNodes.includes(n.id));
-        return `
-===========================================
-     FDA FSMA 204 TRACEABILITY REPORT
-===========================================
-Generated: ${date}
-Report Type: Forward Trace (Mock Recall Drill)
-
-CONTAMINATION SCENARIO
-----------------------
-Product: ${scenario.product}
-Contaminant: ${scenario.contaminant}
-Origin: ${scenario.origin}
-Traceability Lot Code (TLC): ${scenario.lot}
-Severity: ${scenario.severity}
-
-TRACE SUMMARY
--------------
-Trace Direction: FORWARD
-Trace Time: ${traceState.elapsedSeconds} seconds
-Total Events Traced: ${SUPPLY_CHAIN.length}
-Impacted Locations: ${impactedRetailers + impactedRestaurants}
-States Affected: 3 (AZ, TX, CA)
-
-FDA 24-HOUR REQUIREMENT: ✓ MET (${traceState.elapsedSeconds}s response)
-
-SUPPLY CHAIN TRACE RESULTS
---------------------------
-${tracedNodes.map((node, i) =>
-            `${i + 1}. ${node.label}
-   Type: ${node.type}
-   Location: ${node.location}
-   Timestamp: ${node.time}
-   Status: IMPACTED`
-        ).join('\n\n')}
-
-KEY DATA ELEMENTS (KDEs) CAPTURED
----------------------------------
-- Traceability Lot Code (TLC): ${scenario.lot}
-- Product Description: ${scenario.product}
-- Quantity/Unit of Measure: Traced across ${SUPPLY_CHAIN.length} nodes
-- Location Identifiers (GLNs): All facilities identified
-- Event Timestamps: All Critical Tracking Events logged
-
-RECOMMENDED ACTIONS
--------------------
-1. Issue immediate stop-sale order for lot ${scenario.lot}
-2. Notify all ${impactedRetailers + impactedRestaurants} downstream locations
-3. Begin consumer notification protocol
-4. Coordinate with FDA/CDC as required
-5. Initiate product recovery/destruction plan
-
--------------------------------------------
-Report generated by RegEngine FSMA 204 Platform
-For more information: regengine.co/fsma
--------------------------------------------
-`;
     };
 
     const impactedRetailers = SUPPLY_CHAIN.filter(

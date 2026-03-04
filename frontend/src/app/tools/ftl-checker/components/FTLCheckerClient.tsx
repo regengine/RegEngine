@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
+import { generateBrandedPDF } from '@/lib/pdf-report';
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN TOKENS (Unified Dark Theme)
@@ -617,20 +618,72 @@ export function FTLCheckerClient() {
         setIsDownloading(true);
         try {
             const results = getResults();
-            const date = new Date().toLocaleString();
-            const exemptionSection = results.exemptionStatus === 'EXEMPT'
-                ? `\nEXEMPTION STATUS: POTENTIALLY EXEMPT\n${results.qualifyingExemptions.map(e => `• ${e.citation}`).join('\n')}`
-                : results.exemptionStatus === 'NOT_EXEMPT' ? '\nEXEMPTION STATUS: NOT EXEMPT' : '\nEXEMPTION STATUS: UNKNOWN';
-            const reportContent = `FDA FSMA 204 FTL COVERAGE REPORT\nGenerated: ${date}\n\nSUMMARY\nTotal Categories: ${results.totalSelected}\nOn FTL: ${results.coveredCount}\nNot on FTL: ${results.notCoveredCount}\nHigher Outbreak Frequency: ${results.highOutbreakCount}\n${exemptionSection}\n\nCATEGORIES:\n${results.categories.map(c => `${c.covered ? '[ON FTL]' : '[NOT ON FTL]'} ${c.name}`).join('\n')}\n\nRegulatory Reference: 21 CFR Part 1 Subpart S\nLearn more: regengine.co/fsma`;
-            const blob = new Blob([reportContent], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `FTL-Coverage-Report-${new Date().toISOString().split('T')[0]}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+
+            const exemptionLabel =
+                results.exemptionStatus === 'EXEMPT'
+                    ? 'POTENTIALLY EXEMPT'
+                    : results.exemptionStatus === 'NOT_EXEMPT'
+                        ? 'NOT EXEMPT'
+                        : 'UNKNOWN';
+
+            generateBrandedPDF({
+                title: 'FTL Coverage Report',
+                subtitle: `${results.totalSelected} categor${results.totalSelected === 1 ? 'y' : 'ies'} analyzed`,
+                reportType: 'FDA FSMA 204 - Food Traceability List',
+                sections: [
+                    { type: 'heading', text: 'Summary', level: 2 },
+                    {
+                        type: 'keyValue',
+                        pairs: [
+                            { key: 'Total Categories', value: String(results.totalSelected) },
+                            { key: 'On FTL', value: String(results.coveredCount), status: 'success' },
+                            {
+                                key: 'Not on FTL',
+                                value: String(results.notCoveredCount),
+                                status: results.notCoveredCount > 0 ? 'danger' : 'neutral',
+                            },
+                            {
+                                key: 'Higher Outbreak Frequency',
+                                value: String(results.highOutbreakCount),
+                                status: results.highOutbreakCount > 0 ? 'warning' : 'neutral',
+                            },
+                            {
+                                key: 'Exemption Status',
+                                value: exemptionLabel,
+                                status: exemptionLabel === 'NOT EXEMPT' ? 'danger' : 'warning',
+                            },
+                        ],
+                    },
+                    { type: 'divider' },
+                    { type: 'heading', text: 'Category Results', level: 2 },
+                    {
+                        type: 'table',
+                        headers: ['Category', 'FTL Status'],
+                        rows: results.categories.map((category) => [
+                            category.name,
+                            category.covered ? 'ON FTL' : 'NOT ON FTL',
+                        ]),
+                    },
+                    ...(results.exemptionStatus === 'EXEMPT' && results.qualifyingExemptions.length > 0
+                        ? [
+                            { type: 'spacer' as const },
+                            { type: 'heading' as const, text: 'Qualifying Exemptions', level: 2 as const },
+                            {
+                                type: 'table' as const,
+                                headers: ['Citation'],
+                                rows: results.qualifyingExemptions.map((exemption) => [exemption.citation]),
+                            },
+                        ]
+                        : []),
+                ],
+                footer: {
+                    left: 'Confidential',
+                    right: 'regengine.co',
+                    legalLine: 'Regulatory Reference: 21 CFR Part 1 Subpart S',
+                },
+                filename: `FTL-Coverage-Report-${new Date().toISOString().split('T')[0]}`,
+            });
+
             toast({ title: "Report Downloaded", description: "Your FTL coverage report has been saved." });
         } finally {
             setIsDownloading(false);
@@ -1002,7 +1055,7 @@ export function FTLCheckerClient() {
                                     <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                                         <button onClick={handleStartOver} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>← Start Over</button>
                                         <button onClick={handleDownloadReport} disabled={isDownloading} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>
-                                            {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} {isDownloading ? 'Generating...' : 'Download Report'}
+                                            {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} {isDownloading ? 'Generating...' : 'Download PDF Report'}
                                         </button>
                                     </div>
                                 </div>
