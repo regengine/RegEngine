@@ -42,6 +42,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <Activity className="h-5 w-5 text-[var(--re-brand)]" />
                         <span className="font-bold text-sm">Command Center</span>
                     </Link>
+                    <Link
+                        href="/"
+                        className="text-[11px] text-[var(--re-text-disabled)] hover:text-[var(--re-text-muted)] transition-colors"
+                    >
+                        regengine.co
+                    </Link>
                 </div>
                 <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
                     {NAV_ITEMS.map((item) => {
@@ -69,6 +75,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <div className="text-xs font-medium">Professional</div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">5 facilities · 50K events/mo</div>
                     </div>
+                    <Link
+                        href="/onboarding"
+                        className="block mt-2 text-[11px] text-center text-[var(--re-text-disabled)] hover:text-[var(--re-text-muted)]"
+                    >
+                        Re-run onboarding
+                    </Link>
                 </div>
             </aside>
 

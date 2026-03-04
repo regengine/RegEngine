@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 
-const ACCENT = "#1B6B4A";
-const ACCENT_LIGHT = "#E8F5EE";
-const ACCENT_DARK = "#145236";
-const WARN = "#F59E0B";
-const WARN_LIGHT = "#FFF8E1";
-const ERROR = "#EF4444";
-const ERROR_LIGHT = "#FEF2F2";
-const BLUE = "#3B82F6";
-const BLUE_LIGHT = "#EFF6FF";
-const GRAY = "#6B7280";
-const GRAY_LIGHT = "#F9FAFB";
-const BORDER = "#E5E7EB";
+const ACCENT = "var(--re-brand)";
+const ACCENT_LIGHT = "var(--re-brand-muted)";
+const ACCENT_DARK = "var(--re-text-primary)";
+const WARN = "var(--re-warning)";
+const WARN_LIGHT = "var(--re-warning-muted)";
+const ERROR = "var(--re-danger)";
+const ERROR_LIGHT = "var(--re-danger-muted)";
+const BLUE = "var(--re-info)";
+const BLUE_LIGHT = "var(--re-info-muted)";
+const GRAY = "var(--re-text-muted)";
+const GRAY_LIGHT = "var(--re-surface-card)";
+const BORDER = "var(--re-surface-border)";
 
 const VIEWS = {
   OVERVIEW: "overview",
@@ -177,7 +177,7 @@ function Badge({ children, color = ACCENT }) {
 
 function Card({ children, onClick, active, style = {} }) {
   return (
-    <div onClick={onClick} style={{ border: `1px solid ${active ? ACCENT : BORDER}`, borderRadius: 8, padding: 16, backgroundColor: active ? ACCENT_LIGHT : "#fff", cursor: onClick ? "pointer" : "default", transition: "all 0.15s", ...style }}>
+    <div onClick={onClick} style={{ border: `1px solid ${active ? ACCENT : BORDER}`, borderRadius: 8, padding: 16, backgroundColor: active ? ACCENT_LIGHT : "var(--re-surface-base)", cursor: onClick ? "pointer" : "default", transition: "all 0.15s", ...style }}>
       {children}
     </div>
   );
@@ -186,7 +186,7 @@ function Card({ children, onClick, active, style = {} }) {
 function SectionTitle({ children, sub }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111", margin: 0 }}>{children}</h2>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--re-text-primary)", margin: 0 }}>{children}</h2>
       {sub && <p style={{ fontSize: 13, color: GRAY, margin: "4px 0 0" }}>{sub}</p>}
     </div>
   );
@@ -197,12 +197,12 @@ function FlowStep({ number, title, description, active, onClick, status }) {
   const statusBg = { done: ACCENT_LIGHT, current: BLUE_LIGHT, pending: GRAY_LIGHT };
   const c = statusColors[status] || GRAY;
   return (
-    <div onClick={onClick} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 16px", borderRadius: 8, border: `1px solid ${active ? c : BORDER}`, backgroundColor: active ? statusBg[status] : "#fff", cursor: "pointer", transition: "all 0.15s" }}>
-      <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+    <div onClick={onClick} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "12px 16px", borderRadius: 8, border: `1px solid ${active ? c : BORDER}`, backgroundColor: active ? statusBg[status] : "var(--re-surface-base)", cursor: "pointer", transition: "all 0.15s" }}>
+      <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: c, color: "var(--re-surface-base)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
         {status === "done" ? "✓" : number}
       </div>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>{title}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--re-text-primary)" }}>{title}</div>
         <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{description}</div>
       </div>
     </div>
@@ -259,12 +259,12 @@ function BuyerInviteView() {
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Invite Supplier</div>
           {[{ l: "Supplier Company Name", p: "Acme Fresh Produce LLC" }, { l: "Contact Email", p: "compliance@acmefresh.com" }, { l: "Contact Name (optional)", p: "Maria Chen" }].map((f) => (
             <div key={f.l} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>{f.l}</div>
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 4, padding: "8px 10px", fontSize: 13, color: GRAY, backgroundColor: "#fff" }}>{f.p}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 3 }}>{f.l}</div>
+              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: GRAY, backgroundColor: "var(--re-surface-elevated)" }}>{f.p}</div>
             </div>
           ))}
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>FTL Categories You Source From Them</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 3 }}>FTL Categories You Source From Them</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {["Vegetables (leafy greens)", "Fresh herbs"].map((c) => (
                 <span key={c} style={{ padding: "4px 10px", borderRadius: 4, fontSize: 12, backgroundColor: ACCENT_LIGHT, color: ACCENT, fontWeight: 500 }}>{c}</span>
@@ -277,10 +277,10 @@ function BuyerInviteView() {
             Token encodes: buyer_id, supplier_email, pre-selected FTL categories<br />
             Expires in 30 days. Buyer can resend.
           </div>
-          <button style={{ marginTop: 12, padding: "10px 24px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Send Invite</button>
+          <button style={{ marginTop: 12, padding: "10px 24px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Send Invite</button>
         </div>
       </Card>
-      <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: WARN_LIGHT, fontSize: 12, color: "#92400E" }}>
+      <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: WARN_LIGHT, fontSize: 12, color: WARN }}>
         <strong>Graph effect:</strong> Creates <code>(Buyer)-[:INVITED]-{">"} (PendingSupplier)</code> node in Neo4j with pre-linked FTL categories. Converts to full <code>(:Supplier)</code> on signup.
       </div>
     </div>
@@ -299,14 +299,14 @@ function SupplierSignupView() {
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: 16, backgroundColor: GRAY_LIGHT }}>
           {[{ l: "Company Name", v: "Acme Fresh Produce LLC", disabled: true }, { l: "Your Name", p: "Maria Chen" }, { l: "Email", v: "compliance@acmefresh.com", disabled: true }, { l: "Password", p: "••••••••••" }, { l: "Role", p: "Select...", type: "select" }].map((f) => (
             <div key={f.l} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>{f.l}</div>
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 4, padding: "8px 10px", fontSize: 13, color: f.disabled ? GRAY : "#333", backgroundColor: f.disabled ? "#f0f0f0" : "#fff" }}>{f.v || f.p}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 3 }}>{f.l}</div>
+              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: f.disabled ? "var(--re-text-disabled)" : "var(--re-text-secondary)", backgroundColor: f.disabled ? "var(--re-surface-card)" : "var(--re-surface-elevated)" }}>{f.v || f.p}</div>
             </div>
           ))}
           <div style={{ fontSize: 11, color: GRAY, marginTop: 8, marginBottom: 12 }}>
             By signing up you agree to RegEngine&apos;s Terms of Service. Your compliance data is encrypted at rest and in transit.
           </div>
-          <button style={{ width: "100%", padding: "10px 24px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Create Account & Continue Setup</button>
+          <button style={{ width: "100%", padding: "10px 24px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Create Account & Continue Setup</button>
         </div>
       </Card>
       <div style={{ marginTop: 12, fontSize: 12, color: GRAY }}>
@@ -376,17 +376,17 @@ function FacilitySetupView({ setView, onFacilityCreated, onEvent }) {
             ["FDA Registration Number (if applicable)", "fda_registration_number", "12345678901"],
           ].map(([label, key, placeholder]) => (
             <div key={key} style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 3 }}>{label}</div>
               <input
                 value={form[key]}
                 onChange={(event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))}
                 placeholder={placeholder}
-                style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "8px 10px", fontSize: 13, color: "#111", backgroundColor: "#fff" }}
+                style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "var(--re-text-primary)", backgroundColor: "var(--re-surface-elevated)" }}
               />
             </div>
           ))}
           <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#333", marginBottom: 3 }}>Supply Chain Role(s)</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 3 }}>Supply Chain Role(s)</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {roleOptions.map((role) => {
                 const active = form.roles.includes(role);
@@ -394,7 +394,7 @@ function FacilitySetupView({ setView, onFacilityCreated, onEvent }) {
                   <button
                     key={role}
                     onClick={() => toggleRole(role)}
-                    style={{ padding: "4px 10px", borderRadius: 4, fontSize: 12, border: `1px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT_LIGHT : "#fff", color: active ? ACCENT : GRAY, cursor: "pointer", fontWeight: 500 }}
+                    style={{ padding: "4px 10px", borderRadius: 8, fontSize: 12, border: `1px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT_LIGHT : "var(--re-surface-base)", color: active ? ACCENT : GRAY, cursor: "pointer", fontWeight: 500 }}
                   >
                     {active ? "✓ " : ""}
                     {role}
@@ -404,10 +404,10 @@ function FacilitySetupView({ setView, onFacilityCreated, onEvent }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <button onClick={saveFacility} disabled={saving} style={{ padding: "10px 24px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+            <button onClick={saveFacility} disabled={saving} style={{ padding: "10px 24px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
               {saving ? "Saving..." : "Save & Continue to FTL Scoping"}
             </button>
-            <button style={{ padding: "10px 24px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>+ Add Another Facility</button>
+            <button style={{ padding: "10px 24px", borderRadius: 8, backgroundColor: "transparent", color: "var(--re-text-secondary)", border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>+ Add Another Facility</button>
           </div>
           <div style={{ marginTop: 10, fontSize: 12 }}>
             <a href="/onboarding/bulk-upload" style={{ color: BLUE, fontWeight: 600, textDecoration: "none" }}>
@@ -506,14 +506,14 @@ function FTLScopingView({ facilityId, categories, onRequiredCTEsChange, onEvent 
           {(categories?.length ? categories : FTL_CATEGORIES).map((cat) => {
             const active = selected.includes(cat.id);
             return (
-              <div key={cat.id} onClick={() => setSelected(active ? selected.filter((s) => s !== cat.id) : [...selected, cat.id])} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 6, border: `1px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT_LIGHT : "#fff", cursor: "pointer", fontSize: 13 }}>
+              <div key={cat.id} onClick={() => setSelected(active ? selected.filter((s) => s !== cat.id) : [...selected, cat.id])} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, border: `1px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT_LIGHT : "var(--re-surface-base)", cursor: "pointer", fontSize: 13 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 18, height: 18, borderRadius: 3, border: `2px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>{active ? "✓" : ""}</span>
+                  <span style={{ width: 18, height: 18, borderRadius: 3, border: `2px solid ${active ? ACCENT : BORDER}`, backgroundColor: active ? ACCENT : "var(--re-surface-base)", color: "var(--re-surface-base)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>{active ? "✓" : ""}</span>
                   <span style={{ fontWeight: active ? 600 : 400 }}>{cat.name}</span>
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
                   {cat.ctes.map((cte) => (
-                    <span key={cte} style={{ padding: "2px 6px", borderRadius: 3, fontSize: 10, backgroundColor: active ? "#fff" : GRAY_LIGHT, color: active ? ACCENT : GRAY }}>{CTE_TYPES[cte]?.icon} {CTE_TYPES[cte]?.label}</span>
+                    <span key={cte} style={{ padding: "2px 6px", borderRadius: 3, fontSize: 10, backgroundColor: active ? "var(--re-surface-base)" : GRAY_LIGHT, color: active ? ACCENT : GRAY }}>{CTE_TYPES[cte]?.icon} {CTE_TYPES[cte]?.label}</span>
                   ))}
                 </div>
               </div>
@@ -521,18 +521,18 @@ function FTLScopingView({ facilityId, categories, onRequiredCTEsChange, onEvent 
           })}
         </div>
         <div style={{ marginTop: 12 }}>
-          <button onClick={saveScoping} disabled={saving} style={{ padding: "8px 18px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
+          <button onClick={saveScoping} disabled={saving} style={{ padding: "8px 18px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: saving ? 0.7 : 1 }}>
             {saving ? "Saving..." : "Save FTL Scoping"}
           </button>
         </div>
         {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
       </Card>
       {selected.length > 0 && (
-        <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 6, backgroundColor: BLUE_LIGHT, fontSize: 12, color: "#1E40AF" }}>
+        <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 6, backgroundColor: BLUE_LIGHT, fontSize: 12, color: BLUE }}>
           <strong>Auto-determined CTEs for this facility:</strong>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
             {[...new Set(selected.flatMap((id) => FTL_CATEGORIES.find((c) => c.id === id)?.ctes || []))].map((cte) => (
-              <span key={cte} style={{ padding: "4px 10px", borderRadius: 4, fontSize: 12, backgroundColor: "#fff", color: BLUE, fontWeight: 600 }}>{CTE_TYPES[cte]?.icon} {CTE_TYPES[cte]?.label}</span>
+              <span key={cte} style={{ padding: "4px 10px", borderRadius: 8, fontSize: 12, backgroundColor: "var(--re-surface-base)", color: BLUE, fontWeight: 600 }}>{CTE_TYPES[cte]?.icon} {CTE_TYPES[cte]?.label}</span>
             ))}
           </div>
           <div style={{ marginTop: 8, fontSize: 11, color: GRAY }}>Only these CTE forms will appear in data entry. No irrelevant fields.</div>
@@ -628,7 +628,7 @@ function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted, onEvent
             return null;
           }
           return (
-          <button key={key} onClick={() => setActiveCTE(key)} style={{ padding: "6px 12px", borderRadius: 6, border: `1px solid ${activeCTE === key ? ACCENT : BORDER}`, backgroundColor: activeCTE === key ? ACCENT : "#fff", color: activeCTE === key ? "#fff" : GRAY, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{val.icon} {val.label}</button>
+          <button key={key} onClick={() => setActiveCTE(key)} style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${activeCTE === key ? ACCENT : BORDER}`, backgroundColor: activeCTE === key ? ACCENT : "var(--re-surface-base)", color: activeCTE === key ? "var(--re-surface-base)" : GRAY, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{val.icon} {val.label}</button>
           );
         })}
       </div>
@@ -643,14 +643,14 @@ function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted, onEvent
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {cte.fields.map((f) => (
             <div key={f.name}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#333", marginBottom: 2 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 2 }}>
                 {f.label} {f.required && <span style={{ color: ERROR }}>*</span>}
               </div>
               {f.type === "select" ? (
                 <select
                   value={formValues[f.name] || ""}
                   onChange={(event) => setField(f.name, event.target.value)}
-                  style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "6px 8px", fontSize: 12, color: "#111", backgroundColor: "#fff" }}
+                  style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--re-text-primary)", backgroundColor: "var(--re-surface-elevated)" }}
                 >
                   <option value="">Select...</option>
                   {(f.options || []).map((option) => (
@@ -662,17 +662,17 @@ function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted, onEvent
                   type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
                   value={formValues[f.name] || ""}
                   onChange={(event) => setField(f.name, event.target.value)}
-                  style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 4, padding: "6px 8px", fontSize: 12, color: "#111", backgroundColor: "#fff" }}
+                  style={{ width: "100%", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--re-text-primary)", backgroundColor: "var(--re-surface-elevated)" }}
                 />
               )}
             </div>
           ))}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button onClick={submitCTE} disabled={submitting} style={{ padding: "8px 20px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
+          <button onClick={submitCTE} disabled={submitting} style={{ padding: "8px 20px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}>
             {submitting ? "Submitting..." : "Submit & Hash (SHA-256)"}
           </button>
-          <button style={{ padding: "8px 20px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Save Draft</button>
+          <button style={{ padding: "8px 20px", borderRadius: 8, backgroundColor: "transparent", color: "var(--re-text-secondary)", border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>Save Draft</button>
         </div>
         {submitResult && (
           <div style={{ marginTop: 10, fontSize: 11, color: ACCENT_DARK, backgroundColor: ACCENT_LIGHT, borderRadius: 6, padding: "8px 10px" }}>
@@ -685,7 +685,7 @@ function CTECaptureView({ requiredCTEs = [], facilityId, onCTESubmitted, onEvent
         <div style={{ flex: 1, padding: "8px 12px", borderRadius: 6, backgroundColor: ACCENT_LIGHT, fontSize: 11, color: ACCENT_DARK }}>
           <strong>On submit:</strong> KDE record -&gt; Postgres (source of truth) -&gt; Neo4j (graph linkage to TLC, facility, obligation nodes) -&gt; SHA-256 hash -&gt; Merkle chain append
         </div>
-        <div style={{ flex: 1, padding: "8px 12px", borderRadius: 6, backgroundColor: WARN_LIGHT, fontSize: 11, color: "#92400E" }}>
+        <div style={{ flex: 1, padding: "8px 12px", borderRadius: 6, backgroundColor: WARN_LIGHT, fontSize: 11, color: WARN }}>
           <strong>Validation:</strong> Required fields, date logic (ship ≤ receive), TLC format check, qty {">"} 0, location must exist in facility registry
         </div>
       </div>
@@ -767,15 +767,15 @@ function TLCMgmtView({ facilityId, refreshKey, onEvent }) {
               value={newLot.tlc_code}
               onChange={(event) => setNewLot((prev) => ({ ...prev, tlc_code: event.target.value }))}
               placeholder="TLC code"
-              style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }}
+              style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--re-text-primary)", backgroundColor: "var(--re-surface-elevated)" }}
             />
             <input
               value={newLot.product_description}
               onChange={(event) => setNewLot((prev) => ({ ...prev, product_description: event.target.value }))}
               placeholder="Product"
-              style={{ border: `1px solid ${BORDER}`, borderRadius: 6, padding: "6px 8px", fontSize: 12 }}
+              style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--re-text-primary)", backgroundColor: "var(--re-surface-elevated)" }}
             />
-            <button onClick={createLot} disabled={creating} style={{ padding: "6px 14px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: creating ? 0.7 : 1 }}>
+            <button onClick={createLot} disabled={creating} style={{ padding: "6px 14px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: creating ? 0.7 : 1 }}>
               {creating ? "Creating..." : "+ Create New TLC"}
             </button>
           </div>
@@ -902,7 +902,7 @@ function DashboardView({ facilityId, refreshKey }) {
           <div style={{ fontSize: 12, color: ACCENT }}>No open gaps for scoped CTE obligations.</div>
         )}
       </Card>
-      <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: BLUE_LIGHT, fontSize: 12, color: "#1E40AF" }}>
+      <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: BLUE_LIGHT, fontSize: 12, color: BLUE }}>
         <strong>Score formula:</strong> coverage (75%) + freshness (15%) + chain integrity (10%).
         {scoreData && (
           <span>
@@ -1000,8 +1000,8 @@ function FDAExportView({ facilityId, refreshKey, onEvent }) {
             { l: "Facility", v: "All facilities" },
           ].map((f) => (
             <div key={f.l}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#333", marginBottom: 2 }}>{f.l}</div>
-              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 4, padding: "6px 8px", fontSize: 12, color: "#333", backgroundColor: "#fff" }}>{f.v}</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 2 }}>{f.l}</div>
+              <div style={{ border: `1px solid ${BORDER}`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "var(--re-text-secondary)", backgroundColor: "var(--re-surface-elevated)" }}>{f.v}</div>
             </div>
           ))}
         </div>
@@ -1009,31 +1009,49 @@ function FDAExportView({ facilityId, refreshKey, onEvent }) {
           <button
             onClick={() => downloadExport("xlsx")}
             disabled={exportingFormat !== null}
-            style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: exportingFormat ? 0.7 : 1 }}
+            style={{ padding: "10px 20px", borderRadius: 8, backgroundColor: ACCENT, color: "var(--re-surface-base)", border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: exportingFormat ? 0.7 : 1 }}
           >
             {exportingFormat === "xlsx" ? "Preparing XLSX..." : "Export as XLSX (FDA format)"}
           </button>
           <button
             onClick={() => downloadExport("csv")}
             disabled={exportingFormat !== null}
-            style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: "#fff", color: ACCENT, border: `1px solid ${ACCENT}`, fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: exportingFormat ? 0.7 : 1 }}
+            style={{ padding: "10px 20px", borderRadius: 8, backgroundColor: "transparent", color: "var(--re-text-secondary)", border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: exportingFormat ? 0.7 : 1 }}
           >
             {exportingFormat === "csv" ? "Preparing CSV..." : "Export as CSV"}
           </button>
-          <button style={{ padding: "10px 20px", borderRadius: 6, backgroundColor: "#fff", color: GRAY, border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>EPCIS 2.0 (Pro)</button>
+          <button style={{ padding: "10px 20px", borderRadius: 8, backgroundColor: "transparent", color: "var(--re-text-secondary)", border: `1px solid ${BORDER}`, fontWeight: 600, fontSize: 12, cursor: "pointer" }}>EPCIS 2.0 (Pro)</button>
         </div>
         {statusMessage && <div style={{ marginTop: 10, fontSize: 12, color: ACCENT }}>{statusMessage}</div>}
+        {statusMessage && (
+          <a
+            href="/dashboard"
+            style={{
+              display: "inline-block",
+              background: "var(--re-brand)",
+              color: "var(--re-surface-base)",
+              padding: "12px 32px",
+              borderRadius: "8px",
+              fontWeight: 600,
+              fontSize: "15px",
+              textDecoration: "none",
+              marginTop: "24px",
+            }}
+          >
+            Go to Dashboard →
+          </a>
+        )}
         {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
       </Card>
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Export Preview</div>
         {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Loading live FDA preview rows...</div>}
         <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", fontSize: 11 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr", padding: "6px 8px", backgroundColor: ACCENT, color: "#fff", fontWeight: 600 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr", padding: "6px 8px", backgroundColor: ACCENT, color: "var(--re-surface-base)", fontWeight: 600 }}>
             <div>TLC</div><div>Product</div><div>CTE</div><div>Location</div><div>Date</div><div>Qty</div><div>Ref Doc</div><div>SHA-256</div>
           </div>
           {rows.map((row, i) => (
-            <div key={row.event_id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr", padding: "6px 8px", borderTop: `1px solid ${BORDER}`, backgroundColor: i % 2 ? GRAY_LIGHT : "#fff" }}>
+            <div key={row.event_id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr", padding: "6px 8px", borderTop: `1px solid ${BORDER}`, backgroundColor: i % 2 ? GRAY_LIGHT : "var(--re-surface-base)" }}>
               <div style={{ fontFamily: "monospace" }}>{row.tlc_code}</div>
               <div>{row.product_description || "-"}</div>
               <div>{row.cte_type}</div>
@@ -1058,13 +1076,13 @@ function FDAExportView({ facilityId, refreshKey, onEvent }) {
 
 function DataModelView() {
   const nodes = [
-    { label: "Buyer", props: "id, name, facilities[]", color: BLUE },
-    { label: "Supplier", props: "id, name, contact, created_at", color: ACCENT },
-    { label: "Facility", props: "id, name, address, fda_reg, roles[]", color: "#8B5CF6" },
-    { label: "FTLCategory", props: "id, name, code, applicable_ctes[]", color: WARN },
-    { label: "TLC", props: "code, product_desc, created_at, status", color: "#EC4899" },
-    { label: "CTEEvent", props: "id, type, timestamp, kde_data{}, sha256_hash", color: ERROR },
-    { label: "Obligation", props: "id, cfr_ref, text, must/should", color: GRAY },
+    { label: "Buyer", props: "id, name, facilities[]", color: BLUE, bg: BLUE_LIGHT },
+    { label: "Supplier", props: "id, name, contact, created_at", color: ACCENT, bg: ACCENT_LIGHT },
+    { label: "Facility", props: "id, name, address, fda_reg, roles[]", color: "var(--re-linkage)", bg: "color-mix(in srgb, var(--re-linkage) 16%, transparent)" },
+    { label: "FTLCategory", props: "id, name, code, applicable_ctes[]", color: WARN, bg: WARN_LIGHT },
+    { label: "TLC", props: "code, product_desc, created_at, status", color: "var(--re-brand-light)", bg: "color-mix(in srgb, var(--re-brand-light) 14%, transparent)" },
+    { label: "CTEEvent", props: "id, type, timestamp, kde_data{}, sha256_hash", color: ERROR, bg: ERROR_LIGHT },
+    { label: "Obligation", props: "id, cfr_ref, text, must/should", color: GRAY, bg: GRAY_LIGHT },
   ];
   const edges = [
     "(Buyer)-[:SOURCES_FROM]->(Supplier)",
@@ -1084,7 +1102,7 @@ function DataModelView() {
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Node Types</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {nodes.map((n) => (
-            <div key={n.label} style={{ padding: "8px 12px", borderRadius: 6, border: `2px solid ${n.color}`, backgroundColor: `${n.color}11` }}>
+            <div key={n.label} style={{ padding: "8px 12px", borderRadius: 6, border: `2px solid ${n.color}`, backgroundColor: n.bg }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: n.color }}>(:{n.label})</div>
               <div style={{ fontSize: 11, color: GRAY, fontFamily: "monospace" }}>{n.props}</div>
             </div>
@@ -1152,7 +1170,7 @@ function APISpecView() {
           })}
         </div>
       </Card>
-      <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: WARN_LIGHT, fontSize: 12, color: "#92400E" }}>
+      <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 6, backgroundColor: WARN_LIGHT, fontSize: 12, color: WARN }}>
         <strong>Implementation note:</strong> All P0 endpoints run on current topology (Postgres + Neo4j + Redis). CTE submission writes to Postgres first (source of truth), then async graph sync to Neo4j. No Kafka needed - use Postgres LISTEN/NOTIFY for the async bridge.
       </div>
     </div>
@@ -1252,17 +1270,17 @@ export default function SupplierOnboardingFlow() {
   };
 
   return (
-    <div style={{ display: "flex", height: "100vh", fontFamily: "Arial, sans-serif", backgroundColor: "#fff" }}>
-      <div style={{ width: 180, backgroundColor: "#111", padding: "16px 0", flexShrink: 0, overflowY: "auto" }}>
-        <div style={{ padding: "0 14px 16px", borderBottom: "1px solid #333" }}>
+    <div style={{ display: "flex", minHeight: "calc(100vh - 56px)", fontFamily: "Arial, sans-serif", backgroundColor: "var(--re-surface-base)", color: "var(--re-text-primary)" }}>
+      <div style={{ width: 220, backgroundColor: "var(--re-surface-elevated)", padding: "16px 0", flexShrink: 0, overflowY: "auto" }}>
+        <div style={{ padding: "0 14px 16px", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: ACCENT }}>RegEngine</div>
-          <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>Supplier Onboarding</div>
+          <div style={{ fontSize: 10, color: "var(--re-text-muted)", marginTop: 2 }}>Guided Supplier Setup</div>
         </div>
         <div style={{ padding: "8px 0" }}>
           {navItems.map((item) => (
-            <div key={item.id} onClick={() => setView(item.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", cursor: "pointer", backgroundColor: view === item.id ? "#222" : "transparent", borderLeft: view === item.id ? `3px solid ${ACCENT}` : "3px solid transparent", transition: "all 0.1s" }}>
+            <div key={item.id} onClick={() => setView(item.id)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 14px", cursor: "pointer", backgroundColor: view === item.id ? ACCENT_LIGHT : "transparent", borderLeft: view === item.id ? `3px solid ${ACCENT}` : "3px solid transparent", transition: "all 0.1s" }}>
               <span style={{ fontSize: 14 }}>{item.icon}</span>
-              <span style={{ fontSize: 12, color: view === item.id ? "#fff" : "#999", fontWeight: view === item.id ? 600 : 400 }}>{item.label}</span>
+              <span style={{ fontSize: 12, color: view === item.id ? "var(--re-text-primary)" : "var(--re-text-disabled)", fontWeight: view === item.id ? 600 : 500 }}>{item.label}</span>
             </div>
           ))}
         </div>

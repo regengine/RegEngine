@@ -129,25 +129,25 @@ export default function BulkUploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-10">
+    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)] py-10">
       <div className="mx-auto max-w-4xl px-4">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Supplier Bulk Upload</h1>
-            <p className="mt-1 text-sm text-slate-600">
+            <h1 className="text-2xl font-bold text-[var(--re-text-primary)]">Supplier Bulk Upload</h1>
+            <p className="mt-1 text-sm text-[var(--re-text-muted)]">
               Upload facilities, FTL scope, TLCs, and CTE events in one pass. Bulk writes use the same tenant-wide hash/Merkle path as manual entries.
             </p>
           </div>
-          <Link href="/onboarding/supplier-flow" className="text-sm font-medium text-emerald-700 hover:text-emerald-600">
-            Back to Supplier Flow
+          <Link href="/onboarding" className="text-sm font-medium text-[var(--re-brand)] hover:opacity-80">
+            Back to Onboarding
           </Link>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 shadow-sm">
           <div className="mb-3 flex flex-wrap gap-2">
             <button
               onClick={() => onDownloadTemplate('csv')}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-2 text-sm font-medium text-[var(--re-text-secondary)] hover:opacity-90"
               disabled={isBusy}
               type="button"
             >
@@ -155,7 +155,7 @@ export default function BulkUploadPage() {
             </button>
             <button
               onClick={() => onDownloadTemplate('xlsx')}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-2 text-sm font-medium text-[var(--re-text-secondary)] hover:opacity-90"
               disabled={isBusy}
               type="button"
             >
@@ -167,7 +167,7 @@ export default function BulkUploadPage() {
             type="file"
             accept=".csv,.xlsx,.json,.pdf"
             onChange={onFileSelected}
-            className="block w-full rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-700"
+            className="block w-full rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-2 text-sm text-[var(--re-text-secondary)]"
           />
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -175,7 +175,7 @@ export default function BulkUploadPage() {
               onClick={onParseAndValidate}
               disabled={!file || isBusy}
               type="button"
-              className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md bg-[var(--re-brand)] px-4 py-2 text-sm font-semibold text-[var(--re-surface-base)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isBusy ? 'Working...' : 'Parse + Validate'}
             </button>
@@ -184,7 +184,7 @@ export default function BulkUploadPage() {
               onClick={onCommit}
               disabled={!canCommit || isBusy}
               type="button"
-              className="rounded-md bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md bg-[var(--re-info)] px-4 py-2 text-sm font-semibold text-[var(--re-surface-base)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Commit Import
             </button>
@@ -193,22 +193,22 @@ export default function BulkUploadPage() {
               onClick={onRefreshStatus}
               disabled={!parseResult?.session_id || isBusy}
               type="button"
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-4 py-2 text-sm font-medium text-[var(--re-text-secondary)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Refresh Status
             </button>
           </div>
 
-          {error && <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+          {error && <p className="mt-3 rounded-md border border-[var(--re-danger)] bg-[var(--re-danger-muted)] p-2 text-sm text-[var(--re-danger)]">{error}</p>}
 
           {parseResult && (
-            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Parsed ({parseResult.detected_format})</p>
+            <div className="mt-4 rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 text-sm text-[var(--re-text-secondary)]">
+              <p className="font-semibold text-[var(--re-text-primary)]">Parsed ({parseResult.detected_format})</p>
               <p>
                 Facilities: {parseResult.facilities} | FTL scopes: {parseResult.ftl_scopes} | TLCs: {parseResult.tlcs} | Events: {parseResult.events}
               </p>
               {parseResult.warnings?.length > 0 && (
-                <ul className="mt-2 list-disc pl-5 text-xs text-amber-700">
+                <ul className="mt-2 list-disc pl-5 text-xs text-[var(--re-warning)]">
                   {parseResult.warnings.map((warning) => (
                     <li key={warning}>{warning}</li>
                   ))}
@@ -218,8 +218,8 @@ export default function BulkUploadPage() {
           )}
 
           {validateResult && (
-            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Validation Preview</p>
+            <div className="mt-4 rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 text-sm text-[var(--re-text-secondary)]">
+              <p className="font-semibold text-[var(--re-text-primary)]">Validation Preview</p>
               <p>
                 Facilities create/update: {validateResult.preview.facilities_to_create}/{validateResult.preview.facilities_to_update}
               </p>
@@ -229,11 +229,11 @@ export default function BulkUploadPage() {
               <p>
                 FTL upserts: {validateResult.preview.ftl_scopes_to_upsert} | Events to chain: {validateResult.preview.events_to_chain}
               </p>
-              <p className={validateResult.preview.can_commit ? 'text-emerald-700' : 'text-red-700'}>
+              <p className={validateResult.preview.can_commit ? 'text-[var(--re-success)]' : 'text-[var(--re-danger)]'}>
                 {validateResult.preview.can_commit ? 'Ready to commit.' : 'Resolve validation errors before commit.'}
               </p>
               {validateResult.preview.errors?.length > 0 && (
-                <ul className="mt-2 list-disc pl-5 text-xs text-red-700">
+                <ul className="mt-2 list-disc pl-5 text-xs text-[var(--re-danger)]">
                   {validateResult.preview.errors.map((item, index) => (
                     <li key={`${item.section}-${item.row}-${index}`}>
                       {item.section} row {item.row}: {item.message}
@@ -245,14 +245,14 @@ export default function BulkUploadPage() {
           )}
 
           {commitResult && (
-            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <div className="mt-4 rounded-md border border-[var(--re-success)] bg-[var(--re-success-muted)] p-3 text-sm text-[var(--re-text-primary)]">
               <p className="font-semibold">Commit Complete</p>
               <p className="mt-1 text-xs">
                 Facilities create/update: {commitResult.summary.facilities_created}/{commitResult.summary.facilities_updated} | TLC create/update:{' '}
                 {commitResult.summary.tlcs_created}/{commitResult.summary.tlcs_updated} | Events chained: {commitResult.summary.events_chained}
               </p>
               {commitResult.summary.sync_warning_count > 0 && (
-                <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                <div className="mt-2 rounded-md border border-[var(--re-warning)] bg-[var(--re-warning-muted)] p-2 text-xs text-[var(--re-warning)]">
                   <p className="font-semibold">Graph sync warnings ({commitResult.summary.sync_warning_count})</p>
                   <ul className="mt-1 list-disc pl-5">
                     {commitResult.summary.sync_warnings.map((warning) => (
@@ -266,11 +266,11 @@ export default function BulkUploadPage() {
           )}
 
           {statusResult && (
-            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-              <p className="font-semibold text-slate-900">Latest Status: {statusResult.status}</p>
-              {statusResult.error && <p className="mt-1 text-red-700">{statusResult.error}</p>}
+            <div className="mt-4 rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3 text-sm text-[var(--re-text-secondary)]">
+              <p className="font-semibold text-[var(--re-text-primary)]">Latest Status: {statusResult.status}</p>
+              {statusResult.error && <p className="mt-1 text-[var(--re-danger)]">{statusResult.error}</p>}
               {statusResult.summary && statusResult.summary.sync_warning_count > 0 && (
-                <p className="mt-1 text-xs text-amber-700">
+                <p className="mt-1 text-xs text-[var(--re-warning)]">
                   Graph sync warnings: {statusResult.summary.sync_warning_count}. See commit summary details above.
                 </p>
               )}
