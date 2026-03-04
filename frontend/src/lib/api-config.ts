@@ -9,6 +9,7 @@ export function isStaticExport(): boolean {
 
 export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'admin' | 'opportunity'): string {
     const isClient = typeof window !== 'undefined';
+    const isCapacitorClient = isClient && (window as any).Capacitor !== undefined;
 
     // In production static export (Capacitor), we MUST use absolute URLs
     // We prefer a unified API gateway if NEXT_PUBLIC_API_BASE_URL is set
@@ -31,7 +32,8 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
     }
 
     if (service === 'admin') {
-        if (!isStaticExport()) {
+        // On web, always prefer same-origin proxy to avoid CORS and domain drift issues.
+        if (!isCapacitorClient) {
             return '/api/admin';
         }
         if (gatewayUrl) {
