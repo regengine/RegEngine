@@ -30,16 +30,21 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
         }
     }
 
-    // Client-side / Static Export
-    if (gatewayUrl) {
-        // If a gateway is provided (e.g. Nginx proxy), use it for all services
-        // The gateway should route based on paths like /admin, /ingestion, etc.
-        return `${gatewayUrl}/${service}`;
+    if (service === 'admin') {
+        if (!isStaticExport()) {
+            return '/api/admin';
+        }
+        if (gatewayUrl) {
+            return `${gatewayUrl}/admin`;
+        }
+        return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
     }
 
-    // Prefer same-origin proxy for admin calls when no explicit public admin URL is configured.
-    if (service === 'admin') {
-        return process.env.NEXT_PUBLIC_ADMIN_URL || '/api/admin';
+    // Client-side / Static Export
+    if (gatewayUrl) {
+        // If a gateway is provided (e.g. Nginx proxy), use it for non-admin services
+        // The gateway should route based on paths like /ingestion, /graph, etc.
+        return `${gatewayUrl}/${service}`;
     }
 
     switch (service) {

@@ -123,16 +123,11 @@ async function proxyRequest(
           continue;
         }
 
-        const responseBuffer = await response.arrayBuffer();
-
         const outgoingHeaders = new Headers();
         const passthroughResponseHeaders = [
           'content-type',
           'content-disposition',
-          'content-length',
           'cache-control',
-          'etag',
-          'last-modified',
           'x-fda-record-count',
         ];
         for (const headerName of passthroughResponseHeaders) {
@@ -142,7 +137,7 @@ async function proxyRequest(
           }
         }
 
-        return new NextResponse(responseBuffer, {
+        return new NextResponse(response.body, {
           status: response.status,
           headers: outgoingHeaders,
         });
