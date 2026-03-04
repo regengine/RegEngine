@@ -101,6 +101,7 @@ pnpm build
 ## Reference Docs
 
 - FSMA deployment runbook: `docs/FSMA_RAILWAY_DEPLOYMENT.md`
+- Env setup checklist (beginner-friendly): `docs/ENV_SETUP_CHECKLIST.md`
 - FSMA MVP spec: `docs/specs/FSMA_204_MVP_SPEC.md`
 - Fair lending module spec: `docs/specs/FAIR_LENDING_COMPLIANCE_OS_MVP_SPEC.md`
 - SOC2 control mapping (fair lending): `docs/security/SOC2_FAIR_LENDING_CONTROL_MAPPING.md`
