@@ -2,112 +2,91 @@
 
 import { motion } from 'framer-motion';
 import {
-    Shield,
-    FileText,
-    Activity,
-    Lock,
-    Zap,
-    Server,
     ArrowLeft,
-    PlayCircle,
+    Egg,
+    Fish,
+    Leaf,
+    Milk,
+    Shield,
+    UtensilsCrossed,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { useState } from 'react';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 const FRAMEWORKS = [
     {
-        id: 'healthcare',
-        title: 'Healthcare',
-        icon: Activity,
-        description: 'HIPAA, HITECH, FDA 21 CFR Part 11',
-        details: 'Protect patient privacy and ensure clinical safety with pre-built controls for ePHI, audit logs, and medical device security.',
+        id: 'fresh-produce',
+        title: 'Fresh Produce',
+        icon: Leaf,
+        description: 'Leafy greens, herbs, melons, and fresh-cut produce workflows',
+        details: 'Maps receiving, cooling, transformation, and shipping CTEs with KDE coverage patterns commonly requested by grocery buyers.',
         jsonSnippet: `{
-  "rule_pack_id": "healthcare_hipaa_v1",
-  "rules": [
-    {
-      "requirement": "Risk Management Process",
-      "severity": "CRITICAL",
-      "checklist_item": "Conduct thorough assessments of potential vulnerabilities to ePHI..."
-    }
-  ]
-}`
+  "profile": "fresh_produce",
+  "ftl_categories": ["Leafy Greens", "Melons"],
+  "required_ctes": ["RECEIVING", "TRANSFORMING", "SHIPPING"],
+  "kde_focus": ["grower_lot", "harvest_date", "cooling_location"]
+}`,
     },
     {
-        id: 'finance',
-        title: 'Finance',
-        icon: Lock,
-        description: 'PCI DSS 4.0, SOX, GLBA',
-        details: 'Secure transactional integrity with automated checks for encryption, access control, and financial reporting accuracy.',
+        id: 'seafood',
+        title: 'Seafood',
+        icon: Fish,
+        description: 'Finfish and shellfish chain-of-custody controls',
+        details: 'Tracks vessel/source references, cold-chain transitions, and lot transformations so recalls can be traced from supplier to shelf fast.',
         jsonSnippet: `{
-  "rule_pack_id": "finance_pci_sox_v1",
-  "rules": [
-    {
-      "requirement": "Network Security",
-      "severity": "CRITICAL",
-      "checklist_item": "Install firewalls; deny unauthorized traffic; encrypt card data..."
-    }
-  ]
-}`
+  "profile": "seafood",
+  "ftl_categories": ["Fresh Finfish", "Crustaceans"],
+  "required_ctes": ["HARVESTING", "RECEIVING", "SHIPPING"],
+  "kde_focus": ["source_vessel", "landing_date", "temperature_log"]
+}`,
     },
     {
-        id: 'gaming',
-        title: 'Gaming',
-        icon: FileText,
-        description: 'AML/KYC, GLI-11, GLI-19',
-        details: 'Ensure fairness and counter financial crime with real-time monitoring for money laundering and RNG certification.',
+        id: 'dairy',
+        title: 'Dairy',
+        icon: Milk,
+        description: 'Milk, cheese, and cultured product traceability profiles',
+        details: 'Captures co-mingling and rework events with deterministic lineage so auditors can verify exactly which lots entered finished product batches.',
         jsonSnippet: `{
-  "rule_pack_id": "gaming_aml_gli_v1",
-  "rules": [
-    {
-      "requirement": "Customer Due Diligence",
-      "severity": "CRITICAL",
-      "checklist_item": "Verify ID with liveness detection; screen for Politically Exposed Persons (PEPs)..."
-    }
-  ]
-}`
+  "profile": "dairy",
+  "ftl_categories": ["Soft Cheeses", "Fluid Dairy"],
+  "required_ctes": ["RECEIVING", "TRANSFORMING", "PACKING", "SHIPPING"],
+  "kde_focus": ["supplier_lot", "production_line", "hold_release_status"]
+}`,
     },
     {
-        id: 'energy',
-        title: 'Energy',
-        icon: Zap,
-        description: 'NERC CIP',
-        details: 'Protect critical infrastructure with IT/OT integration, asset categorization, and electronic security perimeters.',
+        id: 'deli-prepared',
+        title: 'Deli & Prepared',
+        icon: UtensilsCrossed,
+        description: 'Ready-to-eat and mixed-ingredient operational profiles',
+        details: 'Manages transformation-heavy workflows where a single output lot draws from many upstream inputs and must still support rapid backward tracing.',
         jsonSnippet: `{
-  "rule_pack_id": "energy_nerc_cip_v1",
-  "rules": [
-    {
-      "requirement": "ESP Management",
-      "severity": "CRITICAL",
-      "checklist_item": "Define ESP boundaries; implement layered zones in control centers..."
-    }
-  ]
-}`
+  "profile": "deli_prepared",
+  "ftl_categories": ["Ready-to-Eat Deli Salads"],
+  "required_ctes": ["RECEIVING", "TRANSFORMING", "SHIPPING"],
+  "kde_focus": ["input_lot_map", "recipe_revision", "pack_timestamp"]
+}`,
     },
     {
-        id: 'technology',
-        title: 'Technology',
-        icon: Server,
-        description: 'SOC 2, ISO 27001, GDPR',
-        details: 'Demonstrate governance and trust with mapped controls for data privacy, security maturity, and evidence collection.',
+        id: 'shell-eggs',
+        title: 'Shell Eggs',
+        icon: Egg,
+        description: 'Pack-date, facility, and distributor continuity controls',
+        details: 'Supports egg-specific lot and date coding expectations while preserving supplier-facility relationships needed for retailer and FDA record pulls.',
         jsonSnippet: `{
-  "rule_pack_id": "tech_soc2_iso_gdpr_v1",
-  "rules": [
-    {
-      "requirement": "Trust Services Criteria",
-      "severity": "HIGH",
-      "checklist_item": "Address the 'Common Criteria' (Security) through risk assessment..."
-    }
-  ]
-}`
-    }
+  "profile": "shell_eggs",
+  "ftl_categories": ["Shell Eggs"],
+  "required_ctes": ["RECEIVING", "PACKING", "SHIPPING"],
+  "kde_focus": ["pack_date", "facility_registration", "distributor_reference"]
+}`,
+    },
 ];
 
 function CodeBlock({ code }: { code: string }) {
     return (
-        <pre className="bg-gray-950 text-gray-300 p-4 rounded-lg overflow-x-auto text-xs font-mono border border-gray-800">
+        <pre className="bg-[var(--re-surface-base)] text-[var(--re-text-secondary)] p-4 rounded-lg overflow-x-auto text-xs font-mono border border-[var(--re-surface-border)]">
             <code>{code}</code>
         </pre>
     );
@@ -115,92 +94,97 @@ function CodeBlock({ code }: { code: string }) {
 
 export default function ComplianceVerticalsPage() {
     return (
-        <div className="min-h-screen bg-gray-950 text-gray-100">
-            <div className="border-b border-gray-800 py-16 px-4">
-                <div className="max-w-4xl mx-auto">
-                    <Link href="/developers" className="inline-flex items-center text-gray-400 hover:text-white mb-8 transition-colors">
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back to Developers
-                    </Link>
+        <div className="re-page overflow-x-hidden">
+            <div className="re-noise" />
 
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                    >
-                        <Badge className="mb-4 bg-purple-500/20 text-purple-400 border-purple-500/50">
-                            New Feature
-                        </Badge>
-                        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                            Strategic Compliance<br />
-                            <span className="text-purple-400">Vertical Frameworks</span>
-                        </h1>
-                        <p className="text-xl text-gray-400 max-w-2xl">
-                            Pre-built, architectural-grade RulePacks for highly regulated industries.
-                            Start with a baseline of verified controls.
-                        </p>
-                    </motion.div>
-                </div>
-            </div>
+            <section className="relative z-[2] max-w-[1120px] mx-auto pt-[96px] pb-[72px] px-6">
+                <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.08)_0%,transparent_72%)] pointer-events-none" />
 
-            <div className="max-w-6xl mx-auto px-4 py-16">
+                <Link href="/developers" className="inline-flex items-center text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] mb-8 transition-colors">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Developers
+                </Link>
+
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                    <div className="re-badge-brand mb-6 w-fit">
+                        <span className="re-dot bg-[var(--re-brand)] animate-pulse" />
+                        FSMA 204 Profiles
+                    </div>
+                    <h1 className="text-[clamp(36px,5vw,52px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-4 tracking-[-0.02em]">
+                        Food-First Compliance
+                        <br />
+                        Vertical Profiles
+                    </h1>
+                    <p className="text-lg text-[var(--re-text-muted)] max-w-[780px]">
+                        Pre-built FSMA 204 profile templates for the food categories most frequently
+                        requested in retailer onboarding and recall drills.
+                    </p>
+                </motion.div>
+            </section>
+
+            <section className="relative z-[2] max-w-[1120px] mx-auto px-6 pb-[88px]">
                 <div className="grid gap-8">
-                    {FRAMEWORKS.map((fw, i) => (
+                    {FRAMEWORKS.map((framework, index) => (
                         <motion.div
-                            key={fw.id}
+                            key={framework.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.1 }}
+                            transition={{ delay: index * 0.08 }}
                         >
-                            <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+                            <Card className="bg-[var(--re-surface-card)] border-[var(--re-surface-border)] overflow-hidden">
                                 <div className="grid md:grid-cols-2">
                                     <div className="p-6 md:p-8 flex flex-col justify-center">
                                         <div className="flex items-center gap-3 mb-4">
-                                            <div className="p-2 bg-purple-500/20 rounded-lg">
-                                                <fw.icon className="h-6 w-6 text-purple-400" />
+                                            <div className="p-2 bg-[var(--re-brand-muted)] rounded-lg">
+                                                <framework.icon className="h-6 w-6 text-[var(--re-brand)]" />
                                             </div>
-                                            <h2 className="text-2xl font-bold">{fw.title}</h2>
+                                            <h2 className="text-2xl font-bold text-[var(--re-text-primary)]">{framework.title}</h2>
                                         </div>
-                                        <div className="text-sm font-mono text-purple-400 mb-4">
-                                            {fw.description}
-                                        </div>
-                                        <p className="text-gray-400 mb-6">
-                                            {fw.details}
+
+                                        <Badge className="mb-4 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand-muted)] w-fit">
+                                            {framework.description}
+                                        </Badge>
+
+                                        <p className="text-[var(--re-text-muted)] mb-6">
+                                            {framework.details}
                                         </p>
-                                        <div className="flex gap-4">
-                                            <Button variant="outline" className="border-gray-700 hover:bg-gray-800">
-                                                View Standard
+
+                                        <div className="flex gap-4 flex-wrap">
+                                            <Button asChild variant="outline" className="border-[var(--re-surface-border)] hover:bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
+                                                <Link href="/docs/fsma-204">View FSMA Controls</Link>
                                             </Button>
-                                            <Button className="bg-purple-600 hover:bg-purple-700">
-                                                Load RulePack
+                                            <Button asChild className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
+                                                <Link href="/onboarding/supplier-flow">Start Guided Setup</Link>
                                             </Button>
                                         </div>
                                     </div>
-                                    <div className="bg-gray-950 p-6 md:p-8 border-l border-gray-800">
+
+                                    <div className="bg-[var(--re-surface-base)] p-6 md:p-8 border-l border-[var(--re-surface-border)]">
                                         <div className="flex items-center justify-between mb-4">
-                                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                            <span className="text-xs font-semibold text-[var(--re-text-muted)] uppercase tracking-wider">
                                                 Example Seed Data
                                             </span>
-                                            <Badge variant="outline" className="text-xs border-gray-700 text-gray-500">
+                                            <Badge variant="outline" className="text-xs border-[var(--re-surface-border)] text-[var(--re-text-muted)]">
                                                 JSON
                                             </Badge>
                                         </div>
-                                        <CodeBlock code={fw.jsonSnippet} />
+                                        <CodeBlock code={framework.jsonSnippet} />
                                     </div>
                                 </div>
                             </Card>
                         </motion.div>
                     ))}
                 </div>
-            </div>
+            </section>
 
-            <div className="border-t border-gray-800 py-16 px-4 text-center">
-                <Shield className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-gray-300 mb-2">Enterprise Grade</h3>
-                <p className="text-gray-500 max-w-md mx-auto">
-                    All frameworks are aligned with the foundational pillars of Risk Assessment,
-                    Policy Development, and Continuous Improvement.
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] py-[72px] px-6 text-center bg-[var(--re-surface-card)]">
+                <Shield className="h-12 w-12 text-[var(--re-brand)] mx-auto mb-4" />
+                <h3 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Built for FDA and Retailer Readiness</h3>
+                <p className="text-[var(--re-text-muted)] max-w-[720px] mx-auto">
+                    Each profile maps to practical CTE and KDE coverage so teams can move from supplier
+                    data chaos to auditable FSMA 204 responses.
                 </p>
-            </div>
+            </section>
         </div>
     );
 }
