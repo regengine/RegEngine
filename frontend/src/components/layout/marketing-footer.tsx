@@ -19,6 +19,7 @@ export function MarketingFooter() {
 
     return (
         <footer
+            aria-label="Site footer"
             style={{
                 position: "relative",
                 zIndex: 2,

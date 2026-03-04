@@ -359,6 +359,7 @@ export default function RegEngineLanding() {
         <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
           Compliance Command Center
         </span>
+        <h2 className="sr-only">Compliance Command Center</h2>
         <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[880px] mt-4 mb-8">
           Every record in RegEngine is deterministic, versioned, and independently verifiable. No
           AI guessing. No black boxes.
@@ -386,7 +387,7 @@ export default function RegEngineLanding() {
           <div className="flex items-start gap-4 mb-4">
             <Users size={20} className="text-[var(--re-brand)] mt-1" />
             <div>
-              <h3 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-2">Ready to close your FSMA 204 gap?</h3>
+              <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-2">Ready to close your FSMA 204 gap?</h2>
               <p className="text-[var(--re-text-secondary)] leading-relaxed">
                 Start with a free assessment, then see exactly what it takes to move from reactive traceability to recall-ready infrastructure.
               </p>

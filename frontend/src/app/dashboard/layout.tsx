@@ -36,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
         <div className="flex min-h-screen">
             {/* Sidebar */}
-            <aside className="hidden md:flex flex-col w-60 border-r border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] flex-shrink-0">
+            <aside aria-label="Dashboard sidebar" className="hidden md:flex flex-col w-60 border-r border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] flex-shrink-0">
                 <div className="p-4 border-b border-[var(--re-border-default)]">
                     <Link href="/dashboard" className="flex items-center gap-2">
                         <Activity className="h-5 w-5 text-[var(--re-brand)]" />
@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         regengine.co
                     </Link>
                 </div>
-                <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+                <nav aria-label="Dashboard navigation" className="flex-1 p-3 space-y-0.5 overflow-y-auto">
                     {NAV_ITEMS.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
@@ -86,7 +86,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Mobile top nav */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur border-b border-[var(--re-border-default)]">
-                <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar">
+                <nav aria-label="Dashboard quick navigation" className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar">
                     {NAV_ITEMS.slice(0, 6).map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
@@ -104,7 +104,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             </Link>
                         );
                     })}
-                </div>
+                </nav>
             </div>
 
             {/* Main content */}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { MotionConfig, motion } from 'framer-motion';
 import {
     Code2,
     Play,
@@ -233,7 +233,24 @@ export default function DevelopersPage() {
     const [selectedExample, setSelectedExample] = useState<keyof typeof CODE_EXAMPLES>('quickstart');
     const [selectedLang, setSelectedLang] = useState(0);
     const [installCopied, setInstallCopied] = useState(false);
+    const exampleKeys = Object.keys(CODE_EXAMPLES) as Array<keyof typeof CODE_EXAMPLES>;
     const example = CODE_EXAMPLES[selectedExample];
+
+    const focusById = (id: string) => {
+        requestAnimationFrame(() => {
+            const el = document.getElementById(id) as HTMLElement | null;
+            el?.focus();
+        });
+    };
+
+    const selectExampleTab = (exampleKey: keyof typeof CODE_EXAMPLES) => {
+        setSelectedExample(exampleKey);
+        setSelectedLang(0);
+    };
+
+    const selectLanguageTab = (index: number) => {
+        setSelectedLang(index);
+    };
 
     const handleInstallCopy = async () => {
         try {
@@ -246,8 +263,9 @@ export default function DevelopersPage() {
     };
 
     return (
-        <div className="re-page overflow-x-hidden">
-            <div className="re-noise" />
+        <MotionConfig reducedMotion="user">
+            <div className="re-page overflow-x-hidden">
+                <div className="re-noise" />
 
             <section className="relative z-[2] max-w-[1120px] mx-auto pt-[96px] pb-[72px] px-6">
                 <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.08)_0%,transparent_72%)] pointer-events-none" />
@@ -327,22 +345,58 @@ export default function DevelopersPage() {
                         <h3 className="text-sm font-semibold text-[var(--re-text-muted)] uppercase tracking-wider mb-4">
                             Examples
                         </h3>
-                        <nav className="space-y-1">
-                            {Object.entries(CODE_EXAMPLES).map(([key, ex]) => (
-                                <button
-                                    key={key}
-                                    onClick={() => {
-                                        setSelectedExample(key as keyof typeof CODE_EXAMPLES);
-                                        setSelectedLang(0);
-                                    }}
-                                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${selectedExample === key
-                                        ? 'bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
-                                        : 'text-[var(--re-text-muted)] hover:bg-[var(--re-surface-card)] hover:text-[var(--re-text-primary)]'
-                                        }`}
-                                >
-                                    {ex.title}
-                                </button>
-                            ))}
+                        <nav role="tablist" aria-label="Code examples" aria-orientation="vertical" className="space-y-1">
+                            {Object.entries(CODE_EXAMPLES).map(([key, ex]) => {
+                                const exampleKey = key as keyof typeof CODE_EXAMPLES;
+                                const index = exampleKeys.indexOf(exampleKey);
+
+                                return (
+                                    <button
+                                        key={exampleKey}
+                                        id={`example-tab-${exampleKey}`}
+                                        role="tab"
+                                        aria-selected={selectedExample === exampleKey}
+                                        aria-controls={`example-panel-${exampleKey}`}
+                                        tabIndex={selectedExample === exampleKey ? 0 : -1}
+                                        onClick={() => selectExampleTab(exampleKey)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                                                e.preventDefault();
+                                                const nextKey = exampleKeys[(index + 1) % exampleKeys.length];
+                                                selectExampleTab(nextKey);
+                                                focusById(`example-tab-${nextKey}`);
+                                            }
+
+                                            if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                                                e.preventDefault();
+                                                const prevKey = exampleKeys[(index - 1 + exampleKeys.length) % exampleKeys.length];
+                                                selectExampleTab(prevKey);
+                                                focusById(`example-tab-${prevKey}`);
+                                            }
+
+                                            if (e.key === 'Home') {
+                                                e.preventDefault();
+                                                const firstKey = exampleKeys[0];
+                                                selectExampleTab(firstKey);
+                                                focusById(`example-tab-${firstKey}`);
+                                            }
+
+                                            if (e.key === 'End') {
+                                                e.preventDefault();
+                                                const lastKey = exampleKeys[exampleKeys.length - 1];
+                                                selectExampleTab(lastKey);
+                                                focusById(`example-tab-${lastKey}`);
+                                            }
+                                        }}
+                                        className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${selectedExample === exampleKey
+                                            ? 'bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
+                                            : 'text-[var(--re-text-muted)] hover:bg-[var(--re-surface-card)] hover:text-[var(--re-text-primary)]'
+                                            }`}
+                                    >
+                                        {ex.title}
+                                    </button>
+                                );
+                            })}
                         </nav>
 
                         <div className="mt-8 pt-8 border-t border-[var(--re-surface-border)]">
@@ -371,10 +425,25 @@ export default function DevelopersPage() {
                     </div>
 
                     <div className="lg:col-span-3">
+                        {exampleKeys
+                            .filter((exampleKey) => exampleKey !== selectedExample)
+                            .map((exampleKey) => (
+                                <div
+                                    key={`example-panel-placeholder-${exampleKey}`}
+                                    role="tabpanel"
+                                    id={`example-panel-${exampleKey}`}
+                                    aria-labelledby={`example-tab-${exampleKey}`}
+                                    hidden
+                                />
+                            ))}
                         <motion.div
                             key={selectedExample}
                             initial={{ opacity: 0, x: 20 }}
                             animate={{ opacity: 1, x: 0 }}
+                            role="tabpanel"
+                            id={`example-panel-${selectedExample}`}
+                            aria-labelledby={`example-tab-${selectedExample}`}
+                            tabIndex={0}
                         >
                             <div className="mb-6">
                                 <h2 className="text-2xl font-bold mb-2 text-[var(--re-text-primary)]">{example.title}</h2>
@@ -382,11 +451,44 @@ export default function DevelopersPage() {
                             </div>
 
                             <div className="mb-4">
-                                <div className="flex gap-2">
+                                <div role="tablist" aria-label="Code languages" className="flex gap-2">
                                     {example.tabs.map((tab, i) => (
                                         <button
                                             key={tab.lang}
-                                            onClick={() => setSelectedLang(i)}
+                                            id={`code-tab-${selectedExample}-${tab.lang}`}
+                                            role="tab"
+                                            aria-selected={selectedLang === i}
+                                            aria-controls={`code-panel-${selectedExample}-${tab.lang}`}
+                                            tabIndex={selectedLang === i ? 0 : -1}
+                                            onClick={() => selectLanguageTab(i)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'ArrowRight') {
+                                                    e.preventDefault();
+                                                    const nextIndex = (i + 1) % example.tabs.length;
+                                                    selectLanguageTab(nextIndex);
+                                                    focusById(`code-tab-${selectedExample}-${example.tabs[nextIndex].lang}`);
+                                                }
+
+                                                if (e.key === 'ArrowLeft') {
+                                                    e.preventDefault();
+                                                    const prevIndex = (i - 1 + example.tabs.length) % example.tabs.length;
+                                                    selectLanguageTab(prevIndex);
+                                                    focusById(`code-tab-${selectedExample}-${example.tabs[prevIndex].lang}`);
+                                                }
+
+                                                if (e.key === 'Home') {
+                                                    e.preventDefault();
+                                                    selectLanguageTab(0);
+                                                    focusById(`code-tab-${selectedExample}-${example.tabs[0].lang}`);
+                                                }
+
+                                                if (e.key === 'End') {
+                                                    e.preventDefault();
+                                                    const lastIndex = example.tabs.length - 1;
+                                                    selectLanguageTab(lastIndex);
+                                                    focusById(`code-tab-${selectedExample}-${example.tabs[lastIndex].lang}`);
+                                                }
+                                            }}
                                             className={`px-3 py-1 rounded text-sm font-medium transition-colors ${selectedLang === i
                                                 ? 'bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
                                                 : 'bg-[var(--re-surface-card)] text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]'
@@ -398,10 +500,18 @@ export default function DevelopersPage() {
                                 </div>
                             </div>
 
-                            <CodeBlock
-                                code={example.tabs[selectedLang]?.code || ''}
-                                lang={example.tabs[selectedLang]?.lang || 'javascript'}
-                            />
+                            {example.tabs.map((tab, i) => (
+                                <div
+                                    key={tab.lang}
+                                    role="tabpanel"
+                                    id={`code-panel-${selectedExample}-${tab.lang}`}
+                                    aria-labelledby={`code-tab-${selectedExample}-${tab.lang}`}
+                                    hidden={selectedLang !== i}
+                                    tabIndex={0}
+                                >
+                                    {selectedLang === i ? <CodeBlock code={tab.code} lang={tab.lang} /> : null}
+                                </div>
+                            ))}
 
                             <div className="mt-4 flex gap-3">
                                 <Link href="/demo/mock-recall">
@@ -490,6 +600,7 @@ export default function DevelopersPage() {
                     </div>
                 </div>
             </section>
-        </div>
+            </div>
+        </MotionConfig>
     );
 }
