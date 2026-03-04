@@ -1,32 +1,26 @@
-import { redirect } from 'next/navigation';
+'use client';
 
-type OnboardingRedirectPageProps = {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-};
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
-function toQueryString(searchParams?: Record<string, string | string[] | undefined>): string {
-  if (!searchParams) return '';
+export default function OnboardingRedirectPage() {
+  const router = useRouter();
 
-  const query = new URLSearchParams();
+  useEffect(() => {
+    const queryString = typeof window !== 'undefined' ? window.location.search : '';
+    router.replace(`/onboarding/supplier-flow${queryString}`);
+  }, [router]);
 
-  for (const [key, value] of Object.entries(searchParams)) {
-    if (Array.isArray(value)) {
-      for (const entry of value) {
-        query.append(key, entry);
-      }
-      continue;
-    }
-
-    if (typeof value === 'string') {
-      query.append(key, value);
-    }
-  }
-
-  const queryString = query.toString();
-  return queryString ? `?${queryString}` : '';
-}
-
-export default async function OnboardingRedirectPage({ searchParams }: OnboardingRedirectPageProps) {
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  redirect(`/onboarding/supplier-flow${toQueryString(resolvedSearchParams)}`);
+  return (
+    <main className="min-h-[50vh] flex items-center justify-center px-6 text-center">
+      <p className="text-sm text-slate-600">
+        Redirecting to supplier onboarding. If this takes too long, continue to{' '}
+        <Link href="/onboarding/supplier-flow" className="font-semibold text-emerald-700 hover:text-emerald-600">
+          Supplier Flow
+        </Link>
+        .
+      </p>
+    </main>
+  );
 }
