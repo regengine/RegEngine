@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/lib/tenant-context';
-// dynamic imports used in exportSnapshot
+import { generateBrandedPDF, type PDFSection } from '@/lib/pdf-report';
 import {
     Camera,
     Shield,
@@ -250,47 +250,99 @@ export default function SnapshotsPage() {
             if (response.ok) {
                 const data = await response.json();
 
-                // Generate PDF
-                const jsPDF = (await import('jspdf')).default;
-                const autoTable = (await import('jspdf-autotable')).default;
-                const doc = new jsPDF();
+                const isRecord = (value: unknown): value is Record<string, unknown> =>
+                    typeof value === 'object' && value !== null && !Array.isArray(value);
 
-                // Header
-                doc.setFontSize(20);
-                doc.setTextColor(40, 40, 40);
-                doc.text("Compliance Snapshot Artifact", 14, 22);
+                const toText = (value: unknown): string => {
+                    if (value === null || value === undefined) return '-';
+                    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+                    if (typeof value === 'number') return Number.isFinite(value) ? String(value) : '-';
+                    if (typeof value === 'string') return value;
+                    if (Array.isArray(value)) return `${value.length} items`;
+                    if (isRecord(value)) return 'Object';
+                    return String(value);
+                };
 
-                doc.setFontSize(10);
-                doc.setTextColor(100, 100, 100);
-                doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 30);
-                doc.text(`Snapshot ID: ${snapshotId}`, 14, 35);
+                const sections: PDFSection[] = [
+                    { type: 'heading', text: 'Snapshot Metadata', level: 2 },
+                    {
+                        type: 'keyValue',
+                        pairs: [
+                            { key: 'Snapshot Name', value: snapshotName },
+                            { key: 'Snapshot ID', value: snapshotId },
+                            { key: 'Tenant ID', value: tenantId },
+                            {
+                                key: 'Export Timestamp',
+                                value: data?.export_date ? String(data.export_date) : new Date().toISOString(),
+                            },
+                            {
+                                key: 'Content Hash',
+                                value: data?.content_hash ? String(data.content_hash) : 'N/A',
+                            },
+                            {
+                                key: 'Integrity Verified',
+                                value: data?.integrity_verified ? 'Yes' : 'No',
+                                status: data?.integrity_verified ? 'success' : 'danger',
+                            },
+                        ],
+                    },
+                ];
 
-                // Metadata Table
-                autoTable(doc, {
-                    startY: 45,
-                    head: [['Field', 'Value']],
-                    body: [
-                        ['Snapshot Name', snapshotName],
-                        ['Tenant ID', tenantId],
-                        ['Export Timestamp', data.export_date],
-                        ['Content Hash', data.content_hash || 'N/A'],
-                        ['Verified', data.integrity_verified ? 'Yes' : 'No']
-                    ],
-                    theme: 'grid',
-                    headStyles: { fillColor: [75, 0, 130] } // Purple
+                if (isRecord(data)) {
+                    const primitivePairs = Object.entries(data)
+                        .filter(([, value]) => ['string', 'number', 'boolean'].includes(typeof value))
+                        .slice(0, 12)
+                        .map(([key, value]) => ({
+                            key: key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                            value: toText(value),
+                        }));
+
+                    if (primitivePairs.length > 0) {
+                        sections.push({ type: 'divider' });
+                        sections.push({ type: 'heading', text: 'Export Fields', level: 2 });
+                        sections.push({ type: 'keyValue', pairs: primitivePairs });
+                    }
+
+                    const arrayEntries = Object.entries(data).filter(([, value]) => Array.isArray(value));
+                    arrayEntries.slice(0, 2).forEach(([key, value]) => {
+                        const rows = (value as unknown[]).filter(isRecord);
+                        if (rows.length === 0) return;
+
+                        const columnSet = new Set<string>();
+                        rows.slice(0, 40).forEach((row) => {
+                            Object.keys(row).forEach((column) => columnSet.add(column));
+                        });
+                        const headers = Array.from(columnSet).slice(0, 6);
+                        if (headers.length === 0) return;
+
+                        sections.push({ type: 'divider' });
+                        sections.push({
+                            type: 'heading',
+                            text: key.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                            level: 2,
+                        });
+                        sections.push({
+                            type: 'table',
+                            headers: headers.map((header) =>
+                                header.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+                            ),
+                            rows: rows.slice(0, 40).map((row) => headers.map((header) => toText(row[header]))),
+                        });
+                    });
+                }
+
+                generateBrandedPDF({
+                    title: 'Compliance Snapshot Artifact',
+                    subtitle: snapshotName,
+                    reportType: 'RegEngine Compliance Snapshots',
+                    sections,
+                    footer: {
+                        left: 'Confidential',
+                        right: 'regengine.co',
+                        legalLine: 'Compliance Snapshot Artifact',
+                    },
+                    filename: `compliance-snapshot-${snapshotName.replace(/\s+/g, '-')}`,
                 });
-
-                // Content Dump
-                doc.setFontSize(12);
-                doc.text("Snapshot Data Content", 14, (doc as any).lastAutoTable.finalY + 15);
-
-                doc.setFontSize(8);
-                const contentStr = JSON.stringify(data, null, 2);
-                const splitText = doc.splitTextToSize(contentStr, 180);
-                doc.text(splitText, 14, (doc as any).lastAutoTable.finalY + 25);
-
-                // Save
-                doc.save(`compliance-snapshot-${snapshotName.replace(/\s+/g, '-')}.pdf`);
             }
         } catch (error) {
             console.error('Failed to export snapshot:', error);

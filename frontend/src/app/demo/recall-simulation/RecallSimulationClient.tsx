@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { generateBrandedPDF, type PDFSection } from "@/lib/pdf-report";
 
 type Scenario = {
   id: string;
@@ -72,6 +73,73 @@ type SimulationResult = {
     time_reduction_percent: number;
   };
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toDisplayValue(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "-";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return `${value.length} items`;
+  if (isRecord(value)) return "Object";
+  return String(value);
+}
+
+function toTitleCase(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function buildObjectTableSections(data: Record<string, unknown>): PDFSection[] {
+  const sections: PDFSection[] = [];
+  const entries = Object.entries(data);
+
+  const primitivePairs = entries
+    .filter(([, value]) => ["string", "number", "boolean"].includes(typeof value))
+    .slice(0, 8)
+    .map(([key, value]) => ({ key: toTitleCase(key), value: toDisplayValue(value) }));
+
+  if (primitivePairs.length > 0) {
+    sections.push({ type: "divider" });
+    sections.push({ type: "heading", text: "Export Metadata", level: 2 });
+    sections.push({ type: "keyValue", pairs: primitivePairs });
+  }
+
+  entries
+    .filter(([, value]) => Array.isArray(value))
+    .slice(0, 2)
+    .forEach(([key, value]) => {
+      const arrayValue = value as unknown[];
+      const objectRows = arrayValue.filter(isRecord);
+      if (objectRows.length === 0) return;
+
+      const columnSet = new Set<string>();
+      objectRows.slice(0, 30).forEach((row) => {
+        Object.keys(row).forEach((column) => columnSet.add(column));
+      });
+
+      const headers = Array.from(columnSet).slice(0, 6);
+      if (headers.length === 0) return;
+
+      const rows = objectRows.slice(0, 30).map((row) =>
+        headers.map((header) => toDisplayValue(row[header])),
+      );
+
+      sections.push({ type: "divider" });
+      sections.push({ type: "heading", text: toTitleCase(key), level: 2 });
+      sections.push({
+        type: "table",
+        headers: headers.map((header) => toTitleCase(header)),
+        rows,
+      });
+    });
+
+  return sections;
+}
 
 const FALLBACK_SCENARIOS: Scenario[] = [
   {
@@ -228,17 +296,109 @@ export default function RecallSimulationClient() {
         throw new Error("Unable to export simulation report");
       }
 
-      const blob = new Blob([JSON.stringify(await response.json(), null, 2)], {
-        type: "application/json",
+      const exportData: unknown = await response.json();
+
+      const sections: PDFSection[] = [
+        { type: "heading", text: "Simulation Summary", level: 2 },
+        {
+          type: "keyValue",
+          pairs: [
+            { key: "Simulation ID", value: result.id },
+            { key: "Scenario", value: result.metrics.scenario },
+            { key: "Contaminant", value: result.metrics.contaminant },
+            { key: "Created At", value: new Date(result.created_at).toLocaleString() },
+            { key: "Total Lots", value: String(result.metrics.total_lots_in_system) },
+            { key: "Affected Lots", value: String(result.metrics.affected_lots), status: "danger" },
+            { key: "Affected Locations", value: String(result.metrics.affected_locations), status: "warning" },
+            { key: "States Affected", value: String(result.metrics.states_affected), status: "warning" },
+            {
+              key: "Time Reduction",
+              value: `${result.metrics.time_reduction_percent}%`,
+              status: result.metrics.time_reduction_percent >= 50 ? "success" : "warning",
+            },
+          ],
+        },
+        { type: "divider" },
+        { type: "heading", text: "Response Performance", level: 2 },
+        {
+          type: "keyValue",
+          pairs: [
+            {
+              key: "Without RegEngine",
+              value: `${result.metrics.without_regengine.response_time_hours} hours`,
+              status: "danger",
+            },
+            {
+              key: "With RegEngine",
+              value: `${result.metrics.with_regengine.response_time_minutes} minutes`,
+              status: "success",
+            },
+            {
+              key: "KDE Completeness (Without)",
+              value: `${Math.round(result.metrics.without_regengine.kde_completeness * 100)}%`,
+              status: "warning",
+            },
+            {
+              key: "KDE Completeness (With)",
+              value: `${Math.round(result.metrics.with_regengine.kde_completeness * 100)}%`,
+              status: "success",
+            },
+            {
+              key: "Hash Verified",
+              value: result.metrics.with_regengine.hash_verified ? "Yes" : "No",
+              status: result.metrics.with_regengine.hash_verified ? "success" : "danger",
+            },
+          ],
+        },
+      ];
+
+      if (graphNodes.length > 0) {
+        sections.push({ type: "divider" });
+        sections.push({ type: "heading", text: "Impact Graph Nodes", level: 2 });
+        sections.push({
+          type: "table",
+          headers: ["Node", "Type", "Affected", "Lots"],
+          rows: graphNodes.map((node) => [
+            node.name,
+            node.type,
+            node.affected ? "Yes" : "No",
+            node.lot_count !== undefined ? String(node.lot_count) : "-",
+          ]),
+        });
+      }
+
+      if (timeline.length > 0) {
+        sections.push({ type: "divider" });
+        sections.push({ type: "heading", text: "Timeline Events", level: 2 });
+        sections.push({
+          type: "table",
+          headers: ["Timestamp", "Event", "Location", "Status"],
+          rows: timeline.slice(0, 80).map((event) => [
+            new Date(event.timestamp).toLocaleString(),
+            event.event,
+            event.location || "-",
+            event.status || "-",
+          ]),
+        });
+      }
+
+      if (isRecord(exportData)) {
+        const objectSections = buildObjectTableSections(exportData);
+        sections.push(...objectSections);
+      }
+
+      generateBrandedPDF({
+        title: "Recall Simulation Results",
+        subtitle: `Simulation ID: ${result.id}`,
+        reportType: "FDA FSMA 204 - Recall Readiness",
+        sections,
+        footer: {
+          left: "Confidential",
+          right: "regengine.co",
+          legalLine: "FDA FSMA 204 - 21 CFR Part 1 Subpart S",
+        },
+        filename: `recall-simulation-${result.id}`,
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `recall-simulation-${result.id}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     } catch (exportError: unknown) {
       const message = exportError instanceof Error ? exportError.message : "Export failed";
       setError(message);
