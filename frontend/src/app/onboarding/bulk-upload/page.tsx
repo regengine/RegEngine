@@ -4,6 +4,7 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import type {
   SupplierBulkUploadCommitResponse,
   SupplierBulkUploadParseResponse,
@@ -51,6 +52,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function BulkUploadPage() {
+  const { isAuthenticated } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,10 @@ export default function BulkUploadPage() {
   };
 
   const onParseAndValidate = async () => {
+    if (!isAuthenticated) {
+      setError('Not authenticated. Sign in and try again.');
+      return;
+    }
     if (!file) {
       setError('Choose a file before uploading.');
       return;
@@ -100,6 +106,10 @@ export default function BulkUploadPage() {
   };
 
   const onCommit = async () => {
+    if (!isAuthenticated) {
+      setError('Not authenticated. Sign in and try again.');
+      return;
+    }
     if (!parseResult?.session_id) {
       return;
     }
@@ -118,6 +128,10 @@ export default function BulkUploadPage() {
   };
 
   const onRefreshStatus = async () => {
+    if (!isAuthenticated) {
+      setError('Not authenticated. Sign in and try again.');
+      return;
+    }
     if (!parseResult?.session_id) {
       return;
     }
@@ -134,6 +148,10 @@ export default function BulkUploadPage() {
   };
 
   const onDownloadTemplate = async (format: 'csv' | 'xlsx') => {
+    if (!isAuthenticated) {
+      setError('Not authenticated. Sign in and try again.');
+      return;
+    }
     setIsBusy(true);
     setError(null);
     try {
@@ -167,11 +185,17 @@ export default function BulkUploadPage() {
         </div>
 
         <div className="rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 shadow-sm">
+          {!isAuthenticated && (
+            <p className="mb-3 rounded-md border border-[var(--re-warning)] bg-[var(--re-warning-muted)] p-2 text-sm text-[var(--re-warning)]">
+              You must be signed in to use bulk upload. <Link href="/login?next=/onboarding/bulk-upload" className="underline">Sign in</Link>.
+            </p>
+          )}
+
           <div className="mb-3 flex flex-wrap gap-2">
             <button
               onClick={() => onDownloadTemplate('csv')}
               className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-2 text-sm font-medium text-[var(--re-text-secondary)] hover:opacity-90"
-              disabled={isBusy}
+              disabled={isBusy || !isAuthenticated}
               type="button"
             >
               Download CSV Template
@@ -179,7 +203,7 @@ export default function BulkUploadPage() {
             <button
               onClick={() => onDownloadTemplate('xlsx')}
               className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-3 py-2 text-sm font-medium text-[var(--re-text-secondary)] hover:opacity-90"
-              disabled={isBusy}
+              disabled={isBusy || !isAuthenticated}
               type="button"
             >
               Download XLSX Template
@@ -196,7 +220,7 @@ export default function BulkUploadPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               onClick={onParseAndValidate}
-              disabled={!file || isBusy}
+              disabled={!file || isBusy || !isAuthenticated}
               type="button"
               className="rounded-md bg-[var(--re-brand)] px-4 py-2 text-sm font-semibold text-[var(--re-surface-base)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -205,7 +229,7 @@ export default function BulkUploadPage() {
 
             <button
               onClick={onCommit}
-              disabled={!canCommit || isBusy}
+              disabled={!canCommit || isBusy || !isAuthenticated}
               type="button"
               className="rounded-md bg-[var(--re-info)] px-4 py-2 text-sm font-semibold text-[var(--re-surface-base)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -214,7 +238,7 @@ export default function BulkUploadPage() {
 
             <button
               onClick={onRefreshStatus}
-              disabled={!parseResult?.session_id || isBusy}
+              disabled={!parseResult?.session_id || isBusy || !isAuthenticated}
               type="button"
               className="rounded-md border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-4 py-2 text-sm font-medium text-[var(--re-text-secondary)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
