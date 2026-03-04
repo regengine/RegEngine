@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 type OnboardingRedirectPageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 function toQueryString(searchParams?: Record<string, string | string[] | undefined>): string {
@@ -26,6 +26,7 @@ function toQueryString(searchParams?: Record<string, string | string[] | undefin
   return queryString ? `?${queryString}` : '';
 }
 
-export default function OnboardingRedirectPage({ searchParams }: OnboardingRedirectPageProps) {
-  redirect(`/onboarding/supplier-flow${toQueryString(searchParams)}`);
+export default async function OnboardingRedirectPage({ searchParams }: OnboardingRedirectPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  redirect(`/onboarding/supplier-flow${toQueryString(resolvedSearchParams)}`);
 }
