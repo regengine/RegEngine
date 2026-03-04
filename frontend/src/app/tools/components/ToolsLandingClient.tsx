@@ -4,7 +4,6 @@
 import { motion } from 'framer-motion';
 import {
     Activity,
-    Shield,
     ClipboardList,
     Truck,
     Timer,
@@ -15,9 +14,7 @@ import {
     Zap,
     TrendingUp,
     Leaf,
-    LayoutDashboard,
-    Users,
-    FileText
+    LayoutDashboard
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
@@ -113,36 +110,6 @@ const FSMA_JOURNEY = [
         tag: 'Strategic',
         isFeatured: true,
         status: 'featured'
-    }
-];
-
-const FINANCE_TOOLS = [
-    {
-        id: 'bias-checker',
-        title: 'AI Model Bias Checker',
-        description: 'Compute Disparate Impact Ratios (DIR) and 80% Rule compliance for credit models using our demographic parity engine.',
-        icon: Users,
-        color: 'var(--re-info)',
-        tag: 'Finance',
-        status: 'beta'
-    },
-    {
-        id: 'notice-validator',
-        title: 'Notice Validator (A-F)',
-        description: 'Paste your adverse action notice text to receive a compliance grade based on 11 critical regulatory requirements.',
-        icon: FileText,
-        color: 'var(--re-brand)',
-        tag: 'Finance',
-        status: 'standard'
-    },
-    {
-        id: 'obligation-scanner',
-        title: 'Regulatory Obligation Scanner',
-        description: 'Instantly map your financial product features to applicable US regulations across ECOA, TILA, and FCRA.',
-        icon: Shield,
-        color: 'var(--re-brand)',
-        tag: 'Finance',
-        status: 'standard'
     }
 ];
 
@@ -276,42 +243,8 @@ export function ToolsLandingClient() {
                     </div>
                 </div>
 
-                {/* Grid Sections */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
-                    {/* Finance Section */}
-                    <div className="space-y-8">
-                        <div className="flex items-center gap-4 mb-2">
-                            <div className="h-10 w-10 rounded-xl bg-[var(--re-info)] flex items-center justify-center text-white shadow-lg">
-                                <Users className="h-5 w-5" />
-                            </div>
-                            <h2 className="text-2xl re-heading-industrial !italic !tracking-tighter">Finance & Lending</h2>
-                        </div>
-                        <div className="grid gap-4">
-                            {FINANCE_TOOLS.map((tool) => (
-                                <Link key={tool.id} href={`/tools/${tool.id}`}>
-                                    <div className="p-6 border border-[var(--re-border-default)] bg-[var(--re-surface-card)] rounded-2xl hover:border-[var(--re-info)] transition-all group">
-                                        <div className="flex justify-between items-start mb-6">
-                                            <div className={`p-4 rounded-2xl bg-[var(--re-surface-elevated)] shadow-xl border border-[var(--re-surface-border)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-                                                <tool.icon className="h-6 w-6" style={{ color: tool.color }} />
-                                            </div>
-                                            <div className="flex flex-col items-end gap-2">
-                                                {tool.status === 'beta' && (
-                                                    <Badge className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)] text-white text-[9px] font-black uppercase tracking-widest px-1.5 py-0 h-4 rounded-full">BETA</Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold group-hover:text-[var(--re-info)] transition-colors">{tool.title}</h3>
-                                            <p className="text-xs text-[var(--re-text-tertiary)] font-medium mt-1">{tool.description}</p>
-                                        </div>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Strategic Section */}
-                    <div className="space-y-8">
+                {/* Strategic Section */}
+                <div className="space-y-8 max-w-3xl">
                         <div className="flex items-center gap-4 mb-2">
                             <div className="h-10 w-10 rounded-xl bg-[var(--re-linkage)] flex items-center justify-center text-white shadow-lg">
                                 <TrendingUp className="h-5 w-5" />
@@ -336,7 +269,6 @@ export function ToolsLandingClient() {
                             ))}
                         </div>
                     </div>
-                </div>
 
                 {/* Footer CTA */}
                 <motion.div
