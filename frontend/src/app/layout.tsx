@@ -41,9 +41,15 @@ export default function RootLayout({
         className="min-h-screen flex flex-col bg-background text-foreground"
         suppressHydrationWarning
       >
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-[var(--re-brand)] focus:text-[var(--re-surface-base)] focus:text-sm focus:font-semibold focus:outline-none"
+        >
+          Skip to content
+        </a>
         <Providers>
           <MarketingHeader />
-          <main className="flex-grow">
+          <main id="main-content" aria-label="Page content" className="flex-grow">
             {children}
           </main>
           <MarketingFooter />

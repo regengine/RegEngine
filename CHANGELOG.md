@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.7.0 — Phase 4 Accessibility Polish (WCAG 2.1 AA)
+
+- **Keyboard Accessibility (WS2/WS3/WS5)**
+  - Made the marketing Free Tools dropdown fully keyboard operable with button trigger semantics, menu roles, Escape/arrow navigation, and click-outside close behavior.
+  - Added keyboard-selectable pricing tier cards using `radiogroup`/`radio` semantics and Enter/Space support.
+  - Added tab/tabpanel semantics and arrow-key navigation for developer example and language selectors.
+- **Landmarks & Navigation (WS1)**
+  - Added a skip-to-content link and `main` target ID in the root layout.
+  - Added landmark labels for navigation/footer regions to improve screen reader orientation.
+- **Reduced Motion (WS4)**
+  - Added global `prefers-reduced-motion` CSS overrides to disable non-essential animation and transitions.
+  - Enabled Framer Motion reduced-motion behavior using `MotionConfig reducedMotion="user"`.
+- **Touch Targets & Semantic Polish (WS6)**
+  - Increased shared button minimum heights and enforced a 44x44 mobile menu target.
+  - Improved homepage heading structure and hid decorative emoji icons from screen readers.
+- **Validation**
+  - Verified implementation with `npm run lint` and `npm run build`.
+
 ## v0.6.0 — Phase 3 Onboarding UX Redesign
 
 - **Onboarding Hub (WS1)**

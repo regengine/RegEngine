@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
@@ -11,31 +11,100 @@ export function MarketingHeader() {
     const pathname = usePathname();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [toolsOpen, setToolsOpen] = useState(false);
-    const [closeTimeout, setCloseTimeout] = useState<NodeJS.Timeout | null>(null);
+    const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const toolsWrapperRef = useRef<HTMLDivElement | null>(null);
+    const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
     const { user } = useAuth();
-
-    // Hide global header on dashboard, app, and standalone mobile routes
-    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding')) {
-        return null;
-    }
+    const hideHeader = pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding');
 
     const handleToolsEnter = () => {
-        if (closeTimeout) {
-            clearTimeout(closeTimeout);
-            setCloseTimeout(null);
+        if (closeTimeoutRef.current) {
+            clearTimeout(closeTimeoutRef.current);
+            closeTimeoutRef.current = null;
         }
         setToolsOpen(true);
     };
 
     const handleToolsLeave = () => {
-        const timeout = setTimeout(() => {
+        if (closeTimeoutRef.current) {
+            clearTimeout(closeTimeoutRef.current);
+        }
+
+        closeTimeoutRef.current = setTimeout(() => {
             setToolsOpen(false);
         }, 500); // Increased delay for slow movement
-        setCloseTimeout(timeout);
     };
+
+    const focusFirstToolsItem = () => {
+        requestAnimationFrame(() => {
+            const firstItem = toolsWrapperRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+            firstItem?.focus();
+        });
+    };
+
+    const handleToolsKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Escape') {
+            setToolsOpen(false);
+            toolsButtonRef.current?.focus();
+            return;
+        }
+
+        if (!toolsOpen || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) {
+            return;
+        }
+
+        const menuItems = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+        if (menuItems.length === 0) {
+            return;
+        }
+
+        e.preventDefault();
+        const activeIndex = menuItems.findIndex((item) => item === document.activeElement);
+
+        if (activeIndex === -1) {
+            const fallbackIndex = e.key === 'ArrowDown' ? 0 : menuItems.length - 1;
+            menuItems[fallbackIndex]?.focus();
+            return;
+        }
+
+        const nextIndex =
+            e.key === 'ArrowDown'
+                ? (activeIndex + 1) % menuItems.length
+                : (activeIndex - 1 + menuItems.length) % menuItems.length;
+        menuItems[nextIndex]?.focus();
+    };
+
+    useEffect(() => {
+        if (hideHeader) {
+            return;
+        }
+
+        const handleOutsideInteraction = (event: MouseEvent | TouchEvent) => {
+            const target = event.target as Node;
+            if (!toolsWrapperRef.current?.contains(target)) {
+                setToolsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleOutsideInteraction);
+        document.addEventListener('touchstart', handleOutsideInteraction);
+
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideInteraction);
+            document.removeEventListener('touchstart', handleOutsideInteraction);
+            if (closeTimeoutRef.current) {
+                clearTimeout(closeTimeoutRef.current);
+            }
+        };
+    }, [hideHeader]);
+
+    if (hideHeader) {
+        return null;
+    }
 
     return (
         <nav
+            aria-label="Main navigation"
             style={{
                 position: "sticky",
                 top: 0,
@@ -91,11 +160,34 @@ export function MarketingHeader() {
                     ))}
 
                     {/* Free Tools Dropdown */}
-                    <div style={{ position: "relative" }}
+                    <div
+                        ref={toolsWrapperRef}
+                        style={{ position: "relative" }}
                         onMouseEnter={handleToolsEnter}
                         onMouseLeave={handleToolsLeave}
+                        onKeyDown={handleToolsKeyDown}
                     >
-                        <span
+                        <button
+                            ref={toolsButtonRef}
+                            type="button"
+                            aria-expanded={toolsOpen}
+                            aria-haspopup="true"
+                            aria-controls="tools-dropdown"
+                            onClick={() => setToolsOpen((open) => !open)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                    setToolsOpen(false);
+                                    return;
+                                }
+
+                                if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    if (!toolsOpen) {
+                                        setToolsOpen(true);
+                                    }
+                                    focusFirstToolsItem();
+                                }
+                            }}
                             style={{
                                 fontSize: "13px",
                                 fontWeight: 600,
@@ -107,10 +199,11 @@ export function MarketingHeader() {
                                 transition: "all 0.2s",
                                 cursor: "pointer",
                                 display: "inline-block",
+                                border: "none",
                             }}
                         >
                             Free Tools ▾
-                        </span>
+                        </button>
                         <div
                             data-tools-dropdown
                             style={{
@@ -130,6 +223,10 @@ export function MarketingHeader() {
                             }}
                         >
                             <div
+                                id="tools-dropdown"
+                                role="menu"
+                                aria-label="Free compliance tools"
+                                aria-hidden={!toolsOpen}
                                 style={{
                                     background: "rgba(15,20,30,0.98)",
                                     border: "1px solid rgba(255,255,255,0.08)",
@@ -144,11 +241,17 @@ export function MarketingHeader() {
                                     Featured Compliance Tools
                                 </div>
                                 {MARKETING_FREE_TOOLS.map((tool) => (
-                                    <Link key={tool.href} href={tool.href} className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                                    <Link
+                                        key={tool.href}
+                                        href={tool.href}
+                                        role="menuitem"
+                                        tabIndex={toolsOpen ? 0 : -1}
+                                        className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
+                                        onClick={() => setToolsOpen(false)}
                                         onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                                     >
-                                        <span className="text-sm">{tool.emoji}</span>
+                                        <span aria-hidden="true" className="text-sm">{tool.emoji}</span>
                                         <div>
                                             <div className="text-[13px] font-medium text-re-text-primary">{tool.label}</div>
                                             <div className="text-[11px] text-re-text-muted">{tool.desc}</div>
@@ -156,11 +259,16 @@ export function MarketingHeader() {
                                     </Link>
                                 ))}
                                 <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "6px 12px" }} />
-                                <Link href="/tools" className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
+                                <Link
+                                    href="/tools"
+                                    role="menuitem"
+                                    tabIndex={toolsOpen ? 0 : -1}
+                                    className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
+                                    onClick={() => setToolsOpen(false)}
                                     onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                     onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                                 >
-                                    <span className="text-sm">🧰</span>
+                                    <span aria-hidden="true" className="text-sm">🧰</span>
                                     <div>
                                         <div className="text-[13px] font-semibold text-re-brand">View All Tools →</div>
                                         <div className="text-[11px] text-re-text-muted">Explore the compliance toolkit</div>
@@ -236,6 +344,8 @@ export function MarketingHeader() {
                         color: "var(--re-text-primary)",
                         fontSize: "18px",
                         lineHeight: 1,
+                        minWidth: "44px",
+                        minHeight: "44px",
                     }}
                 >
                     {mobileOpen ? "✕" : "☰"}
@@ -302,7 +412,7 @@ export function MarketingHeader() {
                                     borderBottom: "1px solid rgba(255,255,255,0.04)",
                                 }}
                             >
-                                <span style={{ fontSize: "16px" }}>{tool.emoji}</span>
+                                <span aria-hidden="true" style={{ fontSize: "16px" }}>{tool.emoji}</span>
                                 <div>
                                     <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--re-text-primary)" }}>{tool.label}</div>
                                     <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>{tool.desc}</div>

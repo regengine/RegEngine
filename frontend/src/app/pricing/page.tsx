@@ -214,9 +214,14 @@ export default function PricingPage() {
                 </p>
 
                 {/* Billing Toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                <div
+                    role="group"
+                    aria-label="Billing period"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}
+                >
                     <button
                         type="button"
+                        aria-pressed={!annual}
                         onClick={() => setAnnual(false)}
                         style={{
                             background: 'none',
@@ -230,9 +235,10 @@ export default function PricingPage() {
                     >
                         Monthly
                     </button>
-                    <Switch checked={annual} onCheckedChange={setAnnual} />
+                    <Switch aria-label="Toggle annual billing" checked={annual} onCheckedChange={setAnnual} />
                     <button
                         type="button"
+                        aria-pressed={annual}
                         onClick={() => setAnnual(true)}
                         style={{
                             background: 'none',
@@ -273,6 +279,8 @@ export default function PricingPage() {
                 }}
             >
                 <div
+                    role="radiogroup"
+                    aria-label="Select pricing tier"
                     style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
@@ -283,11 +291,22 @@ export default function PricingPage() {
                         const Icon = tier.icon;
                         const price = annual ? tier.annualPrice : tier.monthlyPrice;
                         const isSelected = selectedPlan === tier.id;
+                        const planPriceLabel = price !== null ? `$${price} per month` : 'custom pricing';
 
                         return (
                             <div
                                 key={tier.id}
+                                role="radio"
+                                aria-checked={isSelected}
+                                aria-label={`${tier.name} plan, ${planPriceLabel}`}
+                                tabIndex={0}
                                 onClick={() => setSelectedPlan(tier.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setSelectedPlan(tier.id);
+                                    }
+                                }}
                                 style={{
                                     background: T.surface,
                                     border: isSelected
