@@ -621,6 +621,9 @@ class APIClient {
     const { data } = await this.adminClient.post<SupplierBulkUploadParseResponse>(
       '/v1/supplier/bulk-upload/parse',
       formData,
+      {
+        timeout: 180000,
+      },
     );
     return data;
   }
@@ -629,7 +632,10 @@ class APIClient {
     const { data } = await this.adminClient.post<SupplierBulkUploadValidateResponse>(
       '/v1/supplier/bulk-upload/validate',
       null,
-      { params: { session_id: sessionId } },
+      {
+        params: { session_id: sessionId },
+        timeout: 120000,
+      },
     );
     return data;
   }
@@ -638,7 +644,10 @@ class APIClient {
     const { data } = await this.adminClient.post<SupplierBulkUploadCommitResponse>(
       '/v1/supplier/bulk-upload/commit',
       null,
-      { params: { session_id: sessionId } },
+      {
+        params: { session_id: sessionId },
+        timeout: 180000,
+      },
     );
     return data;
   }
@@ -656,6 +665,7 @@ class APIClient {
     const response = await this.adminClient.get('/v1/supplier/bulk-upload/template', {
       params: { format },
       responseType: 'blob',
+      timeout: 60000,
     });
 
     const disposition = response.headers['content-disposition'] as string | undefined;

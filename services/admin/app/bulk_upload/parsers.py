@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import re
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
@@ -15,7 +16,9 @@ READ_CHUNK_BYTES = 1024 * 1024
 
 
 def _max_upload_bytes() -> int:
-    raw_value = os.getenv("SUPPLIER_BULK_UPLOAD_MAX_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)).strip()
+    raw_value = os.getenv(
+        "SUPPLIER_BULK_UPLOAD_MAX_BYTES", str(DEFAULT_MAX_UPLOAD_BYTES)
+    ).strip()
     try:
         parsed = int(raw_value)
     except ValueError:
@@ -25,8 +28,222 @@ def _max_upload_bytes() -> int:
     return parsed
 
 
+WIDE_TABLE_ATTRIBUTE_MARKERS = {
+    "storage_capacity",
+    "pallet_positions",
+    "temp_range",
+    "loading_dock",
+    "special_controls",
+    "bonded_facility",
+    "usda_inspection",
+    "ppq_inspection",
+    "overweight",
+    "rail_access",
+    "distance_from_port",
+    "available_office_space",
+    "contact",
+    "additional_service",
+}
+
+PHONE_RE = re.compile(r"\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}")
+STATE_ZIP_RE = re.compile(r"\b([A-Z]{2})\s*(\d{5}(?:-\d{4})?)\b")
+FULL_ADDRESS_RE = re.compile(
+    r"(?P<street>\d[^,\n]+?)\s*,\s*(?P<city>[A-Za-z .'-]+?)\s*,\s*(?P<state>[A-Z]{2})\s*(?P<postal>\d{5}(?:-\d{4})?)"
+)
+
+
 def _normalize_key(value: str) -> str:
-    return value.strip().lower().replace(" ", "_")
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+    return normalized.strip("_")
+
+
+def _clean_multiline_text(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).replace("\r", "\n")
+    lines = []
+    for raw_line in text.split("\n"):
+        line = re.sub(r"\s+", " ", raw_line).strip(" ,;\t")
+        if line:
+            lines.append(line)
+    return "\n".join(lines)
+
+
+def _extract_address_parts(text: str) -> tuple[str, str, str, str]:
+    blob = _clean_multiline_text(text)
+    if not blob:
+        return "", "", "", ""
+
+    one_line = blob.replace("\n", " ")
+    address_match = FULL_ADDRESS_RE.search(one_line)
+    if address_match:
+        return (
+            address_match.group("street").strip(),
+            address_match.group("city").strip(),
+            address_match.group("state").strip().upper(),
+            address_match.group("postal").strip(),
+        )
+
+    street = ""
+    city = ""
+    state = ""
+    postal_code = ""
+
+    lines = [line for line in blob.split("\n") if line]
+    for index, line in enumerate(lines):
+        upper_line = line.upper()
+        state_zip_match = STATE_ZIP_RE.search(upper_line)
+        if state_zip_match:
+            state = state_zip_match.group(1)
+            postal_code = state_zip_match.group(2)
+            city_part = line[: state_zip_match.start()].strip(" ,")
+            if "," in city_part:
+                city = city_part.split(",")[-1].strip()
+            else:
+                city = city_part.strip()
+            if not street and index > 0:
+                previous_line = lines[index - 1]
+                if not PHONE_RE.search(previous_line):
+                    street = previous_line
+            break
+
+    if not street:
+        for line in lines:
+            if PHONE_RE.search(line):
+                continue
+            lowered = line.lower()
+            if lowered.startswith("www") or lowered.startswith("http"):
+                continue
+            if re.search(r"\d", line):
+                street = line
+                break
+
+    return street, city, state, postal_code
+
+
+def _infer_roles_from_text(text: str) -> list[str]:
+    lowered = text.lower()
+    roles: list[str] = []
+    if any(token in lowered for token in ["grow", "harvest", "farm"]):
+        roles.append("Grower")
+    if any(token in lowered for token in ["pack", "re-pack", "bagging"]):
+        roles.append("Packer")
+    if any(
+        token in lowered for token in ["process", "blast freez", "cooling", "transform"]
+    ):
+        roles.append("Processor")
+    if any(
+        token in lowered
+        for token in [
+            "drayage",
+            "warehouse",
+            "distribution",
+            "shipping",
+            "cross docking",
+            "trans-loading",
+        ]
+    ):
+        roles.append("Distributor")
+    if any(token in lowered for token in ["import", "customs", "broker"]):
+        roles.append("Importer")
+    return sorted(set(roles))
+
+
+def _extract_matrix_facility(
+    header: Any,
+    attributes: dict[str, str],
+    *,
+    warnings: list[str],
+) -> dict[str, Any] | None:
+    name = _clean_multiline_text(header).replace("\n", " ").strip()
+    if not name:
+        return None
+
+    contact_blob = attributes.get("contact", "")
+    additional_blob = attributes.get("additional_service", "")
+    special_controls_blob = attributes.get("special_controls", "")
+    lookup_blob = "\n".join(
+        [name, contact_blob, additional_blob, special_controls_blob]
+    )
+
+    street, city, state, postal_code = _extract_address_parts(contact_blob)
+    if not (street and city and state and postal_code):
+        street_fallback, city_fallback, state_fallback, postal_fallback = (
+            _extract_address_parts(lookup_blob)
+        )
+        street = street or street_fallback
+        city = city or city_fallback
+        state = state or state_fallback
+        postal_code = postal_code or postal_fallback
+
+    if not (street and city and state and postal_code):
+        warnings.append(
+            f"Skipped facility '{name}' because address fields were not detected"
+        )
+        return None
+
+    return {
+        "name": name,
+        "street": street,
+        "city": city,
+        "state": state,
+        "postal_code": postal_code,
+        "fda_registration_number": None,
+        "roles": _infer_roles_from_text(lookup_blob),
+    }
+
+
+def _parse_pdf_matrix_table(
+    table: list[list[Any]], parsed: dict[str, Any], warnings: list[str]
+) -> int:
+    if not table or len(table) < 3:
+        return 0
+
+    row_labels: list[str] = []
+    for row in table[1:]:
+        if not row:
+            continue
+        label = _normalize_key(str(row[0] or ""))
+        if label:
+            row_labels.append(label)
+
+    marker_hits = sum(
+        1 for label in row_labels if label in WIDE_TABLE_ATTRIBUTE_MARKERS
+    )
+    if marker_hits < 4:
+        return 0
+
+    added = 0
+    seen_names: set[str] = {
+        str(item.get("name") or "").strip().lower()
+        for item in parsed.get("facilities") or []
+    }
+    for column_index, header in enumerate(table[0][1:], start=1):
+        attributes: dict[str, str] = {}
+        for row in table[1:]:
+            if not row:
+                continue
+            label = _normalize_key(str(row[0] or ""))
+            if not label:
+                continue
+            if column_index >= len(row):
+                continue
+            value = _clean_multiline_text(row[column_index])
+            if value:
+                attributes[label] = value
+
+        facility = _extract_matrix_facility(header, attributes, warnings=warnings)
+        if facility is None:
+            continue
+
+        dedupe_key = str(facility.get("name") or "").strip().lower()
+        if not dedupe_key or dedupe_key in seen_names:
+            continue
+        parsed["facilities"].append(facility)
+        seen_names.add(dedupe_key)
+        added += 1
+
+    return added
 
 
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -100,7 +317,9 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
         kde_data[key] = value
 
     return {
-        "facility_name": str(row.get("facility_name") or row.get("location_name") or "").strip(),
+        "facility_name": str(
+            row.get("facility_name") or row.get("location_name") or ""
+        ).strip(),
         "tlc_code": str(row.get("tlc_code") or "").strip(),
         "cte_type": str(cte_type).strip(),
         "event_time": str(event_time).strip() if event_time else None,
@@ -109,7 +328,9 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list[str]) -> None:
+def _classify_row(
+    parsed: dict[str, Any], row: dict[str, Any], *, warnings: list[str]
+) -> None:
     record_type = str(row.get("record_type") or "").strip().lower()
     if record_type in {"facility", "facilities"}:
         parsed["facilities"].append(
@@ -118,8 +339,13 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
                 "street": str(row.get("street") or "").strip(),
                 "city": str(row.get("city") or "").strip(),
                 "state": str(row.get("state") or "").strip(),
-                "postal_code": str(row.get("postal_code") or row.get("zip") or "").strip(),
-                "fda_registration_number": str(row.get("fda_registration_number") or "").strip() or None,
+                "postal_code": str(
+                    row.get("postal_code") or row.get("zip") or ""
+                ).strip(),
+                "fda_registration_number": str(
+                    row.get("fda_registration_number") or ""
+                ).strip()
+                or None,
                 "roles": _parse_list_field(row.get("roles")),
             }
         )
@@ -127,7 +353,9 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
     if record_type in {"ftl", "ftl_scope", "scope"}:
         parsed["ftl_scopes"].append(
             {
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "facility_name": str(
+                    row.get("facility_name") or row.get("name") or ""
+                ).strip(),
                 "category_id": str(row.get("category_id") or "").strip(),
             }
         )
@@ -136,8 +364,11 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
         parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
-                "product_description": str(row.get("product_description") or "").strip() or None,
+                "facility_name": str(
+                    row.get("facility_name") or row.get("name") or ""
+                ).strip(),
+                "product_description": str(row.get("product_description") or "").strip()
+                or None,
                 "status": str(row.get("status") or "active").strip().lower(),
             }
         )
@@ -152,7 +383,9 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
     if row.get("category_id"):
         parsed["ftl_scopes"].append(
             {
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "facility_name": str(
+                    row.get("facility_name") or row.get("name") or ""
+                ).strip(),
                 "category_id": str(row.get("category_id") or "").strip(),
             }
         )
@@ -161,8 +394,11 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
         parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
-                "product_description": str(row.get("product_description") or "").strip() or None,
+                "facility_name": str(
+                    row.get("facility_name") or row.get("name") or ""
+                ).strip(),
+                "product_description": str(row.get("product_description") or "").strip()
+                or None,
                 "status": str(row.get("status") or "active").strip().lower(),
             }
         )
@@ -174,8 +410,13 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
                 "street": str(row.get("street") or "").strip(),
                 "city": str(row.get("city") or "").strip(),
                 "state": str(row.get("state") or "").strip(),
-                "postal_code": str(row.get("postal_code") or row.get("zip") or "").strip(),
-                "fda_registration_number": str(row.get("fda_registration_number") or "").strip() or None,
+                "postal_code": str(
+                    row.get("postal_code") or row.get("zip") or ""
+                ).strip(),
+                "fda_registration_number": str(
+                    row.get("fda_registration_number") or ""
+                ).strip()
+                or None,
                 "roles": _parse_list_field(row.get("roles")),
             }
         )
@@ -184,7 +425,9 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
     warnings.append("Skipped unrecognized row in uploaded dataset")
 
 
-def _parse_csv_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
+def _parse_csv_bytes(
+    content: bytes, parsed: dict[str, Any], warnings: list[str]
+) -> None:
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -198,15 +441,23 @@ def _parse_csv_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
         _classify_row(parsed, normalized_row, warnings=warnings)
 
 
-def _append_non_object_warning(warnings: list[str], section_name: str, index: int) -> None:
-    warnings.append(f"Skipped non-object row in {section_name} section at index {index}")
+def _append_non_object_warning(
+    warnings: list[str], section_name: str, index: int
+) -> None:
+    warnings.append(
+        f"Skipped non-object row in {section_name} section at index {index}"
+    )
 
 
-def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
+def _parse_json_bytes(
+    content: bytes, parsed: dict[str, Any], warnings: list[str]
+) -> None:
     try:
         payload = json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid JSON file: {exc}"
+        ) from exc
 
     if isinstance(payload, dict):
         facilities = payload.get("facilities") or []
@@ -219,26 +470,45 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
                 if not isinstance(row, dict):
                     _append_non_object_warning(warnings, "facilities", index)
                     continue
-                _classify_row(parsed, _normalize_row({**row, "record_type": "facility"}), warnings=warnings)
+                _classify_row(
+                    parsed,
+                    _normalize_row({**row, "record_type": "facility"}),
+                    warnings=warnings,
+                )
         if isinstance(ftl_scopes, list):
             for index, row in enumerate(ftl_scopes, start=1):
                 if not isinstance(row, dict):
                     _append_non_object_warning(warnings, "ftl_scopes", index)
                     continue
-                _classify_row(parsed, _normalize_row({**row, "record_type": "ftl_scope"}), warnings=warnings)
+                _classify_row(
+                    parsed,
+                    _normalize_row({**row, "record_type": "ftl_scope"}),
+                    warnings=warnings,
+                )
         if isinstance(tlcs, list):
             for index, row in enumerate(tlcs, start=1):
                 if not isinstance(row, dict):
                     _append_non_object_warning(warnings, "tlcs", index)
                     continue
-                _classify_row(parsed, _normalize_row({**row, "record_type": "tlc"}), warnings=warnings)
+                _classify_row(
+                    parsed,
+                    _normalize_row({**row, "record_type": "tlc"}),
+                    warnings=warnings,
+                )
         if isinstance(events, list):
             for index, row in enumerate(events, start=1):
                 if not isinstance(row, dict):
                     _append_non_object_warning(warnings, "events", index)
                     continue
-                _classify_row(parsed, _normalize_row({**row, "record_type": "event"}), warnings=warnings)
-        if not any(isinstance(section, list) and section for section in [facilities, ftl_scopes, tlcs, events]):
+                _classify_row(
+                    parsed,
+                    _normalize_row({**row, "record_type": "event"}),
+                    warnings=warnings,
+                )
+        if not any(
+            isinstance(section, list) and section
+            for section in [facilities, ftl_scopes, tlcs, events]
+        ):
             _classify_row(parsed, _normalize_row(payload), warnings=warnings)
         return
 
@@ -253,11 +523,15 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
     raise HTTPException(status_code=400, detail="JSON must be an object or array")
 
 
-def _parse_xlsx_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
+def _parse_xlsx_bytes(
+    content: bytes, parsed: dict[str, Any], warnings: list[str]
+) -> None:
     try:
         from openpyxl import load_workbook
     except Exception as exc:  # pragma: no cover - dependency/env specific
-        raise HTTPException(status_code=503, detail="XLSX parsing unavailable (openpyxl missing)") from exc
+        raise HTTPException(
+            status_code=503, detail="XLSX parsing unavailable (openpyxl missing)"
+        ) from exc
 
     workbook = load_workbook(io.BytesIO(content), data_only=True)
     for sheet in workbook.worksheets:
@@ -283,9 +557,7 @@ def _parse_xlsx_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
             if values is None:
                 continue
             row_data = {
-                header: value
-                for header, value in zip(headers, values)
-                if header
+                header: value for header, value in zip(headers, values) if header
             }
             if not any(str(value or "").strip() for value in row_data.values()):
                 continue
@@ -294,11 +566,15 @@ def _parse_xlsx_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
             _classify_row(parsed, row_data, warnings=warnings)
 
 
-def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
+def _parse_pdf_bytes(
+    content: bytes, parsed: dict[str, Any], warnings: list[str]
+) -> None:
     try:
         import pdfplumber
     except Exception as exc:  # pragma: no cover - dependency/env specific
-        raise HTTPException(status_code=503, detail="PDF parsing unavailable (pdfplumber missing)") from exc
+        raise HTTPException(
+            status_code=503, detail="PDF parsing unavailable (pdfplumber missing)"
+        ) from exc
 
     extracted_rows = 0
     with pdfplumber.open(io.BytesIO(content)) as pdf:
@@ -306,6 +582,12 @@ def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
             for table in page.extract_tables() or []:
                 if not table or len(table) < 2:
                     continue
+
+                matrix_rows = _parse_pdf_matrix_table(table, parsed, warnings)
+                if matrix_rows > 0:
+                    extracted_rows += matrix_rows
+                    continue
+
                 headers = [_normalize_key(str(cell or "")) for cell in table[0]]
                 for row_values in table[1:]:
                     row = {
@@ -315,7 +597,7 @@ def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
                     }
                     if not any(str(value or "").strip() for value in row.values()):
                         continue
-                    _classify_row(parsed, row, warnings=warnings)
+                    _classify_row(parsed, _normalize_row(row), warnings=warnings)
                     extracted_rows += 1
 
         if extracted_rows == 0:
@@ -331,7 +613,9 @@ def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
                     pass
 
     if extracted_rows == 0:
-        warnings.append("PDF parsed but no structured rows detected; include tabular data or JSON block")
+        warnings.append(
+            "PDF parsed but no structured rows detected; include tabular data or JSON block"
+        )
 
 
 async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:

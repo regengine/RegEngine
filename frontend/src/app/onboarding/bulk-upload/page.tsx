@@ -11,6 +11,45 @@ import type {
   SupplierBulkUploadValidateResponse,
 } from '@/types/api';
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object') {
+    const candidate = err as {
+      message?: unknown;
+      response?: {
+        data?: unknown;
+      };
+    };
+
+    const payload = candidate.response?.data;
+    if (payload && typeof payload === 'object') {
+      const detail = (payload as { detail?: unknown }).detail;
+      if (typeof detail === 'string' && detail.trim().length > 0) {
+        return detail;
+      }
+      const error = (payload as { error?: unknown }).error;
+      if (typeof error === 'string' && error.trim().length > 0) {
+        return error;
+      }
+    }
+
+    if (typeof candidate.message === 'string') {
+      if (candidate.message.toLowerCase().includes('network error')) {
+        return 'Network error while reaching bulk upload service. Please retry with CSV/XLSX template or re-login.';
+      }
+      if (candidate.message.toLowerCase().includes('timeout')) {
+        return 'Bulk upload request timed out. Try a smaller file or CSV/XLSX template.';
+      }
+      if (candidate.message.trim().length > 0) {
+        return candidate.message;
+      }
+    }
+  }
+
+  return fallback;
+}
+
 export default function BulkUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -36,6 +75,10 @@ export default function BulkUploadPage() {
       setError('Choose a file before uploading.');
       return;
     }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('Uploaded file exceeds max size of 10 MB.');
+      return;
+    }
     setIsBusy(true);
     setError(null);
     setParseResult(null);
@@ -50,12 +93,7 @@ export default function BulkUploadPage() {
       const validated = await apiClient.validateSupplierBulkUpload(parsed.session_id);
       setValidateResult(validated);
     } catch (err: unknown) {
-      const fallback = 'Upload failed. Verify file format and try again.';
-      if (err && typeof err === 'object' && 'message' in err) {
-        setError(String((err as { message: unknown }).message || fallback));
-      } else {
-        setError(fallback);
-      }
+      setError(getErrorMessage(err, 'Upload failed. Verify file format and try again.'));
     } finally {
       setIsBusy(false);
     }
@@ -73,12 +111,7 @@ export default function BulkUploadPage() {
       const status = await apiClient.getSupplierBulkUploadStatus(parseResult.session_id);
       setStatusResult(status);
     } catch (err: unknown) {
-      const fallback = 'Commit failed. Resolve validation issues and retry.';
-      if (err && typeof err === 'object' && 'message' in err) {
-        setError(String((err as { message: unknown }).message || fallback));
-      } else {
-        setError(fallback);
-      }
+      setError(getErrorMessage(err, 'Commit failed. Resolve validation issues and retry.'));
     } finally {
       setIsBusy(false);
     }
@@ -94,12 +127,7 @@ export default function BulkUploadPage() {
       const status = await apiClient.getSupplierBulkUploadStatus(parseResult.session_id);
       setStatusResult(status);
     } catch (err: unknown) {
-      const fallback = 'Could not refresh status right now.';
-      if (err && typeof err === 'object' && 'message' in err) {
-        setError(String((err as { message: unknown }).message || fallback));
-      } else {
-        setError(fallback);
-      }
+      setError(getErrorMessage(err, 'Could not refresh status right now.'));
     } finally {
       setIsBusy(false);
     }
@@ -117,12 +145,7 @@ export default function BulkUploadPage() {
       anchor.click();
       URL.revokeObjectURL(href);
     } catch (err: unknown) {
-      const fallback = 'Template download failed.';
-      if (err && typeof err === 'object' && 'message' in err) {
-        setError(String((err as { message: unknown }).message || fallback));
-      } else {
-        setError(fallback);
-      }
+      setError(getErrorMessage(err, 'Template download failed.'));
     } finally {
       setIsBusy(false);
     }
