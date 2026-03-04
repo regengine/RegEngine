@@ -1,13 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
     MARKETING_FOOTER_COMPANY_LINKS,
     MARKETING_FOOTER_PRODUCT_LINKS,
     MARKETING_FREE_TOOLS,
 } from '@/components/layout/marketing-nav';
+import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 
 export function MarketingFooter() {
     const pathname = usePathname();
@@ -40,13 +40,7 @@ export function MarketingFooter() {
             >
                 <div>
                     <Link href="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", textDecoration: "none" }}>
-                        <Image
-                            src="/logo-dark.png"
-                            alt="RegEngine"
-                            width={120}
-                            height={28}
-                            style={{ objectFit: "contain" }}
-                        />
+                        <RegEngineWordmark size="sm" />
                         <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">Beta</span>
                     </Link>
                     <p style={{ fontSize: "13px", color: "var(--re-text-disabled)", lineHeight: 1.6, margin: "0 0 16px", maxWidth: "280px" }}>
