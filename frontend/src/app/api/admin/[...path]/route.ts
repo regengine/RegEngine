@@ -123,15 +123,26 @@ async function proxyRequest(
           continue;
         }
 
-        const responseText = await response.text();
+        const responseBuffer = await response.arrayBuffer();
 
         const outgoingHeaders = new Headers();
-        const responseContentType = response.headers.get('content-type');
-        if (responseContentType) outgoingHeaders.set('Content-Type', responseContentType);
-        const disposition = response.headers.get('content-disposition');
-        if (disposition) outgoingHeaders.set('Content-Disposition', disposition);
+        const passthroughResponseHeaders = [
+          'content-type',
+          'content-disposition',
+          'content-length',
+          'cache-control',
+          'etag',
+          'last-modified',
+          'x-fda-record-count',
+        ];
+        for (const headerName of passthroughResponseHeaders) {
+          const headerValue = response.headers.get(headerName);
+          if (headerValue) {
+            outgoingHeaders.set(headerName, headerValue);
+          }
+        }
 
-        return new NextResponse(responseText, {
+        return new NextResponse(responseBuffer, {
           status: response.status,
           headers: outgoingHeaders,
         });
