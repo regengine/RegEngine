@@ -14,11 +14,11 @@ import {
     Shield,
     BookOpen,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
+
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const CODE_EXAMPLES = {
     quickstart: {
@@ -214,13 +214,13 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
 
     return (
         <div className="relative">
-            <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm">
-                <code>{code}</code>
+            <pre className="bg-[var(--re-surface-card)] text-[var(--re-text-primary)] p-4 rounded-lg overflow-x-auto text-sm border border-[var(--re-surface-border)]">
+                <code data-lang={lang}>{code}</code>
             </pre>
             <Button
                 size="sm"
                 variant="ghost"
-                className="absolute top-2 right-2 text-gray-400 hover:text-white"
+                className="absolute top-2 right-2 text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]"
                 onClick={handleCopy}
             >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -232,86 +232,99 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
 export default function DevelopersPage() {
     const [selectedExample, setSelectedExample] = useState<keyof typeof CODE_EXAMPLES>('quickstart');
     const [selectedLang, setSelectedLang] = useState(0);
-
+    const [installCopied, setInstallCopied] = useState(false);
     const example = CODE_EXAMPLES[selectedExample];
 
+    const handleInstallCopy = async () => {
+        try {
+            await navigator.clipboard.writeText('npm install @regengine/fsma-sdk');
+            setInstallCopied(true);
+            setTimeout(() => setInstallCopied(false), 2000);
+        } catch {
+            setInstallCopied(false);
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-gray-950 text-gray-100">            {/* Hero */}
-            <div className="border-b border-gray-800 py-16 px-4">
-                <div className="max-w-4xl mx-auto text-center">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                    >
-                        <Badge className="mb-4 bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
-                            Developer Experience
-                        </Badge>
-                        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                            The API for<br />
-                            <span className="text-emerald-400">Food Traceability</span>
-                        </h1>
-                        <p className="text-xl text-gray-400 mb-8">
-                            First FSMA 204 CTE in 5 minutes. Not 5 weeks.
-                        </p>
+        <div className="re-page overflow-x-hidden">
+            <div className="re-noise" />
 
-                        <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-gray-500">
-                            <span className="flex items-center gap-2">
-                                <Clock className="h-4 w-4 text-emerald-400" />
-                                5-min quickstart
-                            </span>
-                            <span className="flex items-center gap-2">
-                                <Code2 className="h-4 w-4 text-emerald-400" />
-                                SDKs for Node, Python, Go
-                            </span>
-                            <span className="flex items-center gap-2">
-                                <Shield className="h-4 w-4 text-emerald-400" />
-                                SHA-256 audit trail
-                            </span>
-                        </div>
+            <section className="relative z-[2] max-w-[1120px] mx-auto pt-[96px] pb-[72px] px-6">
+                <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.08)_0%,transparent_72%)] pointer-events-none" />
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center">
+                    <div className="re-badge-brand mb-7 w-fit mx-auto">
+                        <span className="re-dot bg-[var(--re-brand)] animate-pulse" />
+                        Developer Experience
+                    </div>
 
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-                            <Link href="/onboarding">
-                                <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700">
-                                    Get API Key
-                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                </Button>
-                            </Link>
-                            <Link href="/docs">
-                                <Button size="lg" variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
-                                    <BookOpen className="mr-2 h-4 w-4" />
-                                    Read the Docs
-                                </Button>
-                            </Link>
-                        </div>
-                    </motion.div>
-                </div>
-            </div>
+                    <h1 className="text-[clamp(36px,5vw,56px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-6 tracking-[-0.02em]">
+                        The API for
+                        <br />
+                        <span className="text-[var(--re-brand)]">Food Traceability</span>
+                    </h1>
+                    <p className="text-lg text-[var(--re-text-muted)] leading-relaxed mb-8 max-w-[760px] mx-auto">
+                        First FSMA 204 CTE in 5 minutes. Not 5 weeks.
+                    </p>
 
-            {/* Install Banner */}
-            <div className="bg-gray-900 border-b border-gray-800 py-4">
-                <div className="max-w-4xl mx-auto px-4">
-                    <div className="flex items-center justify-between bg-gray-950 rounded-lg px-4 py-3 font-mono text-sm">
-                        <div className="flex items-center gap-3">
-                            <Terminal className="h-4 w-4 text-emerald-400" />
-                            <code>
-                                <span className="text-gray-500">$</span>{' '}
-                                <span className="text-emerald-400">npm install</span>{' '}
-                                <span className="text-white">@regengine/fsma-sdk</span>
+                    <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-[var(--re-text-muted)]">
+                        <span className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-[var(--re-brand)]" />
+                            5-min quickstart
+                        </span>
+                        <span className="flex items-center gap-2">
+                            <Code2 className="h-4 w-4 text-[var(--re-brand)]" />
+                            SDKs for Node, Python, Go
+                        </span>
+                        <span className="flex items-center gap-2">
+                            <Shield className="h-4 w-4 text-[var(--re-brand)]" />
+                            SHA-256 audit trail
+                        </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                        <Link href="/onboarding/supplier-flow">
+                            <Button size="lg" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
+                                Get API Key
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        </Link>
+                        <Link href="/docs">
+                            <Button size="lg" variant="outline" className="border-[var(--re-surface-border)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-card)]">
+                                <BookOpen className="mr-2 h-4 w-4" />
+                                Read the Docs
+                            </Button>
+                        </Link>
+                    </div>
+                </motion.div>
+            </section>
+
+            <section className="relative z-[2] bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-4">
+                <div className="max-w-[1120px] mx-auto px-6">
+                    <div className="flex items-center justify-between bg-[var(--re-surface-base)] border border-[var(--re-surface-border)] rounded-lg px-4 py-3 font-mono text-sm gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <Terminal className="h-4 w-4 text-[var(--re-brand)] flex-shrink-0" />
+                            <code className="truncate">
+                                <span className="text-[var(--re-text-muted)]">$</span>{' '}
+                                <span className="text-[var(--re-brand)]">npm install</span>{' '}
+                                <span className="text-[var(--re-text-primary)]">@regengine/fsma-sdk</span>
                             </code>
                         </div>
-                        <Button size="sm" variant="ghost" className="text-gray-400 hover:text-white">
-                            <Copy className="h-4 w-4" />
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]"
+                            onClick={handleInstallCopy}
+                        >
+                            {installCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                         </Button>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* Code Examples */}
-            <div className="max-w-6xl mx-auto px-4 py-16">
+            <section className="relative z-[2] max-w-[1120px] mx-auto px-6 py-[80px]">
                 <div className="grid lg:grid-cols-4 gap-8">
-                    {/* Sidebar */}
                     <div className="lg:col-span-1">
-                        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                        <h3 className="text-sm font-semibold text-[var(--re-text-muted)] uppercase tracking-wider mb-4">
                             Examples
                         </h3>
                         <nav className="space-y-1">
@@ -323,8 +336,8 @@ export default function DevelopersPage() {
                                         setSelectedLang(0);
                                     }}
                                     className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${selectedExample === key
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                                        ? 'bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
+                                        : 'text-[var(--re-text-muted)] hover:bg-[var(--re-surface-card)] hover:text-[var(--re-text-primary)]'
                                         }`}
                                 >
                                     {ex.title}
@@ -332,24 +345,24 @@ export default function DevelopersPage() {
                             ))}
                         </nav>
 
-                        <div className="mt-8 pt-8 border-t border-gray-800">
-                            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                        <div className="mt-8 pt-8 border-t border-[var(--re-surface-border)]">
+                            <h3 className="text-sm font-semibold text-[var(--re-text-muted)] uppercase tracking-wider mb-4">
                                 Resources
                             </h3>
                             <nav className="space-y-2">
-                                <Link href="/docs" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                <Link href="/docs" className="flex items-center gap-2 text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]">
                                     <BookOpen className="h-4 w-4" />
                                     Full Documentation
                                 </Link>
-                                <Link href="/developers/compliance-verticals" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                <Link href="/developers/compliance-verticals" className="flex items-center gap-2 text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]">
                                     <Shield className="h-4 w-4" />
-                                    Compliance Frameworks
+                                    FSMA Vertical Profiles
                                 </Link>
-                                <Link href="/docs/api" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                <Link href="/docs/api" className="flex items-center gap-2 text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]">
                                     <Code2 className="h-4 w-4" />
                                     API Reference
                                 </Link>
-                                <a href="https://github.com/PetrefiedThunder" className="flex items-center gap-2 text-gray-400 hover:text-white">
+                                <a href="https://github.com/PetrefiedThunder" className="flex items-center gap-2 text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]">
                                     <Terminal className="h-4 w-4" />
                                     GitHub
                                 </a>
@@ -357,7 +370,6 @@ export default function DevelopersPage() {
                         </div>
                     </div>
 
-                    {/* Main Content */}
                     <div className="lg:col-span-3">
                         <motion.div
                             key={selectedExample}
@@ -365,11 +377,10 @@ export default function DevelopersPage() {
                             animate={{ opacity: 1, x: 0 }}
                         >
                             <div className="mb-6">
-                                <h2 className="text-2xl font-bold mb-2">{example.title}</h2>
-                                <p className="text-gray-400">{example.description}</p>
+                                <h2 className="text-2xl font-bold mb-2 text-[var(--re-text-primary)]">{example.title}</h2>
+                                <p className="text-[var(--re-text-muted)]">{example.description}</p>
                             </div>
 
-                            {/* Language Tabs */}
                             <div className="mb-4">
                                 <div className="flex gap-2">
                                     {example.tabs.map((tab, i) => (
@@ -377,8 +388,8 @@ export default function DevelopersPage() {
                                             key={tab.lang}
                                             onClick={() => setSelectedLang(i)}
                                             className={`px-3 py-1 rounded text-sm font-medium transition-colors ${selectedLang === i
-                                                ? 'bg-emerald-500/20 text-emerald-400'
-                                                : 'bg-gray-800 text-gray-400 hover:text-white'
+                                                ? 'bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
+                                                : 'bg-[var(--re-surface-card)] text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]'
                                                 }`}
                                         >
                                             {tab.label}
@@ -387,22 +398,20 @@ export default function DevelopersPage() {
                                 </div>
                             </div>
 
-                            {/* Code Block */}
                             <CodeBlock
                                 code={example.tabs[selectedLang]?.code || ''}
                                 lang={example.tabs[selectedLang]?.lang || 'javascript'}
                             />
 
-                            {/* Try It Button */}
                             <div className="mt-4 flex gap-3">
                                 <Link href="/demo/mock-recall">
-                                    <Button className="bg-emerald-600 hover:bg-emerald-700">
+                                    <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
                                         <Play className="mr-2 h-4 w-4" />
                                         Run in Playground
                                     </Button>
                                 </Link>
                                 <Link href="/docs">
-                                    <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
+                                    <Button variant="outline" className="border-[var(--re-surface-border)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-card)]">
                                         View Full Example
                                     </Button>
                                 </Link>
@@ -410,40 +419,39 @@ export default function DevelopersPage() {
                         </motion.div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* Features Grid */}
-            <div className="border-t border-gray-800 bg-gray-900 py-16 px-4">
-                <div className="max-w-6xl mx-auto">
-                    <h2 className="text-2xl font-bold text-center mb-12">
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)] py-[72px] px-6">
+                <div className="max-w-[1120px] mx-auto">
+                    <h2 className="text-2xl font-bold text-center mb-12 text-[var(--re-text-primary)]">
                         Why Developers Choose RegEngine
                     </h2>
                     <div className="grid md:grid-cols-3 gap-8">
-                        <Card className="bg-gray-950 border-gray-800">
+                        <Card className="bg-[var(--re-surface-base)] border-[var(--re-surface-border)]">
                             <CardHeader>
-                                <Zap className="h-8 w-8 text-emerald-400 mb-2" />
+                                <Zap className="h-8 w-8 text-[var(--re-brand)] mb-2" />
                                 <CardTitle>5-Minute Quickstart</CardTitle>
-                                <CardDescription className="text-gray-400">
+                                <CardDescription className="text-[var(--re-text-muted)]">
                                     npm install, add your API key, and you are recording CTEs.
                                     No weeks of onboarding calls.
                                 </CardDescription>
                             </CardHeader>
                         </Card>
-                        <Card className="bg-gray-950 border-gray-800">
+                        <Card className="bg-[var(--re-surface-base)] border-[var(--re-surface-border)]">
                             <CardHeader>
-                                <Code2 className="h-8 w-8 text-emerald-400 mb-2" />
+                                <Code2 className="h-8 w-8 text-[var(--re-brand)] mb-2" />
                                 <CardTitle>First-Class SDKs</CardTitle>
-                                <CardDescription className="text-gray-400">
+                                <CardDescription className="text-[var(--re-text-muted)]">
                                     Type-safe SDKs for Node.js, Python, and Go.
                                     No raw HTTP requests needed.
                                 </CardDescription>
                             </CardHeader>
                         </Card>
-                        <Card className="bg-gray-950 border-gray-800">
+                        <Card className="bg-[var(--re-surface-base)] border-[var(--re-surface-border)]">
                             <CardHeader>
-                                <Terminal className="h-8 w-8 text-emerald-400 mb-2" />
+                                <Terminal className="h-8 w-8 text-[var(--re-brand)] mb-2" />
                                 <CardTitle>Interactive Playground</CardTitle>
-                                <CardDescription className="text-gray-400">
+                                <CardDescription className="text-[var(--re-text-muted)]">
                                     Test API calls in your browser before writing code.
                                     See real responses instantly.
                                 </CardDescription>
@@ -451,30 +459,37 @@ export default function DevelopersPage() {
                         </Card>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* CTA */}
-            <div className="py-16 px-4 text-center">
-                <h2 className="text-2xl font-bold mb-4">
-                    Ready to build?
-                </h2>
-                <p className="text-gray-400 mb-8">
-                    Get your API key and send your first CTE in under 5 minutes.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                    <Link href="/onboarding">
-                        <Button size="lg" className="bg-emerald-600 hover:bg-emerald-700">
-                            Get Free API Key
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                    </Link>
-                    <Link href="/pricing">
-                        <Button size="lg" variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800">
-                            View Pricing
-                        </Button>
-                    </Link>
+            <section className="relative z-[2] max-w-[1120px] mx-auto py-[88px] px-6">
+                <div className="rounded-2xl p-9 md:p-12 bg-gradient-to-r from-[rgba(16,185,129,0.2)] to-[rgba(59,130,246,0.18)] border border-[var(--re-surface-border)]">
+                    <h3 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-3">
+                        Ready to build?
+                    </h3>
+                    <p className="text-[var(--re-text-secondary)] leading-relaxed max-w-[760px]">
+                        Get your API key and send your first CTE in under 5 minutes.
+                    </p>
+                    <p className="text-sm text-[var(--re-text-muted)] mt-3">
+                        Starting at $149/mo after a 14-day free trial.{' '}
+                        <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">
+                            See all plans.
+                        </Link>
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4 mt-8">
+                        <Link href="/onboarding/supplier-flow">
+                            <Button size="lg" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
+                                Get Free API Key
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        </Link>
+                        <Link href="/pricing">
+                            <Button size="lg" variant="outline" className="border-[var(--re-surface-border)] text-[var(--re-text-primary)] hover:bg-[var(--re-surface-card)]">
+                                View Pricing
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            </section>
         </div>
     );
 }

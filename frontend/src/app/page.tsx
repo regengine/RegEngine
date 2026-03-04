@@ -134,12 +134,12 @@ export default function RegEngineLanding() {
         <h1 className="text-[clamp(36px,5vw,56px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-6 max-w-[860px] tracking-[-0.02em]">
           The FDA will require your traceability data in 24 hours.
           <br />
-          Most food companies cannot deliver.
+          Can you deliver?
         </h1>
 
         <p className="text-lg text-[var(--re-text-muted)] leading-relaxed mb-10 max-w-[760px]">
-          RegEngine gives you API-first FSMA 204 compliance with recall-ready traceability data
-          that is verified, versioned, and exportable on demand.
+          RegEngine connects your suppliers, lots, and events into one auditable record - so when
+          the FDA or Walmart asks, you respond in minutes, not days.
         </p>
 
         <div className="flex gap-3 flex-wrap">
@@ -162,7 +162,7 @@ export default function RegEngineLanding() {
         <div className="max-w-[1120px] mx-auto px-6 grid grid-cols-2 md:grid-cols-4">
           {[
             { value: "23", label: "FDA categories verified" },
-            { value: "EPCIS 2.0", label: "Export ready" },
+            { value: "1 API call", label: "to generate FDA-ready records" },
             { value: "24hr", label: "Recall response window" },
             { value: "Verifiable", label: "Independent verification tooling included" },
           ].map((stat, idx) => (
@@ -355,96 +355,29 @@ export default function RegEngineLanding() {
         </div>
       </section>
 
-      <section className="relative z-[2] max-w-[1120px] mx-auto pb-[90px] px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-14 items-start">
-          <div className="space-y-5">
-            <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
-              System Intelligence
-            </span>
-            <h2 className="text-[32px] font-bold text-[var(--re-text-primary)]">No Black Boxes. Ever.</h2>
-            <p className="text-base text-[var(--re-text-muted)] leading-relaxed">
-              Other platforms ask you to trust their database. RegEngine gives you independently
-              verifiable records your team can audit directly.
-            </p>
-
-            <div className="space-y-4">
-              {[
-                "Deterministic extraction with no AI guessing",
-                "Immutable version history for every compliance record",
-                "Open verification scripts for independent validation",
-              ].map((line) => (
-                <div key={line} className="flex items-start gap-3">
-                  <CheckCircle2 size={16} className="mt-0.5 text-[var(--re-brand)]" />
-                  <p className="text-sm text-[var(--re-text-secondary)]">{line}</p>
-                </div>
-              ))}
-            </div>
-
-            <Link href="/blueprint">
-              <Button size="lg" className="h-14 px-9 rounded-3xl bg-black text-white dark:bg-white dark:text-black text-base font-bold uppercase shadow-xl group">
-                View Technical Blueprint
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </Link>
-          </div>
-
-          <div id="product" className="space-y-4">
-            <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
-              Compliance Command Center
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {COMMAND_CENTER_FEATURES.map((feature) => {
-                const Icon = feature.icon;
-                return (
-                  <Link
-                    key={feature.title}
-                    href={feature.href}
-                    className="p-5 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl transition-all duration-300 hover:-translate-y-1 hover:border-[var(--re-brand-muted)]"
-                  >
-                    <Icon size={18} className="text-[var(--re-brand)] mb-3" />
-                    <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">{feature.title}</h3>
-                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{feature.description}</p>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-[2] border-y border-white/[0.04] bg-white/[0.01]">
-        <div className="max-w-[1120px] mx-auto py-[74px] px-6">
-          <h3 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-3">Built for FSMA 204.</h3>
-          <p className="text-base text-[var(--re-text-muted)] max-w-[760px] leading-relaxed mb-5">
-            RegEngine is intentionally focused on food traceability and recall readiness until FSMA outcomes are proven in production.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <article className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-              <h4 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Design Partner Cohort</h4>
-              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                Private alpha access is open for teams solving FSMA 204 traceability workflows right now.
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-              <h4 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Transparent Validation</h4>
-              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                Synthetic recall simulations and open verification scripts make the proof model auditable.
-              </p>
-            </article>
-            <article className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
-              <h4 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">Implementation Support</h4>
-              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
-                Use the Retailer Readiness Assessment and API docs to map gaps before implementation.
-              </p>
-            </article>
-          </div>
-
-          <div className="mt-6">
-            <Link href="/alpha" className="text-sm font-semibold text-[var(--re-brand)] hover:underline">
-              Apply for design partner access
-            </Link>
-          </div>
+      <section className="relative z-[2] max-w-[1120px] mx-auto pb-[90px] px-6" id="product">
+        <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
+          Compliance Command Center
+        </span>
+        <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[880px] mt-4 mb-8">
+          Every record in RegEngine is deterministic, versioned, and independently verifiable. No
+          AI guessing. No black boxes.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {COMMAND_CENTER_FEATURES.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <Link
+                key={feature.title}
+                href={feature.href}
+                className="p-5 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl transition-all duration-300 hover:-translate-y-1 hover:border-[var(--re-brand-muted)]"
+              >
+                <Icon size={18} className="text-[var(--re-brand)] mb-3" />
+                <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">{feature.title}</h3>
+                <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{feature.description}</p>
+              </Link>
+            );
+          })}
         </div>
       </section>
 

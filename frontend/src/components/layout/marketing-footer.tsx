@@ -63,10 +63,10 @@ export function MarketingFooter() {
                         { label: "Field Capture", href: "/mobile/capture", badge: "New" },
                         { label: "Compliance Snapshots", href: "/compliance/snapshots", badge: "New" },
                         { label: "Supply Chain Explorer", href: "/demo/supply-chains" },
-                        { label: "Ingest Documents", href: "/ingest" },
                         { label: "FSMA Dashboard", href: "/fsma" },
                         { label: "FTL Checker", href: "/tools/ftl-checker", badge: "Free" },
                         { label: "Retailer Readiness", href: "/retailer-readiness" },
+                        { label: "Developers", href: "/developers" },
                         { label: "API Docs", href: "/docs" },
                         { label: "Pricing", href: "/pricing" },
                     ].map((link) => (
@@ -98,12 +98,11 @@ export function MarketingFooter() {
                         Free Tools
                     </h4>
                     {[
-                        { label: "FSMA Dashboard", href: "/tools/fsma-unified" },
-                        { label: "Anomaly Simulator", href: "/tools/fsma-unified?tab=anomaly" },
-                        { label: "Knowledge Graph", href: "/tools/fsma-unified?tab=graph" },
                         { label: "FTL Checker", href: "/tools/ftl-checker" },
-                        { label: "ROI Calculator", href: "/tools/roi-calculator" },
-                        { label: "KDE Builder", href: "/tools/kde-checker" },
+                        { label: "FSMA Exemption Check", href: "/tools/ftl-checker" },
+                        { label: "Bulk Upload Templates", href: "/onboarding/bulk-upload" },
+                        { label: "Anomaly Simulator", href: "/tools/fsma-unified" },
+                        { label: "Knowledge Graph", href: "/tools/knowledge-graph" },
                     ].map((link) => (
                         <Link
                             key={link.label}
@@ -142,13 +141,19 @@ export function MarketingFooter() {
                     <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Company
                     </h4>
-                    {["About", "Security", "Privacy", "Terms"].map((item) => (
+                    {[
+                        { label: "About", href: "/about" },
+                        { label: "Security", href: "/security" },
+                        { label: "Privacy", href: "/privacy" },
+                        { label: "Terms", href: "/terms" },
+                        { label: "Design Partner Program", href: "/alpha" },
+                    ].map((item) => (
                         <Link
-                            key={item}
-                            href={`/${item.toLowerCase()}`}
+                            key={item.label}
+                            href={item.href}
                             className="text-[13px] text-re-text-tertiary no-underline mb-2.5 block"
                         >
-                            {item}
+                            {item.label}
                         </Link>
                     ))}
                 </div>
@@ -168,7 +173,7 @@ export function MarketingFooter() {
                 <span className="text-xs text-re-text-disabled">
                     © 2026 RegEngine Inc. All rights reserved.
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--re-surface-card)", fontFamily: "'JetBrains Mono', monospace" }}>
+                <span style={{ fontSize: "11px", color: "var(--re-text-disabled)", fontFamily: "'JetBrains Mono', monospace" }}>
                     verify_chain.py — don&apos;t trust, verify
                 </span>
             </div>
