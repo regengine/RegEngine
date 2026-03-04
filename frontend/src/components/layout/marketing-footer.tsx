@@ -3,16 +3,17 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-
-const industries = [
-    { name: "Food & Beverage", href: "/retailer-readiness" },
-];
+import {
+    MARKETING_FOOTER_COMPANY_LINKS,
+    MARKETING_FOOTER_PRODUCT_LINKS,
+    MARKETING_FREE_TOOLS,
+} from '@/components/layout/marketing-nav';
 
 export function MarketingFooter() {
     const pathname = usePathname();
 
     // Hide global footer on standalone mobile app and dashboard routes
-    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard')) {
+    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding')) {
         return null;
     }
 
@@ -32,7 +33,7 @@ export function MarketingFooter() {
                     margin: "0 auto",
                     padding: "48px 24px 32px",
                     display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+                    gridTemplateColumns: "2fr 1fr 1fr 1fr",
                     gap: "40px",
                 }}
             >
@@ -59,17 +60,7 @@ export function MarketingFooter() {
                     <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Product
                     </h4>
-                    {[
-                        { label: "Field Capture", href: "/mobile/capture", badge: "New" },
-                        { label: "Compliance Snapshots", href: "/compliance/snapshots", badge: "New" },
-                        { label: "Supply Chain Explorer", href: "/demo/supply-chains" },
-                        { label: "FSMA Dashboard", href: "/fsma" },
-                        { label: "FTL Checker", href: "/tools/ftl-checker", badge: "Free" },
-                        { label: "Retailer Readiness", href: "/retailer-readiness" },
-                        { label: "Developers", href: "/developers" },
-                        { label: "API Docs", href: "/docs" },
-                        { label: "Pricing", href: "/pricing" },
-                    ].map((link) => (
+                    {MARKETING_FOOTER_PRODUCT_LINKS.map((link) => (
                         <Link
                             key={link.label}
                             href={link.href}
@@ -84,11 +75,6 @@ export function MarketingFooter() {
                             }}
                         >
                             {link.label}
-                            {link.badge && (
-                                <span style={{ fontSize: "9px", color: "var(--re-brand)", fontWeight: 600, textTransform: "uppercase" }}>
-                                    {link.badge}
-                                </span>
-                            )}
                         </Link>
                     ))}
                 </div>
@@ -97,13 +83,7 @@ export function MarketingFooter() {
                     <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Free Tools
                     </h4>
-                    {[
-                        { label: "FTL Checker", href: "/tools/ftl-checker" },
-                        { label: "FSMA Exemption Check", href: "/tools/ftl-checker" },
-                        { label: "Bulk Upload Templates", href: "/onboarding/bulk-upload" },
-                        { label: "Anomaly Simulator", href: "/tools/fsma-unified" },
-                        { label: "Knowledge Graph", href: "/tools/knowledge-graph" },
-                    ].map((link) => (
+                    {MARKETING_FREE_TOOLS.map((link) => (
                         <Link
                             key={link.label}
                             href={link.href}
@@ -122,32 +102,9 @@ export function MarketingFooter() {
 
                 <div>
                     <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
-                        Industry Focus
-                    </h4>
-                    <div className="grid grid-cols-1 gap-y-2.5">
-                        {industries.map((ind) => (
-                            <Link
-                                key={ind.name}
-                                href={ind.href}
-                                className="text-[13px] text-re-text-tertiary no-underline flex items-center gap-1.5"
-                            >
-                                {ind.name}
-                            </Link>
-                        ))}
-                    </div>
-                </div>
-
-                <div>
-                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
                         Company
                     </h4>
-                    {[
-                        { label: "About", href: "/about" },
-                        { label: "Security", href: "/security" },
-                        { label: "Privacy", href: "/privacy" },
-                        { label: "Terms", href: "/terms" },
-                        { label: "Design Partner Program", href: "/alpha" },
-                    ].map((item) => (
+                    {MARKETING_FOOTER_COMPANY_LINKS.map((item) => (
                         <Link
                             key={item.label}
                             href={item.href}

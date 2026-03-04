@@ -5,23 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/auth-context';
-
-const TOOL_ITEMS = [
-    { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
-    { emoji: "✅", label: "FSMA Exemption Check", desc: "Determine whether your operation is FSMA 204 exempt", href: "/tools/ftl-checker" },
-    { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
-    { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
-    { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/knowledge-graph" },
-];
-
-const MORE_TOOLS = [
-    { label: "ROI Calculator", href: "/tools/roi-calculator", emoji: "💰" },
-    { label: "KDE Completeness Checker", href: "/tools/kde-checker", emoji: "📋" },
-    { label: "Recall Readiness Score", href: "/tools/recall-readiness", emoji: "📈" },
-    { label: "SOP Generator", href: "/tools/sop-generator", emoji: "📄" },
-    { label: "FDA Mock Drill", href: "/tools/drill-simulator", emoji: "🚨" },
-    { label: "Data Import Hub", href: "/tools/data-import", emoji: "📥" },
-];
+import { MARKETING_FREE_TOOLS, MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 
 export function MarketingHeader() {
     const pathname = usePathname();
@@ -31,7 +15,7 @@ export function MarketingHeader() {
     const { user } = useAuth();
 
     // Hide global header on dashboard, app, and standalone mobile routes
-    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard')) {
+    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding')) {
         return null;
     }
 
@@ -87,10 +71,7 @@ export function MarketingHeader() {
                 {/* Desktop Nav */}
                 <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
                     {[
-                        { label: "Product", href: "/#product" },
-                        { label: "FSMA 204", href: "/retailer-readiness" },
-                        { label: "Developers", href: "/developers" },
-                        { label: "Pricing", href: "/pricing" },
+                        ...MARKETING_PRIMARY_NAV,
                     ].map((item) => (
                         <Link
                             key={item.label}
@@ -162,7 +143,7 @@ export function MarketingHeader() {
                                 <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
                                     Featured Compliance Tools
                                 </div>
-                                {TOOL_ITEMS.map((tool) => (
+                                {MARKETING_FREE_TOOLS.map((tool) => (
                                     <Link key={tool.href} href={tool.href} className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
                                         onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
                                         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
@@ -222,7 +203,7 @@ export function MarketingHeader() {
                                 Log In
                             </Link>
                             <Link
-                                href="/onboarding/supplier-flow"
+                                href="/onboarding"
                                 style={{
                                     fontSize: "13px",
                                     fontWeight: 600,
@@ -276,10 +257,7 @@ export function MarketingHeader() {
                 >
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                         {[
-                            { label: "Product", href: "/#product" },
-                            { label: "FSMA 204", href: "/retailer-readiness" },
-                            { label: "Developers", href: "/developers" },
-                            { label: "Pricing", href: "/pricing" },
+                            ...MARKETING_PRIMARY_NAV,
                         ].map((item) => (
                             <Link
                                 key={item.label}
@@ -310,7 +288,7 @@ export function MarketingHeader() {
                         }}>
                             FSMA 204 Compliance Tools
                         </div>
-                        {TOOL_ITEMS.map((tool) => (
+                        {MARKETING_FREE_TOOLS.map((tool) => (
                             <Link
                                 key={tool.href}
                                 href={tool.href}
@@ -329,24 +307,6 @@ export function MarketingHeader() {
                                     <div style={{ fontSize: "14px", fontWeight: 500, color: "var(--re-text-primary)" }}>{tool.label}</div>
                                     <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>{tool.desc}</div>
                                 </div>
-                            </Link>
-                        ))}
-                        {MORE_TOOLS.map((tool) => (
-                            <Link
-                                key={tool.href}
-                                href={tool.href}
-                                onClick={() => setMobileOpen(false)}
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                    padding: "8px 0 8px 10px",
-                                    textDecoration: "none",
-                                    borderBottom: "1px solid rgba(255,255,255,0.02)",
-                                }}
-                            >
-                                <span style={{ fontSize: "14px" }}>{tool.emoji}</span>
-                                <div style={{ fontSize: "13px", color: "var(--re-text-muted)" }}>{tool.label}</div>
                             </Link>
                         ))}
                         <Link
