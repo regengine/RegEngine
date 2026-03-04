@@ -7,8 +7,10 @@ import Image from 'next/image';
 import { useAuth } from '@/lib/auth-context';
 
 const TOOL_ITEMS = [
-    { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
+    { emoji: "✅", label: "FSMA Exemption Check", desc: "Determine whether your operation is FSMA 204 exempt", href: "/tools/ftl-checker" },
+    { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
+    { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
     { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/knowledge-graph" },
 ];
 

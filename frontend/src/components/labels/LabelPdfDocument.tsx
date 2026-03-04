@@ -138,6 +138,7 @@ export const LabelPdfDocument: React.FC<LabelPdfDocumentProps> = ({
 
             <View style={styles.qrContainer}>
               {qrDataUrls[label.serial] && (
+                // eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf/renderer Image does not support alt
                 <Image
                   src={qrDataUrls[label.serial]}
                   style={styles.qrImage}

@@ -209,14 +209,7 @@ function FlowStep({ number, title, description, active, onClick, status }) {
   );
 }
 
-function formatStepLabel(step) {
-  return String(step || "")
-    .split("_")
-    .map((token) => (token ? token[0].toUpperCase() + token.slice(1) : ""))
-    .join(" ");
-}
-
-function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof, funnelSummary, demoSeedSnapshot }) {
+function OverviewView({ setView, socialProof }) {
   const steps = [
     { id: VIEWS.BUYER_INVITE, n: 1, title: "Buyer Sends Invite", desc: "Email invite with unique onboarding link", status: "current" },
     { id: VIEWS.SUPPLIER_SIGNUP, n: 2, title: "Supplier Creates Account", desc: "Name, email, password - minimal friction", status: "pending" },
@@ -231,40 +224,6 @@ function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof, fu
   return (
     <div>
       <SectionTitle sub="Click any step to see the detailed screen wireframe and data model">Supplier Onboarding Flow - 8 Steps from Invite to FDA-Ready</SectionTitle>
-      <Card style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#111" }}>One-Click Demo Reset</div>
-            <div style={{ fontSize: 12, color: GRAY }}>Re-seed a realistic supplier chain and jump directly to dashboard (step 7) with a live gap.</div>
-            <div style={{ fontSize: 11, color: GRAY, marginTop: 4 }}>Deep-link: append <code>?demo_seed=1</code> for automatic reset on page load.</div>
-          </div>
-          <button
-            onClick={onRunDemoReset}
-            disabled={demoResetState?.loading}
-            style={{ padding: "10px 16px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 700, fontSize: 12, cursor: "pointer", opacity: demoResetState?.loading ? 0.7 : 1 }}
-          >
-            {demoResetState?.loading ? "Resetting demo data..." : "Run Demo Reset → Step 7"}
-          </button>
-        </div>
-        {demoResetState?.message && <div style={{ marginTop: 10, fontSize: 12, color: ACCENT }}>{demoResetState.message}</div>}
-        {demoResetState?.error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{demoResetState.error}</div>}
-      </Card>
-
-      {demoSeedSnapshot && (
-        <Card style={{ marginBottom: 12, borderColor: ACCENT_LIGHT, backgroundColor: "#FCFFFD" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#111", marginBottom: 8 }}>Demo Story Ready</div>
-          <div style={{ fontSize: 12, color: GRAY, marginBottom: 8 }}>
-            Focus facility: <strong style={{ color: "#111" }}>{demoSeedSnapshot.focus_facility_name}</strong> | Gap: <strong style={{ color: ERROR }}>{formatStepLabel(demoSeedSnapshot.focus_gap_cte || "scoping")}</strong>
-          </div>
-          <div style={{ fontSize: 12, color: GRAY, marginBottom: 10 }}>
-            TLCs: {(demoSeedSnapshot.seeded_tlc_codes || []).join(", ")}.
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => setView(VIEWS.DASHBOARD)} style={{ padding: "8px 12px", borderRadius: 6, backgroundColor: ACCENT, color: "#fff", border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Go to Step 7 Dashboard</button>
-            <button onClick={() => setView(VIEWS.FDA_EXPORT)} style={{ padding: "8px 12px", borderRadius: 6, backgroundColor: BLUE, color: "#fff", border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer" }}>Go to Step 8 FDA Export</button>
-          </div>
-        </Card>
-      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
         {[
@@ -281,47 +240,10 @@ function OverviewView({ setView, onRunDemoReset, demoResetState, socialProof, fu
         ))}
       </div>
 
-      <Card style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#111" }}>Live Funnel Snapshot</div>
-          <div style={{ fontSize: 11, color: GRAY }}>
-            Views: {Number.isFinite(funnelSummary?.total_step_views) ? funnelSummary.total_step_views : "-"} | Completions: {Number.isFinite(funnelSummary?.total_step_completions) ? funnelSummary.total_step_completions : "-"}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", fontSize: 11, color: GRAY, fontWeight: 700, borderBottom: `1px solid ${BORDER}`, paddingBottom: 6 }}>
-          <div>Step</div>
-          <div>Viewed</div>
-          <div>Completed</div>
-          <div>Rate</div>
-        </div>
-        {(funnelSummary?.steps || []).filter((row) => (row.viewed || row.completed)).slice(0, 6).map((row) => (
-          <div key={row.step} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", fontSize: 12, padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
-            <div style={{ color: "#111", fontWeight: 600 }}>{formatStepLabel(row.step)}</div>
-            <div style={{ color: GRAY }}>{row.viewed}</div>
-            <div style={{ color: GRAY }}>{row.completed}</div>
-            <div style={{ color: row.completion_rate_pct < 60 ? WARN : ACCENT }}>{row.completion_rate_pct}%</div>
-          </div>
-        ))}
-        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: GRAY }}>
-          <div>Demo resets: <strong style={{ color: "#111" }}>{Number.isFinite(funnelSummary?.demo_resets_completed) ? funnelSummary.demo_resets_completed : "-"}</strong></div>
-          <div>FDA exports: <strong style={{ color: "#111" }}>{Number.isFinite(funnelSummary?.fda_exports_generated) ? funnelSummary.fda_exports_generated : "-"}</strong></div>
-        </div>
-      </Card>
-
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {steps.map((s) => (
           <FlowStep key={s.id} number={s.n} title={s.title} description={s.desc} status={s.status} onClick={() => setView(s.id)} />
         ))}
-      </div>
-      <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
-        <Card onClick={() => setView(VIEWS.DATA_MODEL)} style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: 20 }}>🗄️</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>Neo4j Graph Model</div>
-        </Card>
-        <Card onClick={() => setView(VIEWS.API_SPEC)} style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: 20 }}>⚡</div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>API Endpoints</div>
-        </Card>
       </div>
     </div>
   );
@@ -1244,33 +1166,11 @@ export default function SupplierOnboardingFlow() {
   const [liveCategories, setLiveCategories] = useState(FTL_CATEGORIES);
   const [tlcRefreshKey, setTlcRefreshKey] = useState(0);
   const [socialProof, setSocialProof] = useState(null);
-  const [funnelSummary, setFunnelSummary] = useState(null);
-  const [demoSeedSnapshot, setDemoSeedSnapshot] = useState(null);
-  const [autoSeedTriggered, setAutoSeedTriggered] = useState(false);
-  const [demoResetState, setDemoResetState] = useState({ loading: false, message: "", error: "" });
 
   const trackFunnelEvent = useCallback((payload) => {
     void apiClient.trackSupplierFunnelEvent(payload).catch(() => {
       // Instrumentation must never block product flow.
     });
-  }, []);
-
-  const refreshSocialProof = useCallback(async () => {
-    try {
-      const payload = await apiClient.getSupplierSocialProof();
-      setSocialProof(payload);
-    } catch (_err) {
-      // Keep UI usable even if social proof query fails.
-    }
-  }, []);
-
-  const refreshFunnelSummary = useCallback(async () => {
-    try {
-      const payload = await apiClient.getSupplierFunnelSummary();
-      setFunnelSummary(payload);
-    } catch (_err) {
-      // Keep UI usable even if funnel summary query fails.
-    }
   }, []);
 
   useEffect(() => {
@@ -1312,25 +1212,6 @@ export default function SupplierOnboardingFlow() {
   }, [tlcRefreshKey]);
 
   useEffect(() => {
-    let cancelled = false;
-    const loadFunnelSummary = async () => {
-      try {
-        const payload = await apiClient.getSupplierFunnelSummary();
-        if (!cancelled) {
-          setFunnelSummary(payload);
-        }
-      } catch (_err) {
-        // Keep UI usable even if funnel summary query fails.
-      }
-    };
-
-    loadFunnelSummary();
-    return () => {
-      cancelled = true;
-    };
-  }, [view, tlcRefreshKey]);
-
-  useEffect(() => {
     void apiClient.trackSupplierFunnelEvent({
       event_name: "step_viewed",
       step: view,
@@ -1344,72 +1225,6 @@ export default function SupplierOnboardingFlow() {
     });
   }, [view, facilityId]);
 
-  const runDemoReset = useCallback(async () => {
-    setDemoResetState({ loading: true, message: "", error: "" });
-    try {
-      const payload = await apiClient.resetSupplierDemoData();
-      setFacilityId(payload.focus_facility_id);
-      setRequiredCTEs(payload.focus_required_ctes || []);
-      setDemoSeedSnapshot(payload);
-      setTlcRefreshKey((prev) => prev + 1);
-      setView(VIEWS.DASHBOARD);
-
-      const gapLabel = payload.focus_gap_cte ? payload.focus_gap_cte.replaceAll("_", " ") : "scoping";
-      const gapIssueSuffix = payload.focus_gap_issue ? ` (${payload.focus_gap_issue})` : "";
-
-      setDemoResetState({
-        loading: false,
-        message: `Demo seeded: ${payload.seeded_facilities} facilities, ${payload.seeded_tlcs} TLCs, ${payload.seeded_events} events. ${payload.focus_facility_name} score ${payload.dashboard_score} with ${payload.open_gap_count} open gap(s), including ${gapLabel}${gapIssueSuffix}.`,
-        error: "",
-      });
-
-      trackFunnelEvent({
-        event_name: "demo_reset_completed",
-        step: VIEWS.OVERVIEW,
-        status: "success",
-        facility_id: payload.focus_facility_id,
-        metadata: {
-          seeded_facilities: payload.seeded_facilities,
-          seeded_tlcs: payload.seeded_tlcs,
-          seeded_events: payload.seeded_events,
-          dashboard_score: payload.dashboard_score,
-          open_gap_count: payload.open_gap_count,
-        },
-      });
-      await refreshSocialProof();
-      await refreshFunnelSummary();
-    } catch (_err) {
-      setDemoResetState({
-        loading: false,
-        message: "",
-        error: "Could not reset demo data. Check auth/tenant context and retry.",
-      });
-      trackFunnelEvent({
-        event_name: "demo_reset_failed",
-        step: VIEWS.OVERVIEW,
-        status: "error",
-        facility_id: facilityId || undefined,
-        metadata: {},
-      });
-    }
-  }, [facilityId, refreshFunnelSummary, refreshSocialProof, trackFunnelEvent]);
-
-  useEffect(() => {
-    if (autoSeedTriggered || demoResetState.loading) {
-      return;
-    }
-
-    const searchParams = new URLSearchParams(window.location.search);
-    const flag = (searchParams.get("demo_seed") || searchParams.get("demo") || "").toLowerCase();
-    const shouldAutoSeed = flag === "1" || flag === "true" || flag === "seed";
-    if (!shouldAutoSeed) {
-      return;
-    }
-
-    setAutoSeedTriggered(true);
-    void runDemoReset();
-  }, [autoSeedTriggered, demoResetState.loading, runDemoReset]);
-
   const navItems = [
     { id: VIEWS.OVERVIEW, label: "Overview", icon: "🏠" },
     { id: VIEWS.BUYER_INVITE, label: "1. Invite", icon: "📧" },
@@ -1420,12 +1235,10 @@ export default function SupplierOnboardingFlow() {
     { id: VIEWS.TLC_MGMT, label: "6. TLCs", icon: "🏷️" },
     { id: VIEWS.DASHBOARD, label: "7. Dashboard", icon: "📊" },
     { id: VIEWS.FDA_EXPORT, label: "8. FDA Export", icon: "📄" },
-    { id: VIEWS.DATA_MODEL, label: "Graph Model", icon: "🗄️" },
-    { id: VIEWS.API_SPEC, label: "API Spec", icon: "⚡" },
   ];
 
   const viewComponents = {
-    [VIEWS.OVERVIEW]: <OverviewView setView={setView} onRunDemoReset={runDemoReset} demoResetState={demoResetState} socialProof={socialProof} funnelSummary={funnelSummary} demoSeedSnapshot={demoSeedSnapshot} />,
+    [VIEWS.OVERVIEW]: <OverviewView setView={setView} socialProof={socialProof} />,
     [VIEWS.BUYER_INVITE]: <BuyerInviteView />,
     [VIEWS.SUPPLIER_SIGNUP]: <SupplierSignupView />,
     [VIEWS.FACILITY_SETUP]: <FacilitySetupView setView={setView} onFacilityCreated={setFacilityId} onEvent={trackFunnelEvent} />,
@@ -1452,13 +1265,6 @@ export default function SupplierOnboardingFlow() {
               <span style={{ fontSize: 12, color: view === item.id ? "#fff" : "#999", fontWeight: view === item.id ? 600 : 400 }}>{item.label}</span>
             </div>
           ))}
-        </div>
-        <div style={{ padding: "12px 14px", borderTop: "1px solid #333", marginTop: 8 }}>
-          <div style={{ fontSize: 10, color: "#666", lineHeight: 1.4 }}>
-            V1 MVP - runs on current topology<br />
-            Postgres + Neo4j + Redis<br />
-            No new infrastructure
-          </div>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>

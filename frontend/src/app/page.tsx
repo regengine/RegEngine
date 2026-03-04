@@ -457,6 +457,9 @@ export default function RegEngineLanding() {
               <p className="text-[var(--re-text-secondary)] leading-relaxed">
                 Start with a free assessment, then see exactly what it takes to move from reactive traceability to recall-ready infrastructure.
               </p>
+              <p className="text-sm text-[var(--re-text-muted)] mt-3">
+                Starting at $149/mo after a 14-day free trial. <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">See all plans.</Link>
+              </p>
             </div>
           </div>
 
