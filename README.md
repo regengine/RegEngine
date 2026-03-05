@@ -1,53 +1,40 @@
 # RegEngine
 
+[![Backend CI](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/frontend-ci.yml)
+[![Security](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/security.yml/badge.svg)](https://github.com/PetrefiedThunder/RegEngine/actions/workflows/security.yml)
+
 **API-first FSMA 204 compliance infrastructure for recall-ready traceability.**
 
-RegEngine converts supply-chain traceability events into structured, exportable, and independently verifiable compliance records.
+RegEngine converts supply-chain traceability events into structured, exportable, and independently verifiable compliance records — built to meet the FDA's 24-hour response window for food recall events.
 
-## Current Focus
+## Why FSMA 204
 
-- **Primary wedge:** Food and Beverage (FSMA 204)
-- **Core outcome:** Generate FDA-sortable traceability records inside the 24-hour response window
-- **Product posture:** FSMA-first execution before broader vertical expansion
-
-## Recently Shipped (March 2026)
-
-- Production auth/login chain stabilized end-to-end:
-  - Same-origin Next.js admin proxy at `frontend/src/app/api/admin/[...path]/route.ts`
-  - Public upstream targeting for Vercel (no private DNS dependency)
-  - Working `/api/auth/login` -> `/api/admin/auth/login` routing
-- Railway Redis service added and wired for persistent sessions:
-  - Refresh token flow restored
-  - Rate limiting and auth session persistence run on Redis
-  - Graceful fallback paths remain in code for degraded scenarios
-- FSMA-first narrative cleanup across marketing surfaces:
-  - Removed broad "Soon" industry signaling from primary marketing footer/nav
-  - Tightened homepage CTA and proof language to food-traceability outcomes
-- New interactive supplier onboarding wireframe route:
-  - `frontend/src/app/onboarding/supplier-flow/page.jsx`
-  - Available in app at `/onboarding/supplier-flow`
-  - Linked from onboarding and gated by authenticated session state
+The FDA's Food Safety Modernization Act Section 204 requires companies across the food supply chain to maintain records that can be produced within 24 hours of an FDA request. RegEngine automates the obligation mapping, evidence collection, and export workflow so that compliance teams spend their time on operations, not spreadsheets.
 
 ## Production Topology
 
-- **Frontend + edge:** Vercel (`regengine.co`)
-- **App/API service:** Railway `RegEngine` service (admin/auth API)
-- **Stateful services:** Railway `Postgres`, `neo4j`, `Redis`
+| Layer | Service | Host |
+|---|---|---|
+| Frontend + edge | Next.js 14 on Vercel | `regengine.co` |
+| App / API | FastAPI on Railway | `RegEngine` service |
+| Relational DB | PostgreSQL 16 | Railway managed |
+| Graph DB | Neo4j 5 Community | Railway managed |
+| Cache / sessions | Redis 7 | Railway managed |
 
-This 4-service runtime is the current P0/P1 topology and is intentionally minimal.
+This 5-service runtime is intentionally minimal.
 
 ## Core Capabilities
 
-- FSMA obligation mapping and traceability workflows
-- Neo4j knowledge graph (`obligation -> control -> evidence`)
-- Tamper-evident evidence model (SHA-256 + hash-chain primitives)
-- Compliance score model (coverage x effectiveness x freshness)
-- Multi-tenant enforcement and audit logging
-- Free FSMA utility tools (FTL checker, readiness flows, simulation tools)
+- **FSMA obligation mapping** — regulation-to-control-to-evidence graph in Neo4j
+- **Tamper-evident evidence model** — SHA-256 hash-chain primitives on every record
+- **Compliance scoring** — coverage x effectiveness x freshness, computed per obligation
+- **Multi-tenant enforcement** — row-level security with database-enforced isolation
+- **Audit logging** — immutable event stream for every tenant action
+- **Supplier onboarding** — guided wizard and bulk-upload ingestion for supply-chain partners
+- **Free FSMA utilities** — FTL checker, readiness assessment, recall simulation tools
 
-## Supplier Onboarding V1 (In-App Wireframe)
-
-The current onboarding flow design follows this sequence:
+## Supplier Onboarding Flow
 
 1. Buyer invite
 2. Supplier signup
@@ -60,6 +47,13 @@ The current onboarding flow design follows this sequence:
 
 Route: `/onboarding/supplier-flow`
 
+## Tech Stack
+
+**Backend:** Python 3.11, FastAPI, SQLAlchemy 2, Neo4j driver, Redis, Kafka
+**Frontend:** Next.js 14, React, Tailwind CSS, Vitest
+**Infrastructure:** Docker, Railway, Vercel
+**Observability:** OpenTelemetry, Prometheus, Sentry
+
 ## Local Development
 
 Start core services:
@@ -68,45 +62,57 @@ Start core services:
 docker-compose up -d
 ```
 
-Start frontend:
+Start the backend (example for the admin service):
+
+```bash
+cd services/admin
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Start the frontend:
 
 ```bash
 cd frontend
-pnpm dev
+npm ci
+npm run dev
+```
+
+## Running Tests
+
+Backend (per-service):
+
+```bash
+cd services/admin
+pytest tests/ -v --cov=app
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run test:run        # single run
+npm run lint            # eslint
+npm run build           # production build check
 ```
 
 ## Deployment Notes
 
-- Vercel-hosted frontend should use a **public** admin API base URL.
-- Recommended env on Vercel:
-  - `NEXT_PUBLIC_ADMIN_URL=https://<railway-public-domain>`
-- Avoid relying on private/internal hostnames from Vercel runtime routes.
-
-## Validation Commands
-
-Frontend login tests:
-
-```bash
-cd frontend
-pnpm vitest src/__tests__/auth/login.test.tsx
-```
-
-Frontend production build:
-
-```bash
-cd frontend
-pnpm build
-```
+- Vercel-hosted frontend must use a **public** admin API base URL.
+- Set `NEXT_PUBLIC_ADMIN_URL=https://<railway-public-domain>` on Vercel.
+- Do not rely on private/internal hostnames from Vercel runtime routes.
 
 ## Reference Docs
 
-- FSMA deployment runbook: `docs/FSMA_RAILWAY_DEPLOYMENT.md`
-- Env setup checklist (beginner-friendly): `docs/ENV_SETUP_CHECKLIST.md`
-- FSMA MVP spec: `docs/specs/FSMA_204_MVP_SPEC.md`
-- Fair lending module spec: `docs/specs/FAIR_LENDING_COMPLIANCE_OS_MVP_SPEC.md`
-- SOC2 control mapping (fair lending): `docs/security/SOC2_FAIR_LENDING_CONTROL_MAPPING.md`
-- Investor wedge narrative (fair lending): `docs/whitepapers/FAIR_LENDING_WEDGE_INVESTOR_NARRATIVE.md`
+| Document | Path |
+|---|---|
+| FSMA deployment runbook | `docs/FSMA_RAILWAY_DEPLOYMENT.md` |
+| Env setup checklist | `docs/ENV_SETUP_CHECKLIST.md` |
+| FSMA 204 MVP spec | `docs/specs/FSMA_204_MVP_SPEC.md` |
+| Architecture overview | `docs/ARCHITECTURE.md` |
+| Disaster recovery | `docs/DISASTER_RECOVERY.md` |
+| Incident response | `docs/security/INCIDENT_RESPONSE.md` |
 
 ---
 
-Status: Active FSMA wedge execution with production auth stabilized and supplier onboarding V1 flow live in-app.
+Status: Active FSMA wedge execution with production auth stabilized and supplier onboarding V1 live.
