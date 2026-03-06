@@ -94,6 +94,9 @@ def _compute_chain_hash(event_hash: str, previous_chain_hash: str | None) -> str
     return hashlib.sha256(chain_input.encode("utf-8")).hexdigest()
 
 
+from shared.middleware.tenant_context import get_optional_tenant_id
+from uuid import UUID
+
 @router.post(
     "/ingest",
     response_model=IngestResponse,
@@ -106,10 +109,12 @@ def _compute_chain_hash(event_hash: str, previous_chain_hash: str | None) -> str
 )
 async def ingest_events(
     payload: WebhookPayload,
+    tenant_id_from_context: Optional[UUID] = Depends(get_optional_tenant_id),
     _: None = Depends(_verify_api_key),
 ) -> IngestResponse:
     """Process incoming webhook events."""
-    tenant_id = payload.tenant_id or "default"
+    # Priority: Payload > Context > Default
+    tenant_id = payload.tenant_id or (str(tenant_id_from_context) if tenant_id_from_context else "default")
     results: list[EventResult] = []
     accepted = 0
     rejected = 0
