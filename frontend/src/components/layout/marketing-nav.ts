@@ -23,13 +23,11 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
     { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
     { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
     { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/knowledge-graph" },
-    { emoji: "🗺️", label: "System Architecture", desc: "Interactive map of the full compliance infrastructure", href: "/architecture" },
 ];
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     ...MARKETING_PRIMARY_NAV,
     { label: "Get Started", href: "/onboarding" },
-    { label: "System Architecture", href: "/architecture" },
 ];
 
 export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [

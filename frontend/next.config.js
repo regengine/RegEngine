@@ -35,6 +35,11 @@ const nextConfig = {
                 destination: '/demo/supply-chains',
                 permanent: true,
             },
+            {
+                source: '/architecture',
+                destination: '/security',
+                permanent: true,
+            },
         ];
     },
     async rewrites() {
