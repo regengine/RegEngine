@@ -26,11 +26,13 @@ class MappingEngine:
         password: str = os.getenv("NEO4J_PASSWORD", "")
     ):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        self._groq_model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
         self.llm = None
         if ChatGroq and os.getenv("GROQ_API_KEY"):
             try:
-                self.llm = ChatGroq(model="grok-beta", temperature=0)
-            except Exception:
+                self.llm = ChatGroq(model=self._groq_model, temperature=0)
+            except Exception as e:
+                logger.warning("groq_init_failed", model=self._groq_model, error=str(e))
                 self.llm = None
 
     async def close(self):
@@ -98,7 +100,7 @@ class MappingEngine:
                             "source_id": obligation_id,
                             "target_id": match["text"],
                             "confidence": 0.9,
-                            "justification": "Semantic harmonization via Grok-beta"
+                            "justification": f"Semantic harmonization via {self._groq_model}"
                         })
 
         except Exception as e:

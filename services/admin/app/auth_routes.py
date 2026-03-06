@@ -214,10 +214,23 @@ async def refresh_session(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     
-    # Get active tenant (default to first available)
-    stmt_mem = select(MembershipModel).where(MembershipModel.user_id == user.id)
+    # Get first active tenant — must join TenantModel to filter out
+    # suspended/archived tenants so they cannot receive fresh access tokens.
+    stmt_mem = (
+        select(MembershipModel)
+        .join(TenantModel, MembershipModel.tenant_id == TenantModel.id)
+        .where(
+            MembershipModel.user_id == user.id,
+            MembershipModel.is_active == True,  # noqa: E712
+            TenantModel.status == "active",
+        )
+    )
     memberships = db.execute(stmt_mem).scalars().all()
     active_tenant_id = memberships[0].tenant_id if memberships else None
+
+    if not active_tenant_id:
+        logger.warning("refresh_no_active_tenant", user_id=str(user.id))
+        raise HTTPException(status_code=403, detail="No active tenant available")
     
     access_token_data = {
         "sub": str(user.id),

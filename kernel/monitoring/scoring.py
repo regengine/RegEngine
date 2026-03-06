@@ -5,7 +5,8 @@ Calculates high-integrity compliance scores for FSMA and other domains.
 """
 
 from typing import List, Dict, Any
-from .models import ComplianceScore, RiskWeight, ObligationMatch, RiskLevel
+from kernel.models import ComplianceScore, RiskWeight
+from kernel.obligation.models import ObligationMatch, RiskLevel
 
 def calculate_compliance_score(
     tenant_id: str,
