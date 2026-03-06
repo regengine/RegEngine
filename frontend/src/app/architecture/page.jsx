@@ -35,6 +35,7 @@ const LAYERS = [
                 status: 'exists',
                 x: 2,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/shared/',
             },
             {
                 id: 'webhooks',
@@ -67,6 +68,7 @@ const LAYERS = [
                 status: 'exists',
                 x: 0,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/ingestion/',
             },
             {
                 id: 'nlp',
@@ -75,6 +77,7 @@ const LAYERS = [
                 status: 'exists',
                 x: 1,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/nlp/',
             },
             {
                 id: 'compliance',
@@ -83,22 +86,34 @@ const LAYERS = [
                 status: 'partial',
                 x: 2,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/compliance/',
+            },
+            {
+                id: 'opportunity',
+                label: 'Opportunity Scorer',
+                detail: 'Analyzes compliance data to identify business opportunities, tax credits, and supply chain optimizations.',
+                status: 'exists',
+                x: 3,
+                lastUpdated: 'Mar 2026',
+                repoPath: 'services/opportunity/',
             },
             {
                 id: 'scheduler',
                 label: 'Job Scheduler',
                 detail: 'Background jobs: hash chain computation, evidence rollup, report generation, stale-data alerts. Cron + event-driven.',
                 status: 'exists',
-                x: 3,
+                x: 4,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/scheduler/',
             },
             {
                 id: 'billing',
                 label: 'Billing Platform',
                 detail: 'Usage-based billing, tenant invoicing, Stripe integration. 331/331 tests passing. Needs metering hooks from ingestion.',
                 status: 'exists',
-                x: 4,
+                x: 5,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/billing/',
             },
         ],
     },
@@ -123,6 +138,7 @@ const LAYERS = [
                 status: 'exists',
                 x: 1,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/graph/',
             },
             {
                 id: 'redis',
@@ -171,6 +187,7 @@ const LAYERS = [
                 status: 'exists',
                 x: 1,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'frontend/src/app/dashboard/',
             },
             {
                 id: 'alerts',
@@ -211,6 +228,7 @@ const LAYERS = [
                 status: 'missing',
                 x: 0,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/admin/',
             },
             {
                 id: 'auth',
@@ -219,6 +237,7 @@ const LAYERS = [
                 status: 'partial',
                 x: 1,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'services/shared/middleware/security.py',
             },
             {
                 id: 'cicd',
@@ -227,6 +246,7 @@ const LAYERS = [
                 status: 'partial',
                 x: 2,
                 lastUpdated: 'Mar 2026',
+                repoPath: '.github/workflows/',
             },
             {
                 id: 'infra',
@@ -235,6 +255,7 @@ const LAYERS = [
                 status: 'partial',
                 x: 3,
                 lastUpdated: 'Mar 2026',
+                repoPath: 'infra/',
             },
             {
                 id: 'agents',
@@ -243,16 +264,41 @@ const LAYERS = [
                 status: 'exists',
                 x: 4,
                 lastUpdated: 'Mar 2026',
+                repoPath: '_agent/',
             },
         ],
     },
 ];
 
 const STATUS_CONFIG = {
-    exists: { label: 'Built', bg: '#12342a', border: '#4fa', glow: '0 0 12px rgba(79,255,170,0.3)' },
-    partial: { label: 'In Progress', bg: '#2a2a10', border: '#fa0', glow: '0 0 12px rgba(255,170,0,0.25)' },
-    missing: { label: 'Needed', bg: '#341222', border: '#f44', glow: '0 0 12px rgba(255,68,68,0.25)' },
-    future: { label: 'Future', bg: '#1a1a2e', border: '#88f', glow: '0 0 12px rgba(136,136,255,0.2)' },
+    exists: {
+        label: 'Built',
+        bg: '#12342a',
+        border: '#4fa',
+        glow: '0 0 12px rgba(79,255,170,0.3)',
+        description: 'Component is fully deployed to production and actively used.'
+    },
+    partial: {
+        label: 'In Progress',
+        bg: '#2a2a10',
+        border: '#fa0',
+        glow: '0 0 12px rgba(255,170,0,0.25)',
+        description: 'Currently in active development, beta testing, or pending secondary features.'
+    },
+    missing: {
+        label: 'Needed',
+        bg: '#341222',
+        border: '#f44',
+        glow: '0 0 12px rgba(255,68,68,0.25)',
+        description: 'Planned requirement for v1.0 but development has not yet started.'
+    },
+    future: {
+        label: 'Future',
+        bg: '#1a1a2e',
+        border: '#88f',
+        glow: '0 0 12px rgba(136,136,255,0.2)',
+        description: 'Strategic roadmap item for post-v1.0 scalability or enhanced vertical support.'
+    },
 };
 
 const FLOWS = [
@@ -263,9 +309,11 @@ const FLOWS = [
     { from: 'iot', to: 'ingestion', label: 'Sensor Data' },
     { from: 'ingestion', to: 'postgres', label: 'Validated Records' },
     { from: 'ingestion', to: 'neo4j', label: 'Graph Updates' },
+    { from: 'ingestion', to: 'opportunity', label: 'Data Mining' },
     { from: 'compliance', to: 'hashchain', label: 'Evidence Sealing' },
     { from: 'compliance', to: 'fdaexport', label: 'Audit Packages' },
     { from: 'postgres', to: 'dashboard', label: 'Live Queries' },
+    { from: 'opportunity', to: 'dashboard', label: 'Business Insights' },
     { from: 'neo4j', to: 'reports', label: 'Gap Analysis' },
 ];
 
@@ -290,6 +338,7 @@ function RegEngineArchitectureContent() {
     const [filter, setFilter] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [hoveredFlow, setHoveredFlow] = useState(null);
+    const [showLegend, setShowLegend] = useState(false);
 
     // Sync selection → URL
     const handleSelect = (id) => {
@@ -348,6 +397,19 @@ function RegEngineArchitectureContent() {
           * { box-shadow: none !important; animation: none !important; }
           [style*="background: #0a0a0f"] { background: #fff !important; }
           [style*="color: #e0e0e0"]       { color: #111 !important;  }
+        }
+        .legend-card {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            width: 260px;
+            background: #111118;
+            border: 1px solid #222;
+            padding: 16px;
+            border-radius: 8px;
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            animation: fadeIn 0.15s ease-out;
         }
       `}</style>
 
@@ -432,6 +494,41 @@ function RegEngineArchitectureContent() {
                         className="arch-filter-bar"
                         style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}
                     >
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setShowLegend(!showLegend)}
+                                style={{
+                                    background: '#1a1a24',
+                                    border: '1px solid #333',
+                                    borderRadius: 6,
+                                    width: 28,
+                                    height: 28,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    color: showLegend ? '#4fa' : '#666',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                {showLegend ? '×' : 'ℹ'}
+                            </button>
+                            {showLegend && (
+                                <div className="legend-card">
+                                    <h4 style={{ margin: '0 0 12px 0', fontSize: 11, color: '#fff' }}>STATUS DEFINITIONS</h4>
+                                    {Object.values(STATUS_CONFIG).map((cfg) => (
+                                        <div key={cfg.label} style={{ marginBottom: 12 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.border }} />
+                                                <span style={{ fontSize: 10, fontWeight: 700, color: cfg.border }}>{cfg.label.toUpperCase()}</span>
+                                            </div>
+                                            <div style={{ fontSize: 10, color: '#666', lineHeight: 1.4 }}>{cfg.description}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                             <button
                                 key={key}
@@ -528,7 +625,12 @@ function RegEngineArchitectureContent() {
                                                         }}
                                                     />
                                                     <div style={{ fontSize: 13, fontWeight: 600, color: '#e8e8e8', marginBottom: 4 }}>{node.label}</div>
-                                                    <div style={{ fontSize: 9, color: cfg.border, letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: 600 }}>{cfg.label}</div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div style={{ fontSize: 9, color: cfg.border, letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: 600 }}>{cfg.label}</div>
+                                                        {node.repoPath && (
+                                                            <div style={{ fontSize: 8, color: '#333' }}>[SRC]</div>
+                                                        )}
+                                                    </div>
                                                 </button>
                                             );
                                         })}
@@ -573,22 +675,61 @@ function RegEngineArchitectureContent() {
                                         <span style={{ fontSize: 9, color: '#444' }}>· updated {selectedNode.lastUpdated}</span>
                                     </div>
                                 </div>
-                                <button
-                                    className="arch-close-btn"
-                                    onClick={() => handleSelect(selectedNode.id)}
-                                    style={{ background: 'none', border: '1px solid #333', color: '#666', cursor: 'pointer', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}
-                                >✕</button>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    {selectedNode.repoPath && (
+                                        <div
+                                            title={selectedNode.repoPath}
+                                            style={{
+                                                fontSize: 10, color: '#4fa', border: '1px solid #4fa55',
+                                                padding: '4px 10px', borderRadius: 6, background: '#12342a',
+                                                fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6
+                                            }}
+                                        >
+                                            <span style={{ opacity: 0.5 }}>📂</span>
+                                            {selectedNode.repoPath}
+                                        </div>
+                                    )}
+                                    <button
+                                        className="arch-close-btn"
+                                        onClick={() => handleSelect(selectedNode.id)}
+                                        style={{ background: 'none', border: '1px solid #333', color: '#666', cursor: 'pointer', borderRadius: 6, padding: '4px 10px', fontSize: 12 }}
+                                    >✕</button>
+                                </div>
                             </div>
-                            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: '#bbb' }}>{selectedNode.detail}</p>
-                            <div style={{ marginTop: 16 }}>
-                                <div style={{ fontSize: 10, color: '#555', letterSpacing: 1.5, marginBottom: 8, fontWeight: 600 }}>CONNECTED FLOWS</div>
-                                {FLOWS.filter((f) => f.from === selectedNode.id || f.to === selectedNode.id).map((f, i) => (
-                                    <div key={i} onMouseEnter={() => setHoveredFlow(f)} onMouseLeave={() => setHoveredFlow(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', margin: '0 6px 6px 0', background: '#ffffff08', borderRadius: 4, fontSize: 10, color: '#888' }}>
-                                        <span style={{ color: '#0ff' }}>{f.from}</span>
-                                        <span style={{ color: '#333' }}>→</span>
-                                        <span style={{ color: '#4fa' }}>{f.to}</span>
+                            <p style={{ margin: '0 0 16px 0', fontSize: 13, lineHeight: 1.7, color: '#bbb' }}>{selectedNode.detail}</p>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                                <div>
+                                    <div style={{ fontSize: 10, color: '#555', letterSpacing: 1.5, marginBottom: 8, fontWeight: 600 }}>CONNECTED FLOWS</div>
+                                    {FLOWS.filter((f) => f.from === selectedNode.id || f.to === selectedNode.id).map((f, i) => (
+                                        <div key={i} onMouseEnter={() => setHoveredFlow(f)} onMouseLeave={() => setHoveredFlow(null)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', margin: '0 0 6px 0', background: '#ffffff08', borderRadius: 4, fontSize: 10, color: '#888' }}>
+                                            <span style={{ color: '#0ff', minWidth: 60, textAlign: 'right' }}>{f.from}</span>
+                                            <span style={{ color: '#333' }}>→</span>
+                                            <span style={{ color: '#4fa', minWidth: 60 }}>{f.to}</span>
+                                            <span style={{ color: '#444', fontSize: 8, marginLeft: 'auto' }}>{f.label}</span>
+                                        </div>
+                                    ))}
+                                    {FLOWS.filter((f) => f.from === selectedNode.id || f.to === selectedNode.id).length === 0 && (
+                                        <span style={{ fontSize: 11, color: '#444' }}>No mapped data flows</span>
+                                    )}
+                                </div>
+                                <div style={{ borderLeft: '1px solid #ffffff08', paddingLeft: 24 }}>
+                                    <div style={{ fontSize: 10, color: '#555', letterSpacing: 1.5, marginBottom: 8, fontWeight: 600 }}>ENGINEERING METADATA</div>
+                                    <div style={{ fontSize: 10, color: '#666', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Component ID:</span>
+                                            <span style={{ color: '#888' }}>{selectedNode.id}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Integration:</span>
+                                            <span style={{ color: '#888' }}>{selected === 'postgres' ? 'SQL/RLS' : selected === 'neo4j' ? 'Cypher' : 'REST/gRPC'}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Observability:</span>
+                                            <span style={{ color: '#22c55e' }}>Healthy</span>
+                                        </div>
                                     </div>
-                                ))}
+                                </div>
                             </div>
                         </div>
                     )}
