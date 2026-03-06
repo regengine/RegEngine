@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 
 import structlog
 from apscheduler.schedulers.blocking import BlockingScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.interval import IntervalTrigger
 from pytz import utc
@@ -82,7 +82,7 @@ class SchedulerService:
         
         # Fortune Top 15 Resilience Configuration
         jobstores = {
-            'default': SQLAlchemyJobStore(url=self.settings.database_url)
+            'default': MemoryJobStore()
         }
         executors = {
             'default': ThreadPoolExecutor(20)
@@ -354,7 +354,8 @@ class SchedulerService:
 
         # FDA Warning Letters - hourly by default
         self.scheduler.add_job(
-            lambda: self.run_scraper(SourceType.FDA_WARNING_LETTER),
+            self.run_scraper,
+            args=[SourceType.FDA_WARNING_LETTER],
             trigger=IntervalTrigger(minutes=settings.fda_warning_letters_interval),
             id="fda_warning_letters",
             name="FDA Warning Letters Scraper",
@@ -368,7 +369,8 @@ class SchedulerService:
 
         # FDA Import Alerts - every 2 hours by default
         self.scheduler.add_job(
-            lambda: self.run_scraper(SourceType.FDA_IMPORT_ALERT),
+            self.run_scraper,
+            args=[SourceType.FDA_IMPORT_ALERT],
             trigger=IntervalTrigger(minutes=settings.fda_import_alerts_interval),
             id="fda_import_alerts",
             name="FDA Import Alerts Scraper",
@@ -382,7 +384,8 @@ class SchedulerService:
 
         # FDA Recalls - every 30 minutes by default (critical for FSMA 204)
         self.scheduler.add_job(
-            lambda: self.run_scraper(SourceType.FDA_RECALL),
+            self.run_scraper,
+            args=[SourceType.FDA_RECALL],
             trigger=IntervalTrigger(minutes=settings.fda_recalls_interval),
             id="fda_recalls",
             name="FDA Recalls Scraper",
@@ -396,7 +399,8 @@ class SchedulerService:
 
         # Regulatory Discovery - daily (Nightly)
         self.scheduler.add_job(
-            lambda: self.run_scraper(SourceType.REGULATORY_DISCOVERY),
+            self.run_scraper,
+            args=[SourceType.REGULATORY_DISCOVERY],
             trigger=IntervalTrigger(minutes=settings.regulatory_discovery_interval),
             id="regulatory_discovery",
             name="Regulatory Discovery Bulk Sync",
@@ -410,7 +414,7 @@ class SchedulerService:
 
         # State cleanup - daily
         self.scheduler.add_job(
-            lambda: self.state_manager.cleanup_old_items(days=90),
+            self.cleanup_state,
             trigger=IntervalTrigger(hours=24),
             id="state_cleanup",
             name="State Cleanup (90 days)",
@@ -473,6 +477,10 @@ class SchedulerService:
             logger.error("scheduler_crashed", error=str(e))
             raise e
             
+    def cleanup_state(self) -> None:
+        """Wrapper for state cleanup to avoid lambda serialization issues."""
+        self.state_manager.cleanup_old_items(days=90)
+
     def shutdown(self) -> None:
         """Gracefully shutdown the scheduler."""
         logger.info("scheduler_shutting_down")
