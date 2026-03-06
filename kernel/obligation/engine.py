@@ -114,69 +114,80 @@ class RegulatoryEngine:
     def _persist_evaluation(self, result: ObligationEvaluationResult):
         """
         Persist evaluation result to graph and database.
-        
-        Creates:
-        - ObligationEvaluation nodes in graph
-        - FOR_DECISION relationships
-        - AGAINST_OBLIGATION relationships
+
+        Creates one ObligationEvaluation node per obligation match, then links
+        each node to its parent Decision and the matching RegulatoryObligation.
+
+        Graph structure per match:
+            (ObligationEvaluation)-[:FOR_DECISION]->(Decision)
+            (ObligationEvaluation)-[:AGAINST_OBLIGATION]->(RegulatoryObligation)
         """
         if self.graph is None:
             logger.warning("No graph client configured, skipping persistence")
             return
-        
+
         try:
             with self.graph.session() as session:
-                # Create ObligationEvaluation node
-                session.run(
-                    """
-                    CREATE (oe:ObligationEvaluation {
-                        evaluation_id: $evaluation_id,
-                        vertical: $vertical,
-                        decision_id: $decision_id,
-                        obligation_id: $obligation_id,
-                        met: $met,
-                        confidence: $confidence,
-                        matched_evidence_count: $matched_evidence_count,
-                        evaluated_at: datetime($evaluated_at),
-                        risk_score: $risk_score
-                    })
-                    """,
-                    evaluation_id=result.evaluation_id,
-                    vertical=result.vertical,
-                    decision_id=result.decision_id,
-                    obligation_id=result.obligation_id,
-                    met=result.met,
-                    confidence=result.confidence,
-                    matched_evidence_count=len(result.matched_evidence),
-                    evaluated_at=result.evaluated_at,
-                    risk_score=result.risk_score
-                )
-                
-                # Link to Decision if it exists
-                if result.decision_id:
+                for match in result.obligation_matches:
+                    # One node per obligation match — each carries its own
+                    # obligation_id, met status, risk score and missing evidence.
                     session.run(
                         """
-                        MATCH (oe:ObligationEvaluation {evaluation_id: $evaluation_id})
-                        MATCH (d:Decision {decision_id: $decision_id})
-                        CREATE (oe)-[:FOR_DECISION]->(d)
+                        CREATE (oe:ObligationEvaluation {
+                            evaluation_id: $evaluation_id,
+                            vertical: $vertical,
+                            decision_id: $decision_id,
+                            obligation_id: $obligation_id,
+                            met: $met,
+                            missing_evidence: $missing_evidence,
+                            evaluated_at: datetime($evaluated_at),
+                            risk_score: $risk_score
+                        })
                         """,
                         evaluation_id=result.evaluation_id,
-                        decision_id=result.decision_id
+                        vertical=result.vertical,
+                        decision_id=result.decision_id,
+                        obligation_id=match.obligation_id,
+                        met=match.met,
+                        missing_evidence=match.missing_evidence,
+                        evaluated_at=result.timestamp.isoformat(),
+                        risk_score=match.risk_score,
                     )
-                
-                # Link to Obligation if it exists
-                if result.obligation_id:
+
+                    # Link to Decision node if it exists in the graph
+                    if result.decision_id:
+                        session.run(
+                            """
+                            MATCH (oe:ObligationEvaluation {
+                                evaluation_id: $evaluation_id,
+                                obligation_id: $obligation_id
+                            })
+                            MATCH (d:Decision {decision_id: $decision_id})
+                            MERGE (oe)-[:FOR_DECISION]->(d)
+                            """,
+                            evaluation_id=result.evaluation_id,
+                            obligation_id=match.obligation_id,
+                            decision_id=result.decision_id,
+                        )
+
+                    # Link to the canonical RegulatoryObligation node if present
                     session.run(
                         """
-                        MATCH (oe:ObligationEvaluation {evaluation_id: $evaluation_id})
+                        MATCH (oe:ObligationEvaluation {
+                            evaluation_id: $evaluation_id,
+                            obligation_id: $obligation_id
+                        })
                         MATCH (o:RegulatoryObligation {obligation_id: $obligation_id})
-                        CREATE (oe)-[:AGAINST_OBLIGATION]->(o)
+                        MERGE (oe)-[:AGAINST_OBLIGATION]->(o)
                         """,
                         evaluation_id=result.evaluation_id,
-                        obligation_id=result.obligation_id
+                        obligation_id=match.obligation_id,
                     )
-                
-                logger.info(f"Persisted evaluation {result.evaluation_id} to Neo4j")
+
+                logger.info(
+                    f"Persisted evaluation {result.evaluation_id} to Neo4j "
+                    f"({len(result.obligation_matches)} obligation nodes)"
+                )
         except Exception as e:
             logger.error(f"Failed to persist evaluation to graph: {e}")
     
