@@ -22,11 +22,13 @@ Usage:
         return await db.query(Item).filter(Item.tenant_id == tenant_id).all()
 """
 
-from fastapi import Request, HTTPException, Depends
-from starlette.middleware.base import BaseHTTPMiddleware
-from typing import Optional, Callable
+import os
 import uuid
 import logging
+from typing import Optional, Callable
+
+from fastapi import Request, HTTPException, Depends
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +91,13 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         # We only trust this header if we are in a 'trusted' internal context.
         tenant_header = request.headers.get("X-RegEngine-Tenant-ID")
         if tenant_header:
-            # Check for internal shared secret for service-to-service trust
+            # Validate against the configured internal service secret (env var only —
+            # never compare to a hardcoded string in source code).
             internal_secret = request.headers.get("X-RegEngine-Internal-Secret")
-            # In a real prod env, this would be validated against a secret store/config
-            is_internal = internal_secret == "trusted-internal-v1" # Placeholder for validation logic
+            configured_secret = os.getenv("REGENGINE_INTERNAL_SECRET")
+            is_internal = bool(
+                configured_secret and internal_secret == configured_secret
+            )
             
             if is_internal:
                 try:
@@ -103,14 +108,29 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         detail=f"Invalid tenant ID format in header: {tenant_header}"
                     )
             else:
-                logger.warning(f"Rejected unauthenticated X-RegEngine-Tenant-ID header from {request.client.host}")
+                client_host = request.client.host if request.client else "unknown"
+                logger.warning(
+                    "Rejected unauthenticated X-RegEngine-Tenant-ID header",
+                    extra={"client_host": client_host},
+                )
         
         # Method 3: From API key
+        # API keys must be validated against the database (api_key_store).
+        # A single configurable key is supported for service accounts via env vars;
+        # a hardcoded key in source code is never acceptable.
         api_key = request.headers.get("X-RegEngine-API-Key")
-        if api_key == "regengine-universal-test-key-2026":
-             # Match the default demo tenant ID in shared/auth.py
-             return uuid.UUID("11111111-1111-1111-1111-111111111111")
-        
+        if api_key:
+            configured_key = os.getenv("REGENGINE_API_KEY")
+            configured_tenant = os.getenv("REGENGINE_API_KEY_TENANT_ID")
+            if configured_key and configured_tenant and api_key == configured_key:
+                try:
+                    return uuid.UUID(configured_tenant)
+                except ValueError:
+                    logger.error(
+                        "REGENGINE_API_KEY_TENANT_ID is not a valid UUID — "
+                        "API key auth disabled until corrected"
+                    )
+
         return None
 
 
