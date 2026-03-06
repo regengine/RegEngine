@@ -48,7 +48,7 @@ class ObligationDefinition(BaseModel):
     domain: RegulatoryDomain
     description: str = Field(..., min_length=10)
     triggering_conditions: Dict[str, Any] = Field(..., description="Conditions that trigger this obligation")
-    required_evidence: List[str] = Field(..., min_items=1, description="Required evidence fields")
+    required_evidence: List[str] = Field(..., min_length=1, description="Required evidence fields")
 
 
 class ObligationEvaluationRequest(BaseModel):
