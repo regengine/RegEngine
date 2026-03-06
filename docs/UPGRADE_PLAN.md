@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 1 — Bug Fixes (P0/P1) `[ ]`
+## Phase 1 — Bug Fixes (P0/P1) `[x]`
 
 These issues will cause runtime errors or data loss the moment the affected code path is exercised in production. Fix first.
 
@@ -487,15 +487,15 @@ testpaths = [
 | ID | Phase | Priority | File(s) | Status |
 |----|-------|----------|---------|--------|
 | BUG-001 | 1 | P0 | `kernel/obligation/engine.py` | `[x]` |
-| BUG-002 | 1 | P0 | `kernel/monitoring/scoring.py` | `[ ]` |
-| BUG-003 | 1 | P1 | `docker-compose.yml` | `[ ]` |
-| BUG-004 | 1 | P1 | `docker-compose.yml` | `[ ]` |
-| BUG-005 | 1 | P1 | `kernel/graph.py` | `[ ]` |
-| BUG-006 | 1 | P0 | `kernel/obligation/models.py`, `kernel/models.py` | `[ ]` |
-| SEC-001 | 2 | P1 | `services/admin/app/auth_routes.py` | `[ ]` |
+| BUG-002 | 1 | P0 | `kernel/monitoring/scoring.py` | `[x]` |
+| BUG-003 | 1 | P1 | `docker-compose.yml` | `[x]` |
+| BUG-004 | 1 | P1 | `docker-compose.yml` | `[x]` |
+| BUG-005 | 1 | P1 | `kernel/graph.py` | `[x]` |
+| BUG-006 | 1 | P0 | `kernel/obligation/models.py`, `kernel/models.py` | `[x]` |
+| SEC-001 | 2 | P1 | `services/admin/app/auth_routes.py` | `[x]` |
 | SEC-002 | 2 | P2 | `services/shared/` | `[ ]` |
 | STR-001 | 3 | P2 | `kernel/models.py`, `kernel/obligation/models.py` | `[ ]` |
-| STR-002 | 3 | P2 | `services/admin/app/compliance_routes.py` | `[ ]` |
+| STR-002 | 3 | P2 | `services/admin/app/compliance_routes.py` | `[x]` |
 | STR-003 | 3 | P2 | `kernel/obligation/engine.py`, `routes.py` | `[ ]` |
 | QUAL-001 | 4 | P3 | `kernel/obligation/evaluator.py` | `[ ]` |
 | QUAL-002 | 4 | P3 | `kernel/obligation/evaluator.py` | `[ ]` |
