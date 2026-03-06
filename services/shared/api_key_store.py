@@ -748,6 +748,10 @@ async def get_db_key_store() -> DatabaseAPIKeyStore:
         await _db_key_store.init_db()
     return _db_key_store
 
+async def get_api_key_store() -> DatabaseAPIKeyStore:
+    """Compatibility alias for get_db_key_store()"""
+    return await get_db_key_store()
+
 
 # Migration helper
 async def migrate_from_memory_store(

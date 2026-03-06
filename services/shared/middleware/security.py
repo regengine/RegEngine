@@ -17,4 +17,19 @@ def add_security(app: FastAPI):
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*.regengine.co", "localhost", "testserver"])
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
+        "*.regengine.co", 
+        "localhost", 
+        "testserver", 
+        "ingestion-service",
+        "admin-api",
+        "billing-service",
+        "compliance-api",
+        "energy-api",
+        "opportunity-api",
+        "nlp-service",
+        "graph-service",
+        "scheduler",
+        "otel-collector",
+        "gateway"
+    ])

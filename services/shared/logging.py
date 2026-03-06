@@ -35,8 +35,9 @@ def setup_logging():
     # 1. Stdout listener
     handlers = [logging.StreamHandler(sys.stdout)]
     
-    # 2. OTel Bridge (If available)
-    if OTEL_LOGGING_AVAILABLE:
+    # 2. OTel Bridge (If available and enabled)
+    enable_otel = os.getenv("ENABLE_OTEL", "true").lower() != "false"
+    if OTEL_LOGGING_AVAILABLE and enable_otel:
         handlers.append(LoggingHandler(logger_provider=logs.get_logger_provider()))
         
     logging.basicConfig(
@@ -45,6 +46,10 @@ def setup_logging():
         handlers=handlers
     )
     return logger
+
+def get_logger(name: str):
+    """Compatibility alias for setup_logging().get_logger()"""
+    return structlog.get_logger(name)
 
 # OTel context + sampling flag injection
 def otel_context_processor(logger, method_name, event_dict):
