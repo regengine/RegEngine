@@ -13,7 +13,7 @@ import os
 
 def get_shared_resource(service_name: str):
     """Standardized resource with K8s Downward API metadata."""
-    return Resource.create({
+    attributes = {
         "service.name": service_name,
         "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
         "deployment.environment": os.getenv("ENV", "dev"),
@@ -21,51 +21,65 @@ def get_shared_resource(service_name: str):
         "k8s.pod.name": os.getenv("K8S_POD_NAME"),
         "k8s.namespace.name": os.getenv("K8S_NAMESPACE"),
         "k8s.container.name": os.getenv("K8S_CONTAINER_NAME"),
-    })
+    }
+    # Filter out None values to prevent OTel crashes
+    valid_attributes = {k: v for k, v in attributes.items() if v is not None}
+    return Resource.create(valid_attributes)
 
 def add_observability(app: FastAPI, service_name: str):
     """Unified entry point for FastAPI OTel (Tracing + Baggage + Logs)."""
-    resource = get_shared_resource(service_name)
-    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
+    if os.getenv("ENABLE_OTEL", "true").lower() == "false":
+        return
 
-    # 1. Tracing
-    sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
-    trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
-    trace.set_tracer_provider(trace_provider)
-    trace_exporter = OTLPSpanExporter(endpoint=endpoint)
-    trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
-
-    # 2. Logging (OTLP)
-    log_provider = LoggerProvider(resource=resource)
-    logs.set_logger_provider(log_provider)
-    log_exporter = OTLPLogExporter(endpoint=endpoint)
-    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
-
-    # Enable W3C Baggage propagation globally
     try:
-        from opentelemetry import baggage
-        baggage.set_baggage_propagator()
-    except Exception:
-        pass
+        resource = get_shared_resource(service_name)
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
 
-    FastAPIInstrumentor.instrument_app(app)
+        # 1. Tracing
+        sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
+        trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
+        trace.set_tracer_provider(trace_provider)
+        trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+        trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+
+        # 2. Logging (OTLP)
+        try:
+            log_provider = LoggerProvider(resource=resource)
+            logs.set_logger_provider(log_provider)
+            log_exporter = OTLPLogExporter(endpoint=endpoint)
+            log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        except Exception as e:
+            print(f"Failed to setup OTel logging: {e}")
+
+        FastAPIInstrumentor.instrument_app(app)
+    except Exception as e:
+        print(f"Failed to setup OTel observability: {e}")
 
 def setup_standalone_observability(service_name: str):
     """Setup OTel for workers and consumers (no FastAPI app)."""
-    resource = get_shared_resource(service_name)
-    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
+    if os.getenv("ENABLE_OTEL", "true").lower() == "false":
+        return trace.get_tracer(service_name)
 
-    # 1. Tracing
-    sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
-    trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
-    trace.set_tracer_provider(trace_provider)
-    trace_exporter = OTLPSpanExporter(endpoint=endpoint)
-    trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+    try:
+        resource = get_shared_resource(service_name)
+        endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
 
-    # 2. Logging (OTLP)
-    log_provider = LoggerProvider(resource=resource)
-    logs.set_logger_provider(log_provider)
-    log_exporter = OTLPLogExporter(endpoint=endpoint)
-    log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        # 1. Tracing
+        sampling_rate = float(os.getenv("OTEL_TRACE_SAMPLING_RATE", "0.1"))
+        trace_provider = TracerProvider(sampler=TraceIdRatioBased(sampling_rate), resource=resource)
+        trace.set_tracer_provider(trace_provider)
+        trace_exporter = OTLPSpanExporter(endpoint=endpoint)
+        trace_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
+
+        # 2. Logging (OTLP)
+        try:
+            log_provider = LoggerProvider(resource=resource)
+            logs.set_logger_provider(log_provider)
+            log_exporter = OTLPLogExporter(endpoint=endpoint)
+            log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        except Exception as e:
+            print(f"Failed to setup OTel logging: {e}")
+    except Exception as e:
+        print(f"Failed to setup standalone OTel observability: {e}")
     
     return trace.get_tracer(service_name)
