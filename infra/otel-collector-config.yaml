@@ -22,23 +22,23 @@ processors:
             value: ".*(sent_to_dlq|poison_pill).*"
 
 exporters:
-  jaeger:
-    endpoint: jaeger:14250
+  otlp/jaeger:
+    endpoint: jaeger:4317
     tls:
       insecure: true
   prometheus:
     endpoint: 0.0.0.0:8889
-  logging:
-    loglevel: info
-  logging/dlq:
-    loglevel: warn
+  debug:
+    verbosity: basic
+  debug/dlq:
+    verbosity: basic
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, probabilistic_sampler, batch]
-      exporters: [jaeger]
+      exporters: [otlp/jaeger]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
@@ -46,4 +46,4 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, filter/dlq, batch]
-      exporters: [logging, logging/dlq]
+      exporters: [debug, debug/dlq]

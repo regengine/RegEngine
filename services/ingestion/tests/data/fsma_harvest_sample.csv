@@ -1,0 +1,3 @@
+traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,location_gln,field_id,harvester_name
+TOM-0226-F3-002,Roma Tomatoes (Bulk),800,cases,2026-03-01,"Valley Fresh Farms, Salinas CA",0614141000005,FIELD-B4,Valley Fresh Farms LLC
+# This is a sample FSMA 204 Harvest CSV for integration testing.
