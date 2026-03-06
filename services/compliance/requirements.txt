@@ -3,3 +3,4 @@ uvicorn[standard]==0.27.0
 sqlalchemy>=2.0.38
 psycopg[binary]>=3.2.4
 pydantic>=2.10.6
+confluent-kafka[schema-registry,avro]>=2.3.0

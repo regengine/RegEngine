@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from services.shared.api_key_store import get_api_key_store
-from services.shared.logger import get_logger
+from services.shared.logging import get_logger
 
 logger = get_logger("opportunity-api")
 
