@@ -493,10 +493,10 @@ testpaths = [
 | BUG-005 | 1 | P1 | `kernel/graph.py` | `[x]` |
 | BUG-006 | 1 | P0 | `kernel/obligation/models.py`, `kernel/models.py` | `[x]` |
 | SEC-001 | 2 | P1 | `services/admin/app/auth_routes.py` | `[x]` |
-| SEC-002 | 2 | P2 | `services/shared/` | `[ ]` |
+| SEC-002 | 2 | P2 | `services/shared/` | `[x]` | <!-- No dead modules found - all in use or removed |
 | STR-001 | 3 | P2 | `kernel/models.py`, `kernel/obligation/models.py` | `[ ]` |
 | STR-002 | 3 | P2 | `services/admin/app/compliance_routes.py` | `[x]` |
-| STR-003 | 3 | P2 | `kernel/obligation/engine.py`, `routes.py` | `[ ]` |
+| STR-003 | 3 | P2 | `kernel/obligation/engine.py`, `routes.py` | `[x]` | <!-- Already has fail-fast in __init__ --> |
 | QUAL-001 | 4 | P3 | `kernel/obligation/evaluator.py` | `[ ]` |
 | QUAL-002 | 4 | P3 | `kernel/obligation/evaluator.py` | `[ ]` |
 | QUAL-003 | 4 | P3 | `kernel/graph.py` | `[ ]` |
