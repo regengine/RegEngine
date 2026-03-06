@@ -3,11 +3,14 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies
-# gcc used for building some python packages if needed (e.g. psutil)
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install shared requirements
+COPY services/shared/requirements.txt /app/shared_requirements.txt
+RUN pip install --no-cache-dir -r /app/shared_requirements.txt
 
 # Install Python dependencies
 COPY services/nlp/requirements.txt .
@@ -17,12 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN adduser --disabled-password --gecos '' --uid 1001 appuser
 
 # Copy shared modules
-COPY services/shared /app/shared
+COPY services/shared /app/services/shared
 
 # Copy service code
-# We expect the context to be the project root
-COPY services/nlp/app /app/app
-COPY services/nlp/main.py /app/main.py
+COPY services/nlp /app/services/nlp
 COPY data-schemas /app/data-schemas
 
 # Set PYTHONPATH
@@ -40,4 +41,4 @@ RUN chown -R appuser:appuser /app
 USER appuser
 
 # Run application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8100"]
+CMD ["python", "-m", "uvicorn", "services.nlp.main:app", "--host", "0.0.0.0", "--port", "8100"]
