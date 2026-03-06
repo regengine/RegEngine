@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 # Note: These imports require langchain, pypdf, docx2txt, and langchain-groq to be installed
 try:
     # Try modern namespace (0.1.0+)
-    from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader, Docx2txtLoader
+    from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader, Docx2txtLoader, BSHTMLLoader
     from langchain_text_splitters import RecursiveCharacterTextSplitter
     from langchain_core.prompts import PromptTemplate
     try:
@@ -19,7 +19,7 @@ try:
 except ImportError:
     try:
         # Fallback to legacy namespace (<0.1.0)
-        from langchain.document_loaders import PyPDFLoader, WebBaseLoader, Docx2txtLoader
+        from langchain.document_loaders import PyPDFLoader, WebBaseLoader, Docx2txtLoader, BSHTMLLoader
         from langchain.text_splitter import RecursiveCharacterTextSplitter
         from langchain.prompts import PromptTemplate
         try:
@@ -51,6 +51,8 @@ class RegulationParser:
             loader = Docx2txtLoader(source)
         elif source_type == "url":
             loader = WebBaseLoader(source)
+        elif source_type == "html":
+            loader = BSHTMLLoader(source)
         else:
             raise ValueError(f"Unsupported source_type: {source_type}")
 

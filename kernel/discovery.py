@@ -128,7 +128,7 @@ class EthicalScraper:
                 f.write(response.content)
 
             # ── Parse + load ─────────────────────────────────────────────
-            parse_source_type = "url" if ext == "html" else "pdf"
+            parse_source_type = "html" if ext == "html" else "pdf"
             parser = RegulationParser()
             sections = await parser.parse(path, parse_source_type)
 
