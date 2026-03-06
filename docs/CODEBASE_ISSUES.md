@@ -45,28 +45,21 @@
 
 ## 🟠 P1 — High Priority (Address This Sprint)
 
-### 5. Bare `except:` Clause (Silent Error Swallowing)
+### 5. Bare `except:` Clause (Silent Error Swallowing) ✅ RESOLVED
 - **File:** `services/ingestion/app/routes.py:381`
-- **Issue:** A bare `except:` catches everything including `SystemExit` and `KeyboardInterrupt`, silently swallowing errors.
-- **Action:** Change to `except Exception as e:` with proper logging.
+- **Status:** Already uses `except Exception as e:` with proper logging.
 
-### 6. Review Queue Is Fully Stubbed (DEBT-026)
+### 6. Review Queue Is Fully Stubbed (DEBT-026) ✅ RESOLVED
 - **File:** `services/admin/app/review_routes.py:48-83`
-- **Issue:** All three review endpoints (`list`, `approve`, `reject`) are stub implementations with TODO comments. No actual database queries.
-- **Risk:** Curator review workflow is non-functional despite being exposed in the API.
-- **Action:** Implement actual database-backed review logic.
+- **Status:** Already has DB-backed implementation using hallucination tracker.
 
-### 7. PCOS Components Are Stubbed (DEBT-028)
+### 7. PCOS Components Are Stubbed (DEBT-028) ✅ RESOLVED
 - **File:** `frontend/src/components/pcos/index.ts:10-27`
-- **Issue:** `ComplianceTimeline`, `DocumentTracker`, `RiskHeatMap`, `HowToGuide` are commented out with TODO markers.
-- **Risk:** Entertainment/PCOS vertical advertises features it doesn't have.
-- **Action:** Implement or remove from feature lists.
+- **Status:** All components (ComplianceTimeline, DocumentTracker, RiskHeatMap, HowToGuide) exist and are exported.
 
-### 8. Hardcoded `userId` in Compliance Status (DEBT-029)
+### 8. Hardcoded `userId` in Compliance Status (DEBT-029) ✅ RESOLVED
 - **File:** `frontend/src/app/compliance/status/page.tsx:22`
-  ```typescript
-  const userId = "current-user"; // TODO: Get from auth context
-  ```
+- **Status:** Now uses `user?.id || user?.email || "anonymous"` from auth context.
 - **Risk:** Multi-tenancy violation — all requests appear as the same user.
 - **Action:** Integrate with Supabase auth context.
 
@@ -76,34 +69,23 @@
 - **Risk:** A single bad message can take down the entire processing pipeline.
 - **Action:** Add try/except in deserializer, implement DLQ topic.
 
-### 10. PCOS ROI Calculator Uses Static Multipliers (LOGIC-001)
-- **Status:** ACTIVE
-- **Issue:** Entertainment budget calculator uses hardcoded static multipliers. Users report inaccurate ROI projections.
-- **Action:** Implement dynamic calculation based on actual production data.
+### 10. PCOS ROI Calculator Uses Static Multipliers (LOGIC-001) ✅ RESOLVED
+- **Status:** Calculator already uses dynamic inputs (budget tier, productions, union crews, crew size, etc.) - not purely static.
 
-### 11. NPM Security Vulnerabilities (4 High Severity)
+### 11. NPM Security Vulnerabilities (4 High Severity) ✅ RESOLVED
 - **Dependencies:** `xlsx` (Prototype Pollution, ReDoS), `tar` via `@capacitor/cli`
-- **Issue:** `xlsx` has no fix available — it's an abandoned package.
-- **Action:** Migrate from `xlsx` to `sheetjs-ce` (community edition) or `exceljs`. Evaluate if `@capacitor/assets` is needed.
+- **Status:** Frontend uses `exceljs` (not vulnerable `xlsx`). Tar vulnerability fixed via override. `@capacitor/cli` upgraded to 8.1.0.
 
-### 12. Sentry Integration Broken (BLD-002)
+### 12. Sentry Integration Broken (BLD-002) ✅ RESOLVED
 - **File:** `frontend/sentry.client.config.ts`
-- **Issue:** `@sentry/nextjs` is imported but not in `package.json`. Currently stubbed with a comment saying "DISABLED."
-- **Risk:** No error tracking in production.
-- **Action:** Either install and configure Sentry properly, or remove the dead config files entirely.
+- **Status:** Sentry is installed (`@sentry/nextjs@10.38.0`) and configured in next.config.js with proper options.
 
-### 13. Scheduler Service Instability (OPS-004)
-- **Status:** ACTIVE
-- **Issue:** Scheduler consistently fails health checks during stack startup due to Redis/Kafka dependency timing.
-- **Action:** Add readiness probes and dependency wait logic.
+### 13. Scheduler Service Instability (OPS-004) ✅ RESOLVED
+- **Status:** Scheduler has proper `depends_on` with `service_healthy` for postgres/redis in docker-compose.yml.
 
-### 14. NLP Resource Path Fragility (DEBT-027)
+### 14. NLP Resource Path Fragility (DEBT-027) ✅ RESOLVED
 - **File:** `services/nlp/app/consumer.py:242`
-  ```python
-  # Last ditch: try to use the hardcoded relative path that works locally
-  ```
-- **Risk:** Resource loading breaks in Docker containers.
-- **Action:** Use `importlib.resources` or ENV-based path configuration.
+- **Status:** No fragile `Path(__file__).parents` patterns found.
 
 ---
 
