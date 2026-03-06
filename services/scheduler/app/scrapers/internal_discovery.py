@@ -25,6 +25,7 @@ async def run_regulatory_discovery():
             response = await discovery_breaker.call(
                 lambda: client.post(
                     url,
+                    headers={"X-RegEngine-API-Key": settings.scheduler_api_key},
                     timeout=settings.discovery_timeout_seconds
                 )
             )
@@ -46,8 +47,9 @@ class InternalDiscoveryScraper:
         import asyncio
         asyncio.run(run_regulatory_discovery())
         # Return a dummy ScrapeResult to satisfy the scheduler
-        from app.models import ScrapeResult
+        from app.models import ScrapeResult, SourceType
         return ScrapeResult(
+            source_type=SourceType.REGULATORY_DISCOVERY,
             success=True,
             items_found=2, # Mock value for status reporting
             items=[],
