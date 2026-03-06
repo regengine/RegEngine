@@ -16,8 +16,8 @@ class RegulationLoader:
 
     def __init__(
         self, 
-        uri: str = "bolt://localhost:7687", 
-        user: str = "neo4j", 
+        uri: str = os.getenv("NEO4J_URI", "bolt://localhost:7687"), 
+        user: str = os.getenv("NEO4J_USER", "neo4j"), 
         password: str = os.getenv("NEO4J_PASSWORD", "")
     ):
         try:
