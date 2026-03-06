@@ -79,11 +79,11 @@ class MappingEngine:
                 "Compare these regulatory obligations and identify if they represent the same requirement:\n"
                 "Source: {source_text} (from {source_reg})\n\n"
                 "Candidates:\n{candidates_text}\n\n"
-                "Return only the indexes of candidates that match (comma-separated), or 'NONE'."
+                "Return each matching candidate as 'index:confidence' (e.g., '0:0.85,2:0.60'), "
+                "or 'NONE' if no matches. Confidence is 0.0-1.0 where 1.0 is exact match."
             )
             
             cand_text = "\n".join([f"{i}. {c['text']} (from {c['regulation']})" for i, c in enumerate(candidates)])
-            # LLM invoke is usually synchronous in LangChain unless using ainvoke
             response = await self.llm.ainvoke(prompt.format(
                 source_text=source["text"],
                 source_reg=source["regulation"],
@@ -92,16 +92,25 @@ class MappingEngine:
             result = response.content.strip().upper()
             
             if result != "NONE":
-                matches = [int(idx.strip()) for idx in result.split(",") if idx.strip().isdigit()]
-                for idx in matches:
-                    if 0 <= idx < len(candidates):
-                        match = candidates[idx]
-                        mappings.append({
-                            "source_id": obligation_id,
-                            "target_id": match["text"],
-                            "confidence": 0.9,
-                            "justification": f"Semantic harmonization via {self._groq_model}"
-                        })
+                min_confidence = 0.7
+                for pair in result.split(","):
+                    if ":" not in pair:
+                        continue
+                    idx_str, conf_str = pair.strip().split(":", 1)
+                    if idx_str.isdigit():
+                        idx = int(idx_str)
+                        try:
+                            confidence = float(conf_str.strip())
+                        except ValueError:
+                            confidence = 0.9
+                        if 0 <= idx < len(candidates) and confidence >= min_confidence:
+                            match = candidates[idx]
+                            mappings.append({
+                                "source_id": obligation_id,
+                                "target_id": match["text"],
+                                "confidence": confidence,
+                                "justification": f"Semantic harmonization via {self._groq_model}"
+                            })
 
         except Exception as e:
             logger.error("llm_mapping_failed", error=str(e))
