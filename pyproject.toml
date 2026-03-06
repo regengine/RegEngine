@@ -114,6 +114,9 @@ minversion = "6.0"
 addopts = "-ra -q --asyncio-mode=auto"
 testpaths = [
     "tests",
+    "kernel/obligation/tests",
+    "kernel/monitoring/tests",
+    "kernel/evidence/tests",
     "services/admin/tests",
     "services/graph/tests",
     "services/ingestion/tests",

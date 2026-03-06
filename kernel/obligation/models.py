@@ -17,6 +17,7 @@ class Regulator(str, Enum):
     FRB = "FRB"
     FDIC = "FDIC"
     NCUA = "NCUA"
+    FDA = "FDA"
 
 
 class RegulatoryDomain(str, Enum):
@@ -27,6 +28,7 @@ class RegulatoryDomain(str, Enum):
     UDAAP = "UDAAP"
     SR_11_7 = "SR_11_7"
     OCC_AI = "OCC_AI"
+    FSMA = "FSMA"
 
 
 class RiskLevel(str, Enum):
@@ -110,3 +112,21 @@ class ObligationCoverageReport(BaseModel):
     
     # Risk distribution
     decisions_by_risk_level: Dict[RiskLevel, int]
+
+
+class RiskWeight(BaseModel):
+    """Weighting for different risk factors in compliance scoring."""
+    criticality: float = Field(0.5, ge=0.0, le=1.0)
+    reputation_impact: float = Field(0.2, ge=0.0, le=1.0)
+    legal_liability: float = Field(0.3, ge=0.0, le=1.0)
+
+
+class ComplianceScore(BaseModel):
+    """High-integrity compliance score result."""
+    score: float = Field(..., ge=0.0, le=100.0)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    tenant_id: str
+    vertical: str = "fsma"
+    domain_scores: Dict[str, float] = Field(default_factory=dict)
+    critical_findings_count: int = 0
+    weights_used: RiskWeight

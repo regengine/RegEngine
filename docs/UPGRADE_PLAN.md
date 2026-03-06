@@ -494,14 +494,14 @@ testpaths = [
 | BUG-006 | 1 | P0 | `kernel/obligation/models.py`, `kernel/models.py` | `[x]` |
 | SEC-001 | 2 | P1 | `services/admin/app/auth_routes.py` | `[x]` |
 | SEC-002 | 2 | P2 | `services/shared/` | `[x]` | <!-- No dead modules found - all in use or removed |
-| STR-001 | 3 | P2 | `kernel/models.py`, `kernel/obligation/models.py` | `[ ]` |
+| STR-001 | 3 | P2 | `kernel/models.py`, `kernel/obligation/models.py` | `[x]` | <!-- Consolidated models, obligation is source of truth |
 | STR-002 | 3 | P2 | `services/admin/app/compliance_routes.py` | `[x]` |
 | STR-003 | 3 | P2 | `kernel/obligation/engine.py`, `routes.py` | `[x]` | <!-- Already has fail-fast in __init__ --> |
-| QUAL-001 | 4 | P3 | `kernel/obligation/evaluator.py` | `[ ]` |
-| QUAL-002 | 4 | P3 | `kernel/obligation/evaluator.py` | `[ ]` |
-| QUAL-003 | 4 | P3 | `kernel/graph.py` | `[ ]` |
-| QUAL-004 | 4 | P3 | `kernel/evidence/tests/` | `[ ]` |
-| QUAL-005 | 4 | P3 | `pyproject.toml` | `[ ]` |
+| QUAL-001 | 4 | P3 | `kernel/obligation/evaluator.py` | `[x]` | <!-- Migrated to structlog |
+| QUAL-002 | 4 | P3 | `kernel/obligation/evaluator.py` | `[x]` | <!-- Added risk floor rationale |
+| QUAL-003 | 4 | P3 | `kernel/graph.py` | `[x]` | <!-- LLM returns confidence scores, min threshold 0.7 |
+| QUAL-004 | 4 | P3 | `kernel/evidence/tests/` | `[x]` | <!-- Added 5 test suites |
+| QUAL-005 | 4 | P3 | `pyproject.toml` | `[x]` | <!-- Added kernel test paths |
 
 ---
 

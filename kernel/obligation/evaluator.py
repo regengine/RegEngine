@@ -1,13 +1,14 @@
 """
 Regulatory Obligation Evaluator
-================================
+===============================
 Core logic for evaluating decisions against regulatory obligations.
 """
 
 from typing import List, Dict, Any, Tuple
-import logging
 from datetime import datetime
 import uuid
+
+import structlog
 
 from .models import (
     ObligationDefinition,
@@ -16,7 +17,7 @@ from .models import (
     RiskLevel
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger("obligation.evaluator")
 
 
 class ObligationEvaluator:
@@ -40,7 +41,7 @@ class ObligationEvaluator:
         """
         self.obligations = obligations
         self.obligations_by_id = {o.id: o for o in obligations}
-        logger.info(f"Initialized evaluator with {len(obligations)} obligations")
+        logger.info("evaluator_initialized", obligation_count=len(obligations))
     
     def evaluate_decision(
         self,
@@ -61,7 +62,8 @@ class ObligationEvaluator:
         Returns:
             ObligationEvaluationResult with coverage and matches
         """
-        logger.info(f"Evaluating decision {decision_id} of type {decision_type}")
+        log = logger.bind(decision_id=decision_id, decision_type=decision_type, vertical=vertical)
+        log.info("evaluation_started")
         
         # Step 1: Find applicable obligations
         applicable_obligations = self._find_applicable_obligations(
@@ -69,7 +71,7 @@ class ObligationEvaluator:
             decision_data
         )
         
-        logger.info(f"Found {len(applicable_obligations)} applicable obligations")
+        log.info("applicable_obligations_found", count=len(applicable_obligations))
         
         # Step 2: Evaluate each obligation
         obligation_matches = []
@@ -102,9 +104,12 @@ class ObligationEvaluator:
             obligation_matches=obligation_matches
         )
         
-        logger.info(
-            f"Evaluation complete: {met_count}/{len(obligation_matches)} met "
-            f"(coverage={coverage_percent:.1f}%, risk={risk_level})"
+        log.info(
+            "evaluation_complete",
+            met=met_count,
+            total=len(obligation_matches),
+            coverage_pct=round(coverage_percent, 1),
+            risk_level=risk_level.value
         )
         
         return result
@@ -182,10 +187,11 @@ class ObligationEvaluator:
         if met:
             risk_score = 0.0
         else:
-            # Risk score proportional to missing evidence
-            # More missing fields = higher risk
+            # Risk floor for any violation is 0.5 (medium risk):
+            # Even a single missing field is a compliance gap, not a minor issue.
+            # Full missing evidence maps to 1.0 (critical).
             missing_ratio = len(missing_evidence) / len(obligation.required_evidence)
-            risk_score = min(1.0, 0.5 + (missing_ratio * 0.5))  # Range: 0.5-1.0 for violations
+            risk_score = min(1.0, 0.5 + (missing_ratio * 0.5))  # Range: [0.5, 1.0] for violations
         
         return ObligationMatch(
             obligation_id=obligation.id,
