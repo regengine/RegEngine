@@ -95,9 +95,13 @@ app.include_router(scraping_router)
 from app.routes_discovery import router as discovery_router
 app.include_router(discovery_router)
 
-# Webhook Ingestion (Sprint: Pilot-Ready Platform)
-from app.webhook_router import router as webhook_router
+# Webhook Ingestion (V2: Postgres-backed CTE persistence)
+from app.webhook_router_v2 import router as webhook_router
 app.include_router(webhook_router)
+
+# FDA 24-Hour Export
+from app.fda_export_router import router as fda_export_router
+app.include_router(fda_export_router)
 
 # CSV Templates & Import
 from app.csv_templates import router as csv_router
