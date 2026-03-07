@@ -67,11 +67,12 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
 | Service | Port | Role |
 |---------|------|------|
-| `admin` | 8000 | Auth, tenants, compliance alerts, snapshots |
-| `ingestion` | 8002 | FSMA 204 event ingest, CSV import, FDA export |
+| `admin-api` | 8400 | Auth, tenants, compliance alerts, snapshots |
+| `ingestion-service` | 8002 (container 8000) | FSMA 204 event ingest, CSV import, FDA export |
 | `scheduler` | 8600 | Regulatory scraping (FDA recalls, warning letters) |
-| `nlp` | 8100 | Document parsing and regulatory extraction |
-| `compliance` | 8500 | Compliance scoring worker |
+| `nlp-service` | 8100 | Document parsing and regulatory extraction |
+| `compliance-api` | 8500 | Compliance scoring and policy APIs |
+| `graph-service` | 8200 | Graph operations and FSMA trace endpoints |
 
 ### Kernel Modules
 
@@ -105,7 +106,7 @@ CSV / webhook / EPCIS
 ### Prerequisites
 
 - Docker + Docker Compose
-- Node.js 18+ / pnpm
+- Node.js 18+ / npm
 - Python 3.11+
 
 ### First-time setup
@@ -176,14 +177,20 @@ Full API reference: `partner_api_spec.yaml`
 
 ```bash
 # Unit and integration tests (no Docker required)
-pytest tests/ services/admin/tests/ services/ingestion/tests/ -v
+python -m pytest tests -q
 
 # CTE persistence E2E (requires Docker)
-pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
+python -m pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
-# Frontend
-cd frontend && pnpm vitest
-cd frontend && pnpm build
+# Full quick sweep used in this repo
+bash scripts/test-all.sh --quick
+```
+
+```bash
+# Frontend (from frontend/)
+npm run lint
+npm run test:run
+npm run build
 ```
 
 ---
