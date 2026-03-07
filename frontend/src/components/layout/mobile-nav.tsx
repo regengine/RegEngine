@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Clapperboard, Users, FileText, Zap, Server, Scan, Gamepad2 } from "lucide-react"
+import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Scan } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -24,7 +24,6 @@ export function MobileNav() {
                 { href: "/compliance", label: "Compliance", icon: CheckCircle },
                 { href: "/fsma", label: "FSMA", icon: Leaf },
                 { href: "/review", label: "Review", icon: ClipboardCheck },
-                { href: "/opportunities", label: "Opportunities", icon: TrendingUp },
             ]
         },
         {
@@ -42,23 +41,6 @@ export function MobileNav() {
             title: "Field Operations",
             items: [
                 { href: "/mobile/capture", label: "Field Capture", icon: Scan, iconClass: "text-red-500" },
-            ]
-        },
-        {
-            title: "Production Compliance",
-            items: [
-                { href: "/pcos-assessment.html", label: "Compliance Assessment", icon: Clapperboard, iconClass: "text-purple-500" },
-                { href: "/pcos-crew-import.html", label: "Crew Payroll Import", icon: Users, iconClass: "text-blue-500" },
-            ]
-        },
-        {
-            title: "Industry Frameworks",
-            items: [
-                { href: "/verticals/energy", label: "Energy", icon: Zap, iconClass: "text-blue-500" },
-                { href: "/verticals/finance", label: "Finance", icon: Key, iconClass: "text-amber-500" },
-                { href: "/verticals/gaming", label: "Gaming", icon: FileText, iconClass: "text-purple-500" },
-                { href: "/verticals/healthcare", label: "Healthcare", icon: Activity, iconClass: "text-pink-500" },
-                { href: "/verticals/technology", label: "Technology", icon: Server, iconClass: "text-slate-500" },
             ]
         },
         {

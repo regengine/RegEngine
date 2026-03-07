@@ -72,7 +72,6 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 | `scheduler` | 8600 | Regulatory scraping (FDA recalls, warning letters) |
 | `nlp` | 8100 | Document parsing and regulatory extraction |
 | `compliance` | 8500 | Compliance scoring worker |
-| `billing` | 8800 | Stripe billing integration |
 
 ### Kernel Modules
 
@@ -128,18 +127,21 @@ NEO4J_PASSWORD=         # required
 ADMIN_MASTER_KEY=       # required
 ```
 
-### Start services
+### Start services (FSMA mode)
 
 ```bash
-docker-compose up -d
+./scripts/start-fsma.sh
 ```
+
+This starts the pilot-focused stack only: `postgres`, `redis`, `admin-api`, and `ingestion-service`.
+For the full legacy stack, run `docker compose up -d`.
 
 ### Start frontend
 
 ```bash
 cd frontend
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
 Frontend runs at `http://localhost:3000`.

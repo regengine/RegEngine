@@ -1,0 +1,28 @@
+services:
+  postgres:
+    extends:
+      file: docker-compose.yml
+      service: postgres
+
+  redis:
+    extends:
+      file: docker-compose.yml
+      service: redis
+
+  admin-api:
+    extends:
+      file: docker-compose.yml
+      service: admin-api
+    environment:
+      ENABLE_OTEL: "false"
+
+  ingestion-service:
+    extends:
+      file: docker-compose.yml
+      service: ingestion-service
+    environment:
+      ENABLE_OTEL: "false"
+
+volumes:
+  postgres_data:
+  redis_data:
