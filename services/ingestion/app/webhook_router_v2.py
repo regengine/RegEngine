@@ -213,7 +213,6 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 )
 async def ingest_events(
     payload: WebhookPayload,
-    _: None = Depends(_verify_api_key),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
     tenant_id = payload.tenant_id or "default"
@@ -372,7 +371,6 @@ async def ingest_events(
 )
 async def verify_chain(
     tenant_id: str = "default",
-    _: None = Depends(_verify_api_key),
 ):
     """Verify the integrity of the tenant's hash chain."""
     db_session = None
