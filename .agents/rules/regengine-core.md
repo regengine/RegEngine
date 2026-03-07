@@ -1,0 +1,7 @@
+- Read `AGENTS.md` before making code changes.
+- Verify that every referenced path actually exists in the repository.
+- Shared Python modules live in `services/shared/`, not in a repo-root `shared/` folder.
+- Use `npm` for frontend tasks because `frontend/package-lock.json` is committed.
+- Do not assume a `Makefile`, repo-root `conftest.py`, or `.gemini/settings.json` exists.
+- Prefer minimal diffs and nearby code patterns.
+- When verification depends on missing local services or secrets, say so explicitly.
