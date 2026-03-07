@@ -1,24 +1,14 @@
 #!/bin/bash
 # RegEngine Stack Shutdown Script
-# Gracefully stops all services
+# FSMA-first shutdown wrapper
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_ROOT"
 
-echo "🛑 Stopping RegEngine Stack..."
+echo "🛑 Stopping RegEngine FSMA stack..."
+"$SCRIPT_DIR/stop-fsma.sh"
 
-# Stop in reverse order
-docker-compose stop \
-    kafka-ui schema-registry \
-    opportunity-api compliance-api \
-    ingestion-service nlp-service graph-service \
-    admin-api \
-    redpanda neo4j redis minio postgres \
-    2>/dev/null
-
-echo "✅ All services stopped."
-echo ""
-echo "To remove containers and volumes:"
-echo "  docker-compose down -v"
+echo "✅ FSMA stack stopped."
