@@ -4,6 +4,8 @@ const { withSentryConfig } = require("@sentry/nextjs");
 
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
 const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost';
+const ingestionUrl = process.env.INGESTION_SERVICE_URL || `${apiGatewayUrl}:8002`;
+const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || `${apiGatewayUrl}:8500`;
 
 const nextConfig = {
     output: isStatic ? 'export' : undefined,
@@ -48,7 +50,7 @@ const nextConfig = {
         return [
             {
                 source: '/api/v1/ingestion/:path*',
-                destination: `${apiGatewayUrl}:8002/v1/ingestion/:path*`,
+                destination: `${ingestionUrl}/v1/ingestion/:path*`,
             },
             {
                 source: '/api/auth/:path*',
@@ -56,11 +58,11 @@ const nextConfig = {
             },
             {
                 source: '/api/fsma/:path*',
-                destination: `${apiGatewayUrl}:8200/v1/:path*`,
+                destination: `${ingestionUrl}/v1/:path*`,
             },
             {
                 source: '/api/compliance/:path*',
-                destination: `${apiGatewayUrl}:8500/:path*`,
+                destination: `${complianceUrl}/:path*`,
             },
         ]
     },
