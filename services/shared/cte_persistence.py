@@ -381,28 +381,41 @@ class CTEPersistence:
             },
         )
 
-        # --- Insert alerts ---
+        # --- Insert alerts (non-fatal: savepoint so event still persists) ---
+        _VALID_ALERT_TYPES = {
+            "missing_kde", "temperature_excursion", "deadline_approaching",
+            "supplier_non_compliant", "chain_break", "export_failure",
+        }
         for alert in alerts:
-            self.session.execute(
-                text("""
-                    INSERT INTO fsma.compliance_alerts (
-                        tenant_id, org_id, event_id, severity, alert_type,
-                        title, message
-                    ) VALUES (
-                        :tenant_id, :org_id, :event_id, :severity, :alert_type,
-                        :title, :message
-                    )
-                """),
-                {
-                    "tenant_id": tenant_id,
-                    "org_id": "00000000-0000-0000-0000-000000000000",
-                    "event_id": event_id,
-                    "severity": alert.get("severity", "warning"),
-                    "alert_type": alert.get("alert_type", "unknown"),
-                    "title": alert.get("alert_type", "Compliance Alert"),
-                    "message": alert.get("message", ""),
-                },
-            )
+            raw_type = alert.get("alert_type", "missing_kde")
+            alert_type = raw_type if raw_type in _VALID_ALERT_TYPES else "missing_kde"
+            nested = self.session.begin_nested()
+            try:
+                self.session.execute(
+                    text("""
+                        INSERT INTO fsma.compliance_alerts (
+                            tenant_id, org_id, event_id, severity, alert_type,
+                            title, message
+                        ) VALUES (
+                            :tenant_id, :org_id, :event_id, :severity, :alert_type,
+                            :title, :message
+                        )
+                    """),
+                    {
+                        "tenant_id": tenant_id,
+                        "org_id": "00000000-0000-0000-0000-000000000000",
+                        "event_id": event_id,
+                        "severity": alert.get("severity", "warning"),
+                        "alert_type": alert_type,
+                        "title": alert.get("alert_type", "Compliance Alert"),
+                        "message": alert.get("message", ""),
+                    },
+                )
+            except Exception as exc:
+                nested.rollback()
+                logger.warning("alert_insert_failed", extra={
+                    "event_id": event_id, "alert_type": raw_type, "error": str(exc),
+                })
 
         logger.info(
             "cte_event_persisted",
