@@ -9,7 +9,9 @@
         "sfo1"
     ],
     "env": {
-        "NEXT_PUBLIC_API_BASE_URL": "https://api.regengine.co",
+        "NEXT_PUBLIC_API_BASE_URL": "https://regengine-production.up.railway.app",
+        "INGESTION_SERVICE_URL": "https://believable-respect-production-2fb3.up.railway.app",
+        "COMPLIANCE_SERVICE_URL": "https://intelligent-essence-production.up.railway.app",
         "REGENGINE_DEPLOY_MODE": "cloud"
     }
 }

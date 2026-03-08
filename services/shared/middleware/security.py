@@ -8,6 +8,8 @@ def add_security(app: FastAPI):
         CORSMiddleware,
         allow_origins=[
             "https://*.regengine.co",
+            "https://*.up.railway.app",
+            "https://*.vercel.app",
             "http://localhost:3000",
             "http://127.0.0.1:3000",
             "http://localhost:8002",
@@ -18,9 +20,10 @@ def add_security(app: FastAPI):
         allow_headers=["*"],
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
-        "*.regengine.co", 
-        "localhost", 
-        "testserver", 
+        "*.regengine.co",
+        "*.up.railway.app",
+        "localhost",
+        "testserver",
         "ingestion-service",
         "admin-api",
         "billing-service",
