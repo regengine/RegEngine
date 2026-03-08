@@ -2,11 +2,7 @@ import Link from "next/link";
 
 export const dynamic = "force-static";
 export const generateStaticParams = async () => {
-  return [
-    { vertical: "food-safety" },
-    { vertical: "energy" },
-    { vertical: "healthcare" },
-  ];
+  return [{ vertical: "food-safety" }];
 };
 
 const WHITEPAPER_DOCS: Record<string, Array<{ slug: string; title: string; href: string }>> = {
@@ -15,20 +11,6 @@ const WHITEPAPER_DOCS: Record<string, Array<{ slug: string; title: string; href:
       slug: "fsma-204",
       title: "FSMA 204 Compliance Playbook",
       href: "/verticals/food-safety/whitepaper/fsma-204",
-    },
-  ],
-  energy: [
-    {
-      slug: "cip-013",
-      title: "CIP-013 Supply Chain Risk Guide",
-      href: "/verticals/energy/whitepaper/cip-013",
-    },
-  ],
-  healthcare: [
-    {
-      slug: "risk-baseline",
-      title: "Healthcare Compliance Baseline",
-      href: "/resources/whitepapers",
     },
   ],
 };
