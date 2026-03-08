@@ -63,6 +63,12 @@ export interface SystemMetricsResponse {
   total_tenants: number;
   total_documents: number;
   active_jobs: number;
+  compliance_score?: number | null;
+  compliance_grade?: string | null;
+  events_ingested?: number | null;
+  chain_length?: number | null;
+  chain_valid?: boolean | null;
+  open_alerts?: number | null;
 }
 
 class APIClient {
