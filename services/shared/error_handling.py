@@ -91,14 +91,11 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
         path=str(request.url.path),
         traceback=traceback.format_exc(),
     )
-    return JSONResponse(
+    # Use PlainTextResponse to avoid any JSON serialization issues with exception objects
+    from starlette.responses import PlainTextResponse
+    return PlainTextResponse(
+        content=f"500 DEBUG: {type(exc).__name__}: {str(exc)}\n\n{traceback.format_exc()}",
         status_code=500,
-        content={
-            "error": "internal_server_error",
-            "detail": f"DEBUG: {type(exc).__name__}: {str(exc)}",
-            "debug_traceback": traceback.format_exc()[-1000:],
-            "request_id": request_id,
-        },
     )
 
 
