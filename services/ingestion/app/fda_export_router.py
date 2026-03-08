@@ -466,20 +466,25 @@ async def export_recall_filtered(
         # Convert to FDA export format
         events = []
         for row in rows:
-            kdes = row[12] if row[12] else {}
+            # SQLAlchemy Row objects — use tuple() for safe index access
+            r = tuple(row)
+            kdes = r[12] if r[12] else {}
+            ts = r[6]
+            if hasattr(ts, "isoformat"):
+                ts = ts.isoformat()
             events.append({
-                "id": str(row[0]),
-                "event_type": row[1],
-                "traceability_lot_code": row[2],
-                "product_description": row[3],
-                "quantity": row[4],
-                "unit_of_measure": row[5],
-                "event_timestamp": row[6],
-                "location_gln": row[7],
-                "location_name": row[8],
-                "source": row[9],
-                "sha256_hash": row[10],
-                "chain_hash": row[11] or "",
+                "id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_description": r[3],
+                "quantity": r[4],
+                "unit_of_measure": r[5],
+                "event_timestamp": str(ts) if ts else "",
+                "location_gln": r[7],
+                "location_name": r[8],
+                "source": r[9],
+                "sha256_hash": r[10],
+                "chain_hash": r[11] or "",
                 "kdes": kdes,
             })
 
