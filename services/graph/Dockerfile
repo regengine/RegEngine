@@ -26,16 +26,16 @@ COPY services/graph/main.py /app/main.py
 # Set PYTHONPATH
 ENV PYTHONPATH=/app
 
-# Expose port
+# Expose default local port (Railway injects PORT at runtime)
 EXPOSE 8200
 
-# Health check
+# Health check (Railway-compatible dynamic port)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8200/health || exit 1
+    CMD sh -c 'curl -fsS "http://localhost:${PORT:-8200}/health" || exit 1'
 
 # Set ownership and switch to non-root user
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Run application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8200"]
+# Run application (Railway-compatible dynamic port)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8200}"]

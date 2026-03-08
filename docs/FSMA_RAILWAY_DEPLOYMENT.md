@@ -1,90 +1,133 @@
-# FSMA 204 Deployment Notes (Railway)
+# FSMA Backend Deployment Runbook (Railway)
 
-## Service Topology
+This is the P0 Phase 1A deployment path for the FSMA-first backend.
 
-Railway project layout for FSMA-focused deployment:
+## 1. Target Services
 
-- `frontend` - Next.js web app
-- `ingestion-service` - FSMA ingestion, EPCIS, recall simulation APIs
-- `admin-service` - tenant/admin and persistence APIs
-- `graph-service` - Neo4j traversal and lineage APIs
-- `postgres` - PostgreSQL
-- `neo4j` - Neo4j
-- `redis` - queue and cache
+Deploy these as separate Railway services:
 
-## Environment Variables
+| Service | Railway Root Directory | Default Local Port | Health Path |
+|---|---|---:|---|
+| `admin-service` | `services/admin` | `8400` | `/health` |
+| `ingestion-service` | `services/ingestion` | `8000` | `/health` |
+| `compliance-service` | `services/compliance` | `8500` | `/health` |
+| `graph-service` | `services/graph` | `8200` | `/health` |
 
-### API services
+Notes:
+- All service Dockerfiles now run with `PORT` from Railway at runtime.
+- Keep PostgreSQL and Redis as Railway managed services.
+- Use Neo4j Aura (or another managed Neo4j) for graph persistence.
+
+## 2. Railway Project Setup
+
+1. Create a Railway project and connect this GitHub repository.
+2. Add managed PostgreSQL and Redis plugins.
+3. Create four app services, each with the root directory shown above.
+4. Confirm each service builds from its Dockerfile and gets a public Railway URL.
+
+## 3. Required Environment Variables
+
+Use [`docs/ENV_SETUP_CHECKLIST.md`] for full inventory. This section is only the P0 minimum.
+
+### 3.1 admin-service
+
+- `ADMIN_DATABASE_URL` (or `DATABASE_URL`)
+- `REDIS_URL`
+- `AUTH_SECRET_KEY`
+- `ADMIN_MASTER_KEY`
+- `SERVICE_AUTH_SECRET`
+- `CORS_ORIGINS` (include `https://regengine.co`)
+- `CORS_ALLOW_CREDENTIALS=true`
+- `RESEND_API_KEY`
+- `RESEND_FROM_EMAIL` (for example `onboarding@regengine.co`)
+- `INVITE_BASE_URL` (for example `https://regengine.co`)
+
+### 3.2 ingestion-service
 
 - `DATABASE_URL`
+- `REDIS_URL`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_GROWTH_MONTHLY`
+- `STRIPE_PRICE_SCALE_MONTHLY`
+- `ADMIN_SERVICE_URL` (public URL of `admin-service`)
+- `CORS_ORIGINS` (include `https://regengine.co`)
+
+### 3.3 compliance-service
+
+- `COMPLIANCE_DATABASE_URL` (or `DATABASE_URL`)
+
+### 3.4 graph-service
+
 - `NEO4J_URI`
 - `NEO4J_USER`
 - `NEO4J_PASSWORD`
 - `REDIS_URL`
-- `JWT_SECRET`
-- `HASH_SALT`
-- `API_KEY` (required for protected ingestion endpoints)
-- `ALLOWED_ORIGINS` (comma-separated CORS origins)
-- `STRIPE_WEBHOOK_SECRET` (required when Stripe webhooks are enabled)
-- `OBJECT_STORAGE_ACCESS_KEY_ID`
-- `OBJECT_STORAGE_SECRET_ACCESS_KEY`
-- `OBJECT_STORAGE_REGION`
-- `OBJECT_STORAGE_ENDPOINT_URL`
 
-### Frontend
+## 4. Apply SQL Migrations
 
-- `NEXT_PUBLIC_API_BASE_URL`
-- `NEXT_PUBLIC_ADMIN_PORT`
-- `NEXT_PUBLIC_INGESTION_PORT`
-- `NEXT_PUBLIC_OPPORTUNITY_PORT`
-- `NEXT_PUBLIC_COMPLIANCE_PORT`
-- `NEXT_PUBLIC_STRIPE_KEY` (when billing is enabled)
-- `NEXT_PUBLIC_POSTHOG_KEY` (optional)
-- `NEXT_PUBLIC_POSTHOG_HOST` (optional)
-
-## Rollout Steps
-
-1. Apply PostgreSQL migrations:
+Run from repo root after Railway Postgres is provisioned.
 
 ```bash
-psql "$DATABASE_URL" -f services/admin/migrations/V31__fsma_204_infrastructure.sql
+# Example: if one Postgres URL is shared by all services
+export DATABASE_URL='postgresql://...'
+
+# Optional explicit overrides (if each service uses different DB/database)
+export ADMIN_DATABASE_URL="$DATABASE_URL"
+export INGESTION_DATABASE_URL="$DATABASE_URL"
+export COMPLIANCE_DATABASE_URL="$DATABASE_URL"
+
+bash scripts/railway/run_phase1a_migrations.sh
 ```
 
-2. Apply Neo4j constraints:
+What this executes:
+- `services/admin/migrations/V*.sql`
+- `services/ingestion/migrations/V*.sql`
+- `migrations/V*.sql` (FSMA persistence migration lives here)
+- `services/compliance/migrations/V*.sql`
+
+## 5. Apply Neo4j Constraints
+
+After `graph-service` environment variables are set:
 
 ```bash
 python services/graph/scripts/init_db_constraints.py
 ```
 
-3. Start graph sync worker:
+## 6. DNS Cutover
+
+1. Choose the public API hostname strategy:
+   - Single host: `api.regengine.co` points to one edge/gateway service.
+   - Service hosts: `admin.api.regengine.co`, `ingestion.api.regengine.co`, etc.
+2. If using the single-host P0 approach, point `api.regengine.co` to the Railway-provided domain for the API surface you expose.
+3. Update frontend vars (`NEXT_PUBLIC_ADMIN_URL` and related) to the final production API host(s).
+
+## 7. Health Verification
+
+Set Railway service URLs and run:
 
 ```bash
-python services/graph/scripts/fsma_sync_worker.py
+export ADMIN_URL='https://<admin-service>.up.railway.app'
+export INGESTION_URL='https://<ingestion-service>.up.railway.app'
+export COMPLIANCE_URL='https://<compliance-service>.up.railway.app'
+export GRAPH_URL='https://<graph-service>.up.railway.app'
+
+bash scripts/railway/verify_phase1a_health.sh
 ```
 
-4. Deploy services in order:
+Manual checks (optional):
 
-- `postgres`, `neo4j`, `redis`
-- backend services (`admin-service`, `graph-service`, `ingestion-service`)
-- `frontend`
+```bash
+curl -fsS "$ADMIN_URL/health"
+curl -fsS "$INGESTION_URL/health"
+curl -fsS "$COMPLIANCE_URL/health"
+curl -fsS "$GRAPH_URL/health"
+```
 
-5. Validate critical endpoints:
+## 8. Phase 1A Exit Criteria
 
-- `GET /health`
-- `POST /api/v1/epcis/validate`
-- `POST /api/v1/epcis/ingest`
-- `POST /api/v1/simulations/run`
-
-6. Validate critical frontend routes:
-
-- `/demo/supply-chains`
-- `/demo/recall-simulation`
-- `/tools/ftl-checker`
-- `/retailer-readiness`
-
-## Notes
-
-- Use Railway managed variables for production secrets.
-- Keep `REGENGINE_ENV=production` for production services.
-- Run a mock recall simulation post-deploy to validate graph and export paths.
-- Keep `AUTH_TEST_BYPASS_TOKEN` unset in production.
+- PostgreSQL and Redis are running on Railway.
+- Four backend services are deployed and healthy.
+- SQL migrations are fully applied without errors.
+- Neo4j constraints are applied.
+- Production DNS/API URLs resolve and are reachable from frontend.

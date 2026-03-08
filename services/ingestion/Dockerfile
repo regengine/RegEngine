@@ -45,12 +45,12 @@ COPY schemas /app/schemas
 RUN adduser --disabled-password --gecos '' appuser && chown -R appuser /app
 USER appuser
 
-# Expose port
+# Expose default local port (Railway injects PORT at runtime)
 EXPOSE 8000
 
-# Health check
+# Health check (Railway-compatible dynamic port)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD sh -c 'curl -fsS "http://localhost:${PORT:-8000}/health" || exit 1'
 
-# Run with uvicorn
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run with uvicorn (Railway-compatible dynamic port)
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
