@@ -612,6 +612,7 @@ async def ingest_all_regulations(
 def health() -> dict[str, str]:
     """Health-check endpoint."""
     settings = get_settings()
+    kafka_status = "unavailable"
     try:
         admin_client = AdminClient(
             {
@@ -620,16 +621,14 @@ def health() -> dict[str, str]:
             }
         )
         admin_client.list_topics(timeout=5)
-        return {
-            "status": "healthy",
-            "service": "ingestion-service",
-            "kafka": "available",
-        }
+        kafka_status = "available"
     except Exception as exc:
-        logger.error("ingestion_health_kafka_unavailable", error=str(exc))
-        raise HTTPException(
-            status_code=503, detail="Kafka unavailable or unreachable"
-        ) from exc
+        logger.warning("ingestion_health_kafka_unavailable", error=str(exc))
+    return {
+        "status": "healthy",
+        "service": "ingestion-service",
+        "kafka": kafka_status,
+    }
 
 
 @router.get("/metrics")
