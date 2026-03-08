@@ -74,6 +74,7 @@ docx2txt~=0.8
 neo4j~=5.15.0
 redis~=5.0.0
 httpx~=0.25.0
+stripe>=11.6.0,<12
 
 # CSV/Excel parsing
 numpy~=1.26.4

@@ -56,7 +56,7 @@ PY
 
 ---
 
-## 4) P0 Checklist (Must Have for Login + Bulk Upload)
+## 4) P0 Checklist (Must Have for Login + Billing + Bulk Upload)
 
 Use this first. Without these, auth and onboarding flows break.
 
@@ -102,6 +102,19 @@ Where values come from:
 - [ ] `GET /api/admin/auth/me` returns 200 with bearer token
 - [ ] `GET /api/admin/v1/supplier/bulk-upload/template?format=csv` returns file download
 
+### 4.5 Billing + transactional email (P0 for paid onboarding)
+
+Set in Railway service Variables:
+
+- [ ] `RESEND_API_KEY` (admin-service)
+- [ ] `RESEND_FROM_EMAIL` (admin-service, e.g. `onboarding@regengine.co`)
+- [ ] `INVITE_BASE_URL` (admin-service, e.g. `https://regengine.co`)
+- [ ] `STRIPE_SECRET_KEY` (ingestion-service)
+- [ ] `STRIPE_WEBHOOK_SECRET` (ingestion-service)
+- [ ] `STRIPE_PRICE_GROWTH_MONTHLY` (ingestion-service)
+- [ ] `STRIPE_PRICE_SCALE_MONTHLY` (ingestion-service)
+- [ ] `ADMIN_SERVICE_URL` (ingestion-service URL used by Stripe webhook provisioning)
+
 ---
 
 ## 5) P1 Checklist (Strongly Recommended for Production)
@@ -121,7 +134,7 @@ Set only if you use these features:
 - AI providers: `OPENAI_API_KEY`, `GROQ_API_KEY`, `OLLAMA_HOST`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`
 - Product analytics: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`, `NEXT_PUBLIC_VERCEL_ANALYTICS_ID`
 - Supabase integration: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- Billing/webhooks: `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_BILLING_API_URL`
+- Billing/webhooks: `NEXT_PUBLIC_BILLING_API_URL`
 - Notifications/integrations: `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `FDA_API_KEY`, `NERC_API_KEY`
 
 ---
@@ -185,6 +198,14 @@ Use this quick worksheet while setting values:
 - [ ] `PII_HASH_SALT =`
 - [ ] `SENTRY_DSN =`
 - [ ] `NEXT_PUBLIC_SENTRY_DSN =`
+- [ ] `RESEND_API_KEY =`
+- [ ] `RESEND_FROM_EMAIL =`
+- [ ] `INVITE_BASE_URL =`
+- [ ] `STRIPE_SECRET_KEY =`
+- [ ] `STRIPE_WEBHOOK_SECRET =`
+- [ ] `STRIPE_PRICE_GROWTH_MONTHLY =`
+- [ ] `STRIPE_PRICE_SCALE_MONTHLY =`
+- [ ] `ADMIN_SERVICE_URL =`
 
 ---
 

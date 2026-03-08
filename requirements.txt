@@ -35,6 +35,8 @@ boto3==1.34.0
 neo4j==5.16.0
 supabase==2.16.0
 gotrue==2.12.4
+resend>=2.4.0,<3
+stripe>=11.6.0,<12
 
 # Test dependencies
 pytest==8.4.2
