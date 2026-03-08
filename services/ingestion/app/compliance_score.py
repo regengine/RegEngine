@@ -130,9 +130,9 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         text("""
             SELECT
                 COUNT(*)                                   AS total_kdes,
-                COUNT(*) FILTER (WHERE value IS NOT NULL AND value != '')  AS filled_kdes
+                COUNT(*) FILTER (WHERE kde_value IS NOT NULL AND kde_value != '')  AS filled_kdes
             FROM fsma.cte_kdes k
-            JOIN fsma.cte_events e ON e.id = k.event_id
+            JOIN fsma.cte_events e ON e.id = k.cte_event_id
             WHERE e.tenant_id = :tid
         """),
         {"tid": tenant_id},
