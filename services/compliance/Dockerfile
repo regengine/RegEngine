@@ -34,4 +34,8 @@ USER regengine
 
 EXPOSE 8500
 
-CMD ["python", "-m", "uvicorn", "services.compliance.main:app", "--host", "0.0.0.0", "--port", "8500"]
+# Health check (Railway-compatible dynamic port)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD sh -c 'curl -fsS "http://localhost:${PORT:-8500}/health" || exit 1'
+
+CMD ["sh", "-c", "python -m uvicorn services.compliance.main:app --host 0.0.0.0 --port ${PORT:-8500}"]
