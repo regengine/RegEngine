@@ -395,7 +395,7 @@ async def ingest_events(
     except HTTPException:
         raise
     except Exception as _e:
-        return {"debug_error": str(_e), "debug_traceback": _tb.format_exc()}
+        raise HTTPException(status_code=422, detail=f"DEBUG: {type(_e).__name__}: {_e}\n{_tb.format_exc()[-500:]}")
 
 
 async def _ingest_events_inner(
