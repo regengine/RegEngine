@@ -45,17 +45,24 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
 async def _validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle request validation errors with structured JSON response."""
     request_id = _get_request_id(request)
+    # Pydantic v2 errors() can contain non-serializable objects (ValueError, etc.)
+    # Convert to safe serializable form
+    try:
+        import json as _json
+        safe_errors = _json.loads(_json.dumps(exc.errors(), default=str))
+    except Exception:
+        safe_errors = [{"msg": str(e)} for e in exc.errors()] if exc.errors() else [{"msg": str(exc)}]
     logger.warning(
         "validation_error",
         request_id=request_id,
-        errors=exc.errors(),
+        errors=safe_errors,
         path=str(request.url.path),
     )
     return JSONResponse(
         status_code=422,
         content={
             "error": "validation_error",
-            "detail": exc.errors(),
+            "detail": safe_errors,
             "request_id": request_id,
         },
     )
@@ -91,11 +98,13 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
         path=str(request.url.path),
         traceback=traceback.format_exc(),
     )
-    # Use PlainTextResponse to avoid any JSON serialization issues with exception objects
-    from starlette.responses import PlainTextResponse
-    return PlainTextResponse(
-        content=f"500 DEBUG: {type(exc).__name__}: {str(exc)}\n\n{traceback.format_exc()}",
+    return JSONResponse(
         status_code=500,
+        content={
+            "error": "internal_server_error",
+            "detail": "An unexpected error occurred. Please try again or contact support.",
+            "request_id": request_id,
+        },
     )
 
 
