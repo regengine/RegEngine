@@ -1,13 +1,17 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body
-from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
-from typing import List
-from uuid import UUID
+import hashlib
+import html
+import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
 import structlog
 from pydantic import BaseModel, field_validator
+from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.database import get_session
 from app.sqlalchemy_models import InviteModel, RoleModel, UserModel, MembershipModel
@@ -21,6 +25,69 @@ from app.supplier_graph_sync import supplier_graph_sync
 router = APIRouter()
 logger = structlog.get_logger("invite_routes")
 
+
+def _get_invite_base_url() -> str:
+    """Return frontend base URL for invite acceptance links."""
+    return os.getenv("INVITE_BASE_URL", "https://regengine.co").rstrip("/")
+
+
+def _build_invite_link(token: str) -> tuple[str, str]:
+    """Build relative and absolute invite links from a token."""
+    relative_link = f"/accept-invite?token={token}"
+    absolute_link = f"{_get_invite_base_url()}{relative_link}"
+    return relative_link, absolute_link
+
+
+def _send_invite_email(recipient_email: str, invite_link: str) -> None:
+    """Send invite email via Resend if configured."""
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    if not resend_api_key:
+        logger.warning("invite_email_skipped_missing_resend_api_key", email=recipient_email)
+        return
+
+    try:
+        import resend
+    except ImportError:
+        logger.warning("invite_email_skipped_resend_not_installed", email=recipient_email)
+        return
+
+    resend.api_key = resend_api_key
+    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@regengine.co")
+    safe_link = html.escape(invite_link, quote=True)
+
+    try:
+        response = resend.Emails.send(
+            {
+                "from": from_email,
+                "to": recipient_email,
+                "subject": "You're invited to RegEngine",
+                "html": (
+                    "<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>"
+                    "<h2 style='color: #111827;'>You're invited to RegEngine</h2>"
+                    "<p style='color: #374151; line-height: 1.6;'>"
+                    "Your team invited you to access your FSMA 204 compliance workspace."
+                    "</p>"
+                    "<p style='margin: 24px 0;'>"
+                    f"<a href='{safe_link}' "
+                    "style='background: #10b981; color: #ffffff; text-decoration: none; "
+                    "padding: 12px 20px; border-radius: 8px; display: inline-block; font-weight: 600;'>"
+                    "Accept Invite"
+                    "</a>"
+                    "</p>"
+                    "<p style='color: #6b7280; font-size: 13px;'>"
+                    "If the button does not work, copy and paste this URL into your browser:<br/>"
+                    f"{safe_link}"
+                    "</p>"
+                    "</div>"
+                ),
+            }
+        )
+
+        response_id = response.get("id") if isinstance(response, dict) else None
+        logger.info("invite_email_sent", email=recipient_email, resend_id=response_id)
+    except Exception as exc:  # pragma: no cover - external SDK/network behavior
+        logger.warning("invite_email_send_failed", email=recipient_email, error=str(exc))
+
 # DTOs
 class InviteCreate(BaseModel):
     email: str
@@ -29,7 +96,6 @@ class InviteCreate(BaseModel):
     @field_validator('email')
     @classmethod
     def validate_email(cls, v: str) -> str:
-        import re
         if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", v):
             raise ValueError('Invalid email format')
         return v
@@ -98,11 +164,6 @@ async def create_invite(
 
     # Create Invite
     token = secrets.token_urlsafe(32)
-    # in real prod, store hash of token. For simplicity here: storing raw token or hash? 
-    # Plan said "token_hash". So let's hash it.
-    # But wait, User Plan said "store hash, not raw token".
-    # Implementation: I'll use a simple SHA256 of the token.
-    import hashlib
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
     new_invite = InviteModel(
@@ -141,10 +202,8 @@ async def create_invite(
         created_by=str(current_user.id),
     )
 
-    # In a real app, send email here.
-    # For now, return the link.
-    # Assuming frontend URL from env or header, but hardcoding for dev.
-    invite_link = f"/accept-invite?token={token}"
+    invite_link, absolute_invite_link = _build_invite_link(token)
+    _send_invite_email(new_invite.email, absolute_invite_link)
 
     return InviteResponse(
         id=new_invite.id,
@@ -228,7 +287,6 @@ async def accept_invite(
     db: Session = Depends(get_session)
 ):
     # Verify Token
-    import hashlib
     token_hash = hashlib.sha256(request.token.encode()).hexdigest()
     
     invite = db.execute(
