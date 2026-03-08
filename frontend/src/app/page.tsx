@@ -347,7 +347,7 @@ export default function RegEngineLanding() {
             Your traceability data should be verified, exportable, and ready before anyone asks for it.
           </p>
           <p className="text-sm text-[var(--re-text-secondary)] mt-4">
-            Every Retailer Readiness Assessment gets my personal review. No sales team. Just me and your supply chain.
+            Every Retailer Readiness Assessment is scored automatically against live FDA requirements and retailer-specific benchmarks. Results in minutes, not weeks.
             <Link href="/retailer-readiness" className="text-[var(--re-brand)] hover:underline ml-1">
               Run the assessment.
             </Link>
