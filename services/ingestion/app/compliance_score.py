@@ -177,7 +177,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     else:
         result["chain_gaps"] = 0
 
-    # 4) Obligation coverage — how many obligations have matching CTE data
+    # 4) Obligation coverage — check rules against actual event KDE presence
     obl_row = db_session.execute(
         text("""
             SELECT COUNT(*) FROM obligations WHERE tenant_id = :tid
@@ -186,6 +186,52 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     ).fetchone()
     result["obligation_count"] = obl_row[0] if obl_row else 0
 
+    # Count obligation rules that are satisfied vs total checkable rules
+    if result["event_count"] > 0:
+        obl_coverage = db_session.execute(
+            text("""
+                WITH checkable_rules AS (
+                    SELECT r.id, r.cte_type, r.required_kde_key, r.validation_rule
+                    FROM obligation_cte_rules r
+                    JOIN obligations o ON o.id = r.obligation_id
+                    WHERE o.tenant_id = :tid
+                      AND r.validation_rule = 'present'
+                      AND r.required_kde_key IS NOT NULL
+                ),
+                active_ctes AS (
+                    SELECT DISTINCT event_type FROM fsma.cte_events WHERE tenant_id = :tid
+                ),
+                matched_rules AS (
+                    SELECT cr.id
+                    FROM checkable_rules cr
+                    WHERE cr.cte_type IN (SELECT event_type FROM active_ctes)
+                       OR cr.cte_type = 'all'
+                )
+                SELECT
+                    (SELECT COUNT(*) FROM matched_rules) AS applicable_rules,
+                    (SELECT COUNT(*) FROM checkable_rules) AS total_rules
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["applicable_obligation_rules"] = obl_coverage[0] if obl_coverage else 0
+        result["total_obligation_rules"] = obl_coverage[1] if obl_coverage else 0
+
+        # Count active compliance alerts (unfixed obligation gaps)
+        alert_row = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.compliance_alerts
+                WHERE tenant_id = :tid
+                  AND alert_type = 'obligation_gap'
+                  AND (resolved IS NULL OR resolved = false)
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["open_obligation_alerts"] = alert_row[0] if alert_row else 0
+    else:
+        result["applicable_obligation_rules"] = 0
+        result["total_obligation_rules"] = 0
+        result["open_obligation_alerts"] = 0
+
     # 5) FTL product coverage
     ftl_row = db_session.execute(
         text("""
@@ -193,6 +239,18 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         """),
     ).fetchone()
     result["ftl_category_count"] = ftl_row[0] if ftl_row else 0
+
+    # 6) Chain integrity — full cryptographic verification (last 50 entries)
+    try:
+        from shared.cte_persistence import CTEPersistence
+        persistence = CTEPersistence(db_session)
+        chain_result = persistence.verify_chain(tenant_id)
+        result["chain_verified"] = chain_result.valid
+        result["chain_verification_errors"] = chain_result.errors
+    except Exception as exc:
+        logger.warning("chain_verification_in_scoring_failed: %s", exc)
+        result["chain_verified"] = None  # unknown
+        result["chain_verification_errors"] = []
 
     return result
 
@@ -206,20 +264,38 @@ def _compute_scores(data: dict) -> dict:
     scores = {}
 
     # --- 1) Chain Integrity (30% weight) ---
+    # Uses cryptographic hash recalculation, not just gap detection
     if data["chain_length"] == 0:
         scores["chain_integrity"] = (0, "No events in audit trail")
-    elif data["chain_gaps"] > 0:
-        penalty = min(data["chain_gaps"] * 10, 50)
-        scores["chain_integrity"] = (
-            100 - penalty,
-            f"Chain has {data['chain_gaps']} gap(s) in sequence — possible tampering",
-        )
-    else:
+    elif data.get("chain_verified") is True:
         scores["chain_integrity"] = (
             100,
-            f"All {data['chain_length']} entries verified — chain hash: "
-            f"{data['last_chain_hash'][:16]}..." if data["last_chain_hash"] else "verified",
+            f"All {data['chain_length']} entries cryptographically verified — "
+            f"chain hash: {data['last_chain_hash'][:16]}..."
+            if data["last_chain_hash"] else "All entries verified",
         )
+    elif data.get("chain_verified") is False:
+        errors = data.get("chain_verification_errors", [])
+        error_count = len(errors)
+        # Severe: each verification error is a potential tampering incident
+        penalty = min(error_count * 25, 100)
+        detail = f"TAMPER DETECTED: {error_count} chain verification failure(s)"
+        if errors:
+            detail += f" — {errors[0][:80]}"
+        scores["chain_integrity"] = (max(0, 100 - penalty), detail)
+    else:
+        # Verification couldn't run (DB issue) — use gap detection fallback
+        if data["chain_gaps"] > 0:
+            penalty = min(data["chain_gaps"] * 10, 50)
+            scores["chain_integrity"] = (
+                100 - penalty,
+                f"Chain has {data['chain_gaps']} gap(s) — verification unavailable",
+            )
+        else:
+            scores["chain_integrity"] = (
+                90,  # Can't give 100 without crypto verification
+                f"{data['chain_length']} entries, no gaps — crypto verification pending",
+            )
 
     # --- 2) KDE Completeness (25% weight) ---
     if data["total_kdes"] == 0:
@@ -274,7 +350,39 @@ def _compute_scores(data: dict) -> dict:
             f"{data['event_count']} events tracked across FTL-mapped products",
         )
 
-    # --- 5) Export Readiness (10% weight) ---
+    # --- 5) Obligation Coverage (10% weight) ---
+    # How many FSMA 204 obligations are satisfied by current event data
+    total_rules = data.get("total_obligation_rules", 0)
+    applicable_rules = data.get("applicable_obligation_rules", 0)
+    open_alerts = data.get("open_obligation_alerts", 0)
+
+    if data["event_count"] == 0:
+        scores["obligation_coverage"] = (0, "No events — 0 of 82 obligations assessed")
+    elif total_rules == 0:
+        scores["obligation_coverage"] = (50, "Obligation rules not loaded — seed regulatory data")
+    else:
+        # Base score from CTE type coverage of obligations
+        if total_rules > 0:
+            coverage_ratio = applicable_rules / total_rules
+        else:
+            coverage_ratio = 0
+        obl_score = int(coverage_ratio * 80)  # Up to 80 points for CTE coverage
+
+        # Deduct for open obligation alerts
+        if open_alerts > 0:
+            alert_penalty = min(open_alerts * 3, 30)
+            obl_score = max(0, obl_score - alert_penalty)
+        else:
+            obl_score = min(100, obl_score + 20)  # Bonus for zero alerts
+
+        detail = (
+            f"{applicable_rules}/{total_rules} obligation rules covered by active CTE types"
+        )
+        if open_alerts > 0:
+            detail += f" — {open_alerts} open compliance alert(s)"
+        scores["obligation_coverage"] = (obl_score, detail)
+
+    # --- 6) Export Readiness (10% weight) ---
     # Requires: chain intact, KDEs present, multiple CTE types
     if data["event_count"] == 0:
         scores["export_readiness"] = (0, "Cannot produce FDA report — no data")
@@ -282,8 +390,11 @@ def _compute_scores(data: dict) -> dict:
         export_score = 0
         issues = []
         # Chain must be intact
-        if data["chain_length"] > 0 and data["chain_gaps"] == 0:
+        if data.get("chain_verified") is True:
             export_score += 40
+        elif data["chain_length"] > 0 and data["chain_gaps"] == 0:
+            export_score += 30
+            issues.append("chain not cryptographically verified")
         else:
             issues.append("chain integrity")
         # KDEs must be mostly complete
@@ -319,6 +430,7 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
     kde_score = scores["kde_completeness"][0]
     chain_score = scores["chain_integrity"][0]
     product_score = scores["product_coverage"][0]
+    obligation_score = scores["obligation_coverage"][0]
     export_score = scores["export_readiness"][0]
 
     if data["event_count"] == 0:
@@ -334,26 +446,48 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
         ))
         return actions
 
-    if cte_score < 100 and data["missing_cte_types"]:
-        top_missing = sorted(data["missing_cte_types"])[0]
-        actions.append(NextAction(
-            priority="HIGH",
-            action=f"Add {top_missing.replace('_', ' ')} CTE tracking to your supply chain",
-            impact=f"+{int(100/7)} points on CTE completeness per type added",
-        ))
+    if chain_score < 100:
+        if data.get("chain_verified") is False:
+            actions.append(NextAction(
+                priority="HIGH",
+                action="URGENT: Chain tampering detected — investigate immediately",
+                impact="Chain integrity is 25% of overall score; tampering = audit failure",
+            ))
+        else:
+            actions.append(NextAction(
+                priority="HIGH",
+                action="Investigate chain integrity issues — possible data loss",
+                impact="Chain integrity is 25% of overall score",
+            ))
+
+    if obligation_score < 80:
+        open_alerts = data.get("open_obligation_alerts", 0)
+        if open_alerts > 0:
+            actions.append(NextAction(
+                priority="HIGH",
+                action=f"Resolve {open_alerts} open obligation gap(s) flagged during ingestion",
+                impact=f"+{min(open_alerts * 3, 30)} points on obligation coverage",
+            ))
+        else:
+            actions.append(NextAction(
+                priority="HIGH",
+                action="Expand CTE type coverage to satisfy more FSMA 204 obligations",
+                impact="Each new CTE type unlocks 7-15 obligation checks",
+            ))
 
     if kde_score < 80:
         actions.append(NextAction(
             priority="HIGH",
-            action="Add GLN (Global Location Number) and complete all required KDEs per event",
+            action="Complete all required KDEs per event — add GLN, reference documents, dates",
             impact=f"+{100 - kde_score} points possible on KDE completeness",
         ))
 
-    if chain_score < 100:
+    if cte_score < 100 and data["missing_cte_types"]:
+        top_missing = sorted(data["missing_cte_types"])[0]
         actions.append(NextAction(
-            priority="HIGH",
-            action="Investigate chain integrity gaps — possible data loss or tampering",
-            impact="Chain integrity is 30% of overall score",
+            priority="MEDIUM",
+            action=f"Add {top_missing.replace('_', ' ')} CTE tracking to your supply chain",
+            impact=f"+{int(100/7)} points on CTE completeness per type added",
         ))
 
     if product_score < 80:
@@ -368,21 +502,6 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
             priority="MEDIUM",
             action="Run a 24-hour mock recall drill to test export readiness",
             impact="Validates real-world compliance under time pressure",
-        ))
-
-    # Always include this if score < 90
-    overall = int(
-        chain_score * 0.30
-        + kde_score * 0.25
-        + cte_score * 0.25
-        + product_score * 0.10
-        + export_score * 0.10
-    )
-    if overall < 90 and len(actions) < 4:
-        actions.append(NextAction(
-            priority="MEDIUM",
-            action="Review obligation coverage against 82 FSMA 204 requirements in the system",
-            impact="Identifies specific regulatory gaps",
         ))
 
     return actions[:5]  # Cap at 5
@@ -445,17 +564,25 @@ async def get_compliance_score(
         # Compute sub-scores
         scores = _compute_scores(data)
 
-        # Weighted overall (same weights as before)
+        # Weighted overall — 6 dimensions
+        # Chain integrity:      25% (tamper-proof audit trail)
+        # KDE completeness:     20% (data quality per event)
+        # CTE completeness:     20% (supply chain coverage)
+        # Obligation coverage:  15% (regulatory requirement satisfaction)
+        # Product coverage:     10% (FTL food category mapping)
+        # Export readiness:     10% (FDA 24-hour response capability)
         chain_score = scores["chain_integrity"][0]
         kde_score = scores["kde_completeness"][0]
         cte_score = scores["cte_completeness"][0]
+        obligation_score = scores["obligation_coverage"][0]
         product_score = scores["product_coverage"][0]
         export_score = scores["export_readiness"][0]
 
         overall = int(
-            chain_score * 0.30
-            + kde_score * 0.25
-            + cte_score * 0.25
+            chain_score * 0.25
+            + kde_score * 0.20
+            + cte_score * 0.20
+            + obligation_score * 0.15
             + product_score * 0.10
             + export_score * 0.10
         )
@@ -476,6 +603,9 @@ async def get_compliance_score(
                 ),
                 "cte_completeness": ScoreBreakdown(
                     score=cte_score, detail=scores["cte_completeness"][1],
+                ),
+                "obligation_coverage": ScoreBreakdown(
+                    score=obligation_score, detail=scores["obligation_coverage"][1],
                 ),
                 "product_coverage": ScoreBreakdown(
                     score=product_score, detail=scores["product_coverage"][1],

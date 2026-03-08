@@ -363,6 +363,180 @@ async def export_history(
             db_session.close()
 
 
+@router.get(
+    "/export/recall",
+    summary="Recall-filtered FDA export",
+    description=(
+        "Generate an FDA-compliant export filtered by product, location, and/or date range. "
+        "This is the endpoint used during actual FDA recall investigations: "
+        "'Show me everything from [location] on [date] for [product].' "
+        "Supports any combination of filters."
+    ),
+)
+async def export_recall_filtered(
+    tenant_id: str = Query("default", description="Tenant identifier"),
+    product: Optional[str] = Query(None, description="Product description (partial match)"),
+    location: Optional[str] = Query(None, description="Location name or GLN (partial match)"),
+    tlc: Optional[str] = Query(None, description="Traceability Lot Code (exact or partial)"),
+    event_type: Optional[str] = Query(None, description="CTE type filter"),
+    start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
+    _: None = Depends(_verify_api_key),
+):
+    """Generate recall-filtered FDA export with flexible search criteria."""
+    # Require at least one filter to prevent full-table dumps
+    if not any([product, location, tlc, event_type, start_date]):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one filter is required (product, location, tlc, event_type, or start_date)",
+        )
+
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+
+        db_session = SessionLocal()
+
+        # Build dynamic query with parameterized filters
+        conditions = ["e.tenant_id = :tid"]
+        params: dict = {"tid": tenant_id}
+
+        if product:
+            conditions.append("LOWER(e.product_description) LIKE LOWER(:product)")
+            params["product"] = f"%{product}%"
+
+        if location:
+            conditions.append(
+                "(LOWER(e.location_name) LIKE LOWER(:loc) OR e.location_gln LIKE :loc_exact)"
+            )
+            params["loc"] = f"%{location}%"
+            params["loc_exact"] = f"%{location}%"
+
+        if tlc:
+            conditions.append("e.traceability_lot_code LIKE :tlc")
+            params["tlc"] = f"%{tlc}%" if "%" not in tlc else tlc
+
+        if event_type:
+            conditions.append("e.event_type = :etype")
+            params["etype"] = event_type
+
+        if start_date:
+            conditions.append("e.event_timestamp >= :start")
+            params["start"] = start_date
+
+        if end_date:
+            conditions.append("e.event_timestamp <= :end")
+            params["end"] = end_date + "T23:59:59"
+
+        where_clause = " AND ".join(conditions)
+
+        # Query events with KDEs
+        rows = db_session.execute(
+            text(f"""
+                SELECT
+                    e.id, e.event_type, e.traceability_lot_code, e.product_description,
+                    e.quantity, e.unit_of_measure, e.event_timestamp,
+                    e.location_gln, e.location_name, e.source, e.sha256_hash,
+                    h.chain_hash,
+                    (SELECT jsonb_object_agg(k.key, k.value)
+                     FROM fsma.cte_kdes k WHERE k.event_id = e.id) AS kdes
+                FROM fsma.cte_events e
+                LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
+                WHERE {where_clause}
+                ORDER BY e.event_timestamp ASC
+                LIMIT 10000
+            """),
+            params,
+        ).fetchall()
+
+        if not rows:
+            filters_used = []
+            if product: filters_used.append(f"product='{product}'")
+            if location: filters_used.append(f"location='{location}'")
+            if tlc: filters_used.append(f"tlc='{tlc}'")
+            if event_type: filters_used.append(f"event_type='{event_type}'")
+            if start_date: filters_used.append(f"from={start_date}")
+            if end_date: filters_used.append(f"to={end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No records found matching recall filters: {', '.join(filters_used)}",
+            )
+
+        # Convert to FDA export format
+        events = []
+        for row in rows:
+            kdes = row[12] if row[12] else {}
+            events.append({
+                "id": str(row[0]),
+                "event_type": row[1],
+                "traceability_lot_code": row[2],
+                "product_description": row[3],
+                "quantity": row[4],
+                "unit_of_measure": row[5],
+                "event_timestamp": row[6],
+                "location_gln": row[7],
+                "location_name": row[8],
+                "source": row[9],
+                "sha256_hash": row[10],
+                "chain_hash": row[11] or "",
+                "kdes": kdes,
+            })
+
+        csv_content = _generate_csv(events)
+        export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+
+        # Log the recall export
+        try:
+            db_session.execute(
+                text("""
+                    INSERT INTO fsma.fda_export_log
+                    (tenant_id, export_type, record_count, export_hash, generated_by, query_tlc, query_start_date, query_end_date)
+                    VALUES (:tid, 'recall', :cnt, :hash, 'api_recall', :tlc, :sd, :ed)
+                """),
+                {
+                    "tid": tenant_id, "cnt": len(events), "hash": export_hash,
+                    "tlc": tlc, "sd": start_date, "ed": end_date,
+                },
+            )
+            db_session.commit()
+        except Exception:
+            pass  # Don't fail the export if audit logging fails
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        filename = f"fda_recall_export_{timestamp}.csv"
+
+        logger.info(
+            "fda_recall_export_generated",
+            extra={
+                "record_count": len(events),
+                "filters": {"product": product, "location": location, "tlc": tlc},
+                "export_hash": export_hash[:16],
+                "tenant_id": tenant_id,
+            },
+        )
+
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Export-Hash": export_hash,
+                "X-Record-Count": str(len(events)),
+                "X-Export-Type": "recall",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("fda_recall_export_failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Recall export failed: {str(e)}")
+    finally:
+        if db_session:
+            db_session.close()
+
+
 @router.post(
     "/export/verify",
     summary="Verify a previous export's integrity",
