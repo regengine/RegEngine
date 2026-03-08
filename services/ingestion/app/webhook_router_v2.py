@@ -376,7 +376,6 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 
 @router.post(
     "/ingest",
-    response_model=IngestResponse,
     summary="Ingest traceability events",
     description=(
         "Accept CTE events from external systems (IoT platforms, ERPs, manual entry). "
@@ -387,27 +386,8 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 async def ingest_events(
     payload: WebhookPayload,
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-):
-    """Process incoming webhook events with persistent storage."""
-    import traceback as _tb
-    try:
-        return await _ingest_events_inner(payload, x_api_key)
-    except HTTPException:
-        raise
-    except Exception as _e:
-        # Return plain dict to avoid JSONResponse serialization issues
-        from fastapi.responses import PlainTextResponse
-        return PlainTextResponse(
-            content=f"DEBUG ERROR: {type(_e).__name__}: {_e}\n\n{_tb.format_exc()}",
-            status_code=500,
-        )
-
-
-async def _ingest_events_inner(
-    payload: WebhookPayload,
-    x_api_key: Optional[str] = None,
 ) -> IngestResponse:
-    """Inner implementation — wrapped for debug."""
+    """Process incoming webhook events with persistent storage."""
     # Rate limiting
     _check_rate_limit(x_api_key or "anonymous")
 
