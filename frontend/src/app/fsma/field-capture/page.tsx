@@ -133,9 +133,9 @@ export default function FieldCapturePage() {
                     description: "Data persisted to high-integrity ledger.",
                 })
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Ledger write failed:", error)
-            const detail = error.response?.data?.detail || "Connection failure"
+            const detail = (error as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Connection failure"
             toast({
                 title: "Ledger Write Failed",
                 description: detail,

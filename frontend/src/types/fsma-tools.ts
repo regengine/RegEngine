@@ -4,10 +4,10 @@ export interface ToolQuestion {
     id: string;
     text: string;
     type: 'select' | 'boolean' | 'number' | 'multi-select' | 'text';
-    options?: { label: string; value: any; weight?: number }[];
+    options?: { label: string; value: string | number | boolean; weight?: number }[];
     placeholder?: string;
     hint?: string;
-    dependency?: { questionId: string; value: any };
+    dependency?: { questionId: string; value: string | number | boolean };
 }
 
 export interface ToolConfig {
