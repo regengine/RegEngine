@@ -221,7 +221,6 @@ class APIClient {
   async ingestURL(apiKey: string, url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
     // Make a direct axios call to avoid interceptor header conflicts
     const baseUrl = getServiceURL('ingestion');
-    console.log(`[API] ingestURL: ${baseUrl}/v1/ingest/url`, { url, sourceSystem });
     const response = await axios.post<IngestURLResponse>(
       `${baseUrl}/v1/ingest/url`,
       { url, source_system: sourceSystem },

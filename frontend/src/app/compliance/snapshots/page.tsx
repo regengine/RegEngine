@@ -141,7 +141,7 @@ export default function SnapshotsPage() {
                 }
             }
         } catch (error) {
-            console.log('Using mock snapshots (backend unavailable)');
+            // TODO: Surface backend unavailability in the UI once snapshot API errors are handled.
             setSnapshots([]);
         } finally {
             setLoading(false);

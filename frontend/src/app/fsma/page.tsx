@@ -351,8 +351,8 @@ export default function FSMADashboardPage() {
               {/* Active Recall Timer */}
               <RecallTimer
                 drill={activeDrill}
-                onCancel={() => console.log('Cancel drill')}
-                onComplete={() => console.log('Complete drill')}
+                onCancel={() => { /* TODO */ }}
+                onComplete={() => { /* TODO */ }}
               />
 
               {/* Compliance Readiness */}
