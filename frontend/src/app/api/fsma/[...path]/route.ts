@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 
 // Required for static export
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 export const generateStaticParams = async () => {
     return [{ path: ['static_proxy'] }];
 };
