@@ -12,16 +12,15 @@ export type MarketingToolLink = {
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
     { label: "Product", href: "/#product" },
-    { label: "FSMA 204 Guide", href: "/retailer-readiness" },
+    { label: "FSMA 204 Guide", href: "/docs/fsma-204" },
     { label: "Developers", href: "/developers" },
     { label: "Pricing", href: "/pricing" },
 ];
 
 export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
-    { emoji: "✅", label: "FSMA Exemption Check", desc: "Determine whether your operation is FSMA 204 exempt", href: "/tools/ftl-checker" },
     { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
-    { emoji: "📊", label: "Anomaly Simulator", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
+    { emoji: "📊", label: "Cold Chain Monitor", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
     { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/knowledge-graph" },
 ];
 
