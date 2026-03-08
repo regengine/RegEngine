@@ -386,16 +386,20 @@ class CTEPersistence:
             self.session.execute(
                 text("""
                     INSERT INTO fsma.compliance_alerts (
-                        tenant_id, cte_event_id, severity, alert_type, message
+                        tenant_id, org_id, event_id, severity, alert_type,
+                        title, message
                     ) VALUES (
-                        :tenant_id, :cte_event_id, :severity, :alert_type, :message
+                        :tenant_id, :org_id, :event_id, :severity, :alert_type,
+                        :title, :message
                     )
                 """),
                 {
                     "tenant_id": tenant_id,
-                    "cte_event_id": event_id,
+                    "org_id": "00000000-0000-0000-0000-000000000000",
+                    "event_id": event_id,
                     "severity": alert.get("severity", "warning"),
                     "alert_type": alert.get("alert_type", "unknown"),
+                    "title": alert.get("alert_type", "Compliance Alert"),
                     "message": alert.get("message", ""),
                 },
             )
