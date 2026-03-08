@@ -176,7 +176,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                             <div className="space-y-3">
                                 {questions[currentStep].type === 'select' && questions[currentStep].options?.map(opt => (
                                     <button
-                                        key={opt.value}
+                                        key={String(opt.value)}
                                         onClick={() => {
                                             setAnswers(prev => ({ ...prev, [questions[currentStep].id]: opt.value }));
                                             handleNext();
@@ -212,7 +212,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                                     const isSelected = (answers[questions[currentStep].id] || []).includes(opt.value);
                                     return (
                                         <button
-                                            key={opt.value}
+                                            key={String(opt.value)}
                                             onClick={() => toggleAnswer(questions[currentStep].id, opt.value)}
                                             className={`w-full p-4 rounded-xl text-left border transition-all duration-200 ${isSelected
                                                 ? 'border-[var(--re-brand)] bg-[var(--re-brand-muted)] text-[var(--re-brand)]'
