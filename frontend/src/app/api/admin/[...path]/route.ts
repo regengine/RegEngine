@@ -3,10 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-export const dynamic = 'force-static';
-export const generateStaticParams = async () => {
-  return [{ path: ['static_proxy'] }];
-};
+export const dynamic = 'force-dynamic';
+// No static params needed — this is a dynamic proxy route
 
 export async function GET(
   request: NextRequest,
