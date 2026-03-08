@@ -1129,7 +1129,7 @@ export default function RetailerSuppliersPage() {
                             Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
                             I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation.
                             Your traceability data should be verified, exportable, and ready before anyone asks for it.
-                            Every Retailer Readiness Assessment gets my personal review. No sales team. Just me and your supply chain.
+                            Every Retailer Readiness Assessment is scored automatically against live FDA requirements and retailer-specific benchmarks. Results in minutes, not weeks.
                         </p>
                         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                             {[
