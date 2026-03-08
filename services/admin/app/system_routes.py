@@ -4,7 +4,9 @@ from typing import Dict, Any, List
 import httpx
 import structlog
 import asyncio
-from shared.auth import require_api_key
+import os
+from app.dependencies import get_current_user
+from app.sqlalchemy_models import UserModel
 
 router = APIRouter(prefix="/system", tags=["system"])
 logger = structlog.get_logger("admin.system")
@@ -23,34 +25,33 @@ class SystemMetricsResponse(BaseModel):
     total_documents: int
     active_jobs: int
 
-SERVICE_URLS = {
-    "ingestion": "http://ingestion-api:8002/health",
-    # compliance:8500 inside docker network
-    "compliance": "http://compliance-api:8500/health",
-    "graph": "http://graph-api:8200/v1/labels/health",
-}
+def _get_service_urls() -> Dict[str, str]:
+    """Build service health-check URLs from env vars or fallback to Docker names."""
+    ingestion = os.getenv("INGESTION_SERVICE_URL", "http://ingestion-api:8002")
+    compliance = os.getenv("COMPLIANCE_SERVICE_URL", "http://compliance-api:8500")
+    graph = os.getenv("GRAPH_SERVICE_URL", "http://graph-api:8200")
+    return {
+        "ingestion": f"{ingestion.rstrip('/')}/health",
+        "compliance": f"{compliance.rstrip('/')}/health",
+        "graph": f"{graph.rstrip('/')}/v1/labels/health",
+    }
 
 @router.get("/status", response_model=SystemStatusResponse)
-async def get_system_status(api_key=Depends(require_api_key)):
-    # Enforce Super Admin check - require 'admin' scope
-    if not hasattr(api_key, 'scopes') or 'admin' not in (api_key.scopes or []):
-        raise HTTPException(
-            status_code=403,
-            detail="Super Admin access required for system endpoints"
-        )
-    
-    async with httpx.AsyncClient(timeout=3.0) as client:
+async def get_system_status(current_user: UserModel = Depends(get_current_user)):
+    service_urls = _get_service_urls()
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
         tasks = []
-        for name, url in SERVICE_URLS.items():
+        for name, url in service_urls.items():
             tasks.append(check_service_health(client, name, url))
-        
+
         results = await asyncio.gather(*tasks)
-        
+
     overall = "healthy"
     for r in results:
         if r.status != "healthy":
             overall = "degraded"
-            
+
     return SystemStatusResponse(overall_status=overall, services=results)
 
 async def check_service_health(client, name: str, url: str) -> ServiceHealth:
@@ -63,10 +64,10 @@ async def check_service_health(client, name: str, url: str) -> ServiceHealth:
         return ServiceHealth(name=name, status="unhealthy", details={"error": str(e)})
 
 @router.get("/metrics", response_model=SystemMetricsResponse)
-async def get_system_metrics(api_key=Depends(require_api_key)):
+async def get_system_metrics(current_user: UserModel = Depends(get_current_user)):
     # Mock data for now until we have direct DB access or calls
     return SystemMetricsResponse(
-        total_tenants=5, # Real impl would query KeyStore
-        total_documents=128, # Real impl query Graph
-        active_jobs=3 
+        total_tenants=5,
+        total_documents=128,
+        active_jobs=3
     )
