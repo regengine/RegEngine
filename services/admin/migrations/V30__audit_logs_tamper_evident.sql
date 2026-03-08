@@ -22,7 +22,7 @@ CREATE TABLE audit_logs (
     -- WHO
     actor_id        UUID,
     actor_email     TEXT,
-    actor_ip        INET,
+    actor_ip        TEXT,
     actor_ua        TEXT,
 
     -- WHAT
@@ -45,13 +45,7 @@ CREATE TABLE audit_logs (
     integrity_hash  TEXT NOT NULL,
 
     -- CONSTRAINTS
-    CONSTRAINT audit_event_category_check CHECK (
-        event_category IN ('auth', 'data', 'admin', 'system', 'api')
-    ),
-    CONSTRAINT audit_action_check CHECK (
-        action IN ('create', 'read', 'update', 'delete', 'export',
-                   'login', 'logout', 'fail', 'grant', 'revoke')
-    ),
+    -- Note: event_category and action are not constrained to allow flexible audit event types
     CONSTRAINT audit_severity_check CHECK (
         severity IN ('info', 'warning', 'error', 'critical')
     )
