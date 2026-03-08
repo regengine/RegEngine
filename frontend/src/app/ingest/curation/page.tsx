@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type SVGProps } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -421,7 +421,7 @@ export default function CurationDashboard() {
     );
 }
 
-function ArrowRight(props: any) {
+function ArrowRight(props: SVGProps<SVGSVGElement>) {
     return (
         <svg
             {...props}

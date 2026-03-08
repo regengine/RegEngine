@@ -44,7 +44,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
         utm_term: searchParams.get('utm_term'),
     }), [searchParams]);
 
-    const trackToolEvent = (eventName: string, metadata: any = {}) => {
+    const trackToolEvent = (eventName: string, metadata: Record<string, unknown> = {}) => {
         posthog.capture(`${config.id}_${eventName}`, {
             ...metadata,
             ...utmParams,
@@ -66,11 +66,11 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
         }
     };
 
-    const toggleAnswer = (questionId: string, value: any) => {
+    const toggleAnswer = (questionId: string, value: string | number | boolean) => {
         setAnswers(prev => {
             const current = prev[questionId] || [];
             const updated = current.includes(value)
-                ? current.filter((v: any) => v !== value)
+                ? current.filter((v: string | number | boolean) => v !== value)
                 : [...current, value];
             return { ...prev, [questionId]: updated };
         });

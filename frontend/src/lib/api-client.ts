@@ -396,7 +396,15 @@ class APIClient {
 
     // The backend returns: review_id, text_raw, extraction
     // We map to the frontend expected format here if the backend differs
-    return (data || []).map((item: any) => ({
+    return (data || []).map((item: {
+      review_id?: string;
+      id?: string;
+      text_raw?: string;
+      source_text?: string;
+      extraction?: unknown;
+      extracted_data?: unknown;
+      status?: string;
+    }) => ({
       id: item.review_id || item.id,
       source_text: item.text_raw || item.source_text,
       extracted_data: item.extraction || item.extracted_data,

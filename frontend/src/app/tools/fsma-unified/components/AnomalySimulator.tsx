@@ -251,7 +251,7 @@ export function AnomalyDetectionSimulator() {
 
                 <div className="mt-5 grid gap-4 md:grid-cols-12">
                     <div className="md:col-span-9">
-                        <Tabs value={tab} onValueChange={v => setTab(v as any)}>
+                        <Tabs value={tab} onValueChange={v => setTab(v as "stream" | "daily" | "lots" | "suppliers" | "eval")}>
                             <TabsList className="rounded-2xl">
                                 <TabsTrigger value="stream" className="rounded-2xl">Temp stream</TabsTrigger>
                                 <TabsTrigger value="daily" className="rounded-2xl">Daily overview</TabsTrigger>
@@ -264,7 +264,7 @@ export function AnomalyDetectionSimulator() {
                                 <div className="h-[300px] w-full rounded-2xl border p-2"><ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={streamData} margin={{ top: 10, right: 14, bottom: 6, left: 6 }}>
                                         <CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="idx" tick={false} label={{ value: "90 days (hourly)", position: "insideBottom", offset: -2 }} /><YAxis domain={[32, 46]} />
-                                        <Tooltip formatter={(v: any, n: any) => n === "tempF" ? [`${fmt(Number(v))} °F`, "Temp"] : [v, n]} labelFormatter={(l: any) => streamData[l]?.hour || l} />
+                                        <Tooltip formatter={(v: string | number, n: string) => n === "tempF" ? [`${fmt(Number(v))} °F`, "Temp"] : [v, n]} labelFormatter={(l: number) => streamData[l]?.hour || l} />
                                         <ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" /><Legend /><Line type="monotone" dataKey="tempF" dot={false} strokeWidth={2} stroke="#3b82f6" />
                                     </LineChart>
                                 </ResponsiveContainer></div>
@@ -289,7 +289,7 @@ export function AnomalyDetectionSimulator() {
                                         <Tooltip /><ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" />
                                         <Area type="monotone" dataKey="min" stackId="r" fill="transparent" stroke="transparent" /><Area type="monotone" dataKey="max" stackId="r" fill="rgba(59,130,246,0.08)" stroke="transparent" />
                                         <Line type="monotone" dataKey="avg" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="Avg" />
-                                        <Line type="monotone" dataKey="max" stroke="#ef4444" strokeWidth={1} dot={(props: any) => { const { cx, cy, payload } = props; return payload.anomalyCount > 0 ? <circle cx={cx} cy={cy} r={4} fill="#ef4444" opacity={0.8} /> : <React.Fragment key={`d-${payload.day}`} />; }} name="Max" />
+                                        <Line type="monotone" dataKey="max" stroke="#ef4444" strokeWidth={1} dot={(props: Record<string, unknown>) => { const { cx, cy, payload } = props as { cx?: number; cy?: number; payload?: { anomalyCount?: number; day?: number } }; return (payload?.anomalyCount ?? 0) > 0 ? <circle cx={cx} cy={cy} r={4} fill="#ef4444" opacity={0.8} /> : <React.Fragment key={`d-${payload?.day}`} />; }} name="Max" />
                                         <Line type="monotone" dataKey="min" stroke="#10b981" strokeWidth={1} dot={false} name="Min" /><Legend />
                                     </ComposedChart>
                                 </ResponsiveContainer></div>
@@ -307,7 +307,7 @@ export function AnomalyDetectionSimulator() {
                                         <XAxis dataKey="transitHours" name="Transit" type="number" label={{ value: "Transit Time (hours)", position: "insideBottom", offset: -15, fontSize: 11 }} />
                                         <YAxis dataKey="tempOnArrival" name="Temp" type="number" label={{ value: "Arrival Temp (°F)", angle: -90, position: "insideLeft", fontSize: 11 }} />
                                         <ZAxis range={[30, 30]} /><ReferenceLine y={40} stroke="#ef4444" strokeDasharray="6 3" /><ReferenceLine x={36} stroke="#f59e0b" strokeDasharray="6 3" />
-                                        <Tooltip content={({ payload }: any) => { if (!payload?.[0]) return null; const d = payload[0].payload; return <div className="rounded-xl border bg-background p-2 text-xs shadow-lg"><div className="font-semibold">{d.lot}</div><div className="text-muted-foreground">{d.supplier}</div><div>Transit: {d.transitHours}h · {d.tempOnArrival}°F</div></div>; }} />
+                                        <Tooltip content={({ payload }: { payload?: Array<{ payload: Record<string, unknown> }> }) => { if (!payload?.[0]) return null; const d = payload[0].payload as { lot?: string; supplier?: string; transitHours?: number; tempOnArrival?: number }; return <div className="rounded-xl border bg-background p-2 text-xs shadow-lg"><div className="font-semibold">{d.lot}</div><div className="text-muted-foreground">{d.supplier}</div><div>Transit: {d.transitHours}h · {d.tempOnArrival}°F</div></div>; }} />
                                         <Legend /><Scatter name="Normal" data={normalLots} fill="#10b98166" /><Scatter name="Flagged" data={flaggedLots} fill="#ef4444" />
                                     </ScatterChart>
                                 </ResponsiveContainer></div>
