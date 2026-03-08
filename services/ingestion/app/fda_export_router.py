@@ -439,8 +439,8 @@ async def export_recall_filtered(
                     e.quantity, e.unit_of_measure, e.event_timestamp,
                     e.location_gln, e.location_name, e.source, e.sha256_hash,
                     h.chain_hash,
-                    (SELECT jsonb_object_agg(k.key, k.value)
-                     FROM fsma.cte_kdes k WHERE k.event_id = e.id) AS kdes
+                    (SELECT jsonb_object_agg(k.kde_key, k.kde_value)
+                     FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes
                 FROM fsma.cte_events e
                 LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
                 WHERE {where_clause}
