@@ -19,6 +19,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -74,7 +75,36 @@ FDA_COLUMNS = [
     "Source Document",
     "Record Hash (SHA-256)",
     "Chain Hash",
+    # KDE columns — FSMA 204 requires all KDEs in export
+    "Reference Document Number",
+    "Receive Date",
+    "Ship Date",
+    "Harvest Date",
+    "Cooling Date",
+    "Packing Date",
+    "Transformation Date",
+    "Landing Date",
+    "Receiving Location",
+    "Temperature (°F)",
+    "Carrier",
+    "Additional KDEs (JSON)",
 ]
+
+
+# KDE keys that get their own named columns in the FDA export
+_NAMED_KDE_COLUMNS = {
+    "reference_document_number": "Reference Document Number",
+    "receive_date": "Receive Date",
+    "ship_date": "Ship Date",
+    "harvest_date": "Harvest Date",
+    "cooling_date": "Cooling Date",
+    "packing_date": "Packing Date",
+    "transformation_date": "Transformation Date",
+    "landing_date": "Landing Date",
+    "receiving_location": "Receiving Location",
+    "temperature": "Temperature (°F)",
+    "carrier": "Carrier",
+}
 
 
 def _event_to_fda_row(event: dict) -> dict:
@@ -87,13 +117,14 @@ def _event_to_fda_row(event: dict) -> dict:
     event_time = ""
     if timestamp:
         try:
-            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            ts = str(timestamp)
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
             event_date = dt.strftime("%Y-%m-%d")
             event_time = dt.strftime("%H:%M:%S %Z")
         except (ValueError, AttributeError):
             event_date = str(timestamp)[:10]
 
-    return {
+    row = {
         "Traceability Lot Code (TLC)": event.get("traceability_lot_code", ""),
         "Product Description": event.get("product_description", ""),
         "Quantity": event.get("quantity", ""),
@@ -114,6 +145,16 @@ def _event_to_fda_row(event: dict) -> dict:
         "Record Hash (SHA-256)": event.get("sha256_hash", ""),
         "Chain Hash": event.get("chain_hash", ""),
     }
+
+    # Map named KDE columns
+    for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
+        row[col_name] = str(kdes.get(kde_key, "")) if kdes.get(kde_key) else ""
+
+    # Remaining KDEs not in named columns → JSON blob
+    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS}
+    row["Additional KDEs (JSON)"] = json.dumps(extra_kdes) if extra_kdes else ""
+
+    return row
 
 
 def _generate_csv(events: list[dict]) -> str:

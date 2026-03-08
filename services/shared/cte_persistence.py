@@ -142,12 +142,16 @@ def compute_idempotency_key(
     timestamp: str,
     source: str,
     kdes: Dict[str, Any],
+    location_gln: Optional[str] = None,
+    location_name: Optional[str] = None,
 ) -> str:
     """
     Compute a deduplication key from event content.
 
-    Two identical events from the same source produce the same key,
-    preventing double-ingestion.
+    Two identical events from the same source AND location produce the same key,
+    preventing double-ingestion. Location is included because FSMA 204 treats
+    location as critical to event identity — the same product shipped from two
+    different warehouses at the same time are distinct events.
     """
     canonical = json.dumps(
         {
@@ -155,6 +159,8 @@ def compute_idempotency_key(
             "tlc": tlc,
             "timestamp": timestamp,
             "source": source,
+            "location_gln": location_gln or "",
+            "location_name": location_name or "",
             "kdes": kdes,
         },
         sort_keys=True,
@@ -232,6 +238,7 @@ class CTEPersistence:
         # --- Idempotency check ---
         idempotency_key = compute_idempotency_key(
             event_type, traceability_lot_code, event_timestamp, source, kdes,
+            location_gln=location_gln, location_name=location_name,
         )
 
         existing = self.session.execute(
