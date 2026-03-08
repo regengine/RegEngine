@@ -178,55 +178,70 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         result["chain_gaps"] = 0
 
     # 4) Obligation coverage — check rules against actual event KDE presence
-    obl_row = db_session.execute(
-        text("""
-            SELECT COUNT(*) FROM obligations WHERE tenant_id = :tid
-        """),
-        {"tid": tenant_id},
-    ).fetchone()
-    result["obligation_count"] = obl_row[0] if obl_row else 0
+    # Note: obligations.tenant_id is UUID, but cte_events.tenant_id may be text.
+    # Use try/except to handle type mismatches gracefully.
+    try:
+        obl_row = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM obligations WHERE tenant_id = CAST(:tid AS uuid)
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["obligation_count"] = obl_row[0] if obl_row else 0
+    except Exception:
+        db_session.rollback()
+        result["obligation_count"] = 0
 
     # Count obligation rules that are satisfied vs total checkable rules
     if result["event_count"] > 0:
-        obl_coverage = db_session.execute(
-            text("""
-                WITH checkable_rules AS (
-                    SELECT r.id, r.cte_type, r.required_kde_key, r.validation_rule
-                    FROM obligation_cte_rules r
-                    JOIN obligations o ON o.id = r.obligation_id
-                    WHERE o.tenant_id = :tid
-                      AND r.validation_rule = 'present'
-                      AND r.required_kde_key IS NOT NULL
-                ),
-                active_ctes AS (
-                    SELECT DISTINCT event_type FROM fsma.cte_events WHERE tenant_id = :tid
-                ),
-                matched_rules AS (
-                    SELECT cr.id
-                    FROM checkable_rules cr
-                    WHERE cr.cte_type IN (SELECT event_type FROM active_ctes)
-                       OR cr.cte_type = 'all'
-                )
-                SELECT
-                    (SELECT COUNT(*) FROM matched_rules) AS applicable_rules,
-                    (SELECT COUNT(*) FROM checkable_rules) AS total_rules
-            """),
-            {"tid": tenant_id},
-        ).fetchone()
-        result["applicable_obligation_rules"] = obl_coverage[0] if obl_coverage else 0
-        result["total_obligation_rules"] = obl_coverage[1] if obl_coverage else 0
+        try:
+            obl_coverage = db_session.execute(
+                text("""
+                    WITH checkable_rules AS (
+                        SELECT r.id, r.cte_type, r.required_kde_key, r.validation_rule
+                        FROM obligation_cte_rules r
+                        JOIN obligations o ON o.id = r.obligation_id
+                        WHERE o.tenant_id = CAST(:tid AS uuid)
+                          AND r.validation_rule = 'present'
+                          AND r.required_kde_key IS NOT NULL
+                    ),
+                    active_ctes AS (
+                        SELECT DISTINCT event_type FROM fsma.cte_events WHERE tenant_id = :tid
+                    ),
+                    matched_rules AS (
+                        SELECT cr.id
+                        FROM checkable_rules cr
+                        WHERE cr.cte_type IN (SELECT event_type FROM active_ctes)
+                           OR cr.cte_type = 'all'
+                    )
+                    SELECT
+                        (SELECT COUNT(*) FROM matched_rules) AS applicable_rules,
+                        (SELECT COUNT(*) FROM checkable_rules) AS total_rules
+                """),
+                {"tid": tenant_id},
+            ).fetchone()
+            result["applicable_obligation_rules"] = obl_coverage[0] if obl_coverage else 0
+            result["total_obligation_rules"] = obl_coverage[1] if obl_coverage else 0
+        except Exception:
+            db_session.rollback()
+            result["applicable_obligation_rules"] = 0
+            result["total_obligation_rules"] = 0
 
         # Count active compliance alerts (unfixed obligation gaps)
-        alert_row = db_session.execute(
-            text("""
-                SELECT COUNT(*) FROM fsma.compliance_alerts
-                WHERE tenant_id = :tid
-                  AND alert_type = 'obligation_gap'
-                  AND (resolved IS NULL OR resolved = false)
-            """),
-            {"tid": tenant_id},
-        ).fetchone()
-        result["open_obligation_alerts"] = alert_row[0] if alert_row else 0
+        try:
+            alert_row = db_session.execute(
+                text("""
+                    SELECT COUNT(*) FROM fsma.compliance_alerts
+                    WHERE tenant_id = :tid
+                      AND alert_type = 'obligation_gap'
+                      AND (resolved IS NULL OR resolved = false)
+                """),
+                {"tid": tenant_id},
+            ).fetchone()
+            result["open_obligation_alerts"] = alert_row[0] if alert_row else 0
+        except Exception:
+            db_session.rollback()
+            result["open_obligation_alerts"] = 0
     else:
         result["applicable_obligation_rules"] = 0
         result["total_obligation_rules"] = 0
