@@ -95,7 +95,8 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
         status_code=500,
         content={
             "error": "internal_server_error",
-            "detail": "An unexpected error occurred. Please try again or contact support.",
+            "detail": f"DEBUG: {type(exc).__name__}: {str(exc)}",
+            "debug_traceback": traceback.format_exc()[-1000:],
             "request_id": request_id,
         },
     )
