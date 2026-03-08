@@ -91,11 +91,6 @@ const endpoints: Endpoint[] = [
     { method: 'GET', path: '/pcos/projects/{project_id}/gate-status', description: 'Get regulatory gate status', requiresAuth: true, category: 'PCOS' },
     { method: 'POST', path: '/pcos/budgets/{budget_id}/validate-rates', description: 'Validate union rates', requiresAuth: true, category: 'PCOS' },
 
-    // Verticals
-    { method: 'POST', path: '/verticals/healthcare-enterprise/projects', description: 'Create healthcare project', requiresAuth: true, category: 'Verticals' },
-    { method: 'POST', path: '/verticals/finance/reconcile', description: 'Run finance reconciliation', requiresAuth: true, category: 'Verticals' },
-    { method: 'POST', path: '/verticals/gaming/risk-score', description: 'Calculate player risk', requiresAuth: true, category: 'Verticals' },
-    { method: 'POST', path: '/verticals/energy/validate-firmware', description: 'Validate energy assets', requiresAuth: true, category: 'Verticals' },
 ];
 
 const categoryIcons: Record<string, any> = {

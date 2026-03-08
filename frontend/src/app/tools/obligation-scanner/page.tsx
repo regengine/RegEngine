@@ -403,7 +403,7 @@ export default function ObligationScannerPage() {
                         <div className="os-breadcrumb">
                             <Link href="/">RegEngine</Link>
                             <span>/</span>
-                            <Link href="/verticals/finance">Finance</Link>
+                            <Link href="/verticals/food-safety">Food Safety</Link>
                             <span>/</span>
                             <span>Obligation Scanner</span>
                         </div>
@@ -527,8 +527,8 @@ export default function ObligationScannerPage() {
                             RegEngine&apos;s ROE (Regulatory Obligation Engine) evaluates every financial decision
                             against all {filteredObligations.length} applicable requirements automatically — zero manual mapping.
                         </p>
-                        <Link href="/verticals/finance" className="os-cta-btn">
-                            Explore Finance API <ArrowRight size={16} />
+                        <Link href="/verticals/food-safety" className="os-cta-btn">
+                            Explore Food Safety API <ArrowRight size={16} />
                         </Link>
                     </div>
 
@@ -542,8 +542,8 @@ export default function ObligationScannerPage() {
                             <Link href="/tools/bias-checker" style={{ color: 'var(--os-accent)', marginRight: '1rem' }}>
                                 AI Model Bias Checker →
                             </Link>
-                            <Link href="/verticals/finance" style={{ color: 'var(--os-accent)' }}>
-                                ← Back to Finance Vertical
+                            <Link href="/verticals/food-safety" style={{ color: 'var(--os-accent)' }}>
+                                ← Back to Food Safety Vertical
                             </Link>
                         </p>
                     </footer>

@@ -724,7 +724,7 @@ export default function BiasCheckerPage() {
             <div className="bc-breadcrumb">
               <Link href="/">RegEngine</Link>
               <span>/</span>
-              <Link href="/verticals/finance">Finance</Link>
+              <Link href="/verticals/food-safety">Food Safety</Link>
               <span>/</span>
               <span>Bias Checker</span>
             </div>
@@ -927,8 +927,8 @@ export default function BiasCheckerPage() {
                   RegEngine&apos;s Bias Engine runs DIR, 80% rule, and statistical significance analysis
                   automatically on every model version — integrated directly into your CI/CD pipeline.
                 </p>
-                <Link href="/verticals/finance" className="bc-cta-btn">
-                  Explore Finance API <ArrowRight size={16} />
+                <Link href="/verticals/food-safety" className="bc-cta-btn">
+                  Explore Food Safety API <ArrowRight size={16} />
                 </Link>
               </div>
             </div>
@@ -965,8 +965,8 @@ export default function BiasCheckerPage() {
               It does not constitute legal advice. Disparate impact analysis should be conducted in
               consultation with qualified fair lending counsel. RegEngine Inc. © {new Date().getFullYear()}.
               <br />
-              <Link href="/verticals/finance" style={{ color: 'var(--bc-accent)' }}>
-                ← Back to Finance Vertical
+              <Link href="/verticals/food-safety" style={{ color: 'var(--bc-accent)' }}>
+                ← Back to Food Safety Vertical
               </Link>
             </p>
           </footer>
