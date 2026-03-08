@@ -52,9 +52,6 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
             tool_title: config.title,
             timestamp: new Date().toISOString()
         });
-
-        // Keep console log for local dev debugging
-        console.log(`[ANALYTICS] ${config.id}: ${eventName}`, metadata);
     };
 
     const handleNext = () => {

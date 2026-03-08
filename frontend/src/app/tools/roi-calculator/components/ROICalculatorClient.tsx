@@ -142,7 +142,6 @@ export function ROICalculatorClient() {
                     config={ROI_CALCULATOR_CONFIG}
                     renderResults={renderResults}
                     onLeadCapture={(lead) => {
-                        console.log('[ROI_LEAD_CAPTURE]', lead);
                         if (lead.email) {
                             posthog?.capture('roi_calculated', {
                                 email: lead.email,

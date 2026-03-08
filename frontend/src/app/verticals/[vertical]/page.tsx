@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-static";
 export const generateStaticParams = async () => {
-  return [{ vertical: "food-safety" }, { vertical: "energy" }, { vertical: "healthcare" }];
+  return [{ vertical: "food-safety" }];
 };
 
 const VERTICAL_CONTENT: Record<
@@ -26,24 +27,6 @@ const VERTICAL_CONTENT: Record<
     secondaryHref: "/demo/recall-simulation",
     secondaryLabel: "Open Recall Simulation",
   },
-  energy: {
-    title: "Energy Compliance",
-    subtitle: "Operational controls and documentation support for critical infrastructure teams.",
-    focus: "NERC CIP workflows, evidence packaging, and control attestation.",
-    primaryHref: "/docs/energy/nerc-cip",
-    primaryLabel: "View NERC CIP Guide",
-    secondaryHref: "/controls",
-    secondaryLabel: "Open Controls Workspace",
-  },
-  healthcare: {
-    title: "Healthcare Compliance",
-    subtitle: "Program oversight for regulated healthcare operations and policy workflows.",
-    focus: "Risk visibility, policy controls, and audit-ready reporting.",
-    primaryHref: "/docs/healthcare",
-    primaryLabel: "View Healthcare Docs",
-    secondaryHref: "/dashboard/compliance",
-    secondaryLabel: "Open Compliance Dashboard",
-  },
 };
 
 type PageProps = {
@@ -52,9 +35,10 @@ type PageProps = {
 
 export default async function VerticalPage({ params }: PageProps) {
   const { vertical } = await params;
-  const content =
-    VERTICAL_CONTENT[vertical] ??
-    VERTICAL_CONTENT["food-safety"];
+  const content = VERTICAL_CONTENT[vertical];
+  if (!content) {
+    redirect("/verticals");
+  }
 
   return (
     <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">

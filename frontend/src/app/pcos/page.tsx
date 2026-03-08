@@ -343,7 +343,6 @@ export default function PCOSDashboard() {
                 }}
                 preselectedCategory={preselectedCategory}
                 onUploadComplete={(files, category) => {
-                    console.log(`Uploaded ${files.length} files to category: ${category}`);
                     // TODO: Integrate with backend API when available
                 }}
             />
