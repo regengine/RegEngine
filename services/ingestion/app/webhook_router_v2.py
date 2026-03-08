@@ -198,19 +198,25 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
         from sqlalchemy import text
 
         # Fetch rules for this CTE type + rules that apply to all CTE types
-        rows = db_session.execute(
-            text("""
-                SELECT r.id, r.obligation_id, r.cte_type, r.required_kde_key,
-                       r.validation_rule, r.description,
-                       o.obligation_text, o.risk_category
-                FROM obligation_cte_rules r
-                JOIN obligations o ON o.id = r.obligation_id
-                WHERE o.tenant_id = :tid
-                  AND r.cte_type IN (:cte_type, 'all')
-                ORDER BY o.risk_category DESC
-            """),
-            {"tid": tenant_id, "cte_type": event.cte_type.value},
-        ).fetchall()
+        # Use savepoint so a UUID cast failure doesn't abort the outer transaction
+        nested = db_session.begin_nested()
+        try:
+            rows = db_session.execute(
+                text("""
+                    SELECT r.id, r.obligation_id, r.cte_type, r.required_kde_key,
+                           r.validation_rule, r.description,
+                           o.obligation_text, o.risk_category
+                    FROM obligation_cte_rules r
+                    JOIN obligations o ON o.id = r.obligation_id
+                    WHERE o.tenant_id = CAST(:tid AS uuid)
+                      AND r.cte_type IN (:cte_type, 'all')
+                    ORDER BY o.risk_category DESC
+                """),
+                {"tid": tenant_id, "cte_type": event.cte_type.value},
+            ).fetchall()
+        except Exception:
+            nested.rollback()
+            return []
 
         if not rows:
             return []
