@@ -387,8 +387,22 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 async def ingest_events(
     payload: WebhookPayload,
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-) -> IngestResponse:
+):
     """Process incoming webhook events with persistent storage."""
+    import traceback as _tb
+    try:
+        return await _ingest_events_inner(payload, x_api_key)
+    except HTTPException:
+        raise
+    except Exception as _e:
+        return {"debug_error": str(_e), "debug_traceback": _tb.format_exc()}
+
+
+async def _ingest_events_inner(
+    payload: WebhookPayload,
+    x_api_key: Optional[str] = None,
+) -> IngestResponse:
+    """Inner implementation — wrapped for debug."""
     # Rate limiting
     _check_rate_limit(x_api_key or "anonymous")
 
