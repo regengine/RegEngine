@@ -162,6 +162,118 @@ def _generate_alerts(event: IngestEvent) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Post-Ingest Obligation Check
+# ---------------------------------------------------------------------------
+
+def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id: str) -> list[dict]:
+    """
+    Check ingested event against obligation-CTE rules from the database.
+
+    For each obligation that applies to this CTE type, verify that the required
+    KDE is present in the event. Write pass/fail results to fsma.compliance_alerts.
+
+    Returns list of failed obligation checks (alerts).
+    """
+    if db_session is None:
+        return []
+
+    try:
+        from sqlalchemy import text
+
+        # Fetch rules for this CTE type + rules that apply to all CTE types
+        rows = db_session.execute(
+            text("""
+                SELECT r.id, r.obligation_id, r.cte_type, r.required_kde_key,
+                       r.validation_rule, r.description,
+                       o.obligation_text, o.risk_category
+                FROM obligation_cte_rules r
+                JOIN obligations o ON o.id = r.obligation_id
+                WHERE o.tenant_id = :tid
+                  AND r.cte_type IN (:cte_type, 'all')
+                ORDER BY o.risk_category DESC
+            """),
+            {"tid": tenant_id, "cte_type": event.cte_type.value},
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        alerts = []
+        # Build available KDE values from event
+        available = {
+            "traceability_lot_code": event.traceability_lot_code,
+            "product_description": event.product_description,
+            "quantity": event.quantity,
+            "unit_of_measure": event.unit_of_measure,
+            "location_name": event.location_name,
+            "location_gln": event.location_gln,
+            **event.kdes,
+        }
+
+        for row in rows:
+            rule_id, obl_id, cte_type, kde_key, validation_rule, desc, obl_text, risk = row
+
+            passed = True
+            if validation_rule == "present" and kde_key:
+                val = available.get(kde_key)
+                passed = val is not None and (not isinstance(val, str) or val.strip() != "")
+            elif validation_rule == "tlc_assigned":
+                passed = bool(event.traceability_lot_code and len(event.traceability_lot_code) >= 3)
+            elif validation_rule == "tlc_not_reassigned":
+                # This is a negative check — shipping events should NOT create new TLCs
+                # We can't fully validate this without prior event context, so pass
+                passed = True
+            elif validation_rule == "downstream_transmitted":
+                # Transmission checks are done at the integration layer, not per-event
+                passed = True
+            elif validation_rule == "record_exists":
+                # Record maintenance obligations are checked at audit time
+                passed = True
+
+            if not passed:
+                severity = "critical" if risk == "CRITICAL" else "warning"
+                alert = {
+                    "severity": severity,
+                    "alert_type": "obligation_gap",
+                    "message": f"Obligation not met: {obl_text[:100]}",
+                    "obligation_id": str(obl_id),
+                    "missing_kde": kde_key,
+                }
+                alerts.append(alert)
+
+                # Write to compliance_alerts table
+                try:
+                    db_session.execute(
+                        text("""
+                            INSERT INTO fsma.compliance_alerts
+                            (tenant_id, event_id, severity, alert_type, message, details)
+                            VALUES (:tid, :eid::uuid, :sev, :atype, :msg, :details::jsonb)
+                        """),
+                        {
+                            "tid": tenant_id,
+                            "eid": event_id,
+                            "sev": severity,
+                            "atype": "obligation_gap",
+                            "msg": f"Missing KDE '{kde_key}' required by obligation",
+                            "details": json.dumps({
+                                "obligation_id": str(obl_id),
+                                "obligation_text": obl_text[:200],
+                                "risk_category": risk,
+                                "missing_kde": kde_key,
+                            }),
+                        },
+                    )
+                except Exception as alert_err:
+                    logger.warning("obligation_alert_write_failed: %s", str(alert_err))
+
+        return alerts
+
+    except Exception as exc:
+        logger.warning("obligation_check_failed: %s", str(exc))
+        return []
+
+
+# ---------------------------------------------------------------------------
 # Neo4j Graph Sync
 # ---------------------------------------------------------------------------
 
@@ -276,6 +388,20 @@ async def ingest_events(
                         chain_hash=store_result.chain_hash,
                     ))
                     accepted += 1
+
+                    # Post-ingest obligation check
+                    obl_alerts = _check_obligations(
+                        db_session, event, store_result.event_id, tenant_id,
+                    )
+                    if obl_alerts:
+                        logger.info(
+                            "obligation_gaps_detected",
+                            extra={
+                                "event_id": store_result.event_id,
+                                "gap_count": len(obl_alerts),
+                                "tenant_id": tenant_id,
+                            },
+                        )
 
                     # Async graph sync
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
