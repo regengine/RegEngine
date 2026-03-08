@@ -5,7 +5,6 @@ import {
     Check,
     X,
     Zap,
-    Building2,
     Rocket,
     Crown,
     ArrowRight,
@@ -38,81 +37,66 @@ const T = {
 
 const PRICING_TIERS = [
     {
-        id: 'starter',
-        name: 'Starter',
+        id: 'growth',
+        name: 'Growth',
         icon: Zap,
-        description: 'Single facility getting started with FSMA 204',
-        monthlyPrice: 149,
-        annualPrice: 124,
-        cteLimit: '5,000',
+        description: 'Under $50M annual revenue',
+        monthlyPrice: 999,
+        annualPrice: 999,
+        revenueBand: 'Under $50M annual revenue',
         highlighted: false,
-        cta: 'Start Free Trial',
+        cta: 'Start Growth Plan',
         features: [
-            { text: '1 facility', included: true },
-            { text: '5 supplier portal links (full onboarding + FTL scope + CTE capture)', included: true },
-            { text: 'CSV upload & manual entry', included: true },
-            { text: 'All 7 CTE types', included: true },
-            { text: 'SHA-256 audit trail', included: true },
-            { text: 'Compliance score dashboard', included: true },
-            { text: 'FDA export (CSV)', included: true },
+            { text: 'FSMA 204 traceability workspace', included: true },
+            { text: 'Supplier onboarding + FTL scoping', included: true },
+            { text: 'CSV upload + API ingestion', included: true },
+            { text: 'Compliance scoring + FDA-ready export', included: true },
+            { text: 'Recall simulation + drill workflows', included: true },
             { text: 'Email support', included: true },
-            { text: 'API / webhook access', included: false },
-            { text: 'IoT monitoring', included: false },
-            { text: 'EPCIS export', included: false },
         ],
     },
     {
-        id: 'professional',
-        name: 'Professional',
+        id: 'scale',
+        name: 'Scale',
         icon: Rocket,
-        description: 'Multi-facility operations with API & IoT',
-        monthlyPrice: 499,
-        annualPrice: 416,
-        cteLimit: '50,000',
+        description: '$50M–$200M annual revenue',
+        monthlyPrice: 1999,
+        annualPrice: 1999,
+        revenueBand: '$50M–$200M annual revenue',
         highlighted: true,
-        cta: 'Start Free Trial',
+        cta: 'Start Scale Plan',
         features: [
-            { text: '5 facilities', included: true },
-            { text: 'Unlimited supplier portal links (full onboarding + FTL scope + CTE capture)', included: true },
-            { text: 'API + webhook integration', included: true },
-            { text: 'IoT temperature monitoring', included: true },
-            { text: 'EPCIS 2.0 export (Walmart, Kroger)', included: true },
-            { text: 'SOP generator', included: true },
-            { text: 'Mock audit drills', included: true },
-            { text: 'Sensitech / Tive import', included: true },
-            { text: 'Multi-tenant isolation', included: true },
+            { text: 'Everything in Growth', included: true },
+            { text: 'Multi-facility operations', included: true },
+            { text: 'Expanded API + webhook limits', included: true },
+            { text: 'Priority onboarding support', included: true },
+            { text: 'Retailer-specific readiness benchmarks', included: true },
             { text: 'Priority support', included: true },
-            { text: 'Custom integrations', included: false },
         ],
     },
     {
         id: 'enterprise',
         name: 'Enterprise',
         icon: Crown,
-        description: 'Full supply chain with SSO & dedicated support',
+        description: 'Over $200M annual revenue',
         monthlyPrice: null,
         annualPrice: null,
-        cteLimit: 'Unlimited',
+        revenueBand: 'Over $200M annual revenue',
         highlighted: false,
-        cta: 'Contact Sales',
-        href: 'mailto:sales@regengine.co?subject=Enterprise%20Inquiry',
+        cta: 'Talk to us',
+        href: '/alpha',
         features: [
-            { text: 'Unlimited facilities', included: true },
-            { text: 'Everything in Professional', included: true },
-            { text: 'SSO / SAML integration', included: true },
-            { text: 'Custom recall playbooks', included: true },
-            { text: 'Dedicated account manager', included: true },
-            { text: '99.9% SLA', included: true },
-            { text: 'On-premise deployment option', included: true },
-            { text: 'Custom integrations', included: true },
-            { text: 'SOC 2 Type II report', included: true },
-            { text: '24/7 phone support', included: true },
+            { text: 'Everything in Scale', included: true },
+            { text: 'Dedicated implementation plan', included: true },
+            { text: 'Custom SLA + security review support', included: true },
+            { text: 'Advanced integration and data architecture', included: true },
+            { text: 'Executive sponsor + quarterly roadmap reviews', included: true },
         ],
     },
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$149/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
+    { feature: 'Starting Price', regengine: '$999/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
     { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6-8 weeks', repositrak: '<1 hour*', tracegains: '4-6 weeks' },
     { feature: 'Public API Docs', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
@@ -121,10 +105,10 @@ const COMPETITOR_COMPARISON = [
 ];
 
 const FAQ = [
-    { q: 'What happens if I exceed my CTE limit?', a: 'We charge $0.001 per CTE over your limit—no surprises, no overage charges that blow up your bill. You can also upgrade mid-cycle.' },
+    { q: 'How do you decide between Growth and Scale?', a: 'Pricing is mapped to annual revenue bands: Growth is for teams under $50M, Scale is for $50M–$200M, and Enterprise is custom above that.' },
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
-    { q: "What's included in the free trial?", a: 'Full access to all features in your selected tier for 14 days. No credit card required to start.' },
-    { q: 'Do you offer discounts for annual billing?', a: 'Yes! Save ~17% when you pay annually instead of monthly.' },
+    { q: 'Do you offer pilot engagements?', a: 'Yes. We run structured pilot engagements for qualified teams preparing for retailer and FDA traceability requirements.' },
+    { q: 'Do you offer annual contracts?', a: 'Yes. Annual contracts are available for all plans.' },
     { q: 'What integrations are available?', a: 'We support GS1 EPCIS 2.0 and REST APIs for any ERP/WMS today. SAP and Oracle connectors are on the roadmap.' },
 ];
 
@@ -198,7 +182,7 @@ export default function PricingPage() {
                     }}
                 >
                     FSMA 204 Compliance,<br />
-                    <span className="text-re-brand">Without the Enterprise Price Tag</span>
+                    <span className="text-re-brand">Priced by Revenue Tier</span>
                 </h1>
 
                 <p
@@ -210,7 +194,7 @@ export default function PricingPage() {
                         lineHeight: 1.6,
                     }}
                 >
-                    The only traceability API with public pricing. No sales calls required.
+                    Simple pricing for food safety teams: Growth, Scale, and Enterprise.
                 </p>
 
                 {/* Billing Toggle */}
@@ -262,7 +246,7 @@ export default function PricingPage() {
                                 fontSize: '11px',
                             }}
                         >
-                            Save 17%
+                            Annual contracts
                         </Badge>
                     </button>
                 </div>
@@ -384,7 +368,7 @@ export default function PricingPage() {
                                             <span style={{ fontSize: '28px', fontWeight: 700, color: T.heading }}>Custom</span>
                                         )}
                                         <p style={{ fontSize: '12px', color: T.textDim, marginTop: '4px' }}>
-                                            Up to {tier.cteLimit} CTEs/month
+                                            {tier.revenueBand}
                                         </p>
                                     </div>
 
@@ -405,7 +389,7 @@ export default function PricingPage() {
                                     </div>
 
                                     {/* CTA */}
-                                    <Link href={tier.id === 'enterprise' ? (tier as any).href || 'mailto:sales@regengine.co' : `/checkout?plan=${tier.id}`}>
+                                    <Link href={tier.id === 'enterprise' ? tier.href || '/alpha' : `/checkout?plan=${tier.id}`}>
                                         <Button
                                             style={{
                                                 width: '100%',
@@ -427,7 +411,7 @@ export default function PricingPage() {
                 </div>
 
                 <p style={{ textAlign: 'center', fontSize: '13px', color: T.textDim, marginTop: '32px' }}>
-                    Need more CTEs? Just <strong className="text-re-text-secondary">$0.001 per additional CTE</strong>. No surprise bills.
+                    Need help choosing? Use annual revenue bands as a quick guide, then validate in a 30-minute planning call.
                 </p>
             </section>
 
@@ -540,13 +524,13 @@ export default function PricingPage() {
             >
                 <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
-                        Ready to Get Started?
+                        Ready to Choose Your Plan?
                     </h2>
                     <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)', marginBottom: '32px' }}>
-                        14-day free trial. No credit card required. First CTE in under 10 minutes.
+                        Book a fast fit-check and we will map your operation to the right FSMA plan.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/onboarding">
+                        <Link href="/alpha">
                             <Button
                                 style={{
                                     background: '#fff',
@@ -555,7 +539,7 @@ export default function PricingPage() {
                                     padding: '14px 24px',
                                 }}
                             >
-                                Start Free Trial
+                                Talk to Us
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
