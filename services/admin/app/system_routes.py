@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import httpx
 import structlog
 import asyncio
@@ -24,6 +24,13 @@ class SystemMetricsResponse(BaseModel):
     total_tenants: int
     total_documents: int
     active_jobs: int
+    # FSMA-specific live metrics
+    compliance_score: Optional[int] = None
+    compliance_grade: Optional[str] = None
+    events_ingested: Optional[int] = None
+    chain_length: Optional[int] = None
+    chain_valid: Optional[bool] = None
+    open_alerts: Optional[int] = None
 
 def _get_service_urls() -> Dict[str, str]:
     """Build service health-check URLs from env vars or fallback to Docker names."""
@@ -35,6 +42,9 @@ def _get_service_urls() -> Dict[str, str]:
         "compliance": f"{compliance.rstrip('/')}/health",
         "graph": f"{graph.rstrip('/')}/v1/labels/health",
     }
+
+def _get_ingestion_base() -> str:
+    return os.getenv("INGESTION_SERVICE_URL", "http://ingestion-api:8002").rstrip("/")
 
 @router.get("/status", response_model=SystemStatusResponse)
 async def get_system_status(current_user: UserModel = Depends(get_current_user)):
@@ -63,11 +73,49 @@ async def check_service_health(client, name: str, url: str) -> ServiceHealth:
     except Exception as e:
         return ServiceHealth(name=name, status="unhealthy", details={"error": str(e)})
 
+
 @router.get("/metrics", response_model=SystemMetricsResponse)
 async def get_system_metrics(current_user: UserModel = Depends(get_current_user)):
-    # Mock data for now until we have direct DB access or calls
+    """Fetch live metrics from the ingestion service.
+
+    Calls the scoring and chain-verify endpoints on the ingestion service
+    to return real compliance data instead of hardcoded mocks.
+    """
+    base = _get_ingestion_base()
+    tenant = "default"  # TODO: resolve from current_user's tenant
+
+    score_data: Dict[str, Any] = {}
+    chain_data: Dict[str, Any] = {}
+
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        score_task = client.get(f"{base}/api/v1/compliance/score/{tenant}")
+        chain_task = client.get(
+            f"{base}/api/v1/webhooks/chain/verify",
+            params={"tenant_id": tenant},
+        )
+        score_resp, chain_resp = await asyncio.gather(
+            score_task, chain_task, return_exceptions=True,
+        )
+
+        if isinstance(score_resp, Exception):
+            logger.warning("metrics_score_fetch_failed", error=str(score_resp))
+        elif score_resp.status_code == 200:
+            score_data = score_resp.json()
+
+        if isinstance(chain_resp, Exception):
+            logger.warning("metrics_chain_fetch_failed", error=str(chain_resp))
+        elif chain_resp.status_code == 200:
+            chain_data = chain_resp.json()
+
+    events = score_data.get("events_analyzed", 0)
     return SystemMetricsResponse(
-        total_tenants=5,
-        total_documents=128,
-        active_jobs=3
+        total_tenants=1,
+        total_documents=events,
+        active_jobs=0,
+        compliance_score=score_data.get("overall_score"),
+        compliance_grade=score_data.get("grade"),
+        events_ingested=events,
+        chain_length=chain_data.get("chain_length"),
+        chain_valid=chain_data.get("chain_valid"),
+        open_alerts=0,  # TODO: query alerts table
     )

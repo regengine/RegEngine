@@ -177,9 +177,9 @@ export default function DashboardPage() {
     const metrics = useMemo(() => {
         if (systemMetrics) {
             return {
-                documentsIngested: systemMetrics.total_documents ?? 0,
-                complianceScore: dashboardData?.metrics.complianceScore ?? 85,
-                openAlerts: dashboardData?.metrics.openAlerts ?? 0,
+                documentsIngested: systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0,
+                complianceScore: systemMetrics.compliance_score ?? dashboardData?.metrics.complianceScore ?? 0,
+                openAlerts: systemMetrics.open_alerts ?? dashboardData?.metrics.openAlerts ?? 0,
                 pendingReviews: dashboardData?.metrics.pendingReviews ?? 0,
             };
         }
