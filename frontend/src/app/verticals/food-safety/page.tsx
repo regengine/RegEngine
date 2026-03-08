@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Leaf, CheckCircle, AlertCircle, TrendingUp, ArrowRight, PlayCircle, FileText, ClipboardCheck } from 'lucide-react';
+import { Leaf, CheckCircle, AlertCircle, TrendingUp, PlayCircle, FileText, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -206,7 +206,7 @@ export default function FoodSafetyVerticalPage() {
                             <div className="text-center space-y-4">
                                 <h2 className="text-3xl font-bold">Explore FSMA Tools</h2>
                                 <p className="text-green-100 max-w-2xl mx-auto">
-                                    Access readiness assessment, target market analysis, and compliance dashboard
+                                    Access the compliance dashboard and run an interactive recall simulation
                                 </p>
                                 <div className="flex justify-center gap-4 pt-4">
                                     <Link href="/fsma">
@@ -215,16 +215,10 @@ export default function FoodSafetyVerticalPage() {
                                             FSMA Dashboard
                                         </Button>
                                     </Link>
-                                    <Link href="/fsma/assessment">
+                                    <Link href="/demo/recall-simulation">
                                         <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
                                             <ClipboardCheck className="mr-2 h-4 w-4" />
-                                            Readiness Assessment
-                                        </Button>
-                                    </Link>
-                                    <Link href="/fsma/market">
-                                        <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
-                                            Target Market
-                                            <ArrowRight className="ml-2 h-4 w-4" />
+                                            Recall Simulation
                                         </Button>
                                     </Link>
                                 </div>
