@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const OPPORTunity_URL = process.env.OPPORTUNITY_SERVICE_URL || 'http://localhost:8300';
 
 // Required for static export
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 export const generateStaticParams = async () => {
     return [{ path: ['static_proxy'] }];
 };

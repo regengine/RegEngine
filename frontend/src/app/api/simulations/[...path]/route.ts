@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const INGESTION_URL = process.env.INGESTION_SERVICE_URL || "http://localhost:8002";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 export const generateStaticParams = async () => {
   return [{ path: ["static_proxy"] }];
 };
