@@ -395,7 +395,12 @@ async def ingest_events(
     except HTTPException:
         raise
     except Exception as _e:
-        raise HTTPException(status_code=422, detail=f"DEBUG: {type(_e).__name__}: {_e}\n{_tb.format_exc()[-500:]}")
+        # Return plain dict to avoid JSONResponse serialization issues
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(
+            content=f"DEBUG ERROR: {type(_e).__name__}: {_e}\n\n{_tb.format_exc()}",
+            status_code=500,
+        )
 
 
 async def _ingest_events_inner(
