@@ -146,10 +146,10 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         text("""
             SELECT
                 COUNT(*)                                   AS chain_length,
-                MAX(sequence_number)                       AS max_seq,
+                MAX(sequence_num)                          AS max_seq,
                 (SELECT chain_hash FROM fsma.hash_chain
                  WHERE tenant_id = :tid
-                 ORDER BY sequence_number DESC LIMIT 1)    AS last_hash
+                 ORDER BY sequence_num DESC LIMIT 1)       AS last_hash
             FROM fsma.hash_chain
             WHERE tenant_id = :tid
         """),
@@ -164,12 +164,12 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         gap_row = db_session.execute(
             text("""
                 SELECT COUNT(*) FROM (
-                    SELECT sequence_number,
-                           LAG(sequence_number) OVER (ORDER BY sequence_number) AS prev_seq
+                    SELECT sequence_num,
+                           LAG(sequence_num) OVER (ORDER BY sequence_num) AS prev_seq
                     FROM fsma.hash_chain
                     WHERE tenant_id = :tid
                 ) sub
-                WHERE prev_seq IS NOT NULL AND sequence_number != prev_seq + 1
+                WHERE prev_seq IS NOT NULL AND sequence_num != prev_seq + 1
             """),
             {"tid": tenant_id},
         ).fetchone()
