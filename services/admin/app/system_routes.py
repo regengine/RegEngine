@@ -55,7 +55,7 @@ def _get_ingestion_base() -> str:
 async def get_system_status(current_user: UserModel = Depends(get_current_user)):
     service_urls = _get_service_urls()
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
         tasks = []
         for name, url in service_urls.items():
             tasks.append(check_service_health(client, name, url))
@@ -70,13 +70,25 @@ async def get_system_status(current_user: UserModel = Depends(get_current_user))
     return SystemStatusResponse(overall_status=overall, services=results)
 
 async def check_service_health(client, name: str, url: str) -> ServiceHealth:
-    try:
-        response = await client.get(url)
-        if response.status_code == 200:
-            return ServiceHealth(name=name, status="healthy", details=response.json())
-        return ServiceHealth(name=name, status="unhealthy", details={"error": f"Status {response.status_code}"})
-    except Exception as e:
-        return ServiceHealth(name=name, status="unhealthy", details={"error": str(e)})
+    """Check service health with one retry on failure."""
+    for attempt in range(2):
+        try:
+            response = await client.get(url)
+            if response.status_code == 200:
+                return ServiceHealth(name=name, status="healthy", details=response.json())
+            if attempt == 0:
+                await asyncio.sleep(1)
+                continue
+            return ServiceHealth(name=name, status="unhealthy", details={"error": f"Status {response.status_code}"})
+        except Exception as e:
+            if attempt == 0:
+                await asyncio.sleep(1)
+                continue
+            error_msg = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            logger.warning("health_check_failed", service=name, url=url, error=error_msg)
+            return ServiceHealth(name=name, status="unhealthy", details={"error": error_msg})
+    # Should not reach here, but just in case
+    return ServiceHealth(name=name, status="unhealthy", details={"error": "max retries"})
 
 
 def _resolve_tenant(db: Session) -> str:
@@ -107,7 +119,7 @@ async def get_system_metrics(
     score_data: Dict[str, Any] = {}
     chain_data: Dict[str, Any] = {}
 
-    async with httpx.AsyncClient(timeout=8.0) as client:
+    async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
         score_task = client.get(f"{base}/api/v1/compliance/score/{tenant}")
         chain_task = client.get(
             f"{base}/api/v1/webhooks/chain/verify",
