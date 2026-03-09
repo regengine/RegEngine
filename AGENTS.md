@@ -17,6 +17,7 @@ Use these files before making assumptions:
 - `docs/LOCAL_SETUP_GUIDE.md`
 - `docs/ENV_SETUP_CHECKLIST.md`
 - `docs/specs/FSMA_204_MVP_SPEC.md`
+- `docs/AI_ENGINEERING_STANDARDS.md`
 - `services/shared/paths.py`
 - `scripts/test-all.sh`
 - `frontend/package.json`

@@ -1,4 +1,12 @@
-# RegEngine Product Roadmap
+# RegEngine Product Roadmap (Legacy)
+
+> [!WARNING]
+> Legacy planning document retained for historical context.
+> This file reflects a January 2025 multi-jurisdiction strategy and is **not** the active execution plan.
+>
+> Active source of truth:
+> - `docs/PRODUCT_ROADMAP.md` (FSMA-first, 90-day plan, last updated March 9, 2026)
+> - `docs/AI_ENGINEERING_STANDARDS.md`
 
 **Last Updated**: 2025-01-18
 **Planning Horizon**: 18 months (Q1 2025 – Q3 2026)

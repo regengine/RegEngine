@@ -218,6 +218,7 @@ Route: `/onboarding/supplier-flow`
 | FSMA deployment runbook | `docs/FSMA_RAILWAY_DEPLOYMENT.md` |
 | Env setup checklist | `docs/ENV_SETUP_CHECKLIST.md` |
 | FSMA 204 MVP spec | `docs/specs/FSMA_204_MVP_SPEC.md` |
+| AI engineering standards | `docs/AI_ENGINEERING_STANDARDS.md` |
 | Partner API spec | `partner_api_spec.yaml` |
 
 ---
