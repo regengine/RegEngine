@@ -397,7 +397,24 @@ async def ingest_events(
     # Rate limiting
     _check_rate_limit(x_api_key or "anonymous")
 
-    tenant_id = payload.tenant_id or "default"
+    # Resolve tenant: payload > API-key lookup > fallback
+    tenant_id = payload.tenant_id
+    if not tenant_id and x_api_key:
+        try:
+            from shared.database import SessionLocal
+            _db = SessionLocal()
+            from sqlalchemy import text as _text
+            _row = _db.execute(
+                _text("SELECT tenant_id FROM api_keys WHERE key_hash = encode(sha256(:raw::bytea), 'hex') LIMIT 1"),
+                {"raw": x_api_key},
+            ).fetchone()
+            if _row and _row[0]:
+                tenant_id = str(_row[0])
+            _db.close()
+        except Exception:
+            pass
+    if not tenant_id:
+        tenant_id = "5946c58f-ddf9-4db0-9baa-acb11c6fce91"  # demo fallback
     results: list[EventResult] = []
     accepted = 0
     rejected = 0
@@ -555,7 +572,7 @@ async def ingest_events(
     ),
 )
 async def verify_chain(
-    tenant_id: str = "default",
+    tenant_id: str = "5946c58f-ddf9-4db0-9baa-acb11c6fce91",
 ):
     """Verify the integrity of the tenant's hash chain."""
     db_session = None

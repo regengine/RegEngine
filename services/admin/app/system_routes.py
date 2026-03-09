@@ -5,8 +5,10 @@ import httpx
 import structlog
 import asyncio
 import os
-from app.dependencies import get_current_user
+from sqlalchemy import text
+from app.dependencies import get_current_user, get_session
 from app.sqlalchemy_models import UserModel
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/system", tags=["system"])
 logger = structlog.get_logger("admin.system")
@@ -74,15 +76,30 @@ async def check_service_health(client, name: str, url: str) -> ServiceHealth:
         return ServiceHealth(name=name, status="unhealthy", details={"error": str(e)})
 
 
+def _resolve_tenant(db: Session) -> str:
+    """Resolve tenant UUID from the RLS context set by get_current_user."""
+    try:
+        row = db.execute(text("SELECT current_setting('app.tenant_id', true)")).fetchone()
+        tid = row[0] if row else None
+        if tid:
+            return tid
+    except Exception:
+        pass
+    return "5946c58f-ddf9-4db0-9baa-acb11c6fce91"  # fallback: demo tenant
+
+
 @router.get("/metrics", response_model=SystemMetricsResponse)
-async def get_system_metrics(current_user: UserModel = Depends(get_current_user)):
+async def get_system_metrics(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
     """Fetch live metrics from the ingestion service.
 
     Calls the scoring and chain-verify endpoints on the ingestion service
     to return real compliance data instead of hardcoded mocks.
     """
     base = _get_ingestion_base()
-    tenant = "default"  # TODO: resolve from current_user's tenant
+    tenant = _resolve_tenant(db)
 
     score_data: Dict[str, Any] = {}
     chain_data: Dict[str, Any] = {}
