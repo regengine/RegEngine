@@ -115,10 +115,8 @@ class APIClient {
       timeout: 30000,
     });
 
-    // Default API key for development (test bypass token)
-    const defaultApiKey = typeof window !== 'undefined'
-      ? process.env.NEXT_PUBLIC_API_KEY || 'regengine-universal-test-key-2026'
-      : process.env.NEXT_PUBLIC_API_KEY || 'regengine-universal-test-key-2026';
+    // Default API key from environment (no hardcoded fallback)
+    const defaultApiKey = process.env.NEXT_PUBLIC_API_KEY || '';
 
     client.interceptors.request.use((config) => {
       // Check for existing API key headers (case-insensitive since axios lowercases header names)
