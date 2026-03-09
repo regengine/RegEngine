@@ -57,11 +57,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedAccessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
 
-      // Use stored key or default to universal test key
-      const universalKey = 'regengine-universal-test-key-2026';
-      setApiKeyState(storedApiKey || universalKey);
-      setAdminKeyState(storedAdminKey || universalKey);
-      if (storedAdminKey) setAdminKeyState(storedAdminKey);
+      // Use stored key or env var (no hardcoded fallback)
+      const envKey = process.env.NEXT_PUBLIC_API_KEY || '';
+      setApiKeyState(storedApiKey || envKey);
+      setAdminKeyState(storedAdminKey || envKey);
       if (storedTenantId) setTenantIdState(storedTenantId);
       if (storedOnboarded === 'true') setIsOnboarded(true);
       if (storedDemoMode === 'true') setDemoModeState(true);
