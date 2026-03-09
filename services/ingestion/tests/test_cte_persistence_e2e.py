@@ -769,7 +769,7 @@ class TestCTEPersistenceE2E:
         assert tlc in csv_v1                              # TLC appears in data
         assert "harvesting" in csv_v1
         assert "receiving" in csv_v1
-        assert "Cold Express Logistics" in csv_v1         # carrier in shipping KDEs
+        assert "Valley Fresh Farms" in csv_v1              # ship_from in shipping KDEs
 
         # Verify 4 data rows (+ 1 header)
         rows = list(csv.DictReader(io.StringIO(csv_v1)))
