@@ -196,9 +196,9 @@ def postgres_engine():
     with PostgresContainer("postgres:15-alpine") as pg:
         host = pg.get_container_host_ip()
         port = pg.get_exposed_port(5432)
-        db = pg.POSTGRES_DB
-        user = pg.POSTGRES_USER
-        password = pg.POSTGRES_PASSWORD
+        db = getattr(pg, "dbname", None) or getattr(pg, "POSTGRES_DB", "test")
+        user = getattr(pg, "username", None) or getattr(pg, "POSTGRES_USER", "test")
+        password = getattr(pg, "password", None) or getattr(pg, "POSTGRES_PASSWORD", "test")
 
         url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
         engine = create_engine(url, echo=False)
