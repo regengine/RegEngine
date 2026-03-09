@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 
@@ -14,7 +14,7 @@ import { HelpTooltip } from '@/components/ui/tooltip';
 import { WorkflowStepper } from '@/components/layout/workflow-stepper';
 import { useAuth } from '@/lib/auth-context';
 import { useArbitrageOpportunities, useComplianceGaps } from '@/hooks/use-api';
-import { useDemoProgress } from '@/components/onboarding/DemoProgress';
+
 import { TrendingUp, AlertTriangle, Globe, ArrowRight, Upload, Database, Lightbulb, Rocket } from 'lucide-react';
 import { GapAnalysisView } from '@/components/opportunities/GapAnalysisView';
 
@@ -30,19 +30,10 @@ type ViewMode = 'arbitrage' | 'gaps';
 
 export default function OpportunitiesPage() {
   const { apiKey } = useAuth();
-  const { isActive: isDemoActive, currentStep, nextStep, steps } = useDemoProgress();
   const [viewMode, setViewMode] = useState<ViewMode>('arbitrage');
   const [j1, setJ1] = useState('');
   const [j2, setJ2] = useState('');
   const [concept, setConcept] = useState('');
-
-  // Auto-select EU vs US for demo mode
-  useEffect(() => {
-    if (isDemoActive && !j1 && !j2) {
-      setJ1('EU');
-      setJ2('US-NY');
-    }
-  }, [isDemoActive, j1, j2]);
 
   const handleExampleClick = (example: { j1: string; j2: string }) => {
     setJ1(example.j1);
