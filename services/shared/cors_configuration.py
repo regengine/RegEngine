@@ -520,7 +520,7 @@ def api_cors_policy(
         .mode(CORSMode.STRICT)
         .allow_origins(allowed_origins)
         .allow_methods(["GET", "POST", "PUT", "DELETE", "PATCH"])
-        .allow_headers(["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"])
+        .allow_headers(["Content-Type", "Authorization", "X-RegEngine-API-Key", "X-Request-ID"])
         .expose_headers(["X-Request-ID", "X-Rate-Limit-Remaining"])
         .max_age(86400)
     )

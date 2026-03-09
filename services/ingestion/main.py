@@ -63,7 +63,6 @@ app.add_middleware(
     allow_headers=[
         "Authorization",
         "Content-Type",
-        "X-API-Key",
         "X-RegEngine-API-Key",
         "X-Requested-With",
         "X-Request-ID",

@@ -90,17 +90,15 @@ def _get_persistence(db_session=None):
 # ---------------------------------------------------------------------------
 
 def _verify_api_key(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> None:
-    """Verify API key using timing-safe comparison to prevent timing attacks."""
+    """Verify API key using timing-safe comparison. Canonical header: X-RegEngine-API-Key."""
     import hmac
     settings = get_settings()
     configured_api_key = getattr(settings, "api_key", None)
     if configured_api_key is not None:
-        provided_api_key = x_api_key or x_regengine_api_key
-        if not provided_api_key or not hmac.compare_digest(
-            provided_api_key.encode("utf-8"),
+        if not x_regengine_api_key or not hmac.compare_digest(
+            x_regengine_api_key.encode("utf-8"),
             configured_api_key.encode("utf-8"),
         ):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
@@ -391,22 +389,22 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 )
 async def ingest_events(
     payload: WebhookPayload,
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
     # Rate limiting
-    _check_rate_limit(x_api_key or "anonymous")
+    _check_rate_limit(x_regengine_api_key or "anonymous")
 
     # Resolve tenant: payload > API-key lookup > fallback
     tenant_id = payload.tenant_id
-    if not tenant_id and x_api_key:
+    if not tenant_id and x_regengine_api_key:
         try:
             from shared.database import SessionLocal
             _db = SessionLocal()
             from sqlalchemy import text as _text
             _row = _db.execute(
                 _text("SELECT tenant_id FROM api_keys WHERE key_hash = encode(sha256(:raw::bytea), 'hex') LIMIT 1"),
-                {"raw": x_api_key},
+                {"raw": x_regengine_api_key},
             ).fetchone()
             if _row and _row[0]:
                 tenant_id = str(_row[0])

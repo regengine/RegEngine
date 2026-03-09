@@ -15,10 +15,10 @@ INGEST_SERVICE_URL = os.environ.get("INGEST_SERVICE_URL", "http://localhost:8002
 
 # Auth
 # Using seeded key from scripts/seed_phase2b_key.py
-API_KEY = "rge_phase2b.testsecret123"
+API_KEY = os.environ.get("REGENGINE_TEST_API_KEY", "rge_phase2b.testsecret123")
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
-    "X-Admin-Key": "admin-master-key-dev", # Explicit Admin Key
+    "X-Admin-Key": os.environ.get("ADMIN_MASTER_KEY", "admin-master-key-dev"),
     "X-Tenant-ID": "11111111-1111-1111-1111-111111111111", # Required for PCOS routes
     "Content-Type": "application/json"
 }

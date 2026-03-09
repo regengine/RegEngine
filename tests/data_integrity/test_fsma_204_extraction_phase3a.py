@@ -12,7 +12,7 @@ ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "admin-master-key-dev")
 
 # Test Data
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
-API_KEY = "rge_phase2b.testsecret123"
+API_KEY = os.getenv("REGENGINE_TEST_API_KEY", "rge_phase2b.testsecret123")
 
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,

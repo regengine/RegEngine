@@ -417,7 +417,7 @@ def client():
 def auth_headers(tenant_id, user_id):
     """Provide authentication headers for API requests."""
     return {
-        "X-API-Key": "admin",  # Test bypass key
+        "X-RegEngine-API-Key": "admin",  # Test bypass key
         "X-Tenant-ID": str(tenant_id),
         "X-User-ID": str(user_id),
     }

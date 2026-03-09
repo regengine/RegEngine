@@ -44,7 +44,7 @@ def schedule_startup_jobs():
 _INGESTION_INTERNAL_URL = os.getenv(
     "INGESTION_SERVICE_URL", "http://ingestion:8301"
 )
-_INGESTION_API_KEY = os.getenv("INTERNAL_API_KEY", "")
+_INGESTION_API_KEY = os.getenv("REGENGINE_INTERNAL_SECRET", "")
 
 
 @scheduler.scheduled_job(
@@ -69,7 +69,7 @@ def fsma_nightly_sync_job():
     try:
         response = httpx.post(
             f"{_INGESTION_INTERNAL_URL}/v1/ingest/all-regulations",
-            headers={"X-API-Key": _INGESTION_API_KEY},
+            headers={"X-RegEngine-API-Key": _INGESTION_API_KEY},
             timeout=120.0,
         )
         response.raise_for_status()
