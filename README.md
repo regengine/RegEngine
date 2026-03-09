@@ -6,7 +6,7 @@ RegEngine converts supply-chain traceability events into structured, exportable,
 
 ## Current Focus
 
-- **Primary wedge:** Food and Beverage (FSMA 204)
+- **Primary wedge:** Food and Beverage (FSMA 204 / 21 CFR Part 1 Subpart S)
 - **Core outcome:** Generate FDA-sortable traceability records inside the 24-hour response window
 - **Product posture:** FSMA-first execution before broader vertical expansion
 
@@ -14,44 +14,47 @@ RegEngine converts supply-chain traceability events into structured, exportable,
 
 ## Recently Shipped (March 2026)
 
-### Postgres-Backed CTE Persistence Layer
-The core compliance promise is now backed by durable, tamper-evident storage.
+### Full Frontend → Backend Wiring
+All dashboard pages now call real backend APIs — zero mock data remaining in the production UI.
 
-- `migrations/V002__fsma_cte_persistence.sql` — `fsma` schema with 5 tables: `cte_events`, `cte_kdes`, `hash_chain`, `compliance_alerts`, `fda_export_log`. Full RLS via `get_tenant_context()`, 13 indexes tuned for FDA query patterns
-- `services/shared/cte_persistence.py` — `CTEPersistence` class: atomic event writes (event + KDEs + hash chain + alerts in one transaction), `verify_chain()` full walk from genesis, `query_events_by_tlc()` for FDA export, `get_unsynced_events()` for Neo4j sync
-- `services/ingestion/app/webhook_router_v2.py` — drop-in V1 replacement with DB-backed storage, graceful in-memory fallback with loud warning if DB unavailable, idempotency key deduplication, Redis publish for Neo4j graph sync
-- `services/ingestion/app/fda_export_router.py` — 4 endpoints: `GET /api/v1/fda/export` (TLC → CSV), `GET /api/v1/fda/export/all`, `GET /api/v1/fda/export/history`, `POST /api/v1/fda/export/verify`
-- CSV upload path (`/api/v1/ingest/csv`) wired through V2 — pilot data persists across restarts
+**8 pages wired to live endpoints:**
+- Supplier Dashboard → `GET /v1/supplier/facilities`, compliance scores, TLC lists, FDA export
+- Trace Page → `GET /v1/supplier/export/fda-records/preview` with TLC code filtering
+- Compliance Dashboard → `GET /api/v1/compliance/score/{tenant_id}` (real-time scoring with breakdown)
+- Alerts → `GET /api/v1/alerts/{tenant_id}` + `POST .../acknowledge`
+- Audit Log → `GET /api/v1/audit-log/{tenant_id}` with pagination
+- Team Management → `GET /api/v1/team/{tenant_id}` + invite + role management
+- Product Catalog → `GET /api/v1/products/{tenant_id}` + create
+- Notification Preferences → `GET/PUT /api/v1/notifications/{tenant_id}/preferences`
+
+Every page includes auth gating, loading states, error handling, and refresh controls.
+
+### Security Hardening (Round 2)
+- Removed hardcoded `regengine-universal-test-key-2026` from `api-client.ts` and `auth-context.tsx`
+- API key now sourced exclusively from `NEXT_PUBLIC_API_KEY` env var
+- CORS on ingestion service validated (falls back to allowlist if wildcard detected)
+
+### Codebase Cleanup
+- Removed entire investor demo flow (29 files, ~11k lines): DemoProgress, DemoIngestion, BlueprintFlow, InvestorDemoPanel, TourProvider, demo routes, demo scripts, demo seed data
+- Cleaned up provider tree (removed DemoProgressProvider + TourProvider wrappers)
+
+### Postgres-Backed CTE Persistence Layer
+- `fsma` schema with 5 tables: `cte_events`, `cte_kdes`, `hash_chain`, `compliance_alerts`, `fda_export_log`
+- Full RLS via `get_tenant_context()`, 13 indexes tuned for FDA query patterns
+- `CTEPersistence` class: atomic writes, `verify_chain()` full walk, `query_events_by_tlc()`, `get_unsynced_events()`
+- Webhook V2 router with DB-backed storage, idempotency deduplication, Redis publish for Neo4j sync
+- CSV upload path wired through V2 — pilot data persists across restarts
 
 ### End-to-End Test Suite
-11 integration tests using a real Postgres container (testcontainers) proving the full chain:
+11 integration tests (testcontainers + real Postgres) proving the full chain:
 
 ```
 ingest → hash chain → verify chain → query by TLC → FDA export → verify export hash
 ```
 
-Covers: sequential chain linkage math, tamper detection, multi-tenant isolation, idempotency, export reproducibility, and the master harvest→cooling→shipping→receiving E2E path.
-
 ```bash
 pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 ```
-
-### Security Hardening
-- Removed two hardcoded credential strings from production code paths in `shared/middleware/tenant_context.py` and `shared/auth.py` (universal API key + internal service secret, both committed to source with no env var gate)
-- All auth bypass paths now require explicit env vars; fail closed if unset
-- `REGENGINE_INTERNAL_SECRET`, `REGENGINE_API_KEY` / `REGENGINE_API_KEY_TENANT_ID` documented in `.env.example`
-
-### Bug Fixes
-- `kernel/obligation/engine.py` — graph persistence was accessing non-existent attributes on `ObligationEvaluationResult`; rewrote to iterate `obligation_matches` correctly (was crashing silently on every evaluation)
-- `kernel/monitoring/scoring.py` — broken import from non-existent `.models` module fixed
-- `kernel/graph.py` — hardcoded `model="grok-beta"` (not a valid Groq model) replaced with `GROQ_MODEL` env var, default `llama3-70b-8192`
-- `kernel/obligation/models.py` + `kernel/models.py` — Pydantic v2 `min_items` → `min_length` (silent validation bypass fixed)
-- `kernel/discovery.py` — HTML source type was set to `"url"`, selecting the wrong loader
-- `kernel/obligation/regulation_loader.py` — hardcoded Neo4j host/user replaced with env vars
-- `docker-compose.yml` — `SCHEDULER_API_KEY` and `POSTGRES_PASSWORD` now use `:?` mandatory substitution (no silent defaults)
-- `services/admin/app/auth_routes.py` — refresh token flow now validates tenant `status='active'`; suspended tenants no longer issue tokens
-- Scheduler: `MemoryJobStore` replaces `SQLAlchemyJobStore` (no separate DB dependency); lambda serialization crashes fixed; discovery requests now send API key header
-- Shared OTel: `None`-valued K8s resource attributes no longer crash `Resource.create()`; `ENABLE_OTEL=false` gate added for local dev
 
 ---
 
@@ -59,20 +62,46 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
 ### Production Topology
 
-- **Frontend + edge:** Vercel (`regengine.co`)
-- **App/API service:** Railway (admin/auth API, ingestion service)
-- **Stateful services:** Railway Postgres, Neo4j, Redis
+- **Frontend:** Vercel (`regengine.co`)
+- **Backend services:** Railway (admin-api, ingestion-service, scheduler)
+- **Data stores:** Railway Postgres, Neo4j, Redis
 
 ### Service Map
 
 | Service | Port | Role |
 |---------|------|------|
-| `admin-api` | 8400 | Auth, tenants, compliance alerts, snapshots |
-| `ingestion-service` | 8002 (container 8000) | FSMA 204 event ingest, CSV import, FDA export |
+| `admin-api` | 8400 | Auth, tenants, supplier onboarding, snapshots, compliance alerts |
+| `ingestion-service` | 8002 | FSMA 204 event ingest, CSV import, FDA export, alerts, team, billing, notifications |
 | `scheduler` | 8600 | Regulatory scraping (FDA recalls, warning letters) |
 | `nlp-service` | 8100 | Document parsing and regulatory extraction |
 | `compliance-api` | 8500 | Compliance scoring and policy APIs |
 | `graph-service` | 8200 | Graph operations and FSMA trace endpoints |
+
+### Backend Endpoints (200+)
+
+**Admin Service** — 74 endpoints covering auth, tenants, supplier onboarding, facility management, compliance scoring, TLC management, FDA export, and snapshots.
+
+**Ingestion Service** — 130+ endpoints across 20 route modules:
+
+| Prefix | Module | Purpose |
+|--------|--------|---------|
+| `/api/v1/alerts` | alerts.py | Alert rules, triggers, acknowledgement |
+| `/api/v1/audit-log` | audit_log.py | Immutable SHA-256 verified event log |
+| `/api/v1/billing` | stripe_billing.py | Plans, checkout, subscriptions |
+| `/api/v1/compliance` | compliance_score.py | Real-time scoring with breakdown |
+| `/api/v1/epcis` | epcis_ingestion.py | GS1 EPCIS 2.0 JSON-LD ingestion |
+| `/api/v1/export` | epcis_export.py | EPCIS export (Walmart, Kroger formats) |
+| `/api/v1/fda` | fda_export_router.py | FDA-sortable CSV/JSON export |
+| `/api/v1/ingest/iot` | sensitech_parser.py | IoT sensor data (SensiTech) |
+| `/api/v1/notifications` | notification_prefs.py | Channels, quiet hours, escalation |
+| `/api/v1/onboarding` | onboarding.py | Guided setup steps |
+| `/api/v1/products` | product_catalog.py | FTL product catalog management |
+| `/api/v1/recall` | recall_report.py | Recall readiness reports |
+| `/api/v1/simulations` | recall_simulations.py | Mock recall drills |
+| `/api/v1/sop` | sop_generator.py | AI-generated SOPs |
+| `/api/v1/suppliers` | supplier_mgmt.py | Supplier management |
+| `/api/v1/team` | team_mgmt.py | Team members, invites, roles |
+| `/api/v1/webhooks` | webhook_router_v2.py | CTE event ingestion (V2, DB-backed) |
 
 ### Kernel Modules
 
@@ -86,7 +115,7 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 ### Data Flow
 
 ```
-CSV / webhook / EPCIS
+CSV / webhook / EPCIS / IoT
         ↓
   webhook_router_v2
         ↓
@@ -101,6 +130,27 @@ CSV / webhook / EPCIS
 
 ---
 
+## Frontend
+
+Next.js 18+ app with 30+ routes. Key pages:
+
+| Section | Routes |
+|---------|--------|
+| **Dashboard** | `/dashboard` (overview), `/dashboard/compliance`, `/dashboard/alerts`, `/dashboard/audit-log`, `/dashboard/team`, `/dashboard/products`, `/dashboard/notifications`, `/dashboard/suppliers` |
+| **Tools** | `/ingest` (document ingestion), `/trace` (supply chain trace), `/ftl-checker`, `/tools/*` (drill simulator, data import) |
+| **Compliance** | `/compliance` (status), `/review` (HITL curator), `/opportunities` (gap analysis), `/controls` |
+| **Supplier Portal** | `/portal`, `/onboarding` (8-step supplier flow) |
+| **Admin** | `/admin`, `/api-keys`, `/settings`, `/integrations` |
+
+### Tech Stack
+- **Framework:** Next.js 18+, React, TypeScript
+- **UI:** Radix UI, Tailwind CSS, Framer Motion
+- **State:** React Query, custom auth/tenant context providers
+- **Auth:** Supabase Auth + API key dual-auth pattern
+- **API clients:** Axios (admin service), fetch (ingestion service)
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -112,7 +162,6 @@ CSV / webhook / EPCIS
 ### First-time setup
 
 ```bash
-# Clone and set up environment
 git clone https://github.com/PetrefiedThunder/RegEngine.git
 cd RegEngine
 ./scripts/setup_dev.sh   # creates venv, installs deps, copies .env.example → .env
@@ -121,11 +170,12 @@ cd RegEngine
 Edit `.env` and set the required secrets (see `.env.example` for generation instructions):
 
 ```
-POSTGRES_PASSWORD=      # required
-SCHEDULER_API_KEY=      # required
+POSTGRES_PASSWORD=          # required
+SCHEDULER_API_KEY=          # required
 REGENGINE_INTERNAL_SECRET=  # required for service-to-service calls
-NEO4J_PASSWORD=         # required
-ADMIN_MASTER_KEY=       # required
+NEO4J_PASSWORD=             # required
+ADMIN_MASTER_KEY=           # required
+NEXT_PUBLIC_API_KEY=        # required for frontend API calls
 ```
 
 ### Start services (FSMA mode)
@@ -134,8 +184,8 @@ ADMIN_MASTER_KEY=       # required
 ./scripts/start-fsma.sh
 ```
 
-This starts the pilot-focused stack only: `postgres`, `redis`, `admin-api`, and `ingestion-service`.
-For the full legacy stack, run `docker compose up -d`.
+This starts the pilot-focused stack: `postgres`, `redis`, `admin-api`, and `ingestion-service`.
+For the full stack, run `docker compose up -d`.
 
 ### Start frontend
 
@@ -151,13 +201,11 @@ Frontend runs at `http://localhost:3000`.
 
 ## FDA Export Endpoints
 
-Once the stack is running:
-
 ```bash
 # Ingest a traceability event
 POST /api/v1/webhooks/ingest
 Content-Type: application/json
-X-API-Key: <your-api-key>
+X-RegEngine-API-Key: <your-api-key>
 
 # Generate FDA export for a lot code
 GET /api/v1/fda/export?tlc=TOM-2026-001&tenant_id=<uuid>
@@ -182,7 +230,7 @@ python -m pytest tests -q
 # CTE persistence E2E (requires Docker)
 python -m pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
-# Full quick sweep used in this repo
+# Full quick sweep
 bash scripts/test-all.sh --quick
 ```
 
@@ -214,13 +262,14 @@ Route: `/onboarding/supplier-flow`
 
 | Doc | Path |
 |-----|------|
-| Upgrade plan (16-item) | `docs/UPGRADE_PLAN.md` |
+| FSMA 204 MVP spec | `docs/specs/FSMA_204_MVP_SPEC.md` |
 | FSMA deployment runbook | `docs/FSMA_RAILWAY_DEPLOYMENT.md` |
 | Env setup checklist | `docs/ENV_SETUP_CHECKLIST.md` |
-| FSMA 204 MVP spec | `docs/specs/FSMA_204_MVP_SPEC.md` |
-| AI engineering standards | `docs/AI_ENGINEERING_STANDARDS.md` |
+| Product roadmap | `docs/PRODUCT_ROADMAP.md` |
+| Content ingestion guide | `docs/CONTENT_INGESTION.md` |
 | Partner API spec | `partner_api_spec.yaml` |
+| Architecture diagrams | `docs/architecture/` |
 
 ---
 
-Status: Postgres-backed CTE persistence live, 11-test E2E suite green, auth hardened, pilot-ready.
+All dashboard pages wired to live APIs. Zero mock data in production UI. Pilot-ready.
