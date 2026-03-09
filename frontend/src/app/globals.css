@@ -7,9 +7,10 @@
 @layer base {
 
     /*
-   * RegEngine Dark Theme
+   * RegEngine Theme System
    * Maps the brand palette to shadcn/ui CSS variable tokens.
-   * Background: #06090f  Foreground: #c8d1dc  Accent: #10b981
+   * Dark (default): Background #06090f  Foreground #c8d1dc  Accent #10b981
+   * Light: Background #ffffff  Foreground #1a1a2e  Accent #059669
    */
     :root {
         /* Core surfaces */
@@ -123,6 +124,116 @@
         /* Typography */
         --re-font-sans: 'Instrument Sans', system-ui, -apple-system, sans-serif;
         --re-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+        /* ─── Theme-Aware Nav/Layout Tokens ─────────────── */
+        --re-nav-bg: rgba(6, 9, 15, 0.85);
+        --re-nav-border: rgba(255, 255, 255, 0.04);
+        --re-nav-dropdown-bg: rgba(15, 20, 30, 0.98);
+        --re-nav-dropdown-border: rgba(255, 255, 255, 0.08);
+        --re-nav-dropdown-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        --re-nav-hover: rgba(255, 255, 255, 0.05);
+        --re-nav-divider: rgba(255, 255, 255, 0.06);
+        --re-mobile-menu-bg: rgba(6, 9, 15, 0.97);
+        --re-mobile-border: rgba(255, 255, 255, 0.04);
+        --re-mobile-toggle-border: rgba(255, 255, 255, 0.12);
+    }
+
+    /* ─── Light Theme ──────────────────────────────────── */
+    .light {
+        /* Core surfaces */
+        --background: 0 0% 100%;
+        --foreground: 220 43% 11%;
+
+        /* Cards & popovers */
+        --card: 210 20% 98%;
+        --card-foreground: 220 43% 11%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 220 43% 11%;
+
+        /* Primary (emerald, slightly deeper for contrast on white) */
+        --primary: 160 84% 36%;
+        --primary-foreground: 0 0% 100%;
+
+        /* Secondary */
+        --secondary: 210 20% 96%;
+        --secondary-foreground: 220 43% 11%;
+
+        /* Muted */
+        --muted: 210 20% 96%;
+        --muted-foreground: 215 16% 47%;
+
+        /* Accent */
+        --accent: 160 84% 36%;
+        --accent-foreground: 0 0% 100%;
+
+        /* Destructive */
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 98%;
+
+        /* Borders & inputs */
+        --border: 214 20% 88%;
+        --input: 214 20% 88%;
+        --ring: 160 84% 36%;
+
+        /* Brand */
+        --re-brand: #059669;
+        --re-brand-dark: #047857;
+        --re-brand-light: #10b981;
+        --re-brand-muted: rgba(5, 150, 105, 0.08);
+
+        /* Stage Colors */
+        --re-discovery: #2563eb;
+        --re-decomposition: #059669;
+        --re-linkage: #9333ea;
+        --re-evidence: #d97706;
+
+        /* Surfaces */
+        --re-surface-base: #ffffff;
+        --re-surface-card: #f8fafc;
+        --re-surface-border: #e2e8f0;
+        --re-surface-elevated: #f1f5f9;
+        --re-surface-overlay: rgba(255, 255, 255, 0.80);
+
+        /* Text */
+        --re-text-primary: #0f172a;
+        --re-text-secondary: #334155;
+        --re-text-tertiary: #64748b;
+        --re-text-muted: #94a3b8;
+        --re-text-disabled: #cbd5e1;
+
+        /* Borders */
+        --re-border-default: #e2e8f0;
+        --re-border-subtle: #cbd5e1;
+        --re-border-strong: #94a3b8;
+
+        /* Status */
+        --re-success: #16a34a;
+        --re-success-muted: rgba(22, 163, 74, 0.1);
+        --re-warning: #d97706;
+        --re-warning-muted: rgba(217, 119, 6, 0.1);
+        --re-danger: #dc2626;
+        --re-danger-muted: rgba(220, 38, 38, 0.1);
+        --re-info: #2563eb;
+        --re-info-muted: rgba(37, 99, 235, 0.1);
+
+        /* Shadows */
+        --re-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --re-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        --re-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+        --re-shadow-glow: 0 0 20px rgba(5, 150, 105, 0.1);
+        --re-shadow-glow-strong: 0 0 40px rgba(5, 150, 105, 0.15);
+
+        /* Theme-Aware Nav/Layout Tokens */
+        --re-nav-bg: rgba(255, 255, 255, 0.85);
+        --re-nav-border: rgba(0, 0, 0, 0.06);
+        --re-nav-dropdown-bg: rgba(255, 255, 255, 0.98);
+        --re-nav-dropdown-border: rgba(0, 0, 0, 0.08);
+        --re-nav-dropdown-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+        --re-nav-hover: rgba(0, 0, 0, 0.04);
+        --re-nav-divider: rgba(0, 0, 0, 0.06);
+        --re-mobile-menu-bg: rgba(255, 255, 255, 0.97);
+        --re-mobile-border: rgba(0, 0, 0, 0.06);
+        --re-mobile-toggle-border: rgba(0, 0, 0, 0.12);
     }
 }
 
