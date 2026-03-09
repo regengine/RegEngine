@@ -30,7 +30,6 @@ import {
   Landmark,
   Scale
 } from 'lucide-react';
-import { DemoIngestion } from '@/components/onboarding/DemoIngestion';
 import { NormalizedDocumentViewer } from './NormalizedDocumentViewer';
 
 const EXAMPLE_URLS = [
@@ -220,18 +219,6 @@ export default function IngestPage() {
           )}
 
           {/* Quick Start / Demo Ingestion */}
-          <div id="demo-ingestion-section" className="mb-8">
-            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900">
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Start: Live Data Demo</CardTitle>
-                <CardDescription>Don&apos;t have a document? Run a simulation with the EU DORA regulation.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DemoIngestion />
-              </CardContent>
-            </Card>
-          </div>
-
           {/* Ingestion Form */}
           {jobStatus !== 'completed' ? (
             <Card className="mb-8">

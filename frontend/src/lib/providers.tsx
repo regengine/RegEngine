@@ -4,8 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from 'next-themes';
 import { AuthProvider } from './auth-context';
 import { TenantProvider } from './tenant-context';
-import { TourProvider } from '@/components/onboarding/TourProvider';
-import { DemoProgressProvider } from '@/components/onboarding/DemoProgress';
 import { useState } from 'react';
 
 import { Toaster } from '@/components/ui/toaster';
@@ -27,12 +25,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <QueryClientProvider client={queryClient}>
                     <AuthProvider>
                         <TenantProvider>
-                            <DemoProgressProvider>
-                                <TourProvider>
-                                    {children}
-                                    <Toaster />
-                                </TourProvider>
-                            </DemoProgressProvider>
+                            {children}
+                            <Toaster />
                         </TenantProvider>
                     </AuthProvider>
                 </QueryClientProvider>

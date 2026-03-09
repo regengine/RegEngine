@@ -51,7 +51,7 @@ import {
   useComplianceHealth,
   useLabelsHealth,
 } from '@/hooks/use-api';
-import { StartTourButton } from '../onboarding/StartTourButton';
+
 import { TenantSwitcher } from './tenant-switcher';
 import { MobileNav } from './mobile-nav';
 
@@ -497,9 +497,6 @@ export function Header() {
         <div className="hidden md:flex items-center space-x-3">
           <div className="hidden md:block">
             <TenantSwitcher />
-          </div>
-          <div className="hidden md:block">
-            <StartTourButton />
           </div>
           {/* System Status */}
           <div title={unhealthyServices.map(s => s.name).join(', ')} className="hidden md:block">
