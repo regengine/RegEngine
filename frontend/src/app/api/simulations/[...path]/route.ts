@@ -50,7 +50,7 @@ async function proxyRequest(
 
     const configuredApiKey = process.env.INGESTION_API_KEY;
     if (configuredApiKey) {
-      headers["X-API-Key"] = configuredApiKey;
+      headers["X-RegEngine-API-Key"] = configuredApiKey;
     }
 
     const fetchOptions: RequestInit = {
