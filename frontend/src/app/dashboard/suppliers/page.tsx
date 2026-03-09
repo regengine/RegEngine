@@ -1,15 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import {
     Users,
     Link2,
-    Send,
     CheckCircle2,
     AlertTriangle,
     XCircle,
@@ -18,94 +18,187 @@ import {
     Package,
     Activity,
     Mail,
+    RefreshCw,
+    Download,
 } from 'lucide-react';
 
-interface Supplier {
-    id: string;
-    name: string;
-    email: string;
-    portalStatus: 'active' | 'expired' | 'no_link';
-    submissions: number;
-    lastSubmission: string | null;
-    compliance: 'compliant' | 'partial' | 'non_compliant';
-    products: string[];
+import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
+import type {
+    SupplierFacility,
+    SupplierComplianceScore,
+    SupplierComplianceGapsResponse,
+    SupplierTLC,
+} from '@/types/api';
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
+interface FacilityRow extends SupplierFacility {
+    complianceScore: number | null;
+    gapCount: number;
+    tlcCount: number;
+    lastEvent: string | null;
 }
 
-const SUPPLIERS: Supplier[] = [
-    {
-        id: 'sup-001', name: 'Valley Fresh Farms', email: 'ops@valleyfresh.com',
-        portalStatus: 'active' as const, submissions: 12, lastSubmission: '6 hours ago',
-        compliance: 'compliant' as const, products: ['Romaine Lettuce', 'Roma Tomatoes'],
-    },
-    {
-        id: 'sup-002', name: 'Pacific Seafood Inc.', email: 'trace@pacseafood.com',
-        portalStatus: 'active' as const, submissions: 8, lastSubmission: '2 days ago',
-        compliance: 'compliant' as const, products: ['Atlantic Salmon', 'Pacific Cod'],
-    },
-    {
-        id: 'sup-003', name: 'Sunrise Produce Co.', email: 'quality@sunriseproduce.com',
-        portalStatus: 'expired' as const, submissions: 3, lastSubmission: '35 days ago',
-        compliance: 'partial' as const, products: ['English Cucumbers'],
-    },
-    {
-        id: 'sup-004', name: 'Green Valley Organics', email: 'farm@greenvalley.org',
-        portalStatus: 'no_link' as const, submissions: 0, lastSubmission: null,
-        compliance: 'non_compliant' as const, products: ['Mixed Salad Greens'],
-    },
-    {
-        id: 'sup-005', name: 'Cold Express Logistics', email: 'dispatch@coldexpress.com',
-        portalStatus: 'active' as const, submissions: 22, lastSubmission: '1 hour ago',
-        compliance: 'compliant' as const, products: ['3PL — Temperature Monitoring'],
-    },
-];
+/* ------------------------------------------------------------------ */
+/*  Config                                                             */
+/* ------------------------------------------------------------------ */
 
-const COMPLIANCE_CONFIG = {
-    compliant: { color: '#10b981', bg: 'rgba(16,185,129,0.08)', label: 'Compliant', icon: CheckCircle2 },
-    partial: { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', label: 'Partial', icon: AlertTriangle },
-    non_compliant: { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', label: 'Non-Compliant', icon: XCircle },
-};
+function complianceLabel(score: number | null): { color: string; bg: string; label: string; icon: typeof CheckCircle2 } {
+    if (score === null) return { color: '#6b7280', bg: 'rgba(107,114,128,0.08)', label: 'No Data', icon: Clock };
+    if (score >= 80) return { color: '#10b981', bg: 'rgba(16,185,129,0.08)', label: 'Compliant', icon: CheckCircle2 };
+    if (score >= 50) return { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', label: 'Partial', icon: AlertTriangle };
+    return { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', label: 'Non-Compliant', icon: XCircle };
+}
 
-const PORTAL_CONFIG = {
-    active: { color: '#10b981', label: 'Active' },
-    expired: { color: '#ef4444', label: 'Expired' },
-    no_link: { color: '#6b7280', label: 'No Link' },
-};
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 
 export default function SupplierDashboardPage() {
+    const { apiKey } = useAuth();
+    const isLoggedIn = Boolean(apiKey);
+
+    const [facilities, setFacilities] = useState<FacilityRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // Add-facility form state
     const [showAddForm, setShowAddForm] = useState(false);
     const [newName, setNewName] = useState('');
-    const [newEmail, setNewEmail] = useState('');
-    const [suppliers, setSuppliers] = useState(SUPPLIERS);
+    const [newStreet, setNewStreet] = useState('');
+    const [newCity, setNewCity] = useState('');
+    const [newState, setNewState] = useState('');
+    const [newPostalCode, setNewPostalCode] = useState('');
+    const [adding, setAdding] = useState(false);
 
-    const activeLinks = suppliers.filter(s => s.portalStatus === 'active').length;
-    const compliantCount = suppliers.filter(s => s.compliance === 'compliant').length;
-    const totalSubs = suppliers.reduce((s, sup) => s + sup.submissions, 0);
-    const complianceRate = Math.round((compliantCount / suppliers.length) * 100);
+    /* ---------- Fetch all data ------------------------------------ */
+    const loadData = useCallback(async () => {
+        if (!isLoggedIn) {
+            setFacilities([]);
+            setLoading(false);
+            setError('Sign in to view your supplier facilities.');
+            return;
+        }
 
-    const handleAdd = () => {
-        if (!newName || !newEmail) return;
-        const newSup: typeof SUPPLIERS[number] = {
-            id: `sup-new-${Date.now()}`,
-            name: newName,
-            email: newEmail,
-            portalStatus: 'no_link',
-            submissions: 0,
-            lastSubmission: null,
-            compliance: 'non_compliant',
-            products: [],
-        };
-        setSuppliers([...suppliers, newSup]);
-        setNewName('');
-        setNewEmail('');
-        setShowAddForm(false);
+        setLoading(true);
+        setError(null);
+
+        try {
+            // 1. List facilities
+            const rawFacilities = await apiClient.listSupplierFacilities();
+
+            // 2. For each facility, fetch compliance + gaps + TLCs in parallel
+            const enriched: FacilityRow[] = await Promise.all(
+                rawFacilities.map(async (f) => {
+                    let complianceScore: number | null = null;
+                    let gapCount = 0;
+                    let tlcCount = 0;
+                    let lastEvent: string | null = null;
+
+                    try {
+                        const [score, gaps, tlcs] = await Promise.all([
+                            apiClient.getSupplierComplianceScore(f.id).catch(() => null),
+                            apiClient.getSupplierComplianceGaps(f.id).catch(() => null),
+                            apiClient.listSupplierTLCs(f.id).catch(() => []),
+                        ]);
+
+                        if (score) complianceScore = score.score;
+                        if (gaps) gapCount = gaps.total;
+                        tlcCount = (tlcs || []).length;
+
+                        // Derive "last event" from most-recent TLC created_at
+                        if (tlcs && tlcs.length > 0) {
+                            const sorted = [...tlcs].sort(
+                                (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                            );
+                            lastEvent = sorted[0].created_at;
+                        }
+                    } catch {
+                        // Swallow per-facility errors — show what we have
+                    }
+
+                    return { ...f, complianceScore, gapCount, tlcCount, lastEvent };
+                })
+            );
+
+            setFacilities(enriched);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to load supplier data';
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    }, [isLoggedIn]);
+
+    useEffect(() => { loadData(); }, [loadData]);
+
+    /* ---------- Create facility ----------------------------------- */
+    const handleAdd = async () => {
+        if (!newName.trim() || !newStreet.trim() || !newCity.trim() || !newState.trim() || !newPostalCode.trim()) return;
+
+        setAdding(true);
+        try {
+            await apiClient.createSupplierFacility({
+                name: newName.trim(),
+                street: newStreet.trim(),
+                city: newCity.trim(),
+                state: newState.trim(),
+                postal_code: newPostalCode.trim(),
+                roles: [],
+            });
+            setNewName('');
+            setNewStreet('');
+            setNewCity('');
+            setNewState('');
+            setNewPostalCode('');
+            setShowAddForm(false);
+            await loadData();
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to create facility';
+            setError(message);
+        } finally {
+            setAdding(false);
+        }
     };
 
-    const handleSendLink = (supplierId: string) => {
-        setSuppliers(prev => prev.map(s =>
-            s.id === supplierId ? { ...s, portalStatus: 'active' as const } : s
-        ));
+    /* ---------- FDA Export ---------------------------------------- */
+    const handleFDAExport = async (format: 'csv' | 'xlsx', facilityId?: string) => {
+        try {
+            const { blob, filename } = await apiClient.downloadSupplierFDARecords(format, facilityId);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            setError('FDA export failed. Please try again.');
+        }
     };
 
+    /* ---------- Summary stats ------------------------------------- */
+    const totalFacilities = facilities.length;
+    const compliantCount = facilities.filter(f => f.complianceScore !== null && f.complianceScore >= 80).length;
+    const totalTLCs = facilities.reduce((sum, f) => sum + f.tlcCount, 0);
+    const complianceRate = totalFacilities > 0 ? Math.round((compliantCount / totalFacilities) * 100) : 0;
+
+    /* ---------- Relative time helper ------------------------------ */
+    function relativeTime(iso: string | null): string | null {
+        if (!iso) return null;
+        const diff = Date.now() - new Date(iso).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins}m ago`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        return `${days}d ago`;
+    }
+
+    /* ---------- Render -------------------------------------------- */
     return (
         <div className="min-h-screen bg-background py-10 px-4">
             <div className="max-w-5xl mx-auto space-y-6">
@@ -117,20 +210,42 @@ export default function SupplierDashboardPage() {
                             Supplier Management
                         </h1>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Track portal links, submissions & compliance across your supply chain
+                            Track facilities, compliance & traceability across your supply chain
                         </p>
                     </div>
-                    <Button onClick={() => setShowAddForm(!showAddForm)} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl">
-                        <Plus className="h-4 w-4 mr-1" /> Add Supplier
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => loadData()}
+                            disabled={loading}
+                        >
+                            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+                        </Button>
+                        <Button
+                            onClick={() => setShowAddForm(!showAddForm)}
+                            className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                            disabled={!isLoggedIn}
+                        >
+                            <Plus className="h-4 w-4 mr-1" /> Add Facility
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Error Banner */}
+                {error && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-300">
+                        {error}
+                    </div>
+                )}
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                        { label: 'Total Suppliers', value: suppliers.length, icon: Users },
-                        { label: 'Active Portal Links', value: activeLinks, icon: Link2 },
-                        { label: 'Total Submissions', value: totalSubs, icon: Package },
+                        { label: 'Facilities', value: totalFacilities, icon: Users },
+                        { label: 'Compliant', value: compliantCount, icon: CheckCircle2 },
+                        { label: 'TLCs Tracked', value: totalTLCs, icon: Package },
                         { label: 'Compliance Rate', value: `${complianceRate}%`, icon: Activity },
                     ].map((stat) => (
                         <Card key={stat.label} className="border-[var(--re-border-default)]">
@@ -139,22 +254,54 @@ export default function SupplierDashboardPage() {
                                     <stat.icon className="h-4 w-4 text-[var(--re-brand)]" />
                                     <span className="text-xs text-muted-foreground">{stat.label}</span>
                                 </div>
-                                <div className="text-2xl font-bold">{stat.value}</div>
+                                <div className="text-2xl font-bold">{loading ? '—' : stat.value}</div>
                             </CardContent>
                         </Card>
                     ))}
                 </div>
 
-                {/* Add Form */}
+                {/* Add Facility Form */}
                 {showAddForm && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
                         <Card className="border-[var(--re-brand)]">
                             <CardContent className="py-4">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Supplier name" className="rounded-xl" />
-                                    <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Contact email" type="email" className="rounded-xl" />
-                                    <Button onClick={handleAdd} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl">
-                                        <Plus className="h-4 w-4 mr-1" /> Add
+                                    <Input
+                                        value={newName}
+                                        onChange={e => setNewName(e.target.value)}
+                                        placeholder="Facility name"
+                                        className="rounded-xl"
+                                    />
+                                    <Input
+                                        value={newStreet}
+                                        onChange={e => setNewStreet(e.target.value)}
+                                        placeholder="Street address"
+                                        className="rounded-xl"
+                                    />
+                                    <Input
+                                        value={newCity}
+                                        onChange={e => setNewCity(e.target.value)}
+                                        placeholder="City"
+                                        className="rounded-xl"
+                                    />
+                                    <Input
+                                        value={newState}
+                                        onChange={e => setNewState(e.target.value)}
+                                        placeholder="State"
+                                        className="rounded-xl"
+                                    />
+                                    <Input
+                                        value={newPostalCode}
+                                        onChange={e => setNewPostalCode(e.target.value)}
+                                        placeholder="Postal code"
+                                        className="rounded-xl"
+                                    />
+                                    <Button
+                                        onClick={handleAdd}
+                                        disabled={adding || !newName.trim() || !newStreet.trim()}
+                                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                                    >
+                                        {adding ? <Spinner size="sm" /> : <><Plus className="h-4 w-4 mr-1" /> Create</>}
                                     </Button>
                                 </div>
                             </CardContent>
@@ -162,58 +309,131 @@ export default function SupplierDashboardPage() {
                     </motion.div>
                 )}
 
-                {/* Supplier List */}
-                <div className="space-y-3">
-                    {suppliers.map((supplier, i) => {
-                        const compConfig = COMPLIANCE_CONFIG[supplier.compliance];
-                        const portalConfig = PORTAL_CONFIG[supplier.portalStatus];
-                        const CompIcon = compConfig.icon;
+                {/* Loading State */}
+                {loading && (
+                    <div className="flex items-center justify-center py-12">
+                        <Spinner size="lg" />
+                    </div>
+                )}
 
-                        return (
-                            <motion.div key={supplier.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                                <Card className="border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all">
-                                    <CardContent className="py-4">
-                                        <div className="flex items-center justify-between flex-wrap gap-3">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="font-medium">{supplier.name}</span>
-                                                    <Badge className="text-[9px] px-1.5 py-0" style={{ background: compConfig.bg, color: compConfig.color }}>
-                                                        <CompIcon className="h-2.5 w-2.5 mr-0.5 inline" />
-                                                        {compConfig.label}
-                                                    </Badge>
-                                                    <Badge className="text-[9px] px-1.5 py-0" variant="outline" style={{ color: portalConfig.color, borderColor: portalConfig.color }}>
-                                                        <Link2 className="h-2.5 w-2.5 mr-0.5 inline" />
-                                                        {portalConfig.label}
-                                                    </Badge>
-                                                </div>
-                                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                                    <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {supplier.email}</span>
-                                                    <span>{supplier.submissions} submissions</span>
-                                                    {supplier.lastSubmission && (
-                                                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {supplier.lastSubmission}</span>
+                {/* Empty State */}
+                {!loading && facilities.length === 0 && !error && (
+                    <Card className="border-dashed">
+                        <CardContent className="py-12 text-center">
+                            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                            <p className="text-lg font-medium mb-1">No facilities yet</p>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                Add your first supplier facility to start tracking FSMA 204 compliance.
+                            </p>
+                            <Button
+                                onClick={() => setShowAddForm(true)}
+                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                            >
+                                <Plus className="h-4 w-4 mr-1" /> Add Facility
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Facility List */}
+                {!loading && (
+                    <div className="space-y-3">
+                        {facilities.map((facility, i) => {
+                            const comp = complianceLabel(facility.complianceScore);
+                            const CompIcon = comp.icon;
+
+                            return (
+                                <motion.div
+                                    key={facility.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.05 }}
+                                >
+                                    <Card className="border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all">
+                                        <CardContent className="py-4">
+                                            <div className="flex items-center justify-between flex-wrap gap-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-medium">{facility.name}</span>
+                                                        <Badge
+                                                            className="text-[9px] px-1.5 py-0"
+                                                            style={{ background: comp.bg, color: comp.color }}
+                                                        >
+                                                            <CompIcon className="h-2.5 w-2.5 mr-0.5 inline" />
+                                                            {comp.label}
+                                                            {facility.complianceScore !== null && ` (${facility.complianceScore})`}
+                                                        </Badge>
+                                                        {facility.gapCount > 0 && (
+                                                            <Badge
+                                                                className="text-[9px] px-1.5 py-0"
+                                                                variant="outline"
+                                                                style={{ color: '#f59e0b', borderColor: '#f59e0b' }}
+                                                            >
+                                                                {facility.gapCount} gap{facility.gapCount !== 1 ? 's' : ''}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                        <span className="flex items-center gap-1">
+                                                            <Mail className="h-3 w-3" />
+                                                            {facility.city}, {facility.state} {facility.postal_code}
+                                                        </span>
+                                                        <span>{facility.tlcCount} TLC{facility.tlcCount !== 1 ? 's' : ''}</span>
+                                                        {facility.lastEvent && (
+                                                            <span className="flex items-center gap-1">
+                                                                <Clock className="h-3 w-3" /> {relativeTime(facility.lastEvent)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {facility.roles && facility.roles.length > 0 && (
+                                                        <div className="flex gap-1 mt-2">
+                                                            {facility.roles.map((role) => (
+                                                                <Badge key={role} variant="outline" className="text-[9px] py-0">
+                                                                    {role}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
                                                     )}
                                                 </div>
-                                                {supplier.products.length > 0 && (
-                                                    <div className="flex gap-1 mt-2">
-                                                        {supplier.products.map((p) => (
-                                                            <Badge key={p} variant="outline" className="text-[9px] py-0">{p}</Badge>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            {supplier.portalStatus !== 'active' && (
-                                                <Button variant="outline" size="sm" className="rounded-xl flex-shrink-0" onClick={() => handleSendLink(supplier.id)}>
-                                                    <Send className="h-3 w-3 mr-1" />
-                                                    {supplier.portalStatus === 'expired' ? 'Resend Link' : 'Send Link'}
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="rounded-xl flex-shrink-0"
+                                                    onClick={() => handleFDAExport('xlsx', facility.id)}
+                                                >
+                                                    <Download className="h-3 w-3 mr-1" />
+                                                    FDA Export
                                                 </Button>
-                                            )}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        );
-                    })}
-                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* Bulk FDA Export */}
+                {!loading && facilities.length > 0 && (
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => handleFDAExport('xlsx')}
+                        >
+                            <Download className="h-3 w-3 mr-1" /> Export All (XLSX)
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl"
+                            onClick={() => handleFDAExport('csv')}
+                        >
+                            <Download className="h-3 w-3 mr-1" /> Export All (CSV)
+                        </Button>
+                    </div>
+                )}
             </div>
         </div>
     );

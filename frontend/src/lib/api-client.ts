@@ -508,6 +508,11 @@ class APIClient {
     return data.categories || [];
   }
 
+  async listSupplierFacilities(): Promise<SupplierFacility[]> {
+    const { data } = await this.adminClient.get<SupplierFacility[]>('/v1/supplier/facilities');
+    return data || [];
+  }
+
   async createSupplierFacility(request: SupplierFacilityCreateRequest): Promise<SupplierFacility> {
     const { data } = await this.adminClient.post<SupplierFacility>('/v1/supplier/facilities', request);
     return data;
@@ -571,10 +576,12 @@ class APIClient {
   async getSupplierFDAExportPreview(
     facilityId?: string,
     limit: number = 25,
+    tlcCode?: string,
   ): Promise<SupplierFDAExportPreviewResponse> {
     const { data } = await this.adminClient.get<SupplierFDAExportPreviewResponse>('/v1/supplier/export/fda-records/preview', {
       params: {
         ...(facilityId ? { facility_id: facilityId } : {}),
+        ...(tlcCode ? { tlc_code: tlcCode } : {}),
         limit,
       },
     });
