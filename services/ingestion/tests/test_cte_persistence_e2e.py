@@ -71,8 +71,8 @@ _MIGRATION_V002 = _REPO_ROOT / "migrations" / "V002__fsma_cte_persistence.sql"
 _PREAMBLE_STMTS = [
     # pgcrypto provides gen_random_uuid()
     "CREATE EXTENSION IF NOT EXISTS pgcrypto",
-    # role referenced in RLS policies
-    "CREATE ROLE IF NOT EXISTS regengine",
+    # role referenced in RLS policies (Postgres has no CREATE ROLE IF NOT EXISTS)
+    "DO $$ BEGIN CREATE ROLE regengine; EXCEPTION WHEN duplicate_object THEN NULL; END $$",
     # get_tenant_context() is the RLS policy function
     """
     CREATE OR REPLACE FUNCTION get_tenant_context()
