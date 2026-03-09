@@ -1196,6 +1196,40 @@ async def get_supplier_funnel_summary(
     return SupplierFunnelSummaryResponse(**payload)
 
 
+@router.get("/facilities", response_model=list[SupplierFacilityResponse])
+async def list_supplier_facilities(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> list[SupplierFacilityResponse]:
+    """List all facilities belonging to the current supplier user."""
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    rows = db.scalars(
+        select(SupplierFacilityModel)
+        .where(
+            SupplierFacilityModel.tenant_id == tenant_id,
+            SupplierFacilityModel.supplier_user_id == current_user.id,
+        )
+        .order_by(SupplierFacilityModel.created_at.desc())
+    ).all()
+
+    return [
+        SupplierFacilityResponse(
+            id=str(f.id),
+            name=f.name,
+            street=f.street,
+            city=f.city,
+            state=f.state,
+            postal_code=f.postal_code,
+            fda_registration_number=f.fda_registration_number,
+            roles=f.roles or [],
+        )
+        for f in rows
+    ]
+
+
 @router.post("/facilities", response_model=SupplierFacilityResponse)
 async def create_supplier_facility(
     request: SupplierFacilityCreateRequest,
