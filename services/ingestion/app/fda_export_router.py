@@ -187,7 +187,7 @@ async def export_fda_spreadsheet(
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
-    tenant_id: str = Query("default", description="Tenant identifier"),
+    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91", description="Tenant identifier"),
     _: None = Depends(_verify_api_key),
 ):
     """Generate and return an FDA-compliant traceability export."""
@@ -275,7 +275,7 @@ async def export_all_events(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     event_type: Optional[str] = Query(None, description="Filter by CTE type"),
-    tenant_id: str = Query("default"),
+    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
     _: None = Depends(_verify_api_key),
 ):
     """Export all events as FDA-format CSV."""
@@ -354,7 +354,7 @@ async def export_all_events(
     description="Returns the history of all FDA exports generated for this tenant.",
 )
 async def export_history(
-    tenant_id: str = Query("default"),
+    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
     limit: int = Query(50, ge=1, le=200),
     _: None = Depends(_verify_api_key),
 ):
@@ -415,7 +415,7 @@ async def export_history(
     ),
 )
 async def export_recall_filtered(
-    tenant_id: str = Query("default", description="Tenant identifier"),
+    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91", description="Tenant identifier"),
     product: Optional[str] = Query(None, description="Product description (partial match)"),
     location: Optional[str] = Query(None, description="Location name or GLN (partial match)"),
     tlc: Optional[str] = Query(None, description="Traceability Lot Code (exact or partial)"),
@@ -593,7 +593,7 @@ async def export_recall_filtered(
 )
 async def verify_export(
     export_id: str = Query(..., description="Export log ID to verify"),
-    tenant_id: str = Query("default"),
+    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
     _: None = Depends(_verify_api_key),
 ):
     """Verify that an export can be reproduced with the same hash."""

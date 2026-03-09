@@ -125,7 +125,7 @@ EVENTS = [
 ]
 
 payload = {
-    "tenant_id": "default",
+    "tenant_id": "5946c58f-ddf9-4db0-9baa-acb11c6fce91",
     "source": "demo_seed",
     "events": EVENTS,
 }
