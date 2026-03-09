@@ -462,7 +462,7 @@ class TestPredefinedPolicies:
         
         assert config.mode == CORSMode.STRICT
         assert config.credentials == CredentialsMode.INCLUDE
-        assert "X-API-Key" in config.allowed_headers
+        assert "X-RegEngine-API-Key" in config.allowed_headers
         assert "X-Request-ID" in config.exposed_headers
 
 

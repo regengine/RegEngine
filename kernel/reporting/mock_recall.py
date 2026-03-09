@@ -125,7 +125,7 @@ def _try_live_recall(lot_id: str) -> Optional[Dict[str, Any]]:
     try:
         headers = {"Content-Type": "application/json"}
         if GRAPH_API_KEY:
-            headers["X-API-Key"] = GRAPH_API_KEY
+            headers["X-RegEngine-API-Key"] = GRAPH_API_KEY
 
         with httpx.Client(timeout=10.0) as client:
             response = client.post(

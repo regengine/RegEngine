@@ -33,7 +33,7 @@ API_KEY = os.getenv("REGENGINE_API_KEY", "test-key-smoke")
 TENANT_ID = os.getenv("REGENGINE_TENANT_ID", "smoke-test-tenant")
 
 HEADERS = {
-    "X-API-Key": API_KEY,
+    "X-RegEngine-API-Key": API_KEY,
     "X-Tenant-ID": TENANT_ID,
     "Content-Type": "application/json",
 }

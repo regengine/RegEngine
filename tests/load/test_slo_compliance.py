@@ -1,4 +1,5 @@
 import logging
+import os
 from locust import HttpUser, task, between, events
 
 # SLA Thresholds
@@ -13,7 +14,7 @@ class FSMALoadTest(HttpUser):
         """Setup: Get a valid token if needed"""
         # In this environment, we might use a static admin key
         self.headers = {
-            "X-API-Key": "dev-admin-key",
+            "X-RegEngine-API-Key": os.getenv("REGENGINE_TEST_API_KEY", "dev-admin-key"),
             "Content-Type": "application/json"
         }
 

@@ -251,7 +251,7 @@ class FSMAAutoIngester:
 
     async def ingest_supply_chain(self, chain: dict) -> bool:
         """Ingest a supply chain's events into the system."""
-        headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
+        headers = {"X-RegEngine-API-Key": self.api_key, "Content-Type": "application/json"}
 
         try:
             # In production, this would call the actual ingestion endpoint

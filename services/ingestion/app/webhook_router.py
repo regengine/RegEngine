@@ -35,15 +35,17 @@ _chain_state: dict[str, str] = {}  # tenant_id -> last_chain_hash
 
 
 def _verify_api_key(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> None:
-    """Verify API key if configured."""
+    """Verify API key if configured. Canonical header: X-RegEngine-API-Key."""
+    import hmac
     settings = get_settings()
     configured_api_key = getattr(settings, "api_key", None)
     if configured_api_key is not None:
-        provided_api_key = x_api_key or x_regengine_api_key
-        if not provided_api_key or provided_api_key != configured_api_key:
+        if not x_regengine_api_key or not hmac.compare_digest(
+            x_regengine_api_key.encode("utf-8"),
+            configured_api_key.encode("utf-8"),
+        ):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 

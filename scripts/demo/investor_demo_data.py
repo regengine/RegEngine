@@ -604,7 +604,7 @@ def seed_graph_data(session: requests.Session, api_key: str, lots: List[Dict], f
             resp = session.post(
                 f"{GRAPH_API_URL}/api/v1/fsma/facilities",
                 json=facility,
-                headers={"X-API-Key": api_key}
+                headers={"X-RegEngine-API-Key": api_key}
             )
             if resp.ok:
                 print(f"  ✓ Facility: {facility['name']}")
@@ -619,7 +619,7 @@ def seed_graph_data(session: requests.Session, api_key: str, lots: List[Dict], f
             resp = session.post(
                 f"{GRAPH_API_URL}/api/v1/fsma/lots",
                 json=lot,
-                headers={"X-API-Key": api_key}
+                headers={"X-RegEngine-API-Key": api_key}
             )
             
             # Create CTEs for this lot
@@ -629,7 +629,7 @@ def seed_graph_data(session: requests.Session, api_key: str, lots: List[Dict], f
                     session.post(
                         f"{GRAPH_API_URL}/api/v1/fsma/ctes",
                         json=cte,
-                        headers={"X-API-Key": api_key}
+                        headers={"X-RegEngine-API-Key": api_key}
                     )
                     total_ctes += 1
                 except Exception:
@@ -654,7 +654,7 @@ def run_demo_trace(session: requests.Session, api_key: str, lot_code: str) -> Di
         resp = session.get(
             f"{GRAPH_API_URL}/api/v1/fsma/trace/forward",
             params={"tlc": lot_code},
-            headers={"X-API-Key": api_key}
+            headers={"X-RegEngine-API-Key": api_key}
         )
         resp.raise_for_status()
         result = resp.json()
@@ -702,7 +702,7 @@ def simulate_recall(session: requests.Session, api_key: str) -> Dict:
         resp = session.get(
             f"{GRAPH_API_URL}/api/v1/fsma/trace/forward",
             params={"tlc": contaminated_lot},
-            headers={"X-API-Key": api_key}
+            headers={"X-RegEngine-API-Key": api_key}
         )
         result = resp.json() if resp.ok else {"nodes": [], "edges": []}
     except Exception:
