@@ -18,7 +18,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
         ...options,
         headers: {
             'Content-Type': 'application/json',
-            'X-API-Key': apiKey,
+            'X-RegEngine-API-Key': apiKey,
             ...options.headers,
         },
     });

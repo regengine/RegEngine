@@ -30,7 +30,7 @@ const CTE_TYPES = [
 
 const EXAMPLE_CURL = `curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
-  -H "X-API-Key: YOUR_API_KEY" \\
+  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -d '{
     "source": "erp",
     "events": [
