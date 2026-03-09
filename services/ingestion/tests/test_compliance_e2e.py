@@ -7,6 +7,26 @@ from pathlib import Path
 BASE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:8002")
 API_KEY = os.getenv("API_KEY", "") # Default is blank as seen in config
 
+
+def _ingestion_reachable() -> bool:
+    """Quick check whether the ingestion service is up."""
+    try:
+        import httpx as _httpx
+        resp = _httpx.get(f"{BASE_URL}/health", timeout=3.0)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _ingestion_reachable(),
+        reason=f"Ingestion service not reachable at {BASE_URL}",
+    ),
+]
+
+
 @pytest.mark.asyncio
 async def test_compliance_golden_path():
     """
