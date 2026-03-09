@@ -20,7 +20,7 @@ def postgres_container():
 def db_engine(postgres_container):
     """Create a database engine pointing to the test container."""
     url = postgres_container.get_connection_url()
-    # Replace the default postgres driver with psycopg if needed
+    # Ensure we use psycopg (v3) driver
     url = url.replace("postgresql+psycopg2://", "postgresql+psycopg://")
     engine = create_engine(url)
     return engine

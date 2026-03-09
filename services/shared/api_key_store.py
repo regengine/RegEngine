@@ -190,9 +190,7 @@ class DatabaseAPIKeyStore:
             # Handle cases like "postgres://..."
             self._database_url = self._database_url.replace("postgres://", "postgresql+asyncpg://", 1)
         elif self._database_url.startswith("postgresql+psycopg2://"):
-            # psycopg2 is sync-only, force asyncpg or psycopg (v3)
-            # Since psycopg2 is failing in containers, we'll try to use psycopg (v3) if possible
-            # or asyncpg as a safe fallback.
+            # psycopg2 removed — migrate any leftover URLs to asyncpg
             self._database_url = self._database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
         elif self._database_url.startswith("postgresql+psycopg://"):
              # psycopg (v3) is already async-capable, so this is usually fine,

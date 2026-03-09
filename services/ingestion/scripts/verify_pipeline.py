@@ -1,7 +1,7 @@
 import os
 import sys
 import json
-import psycopg2
+import psycopg
 import boto3
 
 def verify_pipeline():
@@ -21,12 +21,12 @@ def verify_pipeline():
     # 1. Check PostgreSQL
     print("\n--- PostgreSQL: ingestion.documents ---")
     try:
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             host="localhost",
             port=5432,
-            database="regengine_admin",
+            dbname="regengine_admin",
             user="regengine",
-            password=db_password
+            password=db_password,
         )
         cur = conn.cursor()
         cur.execute("SELECT id, title, document_type, content_length FROM ingestion.documents ORDER BY fetch_timestamp DESC LIMIT 5;")

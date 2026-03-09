@@ -5,11 +5,8 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-import psycopg2
-from psycopg2.extras import RealDictCursor, execute_values, register_uuid
-
-# Register UUID adapter for psycopg2
-register_uuid()
+import psycopg
+from psycopg.rows import dict_row
 
 from ..config import DatabaseConfig
 from ..models import Document, IngestionJob, AuditEntry
@@ -34,13 +31,13 @@ class DatabaseManager:
     
     def connect(self) -> None:
         """Establish database connection."""
-        self.conn = psycopg2.connect(
+        self.conn = psycopg.connect(
             host=self.config.host,
             port=self.config.port,
-            database=self.config.database,
+            dbname=self.config.database,
             user=self.config.user,
             password=self.config.password,
-            cursor_factory=RealDictCursor
+            row_factory=dict_row,
         )
         self.conn.autocommit = True
     

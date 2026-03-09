@@ -5,8 +5,8 @@ Uses direct database connection (no Supabase UI needed).
 """
 
 import os
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+import psycopg
+from psycopg import IsolationLevel
 import sys
 
 # Database connection strings
@@ -39,8 +39,8 @@ def run_migration(dsn: str, migration_file: str, migration_name: str):
     
     # Connect and execute
     try:
-        conn = psycopg2.connect(dsn)
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        conn = psycopg.connect(dsn)
+        conn.autocommit = True
         cursor = conn.cursor()
         
         print("📡 Connected to database")
@@ -58,7 +58,7 @@ def run_migration(dsn: str, migration_file: str, migration_name: str):
         conn.close()
         return True
         
-    except psycopg2.Error as e:
+    except psycopg.Error as e:
         print(f"\n❌ Database error: {e}")
         return False
     except Exception as e:
@@ -73,7 +73,7 @@ def verify_v29_deployment(dsn: str):
     print(f"{'='*60}\n")
     
     try:
-        conn = psycopg2.connect(dsn)
+        conn = psycopg.connect(dsn)
         cursor = conn.cursor()
         
         # Check for the 3 new functions
@@ -111,7 +111,7 @@ def verify_v005_deployment(dsn: str):
     print(f"{'='*60}\n")
     
     try:
-        conn = psycopg2.connect(dsn)
+        conn = psycopg.connect(dsn)
         cursor = conn.cursor()
         
         # Check for tenant_id columns
