@@ -2,8 +2,8 @@
 import os
 import uuid
 import pytest
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 
 # Get DB URL from env or use default (matching conftest.py)
 DB_URL = os.environ.get(
@@ -15,11 +15,11 @@ DB_URL = os.environ.get(
 def db_connection():
     """Create a raw DB connection for RLS testing."""
     try:
-        conn = psycopg2.connect(DB_URL)
+        conn = psycopg.connect(DB_URL)
         conn.autocommit = False  # Use transactions
         yield conn
         conn.close()
-    except psycopg2.OperationalError as e:
+    except psycopg.OperationalError as e:
         pytest.skip(f"Database unavailable: {e}")
 
 def set_tenant_context(cursor, tenant_id):
@@ -54,7 +54,7 @@ class TestPhase1TenantIsolation:
         # To truly test RLS, we should CREATE a restricted role or ensure our user is restricted.
         # For this Phase 1 test, we will assume standard RLS behavior is active.
         
-        cur = db_connection.cursor(cursor_factory=RealDictCursor)
+        cur = db_connection.cursor(row_factory=dict_row)
         
         try:
             # 1. Setup: Insert data for both tenants (bypassing RLS if possible, or context switching)

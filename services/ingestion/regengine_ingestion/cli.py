@@ -66,18 +66,18 @@ def ingest(source, vertical, max_documents, data_path, date_from, agencies):
 @click.option("--db-password", prompt=True, hide_input=True, help="Database password")
 def init_db(db_host, db_name, db_user, db_password):
     """Initialize database schema."""
-    import psycopg2
+    import psycopg
     from pathlib import Path
-    
+
     click.echo("🔧 Initializing database schema...")
-    
+
     try:
         # Connect to database
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             host=db_host,
-            database=db_name,
+            dbname=db_name,
             user=db_user,
-            password=db_password
+            password=db_password,
         )
         
         # Read migration file

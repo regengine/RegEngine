@@ -1,8 +1,8 @@
 
 import os
 import pytest
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 
 # Get DB URL from env or use default
 DB_URL = os.environ.get(
@@ -14,10 +14,10 @@ DB_URL = os.environ.get(
 def db_connection():
     """Create a raw DB connection for integrity testing."""
     try:
-        conn = psycopg2.connect(DB_URL)
+        conn = psycopg.connect(DB_URL)
         yield conn
         conn.close()
-    except psycopg2.OperationalError as e:
+    except psycopg.OperationalError as e:
         pytest.skip(f"Database unavailable: {e}")
 
 class TestFSMA204Invariants:
@@ -33,7 +33,7 @@ class TestFSMA204Invariants:
         Invariant: All Authority Documents must have an Issuer and Effective Date.
         Critical for audit trails (who said so, and when).
         """
-        cur = db_connection.cursor(cursor_factory=RealDictCursor)
+        cur = db_connection.cursor(row_factory=dict_row)
         
         # We query for any violation
         cur.execute("""
@@ -64,7 +64,7 @@ class TestFSMA204Invariants:
         Invariant: Extracted Facts must populate the value column matching their 'fact_value_type'.
         e.g., if type='decimal', fact_value_decimal must not be NULL.
         """
-        cur = db_connection.cursor(cursor_factory=RealDictCursor)
+        cur = db_connection.cursor(row_factory=dict_row)
         
         # Check Decimal
         cur.execute("""
@@ -88,7 +88,7 @@ class TestFSMA204Invariants:
         """
         Invariant: Compliance Snapshots must have a cryptographic content_hash.
         """
-        cur = db_connection.cursor(cursor_factory=RealDictCursor)
+        cur = db_connection.cursor(row_factory=dict_row)
         cur.execute("""
             SELECT id, snapshot_name 
             FROM compliance_snapshots 
@@ -102,7 +102,7 @@ class TestFSMA204Invariants:
         Invariant: All Extracted Facts must belong to an active Authority Document.
         (Referential integrity check beyond FKs, logic check).
         """
-        cur = db_connection.cursor(cursor_factory=RealDictCursor)
+        cur = db_connection.cursor(row_factory=dict_row)
         cur.execute("""
             SELECT f.id, f.fact_key, a.status as doc_status
             FROM pcos_extracted_facts f

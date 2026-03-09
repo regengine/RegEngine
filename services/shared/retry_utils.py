@@ -237,21 +237,21 @@ class PostgresConnectionManager:
 
     def connect(self):
         """Establish connection to PostgreSQL with retry logic."""
-        import psycopg2
-        from psycopg2 import OperationalError
+        import psycopg
+        from psycopg import OperationalError
 
         @retry_with_backoff(
             retryable_exceptions=[OperationalError],
             config=self.retry_config
         )
         def _connect():
-            self.connection = psycopg2.connect(
+            self.connection = psycopg.connect(
                 host=self.host,
                 port=self.port,
-                database=self.database,
+                dbname=self.database,
                 user=self.user,
                 password=self.password,
-                connect_timeout=10
+                connect_timeout=10,
             )
             logger.info(f"Successfully connected to PostgreSQL at {self.host}:{self.port}/{self.database}")
 

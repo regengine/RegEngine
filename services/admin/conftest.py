@@ -10,7 +10,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql://regengine:regengine@localhos
 os.environ.setdefault("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
 os.environ.setdefault("ENTERTAINMENT_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/entertainment")
 os.environ.setdefault("ENABLE_DB_API_KEYS", "false")  # Use in-memory store in tests (no api_keys table in CI)
-os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "admin")
+os.environ.setdefault("AUTH_TEST_BYPASS_TOKEN", "test-bypass-token-for-pytest")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("LOG_LEVEL", "INFO")
 os.environ.setdefault("AUTH_SECRET_KEY", "dev_secret_key_change_me")

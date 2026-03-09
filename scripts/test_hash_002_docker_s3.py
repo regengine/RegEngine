@@ -1,8 +1,8 @@
 import boto3
 import json
 import hashlib
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 import os
 
 # Config - Internal Docker names
@@ -29,8 +29,8 @@ def test_s3_integrity():
     
     try:
         # 1. Identify document in DB
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        conn = psycopg.connect(**DB_CONFIG)
+        cur = conn.cursor(row_factory=dict_row)
         cur.execute("SELECT id, title, content_sha256, storage_key FROM ingestion.documents WHERE length(content_sha256) > 0 LIMIT 1;")
         doc = cur.fetchone()
         if not doc:

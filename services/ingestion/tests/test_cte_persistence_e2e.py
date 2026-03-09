@@ -41,17 +41,17 @@ except ImportError:
     _HAS_TESTCONTAINERS = False
 
 try:
-    import psycopg2  # noqa: F401
-    _HAS_PSYCOPG2 = True
+    import psycopg  # noqa: F401
+    _HAS_PSYCOPG = True
 except ImportError:
-    _HAS_PSYCOPG2 = False
+    _HAS_PSYCOPG = False
 
-_SKIP_REASON = "testcontainers[postgresql] and psycopg2 required (pip install testcontainers[postgresql] psycopg2-binary)"
+_SKIP_REASON = "testcontainers[postgresql] and psycopg required (pip install testcontainers[postgresql] psycopg[binary])"
 
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
-        not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG2),
+        not (_HAS_TESTCONTAINERS and _HAS_PSYCOPG),
         reason=_SKIP_REASON,
     ),
 ]
@@ -200,7 +200,7 @@ def postgres_engine():
         user = getattr(pg, "username", None) or getattr(pg, "POSTGRES_USER", "test")
         password = getattr(pg, "password", None) or getattr(pg, "POSTGRES_PASSWORD", "test")
 
-        url = f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
+        url = f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
         engine = create_engine(url, echo=False)
 
         # Run preamble + migration using AUTOCOMMIT so each DDL statement

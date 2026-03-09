@@ -1,6 +1,6 @@
 import hashlib
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import psycopg
+from psycopg.rows import dict_row
 import sys
 
 # DB connection config - Use 127.0.0.1 to avoid local postgres collision
@@ -17,8 +17,8 @@ def test_normalized_integrity():
     print("-----------------------------------------------")
     
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cur = conn.cursor(cursor_factory=RealDictCursor)
+        conn = psycopg.connect(**DB_CONFIG)
+        cur = conn.cursor(row_factory=dict_row)
         
         # 1. Selection
         cur.execute("SELECT id, title, text_sha256 FROM ingestion.documents WHERE text_sha256 IS NOT NULL LIMIT 1;")

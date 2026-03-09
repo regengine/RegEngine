@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 
 def deploy_rls_migrations():
-    """Deploy RLS migrations using psycopg2"""
+    """Deploy RLS migrations using psycopg"""
     try:
-        import psycopg2
+        import psycopg
     except ImportError:
-        print("❌ psycopg2 not installed. Installing...")
-        os.system("pip install psycopg2-binary")
-        import psycopg2
+        print("❌ psycopg not installed. Installing...")
+        os.system("pip install psycopg[binary]")
+        import psycopg
     
     # Supabase connection details
     SUPABASE_HOST = os.getenv("SUPABASE_HOST", "")
@@ -52,7 +52,7 @@ def deploy_rls_migrations():
     # Connect to Supabase
     print("Connecting to Supabase...")
     try:
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             host=SUPABASE_HOST,
             port=SUPABASE_PORT,
             user=SUPABASE_USER,

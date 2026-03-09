@@ -1,7 +1,7 @@
 
 import os
 import hashlib
-import psycopg2
+import psycopg
 from datetime import datetime, timezone
 
 # Config
@@ -17,7 +17,7 @@ def seed_key():
     if not SECRET:
         raise RuntimeError("Set PHASE2B_API_SECRET before running this script")
 
-    conn = psycopg2.connect(DB_URL)
+    conn = psycopg.connect(DB_URL)
     cur = conn.cursor()
     
     key_hash = hash_key(RAW_KEY)
