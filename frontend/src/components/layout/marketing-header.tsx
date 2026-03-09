@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { MARKETING_FREE_TOOLS, MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 
 export function MarketingHeader() {
     const pathname = usePathname();
@@ -109,9 +110,9 @@ export function MarketingHeader() {
                 position: "sticky",
                 top: 0,
                 zIndex: 50,
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
+                borderBottom: "1px solid var(--re-nav-border)",
                 backdropFilter: "blur(16px)",
-                background: "rgba(6,9,15,0.85)",
+                background: "var(--re-nav-bg)",
             }}
         >
             <div
@@ -221,13 +222,13 @@ export function MarketingHeader() {
                                 aria-label="Free compliance tools"
                                 aria-hidden={!toolsOpen}
                                 style={{
-                                    background: "rgba(15,20,30,0.98)",
-                                    border: "1px solid rgba(255,255,255,0.08)",
+                                    background: "var(--re-nav-dropdown-bg)",
+                                    border: "1px solid var(--re-nav-dropdown-border)",
                                     borderRadius: "12px",
                                     padding: "8px 0",
                                     minWidth: "280px",
                                     backdropFilter: "blur(24px)",
-                                    boxShadow: "0 20px 50px rgba(0,0,0,0.6)",
+                                    boxShadow: "var(--re-nav-dropdown-shadow)",
                                 }}
                             >
                                 <div className="px-4 pt-1 pb-2 text-[10px] font-semibold tracking-wider text-re-text-muted uppercase">
@@ -241,7 +242,7 @@ export function MarketingHeader() {
                                         tabIndex={toolsOpen ? 0 : -1}
                                         className="flex items-center gap-2.5 py-2 px-4 no-underline transition-[background] duration-150"
                                         onClick={() => setToolsOpen(false)}
-                                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
+                                        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--re-nav-hover)")}
                                         onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                                     >
                                         <span aria-hidden="true" className="text-sm">{tool.emoji}</span>
@@ -251,7 +252,7 @@ export function MarketingHeader() {
                                         </div>
                                     </Link>
                                 ))}
-                                <div style={{ height: "1px", background: "rgba(255,255,255,0.06)", margin: "6px 12px" }} />
+                                <div style={{ height: "1px", background: "var(--re-nav-divider)", margin: "6px 12px" }} />
                                 <Link
                                     href="/tools"
                                     role="menuitem"
@@ -270,6 +271,8 @@ export function MarketingHeader() {
                             </div>
                         </div>
                     </div>
+
+                    <ThemeToggle />
 
                     {/* Auth-aware buttons */}
                     {user ? (
@@ -330,7 +333,7 @@ export function MarketingHeader() {
                     style={{
                         display: "none",
                         background: "transparent",
-                        border: "1px solid rgba(255,255,255,0.12)",
+                        border: "1px solid var(--re-mobile-toggle-border)",
                         borderRadius: "6px",
                         padding: "6px 10px",
                         cursor: "pointer",
@@ -351,8 +354,8 @@ export function MarketingHeader() {
                     className="marketing-mobile-menu"
                     style={{
                         display: "none",
-                        borderTop: "1px solid rgba(255,255,255,0.06)",
-                        background: "rgba(6,9,15,0.97)",
+                        borderTop: "1px solid var(--re-nav-divider)",
+                        background: "var(--re-mobile-menu-bg)",
                         padding: "16px 24px 24px",
                         maxHeight: "calc(100vh - 56px)",
                         overflowY: "auto",
@@ -372,7 +375,7 @@ export function MarketingHeader() {
                                     textDecoration: "none",
                                     fontWeight: 500,
                                     padding: "10px 0",
-                                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                    borderBottom: "1px solid var(--re-mobile-border)",
                                 }}
                             >
                                 {item.label}
@@ -402,7 +405,7 @@ export function MarketingHeader() {
                                     gap: "10px",
                                     padding: "10px 0",
                                     textDecoration: "none",
-                                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                    borderBottom: "1px solid var(--re-mobile-border)",
                                 }}
                             >
                                 <span aria-hidden="true" style={{ fontSize: "16px" }}>{tool.emoji}</span>
