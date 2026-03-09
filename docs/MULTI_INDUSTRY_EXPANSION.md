@@ -1,4 +1,13 @@
-# RegEngine Multi-Industry Expansion Plan
+# RegEngine Multi-Industry Expansion Plan (Legacy/Exploratory)
+
+> [!WARNING]
+> Legacy exploratory strategy document.
+> This file is not the active product execution plan for the current repository state.
+>
+> Active source of truth:
+> - `README.md` (current FSMA-first focus)
+> - `docs/PRODUCT_ROADMAP.md` (active roadmap)
+> - `docs/AI_ENGINEERING_STANDARDS.md`
 
 RegEngine is expanding beyond fintech to serve **10 highly regulated industries** with bespoke regulatory intelligence.
 
