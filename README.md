@@ -92,7 +92,7 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 | `/api/v1/epcis` | epcis_ingestion.py | GS1 EPCIS 2.0 JSON-LD ingestion |
 | `/api/v1/exchange` | exchange_api.py | B2B shipping KDE package send/receive |
 | `/api/v1/export` | epcis_export.py | EPCIS export (Walmart, Kroger formats) |
-| `/api/v1/fda` | fda_export_router.py | FDA-sortable CSV/JSON export |
+| `/api/v1/fda` | fda_export_router.py | FDA traceability package (ZIP) + CSV export |
 | `/api/v1/ingest/edi` | edi_ingestion.py | Partner-authenticated EDI 856 inbound ingest |
 | `/api/v1/ingest/iot` | sensitech_parser.py | IoT sensor data (SensiTech) |
 | `/api/v1/notifications` | notification_prefs.py | Channels, quiet hours, escalation |
@@ -209,8 +209,11 @@ POST /api/v1/webhooks/ingest
 Content-Type: application/json
 X-RegEngine-API-Key: <your-api-key>
 
-# Generate FDA export for a lot code
+# Generate FDA verifiable package for a lot code (default format)
 GET /api/v1/fda/export?tlc=TOM-2026-001&tenant_id=<uuid>
+
+# Generate FDA CSV explicitly (legacy-compatible)
+GET /api/v1/fda/export?tlc=TOM-2026-001&tenant_id=<uuid>&format=csv
 
 # Verify hash chain integrity
 GET /api/v1/webhooks/chain/verify?tenant_id=<uuid>
