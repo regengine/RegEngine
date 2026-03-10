@@ -145,3 +145,26 @@ class TenantRateLimitMiddleware(BaseHTTPMiddleware):
         response.headers["X-RateLimit-Remaining"] = str(remaining)
         response.headers["X-RateLimit-Tenant"] = tenant_id
         return response
+
+
+def consume_tenant_rate_limit(
+    *,
+    tenant_id: str,
+    bucket_suffix: str,
+    limit: int,
+    window: int = 60,
+) -> tuple[bool, int]:
+    """
+    Consume one request from a tenant-scoped rate-limit bucket.
+
+    Returns ``(allowed, remaining)``.
+    """
+    safe_tenant = tenant_id or "anonymous"
+    safe_suffix = bucket_suffix or "default"
+    safe_limit = max(1, int(limit))
+    safe_window = max(1, int(window))
+    key = f"tenant:{safe_tenant}:{safe_suffix}"
+
+    allowed, remaining = _bucket.is_allowed(key, safe_limit, safe_window)
+    record_rate_limit(safe_tenant, allowed)
+    return allowed, remaining

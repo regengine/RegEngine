@@ -16,14 +16,13 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.config import get_settings
+from shared.tenant_rate_limiting import consume_tenant_rate_limit
 from app.webhook_models import (
     EventResult,
     IngestEvent,
@@ -105,27 +104,44 @@ def _verify_api_key(
 
 
 # ---------------------------------------------------------------------------
-# Rate Limiting (in-memory, per-process — sufficient for single-instance)
+# Rate Limiting (Redis-backed with in-memory fallback via shared module)
 # ---------------------------------------------------------------------------
 
-_rate_limit_window: dict[str, list[float]] = defaultdict(list)
-_RATE_LIMIT_MAX = 100  # max requests per window
-_RATE_LIMIT_WINDOW_SECS = 60  # 1-minute window
+_WEBHOOK_RATE_LIMIT_RPM = max(1, int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_RPM", "120")))
+_WEBHOOK_RATE_LIMIT_WINDOW_SECS = max(
+    1,
+    int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS", "60")),
+)
 
 
-def _check_rate_limit(api_key: str) -> None:
-    """Sliding window rate limiter. Raises 429 if exceeded."""
-    now = time.monotonic()
-    window = _rate_limit_window[api_key]
-    # Prune old entries
-    cutoff = now - _RATE_LIMIT_WINDOW_SECS
-    _rate_limit_window[api_key] = [t for t in window if t > cutoff]
-    if len(_rate_limit_window[api_key]) >= _RATE_LIMIT_MAX:
+def _check_rate_limit(tenant_id: str) -> None:
+    """Tenant-scoped sliding-window limit for webhook ingestion."""
+    allowed, remaining = consume_tenant_rate_limit(
+        tenant_id=tenant_id,
+        bucket_suffix="webhooks.ingest",
+        limit=_WEBHOOK_RATE_LIMIT_RPM,
+        window=_WEBHOOK_RATE_LIMIT_WINDOW_SECS,
+    )
+    if not allowed:
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded: max {_RATE_LIMIT_MAX} requests per {_RATE_LIMIT_WINDOW_SECS}s",
+            detail=(
+                f"Rate limit exceeded for tenant '{tenant_id}' "
+                f"({_WEBHOOK_RATE_LIMIT_RPM}/{_WEBHOOK_RATE_LIMIT_WINDOW_SECS}s)"
+            ),
+            headers={
+                "Retry-After": str(_WEBHOOK_RATE_LIMIT_WINDOW_SECS),
+                "X-RateLimit-Limit": str(_WEBHOOK_RATE_LIMIT_RPM),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Tenant": tenant_id,
+                "X-RateLimit-Scope": "webhooks.ingest",
+            },
         )
-    _rate_limit_window[api_key].append(now)
+    logger.debug(
+        "webhook_rate_limit_allow tenant_id=%s remaining=%s",
+        tenant_id,
+        remaining,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -392,9 +408,6 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
-    # Rate limiting
-    _check_rate_limit(x_regengine_api_key or "anonymous")
-
     # Resolve tenant: payload > API-key lookup
     tenant_id = payload.tenant_id
     if not tenant_id and x_regengine_api_key:
@@ -414,6 +427,10 @@ async def ingest_events(
     if not tenant_id:
         logger.error("Webhook rejected: no tenant_id resolved")
         raise HTTPException(status_code=400, detail="Tenant context required")
+
+    # Rate limiting (tenant-scoped)
+    _check_rate_limit(tenant_id)
+
     results: list[EventResult] = []
     accepted = 0
     rejected = 0

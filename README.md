@@ -235,6 +235,20 @@ Scoped API keys can now enforce permissions on Phase 2 traceability endpoints:
 
 Legacy master `API_KEY` remains supported and maps to full access.
 
+### Ingestion Rate Limiting (Phase 3)
+
+Ingestion endpoints now enforce Redis-backed tenant limits:
+
+- RBAC-protected endpoints (`/api/v1/exchange/*`, `/api/v1/ingest/edi`, `/api/v1/simulations/*`, `/api/v1/fda/*`) are limited per tenant and required permission scope.
+- Webhook ingest (`/api/v1/webhooks/ingest`) is limited per tenant with a dedicated `webhooks.ingest` bucket.
+
+Tune via env vars:
+- `INGESTION_RBAC_RATE_LIMIT_WINDOW_SECONDS` (default `60`)
+- `INGESTION_RBAC_RATE_LIMIT_DEFAULT_RPM` (default `120`)
+- `INGESTION_RBAC_RATE_LIMITS` (example: `fda.export=60,exchange.read=240`)
+- `WEBHOOK_INGEST_RATE_LIMIT_RPM` (default `120`)
+- `WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS` (default `60`)
+
 ---
 
 ## Testing
