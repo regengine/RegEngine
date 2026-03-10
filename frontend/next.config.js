@@ -33,11 +33,6 @@ const nextConfig = {
                 permanent: true,
             },
             {
-                source: '/tools/supply-chain-explorer',
-                destination: '/demo/supply-chains',
-                permanent: true,
-            },
-            {
                 source: '/architecture',
                 destination: '/security',
                 permanent: true,
