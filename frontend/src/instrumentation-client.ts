@@ -40,6 +40,8 @@ if (SENTRY_DSN) {
     });
 }
 
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
+
 // Re-export convenience helpers for use across the app
 export const captureError = (error: Error, context?: Record<string, unknown>) => {
     if (SENTRY_DSN) {
