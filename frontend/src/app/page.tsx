@@ -143,14 +143,14 @@ export default function RegEngineLanding() {
         </p>
 
         <div className="flex gap-3 flex-wrap">
-          <Link href="/retailer-readiness">
-            <Button size="lg" className="h-16 px-10 rounded-3xl bg-[var(--re-brand)] text-white text-lg font-black italic uppercase shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] group">
+          <Link href="/retailer-readiness" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto h-16 px-10 rounded-3xl bg-[var(--re-brand)] text-white text-lg font-black italic uppercase shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] group">
               Retailer Readiness Assessment
               <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>
-          <Link href="/tools/ftl-checker">
-            <Button size="lg" variant="outline" className="h-16 px-10 rounded-3xl text-lg font-black italic uppercase border-2 group">
+          <Link href="/tools/ftl-checker" className="w-full sm:w-auto">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto h-16 px-10 rounded-3xl text-lg font-black italic uppercase border-2 group">
               Check Your Coverage
               <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
@@ -398,13 +398,13 @@ export default function RegEngineLanding() {
           </div>
 
           <div className="flex flex-wrap gap-3 mt-7">
-            <Link href="/retailer-readiness">
-              <Button size="lg" className="h-14 px-8 rounded-2xl bg-[var(--re-brand)] text-white font-bold uppercase">
+            <Link href="/retailer-readiness" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto h-14 px-8 rounded-2xl bg-[var(--re-brand)] text-white font-bold uppercase">
                 Retailer Readiness Assessment
               </Button>
             </Link>
-            <Link href="/pricing">
-              <Button size="lg" variant="outline" className="h-14 px-8 rounded-2xl font-bold uppercase border-2">
+            <Link href="/pricing" className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto h-14 px-8 rounded-2xl font-bold uppercase border-2">
                 View Pricing
               </Button>
             </Link>

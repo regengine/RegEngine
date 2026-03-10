@@ -114,7 +114,7 @@ export default function FDAExport({ facilityId, refreshKey, onEvent, isLoggedIn 
 
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Generate FDA Traceability Records</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <div className="onb-fda-config-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
           {[
             { l: "Date Range", v: "Last 24 months" },
             { l: "TLC Filter", v: "All active TLCs" },
@@ -132,7 +132,7 @@ export default function FDAExport({ facilityId, refreshKey, onEvent, isLoggedIn 
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="onb-actions-row" style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => downloadExport("xlsx")}
             disabled={exportingFormat !== null || !isLoggedIn}
@@ -181,8 +181,8 @@ export default function FDAExport({ facilityId, refreshKey, onEvent, isLoggedIn 
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Export Preview</div>
         {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Loading live FDA preview rows...</div>}
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", fontSize: 11 }}>
-          <div style={{
+        <div className="onb-table-scroll" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", fontSize: 11 }}>
+          <div className="onb-fda-grid" style={{
             display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr",
             padding: "6px 8px", backgroundColor: ACCENT,
             color: "var(--re-surface-base)", fontWeight: 600,
@@ -192,7 +192,7 @@ export default function FDAExport({ facilityId, refreshKey, onEvent, isLoggedIn 
           {rows.map((raw, i) => {
             const row = normalizeRow(raw);
             return (
-              <div key={row.id || i} style={{
+              <div className="onb-fda-grid" key={row.id || i} style={{
                 display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr",
                 padding: "6px 8px",
                 borderTop: `1px solid ${BORDER}`,
