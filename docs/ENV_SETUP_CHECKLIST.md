@@ -112,7 +112,9 @@ Set in Railway service Variables:
 - [ ] `STRIPE_SECRET_KEY` (ingestion-service)
 - [ ] `STRIPE_WEBHOOK_SECRET` (ingestion-service)
 - [ ] `STRIPE_PRICE_GROWTH_MONTHLY` (ingestion-service)
+- [ ] `STRIPE_PRICE_GROWTH_ANNUAL` (ingestion-service)
 - [ ] `STRIPE_PRICE_SCALE_MONTHLY` (ingestion-service)
+- [ ] `STRIPE_PRICE_SCALE_ANNUAL` (ingestion-service)
 - [ ] `ADMIN_SERVICE_URL` (ingestion-service URL used by Stripe webhook provisioning)
 
 ---
@@ -204,7 +206,9 @@ Use this quick worksheet while setting values:
 - [ ] `STRIPE_SECRET_KEY =`
 - [ ] `STRIPE_WEBHOOK_SECRET =`
 - [ ] `STRIPE_PRICE_GROWTH_MONTHLY =`
+- [ ] `STRIPE_PRICE_GROWTH_ANNUAL =`
 - [ ] `STRIPE_PRICE_SCALE_MONTHLY =`
+- [ ] `STRIPE_PRICE_SCALE_ANNUAL =`
 - [ ] `ADMIN_SERVICE_URL =`
 
 ---

@@ -8,7 +8,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Check, X, Star, Zap, Rocket, Building2, Crown } from 'lucide-react';
+import { Check, X, Zap, Rocket, Building2, Crown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export interface PlanFeature {
@@ -33,8 +33,8 @@ export interface PlanCardProps {
 
 const TIER_ICONS: Record<string, React.ElementType> = {
     starter: Zap,
-    growth: Rocket,
-    scale: Star,
+    growth: Zap,
+    scale: Rocket,
     enterprise: Crown,
 };
 

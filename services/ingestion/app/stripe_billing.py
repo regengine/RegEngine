@@ -42,7 +42,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "id": "growth",
         "name": "Growth",
         "price_monthly": 999,
-        "price_annual": 999,
+        "price_annual": 832,
         "stripe_price_env_monthly": "STRIPE_PRICE_GROWTH_MONTHLY",
         "stripe_price_env_annual": "STRIPE_PRICE_GROWTH_ANNUAL",
         "features": [
@@ -62,7 +62,7 @@ PLANS: dict[str, dict[str, Any]] = {
         "id": "scale",
         "name": "Scale",
         "price_monthly": 1999,
-        "price_annual": 1999,
+        "price_annual": 1666,
         "stripe_price_env_monthly": "STRIPE_PRICE_SCALE_MONTHLY",
         "stripe_price_env_annual": "STRIPE_PRICE_SCALE_ANNUAL",
         "features": [

@@ -35,9 +35,8 @@ that can be verified with external scripts and reproducible hash-chain checks.
 ## Business Model
 
 - Free: FTL checking and basic readiness scoring
-- Starter ($299/mo): CTE and KDE tracking, up to 100 products and 10 suppliers
-- Growth ($799/mo): expanded supplier coverage, EPCIS export, recall simulation
-- Scale ($1,999/mo): high-volume ingestion, advanced automation, enterprise SLA
+- Growth ($999/mo): FSMA 204 workspace, supplier onboarding, compliance scoring, FDA-ready export
+- Scale ($1,999/mo): multi-facility operations, expanded API limits, priority onboarding and support
 - Enterprise (custom): multi-facility rollout, custom integrations, contractual support terms
 
 ## Raise

@@ -60,28 +60,26 @@ const INDUSTRIES = [
 
 const PLANS = [
     {
-        id: 'starter', name: 'Starter', description: 'Single facility getting started with FSMA 204',
-        monthlyPrice: 149, annualPrice: 124, cteLimit: '5,000', highlighted: false,
+        id: 'growth', name: 'Growth', description: 'Single-facility teams under $50M annual revenue',
+        monthlyPrice: 999, annualPrice: 832, cteLimit: '50,000', highlighted: false,
         features: [
             { text: '1 facility', included: true },
-            { text: '5 supplier portal links', included: true },
-            { text: 'CSV upload & manual entry', included: true },
-            { text: 'All 7 CTE types', included: true },
-            { text: 'Compliance score dashboard', included: true },
-            { text: 'FDA export (CSV)', included: true },
+            { text: 'Supplier onboarding + FTL scoping', included: true },
+            { text: 'CSV upload + API ingestion', included: true },
+            { text: 'Compliance scoring + FDA-ready export', included: true },
+            { text: 'Recall simulation + drill workflows', included: true },
             { text: 'Email support', included: true },
         ] as PlanFeature[],
     },
     {
-        id: 'professional', name: 'Professional', description: 'Multi-facility operations with API & IoT',
-        monthlyPrice: 499, annualPrice: 416, cteLimit: '50,000', highlighted: true,
+        id: 'scale', name: 'Scale', description: 'Multi-facility operations from $50M-$200M annual revenue',
+        monthlyPrice: 1999, annualPrice: 1666, cteLimit: '250,000', highlighted: true,
         features: [
-            { text: 'Everything in Starter', included: true },
+            { text: 'Everything in Growth', included: true },
             { text: '5 facilities', included: true },
-            { text: 'Unlimited supplier links', included: true },
-            { text: 'API + webhook integration', included: true },
-            { text: 'IoT temperature monitoring', included: true },
-            { text: 'EPCIS 2.0 export', included: true },
+            { text: 'Expanded API + webhook limits', included: true },
+            { text: 'Retailer-specific readiness benchmarks', included: true },
+            { text: 'Priority onboarding support', included: true },
             { text: 'Priority support', included: true },
         ] as PlanFeature[],
     },
@@ -89,7 +87,7 @@ const PLANS = [
         id: 'enterprise', name: 'Enterprise', description: 'Full supply chain with SSO & dedicated support',
         monthlyPrice: null, annualPrice: null, cteLimit: 'Unlimited', highlighted: false,
         features: [
-            { text: 'Everything in Professional', included: true },
+            { text: 'Everything in Scale', included: true },
             { text: 'Unlimited facilities', included: true },
             { text: 'SSO / SAML integration', included: true },
             { text: 'Custom recall playbooks', included: true },
@@ -129,11 +127,12 @@ export function CheckoutWizard() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const createCheckout = useCreateCheckout();
+    const billingParam = searchParams?.get('billing');
 
     const [currentStep, setCurrentStep] = useState<WizardStep>('industry');
     const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
     const [selectedPlan, setSelectedPlan] = useState<string>(searchParams?.get('plan') || 'growth');
-    const [isAnnual, setIsAnnual] = useState(true);
+    const [isAnnual, setIsAnnual] = useState(billingParam !== 'monthly');
     const [appliedCredits, setAppliedCredits] = useState(0);
     const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
 
@@ -144,6 +143,14 @@ export function CheckoutWizard() {
             setSelectedPlan(planParam);
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        if (billingParam === 'monthly') {
+            setIsAnnual(false);
+        } else if (billingParam === 'annual') {
+            setIsAnnual(true);
+        }
+    }, [billingParam]);
 
     const currentStepIndex = stepsMeta.findIndex((s) => s.id === currentStep);
 

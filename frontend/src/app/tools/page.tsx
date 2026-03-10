@@ -4,12 +4,12 @@ import { JSONLD } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
     title: "Free Strategic Compliance Tools | RegEngine",
-    description: "Benchmark your readiness with free interactive tools. FTL checkers, AI model bias calculators, obligation scanners, and notice validators. Identify critical compliance gaps in minutes.",
+    description: "Free FSMA 204 compliance tools including FTL checker, CTE/KDE validators, readiness assessments, and traceability workflow utilities.",
     openGraph: {
         title: "FSMA 204 Free Tools — RegEngine",
-        description: "Benchmark your readiness with interactive tools.",
+        description: "Free FSMA 204 compliance tools for traceability readiness.",
         type: "website",
-        url: "https://regengine.vercel.app/tools",
+        url: "https://www.regengine.co/tools",
     },
 };
 

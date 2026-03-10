@@ -108,7 +108,7 @@ export function DemoBanner({ isLoggedIn }) {
       gap: 12,
     }}>
       <div style={{ fontSize: 13, color: BLUE }}>
-        <strong>Interactive walkthrough</strong> — Steps 1-2 show how the invite flow works. Steps 3-8 are live when you log in.
+        <strong>Interactive walkthrough</strong> — Steps 1-2 preview how your buyers invite you. Steps 3-8 are live setup you complete after signup.
       </div>
       <a
         href="/login?redirect=/onboarding/supplier-flow"

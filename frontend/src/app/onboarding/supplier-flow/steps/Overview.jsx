@@ -66,7 +66,7 @@ export default function Overview({ setView, socialProof, facilityId, isLoggedIn 
       </div>
 
       <InfoCallout>
-        Steps 1-2 explain how the invite and signup flow works. Steps 3-8 are live — log in to start recording real compliance data.
+        Steps 1-2 preview how your buyers invite you. Steps 3-8 are live setup you complete after signup.
       </InfoCallout>
     </div>
   );
