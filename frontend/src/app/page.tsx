@@ -392,7 +392,7 @@ export default function RegEngineLanding() {
                 Start with a free assessment, then see exactly what it takes to move from reactive traceability to recall-ready infrastructure.
               </p>
               <p className="text-sm text-[var(--re-text-muted)] mt-3">
-                Starting at $149/mo after a 14-day free trial. <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">See all plans.</Link>
+                Start with a free 14-day trial. <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">See all plans.</Link>
               </p>
             </div>
           </div>
@@ -403,9 +403,9 @@ export default function RegEngineLanding() {
                 Retailer Readiness Assessment
               </Button>
             </Link>
-            <Link href="/tools/ftl-checker">
+            <Link href="/pricing">
               <Button size="lg" variant="outline" className="h-14 px-8 rounded-2xl font-bold uppercase border-2">
-                Check Your Coverage
+                View Pricing
               </Button>
             </Link>
           </div>

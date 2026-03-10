@@ -124,7 +124,33 @@ const STRATEGIC_TOOLS = [
     }
 ];
 
+const ALL_TOOL_LINKS = [
+    { id: 'anomaly-simulator', label: 'Anomaly Simulator' },
+    { id: 'bias-checker', label: 'Bias Checker' },
+    { id: 'cte-mapper', label: 'CTE Coverage Mapper' },
+    { id: 'data-import', label: 'Data Import Assistant' },
+    { id: 'drill-simulator', label: '24-Hour Drill Simulator' },
+    { id: 'fsma-unified', label: 'Unified FSMA Dashboard' },
+    { id: 'ftl-checker', label: 'FTL Coverage Checker' },
+    { id: 'kde-checker', label: 'KDE Completeness Checker' },
+    { id: 'knowledge-graph', label: 'Knowledge Graph' },
+    { id: 'notice-validator', label: 'Notice Validator' },
+    { id: 'obligation-scanner', label: 'Obligation Scanner' },
+    { id: 'readiness-assessment', label: 'FSMA Readiness Assessment' },
+    { id: 'recall-readiness', label: 'Recall Readiness Score' },
+    { id: 'retailer-readiness', label: 'Retailer Readiness' },
+    { id: 'roi-calculator', label: 'Regulatory ROI Calculator' },
+    { id: 'sop-generator', label: 'SOP Generator' },
+    { id: 'tlc-validator', label: 'TLC Validator' },
+];
+
 export function ToolsLandingClient() {
+    const featuredToolIds = new Set([
+        ...FSMA_JOURNEY.map((tool) => tool.id),
+        ...STRATEGIC_TOOLS.map((tool) => tool.id),
+    ]);
+    const additionalTools = ALL_TOOL_LINKS.filter((tool) => !featuredToolIds.has(tool.id));
+
     return (
         <div className="re-page min-h-screen py-20 px-4">
             <div className="max-w-7xl mx-auto">
@@ -269,6 +295,27 @@ export function ToolsLandingClient() {
                             ))}
                         </div>
                     </div>
+
+                <section className="mt-20">
+                    <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+                        <h2 className="text-2xl re-heading-industrial">Full Tool Index</h2>
+                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--re-text-muted)]">
+                            17 free tools
+                        </span>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {additionalTools.map((tool) => (
+                            <Link
+                                key={tool.id}
+                                href={`/tools/${tool.id}`}
+                                className="block rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-card)] px-4 py-3 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-colors"
+                            >
+                                {tool.label}
+                            </Link>
+                        ))}
+                    </div>
+                </section>
 
                 {/* Footer CTA */}
                 <motion.div

@@ -93,6 +93,19 @@ export function MarketingFooter() {
                             {link.label}
                         </Link>
                     ))}
+                    <Link
+                        href="/tools"
+                        style={{
+                            display: "block",
+                            fontSize: "13px",
+                            color: "var(--re-brand)",
+                            textDecoration: "none",
+                            marginTop: "4px",
+                            fontWeight: 600,
+                        }}
+                    >
+                        View all tools →
+                    </Link>
                 </div>
 
                 <div>

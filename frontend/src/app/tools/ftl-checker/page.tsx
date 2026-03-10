@@ -5,12 +5,12 @@ import { JSONLD } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
     title: "FTL Coverage Checker | FDA FSMA 204 Compliance Tool | RegEngine",
-    description: "Instantly verify if your food products are covered by FDA FSMA 204 requirements using our 23-tier high-integrity standard. Professional-grade traceability check.",
+    description: "Free FDA Food Traceability List checker. Verify FSMA 204 coverage for your products.",
     openGraph: {
         title: "FTL Coverage Checker — RegEngine",
-        description: "Check your FSMA 204 product coverage.",
+        description: "Free FDA Food Traceability List checker. Verify FSMA 204 coverage for your products.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/ftl-checker",
+        url: "https://www.regengine.co/tools/ftl-checker",
     },
 };
 
