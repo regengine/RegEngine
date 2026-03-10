@@ -1,96 +1,41 @@
 # RegEngine Sales Collateral
 
-This directory contains sales and go-to-market materials for RegEngine.
+This directory contains FSMA-first sales assets and design-partner operating templates.
 
-## Contents
+## Current Assets
 
-### One-Pagers (Persona-Specific)
+- `fsma_supplier_onepager.md` - FSMA 204 supplier one-pager
+- `fsma_cold_outreach_templates.md` - cold outbound templates for FSMA pipeline
+- `fsma_investor_brief.md` - investor narrative focused on FSMA wedge and traction
+- `design_partner_demo_script.md` - 15-minute live demo script and operator checklist
+- `design_partner_feedback_scorecard.md` - structured post-demo interview and qualification scorecard
+- `design_partner_outreach_tracker_template.csv` - outreach and follow-up tracking template
 
-- **`sales_collateral_fintech_onepager.md`** - Fintech and digital bank compliance leaders
-  - Focus: Multi-jurisdiction tracking, obligation mapping, audit trail
-  - Key benefits: 30-50% reduction in manual review time
-  - Use cases: EU regulatory changes, board reporting
+Related runbook:
+- `docs/runbooks/design_partner_funnel_operating_rhythm.md` - daily/weekly funnel review process tied to live `/v1/admin/funnel` metrics
 
-- **`fsma_supplier_onepager.md`** - FSMA 204 supplier outreach one-pager
-  - Focus: 24-hour FDA response readiness for mid-market food suppliers
-  - Key benefits: faster recall response, EPCIS 2.0 export readiness
+## Recommended Usage Flow
 
-- **`fsma_cold_outreach_templates.md`** - cold email templates for FSMA 204 pipeline
-  - Hooks: FTL awareness, retailer pressure, recall response readiness
+1. Start outreach using `fsma_cold_outreach_templates.md` and track accounts in `design_partner_outreach_tracker_template.csv`.
+2. Run discovery and live demo with `design_partner_demo_script.md`.
+3. Capture blockers and buying signals in `design_partner_feedback_scorecard.md`.
+4. Prioritize product and sales actions via `docs/runbooks/design_partner_funnel_operating_rhythm.md`.
 
-- **`fsma_investor_brief.md`** - FSMA-focused investor narrative
-  - Focus: wedge, moat, pricing, and pre-seed use of funds
+## Template Variables
 
-### Additional Materials (To Be Created)
+Replace these placeholders when relevant:
 
-- **RegTech CTO One-Pager** - OEM licensing pitch
-- **Enterprise Risk Officer One-Pager** - Board-level reporting focus
-- **Product Demo Script** - Step-by-step walkthrough
-- **ROI Calculator** - Cost savings estimation tool
-- **Customer Case Studies** - Success stories (once available)
+- `{SALES_EMAIL}`
+- `{WEBSITE_URL}`
+- `{CALENDLY_LINK}`
+- `{RETAILER_NAME}`
 
-## Usage
+## Notes
 
-These materials are designed to be:
-
-1. **Customizable** - Replace {VARIABLES} with actual values
-2. **Format-Flexible** - Convert to PDF, PowerPoint, or web pages as needed
-3. **Persona-Targeted** - Each document addresses specific pain points
-
-## Variable Replacement
-
-When using these templates, replace:
-
-- `{SALES_EMAIL}` → Your sales contact email
-- `{WEBSITE_URL}` → regengine.ai or your marketing site
-- `{CALENDLY_LINK}` → Your scheduling link
-- `{JURISDICTIONS}` → Relevant jurisdictions for the prospect
-
-## Best Practices
-
-### For Outbound Sales
-
-1. **Pre-qualify** - Ensure prospect operates in multiple jurisdictions
-2. **Personalize** - Reference their specific compliance challenges
-3. **Focus on outcomes** - Emphasize time savings and risk reduction, not features
-
-### For Demos
-
-1. **Start with their data** - Use their jurisdiction examples
-2. **Show the gap analysis** - This is the "aha moment"
-3. **Leave time for questions** - Technical buyers will have detailed questions
-
-### For Design Partner Conversations
-
-1. **Be transparent** - This is early-stage evaluation
-2. **Set expectations** - Sandbox limitations, no SLAs
-3. **Gather feedback** - Their input shapes the roadmap
-
-## File Organization
-
-```
-sales/
-├── README.md (this file)
-├── sales_collateral_fintech_onepager.md
-├── regtech_cto_onepager.md (to be created)
-├── enterprise_risk_onepager.md (to be created)
-├── demo_scripts/
-│   └── standard_demo.md (to be created)
-└── calculators/
-    └── roi_calculator.xlsx (to be created)
-```
-
-## Next Steps
-
-To expand this sales toolkit:
-
-1. Create RegTech CTO and Enterprise Risk one-pagers
-2. Develop demo scripts for each persona
-3. Build ROI calculator with time-savings model
-4. Create case study template for design partners
-5. Design presentation deck (PowerPoint/Google Slides)
+- Keep all language grounded in FSMA 204 workflows and buyer vocabulary.
+- Update this README when adding or removing collateral.
 
 ---
 
-**Last Updated**: 2025-11-19
+**Last Updated**: 2026-03-10
 **Owner**: Sales Team
