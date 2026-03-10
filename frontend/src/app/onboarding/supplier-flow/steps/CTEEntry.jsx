@@ -138,7 +138,7 @@ export default function CTEEntry({ requiredCTEs = [], facilityId, onCTESubmitted
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div className="onb-cte-fields" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {cte.fields.map((f) => (
             <div key={f.name}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "var(--re-text-secondary)", marginBottom: 2 }}>
@@ -175,7 +175,7 @@ export default function CTEEntry({ requiredCTEs = [], facilityId, onCTESubmitted
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <div className="onb-actions-row" style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button
             onClick={submitCTE}
             disabled={submitting || !isLoggedIn}

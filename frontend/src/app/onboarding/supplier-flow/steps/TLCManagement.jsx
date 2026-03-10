@@ -85,7 +85,7 @@ export default function TLCManagement({ facilityId, refreshKey, onEvent, isLogge
       </SectionTitle>
 
       <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div className="onb-actions-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Active Traceability Lot Codes</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <input
@@ -126,8 +126,8 @@ export default function TLCManagement({ facilityId, refreshKey, onEvent, isLogge
         </div>
 
         {/* TLC table */}
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" }}>
-          <div style={{
+        <div className="onb-table-scroll" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden" }}>
+          <div className="onb-tlc-grid" style={{
             display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 0.7fr 0.8fr",
             padding: "8px 12px", backgroundColor: GRAY_LIGHT,
             fontSize: 11, fontWeight: 600, color: GRAY,
@@ -135,7 +135,7 @@ export default function TLCManagement({ facilityId, refreshKey, onEvent, isLogge
             <div>TLC</div><div>Product</div><div>Facility</div><div>Created</div><div>Events</div><div>Status</div>
           </div>
           {lots.map((lot) => (
-            <div key={lot.id} style={{
+            <div className="onb-tlc-grid" key={lot.id} style={{
               display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 0.7fr 0.8fr",
               padding: "10px 12px", fontSize: 12,
               borderTop: `1px solid ${BORDER}`, alignItems: "center",

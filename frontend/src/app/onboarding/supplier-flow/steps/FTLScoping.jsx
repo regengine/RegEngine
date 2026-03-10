@@ -137,7 +137,7 @@ export default function FTLScoping({ facilityId, setView, onRequiredCTEsChange, 
 
         {error && <div style={{ marginTop: 10, fontSize: 12, color: ERROR }}>{error}</div>}
 
-        <div style={{ marginTop: 14 }}>
+        <div className="onb-selection-actions" style={{ marginTop: 14 }}>
           <button
             onClick={saveScoping}
             disabled={saving || !isLoggedIn || selected.length === 0}

@@ -118,6 +118,7 @@ export default function PricingPage() {
 
     return (
         <div
+            className="pricing-page"
             style={{
                 minHeight: '100vh',
                 background: T.bg,
@@ -139,6 +140,7 @@ export default function PricingPage() {
 
             {/* ─── HERO ─── */}
             <section
+                className="pricing-hero"
                 style={{
                     position: 'relative',
                     zIndex: 2,
@@ -149,6 +151,7 @@ export default function PricingPage() {
                 }}
             >
                 <div
+                    className="pricing-hero-glow"
                     style={{
                         position: 'absolute',
                         top: '-60px',
@@ -199,6 +202,7 @@ export default function PricingPage() {
 
                 {/* Billing Toggle */}
                 <div
+                    className="pricing-billing-toggle"
                     role="group"
                     aria-label="Billing period"
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}
@@ -254,6 +258,7 @@ export default function PricingPage() {
 
             {/* ─── PRICING CARDS ─── */}
             <section
+                className="pricing-cards"
                 style={{
                     position: 'relative',
                     zIndex: 2,
@@ -263,6 +268,7 @@ export default function PricingPage() {
                 }}
             >
                 <div
+                    className="pricing-grid"
                     role="radiogroup"
                     aria-label="Select pricing tier"
                     style={{
@@ -417,6 +423,7 @@ export default function PricingPage() {
 
             {/* ─── COMPETITOR COMPARISON ─── */}
             <section
+                className="pricing-compare"
                 style={{
                     position: 'relative',
                     zIndex: 2,
@@ -442,7 +449,7 @@ export default function PricingPage() {
                             overflow: 'hidden',
                         }}
                     >
-                        <div style={{ overflowX: 'auto' }}>
+                        <div className="pricing-compare-table-wrap" style={{ overflowX: 'auto' }}>
                             <table className="re-table">
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -480,6 +487,7 @@ export default function PricingPage() {
 
             {/* ─── FAQ ─── */}
             <section
+                className="pricing-faq"
                 style={{
                     position: 'relative',
                     zIndex: 2,
@@ -515,6 +523,7 @@ export default function PricingPage() {
 
             {/* ─── CTA ─── */}
             <section
+                className="pricing-cta"
                 style={{
                     position: 'relative',
                     zIndex: 2,
@@ -529,9 +538,10 @@ export default function PricingPage() {
                     <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)', marginBottom: '32px' }}>
                         Book a fast fit-check and we will map your operation to the right FSMA plan.
                     </p>
-                    <div className="flex gap-3 justify-center flex-wrap">
+                    <div className="pricing-cta-actions flex gap-3 justify-center flex-wrap">
                         <Link href="/alpha">
                             <Button
+                                className="pricing-cta-btn"
                                 style={{
                                     background: '#fff',
                                     color: T.accent,
@@ -543,8 +553,9 @@ export default function PricingPage() {
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
-                        <Link href="/ftl-checker">
+                        <Link href="/tools/ftl-checker">
                             <Button
+                                className="pricing-cta-btn"
                                 variant="outline"
                                 style={{
                                     background: 'transparent',
@@ -562,6 +573,21 @@ export default function PricingPage() {
 
             <style>{`
                 * { box-sizing: border-box; margin: 0; }
+
+                @media (max-width: 768px) {
+                    .pricing-hero { padding: 56px 16px 40px !important; }
+                    .pricing-hero-glow { width: 360px !important; height: 240px !important; top: -30px !important; }
+                    .pricing-billing-toggle { gap: 10px !important; flex-wrap: wrap !important; }
+                    .pricing-cards { padding: 0 16px 40px !important; }
+                    .pricing-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+                    .pricing-compare { padding: 44px 16px !important; }
+                    .pricing-compare-table-wrap .re-table { min-width: 720px; }
+                    .pricing-faq { padding: 44px 16px !important; }
+                    .pricing-cta { padding: 44px 16px !important; }
+                    .pricing-cta-actions { flex-direction: column; align-items: stretch !important; }
+                    .pricing-cta-actions a { width: 100%; }
+                    .pricing-cta-btn { width: 100%; justify-content: center; }
+                }
             `}</style>
         </div>
     );

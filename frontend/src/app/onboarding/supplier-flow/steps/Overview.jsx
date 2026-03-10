@@ -36,7 +36,7 @@ export default function Overview({ setView, socialProof, facilityId, isLoggedIn 
       <DemoBanner isLoggedIn={isLoggedIn} />
 
       {socialProof && (
-        <div style={{
+        <div className="onb-proof-row" style={{
           display: "flex", gap: 16, marginBottom: 16, fontSize: 12, color: GRAY,
         }}>
           {socialProof.supplier_count != null && (

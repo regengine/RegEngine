@@ -91,7 +91,7 @@ export default function Dashboard({ facilityId, refreshKey, isLoggedIn }) {
       )}
 
       {/* Metric cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+      <div className="onb-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
         {[
           { label: "Compliance Score", value: `${score}%`, color: score >= 80 ? ACCENT : WARN },
           { label: "Active TLCs", value: `${tlcCount}`, color: BLUE },

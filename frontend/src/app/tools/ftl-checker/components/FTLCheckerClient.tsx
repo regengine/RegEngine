@@ -694,7 +694,7 @@ export function FTLCheckerClient() {
     const coveragePercent = results.totalSelected > 0 ? Math.round((results.coveredCount / results.totalSelected) * 100) : 0;
 
     return (
-        <div style={{ minHeight: '100vh', background: T.bg, fontFamily: T.sans, color: T.textBody, padding: '24px' }}>
+        <div className="ftl-root" style={{ minHeight: '100vh', background: T.bg, fontFamily: T.sans, color: T.textBody, padding: '24px' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 <Breadcrumbs
                     items={[
@@ -709,19 +709,19 @@ export function FTLCheckerClient() {
             <div style={{ position: 'fixed', inset: 0, opacity: 0.015, pointerEvents: 'none', zIndex: 1, backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
 
             {/* Hero */}
-            <section style={{ position: 'relative', zIndex: 2, borderBottom: `1px solid ${T.border}`, background: T.accentBg }}>
-                <div style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 24px', textAlign: 'center' }}>
+            <section className="ftl-hero" style={{ position: 'relative', zIndex: 2, borderBottom: `1px solid ${T.border}`, background: T.accentBg }}>
+                <div className="ftl-hero-inner" style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 24px', textAlign: 'center' }}>
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '20px', background: T.successBg, border: `1px solid ${T.successBorder}`, fontSize: '12px', fontWeight: 600, color: T.accent, marginBottom: '16px' }}>
                             Free Tool • No Login Required
                         </span>
-                        <h1 style={{ fontSize: '40px', fontWeight: 700, color: T.textPrimary, margin: '0 0 16px', lineHeight: 1.1 }}>
+                        <h1 style={{ fontSize: 'clamp(30px, 8vw, 40px)', fontWeight: 700, color: T.textPrimary, margin: '0 0 16px', lineHeight: 1.1 }}>
                             FTL Coverage Checker
                         </h1>
                         <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 24px', lineHeight: 1.6 }}>
                             Instantly check if your products are covered by FDA FSMA 204 Food Traceability requirements
                         </p>
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
+                        <div className="ftl-hero-bullets" style={{ display: 'flex', justifyContent: 'center', gap: '24px', fontSize: '13px', color: T.textDim }}>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> No account required</span>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Results in seconds</span>
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} className="text-re-brand" /> Deadline: July 2028</span>
@@ -730,10 +730,10 @@ export function FTLCheckerClient() {
                 </div>
             </section>
 
-            <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px', position: 'relative', zIndex: 2 }}>
+            <div className="ftl-content" style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px', position: 'relative', zIndex: 2 }}>
                 {/* Step Progress */}
                 {currentStep !== 'categories' && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}>
+                    <div className="ftl-step-progress" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}>
                         {[{ num: 1, label: 'Categories', step: 'categories' }, { num: 2, label: 'Exemptions', step: 'exemptions' }, { num: 3, label: 'Results', step: 'results' }].map((s, i) => (
                             <div key={s.step} className="flex items-center gap-2">
                                 {i > 0 && <div style={{ width: '32px', height: '1px', background: T.border }} />}
@@ -750,7 +750,7 @@ export function FTLCheckerClient() {
                     {/* Step 1: Category Selection */}
                     {currentStep === 'categories' && (
                         <motion.div key="selector" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                            <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
+                            <div className="ftl-section-card" style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
                                 <div className="mb-6 space-y-4">
                                     <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
                                         <div>
@@ -788,7 +788,7 @@ export function FTLCheckerClient() {
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', maxHeight: '500px', overflowY: 'auto', paddingRight: '8px' }} className="re-scrollbar">
+                                <div className="ftl-category-grid re-scrollbar" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', maxHeight: '500px', overflowY: 'auto', paddingRight: '8px' }}>
                                     {FTL_CATEGORIES
                                         .filter(c => {
                                             const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -829,7 +829,7 @@ export function FTLCheckerClient() {
                                         })}
                                 </div>
 
-                                <div className="mt-6 flex items-center justify-between">
+                                <div className="ftl-selection-actions mt-6 flex items-center justify-between">
                                     <span className="text-[13px] text-re-text-muted">{selectedCategories.length} categories selected</span>
                                     <button
                                         onClick={handleCheck}
@@ -851,7 +851,7 @@ export function FTLCheckerClient() {
                     {/* Step 2: Exemption Wizard */}
                     {currentStep === 'exemptions' && (
                         <motion.div key="exemptions" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                            <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
+                            <div className="ftl-section-card" style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', marginBottom: '24px' }}>
                                 <div className="mb-6">
                                     <h2 style={{ fontSize: '20px', fontWeight: 600, color: T.textPrimary, margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                         <ShieldCheck size={20} className="text-re-brand" /> Check for Exemptions
@@ -874,7 +874,7 @@ export function FTLCheckerClient() {
                                                         <Icon size={20} style={{ color: answer === true ? T.accent : T.textDim }} />
                                                     </div>
                                                     <div className="flex-1">
-                                                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
+                                                        <div className="ftl-exemption-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
                                                             <div>
                                                                 <p style={{ fontWeight: 500, color: T.textPrimary, margin: '0 0 6px', fontSize: '14px', lineHeight: 1.5 }}>{q.question}</p>
                                                                 <a href={ecfrUrl(q.citation)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', fontFamily: T.mono, color: T.accent, background: T.elevated, padding: '2px 8px', borderRadius: '4px', textDecoration: 'none' }}>{q.citation}</a>
@@ -900,7 +900,7 @@ export function FTLCheckerClient() {
                                     })}
                                 </div>
 
-                                <div className="mt-6 flex items-center justify-between">
+                                <div className="ftl-exemption-actions mt-6 flex items-center justify-between">
                                     <button onClick={handleBackToCategories} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>← Back to Categories</button>
                                     <div className="flex gap-3">
                                         <button onClick={handleSkipExemptions} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>Skip Exemptions</button>
@@ -916,10 +916,10 @@ export function FTLCheckerClient() {
                     {/* Step 3: Results */}
                     {currentStep === 'results' && (
                         <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                            <div style={{ display: 'grid', gap: '24px', gridTemplateColumns: '1fr 340px' }}>
+                            <div className="ftl-results-layout" style={{ display: 'grid', gap: '24px', gridTemplateColumns: '1fr 340px' }}>
                                 {/* Main Result Card */}
-                                <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+                                <div className="ftl-section-card" style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
+                                    <div className="ftl-results-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
                                         <div>
                                             <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.textPrimary, margin: '0 0 8px' }}>Your FTL Coverage Results</h2>
                                             <p className="text-sm text-re-text-muted m-0">Based on your selected product categories</p>
@@ -953,7 +953,7 @@ export function FTLCheckerClient() {
                                     </div>
 
                                     {/* Stats Grid */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
+                                    <div className="ftl-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '32px' }}>
                                         <div style={{ textAlign: 'center', padding: '20px', background: T.successBg, borderRadius: '10px', border: `1px solid ${T.successBorder}` }}>
                                             <div style={{ fontSize: '28px', fontWeight: 700, color: T.accent }}>{results.coveredCount}</div>
                                             <div className="text-xs text-re-text-muted">On FTL</div>
@@ -1020,7 +1020,7 @@ export function FTLCheckerClient() {
                                                 {/* CTE/KDE Requirements - Only for covered categories */}
                                                 {category.covered && category.ctes && category.ctes.length > 0 && (
                                                     <div style={{ padding: '12px 16px', borderTop: `1px solid ${T.border}`, background: 'rgba(16,185,129,0.03)' }}>
-                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                        <div className="ftl-cte-kde-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                                             <div>
                                                                 <div style={{ fontSize: '11px', fontWeight: 600, color: T.accent, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                                                     CTEs Required
@@ -1052,7 +1052,7 @@ export function FTLCheckerClient() {
                                         ))}
                                     </div>
 
-                                    <div style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
+                                    <div className="ftl-results-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px' }}>
                                         <button onClick={handleStartOver} style={{ padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>← Start Over</button>
                                         <button onClick={handleDownloadReport} disabled={isDownloading} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px', border: `1px solid ${T.border}`, background: 'transparent', color: T.textBody, fontSize: '14px', cursor: 'pointer' }}>
                                             {isDownloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} {isDownloading ? 'Generating...' : 'Download PDF Report'}
@@ -1097,9 +1097,9 @@ export function FTLCheckerClient() {
 
                             {/* What's Next Section */}
                             {results.coveredCount > 0 && (
-                                <div style={{ marginTop: '32px', padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
+                                <div className="ftl-section-card" style={{ marginTop: '32px', padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
                                     <h3 style={{ fontSize: '20px', fontWeight: 700, color: T.textPrimary, margin: '0 0 24px' }}>What You Need to Know</h3>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+                                    <div className="ftl-whats-next-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
                                         {[
                                             { num: 1, title: 'Critical Tracking Events (CTEs)', desc: 'You must record events for: Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation of FTL foods.', cfrLink: 'https://www.ecfr.gov/current/title-21/section-1.1325', cfrLabel: '§1.1325–§1.1350' },
                                             { num: 2, title: '24-Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)', cfrLabel: '§1.1455(c)' },
@@ -1121,12 +1121,12 @@ export function FTLCheckerClient() {
                             )}
 
                             {/* Regulatory Sources Footer */}
-                            <div style={{ marginTop: '32px', padding: '24px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px' }}>
+                            <div className="ftl-section-card" style={{ marginTop: '32px', padding: '24px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px' }}>
                                 <h4 style={{ fontSize: '14px', fontWeight: 600, color: T.textPrimary, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <ExternalLink size={16} className="text-re-brand" />
                                     Regulatory Sources
                                 </h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                                <div className="ftl-sources-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                                     <a href="https://www.ecfr.gov/current/title-21/part-1/subpart-S" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
                                         <span className="re-dot bg-re-brand" />
                                         21 CFR Part 1 Subpart S — Full Rule Text
@@ -1168,6 +1168,32 @@ export function FTLCheckerClient() {
                     tools={FREE_TOOLS.filter(t => ['recall-readiness', 'kde-checker', 'roi-calculator'].includes(t.id))}
                 />
             </div>
+
+            <style>{`
+                @media (max-width: 900px) {
+                    .ftl-root { padding: 12px !important; }
+                    .ftl-hero-inner { padding: 44px 16px !important; }
+                    .ftl-hero-bullets { flex-wrap: wrap; gap: 10px !important; }
+                    .ftl-content { padding: 24px 8px !important; }
+                    .ftl-step-progress { flex-wrap: wrap; justify-content: flex-start !important; }
+                    .ftl-section-card { padding: 20px !important; }
+                    .ftl-category-grid { grid-template-columns: 1fr !important; max-height: 420px !important; }
+                    .ftl-selection-actions { flex-direction: column; align-items: stretch !important; gap: 10px; }
+                    .ftl-selection-actions button { width: 100%; justify-content: center; }
+                    .ftl-exemption-row { flex-direction: column !important; }
+                    .ftl-exemption-actions { flex-direction: column !important; align-items: stretch !important; gap: 10px; }
+                    .ftl-exemption-actions > div { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+                    .ftl-exemption-actions button { width: 100%; justify-content: center; }
+                    .ftl-results-layout { grid-template-columns: 1fr !important; }
+                    .ftl-results-header { flex-direction: column !important; gap: 10px; }
+                    .ftl-stats-grid { grid-template-columns: 1fr !important; }
+                    .ftl-cte-kde-grid { grid-template-columns: 1fr !important; }
+                    .ftl-results-actions { flex-direction: column !important; }
+                    .ftl-results-actions button { width: 100%; justify-content: center; }
+                    .ftl-whats-next-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+                    .ftl-sources-grid { grid-template-columns: 1fr !important; }
+                }
+            `}</style>
         </div>
     );
 }

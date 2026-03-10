@@ -52,7 +52,7 @@ export default function HowSignupWorks({ setView, VIEWS }) {
         After creating your account, you&apos;ll register your facilities, scope your food categories, and start logging CTE events. The next steps are where the real work begins.
       </InfoCallout>
 
-      <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
+      <div className="onb-nav-row" style={{ marginTop: 16, display: "flex", justifyContent: "space-between" }}>
         <button
           onClick={() => setView(VIEWS.HOW_INVITE)}
           style={{
