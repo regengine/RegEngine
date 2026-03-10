@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
@@ -12,6 +12,7 @@ from ...fsma_metrics import record_trace_query
 from ...fsma_utils import (
     TraceResult,
     get_lot_timeline,
+    query_events_by_range,
     trace_backward,
     trace_forward,
 )
@@ -250,6 +251,93 @@ async def link_obligation_endpoint(
         await linker.close()
         logger.error("link_obligation_failed", obligation_id=obligation_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search/events")
+async def search_traceability_events(
+    start_date: Optional[str] = Query(
+        default=None,
+        description="Start date (YYYY-MM-DD). Defaults to 30 days ago.",
+    ),
+    end_date: Optional[str] = Query(
+        default=None,
+        description="End date (YYYY-MM-DD). Defaults to today.",
+    ),
+    product_contains: Optional[str] = Query(
+        default=None,
+        max_length=120,
+        description="Case-insensitive product description filter.",
+    ),
+    facility_contains: Optional[str] = Query(
+        default=None,
+        max_length=120,
+        description="Case-insensitive facility name/address/GLN filter.",
+    ),
+    cte_type: Optional[str] = Query(
+        default=None,
+        max_length=32,
+        description="Optional CTE type filter (RECEIVING, SHIPPING, etc).",
+    ),
+    limit: int = Query(100, ge=1, le=500),
+    starting_after: Optional[str] = Query(
+        default=None,
+        max_length=128,
+        description="Cursor based on event_id from the prior page.",
+    ),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    api_key=Depends(require_api_key),
+):
+    """
+    Search traceability events by date range + optional product/facility/CTE filters.
+
+    This endpoint is optimized for NLP query adapters and dashboard search UIs.
+    """
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    client = Neo4jClient(database=db_name)
+
+    now = datetime.now(timezone.utc).date()
+    effective_end = end_date or now.isoformat()
+    effective_start = start_date or (now - timedelta(days=30)).isoformat()
+    normalized_cte = cte_type.upper() if cte_type else None
+
+    try:
+        events = await query_events_by_range(
+            client,
+            effective_start,
+            effective_end,
+            str(tenant_id),
+            product_contains=product_contains,
+            facility_contains=facility_contains,
+            cte_type=normalized_cte,
+            limit=limit + 1,
+            starting_after=starting_after,
+        )
+        await client.close()
+
+        has_more = len(events) > limit
+        page_events = events[:limit]
+        next_cursor = page_events[-1]["event_id"] if has_more and page_events else None
+
+        return {
+            "count": len(page_events),
+            "events": page_events,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "filters": {
+                "start_date": effective_start,
+                "end_date": effective_end,
+                "product_contains": product_contains,
+                "facility_contains": facility_contains,
+                "cte_type": normalized_cte,
+            },
+        }
+    except Exception as exc:
+        logger.exception(
+            "traceability_search_error",
+            error=str(exc),
+            tenant_id=str(tenant_id),
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================

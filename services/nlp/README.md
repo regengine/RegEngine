@@ -52,3 +52,29 @@ python -m pytest tests/nlp/test_llm_extractor.py -v
 ```
 
 For PDF text extraction, `pdfminer.six` is included in the `[nlp]` extras.
+
+## Traceability Query API (Phase 4)
+
+NLP service now exposes a deterministic natural-language query endpoint:
+
+- `POST /api/v1/query/traceability`
+
+### Request
+
+```json
+{
+  "query": "show me all lettuce from Supplier X in the last 30 days",
+  "limit": 50
+}
+```
+
+### Behavior
+
+- Uses rule-based intent parsing (no LLM calls in v1).
+- Converts natural language into an allowlisted query plan.
+- Delegates execution to graph-service FSMA endpoints.
+- Returns `answer`, `results`, `evidence`, `confidence`, and `warnings`.
+
+### Required scope
+
+- API key must include `graph.query` (or wildcard equivalent).

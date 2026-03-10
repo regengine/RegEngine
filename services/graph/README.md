@@ -115,6 +115,33 @@ Authorization: Bearer <token>
 }
 ```
 
+### FSMA Traceability Event Search
+
+```http
+GET /api/v1/fsma/traceability/search/events?start_date=2026-02-01&end_date=2026-03-01&product_contains=lettuce&facility_contains=Supplier%20X&cte_type=RECEIVING&limit=100
+X-RegEngine-API-Key: <api-key>
+```
+
+**Response:**
+```json
+{
+  "count": 2,
+  "events": [
+    {"event_id": "evt-1", "type": "RECEIVING"},
+    {"event_id": "evt-2", "type": "RECEIVING"}
+  ],
+  "has_more": false,
+  "next_cursor": null,
+  "filters": {
+    "start_date": "2026-02-01",
+    "end_date": "2026-03-01",
+    "product_contains": "lettuce",
+    "facility_contains": "Supplier X",
+    "cte_type": "RECEIVING"
+  }
+}
+```
+
 ## Cypher Queries
 
 ### Find Shortest Path Between Frameworks
