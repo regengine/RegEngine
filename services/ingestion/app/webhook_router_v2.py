@@ -395,7 +395,7 @@ async def ingest_events(
     # Rate limiting
     _check_rate_limit(x_regengine_api_key or "anonymous")
 
-    # Resolve tenant: payload > API-key lookup > fallback
+    # Resolve tenant: payload > API-key lookup
     tenant_id = payload.tenant_id
     if not tenant_id and x_regengine_api_key:
         try:
@@ -412,7 +412,8 @@ async def ingest_events(
         except Exception:
             pass
     if not tenant_id:
-        tenant_id = "5946c58f-ddf9-4db0-9baa-acb11c6fce91"  # demo fallback
+        logger.error("Webhook rejected: no tenant_id resolved")
+        raise HTTPException(status_code=400, detail="Tenant context required")
     results: list[EventResult] = []
     accepted = 0
     rejected = 0
@@ -570,7 +571,7 @@ async def ingest_events(
     ),
 )
 async def verify_chain(
-    tenant_id: str = "5946c58f-ddf9-4db0-9baa-acb11c6fce91",
+    tenant_id: str,
 ):
     """Verify the integrity of the tenant's hash chain."""
     db_session = None
