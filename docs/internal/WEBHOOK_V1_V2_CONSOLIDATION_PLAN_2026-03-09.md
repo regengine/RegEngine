@@ -1,7 +1,7 @@
 # Webhook Router v1/v2 Consolidation Plan
 
 **Date:** March 9, 2026  
-**Status:** Phase 2 complete (v1 shim landed)
+**Status:** Phase 3 complete (v1 retired)
 
 ## Goal
 
@@ -10,7 +10,7 @@ Consolidate ingestion webhook logic onto `webhook_router_v2.py` without breaking
 ## Current State
 
 - `services/ingestion/main.py` mounts **v2** router: `app.webhook_router_v2.router`.
-- Legacy `webhook_router.py` is **not mounted** but was still used as a helper import source (`_verify_api_key`, `ingest_events`).
+- Legacy `webhook_router.py` has been removed.
 - Internal modules now use a stable compat surface:
   - `services/ingestion/app/webhook_compat.py`
 
@@ -43,16 +43,16 @@ Consolidate ingestion webhook logic onto `webhook_router_v2.py` without breaking
 3. Added one-time deprecation logging in the v1 shim to make remaining usage visible without log spam.
 4. Added targeted shim tests in `services/ingestion/tests/test_webhook_router_shim.py`.
 
-## Phase 3 (Final cleanup)
+## Phase 3 (Completed)
 
-1. Remove any remaining references to `webhook_router.py`.
-2. Keep `webhook_compat.py` as the only helper import surface for non-router modules.
-3. Delete `webhook_router.py` after one full release cycle with no v1 shim usage telemetry.
-4. Document deprecation completion in release notes.
+1. Removed all remaining code imports of `app.webhook_router`.
+2. Kept `webhook_compat.py` as the only helper import surface for non-router modules.
+3. Deleted `services/ingestion/app/webhook_router.py`.
+4. Removed obsolete shim-only tests tied to the deleted module.
 
 ## Verification Checklist
 
 - [x] `services/ingestion/tests/test_epcis_ingestion_api.py`
 - [x] `services/ingestion/tests/test_recall_simulations_api.py`
-- [x] `services/ingestion/tests/test_webhook_router_shim.py`
+- [x] removal verified: no direct imports of `app.webhook_router` outside `webhook_compat.py`
 - [ ] targeted API smoke tests for CSV and Sensitech ingest paths
