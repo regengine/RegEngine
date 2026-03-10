@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, FileText, CheckCircle, Clock, Zap, Accessibility, Layout } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
 export default function ChangelogPage() {
@@ -219,38 +219,6 @@ export default function ChangelogPage() {
                     </div>
                 </section>
 
-                {/* Roadmap Preview */}
-                <section style={{
-                    background: T.surface,
-                    border: `1px solid ${T.border}`,
-                    borderRadius: '8px',
-                    padding: '24px',
-                }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '16px' }}>
-                        <Clock style={{ width: 18, height: 18, display: 'inline', verticalAlign: 'middle', marginRight: '8px' }} />
-                        Coming Next
-                    </h3>
-
-                    <div className="grid gap-3">
-                        {[
-                            { item: 'Python & Node.js SDKs', quarter: 'Q2 2026' },
-                            { item: 'Webhook notifications', quarter: 'Q2 2026' },
-                            { item: 'Finance vertical (SOX 404, SEC)', quarter: 'Q2 2026' },
-                            { item: 'Energy vertical (NERC CIP-013)', quarter: 'Q2 2026' },
-                        ].map((item) => (
-                            <div key={item.item} style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                padding: '8px 0',
-                                borderBottom: `1px solid ${T.border}`,
-                            }}>
-                                <span style={{ color: T.text, fontSize: '14px' }}>{item.item}</span>
-                                <span style={{ color: T.textMuted, fontSize: '12px' }}>{item.quarter}</span>
-                            </div>
-                        ))}
-                    </div>
-                </section>
             </div>
         </div>
     );

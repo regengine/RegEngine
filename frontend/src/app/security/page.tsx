@@ -89,25 +89,15 @@ const securityFeatures = [
     },
 ];
 
-const roadmapItems = [
-    // Shipped (Current)
+const securityControls = [
     { item: "Data encryption at rest (AES-256)", status: "implemented", timeline: "Current" },
     { item: "TLS 1.3 in transit", status: "implemented", timeline: "Current" },
     { item: "Branch protection (required reviews, no force-push)", status: "implemented", timeline: "Current" },
-    // Shipped
     { item: "CI security scanning (SAST, secrets, deps, DAST)", status: "implemented", timeline: "Current" },
     { item: "Vulnerability Disclosure Policy + security.txt", status: "implemented", timeline: "Current" },
     { item: "Audit log export (tamper-evident)", status: "implemented", timeline: "Current" },
     { item: "Hardening gates: auth + tenant isolation in CI", status: "implemented", timeline: "Current" },
     { item: "Incident response plan (internal)", status: "implemented", timeline: "Current" },
-    // Next (Q2 2026)
-    { item: "OWASP ZAP authenticated scans (full flows)", status: "planned", timeline: "Q2 2026" },
-    { item: "Penetration testing (third-party)", status: "planned", timeline: "Q2 2026" },
-    { item: "SSO / SAML integration", status: "planned", timeline: "Q3 2026" },
-    { item: "API rate limiting + edge protection (WAF)", status: "planned", timeline: "Q2 2026" },
-    { item: "Container image scanning (Trivy)", status: "planned", timeline: "Q2 2026" },
-    // Audit Track
-    { item: "SOC 2 Type II", status: "in-preparation", timeline: "2026" },
 ];
 
 export default function SecurityPage() {
@@ -122,8 +112,6 @@ export default function SecurityPage() {
         implemented: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Implemented" },
         implementing: { bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)", text: "var(--re-warning)", label: "Implementing" },
         "in-progress": { bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)", text: "var(--re-info)", label: "In Progress" },
-        "in-preparation": { bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.2)", text: "var(--re-accent-purple)", label: "In Preparation" },
-        planned: { bg: T.elevated, border: T.border, text: T.textDim, label: "Planned" },
     };
 
     return (
@@ -158,7 +146,7 @@ export default function SecurityPage() {
                         <span className="text-re-brand">Verify us.</span>
                     </h1>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
-                        Security in compliance software shouldn't be a marketing claim — it should be independently auditable. Here's exactly what we've built, what we've verified, and what's still on the roadmap. No hand-waving.
+                        Security in compliance software shouldn't be a marketing claim — it should be independently auditable. Here's exactly what we've built and verified in production today.
                     </p>
                 </div>
             </section>
@@ -254,17 +242,17 @@ export default function SecurityPage() {
                 </div>
             </section>
 
-            {/* Roadmap */}
+            {/* Security Controls */}
             <section className="relative z-[2] max-w-[720px] mx-auto py-[60px] px-6 pb-20">
                 <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 8px" }}>
-                    Security roadmap
+                    Security controls in production
                 </h2>
                 <p style={{ fontSize: "14px", color: T.textMuted, margin: "0 0 24px" }}>
-                    We're honest about what's done and what's planned. No checkmarks we haven't earned.
+                    Controls below are implemented and running in the current platform.
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {roadmapItems.map((item, i) => {
+                    {securityControls.map((item, i) => {
                         const s = statusColors[item.status];
                         return (
                             <div

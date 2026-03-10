@@ -90,7 +90,7 @@ const PRICING_TIERS = [
             { text: 'Dedicated implementation plan', included: true },
             { text: 'Custom SLA + security review support', included: true },
             { text: 'Advanced integration and data architecture', included: true },
-            { text: 'Executive sponsor + quarterly roadmap reviews', included: true },
+            { text: 'Executive sponsor + quarterly strategic reviews', included: true },
         ],
     },
 ];
@@ -109,7 +109,7 @@ const FAQ = [
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
     { q: 'Do you offer pilot engagements?', a: 'Yes. We run structured pilot engagements for qualified teams preparing for retailer and FDA traceability requirements.' },
     { q: 'Do you offer annual contracts?', a: 'Yes. Annual contracts are available for all plans.' },
-    { q: 'What integrations are available?', a: 'We support GS1 EPCIS 2.0 and REST APIs for any ERP/WMS today. SAP and Oracle connectors are on the roadmap.' },
+    { q: 'What integrations are available?', a: 'We support GS1 EPCIS 2.0 and REST APIs for ERP/WMS integrations today, with custom connector scoping available during enterprise onboarding.' },
 ];
 
 export default function PricingPage() {
