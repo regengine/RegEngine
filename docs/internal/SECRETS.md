@@ -193,6 +193,40 @@ kubectl rollout restart deployment/graph-service
 kubectl rollout restart deployment/opportunity-api
 ```
 
+**MinIO / S3 Access Key Pair (if used outside LocalStack):**
+```bash
+# 1. Generate new values
+NEW_MINIO_ACCESS_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))')
+NEW_MINIO_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+
+# 2. Update secret manager entries used by ingestion/admin services
+aws secretsmanager update-secret \
+  --secret-id regengine/minio-access-key \
+  --secret-string "$NEW_MINIO_ACCESS_KEY"
+
+aws secretsmanager update-secret \
+  --secret-id regengine/minio-secret-key \
+  --secret-string "$NEW_MINIO_SECRET_KEY"
+
+# 3. Restart services that read S3/MinIO credentials
+kubectl rollout restart deployment/ingestion-service
+kubectl rollout restart deployment/admin-service
+```
+
+## March 2026 Rotation Closeout Checklist
+
+Use this checklist when closing a suspected secret exposure incident.
+
+- [ ] Confirm `.env` is not tracked now:
+  - `git ls-files .env`
+- [ ] Check whether `.env` ever appeared in commit history:
+  - `git log -- .env`
+- [ ] Rotate `ADMIN_MASTER_KEY` in secrets manager and restart `admin-service`.
+- [ ] Rotate `NEO4J_PASSWORD` in Neo4j + secrets manager and restart graph-dependent services.
+- [ ] Rotate MinIO/S3 access keys (if non-LocalStack credentials are used) and restart affected services.
+- [ ] Invalidate/revoke any stale API keys issued during the exposure window.
+- [ ] Record rotation timestamp, operator, and ticket/incident ID in the ops tracker.
+
 ## API Key Rotation
 
 **For clients:**
