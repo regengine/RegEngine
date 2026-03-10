@@ -107,6 +107,10 @@ app.include_router(csv_router)
 from app.sensitech_parser import router as sensitech_router
 app.include_router(sensitech_router)
 
+# EDI 856 Inbound
+from app.edi_ingestion import router as edi_router
+app.include_router(edi_router)
+
 # Compliance Score
 from app.compliance_score import router as score_router
 app.include_router(score_router)
@@ -130,6 +134,10 @@ app.include_router(export_router)
 # EPCIS 2.0 Ingestion
 from app.epcis_ingestion import router as epcis_ingestion_router
 app.include_router(epcis_ingestion_router)
+
+# B2B Exchange API (EPCIS shipping package handoff)
+from app.exchange_api import router as exchange_router
+app.include_router(exchange_router)
 
 # Stripe Billing
 from app.stripe_billing import router as billing_router

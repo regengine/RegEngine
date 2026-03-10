@@ -81,7 +81,7 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
 **Admin Service** — 74 endpoints covering auth, tenants, supplier onboarding, facility management, compliance scoring, TLC management, FDA export, and snapshots.
 
-**Ingestion Service** — 130+ endpoints across 20 route modules:
+**Ingestion Service** — 130+ endpoints across 22 route modules:
 
 | Prefix | Module | Purpose |
 |--------|--------|---------|
@@ -90,8 +90,10 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 | `/api/v1/billing` | stripe_billing.py | Plans, checkout, subscriptions |
 | `/api/v1/compliance` | compliance_score.py | Real-time scoring with breakdown |
 | `/api/v1/epcis` | epcis_ingestion.py | GS1 EPCIS 2.0 JSON-LD ingestion |
+| `/api/v1/exchange` | exchange_api.py | B2B shipping KDE package send/receive |
 | `/api/v1/export` | epcis_export.py | EPCIS export (Walmart, Kroger formats) |
 | `/api/v1/fda` | fda_export_router.py | FDA-sortable CSV/JSON export |
+| `/api/v1/ingest/edi` | edi_ingestion.py | Partner-authenticated EDI 856 inbound ingest |
 | `/api/v1/ingest/iot` | sensitech_parser.py | IoT sensor data (SensiTech) |
 | `/api/v1/notifications` | notification_prefs.py | Channels, quiet hours, escalation |
 | `/api/v1/onboarding` | onboarding.py | Guided setup steps |
