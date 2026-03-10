@@ -10,6 +10,9 @@ This directory contains FSMA-first sales assets and design-partner operating tem
 - `design_partner_demo_script.md` - 15-minute live demo script and operator checklist
 - `design_partner_feedback_scorecard.md` - structured post-demo interview and qualification scorecard
 - `design_partner_outreach_tracker_template.csv` - outreach and follow-up tracking template
+- `design_partner_targets_2026-03-10.md` - source-backed target account shortlist for outbound
+- `design_partner_outreach_messages_2026-03-10.md` - personalized first-touch email and LinkedIn drafts
+- `design_partner_outreach_week_of_2026-03-10.csv` - ready-to-run tracker rows for this week's targets
 
 Related runbook:
 - `docs/runbooks/design_partner_funnel_operating_rhythm.md` - daily/weekly funnel review process tied to live `/v1/admin/funnel` metrics
