@@ -6,12 +6,15 @@ FSMA 204 response improvements with RegEngine.
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.webhook_compat import _verify_api_key
@@ -222,6 +225,102 @@ def _get_simulation_or_404(simulation_id: str) -> dict:
     return simulation
 
 
+def _build_export_payload(simulation_id: str, simulation: dict) -> dict:
+    return {
+        "simulation_id": simulation_id,
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "format": "application/json",
+        **simulation,
+    }
+
+
+def _csv_rows_for_view(simulation: dict, view: str) -> list[dict]:
+    metrics = simulation["metrics"]
+    scenario = metrics.get("scenario", "")
+
+    if view == "summary":
+        return [
+            {
+                "simulation_id": simulation["id"],
+                "scenario_id": simulation["scenario_id"],
+                "scenario_name": scenario,
+                "contaminant": metrics.get("contaminant"),
+                "total_lots_in_system": metrics.get("total_lots_in_system"),
+                "affected_lots": metrics.get("affected_lots"),
+                "affected_locations": metrics.get("affected_locations"),
+                "states_affected": metrics.get("states_affected"),
+                "baseline_response_hours": metrics.get("without_regengine", {}).get("response_time_hours"),
+                "regengine_response_minutes": metrics.get("with_regengine", {}).get("response_time_minutes"),
+                "time_reduction_percent": metrics.get("time_reduction_percent"),
+                "created_at": simulation.get("created_at"),
+            }
+        ]
+
+    if view == "timeline":
+        rows: list[dict] = []
+        for item in metrics.get("timeline", []):
+            rows.append(
+                {
+                    "simulation_id": simulation["id"],
+                    "scenario_id": simulation["scenario_id"],
+                    "scenario_name": scenario,
+                    "timestamp": item.get("timestamp"),
+                    "event": item.get("event"),
+                    "location": item.get("location"),
+                    "status": item.get("status"),
+                }
+            )
+        return rows
+
+    if view == "impact_graph":
+        rows = []
+        for link in metrics.get("supply_chain_graph", {}).get("links", []):
+            rows.append(
+                {
+                    "simulation_id": simulation["id"],
+                    "scenario_id": simulation["scenario_id"],
+                    "scenario_name": scenario,
+                    "source": link.get("source"),
+                    "target": link.get("target"),
+                    "affected": bool(link.get("affected")),
+                    "lot_codes": ",".join(link.get("lot_codes", [])),
+                }
+            )
+        return rows
+
+    # contact_list
+    rows = []
+    for node in metrics.get("supply_chain_graph", {}).get("nodes", []):
+        if not node.get("affected"):
+            continue
+        rows.append(
+            {
+                "simulation_id": simulation["id"],
+                "scenario_id": simulation["scenario_id"],
+                "scenario_name": scenario,
+                "facility_id": node.get("id"),
+                "facility_name": node.get("name"),
+                "facility_type": node.get("type"),
+                "state": node.get("state"),
+                "lot_count": node.get("lot_count"),
+                "notification_priority": "high",
+            }
+        )
+    return rows
+
+
+def _build_csv_export(simulation: dict, view: str) -> str:
+    rows = _csv_rows_for_view(simulation, view=view)
+    output = io.StringIO()
+    if not rows:
+        return output.getvalue()
+
+    writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerows(rows)
+    return output.getvalue()
+
+
 @router.get("/scenarios", summary="List available simulation scenarios")
 async def list_scenarios(_: None = Depends(_verify_api_key)):
     scenarios = [
@@ -304,18 +403,24 @@ async def get_simulation_impact_graph(
 @router.get("/{simulation_id}/export", summary="Export simulation report")
 async def export_simulation(
     simulation_id: str,
+    format: Literal["json", "csv"] = Query(default="json"),
+    view: Literal["summary", "timeline", "impact_graph", "contact_list"] = Query(default="summary"),
     _: None = Depends(_verify_api_key),
 ):
     simulation = _get_simulation_or_404(simulation_id)
-    export_payload = {
-        "simulation_id": simulation_id,
-        "exported_at": datetime.now(timezone.utc).isoformat(),
-        "format": "application/json",
-        **simulation,
-    }
+
+    if format == "csv":
+        csv_content = _build_csv_export(simulation, view=view)
+        filename = f"recall_simulation_{simulation_id}_{view}.csv"
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    export_payload = _build_export_payload(simulation_id, simulation)
+    export_payload["view"] = view
     return JSONResponse(
         content=export_payload,
-        headers={
-            "Content-Disposition": f'attachment; filename="recall_simulation_{simulation_id}.json"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="recall_simulation_{simulation_id}.json"'},
     )

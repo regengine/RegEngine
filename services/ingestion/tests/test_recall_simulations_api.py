@@ -68,3 +68,47 @@ def test_unknown_scenario_returns_400(client: TestClient) -> None:
         json={"scenario_id": "unknown-scenario"},
     )
     assert response.status_code == 400
+
+
+def test_export_simulation_json_and_csv_views(client: TestClient) -> None:
+    run_response = client.post(
+        "/api/v1/simulations/run",
+        json={"scenario_id": "romaine-ecoli"},
+    )
+    assert run_response.status_code == 201
+    simulation_id = run_response.json()["id"]
+
+    json_export = client.get(f"/api/v1/simulations/{simulation_id}/export")
+    assert json_export.status_code == 200
+    assert "attachment; filename=" in json_export.headers["content-disposition"]
+    json_payload = json_export.json()
+    assert json_payload["format"] == "application/json"
+    assert json_payload["simulation_id"] == simulation_id
+
+    csv_summary = client.get(
+        f"/api/v1/simulations/{simulation_id}/export",
+        params={"format": "csv", "view": "summary"},
+    )
+    assert csv_summary.status_code == 200
+    assert csv_summary.headers["content-type"].startswith("text/csv")
+    summary_text = csv_summary.text
+    assert "scenario_name" in summary_text
+    assert "time_reduction_percent" in summary_text
+
+    csv_timeline = client.get(
+        f"/api/v1/simulations/{simulation_id}/export",
+        params={"format": "csv", "view": "timeline"},
+    )
+    assert csv_timeline.status_code == 200
+    timeline_text = csv_timeline.text
+    assert "timestamp,event,location,status" in timeline_text
+    assert "Contaminant introduced at source lot" in timeline_text
+
+    csv_contacts = client.get(
+        f"/api/v1/simulations/{simulation_id}/export",
+        params={"format": "csv", "view": "contact_list"},
+    )
+    assert csv_contacts.status_code == 200
+    contacts_text = csv_contacts.text
+    assert "facility_name" in contacts_text
+    assert "notification_priority" in contacts_text
