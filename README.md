@@ -87,7 +87,7 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 |--------|--------|---------|
 | `/api/v1/alerts` | alerts.py | Alert rules, triggers, acknowledgement |
 | `/api/v1/audit-log` | audit_log.py | Immutable SHA-256 verified event log |
-| `/api/v1/billing` | stripe_billing.py | Plans, checkout, subscriptions |
+| `/api/v1/billing` | stripe_billing.py | Plans, checkout, customer portal, invoices, subscriptions |
 | `/api/v1/compliance` | compliance_score.py | Real-time scoring with breakdown |
 | `/api/v1/epcis` | epcis_ingestion.py | GS1 EPCIS 2.0 JSON-LD ingestion |
 | `/api/v1/exchange` | exchange_api.py | B2B shipping KDE package send/receive |

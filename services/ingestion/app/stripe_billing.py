@@ -15,11 +15,13 @@ from typing import Any, Optional
 import httpx
 import redis
 import stripe
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from app.authz import IngestionPrincipal, get_ingestion_principal, require_permission
 from app.config import get_settings
 from app.webhook_compat import _verify_api_key
+from shared.permissions import has_permission
 
 logger = logging.getLogger("stripe-billing")
 
@@ -134,6 +136,57 @@ class SubscriptionStatus(BaseModel):
     events_limit: int = 0
     facilities_used: int = 0
     facilities_limit: int = 0
+
+
+class BillingPortalRequest(BaseModel):
+    """Request payload for creating a Stripe customer portal session."""
+
+    tenant_id: Optional[str] = Field(default=None, description="Tenant ID override for legacy/master keys")
+    tenant_name: Optional[str] = Field(default=None, description="Tenant display name for first-time Stripe customer creation")
+    customer_email: Optional[str] = Field(default=None, description="Billing contact email for first-time Stripe customer creation")
+    return_url: Optional[str] = Field(default=None, description="Optional Stripe portal return URL override")
+
+
+class BillingPortalResponse(BaseModel):
+    """Response payload for customer portal session creation."""
+
+    portal_url: str
+    tenant_id: str
+    customer_id: str
+
+
+class InvoiceSummary(BaseModel):
+    """Flattened Stripe invoice summary for billing UI/API clients."""
+
+    invoice_id: str
+    amount_due: int
+    amount_paid: int
+    currency: str
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    pdf_url: Optional[str] = None
+    hosted_invoice_url: Optional[str] = None
+
+
+class InvoiceListResponse(BaseModel):
+    """Paginated invoice list response."""
+
+    tenant_id: str
+    customer_id: str
+    invoices: list[InvoiceSummary]
+    has_more: bool
+    next_cursor: Optional[str] = None
+
+
+class InvoicePdfResponse(BaseModel):
+    """Invoice PDF lookup response."""
+
+    tenant_id: str
+    invoice_id: str
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    pdf_url: str
+    hosted_invoice_url: Optional[str] = None
 
 
 def _normalize_plan_id(plan_id: str) -> str:
@@ -280,6 +333,131 @@ def _format_period_end(epoch_seconds: Optional[int]) -> Optional[str]:
     if not epoch_seconds:
         return None
     return datetime.fromtimestamp(epoch_seconds, tz=timezone.utc).isoformat()
+
+
+def _normalize_scope(scope: str) -> str:
+    return scope.strip().lower().replace(":", ".")
+
+
+def _principal_role(principal: IngestionPrincipal) -> str:
+    normalized_scopes = [_normalize_scope(scope) for scope in principal.scopes]
+    if has_permission(normalized_scopes, "*") or any(scope.startswith("admin") for scope in normalized_scopes):
+        return "admin"
+    if any(scope.endswith((".write", ".ingest", ".export", ".verify")) for scope in normalized_scopes):
+        return "operator"
+    return "viewer"
+
+
+def _enforce_admin_or_operator(principal: IngestionPrincipal, required_permission: str) -> None:
+    if _principal_role(principal) == "viewer":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Insufficient role for invoice access: "
+                f"requires admin/operator role with '{required_permission}'"
+            ),
+        )
+
+
+def _resolve_tenant_context(
+    explicit_tenant_id: Optional[str],
+    x_tenant_id: Optional[str],
+    principal: Optional[IngestionPrincipal] = None,
+) -> str:
+    resolved = (explicit_tenant_id or x_tenant_id or (principal.tenant_id if principal else None) or "").strip()
+    if not resolved:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    return resolved
+
+
+def _stripe_get(payload: Any, key: str, default: Any = None) -> Any:
+    if isinstance(payload, dict):
+        return payload.get(key, default)
+    return getattr(payload, key, default)
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _create_portal_session(customer_id: str, return_url: str) -> Any:
+    """Create Stripe portal session across SDK variants."""
+    portal_namespace = getattr(stripe, "billing_portal", None)
+    sessions_api = getattr(portal_namespace, "sessions", None)
+    if sessions_api and hasattr(sessions_api, "create"):
+        return sessions_api.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+
+    session_api = getattr(portal_namespace, "Session", None)
+    if session_api and hasattr(session_api, "create"):
+        return session_api.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+
+    raise HTTPException(status_code=500, detail="Stripe billing portal API is unavailable")
+
+
+def _create_customer_for_tenant(
+    tenant_id: str,
+    tenant_name: Optional[str],
+    customer_email: Optional[str],
+) -> str:
+    try:
+        customer = stripe.Customer.create(
+            email=customer_email,
+            name=tenant_name or f"Tenant {tenant_id}",
+            metadata={"tenant_id": tenant_id},
+        )
+    except stripe.error.StripeError as exc:
+        logger.error("stripe_customer_create_failed", tenant_id=tenant_id, error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Stripe customer creation failed: {exc.user_message or str(exc)}",
+        ) from exc
+
+    customer_id = str(_stripe_get(customer, "id", "") or "")
+    if not customer_id:
+        raise HTTPException(status_code=502, detail="Stripe customer creation returned no customer ID")
+    return customer_id
+
+
+def _ensure_customer_mapping(
+    tenant_id: str,
+    tenant_name: Optional[str],
+    customer_email: Optional[str],
+) -> str:
+    mapping = _get_subscription_mapping(tenant_id)
+    customer_id = str(mapping.get("customer_id") or "").strip()
+    if customer_id:
+        return customer_id
+
+    customer_id = _create_customer_for_tenant(
+        tenant_id=tenant_id,
+        tenant_name=tenant_name,
+        customer_email=customer_email,
+    )
+
+    _store_subscription_mapping(
+        tenant_id,
+        {
+            "tenant_id": tenant_id,
+            "session_id": mapping.get("session_id", ""),
+            "customer_id": customer_id,
+            "subscription_id": mapping.get("subscription_id", ""),
+            "plan_id": mapping.get("plan_id", "none"),
+            "billing_period": mapping.get("billing_period", "monthly"),
+            "status": mapping.get("status", "none"),
+            "customer_email": mapping.get("customer_email", "") or (customer_email or ""),
+            "current_period_end": mapping.get("current_period_end", ""),
+        },
+    )
+    return customer_id
 
 
 async def _handle_checkout_completed(session: dict[str, Any]) -> None:
@@ -590,34 +768,227 @@ async def stripe_webhook(
 
 
 @router.post(
-    "/portal/{tenant_id}",
+    "/portal",
+    response_model=BillingPortalResponse,
     summary="Create Stripe customer portal session",
-    description="Creates a Stripe customer portal session for managing subscriptions.",
+    description=(
+        "Creates a tenant-scoped Stripe customer portal session and returns a redirect URL. "
+        "If the tenant has no linked Stripe customer yet, creates one first."
+    ),
 )
-async def create_portal_session(
-    tenant_id: str,
-    _: None = Depends(_verify_api_key),
-) -> dict[str, str]:
-    """Create Stripe customer portal session for self-service billing management."""
+async def create_portal_session_for_tenant(
+    request: BillingPortalRequest,
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+) -> BillingPortalResponse:
+    """Create Stripe customer portal session for self-service billing changes."""
     _configure_stripe()
 
-    mapping = _get_subscription_mapping(tenant_id)
-    customer_id = mapping.get("customer_id")
+    tenant_id = _resolve_tenant_context(request.tenant_id, x_tenant_id, principal)
+    return_url = request.return_url or os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
+
+    try:
+        customer_id = _ensure_customer_mapping(
+            tenant_id=tenant_id,
+            tenant_name=request.tenant_name,
+            customer_email=request.customer_email,
+        )
+    except redis.RedisError as exc:
+        logger.error("portal_customer_lookup_failed", tenant_id=tenant_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    try:
+        session = _create_portal_session(customer_id=customer_id, return_url=return_url)
+    except stripe.error.StripeError as exc:
+        logger.error("portal_session_create_failed", tenant_id=tenant_id, error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Stripe portal creation failed: {exc.user_message or str(exc)}",
+        ) from exc
+
+    portal_url = str(_stripe_get(session, "url", "") or "")
+    if not portal_url:
+        raise HTTPException(status_code=502, detail="Stripe portal creation failed: missing portal URL")
+
+    return BillingPortalResponse(
+        portal_url=portal_url,
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+    )
+
+
+@router.get(
+    "/invoices",
+    response_model=InvoiceListResponse,
+    summary="List tenant Stripe invoices",
+    description=(
+        "Lists Stripe invoices for the tenant-linked customer with cursor pagination "
+        "using Stripe's starting_after parameter."
+    ),
+)
+async def list_invoices(
+    tenant_id: Optional[str] = Query(default=None, description="Tenant ID override for legacy/master keys"),
+    limit: int = Query(default=25, ge=1, le=100),
+    starting_after: Optional[str] = Query(default=None, description="Stripe pagination cursor"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("billing.invoices.read")),
+) -> InvoiceListResponse:
+    """List Stripe invoices for a tenant's customer record."""
+    _configure_stripe()
+    _enforce_admin_or_operator(principal, "billing.invoices.read")
+
+    resolved_tenant_id = _resolve_tenant_context(tenant_id, x_tenant_id, principal)
+    try:
+        mapping = _get_subscription_mapping(resolved_tenant_id)
+    except redis.RedisError as exc:
+        logger.error("invoice_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    customer_id = str(mapping.get("customer_id") or "").strip()
     if not customer_id:
         raise HTTPException(status_code=404, detail="No Stripe customer is linked to this tenant")
+
+    list_kwargs: dict[str, Any] = {
+        "customer": customer_id,
+        "limit": limit,
+    }
+    if starting_after:
+        list_kwargs["starting_after"] = starting_after
+
+    try:
+        page = stripe.Invoice.list(**list_kwargs)
+    except stripe.error.StripeError as exc:
+        logger.error("invoice_list_failed", tenant_id=resolved_tenant_id, customer_id=customer_id, error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Stripe invoice list failed: {exc.user_message or str(exc)}",
+        ) from exc
+
+    invoices: list[InvoiceSummary] = []
+    for raw_invoice in list(_stripe_get(page, "data", []) or []):
+        invoice_id = str(_stripe_get(raw_invoice, "id", "") or "")
+        if not invoice_id:
+            continue
+
+        invoices.append(
+            InvoiceSummary(
+                invoice_id=invoice_id,
+                amount_due=_coerce_int(_stripe_get(raw_invoice, "amount_due")),
+                amount_paid=_coerce_int(_stripe_get(raw_invoice, "amount_paid")),
+                currency=str(_stripe_get(raw_invoice, "currency", "usd") or "usd"),
+                status=_stripe_get(raw_invoice, "status"),
+                created_at=_format_period_end(_coerce_int(_stripe_get(raw_invoice, "created"))),
+                pdf_url=_stripe_get(raw_invoice, "invoice_pdf"),
+                hosted_invoice_url=_stripe_get(raw_invoice, "hosted_invoice_url"),
+            )
+        )
+
+    has_more = bool(_stripe_get(page, "has_more", False))
+    next_cursor = invoices[-1].invoice_id if has_more and invoices else None
+
+    return InvoiceListResponse(
+        tenant_id=resolved_tenant_id,
+        customer_id=customer_id,
+        invoices=invoices,
+        has_more=has_more,
+        next_cursor=next_cursor,
+    )
+
+
+@router.get(
+    "/invoices/{invoice_id}/pdf",
+    response_model=InvoicePdfResponse,
+    summary="Get Stripe invoice PDF URL",
+    description=(
+        "Fetches a Stripe invoice by ID and returns the hosted invoice PDF URL for the tenant."
+    ),
+)
+async def get_invoice_pdf(
+    invoice_id: str,
+    tenant_id: Optional[str] = Query(default=None, description="Tenant ID override for legacy/master keys"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    principal: IngestionPrincipal = Depends(require_permission("billing.invoices.read")),
+) -> InvoicePdfResponse:
+    """Return Stripe-hosted invoice PDF URL for an authorized tenant."""
+    _configure_stripe()
+    _enforce_admin_or_operator(principal, "billing.invoices.read")
+
+    resolved_tenant_id = _resolve_tenant_context(tenant_id, x_tenant_id, principal)
+    try:
+        mapping = _get_subscription_mapping(resolved_tenant_id)
+    except redis.RedisError as exc:
+        logger.error("invoice_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    customer_id = str(mapping.get("customer_id") or "").strip()
+    if not customer_id:
+        raise HTTPException(status_code=404, detail="No Stripe customer is linked to this tenant")
+
+    try:
+        invoice = stripe.Invoice.retrieve(invoice_id)
+    except stripe.error.InvalidRequestError as exc:
+        raise HTTPException(status_code=404, detail=f"Invoice '{invoice_id}' was not found") from exc
+    except stripe.error.StripeError as exc:
+        logger.error("invoice_retrieve_failed", invoice_id=invoice_id, tenant_id=resolved_tenant_id, error=str(exc))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Stripe invoice retrieval failed: {exc.user_message or str(exc)}",
+        ) from exc
+
+    invoice_customer_id = str(_stripe_get(invoice, "customer", "") or "").strip()
+    if invoice_customer_id and invoice_customer_id != customer_id:
+        raise HTTPException(status_code=404, detail="Invoice not found for tenant")
+
+    pdf_url = str(_stripe_get(invoice, "invoice_pdf", "") or "").strip()
+    if not pdf_url:
+        raise HTTPException(status_code=404, detail=f"Invoice '{invoice_id}' does not have a PDF URL")
+
+    return InvoicePdfResponse(
+        tenant_id=resolved_tenant_id,
+        invoice_id=str(_stripe_get(invoice, "id", invoice_id) or invoice_id),
+        status=_stripe_get(invoice, "status"),
+        created_at=_format_period_end(_coerce_int(_stripe_get(invoice, "created"))),
+        pdf_url=pdf_url,
+        hosted_invoice_url=_stripe_get(invoice, "hosted_invoice_url"),
+    )
+
+
+@router.post(
+    "/portal/{tenant_id}",
+    summary="Create Stripe customer portal session",
+    description="Legacy endpoint. Creates a Stripe customer portal session for managing subscriptions.",
+)
+async def create_portal_session_legacy(
+    tenant_id: str,
+    _: None = Depends(_verify_api_key),
+) -> BillingPortalResponse:
+    """Create Stripe customer portal session for self-service billing management."""
+    _configure_stripe()
 
     return_url = os.getenv("STRIPE_PORTAL_RETURN_URL", DEFAULT_PORTAL_RETURN_URL)
 
     try:
-        session = stripe.billing_portal.Session.create(
-            customer=customer_id,
-            return_url=return_url,
+        customer_id = _ensure_customer_mapping(
+            tenant_id=tenant_id,
+            tenant_name=None,
+            customer_email=None,
         )
+    except redis.RedisError as exc:
+        logger.error("portal_customer_lookup_failed", tenant_id=tenant_id, error=str(exc))
+        raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    try:
+        session = _create_portal_session(customer_id=customer_id, return_url=return_url)
     except stripe.error.StripeError as exc:
         logger.error("portal_session_create_failed", tenant_id=tenant_id, error=str(exc))
         raise HTTPException(status_code=502, detail=f"Stripe portal creation failed: {exc.user_message or str(exc)}") from exc
 
-    return {
-        "portal_url": session.url,
-        "tenant_id": tenant_id,
-    }
+    portal_url = str(_stripe_get(session, "url", "") or "")
+    if not portal_url:
+        raise HTTPException(status_code=502, detail="Stripe portal creation failed: missing portal URL")
+
+    return BillingPortalResponse(
+        portal_url=portal_url,
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+    )
