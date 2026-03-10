@@ -13,7 +13,12 @@ export function MarketingFooter() {
     const pathname = usePathname();
 
     // Hide global footer on standalone mobile app and dashboard routes
-    if (pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding')) {
+    if (
+        pathname === '/mobile/capture' ||
+        pathname === '/fsma/field-capture' ||
+        pathname.startsWith('/dashboard') ||
+        pathname.startsWith('/onboarding')
+    ) {
         return null;
     }
 
