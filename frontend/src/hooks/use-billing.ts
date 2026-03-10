@@ -6,6 +6,7 @@
  */
 
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { getServiceURL } from '@/lib/api-config';
 
 const BILLING_API_BASE =
     typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -30,6 +31,81 @@ async function billingFetch<T>(path: string, options?: RequestInit): Promise<T> 
     }
 
     return res.json();
+}
+
+function getApiKey(): string {
+    if (typeof window === 'undefined') {
+        return process.env.NEXT_PUBLIC_API_KEY || '';
+    }
+    return (
+        localStorage.getItem('regengine_api_key') ||
+        localStorage.getItem('re-api-key') ||
+        process.env.NEXT_PUBLIC_API_KEY ||
+        ''
+    );
+}
+
+function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
+    if (typeof window === 'undefined') {
+        return {};
+    }
+
+    const tenantId = localStorage.getItem('regengine_tenant_id') || undefined;
+    const rawUser = localStorage.getItem('regengine_user');
+    if (!rawUser) {
+        return { tenantId };
+    }
+
+    try {
+        const parsed = JSON.parse(rawUser) as { email?: string };
+        return { tenantId, customerEmail: parsed.email };
+    } catch {
+        return { tenantId };
+    }
+}
+
+async function createIngestionCheckout(
+    params: { tier_id: string; billing_cycle?: string; credit_code?: string },
+): Promise<CheckoutSessionData> {
+    const { tenantId, customerEmail } = getCheckoutContext();
+    const billingCycle = params.billing_cycle || 'annual';
+    const res = await fetch(`${getServiceURL('ingestion')}/api/v1/billing/checkout`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-RegEngine-API-Key': getApiKey(),
+        },
+        body: JSON.stringify({
+            plan_id: params.tier_id,
+            billing_period: billingCycle,
+            tenant_id: tenantId,
+            customer_email: customerEmail,
+        }),
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || `Billing API error: ${res.status}`);
+    }
+
+    const payload = await res.json() as {
+        session_id: string;
+        checkout_url: string;
+        plan: string;
+        billing_period: string;
+        amount: number;
+    };
+
+    return {
+        session_id: payload.session_id,
+        checkout_url: payload.checkout_url,
+        tier: payload.plan,
+        billing_cycle: payload.billing_period,
+        subtotal: String(payload.amount),
+        credits_applied: null,
+        total: String(payload.amount),
+        sandbox_mode: false,
+    };
 }
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -147,15 +223,7 @@ export function useCreateCheckout() {
         Error,
         { tier_id: string; billing_cycle?: string; credit_code?: string }
     >({
-        mutationFn: (params) =>
-            billingFetch('/v1/billing/checkout/session', {
-                method: 'POST',
-                body: JSON.stringify({
-                    tier_id: params.tier_id,
-                    billing_cycle: params.billing_cycle || 'annual',
-                    credit_code: params.credit_code,
-                }),
-            }),
+        mutationFn: createIngestionCheckout,
     });
 }
 

@@ -429,6 +429,22 @@ class APIClient {
   }
 
   // Auth API
+  async signup(email: string, password: string, tenantName: string): Promise<LoginResponse> {
+    const { data } = await this.adminClient.post('/auth/signup', {
+      email,
+      password,
+      tenant_name: tenantName,
+    });
+    if (data.access_token) {
+      this.setAccessToken(data.access_token);
+      this.setUser(data.user);
+      if (data.tenant_id) {
+        this.setCurrentTenant(data.tenant_id);
+      }
+    }
+    return data;
+  }
+
   async login(email: string, password: string): Promise<LoginResponse> {
     const { data } = await this.adminClient.post('/auth/login', { email, password });
     if (data.access_token) {

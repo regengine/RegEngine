@@ -15,6 +15,8 @@ pytest.importorskip("fastapi")
 from app.epcis_ingestion import _epcis_idempotency_index, _epcis_store, router as epcis_ingestion_router
 from app.webhook_compat import _verify_api_key
 
+TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
+
 
 @pytest.fixture()
 def client() -> TestClient:
@@ -60,21 +62,32 @@ def test_validate_and_ingest_epcis_event(client: TestClient) -> None:
     validate_payload = validate_response.json()
     assert validate_payload["valid"] is True
 
-    ingest_response = client.post("/api/v1/epcis/events", json=VALID_EPCIS_EVENT)
+    ingest_response = client.post(
+        "/api/v1/epcis/events",
+        params={"tenant_id": TEST_TENANT_ID},
+        json=VALID_EPCIS_EVENT,
+    )
     assert ingest_response.status_code == 201
     ingest_payload = ingest_response.json()
     assert ingest_payload["cte_id"]
     assert ingest_payload["validation_status"] == "valid"
     assert ingest_payload["idempotent"] is False
 
-    second_ingest = client.post("/api/v1/epcis/events", json=VALID_EPCIS_EVENT)
+    second_ingest = client.post(
+        "/api/v1/epcis/events",
+        params={"tenant_id": TEST_TENANT_ID},
+        json=VALID_EPCIS_EVENT,
+    )
     assert second_ingest.status_code == 200
     second_payload = second_ingest.json()
     assert second_payload["cte_id"] == ingest_payload["cte_id"]
     assert second_payload["idempotent"] is True
 
     event_id = ingest_payload["cte_id"]
-    get_response = client.get(f"/api/v1/epcis/events/{event_id}")
+    get_response = client.get(
+        f"/api/v1/epcis/events/{event_id}",
+        params={"tenant_id": TEST_TENANT_ID},
+    )
     assert get_response.status_code == 200
     event_payload = get_response.json()
     assert event_payload["normalized_cte"]["tlc"] == "LOT-2026-ROM-0042"
@@ -88,6 +101,7 @@ def test_batch_ingest_with_mixed_validity(client: TestClient) -> None:
 
     response = client.post(
         "/api/v1/epcis/events/batch",
+        params={"tenant_id": TEST_TENANT_ID},
         json={"events": [VALID_EPCIS_EVENT, invalid_event]},
     )
     assert response.status_code == 207
@@ -95,16 +109,23 @@ def test_batch_ingest_with_mixed_validity(client: TestClient) -> None:
     assert payload["created"] >= 0
     assert payload["failed"] == 1
 
-    empty_batch_response = client.post("/api/v1/epcis/events/batch", json={"events": []})
+    empty_batch_response = client.post(
+        "/api/v1/epcis/events/batch",
+        params={"tenant_id": TEST_TENANT_ID},
+        json={"events": []},
+    )
     assert empty_batch_response.status_code == 400
 
-    export_response = client.get("/api/v1/epcis/export")
+    export_response = client.get("/api/v1/epcis/export", params={"tenant_id": TEST_TENANT_ID})
     assert export_response.status_code == 200
     export_payload = export_response.json()
     assert export_payload["type"] == "EPCISDocument"
     assert len(export_payload["epcisBody"]["eventList"]) >= 1
 
-    filtered_response = client.get("/api/v1/epcis/export", params={"product_id": "non-existent"})
+    filtered_response = client.get(
+        "/api/v1/epcis/export",
+        params={"tenant_id": TEST_TENANT_ID, "product_id": "non-existent"},
+    )
     assert filtered_response.status_code == 200
     filtered_payload = filtered_response.json()
     assert filtered_payload["metadata"]["filters"]["product_id"] == "non-existent"

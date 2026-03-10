@@ -1,24 +1,18 @@
 """
 Alerts Router.
 
-Automated compliance alerts and notifications system. Monitors
-traceability events and triggers alerts for:
-- Missing KDEs
-- Overdue CTE entries
-- Temperature excursions
-- Chain integrity failures
-- Supplier portal link expiry
-- FDA records request deadline approaching
+Reads real tenant alerts from Postgres instead of static demo payloads.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
@@ -28,11 +22,10 @@ router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts & Notifications"])
 
 
 class AlertRule(BaseModel):
-    """Alert rule definition."""
     id: str
     name: str
-    category: str  # compliance, temperature, chain, deadline
-    severity: str  # critical, warning, info
+    category: str
+    severity: str
     description: str
     enabled: bool = True
     notify_email: bool = True
@@ -41,7 +34,6 @@ class AlertRule(BaseModel):
 
 
 class Alert(BaseModel):
-    """A triggered alert instance."""
     id: str
     rule_id: str
     rule_name: str
@@ -57,14 +49,12 @@ class Alert(BaseModel):
 
 
 class AlertsResponse(BaseModel):
-    """Response with alerts list."""
     tenant_id: str
     total: int
     unacknowledged: int
     alerts: list[Alert]
 
 
-# Default rules
 DEFAULT_RULES: list[AlertRule] = [
     AlertRule(
         id="kde-missing",
@@ -78,7 +68,7 @@ DEFAULT_RULES: list[AlertRule] = [
         name="Overdue CTE Entry",
         category="compliance",
         severity="warning",
-        description="Triggered when expected CTE entries (Shipping, Receiving) are not recorded within the configured time window",
+        description="Triggered when expected CTE entries are not recorded within the configured time window",
         threshold="4 hours",
     ),
     AlertRule(
@@ -94,14 +84,14 @@ DEFAULT_RULES: list[AlertRule] = [
         name="Hash Chain Break",
         category="chain",
         severity="critical",
-        description="Triggered when SHA-256 hash chain verification detects a gap or mismatch",
+        description="Triggered when hash-chain verification detects a mismatch",
     ),
     AlertRule(
         id="portal-expiry",
         name="Supplier Portal Link Expiring",
         category="deadline",
         severity="info",
-        description="Triggered 48 hours before a supplier portal link expires",
+        description="Triggered before a supplier portal link expires",
         threshold="48 hours",
     ),
     AlertRule(
@@ -109,101 +99,142 @@ DEFAULT_RULES: list[AlertRule] = [
         name="FDA Records Request Deadline",
         category="deadline",
         severity="critical",
-        description="Triggered when an active mock audit drill is within 4 hours of the 24-hour deadline",
+        description="Triggered when a mock audit drill approaches the 24-hour response deadline",
         threshold="4 hours",
-    ),
-    AlertRule(
-        id="compliance-drop",
-        name="Compliance Score Drop",
-        category="compliance",
-        severity="warning",
-        description="Triggered when compliance score drops below the configured threshold",
-        threshold="Grade C",
-    ),
-    AlertRule(
-        id="event-volume-spike",
-        name="Event Volume Anomaly",
-        category="compliance",
-        severity="info",
-        description="Triggered when daily event volume deviates significantly from the 7-day average",
-        threshold="2x average",
     ),
 ]
 
-# In-memory storage
-_alerts_store: dict[str, list[Alert]] = {}
+
+def _get_db_session():
+    try:
+        from shared.database import SessionLocal
+
+        db = SessionLocal()
+    except Exception as exc:
+        logger.error("alerts_db_session_init_failed", error=str(exc))
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    return db
 
 
-# Sample alerts for demo (generated per tenant on first request)
-def _generate_sample_alerts(tenant_id: str) -> list[Alert]:
-    now = datetime.now(timezone.utc)
-    return [
-        Alert(
-            id=f"{tenant_id}-alert-001",
-            rule_id="kde-missing",
-            rule_name="Missing Key Data Elements",
-            severity="warning",
-            category="compliance",
-            title="Missing GLN on Receiving CTE",
-            message="Receiving event for TLC ROM-0226-A1-001 is missing the ship-from GLN. Required per 21 CFR 1.1345(a)(3).",
-            triggered_at=(now - timedelta(hours=2)).isoformat(),
-            metadata={"tlc": "ROM-0226-A1-001", "missing_kde": "ship_from_gln", "cte_type": "receiving"},
-        ),
-        Alert(
-            id=f"{tenant_id}-alert-002",
-            rule_id="temp-excursion",
-            rule_name="Temperature Excursion",
-            severity="critical",
-            category="temperature",
-            title="Temperature Excursion — Atlantic Salmon",
-            message="IoT sensor detected temperature of 8.2°C for SAL-0226-B1-007 (threshold: 5°C). Product may need quarantine assessment.",
-            triggered_at=(now - timedelta(minutes=45)).isoformat(),
-            metadata={"tlc": "SAL-0226-B1-007", "temperature": 8.2, "threshold": 5.0, "sensor_id": "TT-2026-003"},
-        ),
-        Alert(
-            id=f"{tenant_id}-alert-003",
-            rule_id="cte-overdue",
-            rule_name="Overdue CTE Entry",
-            severity="warning",
-            category="compliance",
-            title="Receiving CTE Overdue — Shipment #SHP-20260226-04",
-            message="Expected Receiving CTE for shipment SHP-20260226-04 (Roma Tomatoes) has not been recorded. Shipment departed 6 hours ago.",
-            triggered_at=(now - timedelta(hours=1)).isoformat(),
-            metadata={"shipment_id": "SHP-20260226-04", "product": "Roma Tomatoes", "departed_hours_ago": 6},
-        ),
-        Alert(
-            id=f"{tenant_id}-alert-004",
-            rule_id="compliance-drop",
-            rule_name="Compliance Score Drop",
-            severity="warning",
-            category="compliance",
-            title="Compliance Score Dropped to C",
-            message="Your compliance readiness score has dropped from B (82%) to C (71%). Primary factor: KDE completeness decreased due to missing GLN records.",
-            triggered_at=(now - timedelta(hours=5)).isoformat(),
-            acknowledged=True,
-            acknowledged_at=(now - timedelta(hours=4)).isoformat(),
-            acknowledged_by="jsmith@example.com",
-            metadata={"previous_grade": "B", "current_grade": "C", "primary_factor": "kde_completeness"},
-        ),
-        Alert(
-            id=f"{tenant_id}-alert-005",
-            rule_id="portal-expiry",
-            rule_name="Supplier Portal Link Expiring",
-            severity="info",
-            category="deadline",
-            title="Supplier Link Expiring — Valley Fresh Farms",
-            message="Portal link for supplier 'Valley Fresh Farms' expires in 36 hours. 3 of 5 pending submissions not yet received.",
-            triggered_at=(now - timedelta(hours=12)).isoformat(),
-            metadata={"supplier": "Valley Fresh Farms", "hours_remaining": 36, "pending_submissions": 3},
-        ),
-    ]
+def _load_alert_columns(db_session) -> set[str]:
+    rows = db_session.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'fsma'
+              AND table_name = 'compliance_alerts'
+            """
+        )
+    ).fetchall()
+    return {row[0] for row in rows}
+
+
+def _category_for_alert_type(alert_type: str) -> str:
+    normalized = (alert_type or "").lower()
+    if "temp" in normalized:
+        return "temperature"
+    if "deadline" in normalized or "expiry" in normalized:
+        return "deadline"
+    if "chain" in normalized:
+        return "chain"
+    return "compliance"
+
+
+def _rule_name(alert_type: str) -> str:
+    if not alert_type:
+        return "Compliance Alert"
+    return alert_type.replace("_", " ").strip().title()
+
+
+def _to_iso(value: Any) -> str:
+    if value is None:
+        return datetime.now(timezone.utc).isoformat()
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc).isoformat()
+        return value.astimezone(timezone.utc).isoformat()
+    return str(value)
+
+
+def _fetch_alerts_from_db(db_session, tenant_id: str) -> list[Alert]:
+    columns = _load_alert_columns(db_session)
+    if not columns:
+        return []
+
+    tenant_col = "tenant_id" if "tenant_id" in columns else ("org_id" if "org_id" in columns else None)
+    if tenant_col is None:
+        logger.warning("alerts_table_missing_tenant_scope_column")
+        return []
+
+    alert_type_col = "alert_type" if "alert_type" in columns else None
+    message_col = "message" if "message" in columns else ("description" if "description" in columns else None)
+    title_col = "title" if "title" in columns else None
+    resolved_col = "resolved" if "resolved" in columns else ("acknowledged" if "acknowledged" in columns else None)
+    resolved_at_col = "resolved_at" if "resolved_at" in columns else ("acknowledged_at" if "acknowledged_at" in columns else None)
+    resolved_by_col = "resolved_by" if "resolved_by" in columns else ("acknowledged_by" if "acknowledged_by" in columns else None)
+    details_col = "details" if "details" in columns else ("metadata" if "metadata" in columns else None)
+    event_ref_col = next(
+        (name for name in ("cte_event_id", "event_id", "entity_id") if name in columns),
+        None,
+    )
+
+    sql = f"""
+        SELECT
+            id::text AS alert_id,
+            {alert_type_col if alert_type_col else "NULL"} AS alert_type,
+            severity,
+            {title_col if title_col else "NULL"} AS title,
+            {message_col if message_col else "NULL"} AS message,
+            created_at,
+            {resolved_col if resolved_col else "false"} AS resolved,
+            {resolved_at_col if resolved_at_col else "NULL"} AS resolved_at,
+            {resolved_by_col if resolved_by_col else "NULL"} AS resolved_by,
+            {details_col if details_col else "NULL"} AS details,
+            {event_ref_col if event_ref_col else "NULL"}::text AS event_ref
+        FROM fsma.compliance_alerts
+        WHERE {tenant_col} = :tenant_id
+        ORDER BY created_at DESC
+        LIMIT 200
+    """
+
+    rows = db_session.execute(text(sql), {"tenant_id": tenant_id}).fetchall()
+
+    alerts: list[Alert] = []
+    for row in rows:
+        details = row.details if isinstance(row.details, dict) else {}
+        if row.event_ref:
+            details = {**details, "event_id": row.event_ref}
+
+        alert_type = row.alert_type or "compliance_alert"
+        rule_id = alert_type
+        rule_name = _rule_name(alert_type)
+        message = row.message or row.title or rule_name
+
+        alerts.append(
+            Alert(
+                id=row.alert_id,
+                rule_id=rule_id,
+                rule_name=rule_name,
+                severity=row.severity or "warning",
+                category=_category_for_alert_type(alert_type),
+                title=row.title or rule_name,
+                message=message,
+                triggered_at=_to_iso(row.created_at),
+                acknowledged=bool(row.resolved),
+                acknowledged_at=_to_iso(row.resolved_at) if row.resolved_at else None,
+                acknowledged_by=str(row.resolved_by) if row.resolved_by else None,
+                metadata=details,
+            )
+        )
+
+    return alerts
 
 
 @router.get(
     "/{tenant_id}",
     response_model=AlertsResponse,
     summary="Get alerts for a tenant",
-    description="Returns all alerts for the given tenant, ordered by most recent first.",
 )
 async def get_alerts(
     tenant_id: str,
@@ -212,24 +243,20 @@ async def get_alerts(
     acknowledged: Optional[bool] = None,
     _: None = Depends(_verify_api_key),
 ) -> AlertsResponse:
-    """Get alerts for a tenant with optional filtering."""
-    if tenant_id not in _alerts_store:
-        _alerts_store[tenant_id] = _generate_sample_alerts(tenant_id)
+    db_session = _get_db_session()
+    try:
+        alerts = _fetch_alerts_from_db(db_session, tenant_id)
+    finally:
+        db_session.close()
 
-    alerts = _alerts_store[tenant_id]
-
-    # Apply filters
     if severity:
-        alerts = [a for a in alerts if a.severity == severity]
+        alerts = [alert for alert in alerts if alert.severity == severity]
     if category:
-        alerts = [a for a in alerts if a.category == category]
+        alerts = [alert for alert in alerts if alert.category == category]
     if acknowledged is not None:
-        alerts = [a for a in alerts if a.acknowledged == acknowledged]
+        alerts = [alert for alert in alerts if alert.acknowledged == acknowledged]
 
-    # Sort by most recent first
-    alerts.sort(key=lambda a: a.triggered_at, reverse=True)
-
-    unack = sum(1 for a in _alerts_store[tenant_id] if not a.acknowledged)
+    unack = sum(1 for alert in alerts if not alert.acknowledged)
 
     return AlertsResponse(
         tenant_id=tenant_id,
@@ -248,58 +275,70 @@ async def acknowledge_alert(
     alert_id: str,
     _: None = Depends(_verify_api_key),
 ):
-    """Mark an alert as acknowledged."""
-    if tenant_id not in _alerts_store:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    db_session = _get_db_session()
+    try:
+        columns = _load_alert_columns(db_session)
+        tenant_col = "tenant_id" if "tenant_id" in columns else ("org_id" if "org_id" in columns else None)
+        if tenant_col is None:
+            raise HTTPException(status_code=500, detail="Alerts table does not expose tenant scope")
+        if "resolved" not in columns:
+            raise HTTPException(status_code=501, detail="Alert acknowledgement is not supported by this schema")
 
-    for alert in _alerts_store[tenant_id]:
-        if alert.id == alert_id:
-            alert.acknowledged = True
-            alert.acknowledged_at = datetime.now(timezone.utc).isoformat()
-            return {"acknowledged": True, "alert_id": alert_id}
+        update_sql = f"""
+            UPDATE fsma.compliance_alerts
+            SET resolved = true,
+                resolved_at = NOW()
+            WHERE id = :alert_id
+              AND {tenant_col} = :tenant_id
+              AND (resolved IS NULL OR resolved = false)
+            RETURNING id
+        """
+        row = db_session.execute(
+            text(update_sql),
+            {"alert_id": alert_id, "tenant_id": tenant_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Alert not found")
 
-    raise HTTPException(status_code=404, detail="Alert not found")
+        db_session.commit()
+        return {"acknowledged": True, "alert_id": alert_id}
+    finally:
+        db_session.close()
 
 
 @router.get(
     "/{tenant_id}/rules",
     summary="Get alert rules",
-    description="Returns the alert rules configured for the tenant.",
 )
 async def get_alert_rules(
     tenant_id: str,
     _: None = Depends(_verify_api_key),
 ):
-    """Get alert rules for a tenant."""
-    return {"tenant_id": tenant_id, "rules": [r.model_dump() for r in DEFAULT_RULES]}
+    return {"tenant_id": tenant_id, "rules": [rule.model_dump() for rule in DEFAULT_RULES]}
 
 
 @router.get(
     "/{tenant_id}/summary",
     summary="Get alert summary",
-    description="Returns a summary of alert counts by severity and category.",
 )
 async def get_alert_summary(
     tenant_id: str,
     _: None = Depends(_verify_api_key),
 ):
-    """Get alert summary for dashboard widgets."""
-    if tenant_id not in _alerts_store:
-        _alerts_store[tenant_id] = _generate_sample_alerts(tenant_id)
+    db_session = _get_db_session()
+    try:
+        alerts = _fetch_alerts_from_db(db_session, tenant_id)
+    finally:
+        db_session.close()
 
-    alerts = _alerts_store[tenant_id]
-
-    # Count by severity
-    by_severity = {}
-    for a in alerts:
-        by_severity[a.severity] = by_severity.get(a.severity, 0) + 1
-
-    # Count by category
-    by_category = {}
-    for a in alerts:
-        by_category[a.category] = by_category.get(a.category, 0) + 1
-
-    unack = sum(1 for a in alerts if not a.acknowledged)
+    by_severity: dict[str, int] = {}
+    by_category: dict[str, int] = {}
+    unack = 0
+    for alert in alerts:
+        by_severity[alert.severity] = by_severity.get(alert.severity, 0) + 1
+        by_category[alert.category] = by_category.get(alert.category, 0) + 1
+        if not alert.acknowledged:
+            unack += 1
 
     return {
         "tenant_id": tenant_id,

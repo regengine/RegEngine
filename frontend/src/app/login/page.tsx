@@ -325,6 +325,12 @@ export default function LoginPage() {
                                 )}
 
                                 <div className="pt-2 text-center text-sm text-muted-foreground">
+                                    <p className="mb-2">
+                                        New here?{" "}
+                                        <Link href="/signup" className="font-medium text-[var(--re-brand)] hover:underline">
+                                            Create an account
+                                        </Link>
+                                    </p>
                                     <Link href="/" className="flex items-center justify-center gap-2 transition-colors hover:text-primary">
                                         <LayoutDashboard className="h-4 w-4" />
                                         Return to public site
