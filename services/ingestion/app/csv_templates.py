@@ -23,7 +23,7 @@ from app.webhook_models import (
     WebhookCTEType,
     WebhookPayload,
 )
-from app.webhook_router_v2 import _verify_api_key, ingest_events
+from app.webhook_compat import _verify_api_key, ingest_events
 
 logger = logging.getLogger("csv-templates")
 
@@ -176,6 +176,7 @@ async def ingest_csv(
     source: str = Form("csv_upload", description="Source identifier"),
     tenant_id: Optional[str] = Form(None, description="Tenant ID"),
     _: None = Depends(_verify_api_key),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ):
     """Ingest a CSV file of CTE events."""
     cte_type = cte_type.lower()
@@ -245,7 +246,10 @@ async def ingest_csv(
 
     # Reuse webhook ingestion pipeline
     payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
-    response = await ingest_events(payload)
+    response = await ingest_events(
+        payload,
+        x_regengine_api_key=x_regengine_api_key,
+    )
 
     # Add parse errors to the first rejected event if any
     if parse_errors:

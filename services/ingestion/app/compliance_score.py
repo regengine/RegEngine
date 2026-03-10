@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
-from app.webhook_router import _verify_api_key
+from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("compliance-score")
 

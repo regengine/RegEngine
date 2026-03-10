@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
-from app.webhook_router import _verify_api_key
+from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("stripe-billing")
 

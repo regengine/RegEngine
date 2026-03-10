@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.webhook_router import _verify_api_key
+from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("epcis-export")
 

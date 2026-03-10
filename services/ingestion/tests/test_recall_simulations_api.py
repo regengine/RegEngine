@@ -13,7 +13,7 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 from app.recall_simulations import _simulation_store, router as recall_simulations_router
-from app.webhook_router import _verify_api_key
+from app.webhook_compat import _verify_api_key
 
 
 @pytest.fixture()
