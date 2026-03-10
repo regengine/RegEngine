@@ -236,9 +236,9 @@ Does the platform offer a credible free-to-paid path that lets prospects experie
 
 | Feature | File | Status |
 |---------|------|--------|
-| CTE ingestion + validation | `webhook_router.py` | ✅ Live |
-| SHA-256 event hashing | `webhook_router.py` (lines 76–96) | ✅ Live |
-| Chain hashing | `webhook_router.py` (_chain_state) | ⚠️ In-memory |
+| CTE ingestion + validation | `webhook_router_v2.py` | ✅ Live |
+| SHA-256 event hashing | `webhook_router_v2.py` | ✅ Live |
+| Chain hashing | `webhook_router_v2.py` + `services/shared/cte_persistence.py` | ✅ Postgres-backed |
 | FDA 30-col CSV export | `fda_export_router.py` | ✅ Live |
 | Export audit log | `fda_export_router.py` | ✅ Live |
 | EPCIS 2.0 JSON-LD export | `epcis_export.py` | ⚠️ Sample data only |

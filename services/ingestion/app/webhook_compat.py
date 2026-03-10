@@ -1,8 +1,8 @@
 """Compatibility helpers for webhook auth and ingestion.
 
-This module is the stable import surface for non-router ingestion modules while
-`webhook_router.py` (legacy v1) is being retired and `webhook_router_v2.py`
-remains the mounted HTTP router.
+This module is the stable import surface for non-router ingestion modules.
+Legacy `webhook_router.py` has been retired; `webhook_router_v2.py` remains
+the mounted HTTP router.
 """
 
 from __future__ import annotations
