@@ -13,6 +13,7 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 from app.authz import IngestionPrincipal, get_ingestion_principal
+import app.authz as authz
 import app.exchange_api as exchange_api
 from app.exchange_api import _exchange_store, router as exchange_router
 
@@ -143,3 +144,34 @@ def test_send_denied_without_exchange_write_scope(monkeypatch: pytest.MonkeyPatc
 
     assert response.status_code == 403
     assert "requires 'exchange.write'" in response.json()["detail"]
+
+
+def test_send_rate_limited_returns_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = FastAPI()
+    app.include_router(exchange_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="tenant-limited-key",
+        tenant_id="00000000-0000-0000-0000-000000000111",
+        scopes=["exchange.write"],
+        auth_mode="test",
+    )
+
+    monkeypatch.setattr(
+        authz,
+        "consume_tenant_rate_limit",
+        lambda **_kwargs: (False, 0),
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.post(
+            "/api/v1/exchange/send",
+            params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+            json={
+                "receiver_tenant_id": "00000000-0000-0000-0000-000000000222",
+                "event_ids": ["evt-1"],
+            },
+        )
+
+    assert response.status_code == 429
+    assert "Rate limit exceeded" in response.json()["detail"]
+    assert response.headers["x-ratelimit-scope"] == "exchange.write"

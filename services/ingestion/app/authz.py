@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hmac
+import os
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Request
@@ -14,6 +16,7 @@ from app.config import get_settings
 from shared.auth import APIKey, require_api_key
 from shared.api_key_store import APIKeyResponse
 from shared.permissions import has_permission
+from shared.tenant_rate_limiting import consume_tenant_rate_limit
 
 
 class IngestionPrincipal(BaseModel):
@@ -23,6 +26,89 @@ class IngestionPrincipal(BaseModel):
     scopes: list[str] = Field(default_factory=list)
     tenant_id: Optional[str] = None
     auth_mode: str = "scoped_key"
+
+
+_ACTION_BASE_RPM: dict[str, int] = {
+    "read": 180,
+    "write": 90,
+    "ingest": 75,
+    "export": 90,
+    "verify": 45,
+}
+
+_ROLE_MULTIPLIER: dict[str, float] = {
+    "viewer": 1.0,
+    "operator": 1.5,
+    "admin": 3.0,
+}
+
+
+def _normalize_permission(permission: str) -> str:
+    return permission.strip().lower().replace(":", ".")
+
+
+def _principal_rate_limit_role(principal: IngestionPrincipal) -> str:
+    normalized_scopes = [_normalize_permission(scope) for scope in principal.scopes]
+    if has_permission(normalized_scopes, "*") or any(scope.startswith("admin") for scope in normalized_scopes):
+        return "admin"
+    if any(
+        scope.endswith((".write", ".ingest", ".export", ".verify"))
+        for scope in normalized_scopes
+    ):
+        return "operator"
+    return "viewer"
+
+
+@lru_cache(maxsize=1)
+def _rate_limit_overrides() -> dict[str, int]:
+    """
+    Parse optional per-scope RPM overrides.
+
+    Format:
+        INGESTION_RBAC_RATE_LIMITS="fda.export=60,exchange.read=240"
+    """
+    raw = os.getenv("INGESTION_RBAC_RATE_LIMITS", "").strip()
+    if not raw:
+        return {}
+
+    overrides: dict[str, int] = {}
+    for item in raw.split(","):
+        token = item.strip()
+        if not token or "=" not in token:
+            continue
+        scope_raw, value_raw = token.split("=", 1)
+        scope = _normalize_permission(scope_raw)
+        try:
+            value = int(value_raw.strip())
+        except ValueError:
+            continue
+        overrides[scope] = max(1, value)
+    return overrides
+
+
+def _rpm_for_permission(required_permission: str, principal: IngestionPrincipal) -> int:
+    required = _normalize_permission(required_permission)
+    action = required.split(".")[-1] if "." in required else required
+    default_rpm = max(1, int(os.getenv("INGESTION_RBAC_RATE_LIMIT_DEFAULT_RPM", "120")))
+    base_rpm = _rate_limit_overrides().get(required, _ACTION_BASE_RPM.get(action, default_rpm))
+
+    role = _principal_rate_limit_role(principal)
+    multiplier = _ROLE_MULTIPLIER.get(role, 1.0)
+    return max(1, int(round(base_rpm * multiplier)))
+
+
+def _rate_limit_window_seconds() -> int:
+    return max(1, int(os.getenv("INGESTION_RBAC_RATE_LIMIT_WINDOW_SECONDS", "60")))
+
+
+def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> str:
+    if principal.tenant_id:
+        return principal.tenant_id
+    if request.headers.get("X-Tenant-ID"):
+        return str(request.headers["X-Tenant-ID"])
+    if request.query_params.get("tenant_id"):
+        return str(request.query_params["tenant_id"])
+    return "global"
 
 
 def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrincipal:
@@ -149,9 +235,38 @@ def require_permission(required_permission: str):
     """FastAPI dependency factory enforcing a required permission scope."""
 
     async def _dependency(
+        request: Request,
         principal: IngestionPrincipal = Depends(get_ingestion_principal),
     ) -> IngestionPrincipal:
         if has_permission(principal.scopes, required_permission):
+            tenant_id = _tenant_for_rate_limit(request, principal)
+            window = _rate_limit_window_seconds()
+            rpm = _rpm_for_permission(required_permission, principal)
+            role = _principal_rate_limit_role(principal)
+            scope = _normalize_permission(required_permission)
+
+            allowed, remaining = consume_tenant_rate_limit(
+                tenant_id=tenant_id,
+                bucket_suffix=f"rbac.{scope}.{role}",
+                limit=rpm,
+                window=window,
+            )
+            if not allowed:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded for tenant '{tenant_id}' on '{scope}'",
+                    headers={
+                        "Retry-After": str(window),
+                        "X-RateLimit-Limit": str(rpm),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Tenant": tenant_id,
+                        "X-RateLimit-Scope": scope,
+                    },
+                )
+
+            # Keep remaining available for downstream handlers/logging if needed.
+            request.state.rate_limit_remaining = remaining
+            request.state.rate_limit_scope = scope
             return principal
         raise HTTPException(
             status_code=403,
