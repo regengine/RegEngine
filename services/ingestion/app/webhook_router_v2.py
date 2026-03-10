@@ -22,6 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.config import get_settings
+from shared.funnel_events import emit_funnel_event
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
 from app.webhook_models import (
     EventResult,
@@ -553,6 +554,17 @@ async def ingest_events(
                     errors=[f"Storage error: {str(e)}"],
                 ))
                 rejected += 1
+
+        if accepted > 0:
+            emit_funnel_event(
+                tenant_id=tenant_id,
+                event_name="first_ingest",
+                metadata={
+                    "accepted_events": accepted,
+                    "source": payload.source,
+                },
+                db_session=db_session,
+            )
 
         # Commit all events in a single transaction
         if db_session:

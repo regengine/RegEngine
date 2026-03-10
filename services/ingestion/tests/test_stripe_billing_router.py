@@ -47,6 +47,7 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+    captured_funnel: dict[str, object] = {}
 
     captured = {}
 
@@ -59,6 +60,11 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
         return _Session()
 
     monkeypatch.setattr(stripe_billing.stripe.checkout.Session, "create", _fake_create)
+    monkeypatch.setattr(
+        stripe_billing,
+        "emit_funnel_event",
+        lambda **kwargs: captured_funnel.update(kwargs) or True,
+    )
 
     response = await stripe_billing.create_checkout(
         stripe_billing.CheckoutRequest(
@@ -76,6 +82,8 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     assert captured["metadata"]["tenant_id"] == "tenant-1"
     assert captured["metadata"]["plan_id"] == "growth"
     assert captured["customer_email"] == "ops@example.com"
+    assert captured_funnel["tenant_id"] == "tenant-1"
+    assert captured_funnel["event_name"] == "checkout_started"
 
 
 @pytest.mark.asyncio
@@ -209,6 +217,12 @@ async def test_invoice_payment_failed_marks_subscription_past_due(monkeypatch):
 async def test_invoice_paid_updates_period_end_and_payment_metadata(monkeypatch):
     fake_redis = _FakeRedis()
     monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
+    captured_funnel: dict[str, object] = {}
+    monkeypatch.setattr(
+        stripe_billing,
+        "emit_funnel_event",
+        lambda **kwargs: captured_funnel.update(kwargs) or True,
+    )
 
     stripe_billing._store_subscription_mapping(
         "tenant-777",
@@ -246,6 +260,8 @@ async def test_invoice_paid_updates_period_end_and_payment_metadata(monkeypatch)
     assert mapping["last_invoice_id"] == "in_777"
     assert mapping["last_payment_at"] == "2023-11-14T22:21:40+00:00"
     assert mapping["current_period_end"] == "2023-11-14T22:30:00+00:00"
+    assert captured_funnel["tenant_id"] == "tenant-777"
+    assert captured_funnel["event_name"] == "payment_completed"
 
 
 @pytest.mark.parametrize("path", ["/api/v1/billing/webhooks", "/api/v1/billing/webhook/stripe"])

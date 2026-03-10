@@ -59,16 +59,21 @@ def test_query_api_events_search_contract():
     }
 
     with patch("services.nlp.app.routes._graph_get", new_callable=AsyncMock) as mock_graph:
-        mock_graph.return_value = graph_payload
+        with patch("services.nlp.app.routes.emit_funnel_event") as mock_emit:
+            mock_graph.return_value = graph_payload
 
-        response = client.post(
-            "/api/v1/query/traceability",
-            json={
-                "query": "show me all lettuce from Supplier X in the last 30 days",
-                "limit": 25,
-            },
-            headers={"X-RegEngine-API-Key": "rge_test.secret"},
-        )
+            response = client.post(
+                "/api/v1/query/traceability",
+                json={
+                    "query": "show me all lettuce from Supplier X in the last 30 days",
+                    "limit": 25,
+                },
+                headers={"X-RegEngine-API-Key": "rge_test.secret"},
+            )
+            mock_emit.assert_called_once()
+            kwargs = mock_emit.call_args.kwargs
+            assert kwargs["tenant_id"] == "11111111-1111-1111-1111-111111111111"
+            assert kwargs["event_name"] == "first_nlp_query"
 
     assert response.status_code == 200
     body = response.json()

@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from app.authz import IngestionPrincipal, get_ingestion_principal, require_permission
 from app.config import get_settings
 from app.webhook_compat import _verify_api_key
+from shared.funnel_events import emit_funnel_event
 from shared.permissions import has_permission
 
 logger = logging.getLogger("stripe-billing")
@@ -658,13 +659,24 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
     if event_type == "invoice.paid":
         period_end = _extract_invoice_period_end(data_object)
         paid_at = _extract_paid_at(data_object)
+        subscription_id = data_object.get("subscription")
+        customer_id = data_object.get("customer")
         _update_subscription_status(
-            subscription_id=data_object.get("subscription"),
-            customer_id=data_object.get("customer"),
+            subscription_id=subscription_id,
+            customer_id=customer_id,
             status="active",
             current_period_end=period_end,
             last_invoice_id=str(data_object.get("id", "") or ""),
             last_payment_at=paid_at,
+        )
+        payment_tenant_id = _find_tenant_id(subscription_id, customer_id)
+        emit_funnel_event(
+            tenant_id=payment_tenant_id,
+            event_name="payment_completed",
+            metadata={
+                "invoice_id": str(data_object.get("id", "") or ""),
+                "subscription_id": str(subscription_id or ""),
+            },
         )
         return
 
@@ -809,6 +821,16 @@ async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
         except redis.RedisError as exc:
             # Don't block checkout redirect if Redis is briefly unavailable.
             logger.warning("checkout_hint_store_failed tenant_id=%s error=%s", request.tenant_id, str(exc))
+
+    emit_funnel_event(
+        tenant_id=request.tenant_id,
+        event_name="checkout_started",
+        metadata={
+            "plan_id": plan["id"],
+            "billing_period": billing_period,
+            "session_id": str(session.id),
+        },
+    )
 
     logger.info(
         "checkout_created",

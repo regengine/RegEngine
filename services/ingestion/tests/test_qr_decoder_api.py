@@ -43,10 +43,17 @@ def test_decode_qr_parses_gs1_digital_link(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    captured: dict[str, object] = {}
+
     monkeypatch.setattr(
         qr_decoder,
         "_decode_image_bytes",
         lambda _image_bytes: "https://id.example.com/01/09506000134352/10/LOT-2026-44/21/SER-778/17/260930",
+    )
+    monkeypatch.setattr(
+        qr_decoder,
+        "emit_funnel_event",
+        lambda **kwargs: captured.update(kwargs) or True,
     )
 
     response = client.post(
@@ -64,6 +71,8 @@ def test_decode_qr_parses_gs1_digital_link(
     assert payload["fields"]["serial"] == "SER-778"
     assert payload["fields"]["expiry_date"] == "2026-09-30"
     assert payload["fields"]["valid_gtin"] is True
+    assert captured["tenant_id"] == "00000000-0000-0000-0000-000000000321"
+    assert captured["event_name"] == "first_scan"
 
 
 def test_decode_qr_parses_gs1_ai_fields(
@@ -121,4 +130,3 @@ def test_decode_qr_denied_without_scan_decode_scope(
 
     assert response.status_code == 403
     assert "requires 'scan.decode'" in response.json()["detail"]
-
