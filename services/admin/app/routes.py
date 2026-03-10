@@ -14,6 +14,7 @@ from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 import html
+from sqlalchemy.orm import Session
 
 # Centralised path resolution
 from shared.paths import ensure_shared_importable
@@ -21,8 +22,11 @@ ensure_shared_importable()
 
 from shared.auth import get_key_store
 from shared.api_key_store import DatabaseAPIKeyStore
+from shared.funnel_events import get_funnel_stage_metrics
 
 from .config import get_settings
+from .database import get_session
+from .dependencies import PermissionChecker
 from .metrics import get_hallucination_tracker
 from .review_consumer import get_consumer_health
 
@@ -125,6 +129,20 @@ class TenantCreateResponse(BaseModel):
     status: str = "active"
 
 
+class FunnelStageResponse(BaseModel):
+    """Single funnel stage metric."""
+
+    name: str
+    count: int
+    conversion_from_previous_pct: float
+
+
+class FunnelResponse(BaseModel):
+    """Aggregate funnel metrics response."""
+
+    stages: list[FunnelStageResponse]
+
+
 def verify_admin_key(
     request: Request,
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
@@ -153,6 +171,13 @@ def verify_admin_key(
 
 def _tracker():
     return get_hallucination_tracker()
+
+
+def require_funnel_read(
+    _: bool = Depends(PermissionChecker("admin.funnel.read")),
+) -> None:
+    """RBAC guard for funnel analytics."""
+    return None
 
 
 @router.get("/health")
@@ -449,6 +474,19 @@ async def create_tenant(
     sanitized_name = html.escape(request.name)
     logger.info("tenant_created_via_admin", tenant_id=tenant_id, name=sanitized_name)
     return TenantCreateResponse(tenant_id=tenant_id, name=sanitized_name)
+
+
+@v1_router.get(
+    "/admin/funnel",
+    response_model=FunnelResponse,
+    dependencies=[Depends(require_funnel_read)],
+)
+async def get_funnel_metrics(
+    db: Session = Depends(get_session),
+) -> FunnelResponse:
+    """Return aggregate tenant funnel counts and stage conversion rates."""
+    stages = get_funnel_stage_metrics(db_session=db)
+    return FunnelResponse(stages=[FunnelStageResponse(**stage) for stage in stages])
 
 
 @v1_router.get("/admin/review/flagged-extractions/{review_id}", response_model=ReviewItemResponse)

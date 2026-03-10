@@ -79,7 +79,7 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 
 ### Backend Endpoints (200+)
 
-**Admin Service** — 74 endpoints covering auth, tenants, supplier onboarding, facility management, compliance scoring, TLC management, FDA export, and snapshots.
+**Admin Service** — 74+ endpoints covering auth, tenants, supplier onboarding, facility management, compliance scoring, funnel analytics, TLC management, FDA export, and snapshots.
 
 **Ingestion Service** — 130+ endpoints across 22 route modules:
 
