@@ -135,6 +135,10 @@ app.include_router(export_router)
 from app.epcis_ingestion import router as epcis_ingestion_router
 app.include_router(epcis_ingestion_router)
 
+# QR / GS1 Decode
+from app.qr_decoder import router as qr_decoder_router
+app.include_router(qr_decoder_router)
+
 # B2B Exchange API (EPCIS shipping package handoff)
 from app.exchange_api import router as exchange_router
 app.include_router(exchange_router)

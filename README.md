@@ -98,6 +98,7 @@ pytest services/ingestion/tests/test_cte_persistence_e2e.py -v -m integration
 | `/api/v1/notifications` | notification_prefs.py | Channels, quiet hours, escalation |
 | `/api/v1/onboarding` | onboarding.py | Guided setup steps |
 | `/api/v1/products` | product_catalog.py | FTL product catalog management |
+| `/api/v1/qr` | qr_decoder.py | GS1 QR/barcode decode (Digital Link + AI parsing) |
 | `/api/v1/recall` | recall_report.py | Recall readiness reports |
 | `/api/v1/simulations` | recall_simulations.py | Mock recall drills and export artifacts |
 | `/api/v1/sop` | sop_generator.py | AI-generated SOPs |
