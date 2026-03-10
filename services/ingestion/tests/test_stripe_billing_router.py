@@ -43,6 +43,8 @@ def _build_client(principal: IngestionPrincipal) -> TestClient:
 
 @pytest.mark.asyncio
 async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
 
@@ -73,6 +75,60 @@ async def test_create_checkout_uses_stripe_and_normalizes_plan(monkeypatch):
     assert captured["line_items"][0]["price"] == "price_growth_monthly"
     assert captured["metadata"]["tenant_id"] == "tenant-1"
     assert captured["metadata"]["plan_id"] == "growth"
+    assert captured["customer_email"] == "ops@example.com"
+
+
+@pytest.mark.asyncio
+async def test_create_checkout_reuses_existing_customer_id_and_records_session(monkeypatch):
+    fake_redis = _FakeRedis()
+    tenant_id = "tenant-checkout-1"
+    monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+
+    stripe_billing._store_subscription_mapping(
+        tenant_id,
+        {
+            "tenant_id": tenant_id,
+            "session_id": "",
+            "customer_id": "cus_existing_1",
+            "subscription_id": "",
+            "plan_id": "growth",
+            "billing_period": "monthly",
+            "status": "none",
+            "customer_email": "billing@acme.example",
+            "current_period_end": "",
+        },
+    )
+
+    captured = {}
+
+    class _Session:
+        id = "cs_existing_customer"
+        url = "https://checkout.stripe.com/c/pay/cs_existing_customer"
+
+    def _fake_create(**kwargs):
+        captured.update(kwargs)
+        return _Session()
+
+    monkeypatch.setattr(stripe_billing.stripe.checkout.Session, "create", _fake_create)
+
+    response = await stripe_billing.create_checkout(
+        stripe_billing.CheckoutRequest(
+            plan_id="growth",
+            billing_period="monthly",
+            tenant_id=tenant_id,
+            customer_email="billing@acme.example",
+        )
+    )
+
+    assert response.session_id == "cs_existing_customer"
+    assert captured["customer"] == "cus_existing_1"
+    assert "customer_email" not in captured
+
+    mapping = fake_redis.hgetall(stripe_billing._tenant_subscription_key(tenant_id))
+    assert mapping["session_id"] == "cs_existing_customer"
+    assert fake_redis.get(stripe_billing._session_lookup_key("cs_existing_customer")) == tenant_id
 
 
 @pytest.mark.asyncio
@@ -147,6 +203,109 @@ async def test_invoice_payment_failed_marks_subscription_past_due(monkeypatch):
 
     mapping = fake_redis.hgetall(stripe_billing._tenant_subscription_key("tenant-999"))
     assert mapping["status"] == "past_due"
+
+
+@pytest.mark.asyncio
+async def test_invoice_paid_updates_period_end_and_payment_metadata(monkeypatch):
+    fake_redis = _FakeRedis()
+    monkeypatch.setattr(stripe_billing, "_redis_client", lambda: fake_redis)
+
+    stripe_billing._store_subscription_mapping(
+        "tenant-777",
+        {
+            "tenant_id": "tenant-777",
+            "session_id": "cs_777",
+            "customer_id": "cus_777",
+            "subscription_id": "sub_777",
+            "plan_id": "growth",
+            "billing_period": "monthly",
+            "status": "past_due",
+            "customer_email": "buyer@example.com",
+            "current_period_end": "",
+        },
+    )
+
+    await stripe_billing._handle_stripe_event(
+        {
+            "type": "invoice.paid",
+            "data": {
+                "object": {
+                    "id": "in_777",
+                    "subscription": "sub_777",
+                    "customer": "cus_777",
+                    "created": 1700000000,
+                    "status_transitions": {"paid_at": 1700000500},
+                    "lines": {"data": [{"period": {"end": 1700001000}}]},
+                }
+            },
+        }
+    )
+
+    mapping = fake_redis.hgetall(stripe_billing._tenant_subscription_key("tenant-777"))
+    assert mapping["status"] == "active"
+    assert mapping["last_invoice_id"] == "in_777"
+    assert mapping["last_payment_at"] == "2023-11-14T22:21:40+00:00"
+    assert mapping["current_period_end"] == "2023-11-14T22:30:00+00:00"
+
+
+@pytest.mark.parametrize("path", ["/api/v1/billing/webhooks", "/api/v1/billing/webhook/stripe"])
+def test_webhooks_endpoint_processes_events(monkeypatch: pytest.MonkeyPatch, path: str) -> None:
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_123")
+    monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kwargs: (True, 99))
+
+    captured: dict[str, str] = {}
+
+    def _fake_construct_event(payload, sig_header, secret):
+        captured["payload"] = payload.decode("utf-8")
+        captured["signature"] = sig_header
+        captured["secret"] = secret
+        return {"type": "invoice.paid", "data": {"object": {}}}
+
+    async def _fake_handle(event):
+        captured["event_type"] = event["type"]
+
+    monkeypatch.setattr(stripe_billing.stripe.Webhook, "construct_event", _fake_construct_event)
+    monkeypatch.setattr(stripe_billing, "_handle_stripe_event", _fake_handle)
+
+    principal = IngestionPrincipal(
+        key_id="billing-webhook-test",
+        tenant_id="tenant-webhook-1",
+        scopes=["*"],
+        auth_mode="test",
+    )
+    with _build_client(principal) as client:
+        response = client.post(
+            path,
+            content=b'{"id":"evt_1"}',
+            headers={"Stripe-Signature": "t=123,v1=fake"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["received"] is True
+    assert response.json()["event_type"] == "invoice.paid"
+    assert captured["event_type"] == "invoice.paid"
+    assert captured["secret"] == "whsec_test_123"
+
+
+def test_webhooks_endpoint_requires_signature_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "whsec_test_123")
+
+    principal = IngestionPrincipal(
+        key_id="billing-webhook-test",
+        tenant_id="tenant-webhook-2",
+        scopes=["*"],
+        auth_mode="test",
+    )
+    with _build_client(principal) as client:
+        response = client.post(
+            "/api/v1/billing/webhooks",
+            content=b'{"id":"evt_2"}',
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Missing Stripe-Signature header"
 
 
 def test_portal_endpoint_creates_customer_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
