@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # For PDF OCR fallback
     tesseract-ocr \
     poppler-utils \
+    # For pyzbar runtime QR/barcode decoding
+    libzbar0 \
     # For lxml
     libxml2-dev \
     libxslt1-dev \
