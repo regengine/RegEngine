@@ -420,6 +420,12 @@ export default function FSMADashboardPage() {
                       Browse Target Market
                     </Button>
                   </Link>
+                  <Link href="/fsma/integration">
+                    <Button variant="outline" className="w-full justify-start">
+                      <ArrowRight className="w-4 h-4 mr-2" />
+                      Integration Blueprint
+                    </Button>
+                  </Link>
                   <Link href="/trace">
                     <Button variant="outline" className="w-full justify-start">
                       <Search className="w-4 h-4 mr-2" />

@@ -13,6 +13,7 @@ export type MarketingToolLink = {
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
     { label: "Product", href: "/#product" },
     { label: "FSMA 204 Guide", href: "/docs/fsma-204" },
+    { label: "Resources", href: "/resources" },
     { label: "Developers", href: "/developers" },
     { label: "Pricing", href: "/pricing" },
 ];
@@ -26,13 +27,15 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     ...MARKETING_PRIMARY_NAV,
-    { label: "Get Started", href: "/onboarding" },
+    { label: "Integrations", href: "/integrations" },
+    { label: "Get Started", href: "/get-started" },
 ];
 
 export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "About", href: "/about" },
+    { label: "Contact", href: "/contact" },
     { label: "Security", href: "/security" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    { label: "Design Partner Program", href: "/alpha" },
+    { label: "Design Partner Program", href: "/design-partner" },
 ];

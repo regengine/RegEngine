@@ -51,6 +51,39 @@ export default function ResourcesPage() {
                     </div>
                 </div>
 
+                {/* Resource Library */}
+                <div className="max-w-6xl mx-auto px-4 pt-12">
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <Link
+                            href="/resources/guides"
+                            className="rounded-lg border bg-white p-5 hover:shadow-sm transition-shadow"
+                        >
+                            <p className="text-sm font-semibold text-gray-900">Implementation Guides</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Step-by-step compliance playbooks and rollout checklists.
+                            </p>
+                        </Link>
+                        <Link
+                            href="/resources/whitepapers"
+                            className="rounded-lg border bg-white p-5 hover:shadow-sm transition-shadow"
+                        >
+                            <p className="text-sm font-semibold text-gray-900">White Papers</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Industry and regulatory deep-dives for buyer education.
+                            </p>
+                        </Link>
+                        <Link
+                            href="/resources/calculators"
+                            className="rounded-lg border bg-white p-5 hover:shadow-sm transition-shadow"
+                        >
+                            <p className="text-sm font-semibold text-gray-900">ROI Calculator</p>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Estimate savings from faster recall response and audit prep.
+                            </p>
+                        </Link>
+                    </div>
+                </div>
+
                 {/* Verticals Grid */}
                 <div className="max-w-6xl mx-auto px-4 py-16">
                     <h2 className="text-3xl font-bold text-gray-900 mb-8">Industry Verticals</h2>

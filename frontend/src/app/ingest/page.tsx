@@ -175,16 +175,24 @@ export default function IngestPage() {
           </div>
 
           {/* Page Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
-              <Database className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+          <div className="flex items-center justify-between gap-4 mb-8">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
+                <Database className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold">Document Ingestion</h1>
+                <p className="text-muted-foreground mt-1">
+                  Submit regulatory document URLs for processing
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-4xl font-bold">Document Ingestion</h1>
-              <p className="text-muted-foreground mt-1">
-                Submit regulatory document URLs for processing
-              </p>
-            </div>
+            <Link href="/ingest/curation">
+              <Button variant="outline">
+                <ClipboardCheck className="h-4 w-4 mr-2" />
+                Open Curation Queue
+              </Button>
+            </Link>
           </div>
 
           {/* No API Key Warning */}

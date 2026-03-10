@@ -121,6 +121,27 @@ export default function AdminPage() {
             </div>
           </div>
 
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Admin Shortcuts</CardTitle>
+              <CardDescription>
+                Jump directly to operational consoles.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-3">
+              <Link href="/admin/alerts">
+                <Button variant="outline">
+                  Alert Center
+                </Button>
+              </Link>
+              <Link href="/admin/api-console">
+                <Button variant="outline">
+                  API Console
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
           {/* Admin Key Input */}
           {!adminKey && (
             <Card className="mb-8">
