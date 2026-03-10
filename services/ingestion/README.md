@@ -203,6 +203,21 @@ python -m pytest \
   services/ingestion/tests/test_epcis_ingestion_api.py
 ```
 
+### Stripe Billing End-to-End Validation
+
+Use this when validating checkout -> webhook -> portal/invoice flows in Stripe test mode.
+
+```bash
+# Start a Stripe listener in one terminal
+stripe listen --forward-to http://localhost:8002/api/v1/billing/webhooks
+
+# Run validation script in another terminal
+python services/ingestion/scripts/verify_stripe_billing_e2e.py \
+  --tenant-id <tenant-id> \
+  --base-url http://localhost:8002 \
+  --redis-url redis://localhost:6379/0
+```
+
 ## Docker Deployment
 
 ### docker-compose.yml

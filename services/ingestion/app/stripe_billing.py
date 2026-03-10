@@ -383,6 +383,47 @@ def _coerce_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _coerce_optional_int(value: Any) -> Optional[int]:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _extract_invoice_period_end(invoice_payload: dict[str, Any]) -> Optional[str]:
+    # Stripe invoice payloads can surface period end in several places depending on event type/version.
+    direct_period_end = _coerce_optional_int(invoice_payload.get("period_end"))
+    if direct_period_end:
+        return _format_period_end(direct_period_end)
+
+    lines = invoice_payload.get("lines") or {}
+    data = lines.get("data") if isinstance(lines, dict) else None
+    if isinstance(data, list):
+        for line in data:
+            if not isinstance(line, dict):
+                continue
+            line_period = line.get("period") or {}
+            period_end = _coerce_optional_int(line_period.get("end"))
+            if period_end:
+                return _format_period_end(period_end)
+
+    return None
+
+
+def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
+    status_transitions = invoice_payload.get("status_transitions") or {}
+    paid_at = _coerce_optional_int(status_transitions.get("paid_at"))
+    if paid_at:
+        return _format_period_end(paid_at)
+
+    created = _coerce_optional_int(invoice_payload.get("created"))
+    if created:
+        return _format_period_end(created)
+
+    return None
+
+
 def _create_portal_session(customer_id: str, return_url: str) -> Any:
     """Create Stripe portal session across SDK variants."""
     portal_namespace = getattr(stripe, "billing_portal", None)
@@ -460,6 +501,46 @@ def _ensure_customer_mapping(
     return customer_id
 
 
+def _get_existing_customer_id(tenant_id: Optional[str]) -> Optional[str]:
+    if not tenant_id:
+        return None
+
+    mapping = _get_subscription_mapping(tenant_id)
+    customer_id = str(mapping.get("customer_id") or "").strip()
+    return customer_id or None
+
+
+def _record_checkout_session_hint(
+    tenant_id: Optional[str],
+    session_id: str,
+    plan_id: str,
+    billing_period: str,
+    customer_email: Optional[str],
+    customer_id: Optional[str],
+) -> None:
+    if not tenant_id:
+        return
+
+    existing = _get_subscription_mapping(tenant_id)
+    _store_subscription_mapping(
+        tenant_id,
+        {
+            "tenant_id": tenant_id,
+            "session_id": session_id,
+            "customer_id": customer_id or existing.get("customer_id", ""),
+            "subscription_id": existing.get("subscription_id", ""),
+            "plan_id": plan_id,
+            "billing_period": billing_period,
+            "status": existing.get("status", "checkout_pending"),
+            "customer_email": existing.get("customer_email", "") or (customer_email or ""),
+            "current_period_end": existing.get("current_period_end", ""),
+            "last_invoice_id": existing.get("last_invoice_id", ""),
+            "last_payment_at": existing.get("last_payment_at", ""),
+            "last_payment_failure_at": existing.get("last_payment_failure_at", ""),
+        },
+    )
+
+
 async def _handle_checkout_completed(session: dict[str, Any]) -> None:
     metadata = session.get("metadata") or {}
     session_id = session.get("id")
@@ -517,7 +598,16 @@ async def _handle_checkout_completed(session: dict[str, Any]) -> None:
     )
 
 
-def _update_subscription_status(subscription_id: Optional[str], customer_id: Optional[str], status: str) -> None:
+def _update_subscription_status(
+    subscription_id: Optional[str],
+    customer_id: Optional[str],
+    status: str,
+    *,
+    current_period_end: Optional[str] = None,
+    last_invoice_id: Optional[str] = None,
+    last_payment_at: Optional[str] = None,
+    last_payment_failure_at: Optional[str] = None,
+) -> None:
     tenant_id = _find_tenant_id(subscription_id, customer_id)
     if not tenant_id:
         logger.warning(
@@ -536,6 +626,14 @@ def _update_subscription_status(subscription_id: Optional[str], customer_id: Opt
             "customer_id": customer_id or existing.get("customer_id", ""),
         }
     )
+    if current_period_end is not None:
+        existing["current_period_end"] = current_period_end
+    if last_invoice_id is not None:
+        existing["last_invoice_id"] = last_invoice_id
+    if last_payment_at is not None:
+        existing["last_payment_at"] = last_payment_at
+    if last_payment_failure_at is not None:
+        existing["last_payment_failure_at"] = last_payment_failure_at
     _store_subscription_mapping(tenant_id, existing)
 
 
@@ -552,14 +650,21 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             subscription_id=data_object.get("subscription"),
             customer_id=data_object.get("customer"),
             status="past_due",
+            last_invoice_id=str(data_object.get("id", "") or ""),
+            last_payment_failure_at=_format_period_end(_coerce_int(data_object.get("created"))),
         )
         return
 
     if event_type == "invoice.paid":
+        period_end = _extract_invoice_period_end(data_object)
+        paid_at = _extract_paid_at(data_object)
         _update_subscription_status(
             subscription_id=data_object.get("subscription"),
             customer_id=data_object.get("customer"),
             status="active",
+            current_period_end=period_end,
+            last_invoice_id=str(data_object.get("id", "") or ""),
+            last_payment_at=paid_at,
         )
         return
 
@@ -582,6 +687,37 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
         return
 
     logger.info("stripe_webhook_ignored", event_type=event_type)
+
+
+async def _process_stripe_webhook(
+    request: Request,
+    stripe_signature: Optional[str],
+) -> dict[str, Any]:
+    _configure_stripe()
+
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    if not webhook_secret:
+        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured")
+
+    if not stripe_signature:
+        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+
+    body = await request.body()
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload=body,
+            sig_header=stripe_signature,
+            secret=webhook_secret,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
+    except stripe.error.SignatureVerificationError as exc:
+        raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
+
+    await _handle_stripe_event(event)
+    logger.info("stripe_webhook_processed", event_type=event.get("type"))
+    return {"received": True, "event_type": event.get("type")}
 
 
 @router.get(
@@ -621,6 +757,7 @@ async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
 
     billing_period = _normalize_billing_period(request.billing_period)
     plan, price_id, amount = _resolve_price_id(request.plan_id, billing_period)
+    existing_customer_id: Optional[str] = None
 
     metadata = {
         "plan_id": plan["id"],
@@ -633,20 +770,45 @@ async def create_checkout(request: CheckoutRequest) -> CheckoutResponse:
     if request.customer_email:
         metadata["customer_email"] = request.customer_email
 
+    if request.tenant_id:
+        try:
+            existing_customer_id = _get_existing_customer_id(request.tenant_id)
+        except redis.RedisError as exc:
+            logger.warning("checkout_customer_lookup_failed tenant_id=%s error=%s", request.tenant_id, str(exc))
+
+    checkout_kwargs: dict[str, Any] = {
+        "mode": "subscription",
+        "line_items": [{"price": price_id, "quantity": 1}],
+        "success_url": request.success_url,
+        "cancel_url": request.cancel_url,
+        "allow_promotion_codes": True,
+        "metadata": metadata,
+        "subscription_data": {"metadata": metadata},
+    }
+    if existing_customer_id:
+        checkout_kwargs["customer"] = existing_customer_id
+    elif request.customer_email:
+        checkout_kwargs["customer_email"] = request.customer_email
+
     try:
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": price_id, "quantity": 1}],
-            success_url=request.success_url,
-            cancel_url=request.cancel_url,
-            customer_email=request.customer_email,
-            allow_promotion_codes=True,
-            metadata=metadata,
-            subscription_data={"metadata": metadata},
-        )
+        session = stripe.checkout.Session.create(**checkout_kwargs)
     except stripe.error.StripeError as exc:
         logger.error("checkout_create_failed", error=str(exc), plan=plan["id"])
         raise HTTPException(status_code=502, detail=f"Stripe checkout creation failed: {exc.user_message or str(exc)}") from exc
+
+    if request.tenant_id:
+        try:
+            _record_checkout_session_hint(
+                tenant_id=request.tenant_id,
+                session_id=str(session.id),
+                plan_id=plan["id"],
+                billing_period=billing_period,
+                customer_email=request.customer_email,
+                customer_id=existing_customer_id,
+            )
+        except redis.RedisError as exc:
+            # Don't block checkout redirect if Redis is briefly unavailable.
+            logger.warning("checkout_hint_store_failed tenant_id=%s error=%s", request.tenant_id, str(exc))
 
     logger.info(
         "checkout_created",
@@ -730,41 +892,30 @@ async def get_subscription(
 
 
 @router.post(
-    "/webhook/stripe",
+    "/webhooks",
     summary="Stripe webhook handler",
     description="Handles Stripe webhook events (checkout.session.completed, invoice.paid, etc.)",
 )
-async def stripe_webhook(
+async def stripe_webhooks(
     request: Request,
     stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
 ) -> dict[str, Any]:
-    """Handle Stripe webhook events."""
-    _configure_stripe()
+    """Primary Stripe webhook endpoint."""
+    return await _process_stripe_webhook(request, stripe_signature)
 
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-    if not webhook_secret:
-        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured")
 
-    if not stripe_signature:
-        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
-
-    body = await request.body()
-
-    try:
-        event = stripe.Webhook.construct_event(
-            payload=body,
-            sig_header=stripe_signature,
-            secret=webhook_secret,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid webhook payload") from exc
-    except stripe.error.SignatureVerificationError as exc:
-        raise HTTPException(status_code=401, detail="Invalid Stripe signature") from exc
-
-    await _handle_stripe_event(event)
-
-    logger.info("stripe_webhook_processed", event_type=event.get("type"))
-    return {"received": True, "event_type": event.get("type")}
+@router.post(
+    "/webhook/stripe",
+    summary="Stripe webhook handler",
+    description="Handles Stripe webhook events (checkout.session.completed, invoice.paid, etc.)",
+    include_in_schema=False,
+)
+async def stripe_webhook_legacy(
+    request: Request,
+    stripe_signature: Optional[str] = Header(default=None, alias="Stripe-Signature"),
+) -> dict[str, Any]:
+    """Legacy Stripe webhook path retained for backward compatibility."""
+    return await _process_stripe_webhook(request, stripe_signature)
 
 
 @router.post(
