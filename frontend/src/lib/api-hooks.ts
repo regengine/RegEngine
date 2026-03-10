@@ -8,11 +8,22 @@ import { getServiceURL } from './api-config';
 
 const BASE = () => getServiceURL('ingestion');
 
+function getApiKey(): string {
+    if (typeof window === 'undefined') {
+        return process.env.NEXT_PUBLIC_API_KEY || '';
+    }
+
+    // Keep backward compatibility with both key names that exist in the codebase.
+    const stored =
+        localStorage.getItem('regengine_api_key') ||
+        localStorage.getItem('re-api-key');
+
+    return stored || process.env.NEXT_PUBLIC_API_KEY || '';
+}
+
 /** Shared fetch helper with API key */
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const apiKey = typeof window !== 'undefined'
-        ? localStorage.getItem('re-api-key') || ''
-        : '';
+    const apiKey = getApiKey();
 
     const res = await fetch(`${BASE()}${path}`, {
         ...options,

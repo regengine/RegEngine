@@ -73,7 +73,14 @@ function formatTimeAgo(iso: string): string {
 }
 
 async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise<AuditLogResponse> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+    const apiKey = typeof window !== 'undefined'
+        ? (
+            localStorage.getItem('regengine_api_key') ||
+            localStorage.getItem('re-api-key') ||
+            process.env.NEXT_PUBLIC_API_KEY ||
+            ''
+        )
+        : (process.env.NEXT_PUBLIC_API_KEY || '');
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/audit-log/${tenantId}?page=${page}&page_size=${pageSize}`, {

@@ -7,14 +7,16 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 from uuid import UUID
 import uuid
+import re
 
 from app.database import get_session
-from app.sqlalchemy_models import UserModel, MembershipModel, TenantModel
+from app.sqlalchemy_models import UserModel, MembershipModel, TenantModel, RoleModel
 from app.auth_utils import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_access_token, hash_token, REFRESH_TOKEN_EXPIRE_DAYS
 from app.dependencies import get_current_user, PermissionChecker, get_session_store
 from app.audit import AuditLogger
 from app.password_policy import validate_password, PasswordPolicyError
 from app.session_store import RedisSessionStore, SessionData
+from shared.supabase_client import get_supabase
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -42,6 +44,21 @@ class UserResponse(BaseModel):
     email: str
     is_sysadmin: bool
     status: str
+
+
+def _slugify_tenant_name(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
+    return base or "tenant"
+
+
+def _ensure_unique_tenant_slug(db: Session, tenant_name: str) -> str:
+    base_slug = _slugify_tenant_name(tenant_name)
+    slug = base_slug
+    suffix = 2
+    while db.execute(select(TenantModel).where(TenantModel.slug == slug)).scalar_one_or_none():
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
+    return slug
 
 @router.get("/me", response_model=UserResponse)
 def get_me(user: UserModel = Depends(get_current_user)):
@@ -160,6 +177,147 @@ async def login(
         tenant_id=active_tenant_id,
         user={"id": str(user.id), "email": user.email, "is_sysadmin": user.is_sysadmin},
         available_tenants=available_tenants
+    )
+
+
+@router.post("/signup", response_model=TokenResponse)
+async def signup(
+    payload: RegisterRequest,
+    request: Request,
+    db: Session = Depends(get_session),
+    session_store: RedisSessionStore = Depends(get_session_store),
+):
+    """Self-serve signup that creates tenant + owner membership and returns session tokens."""
+    normalized_email = payload.email.strip().lower()
+    tenant_name = payload.tenant_name.strip()
+    if not tenant_name:
+        raise HTTPException(status_code=400, detail="Tenant name is required")
+
+    existing_user = db.execute(
+        select(UserModel).where(UserModel.email == normalized_email)
+    ).scalar_one_or_none()
+    if existing_user:
+        raise HTTPException(status_code=409, detail="User already exists")
+
+    try:
+        validate_password(payload.password, user_context={"email": normalized_email})
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=400, detail=exc.message)
+
+    supabase_user_id: Optional[UUID] = None
+    sb = get_supabase()
+    if sb:
+        try:
+            supabase_response = sb.auth.admin.create_user(
+                {
+                    "email": normalized_email,
+                    "password": payload.password,
+                    "email_confirm": True,
+                    "user_metadata": {"tenant_name": tenant_name},
+                }
+            )
+            supabase_user = getattr(supabase_response, "user", None)
+            if supabase_user and getattr(supabase_user, "id", None):
+                supabase_user_id = UUID(str(supabase_user.id))
+        except Exception as exc:  # pragma: no cover - external dependency behavior
+            logger.warning("supabase_signup_provisioning_failed", email=normalized_email, error=str(exc))
+
+    new_user = UserModel(
+        id=supabase_user_id or uuid.uuid4(),
+        email=normalized_email,
+        password_hash=get_password_hash(payload.password),
+        is_sysadmin=False,
+        status="active",
+    )
+    db.add(new_user)
+    db.flush()
+
+    new_tenant = TenantModel(
+        name=tenant_name,
+        slug=_ensure_unique_tenant_slug(db, tenant_name),
+        status="active",
+    )
+    db.add(new_tenant)
+    db.flush()
+
+    owner_role = RoleModel(
+        tenant_id=new_tenant.id,
+        name="Owner",
+        permissions=["*"],
+    )
+    db.add(owner_role)
+    db.flush()
+
+    membership = MembershipModel(
+        user_id=new_user.id,
+        tenant_id=new_tenant.id,
+        role_id=owner_role.id,
+    )
+    db.add(membership)
+
+    raw_refresh_token = create_refresh_token()
+    token_hash = hash_token(raw_refresh_token)
+    family_id = uuid.uuid4()
+    session_data = SessionData(
+        id=uuid.uuid4(),
+        user_id=new_user.id,
+        refresh_token_hash=token_hash,
+        family_id=family_id,
+        created_at=datetime.now(timezone.utc),
+        last_used_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        user_agent=request.headers.get("User-Agent", "Unknown"),
+        ip_address=request.client.host if request.client else "0.0.0.0",
+    )
+
+    session_persisted = True
+    try:
+        await session_store.create_session(session_data)
+    except Exception as exc:
+        session_persisted = False
+        logger.warning(
+            "session_store_unavailable_on_signup",
+            user_id=str(new_user.id),
+            error=str(exc),
+            fallback="stateless_session",
+        )
+
+    access_token_data = {
+        "sub": str(new_user.id),
+        "email": new_user.email,
+        "tenant_id": str(new_tenant.id),
+        "tid": str(new_tenant.id),
+    }
+    access_token = create_access_token(access_token_data)
+
+    AuditLogger.log_event(
+        db,
+        tenant_id=new_tenant.id,
+        event_type="tenant.create",
+        action="tenant.create",
+        event_category="tenant_management",
+        actor_id=new_user.id,
+        resource_type="tenant",
+        resource_id=str(new_tenant.id),
+        metadata={"tenant_name": new_tenant.name, "signup": True},
+    )
+
+    db.commit()
+
+    logger.info(
+        "signup_success",
+        user_id=str(new_user.id),
+        tenant_id=str(new_tenant.id),
+        supabase_user_linked=bool(supabase_user_id),
+        session_persisted=session_persisted,
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=raw_refresh_token if session_persisted else "",
+        tenant_id=new_tenant.id,
+        user={"id": str(new_user.id), "email": new_user.email, "is_sysadmin": new_user.is_sysadmin},
+        available_tenants=[{"id": new_tenant.id, "name": new_tenant.name, "slug": new_tenant.slug}],
     )
 
 

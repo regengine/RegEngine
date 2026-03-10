@@ -134,7 +134,7 @@ export function CheckoutWizard() {
     const [selectedPlan, setSelectedPlan] = useState<string>(searchParams?.get('plan') || 'growth');
     const [isAnnual, setIsAnnual] = useState(billingParam !== 'monthly');
     const [appliedCredits, setAppliedCredits] = useState(0);
-    const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+    const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
     // Pre-select plan from URL param
     useEffect(() => {
@@ -161,17 +161,21 @@ export function CheckoutWizard() {
     };
 
     const handleCheckout = async () => {
+        setCheckoutError(null);
         try {
             const result = await createCheckout.mutateAsync({
                 tier_id: selectedPlan,
                 billing_cycle: isAnnual ? 'annual' : 'monthly',
             });
-            setCheckoutUrl(result.checkout_url);
-            setCurrentStep('activation');
-        } catch (err) {
-            // In sandbox mode, still advance to show the flow
-            setCheckoutUrl('https://checkout.stripe.com/sandbox/demo');
-            setCurrentStep('activation');
+            if (result.checkout_url) {
+                window.location.assign(result.checkout_url);
+                return;
+            }
+
+            throw new Error('Missing checkout URL from billing API');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to create checkout session';
+            setCheckoutError(message);
         }
     };
 
@@ -540,6 +544,16 @@ export function CheckoutWizard() {
 
                                 {/* Credit code input */}
                                 <CreditRedemption compact onCreditApplied={handleCreditApplied} />
+
+                                {checkoutError && (
+                                    <div
+                                        className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+                                        role="alert"
+                                        aria-live="polite"
+                                    >
+                                        {checkoutError}
+                                    </div>
+                                )}
 
                                 {/* Security badges */}
                                 <div className="flex items-center justify-center gap-4 py-2">
