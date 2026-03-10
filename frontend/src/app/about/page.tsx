@@ -4,10 +4,10 @@ import AboutPageClient from './AboutPageClient';
 
 export const metadata: Metadata = {
     title: 'About | RegEngine',
-    description: 'Meet the founder of RegEngine. 20 years in federal compliance, disaster response, and food safety tech.',
+    description: 'Compliance infrastructure for FSMA 204, built from the ground up by a solo technical founder.',
     openGraph: {
         title: 'About | RegEngine',
-        description: 'Meet the founder of RegEngine. 20 years in federal compliance, disaster response, and food safety tech.',
+        description: 'Compliance infrastructure for FSMA 204, built from the ground up by a solo technical founder.',
         url: 'https://www.regengine.co/about',
         type: 'website',
     },
