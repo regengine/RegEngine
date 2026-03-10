@@ -44,6 +44,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
             if (!scannerRef.current) {
                 scannerRef.current = new Html5Qrcode(scannerRegionId, {
                     formatsToSupport: [
+                        Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.CODE_128,
                         Html5QrcodeSupportedFormats.DATA_MATRIX,
                         Html5QrcodeSupportedFormats.EAN_13,
@@ -132,7 +133,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
             </div>
 
             <p className="text-xs text-muted-foreground text-center max-w-xs">
-                Supports GS1-128, DataMatrix, EAN-13, and UPC-A.
+                Supports QR (GS1 Digital Link), GS1-128, DataMatrix, EAN-13, and UPC-A.
                 Ensure good lighting and hold steady.
             </p>
         </div>
