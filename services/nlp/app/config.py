@@ -36,6 +36,20 @@ class Settings(BaseSettings):
         ge=0.0, le=1.0, 
         alias="EXTRACTION_CONFIDENCE_MEDIUM"
     )
+    graph_service_url: str = Field(
+        default="http://graph-service:8200",
+        alias="GRAPH_SERVICE_URL",
+    )
+    graph_request_timeout_s: float = Field(
+        default=15.0,
+        ge=1.0,
+        le=120.0,
+        alias="GRAPH_REQUEST_TIMEOUT_S",
+    )
+    internal_service_secret: Optional[str] = Field(
+        default=None,
+        alias="REGENGINE_INTERNAL_SECRET",
+    )
 
 
 @lru_cache(maxsize=1)
