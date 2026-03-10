@@ -12,9 +12,9 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
+from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.edi_ingestion as edi_ingestion
 from app.edi_ingestion import router as edi_router
-from app.webhook_compat import _verify_api_key
 from app.webhook_models import EventResult, IngestResponse, WebhookCTEType
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
@@ -67,7 +67,11 @@ def captured_payload() -> dict:
 def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClient:
     app = FastAPI()
     app.include_router(edi_router)
-    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
 
     async def _fake_ingest_events(payload, x_regengine_api_key=None):
         captured_payload["payload"] = payload
@@ -153,3 +157,27 @@ def test_ingest_rejects_missing_required_segments(client: TestClient) -> None:
     detail = response.json()["detail"]
     assert detail["message"] == "EDI 856 missing required segments"
     assert "HL" in detail["missing_segments"]
+
+
+def test_ingest_denied_without_edi_ingest_scope() -> None:
+    app = FastAPI()
+    app.include_router(edi_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="limited-key",
+        scopes=["exchange.write"],
+        auth_mode="test",
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.post(
+            "/api/v1/ingest/edi",
+            data={
+                "traceability_lot_code": "LOT-2026-EDI-001",
+                "tenant_id": TEST_TENANT_ID,
+            },
+            files={"file": ("asn.edi", VALID_856, "application/edi-x12")},
+            headers={"X-Partner-ID": "WALMART"},
+        )
+
+    assert response.status_code == 403
+    assert "requires 'edi.ingest'" in response.json()["detail"]

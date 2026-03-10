@@ -12,15 +12,19 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.recall_simulations import _simulation_store, router as recall_simulations_router
-from app.webhook_compat import _verify_api_key
 
 
 @pytest.fixture()
 def client() -> TestClient:
     app = FastAPI()
     app.include_router(recall_simulations_router)
-    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
     _simulation_store.clear()
     with TestClient(app) as test_client:
         yield test_client
@@ -112,3 +116,22 @@ def test_export_simulation_json_and_csv_views(client: TestClient) -> None:
     contacts_text = csv_contacts.text
     assert "facility_name" in contacts_text
     assert "notification_priority" in contacts_text
+
+
+def test_run_denied_without_simulations_write_scope() -> None:
+    app = FastAPI()
+    app.include_router(recall_simulations_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="limited-key",
+        scopes=["simulations.read"],
+        auth_mode="test",
+    )
+    _simulation_store.clear()
+
+    with TestClient(app) as test_client:
+        run_response = test_client.post(
+            "/api/v1/simulations/run",
+            json={"scenario_id": "romaine-ecoli"},
+        )
+        assert run_response.status_code == 403
+        assert "requires 'simulations.write'" in run_response.json()["detail"]

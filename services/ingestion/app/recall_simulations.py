@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.webhook_compat import _verify_api_key
+from app.authz import require_permission
 
 logger = logging.getLogger("recall-simulations")
 
@@ -322,7 +322,7 @@ def _build_csv_export(simulation: dict, view: str) -> str:
 
 
 @router.get("/scenarios", summary="List available simulation scenarios")
-async def list_scenarios(_: None = Depends(_verify_api_key)):
+async def list_scenarios(_auth=Depends(require_permission("simulations.read"))):
     scenarios = [
         {
             "id": item["id"],
@@ -341,7 +341,7 @@ async def list_scenarios(_: None = Depends(_verify_api_key)):
 @router.post("/run", status_code=201, summary="Run recall simulation")
 async def run_recall_simulation(
     request: RunSimulationRequest,
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("simulations.write")),
 ):
     scenario = _get_scenario_or_400(request.scenario_id)
     metrics = _calculate_metrics(scenario)
@@ -369,7 +369,7 @@ async def run_recall_simulation(
 @router.get("/{simulation_id}", summary="Get simulation result")
 async def get_simulation(
     simulation_id: str,
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("simulations.read")),
 ):
     return _get_simulation_or_404(simulation_id)
 
@@ -377,7 +377,7 @@ async def get_simulation(
 @router.get("/{simulation_id}/timeline", summary="Get simulation timeline")
 async def get_simulation_timeline(
     simulation_id: str,
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("simulations.read")),
 ):
     simulation = _get_simulation_or_404(simulation_id)
     return {
@@ -389,7 +389,7 @@ async def get_simulation_timeline(
 @router.get("/{simulation_id}/impact-graph", summary="Get simulation impact graph")
 async def get_simulation_impact_graph(
     simulation_id: str,
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("simulations.read")),
 ):
     simulation = _get_simulation_or_404(simulation_id)
     graph = simulation["metrics"]["supply_chain_graph"]
@@ -405,7 +405,7 @@ async def export_simulation(
     simulation_id: str,
     format: Literal["json", "csv"] = Query(default="json"),
     view: Literal["summary", "timeline", "impact_graph", "contact_list"] = Query(default="summary"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("simulations.export")),
 ):
     simulation = _get_simulation_or_404(simulation_id)
 

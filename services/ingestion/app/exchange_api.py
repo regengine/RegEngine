@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.webhook_compat import _verify_api_key
+from app.authz import require_permission
 
 logger = logging.getLogger("b2b-exchange")
 
@@ -529,7 +529,7 @@ async def send_exchange_package(
     tenant_id: Optional[str] = Query(default=None, description="Optional sender tenant override"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("exchange.write")),
 ):
     sender_tenant_id = _resolve_tenant_id(
         request.sender_tenant_id or tenant_id,
@@ -642,7 +642,7 @@ async def receive_exchange_packages(
     mark_received: bool = Query(default=False, description="Mark selected package as received"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("exchange.read")),
 ):
     receiver_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
     if not receiver_tenant_id:

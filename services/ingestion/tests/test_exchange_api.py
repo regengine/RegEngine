@@ -12,16 +12,20 @@ sys.path.insert(0, str(service_dir))
 
 pytest.importorskip("fastapi")
 
+from app.authz import IngestionPrincipal, get_ingestion_principal
 import app.exchange_api as exchange_api
 from app.exchange_api import _exchange_store, router as exchange_router
-from app.webhook_compat import _verify_api_key
 
 
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app = FastAPI()
     app.include_router(exchange_router)
-    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
 
     _exchange_store.clear()
     monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "true")
@@ -109,3 +113,33 @@ def test_receive_requires_receiver_tenant_context(client: TestClient) -> None:
     response = client.get("/api/v1/exchange/receive")
     assert response.status_code == 400
     assert response.json()["detail"] == "Receiver tenant context required"
+
+
+def test_send_denied_without_exchange_write_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = FastAPI()
+    app.include_router(exchange_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="limited-key",
+        scopes=["exchange.read"],
+        auth_mode="test",
+    )
+    _exchange_store.clear()
+    monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "true")
+
+    def _db_unavailable():
+        raise RuntimeError("db unavailable in unit test")
+
+    monkeypatch.setattr(exchange_api, "_get_db_session", _db_unavailable)
+
+    with TestClient(app) as test_client:
+        response = test_client.post(
+            "/api/v1/exchange/send",
+            params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+            json={
+                "receiver_tenant_id": "00000000-0000-0000-0000-000000000222",
+                "event_ids": ["evt-1"],
+            },
+        )
+
+    assert response.status_code == 403
+    assert "requires 'exchange.write'" in response.json()["detail"]

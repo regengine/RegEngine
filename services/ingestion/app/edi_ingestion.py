@@ -16,8 +16,9 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Uploa
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from app.authz import require_permission
 from app.format_extractors import is_edi_content
-from app.webhook_compat import _verify_api_key, ingest_events
+from app.webhook_compat import ingest_events
 from app.webhook_models import (
     IngestEvent,
     IngestResponse,
@@ -334,7 +335,7 @@ async def ingest_edi_856(
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     x_partner_id: Optional[str] = Header(default=None, alias="X-Partner-ID"),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("edi.ingest")),
 ) -> EDIIngestResponse:
     sender_tenant_id = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
     if not sender_tenant_id:
