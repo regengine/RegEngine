@@ -1,20 +1,14 @@
-'use client';
+import type { Metadata } from 'next';
 
-import { useState, useEffect } from "react";
-
-const T = {
-    bg: "var(--re-surface-base)",
-    surface: "rgba(255,255,255,0.02)",
-    border: "rgba(255,255,255,0.06)",
-    accent: "var(--re-brand)",
-    accentBg: "rgba(16,185,129,0.08)",
-    textPrimary: "var(--re-text-primary)",
-    textBody: "var(--re-text-secondary)",
-    textMuted: "var(--re-text-muted)",
-    textDim: "var(--re-text-disabled)",
-    textGhost: "var(--re-text-disabled)",
-    sans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    mono: "'JetBrains Mono', monospace",
+export const metadata: Metadata = {
+    title: 'Terms of Service | RegEngine',
+    description: 'RegEngine terms of service. Plain language rules for using FSMA 204 compliance tools.',
+    openGraph: {
+        title: 'Terms of Service | RegEngine',
+        description: 'Terms of service for RegEngine FSMA 204 compliance platform.',
+        url: 'https://www.regengine.co/terms',
+        type: 'website',
+    },
 };
 
 const sections = [
@@ -140,67 +134,33 @@ Los Angeles, California`,
 ];
 
 export default function TermsPage() {
-    const [animateIn, setAnimateIn] = useState(false);
-
-    useEffect(() => {
-        setAnimateIn(true);
-    }, []);
-
     return (
         <div className="re-page">
-            <link
-                href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-                rel="stylesheet"
-            />
-
-            <div
-                style={{
-                    position: "fixed", inset: 0, opacity: 0.015, pointerEvents: "none", zIndex: 1,
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-                    backgroundSize: "128px 128px",
-                }}
-            />
-
             {/* Hero */}
             <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-12">
-                <div
-                    style={{
-                        opacity: animateIn ? 1 : 0,
-                        transform: animateIn ? "translateY(0)" : "translateY(16px)",
-                        transition: "all 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
-                    }}
-                >
-                    <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
-                        Legal
-                    </span>
-                    <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 12px", lineHeight: 1.15 }}>
-                        Terms of Service
-                    </h1>
-                    <p style={{ fontSize: "14px", color: T.textDim, fontFamily: T.mono }}>
-                        Effective: February 5, 2026 · Last updated: February 6, 2026
-                    </p>
-                    <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: "20px 0 0" }}>
-                        These are the rules for using RegEngine. We've written them in plain language because compliance professionals shouldn't need a lawyer to understand a terms page.
-                    </p>
-                </div>
+                <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
+                    Legal
+                </span>
+                <h1 className="text-4xl font-bold text-re-text-primary mt-4 mb-3 leading-tight">
+                    Terms of Service
+                </h1>
+                <p className="text-sm text-re-text-disabled font-mono">
+                    Effective: February 5, 2026 · Last updated: February 6, 2026
+                </p>
+                <p className="text-base text-re-text-muted leading-relaxed mt-5">
+                    These are the rules for using RegEngine. We&apos;ve written them in plain language because compliance professionals shouldn&apos;t need a lawyer to understand a terms page.
+                </p>
             </section>
 
-            {/* Quick Summary */}
-            <section style={{ position: "relative", zIndex: 2, maxWidth: "720px", margin: "0 auto", padding: "0 24px 32px" }}>
-                <div
-                    style={{
-                        padding: "20px 24px",
-                        background: T.accentBg,
-                        border: `1px solid rgba(16,185,129,0.15)`,
-                        borderRadius: "10px",
-                    }}
-                >
-                    <h3 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "0 0 10px" }}>
+            {/* TL;DR */}
+            <section className="relative z-[2] max-w-[720px] mx-auto px-6 pb-8">
+                <div className="p-5 bg-re-brand/[0.08] border border-re-brand/[0.15] rounded-xl">
+                    <h3 className="text-sm font-semibold text-re-brand mb-2">
                         TL;DR
                     </h3>
-                    <div style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.7 }}>
-                        You own your data. We store it to provide the service. Free tools are free with no strings. Paid plans can be cancelled anytime. We're a software tool, not legal advice. Don't try to access other people's data. California law applies.
-                    </div>
+                    <p className="text-sm text-re-text-muted leading-relaxed">
+                        You own your data. We store it to provide the service. Free tools are free with no strings. Paid plans can be cancelled anytime. We&apos;re a software tool, not legal advice. Don&apos;t try to access other people&apos;s data. California law applies.
+                    </p>
                 </div>
             </section>
 
@@ -209,22 +169,17 @@ export default function TermsPage() {
                 {sections.map((section, si) => (
                     <div
                         key={si}
-                        style={{
-                            padding: "28px 0",
-                            borderTop: `1px solid ${T.border}`,
-                        }}
+                        className="py-7 border-t border-white/[0.06]"
                     >
-                        <h2 style={{ fontSize: "18px", fontWeight: 700, color: T.textPrimary, margin: "0 0 16px" }}>
+                        <h2 className="text-lg font-bold text-re-text-primary mb-4">
                             {section.title}
                         </h2>
-                        <div style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.7, whiteSpace: "pre-line" }}>
+                        <p className="text-sm text-re-text-muted leading-relaxed whitespace-pre-line">
                             {section.content}
-                        </div>
+                        </p>
                     </div>
                 ))}
             </section>
-
-            <style>{`* { box-sizing: border-box; margin: 0; }`}</style>
         </div>
     );
 }
