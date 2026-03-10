@@ -21,9 +21,13 @@ import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query, Form
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from confluent_kafka.admin import AdminClient
 from requests import Response
 import redis
+
+try:
+    from confluent_kafka.admin import AdminClient
+except ModuleNotFoundError:  # pragma: no cover - local/test environments may not ship kafka extras
+    AdminClient = None  # type: ignore[assignment]
 
 # Add shared module to path
 from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
@@ -614,6 +618,8 @@ def health() -> dict[str, str]:
     settings = get_settings()
     kafka_status = "unavailable"
     try:
+        if AdminClient is None:
+            raise RuntimeError("confluent_kafka is not installed")
         admin_client = AdminClient(
             {
                 "bootstrap.servers": settings.kafka_bootstrap_servers,

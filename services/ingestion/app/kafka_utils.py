@@ -3,25 +3,32 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from functools import lru_cache
 from typing import Optional
 
 import structlog
 from fastapi import HTTPException
-from kafka import KafkaProducer
-from kafka.errors import KafkaTimeoutError
 
 from .config import get_settings
-from confluent_kafka import SerializingProducer
-from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.avro import AvroSerializer
 import os
+
+try:
+    from confluent_kafka import SerializingProducer
+    from confluent_kafka.schema_registry import SchemaRegistryClient
+    from confluent_kafka.schema_registry.avro import AvroSerializer
+except ModuleNotFoundError:  # pragma: no cover - optional in local/test environments
+    SerializingProducer = None  # type: ignore[assignment]
+    SchemaRegistryClient = None  # type: ignore[assignment]
+    AvroSerializer = None  # type: ignore[assignment]
 
 logger = structlog.get_logger("kafka_utils")
 
 
 @lru_cache(maxsize=1)
 def get_schema_registry_client() -> SchemaRegistryClient:
+    if SchemaRegistryClient is None:
+        raise RuntimeError("confluent_kafka schema registry client is not installed")
     settings = get_settings()
     return SchemaRegistryClient({'url': 'http://schema-registry:8081'}) # Make configurable
 
@@ -47,6 +54,8 @@ def load_schema(schema_name: str) -> str:
 @lru_cache(maxsize=1)
 def get_producer() -> SerializingProducer:
     """Return a configured Kafka producer with Avro support."""
+    if SerializingProducer is None:
+        raise RuntimeError("confluent_kafka producer is not installed")
     settings = get_settings()
     
     # schema_registry = get_schema_registry_client()
@@ -78,7 +87,9 @@ def send(topic: str, payload: dict, key: Optional[str] = None) -> None:
         producer = get_producer()
         producer.produce(topic=topic, key=key, value=payload)
         producer.flush()
-    except KafkaTimeoutError as exc:
-        logger.error("kafka_flush_timeout", topic=topic, error=str(exc))
-        raise HTTPException(status_code=500, detail="Kafka flush timeout") from exc
-
+    except RuntimeError as exc:
+        logger.warning("kafka_client_unavailable", topic=topic, error=str(exc))
+        raise HTTPException(status_code=503, detail="Kafka client unavailable") from exc
+    except Exception as exc:
+        logger.error("kafka_send_failed", topic=topic, error=str(exc))
+        raise HTTPException(status_code=500, detail="Kafka publish failed") from exc
