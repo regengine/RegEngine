@@ -224,6 +224,17 @@ POST /api/v1/fda/export/verify?export_id=<id>&tenant_id=<uuid>
 
 Full API reference: `partner_api_spec.yaml`
 
+### Ingestion RBAC Scopes (Phase 3 Minimal Rollout)
+
+Scoped API keys can now enforce permissions on Phase 2 traceability endpoints:
+
+- `exchange.write` / `exchange.read` -> `/api/v1/exchange/send`, `/api/v1/exchange/receive`
+- `edi.ingest` -> `POST /api/v1/ingest/edi`
+- `simulations.read` / `simulations.write` / `simulations.export` -> `/api/v1/simulations/*`
+- `fda.export` / `fda.read` / `fda.verify` -> `/api/v1/fda/export*`
+
+Legacy master `API_KEY` remains supported and maps to full access.
+
 ---
 
 ## Testing

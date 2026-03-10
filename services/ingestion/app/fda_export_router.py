@@ -26,34 +26,15 @@ from typing import Any, Literal, Optional
 from uuid import uuid4
 import zipfile
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from app.authz import require_permission
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 
 logger = logging.getLogger("fda-export")
 
 router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
-
-
-# ---------------------------------------------------------------------------
-# Auth (shared with webhook router)
-# ---------------------------------------------------------------------------
-
-def _verify_api_key(
-    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-) -> None:
-    """Verify API key. Canonical header: X-RegEngine-API-Key."""
-    import hmac
-    from app.config import get_settings
-    settings = get_settings()
-    configured_api_key = getattr(settings, "api_key", None)
-    if configured_api_key is not None:
-        if not x_regengine_api_key or not hmac.compare_digest(
-            x_regengine_api_key.encode("utf-8"),
-            configured_api_key.encode("utf-8"),
-        ):
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 # ---------------------------------------------------------------------------
@@ -418,7 +399,7 @@ async def export_fda_spreadsheet(
         description="Export format: package (zip bundle) or csv",
     ),
     tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91", description="Tenant identifier"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("fda.export")),
 ):
     """Generate and return an FDA-compliant traceability export."""
     db_session = None
@@ -546,7 +527,7 @@ async def export_all_events(
         description="Export format: package (zip bundle) or csv",
     ),
     tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("fda.export")),
 ):
     """Export all events as FDA-format CSV."""
     db_session = None
@@ -664,7 +645,7 @@ async def export_all_events(
 async def export_history(
     tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
     limit: int = Query(50, ge=1, le=200),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("fda.read")),
 ):
     """Return export audit log."""
     db_session = None
@@ -734,7 +715,7 @@ async def export_recall_filtered(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("fda.export")),
 ):
     """Generate recall-filtered FDA export with flexible search criteria."""
     # Require at least one filter to prevent full-table dumps
@@ -950,7 +931,7 @@ async def export_recall_filtered(
 async def verify_export(
     export_id: str = Query(..., description="Export log ID to verify"),
     tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
-    _: None = Depends(_verify_api_key),
+    _auth=Depends(require_permission("fda.verify")),
 ):
     """Verify that an export can be reproduced with the same hash."""
     db_session = None

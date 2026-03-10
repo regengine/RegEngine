@@ -22,9 +22,9 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 import shared.cte_persistence as shared_cte_persistence
+from app.authz import IngestionPrincipal, get_ingestion_principal
 from app.fda_export_router import (
     _generate_csv,
-    _verify_api_key,
     router as fda_router,
 )
 
@@ -161,7 +161,11 @@ def _install_fake_dependencies(
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app = FastAPI()
     app.include_router(fda_router)
-    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
 
     _install_fake_dependencies(
         monkeypatch,
@@ -246,7 +250,11 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
 
     app = FastAPI()
     app.include_router(fda_router)
-    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
 
     _install_fake_dependencies(
         monkeypatch,
@@ -268,3 +276,31 @@ def test_verify_export_recomputes_hash_for_full_export(monkeypatch: pytest.Monke
     assert payload["hashes_match"] is True
     assert payload["data_integrity"] == "VERIFIED"
     assert payload["current_record_count"] == 2
+
+
+def test_export_denied_without_fda_export_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = FastAPI()
+    app.include_router(fda_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="limited-key",
+        scopes=["fda.read"],
+        auth_mode="test",
+    )
+
+    _install_fake_dependencies(
+        monkeypatch,
+        session_factory=lambda: _FakeSession(),
+        persistence_cls=_FakePersistence,
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/api/v1/fda/export",
+            params={
+                "tenant_id": "00000000-0000-0000-0000-000000000111",
+                "tlc": "TLC-2026-001",
+            },
+        )
+
+    assert response.status_code == 403
+    assert "requires 'fda.export'" in response.json()["detail"]

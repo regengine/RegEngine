@@ -14,6 +14,7 @@ from app.models import TenantContext
 from app.auth_utils import decode_access_token
 # Supabase Integration
 from shared.supabase_client import get_supabase
+from shared.permissions import has_permission
 
 # Redis Session Store
 from app.session_store import RedisSessionStore, redact_connection_url
@@ -160,9 +161,8 @@ class PermissionChecker:
         if not role:
              raise HTTPException(status_code=403, detail="Role not found")
              
-        # Check permissions
-        # Supports wildcard '*'
-        if "*" in role.permissions or self.required_permission in role.permissions:
+        # Check permissions with wildcard and namespace support.
+        if has_permission(role.permissions or [], self.required_permission):
             return True
             
         raise HTTPException(status_code=403, detail="Insufficient permissions")
