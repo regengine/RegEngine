@@ -5,59 +5,20 @@ import { useState, useEffect } from "react";
 const T = {
     bg: "var(--re-surface-base)",
     surface: "rgba(255,255,255,0.02)",
-    elevated: "rgba(255,255,255,0.04)",
     border: "rgba(255,255,255,0.06)",
     accent: "var(--re-brand)",
     accentBg: "rgba(16,185,129,0.08)",
     accentBorder: "rgba(16,185,129,0.2)",
     textPrimary: "var(--re-text-primary)",
-    textBody: "var(--re-text-secondary)",
     textMuted: "var(--re-text-muted)",
     textDim: "var(--re-text-disabled)",
-    textGhost: "var(--re-text-disabled)",
     sans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     mono: "'JetBrains Mono', monospace",
 };
 
-const timeline = [
-    {
-        year: "2003–2006",
-        title: "AmeriCorps NCCC",
-        description: "Team Leader during Hurricane Katrina response. Learned that compliance failures during crises aren't about bad people — they're about bad infrastructure.",
-        tag: "Disaster Response",
-    },
-    {
-        year: "2006–2009",
-        title: "U.S. Senate — Personal Aide to Senator Jeff Merkley",
-        description: "Supported 150+ town halls and constituent engagements statewide. Saw firsthand how regulatory complexity creates coordination failures at scale.",
-        tag: "Federal Government",
-    },
-    {
-        year: "2009–2013",
-        title: "Epilepsy Foundation of Los Angeles",
-        description: "Program Manager overseeing $2.8M portfolio. Achieved 50% enrollment increases while navigating healthcare compliance requirements.",
-        tag: "Nonprofit",
-    },
-    {
-        year: "2013–2023",
-        title: "Tech Startups — SeatGeek, RadarFirst, Shift Technologies",
-        description: "Customer success, account management, and business development across ticketing, privacy compliance, and automotive marketplaces. Saw the compliance coordination problem firsthand from the customer side.",
-        tag: "Technology",
-    },
-    {
-        year: "2024–Present",
-        title: "RegEngine",
-        description: "Built an audit-grade regulatory compliance platform from architecture to deployment. Solo technical founder. Every line of code, every CFR citation, every SHA-256 hash.",
-        tag: "Current",
-    },
-];
-
 export default function AboutPage() {
     const [animateIn, setAnimateIn] = useState(false);
-
-    useEffect(() => {
-        setAnimateIn(true);
-    }, []);
+    useEffect(() => { setAnimateIn(true); }, []);
 
     return (
         <div className="re-page">
@@ -66,16 +27,8 @@ export default function AboutPage() {
                 rel="stylesheet"
             />
 
-            <div
-                style={{
-                    position: "fixed", inset: 0, opacity: 0.015, pointerEvents: "none", zIndex: 1,
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-                    backgroundSize: "128px 128px",
-                }}
-            />
-
             {/* Hero */}
-            <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-[60px]">
+            <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-[48px]">
                 <div
                     style={{
                         opacity: animateIn ? 1 : 0,
@@ -87,20 +40,18 @@ export default function AboutPage() {
                         About
                     </span>
                     <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
-                        Built by someone who&apos;s seen compliance from every side
+                        Compliance infrastructure, built from the ground up
                     </h1>
-                    <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: "0 0 16px" }}>
-                        RegEngine isn&apos;t a venture-backed team that read about FSMA 204 in a TechCrunch article. It&apos;s built by a founder with 20+ years across public service, federal government, nonprofit management, and technology.
-                    </p>
                     <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
-                        The thesis is simple: regulatory compliance is a coordination problem, not an information problem. The rules are public. The challenge is making them machine-readable, cryptographically verifiable, and operationally useful — without requiring a six-figure consulting engagement.
+                        RegEngine turns FSMA 204 requirements into machine-readable, cryptographically verifiable records.
+                        Scan a barcode, trace a lot, export an FDA-ready package — in minutes, not days.
                     </p>
                 </div>
             </section>
 
             {/* Founder */}
-            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.01)" }}>
-                <div className="max-w-[720px] mx-auto py-[60px] px-6">
+            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: T.surface }}>
+                <div className="max-w-[720px] mx-auto py-[48px] px-6">
                     <div style={{ display: "flex", gap: "24px", alignItems: "start" }}>
                         <div
                             style={{
@@ -114,91 +65,57 @@ export default function AboutPage() {
                         </div>
                         <div>
                             <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 4px" }}>
-                                Christopher Lee Sellers
+                                Christopher Sellers
                             </h2>
-                            <p style={{ fontSize: "14px", color: T.accent, fontWeight: 600, margin: "0 0 12px" }}>
-                                CEO & Founder
+                            <p style={{ fontSize: "14px", color: T.accent, fontWeight: 600, margin: "0 0 16px" }}>
+                                Founder & CEO
                             </p>
-                            <p className="text-sm text-re-text-muted leading-relaxed m-0">
-                                20+ years spanning federal government (U.S. Senate), nonprofit program management (Epilepsy Foundation), disaster response (AmeriCorps NCCC / Hurricane Katrina), and tech startups (SeatGeek, RadarFirst, Shift Technologies). President&apos;s Volunteer Service Award for lifetime achievement. B.S. Political Science, Portland State University.
-                            </p>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "baseline" }}>
+                                    <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim, fontWeight: 500, minWidth: "20px" }}>01</span>
+                                    <p className="text-sm text-re-text-muted leading-relaxed m-0">
+                                        U.S. Senate — served as aide to Senator Jeff Merkley, supporting 150+ constituent engagements statewide.
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "baseline" }}>
+                                    <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim, fontWeight: 500, minWidth: "20px" }}>02</span>
+                                    <p className="text-sm text-re-text-muted leading-relaxed m-0">
+                                        AmeriCorps NCCC — Team Leader during Hurricane Katrina disaster response. President&apos;s Volunteer Service Award.
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", gap: "10px", alignItems: "baseline" }}>
+                                    <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim, fontWeight: 500, minWidth: "20px" }}>03</span>
+                                    <p className="text-sm text-re-text-muted leading-relaxed m-0">
+                                        Built every layer of RegEngine — architecture, backend, frontend, compliance logic, and cryptographic verification. Solo technical founder.
+                                    </p>
+                                </div>
+                            </div>
+                            <a
+                                href="https://www.linkedin.com/in/christophersellers"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ display: "inline-block", fontSize: "13px", color: T.accent, fontWeight: 500, marginTop: "16px", textDecoration: "none" }}
+                            >
+                                LinkedIn →
+                            </a>
                         </div>
                     </div>
                 </div>
             </section>
 
-            {/* Timeline */}
-            <section className="relative z-[2] max-w-[720px] mx-auto py-[60px] px-6 pb-20">
-                <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.textPrimary, margin: "0 0 36px" }}>
-                    The path to RegEngine
-                </h2>
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "0", position: "relative" }}>
-                    {/* Vertical line */}
-                    <div
-                        style={{
-                            position: "absolute", left: "15px", top: "8px", bottom: "8px", width: "1px",
-                            background: `linear-gradient(to bottom, ${T.border}, ${T.accentBorder}, ${T.accent})`,
-                        }}
-                    />
-
-                    {timeline.map((item, i) => {
-                        const isCurrent = i === timeline.length - 1;
-                        return (
-                            <div key={i} style={{ display: "flex", gap: "24px", padding: "20px 0", position: "relative" }}>
-                                <div
-                                    style={{
-                                        width: "10px", height: "10px", borderRadius: "50%", flexShrink: 0, marginTop: "6px",
-                                        background: isCurrent ? T.accent : T.textGhost,
-                                        boxShadow: isCurrent ? `0 0 12px ${T.accentBorder}` : "none",
-                                        border: isCurrent ? "none" : `2px solid ${T.textDim}`,
-                                        position: "relative", left: "10px", zIndex: 2,
-                                    }}
-                                />
-                                <div className="flex-1">
-                                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", flexWrap: "wrap" }}>
-                                        <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim, fontWeight: 500 }}>
-                                            {item.year}
-                                        </span>
-                                        <span
-                                            style={{
-                                                fontSize: "10px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-                                                padding: "2px 8px", borderRadius: "4px",
-                                                color: isCurrent ? T.accent : T.textDim,
-                                                background: isCurrent ? T.accentBg : T.elevated,
-                                                border: `1px solid ${isCurrent ? T.accentBorder : T.border}`,
-                                            }}
-                                        >
-                                            {item.tag}
-                                        </span>
-                                    </div>
-                                    <h3 style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary, margin: "0 0 6px" }}>
-                                        {item.title}
-                                    </h3>
-                                    <p className="text-sm text-re-text-muted leading-relaxed m-0">
-                                        {item.description}
-                                    </p>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </section>
-
-            {/* What we believe */}
-            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: T.accentBg }}>
-                <div className="max-w-[720px] mx-auto py-[60px] px-6">
-                    <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.textPrimary, margin: "0 0 28px" }}>
+            {/* Beliefs */}
+            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}` }}>
+                <div className="max-w-[720px] mx-auto py-[48px] px-6">
+                    <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.textPrimary, margin: "0 0 24px" }}>
                         What we believe
                     </h2>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                         {[
-                            { title: "Compliance data should be verifiable, not trusted.", body: "Every fact in RegEngine is cryptographically hashed with SHA-256. Run our open verification script yourself. If the hashes don't match, don't trust us." },
-                            { title: "Pricing should be public.", body: "The compliance industry runs on 'contact sales' and opaque enterprise contracts. We publish our prices. If you can't afford us, we'll point you to free resources that can help." },
-                            { title: "Regulations are public. Access shouldn't be expensive.", body: "The Code of Federal Regulations is freely available. The challenge is operationalizing it. We charge for the infrastructure, not the information." },
-                            { title: "Solo founder ≠ unserious.", body: "We're honest about being early-stage with a single founder. That means you get direct access to the person who built every layer of the system — not a support ticket queue." },
+                            { title: "Compliance data should be verifiable, not trusted.", body: "Every record is SHA-256 hashed. Run our open verification script — if the hashes don't match, don't trust us." },
+                            { title: "Pricing should be public.", body: "We publish our prices. No 'contact sales' gates, no opaque enterprise contracts." },
+                            { title: "Regulations are public. Tooling should be accessible.", body: "The CFR is free. We charge for the infrastructure that makes it operationally useful." },
                         ].map((belief, i) => (
-                            <div key={i}>
+                            <div key={i} style={{ padding: "16px 20px", background: T.surface, borderRadius: "8px", border: `1px solid ${T.border}` }}>
                                 <h3 style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary, margin: "0 0 4px" }}>
                                     {belief.title}
                                 </h3>
@@ -212,23 +129,36 @@ export default function AboutPage() {
             </section>
 
             {/* CTA */}
-            <section style={{ position: "relative", zIndex: 2, maxWidth: "720px", margin: "0 auto", padding: "60px 24px", textAlign: "center" }}>
-                <h2 style={{ fontSize: "24px", fontWeight: 700, color: T.textPrimary, margin: "0 0 12px" }}>
-                    Questions? Talk to the founder directly.
+            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, maxWidth: "720px", margin: "0 auto", padding: "48px 24px", textAlign: "center" }}>
+                <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 8px" }}>
+                    Talk to the founder directly
                 </h2>
                 <p style={{ fontSize: "15px", color: T.textMuted, margin: "0 0 24px" }}>
                     chris@regengine.co — no sales team, no gatekeepers.
                 </p>
-                <a
-                    href="/ftl-checker"
-                    style={{
-                        display: "inline-flex", alignItems: "center", gap: "8px",
-                        padding: "14px 28px", background: T.accent, color: T.bg,
-                        borderRadius: "8px", fontSize: "15px", fontWeight: 600, textDecoration: "none",
-                    }}
-                >
-                    Try the FTL Checker →
-                </a>
+                <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+                    <a
+                        href="/signup"
+                        style={{
+                            display: "inline-flex", alignItems: "center", gap: "8px",
+                            padding: "14px 28px", background: T.accent, color: T.bg,
+                            borderRadius: "8px", fontSize: "15px", fontWeight: 600, textDecoration: "none",
+                        }}
+                    >
+                        Start Free Trial →
+                    </a>
+                    <a
+                        href="/pricing"
+                        style={{
+                            display: "inline-flex", alignItems: "center", gap: "8px",
+                            padding: "14px 28px", background: "transparent", color: T.textPrimary,
+                            borderRadius: "8px", fontSize: "15px", fontWeight: 600, textDecoration: "none",
+                            border: `1px solid ${T.border}`,
+                        }}
+                    >
+                        View Pricing
+                    </a>
+                </div>
             </section>
 
             <style>{`* { box-sizing: border-box; margin: 0; }`}</style>
