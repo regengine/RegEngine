@@ -1,6 +1,15 @@
-'use client';
+import type { Metadata } from 'next';
 
-import { useState, useEffect } from "react";
+export const metadata: Metadata = {
+    title: 'Security | RegEngine',
+    description: 'Independently verifiable security: Row-Level Security, SHA-256 hashing, immutable audit trails, and open-source verification.',
+    openGraph: {
+        title: 'Security | RegEngine',
+        description: 'Independently verifiable security for FSMA 204 compliance.',
+        url: 'https://www.regengine.co/security',
+        type: 'website',
+    },
+};
 
 const T = {
     bg: "var(--re-surface-base)",
@@ -14,8 +23,6 @@ const T = {
     textBody: "var(--re-text-secondary)",
     textMuted: "var(--re-text-muted)",
     textDim: "var(--re-text-disabled)",
-    textGhost: "var(--re-text-disabled)",
-    sans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
     mono: "'JetBrains Mono', monospace",
 };
 
@@ -27,7 +34,6 @@ function ShieldIcon() {
         </svg>
     );
 }
-
 function LockIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +42,6 @@ function LockIcon() {
         </svg>
     );
 }
-
 function HashIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -44,7 +49,6 @@ function HashIcon() {
         </svg>
     );
 }
-
 function EyeIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -58,15 +62,13 @@ const securityFeatures = [
     {
         icon: <LockIcon />,
         title: "Row-Level Security (RLS)",
-        status: "verified",
-        description: "Every database query is scoped to the authenticated tenant. Cross-tenant data access is structurally impossible — enforced at the PostgreSQL policy level, not the application layer.",
+        description: "Every database query is scoped to the authenticated tenant. Cross-tenant data access is structurally impossible \u2014 enforced at the PostgreSQL policy level, not the application layer.",
         evidence: "Tested: Tenant A cannot query Tenant B data (0 rows returned). Public access correctly blocked.",
         regulation: "Multi-tenant isolation",
     },
     {
         icon: <HashIcon />,
         title: "Cryptographic Fact Hashing",
-        status: "verified",
         description: "Every extracted regulatory fact is hashed with SHA-256 using a deterministic composition: key|type|value|conditions|provenance. Any mutation produces a completely different hash.",
         evidence: "Verified: Re-running ingestion produces identical hashes. Independent verification script (verify_chain.py) confirms integrity.",
         regulation: "Tamper detection",
@@ -74,99 +76,67 @@ const securityFeatures = [
     {
         icon: <ShieldIcon />,
         title: "Immutable Audit Trail",
-        status: "verified",
-        description: "Database triggers block all updates and deletes on compliance tables (extracted facts, rule evaluations, audit events). Corrections must create new versioned records with lineage links (supersedes_document_id, previous_fact_id).",
+        description: "Database triggers block all updates and deletes on compliance tables (extracted facts, rule evaluations, audit events). Corrections must create new versioned records with lineage links.",
         evidence: "Enforced via prevent_mutation trigger (V20). Append-only audit_logs enforced via prevent_audit_modification (V30). Version chain verified from V1 through V16.",
         regulation: "21 CFR Part 11 alignment",
     },
     {
         icon: <EyeIcon />,
         title: "Independent Verification",
-        status: "verified",
-        description: "Our open-source verify_chain.py script lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Zero trust required.",
+        description: "Our open-source verify_chain.py script lets anyone \u2014 auditors, customers, regulators \u2014 independently verify data integrity without database access. Zero trust required.",
         evidence: "Output: 430 record hashes verified, 0 failed across 7 Critical Tracking Events (Dairy, Imported Seafood, Produce recall chains).",
         regulation: "Third-party auditability",
     },
 ];
 
 const securityControls = [
-    { item: "Data encryption at rest (AES-256)", status: "implemented", timeline: "Current" },
-    { item: "TLS 1.3 in transit", status: "implemented", timeline: "Current" },
-    { item: "Branch protection (required reviews, no force-push)", status: "implemented", timeline: "Current" },
-    { item: "CI security scanning (SAST, secrets, deps, DAST)", status: "implemented", timeline: "Current" },
-    { item: "Vulnerability Disclosure Policy + security.txt", status: "implemented", timeline: "Current" },
-    { item: "Audit log export (tamper-evident)", status: "implemented", timeline: "Current" },
-    { item: "Hardening gates: auth + tenant isolation in CI", status: "implemented", timeline: "Current" },
-    { item: "Incident response plan (internal)", status: "implemented", timeline: "Current" },
+    { item: "Data encryption at rest (AES-256)", timeline: "Current" },
+    { item: "TLS 1.3 in transit", timeline: "Current" },
+    { item: "Branch protection (required reviews, no force-push)", timeline: "Current" },
+    { item: "CI security scanning (SAST, secrets, deps, DAST)", timeline: "Current" },
+    { item: "Vulnerability Disclosure Policy + security.txt", timeline: "Current" },
+    { item: "Audit log export (tamper-evident)", timeline: "Current" },
+    { item: "Hardening gates: auth + tenant isolation in CI", timeline: "Current" },
+    { item: "Incident response plan (internal)", timeline: "Current" },
+];
+
+const infrastructure = [
+    { label: "Database", value: "PostgreSQL (Supabase)", detail: "Row-Level Security enforced" },
+    { label: "Hosting", value: "Cloud infrastructure", detail: "US data residency" },
+    { label: "Encryption at rest", value: "AES-256", detail: "All stored data" },
+    { label: "Encryption in transit", value: "TLS 1.3", detail: "All API traffic" },
+    { label: "Authentication", value: "JWT + API keys", detail: "Per-tenant scoping" },
+    { label: "Hashing", value: "SHA-256", detail: "Deterministic, auditable" },
 ];
 
 export default function SecurityPage() {
-    const [animateIn, setAnimateIn] = useState(false);
-
-    useEffect(() => {
-        setAnimateIn(true);
-    }, []);
-
-    const statusColors: Record<string, { bg: string; border: string; text: string; label: string }> = {
-        verified: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Verified" },
-        implemented: { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.2)", text: "var(--re-brand)", label: "✓ Implemented" },
-        implementing: { bg: "rgba(250,204,21,0.1)", border: "rgba(250,204,21,0.2)", text: "var(--re-warning)", label: "Implementing" },
-        "in-progress": { bg: "rgba(96,165,250,0.1)", border: "rgba(96,165,250,0.2)", text: "var(--re-info)", label: "In Progress" },
-    };
-
     return (
         <div className="re-page">
-            <link
-                href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-                rel="stylesheet"
-            />
-
-            <div
-                style={{
-                    position: "fixed", inset: 0, opacity: 0.015, pointerEvents: "none", zIndex: 1,
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-                    backgroundSize: "128px 128px",
-                }}
-            />
-
             {/* Hero */}
             <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-[60px]">
-                <div
-                    style={{
-                        opacity: animateIn ? 1 : 0,
-                        transform: animateIn ? "translateY(0)" : "translateY(16px)",
-                        transition: "all 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
-                    }}
-                >
-                    <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
-                        Security
-                    </span>
-                    <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15 }}>
-                        Don't trust us.<br />
-                        <span className="text-re-brand">Verify us.</span>
-                    </h1>
-                    <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
-                        Security in compliance software shouldn't be a marketing claim — it should be independently auditable. Here's exactly what we've built and verified in production today.
-                    </p>
-                </div>
+                <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
+                    Security
+                </span>
+                <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15 }}>
+                    Don&apos;t trust us.<br />
+                    <span className="text-re-brand">Verify us.</span>
+                </h1>
+                <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
+                    Security in compliance software shouldn&apos;t be a marketing claim &mdash; it should be independently auditable.
+                    Here&apos;s exactly what we&apos;ve built and verified in production today.
+                </p>
             </section>
 
             {/* Verified Security */}
             <section style={{ position: "relative", zIndex: 2, maxWidth: "720px", margin: "0 auto", padding: "0 24px 60px" }}>
                 <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 24px" }}>
-                    What's verified today
+                    What&apos;s verified today
                 </h2>
-
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                     {securityFeatures.map((feature, i) => (
                         <div
                             key={i}
-                            style={{
-                                padding: "24px",
-                                background: T.surface,
-                                border: `1px solid ${T.accentBorder}`,
-                                borderRadius: "12px",
-                            }}
+                            style={{ padding: "24px", background: T.surface, border: `1px solid ${T.accentBorder}`, borderRadius: "12px" }}
                         >
                             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
                                 <span className="text-re-brand">{feature.icon}</span>
@@ -177,11 +147,10 @@ export default function SecurityPage() {
                                     style={{
                                         fontSize: "10px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
                                         padding: "3px 10px", borderRadius: "10px",
-                                        color: statusColors.verified.text,
-                                        background: statusColors.verified.bg,
+                                        color: T.accent, background: T.accentBg,
                                     }}
                                 >
-                                    {statusColors.verified.label}
+                                    ✓ Verified
                                 </span>
                             </div>
                             <p style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.6, margin: "0 0 12px" }}>
@@ -189,13 +158,8 @@ export default function SecurityPage() {
                             </p>
                             <div
                                 style={{
-                                    padding: "10px 14px",
-                                    background: "rgba(0,0,0,0.2)",
-                                    borderRadius: "6px",
-                                    fontSize: "12px",
-                                    fontFamily: T.mono,
-                                    color: T.textDim,
-                                    lineHeight: 1.5,
+                                    padding: "10px 14px", background: "rgba(0,0,0,0.2)", borderRadius: "6px",
+                                    fontSize: "12px", fontFamily: T.mono, color: T.textDim, lineHeight: 1.5,
                                 }}
                             >
                                 <span className="text-re-brand">Evidence:</span> {feature.evidence}
@@ -211,31 +175,16 @@ export default function SecurityPage() {
                     <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 24px" }}>
                         Infrastructure
                     </h2>
-
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                        {[
-                            { label: "Database", value: "PostgreSQL (Supabase)", detail: "Row-Level Security enforced" },
-                            { label: "Hosting", value: "Cloud infrastructure", detail: "US data residency" },
-                            { label: "Encryption at rest", value: "AES-256", detail: "All stored data" },
-                            { label: "Encryption in transit", value: "TLS 1.3", detail: "All API traffic" },
-                            { label: "Authentication", value: "JWT + API keys", detail: "Per-tenant scoping" },
-                            { label: "Hashing", value: "SHA-256", detail: "Deterministic, auditable" },
-                        ].map((item, i) => (
-                            <div
-                                key={i}
-                                style={{
-                                    padding: "16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "8px",
-                                }}
-                            >
+                        {infrastructure.map((item, i) => (
+                            <div key={i} style={{ padding: "16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "8px" }}>
                                 <div style={{ fontSize: "11px", color: T.textDim, fontFamily: T.mono, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                                     {item.label}
                                 </div>
                                 <div style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary, marginBottom: "2px" }}>
                                     {item.value}
                                 </div>
-                                <div style={{ fontSize: "12px", color: T.textMuted }}>
-                                    {item.detail}
-                                </div>
+                                <div style={{ fontSize: "12px", color: T.textMuted }}>{item.detail}</div>
                             </div>
                         ))}
                     </div>
@@ -250,37 +199,28 @@ export default function SecurityPage() {
                 <p style={{ fontSize: "14px", color: T.textMuted, margin: "0 0 24px" }}>
                     Controls below are implemented and running in the current platform.
                 </p>
-
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {securityControls.map((item, i) => {
-                        const s = statusColors[item.status];
-                        return (
-                            <div
-                                key={i}
+                    {securityControls.map((item, i) => (
+                        <div
+                            key={i}
+                            style={{
+                                display: "flex", alignItems: "center", gap: "12px",
+                                padding: "12px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "8px",
+                            }}
+                        >
+                            <span style={{ fontSize: "14px", fontWeight: 500, color: T.textBody, flex: 1 }}>{item.item}</span>
+                            <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim }}>{item.timeline}</span>
+                            <span
                                 style={{
-                                    display: "flex", alignItems: "center", gap: "12px",
-                                    padding: "12px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "8px",
+                                    fontSize: "10px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
+                                    padding: "3px 10px", borderRadius: "10px", minWidth: "90px", textAlign: "center",
+                                    color: T.accent, background: T.accentBg, border: `1px solid ${T.accentBorder}`,
                                 }}
                             >
-                                <span style={{ fontSize: "14px", fontWeight: 500, color: T.textBody, flex: 1 }}>
-                                    {item.item}
-                                </span>
-                                <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim }}>
-                                    {item.timeline}
-                                </span>
-                                <span
-                                    style={{
-                                        fontSize: "10px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-                                        padding: "3px 10px", borderRadius: "10px",
-                                        color: s.text, background: s.bg, border: `1px solid ${s.border}`,
-                                        minWidth: "90px", textAlign: "center",
-                                    }}
-                                >
-                                    {s.label}
-                                </span>
-                            </div>
-                        );
-                    })}
+                                ✓ Implemented
+                            </span>
+                        </div>
+                    ))}
                 </div>
             </section>
 
@@ -304,8 +244,6 @@ export default function SecurityPage() {
                     </a>
                 </div>
             </section>
-
-            <style>{`* { box-sizing: border-box; margin: 0; }`}</style>
         </div>
     );
 }
