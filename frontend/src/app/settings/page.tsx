@@ -89,9 +89,11 @@ export default function SettingsPage() {
                                     Change password and enable 2FA
                                 </p>
                             </div>
-                            <Button variant="outline" className="w-full" disabled>
-                                Configure Security
-                            </Button>
+                            <Link href="/settings/security">
+                                <Button variant="outline" className="w-full">
+                                    Configure Security
+                                </Button>
+                            </Link>
                         </CardContent>
                     </Card>
 
@@ -113,9 +115,11 @@ export default function SettingsPage() {
                                     Email, in-app, and webhook notifications
                                 </p>
                             </div>
-                            <Button variant="outline" className="w-full" disabled>
-                                Manage Notifications
-                            </Button>
+                            <Link href="/settings/notifications">
+                                <Button variant="outline" className="w-full">
+                                    Manage Notifications
+                                </Button>
+                            </Link>
                         </CardContent>
                     </Card>
 
@@ -161,9 +165,11 @@ export default function SettingsPage() {
                                     Organization settings and subscription
                                 </p>
                             </div>
-                            <Button variant="outline" className="w-full" disabled>
-                                Organization Settings
-                            </Button>
+                            <Link href="/settings/users">
+                                <Button variant="outline" className="w-full">
+                                    Manage Users
+                                </Button>
+                            </Link>
                         </CardContent>
                     </Card>
                 </div>

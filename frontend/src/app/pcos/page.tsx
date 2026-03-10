@@ -173,6 +173,33 @@ export default function PCOSDashboard() {
             </header>
 
             <main className="container px-6 py-8 space-y-8">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">PCOS Workspace</CardTitle>
+                        <CardDescription>Open assessment, crew import, and evidence locker tools.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap gap-3">
+                        <Link href="/pcos/assessment">
+                            <Button variant="outline">
+                                <Shield className="h-4 w-4 mr-2" />
+                                Compliance Assessment
+                            </Button>
+                        </Link>
+                        <Link href="/pcos/crew-import">
+                            <Button variant="outline">
+                                <Users className="h-4 w-4 mr-2" />
+                                Crew Import
+                            </Button>
+                        </Link>
+                        <Link href="/pcos/documents">
+                            <Button variant="outline">
+                                <FileCheck className="h-4 w-4 mr-2" />
+                                Evidence Locker
+                            </Button>
+                        </Link>
+                    </CardContent>
+                </Card>
+
                 {/* Project Overview Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Card>

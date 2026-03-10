@@ -241,7 +241,7 @@ export default function CompliancePage() {
           )}
 
           {/* Info Cards */}
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Validation API</CardTitle>
@@ -270,6 +270,26 @@ export default function CompliancePage() {
                   <Badge>PCI DSS</Badge>
                   <Badge>GDPR</Badge>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>FSMA Workspace</CardTitle>
+                <CardDescription>
+                  Open advanced compliance tools for labels and traceability planning
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Link href="/compliance/labels">
+                  <Button variant="outline" className="w-full justify-start">
+                    Label Compliance
+                  </Button>
+                </Link>
+                <Link href="/compliance/traceability-plan">
+                  <Button variant="outline" className="w-full justify-start">
+                    Traceability Plan
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </div>
