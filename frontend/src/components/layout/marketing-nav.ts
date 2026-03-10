@@ -11,7 +11,7 @@ export type MarketingToolLink = {
 };
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
-    { label: "Product", href: "/#product" },
+    { label: "Product", href: "/product" },
     { label: "FSMA 204 Guide", href: "/docs/fsma-204" },
     { label: "Resources", href: "/resources" },
     { label: "Developers", href: "/developers" },
