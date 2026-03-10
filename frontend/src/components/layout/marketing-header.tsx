@@ -16,7 +16,11 @@ export function MarketingHeader() {
     const toolsWrapperRef = useRef<HTMLDivElement | null>(null);
     const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
     const { user } = useAuth();
-    const hideHeader = pathname === '/fsma/field-capture' || pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding');
+    const hideHeader =
+        pathname === '/mobile/capture' ||
+        pathname === '/fsma/field-capture' ||
+        pathname.startsWith('/dashboard') ||
+        pathname.startsWith('/onboarding');
 
     const handleToolsEnter = () => {
         if (closeTimeoutRef.current) {
