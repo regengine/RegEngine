@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
@@ -15,13 +13,18 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
-import { Search, Wand2, GitBranch, Network, Plus, Trash2, Sparkles } from "lucide-react";
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/components/ui/use-toast";
+import { Spinner } from "@/components/ui/spinner";
+import { useTenant } from "@/lib/tenant-context";
+import { getServiceURL } from "@/lib/api-config";
+import { AlertTriangle, GitBranch, Network, Search } from "lucide-react";
 
 // ── Utilities ──
 function mulberry32(seed: number) {
@@ -42,6 +45,28 @@ type GraphNode = { id: string; type: NodeType; label: string; meta?: Record<stri
 type GraphEdge = { id: string; type: EdgeType; from: string; to: string; meta?: Record<string, any> };
 type TraceMode = "forward" | "backward" | "bidirectional";
 type Viewport = { scale: number; panX: number; panY: number };
+type TraceabilityQueryEvidence = {
+    endpoint: string;
+    params?: Record<string, unknown>;
+    result_count?: number;
+    next_cursor?: string | null;
+};
+type TraceabilityQueryResponse = {
+    intent: string;
+    filters?: Record<string, unknown>;
+    answer: string;
+    results: Array<Record<string, any>>;
+    evidence: TraceabilityQueryEvidence[];
+    confidence: number;
+    warnings: string[];
+};
+type TraceabilityTableRow = {
+    tlc: string;
+    product: string;
+    facility: string;
+    date: string;
+    eventType: string;
+};
 
 const NTS: Record<NodeType, { color: string; dim: string; icon: string; kde: string }> = {
     Supplier: { color: "var(--re-info)", dim: "rgba(14, 165, 233, 0.15)", icon: "🏭", kde: "Source" },
@@ -111,8 +136,73 @@ function useAnimFrame(cb: () => void, on: boolean) {
     useEffect(() => { if (!on) return; const tick = () => { cb(); raf.current = requestAnimationFrame(tick); }; raf.current = requestAnimationFrame(tick); return () => { if (raf.current) cancelAnimationFrame(raf.current); }; }, [cb, on]);
 }
 
+function getConfidenceDescriptor(confidence: number) {
+    if (confidence >= 0.85) {
+        return {
+            label: "high",
+            className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+        };
+    }
+    if (confidence >= 0.7) {
+        return {
+            label: "medium",
+            className: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+        };
+    }
+    return {
+        label: "low",
+        className: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+    };
+}
+
+function toRow(candidate: Record<string, any>, fallbackTlc = ""): TraceabilityTableRow {
+    const facilityValue = candidate.facility;
+    const facilityName =
+        (typeof facilityValue === "string" ? facilityValue : facilityValue?.name) ||
+        candidate.facility_name ||
+        candidate.location_description ||
+        candidate.location_gln ||
+        "";
+    return {
+        tlc: candidate.tlc || candidate.lot_id || candidate.traceability_lot_code || fallbackTlc || "",
+        product: candidate.product_description || candidate.product || candidate.description || "",
+        facility: facilityName,
+        date: candidate.event_date || candidate.last_event_date || "",
+        eventType: candidate.type || candidate.event_type || candidate.last_event_type || "",
+    };
+}
+
+function collectQueryRows(intent: string, results: Array<Record<string, any>>): TraceabilityTableRow[] {
+    const rows: TraceabilityTableRow[] = [];
+
+    for (const item of results) {
+        if (intent === "trace_forward" || intent === "trace_backward") {
+            const nestedEvents = Array.isArray(item.events) ? item.events : [];
+            if (nestedEvents.length > 0) {
+                for (const event of nestedEvents) {
+                    rows.push(toRow({ ...event, facility: item.facilities?.[0], lot_id: item.lot_id }, item.lot_id || ""));
+                }
+                continue;
+            }
+        }
+
+        if (Array.isArray(item.events)) {
+            for (const nested of item.events) {
+                rows.push(toRow(nested));
+            }
+            continue;
+        }
+
+        rows.push(toRow(item));
+    }
+
+    return rows.slice(0, 200);
+}
+
 export function SupplyChainKnowledgeGraphBuilder() {
-    const [seed, setSeed] = useState(204);
+    const { tenantId } = useTenant();
+    const { toast } = useToast();
+    const [seed] = useState(204);
     const scenario = useMemo(() => seededScenario(seed), [seed]);
     const [nodes, setNodes] = useState<GraphNode[]>(scenario.nodes);
     const [edges, setEdges] = useState<GraphEdge[]>(scenario.edges);
@@ -128,17 +218,29 @@ export function SupplyChainKnowledgeGraphBuilder() {
     const [selNode, setSelNode] = useState<string | null>(null);
     const [selEdge, setSelEdge] = useState<string | null>(null);
     const [trMode, setTrMode] = useState<TraceMode>("forward");
-    const [trDepth, setTrDepth] = useState(3);
-    const [filterType, setFilterType] = useState<NodeType | "All">("All");
+    const trDepth = 3;
+    const filterType: NodeType | "All" = "All";
     const [search, setSearch] = useState("");
+    const [traceabilityQuery, setTraceabilityQuery] = useState("");
+    const [queryLoading, setQueryLoading] = useState(false);
+    const [queryResponse, setQueryResponse] = useState<TraceabilityQueryResponse | null>(null);
 
     const selNodeObj = useMemo(() => nodes.find(n => n.id === selNode) || null, [nodes, selNode]);
-    const selEdgeObj = useMemo(() => edges.find(e => e.id === selEdge) || null, [edges, selEdge]);
     const trace = useMemo(() => selNode ? traceNodes(selNode, edges, trMode, trDepth) : null, [selNode, edges, trMode, trDepth]);
 
     const visNodes = useMemo(() => { const q = search.trim().toLowerCase(); return nodes.filter(n => { if (filterType !== "All" && n.type !== filterType) return false; if (!q) return true; return n.label.toLowerCase().includes(q) || n.id.includes(q); }); }, [nodes, filterType, search]);
     const visIds = useMemo(() => new Set(visNodes.map(n => n.id)), [visNodes]);
     const visEdges = useMemo(() => edges.filter(e => visIds.has(e.from) && visIds.has(e.to)), [edges, visIds]);
+    const queryRows = useMemo(
+        () => collectQueryRows(queryResponse?.intent || "", queryResponse?.results || []),
+        [queryResponse],
+    );
+    const confidenceInfo = queryResponse
+        ? getConfidenceDescriptor(queryResponse.confidence)
+        : null;
+    const showWarningBanner = Boolean(
+        queryResponse && (queryResponse.confidence < 0.7 || queryResponse.warnings.length > 0)
+    );
 
     const [relaxing, setRelaxing] = useState(false);
     useAnimFrame(() => {
@@ -245,6 +347,61 @@ export function SupplyChainKnowledgeGraphBuilder() {
     const onDown = (e: React.MouseEvent) => { const w = toW(e.clientX, e.clientY); const h = hitNode(w.x, w.y); if (h) { setSelEdge(null); setSelNode(h); setDragId(h); const n = nodes.find(x => x.id === h); if (n) setDragOff({ x: w.x - n.x, y: w.y - n.y }); } else { setSelNode(null); setSelEdge(null); setPanning(true); setLastPan({ x: e.clientX, y: e.clientY }); } };
     const onMove = (e: React.MouseEvent) => { if (dragId && dragOff) { const w = toW(e.clientX, e.clientY); setNodes(p => p.map(n => n.id === dragId ? { ...n, x: w.x - dragOff.x, y: w.y - dragOff.y } : n)); } else if (panning && lastPan) { setVp(v => ({ ...v, panX: v.panX + e.clientX - lastPan.x, panY: v.panY + e.clientY - lastPan.y })); setLastPan({ x: e.clientX, y: e.clientY }); } };
     const onUp = () => { setDragId(null); setDragOff(null); setPanning(false); setLastPan(null); };
+    const runTraceabilityQuery = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const rawQuery = traceabilityQuery.trim();
+        if (!rawQuery || queryLoading) return;
+
+        const apiKey = process.env.NEXT_PUBLIC_API_KEY || "";
+        if (!apiKey) {
+            toast({
+                title: "Missing API key",
+                description: "Set NEXT_PUBLIC_API_KEY before running traceability queries.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setQueryLoading(true);
+
+        try {
+            const response = await fetch(`${getServiceURL("nlp")}/api/v1/query/traceability`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-RegEngine-API-Key": apiKey,
+                    "X-Tenant-ID": tenantId,
+                },
+                body: JSON.stringify({
+                    query: rawQuery,
+                    limit: 50,
+                }),
+            });
+
+            let payload: any = null;
+            try {
+                payload = await response.json();
+            } catch {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                const detail = payload?.detail || `Request failed with status ${response.status}`;
+                throw new Error(detail);
+            }
+
+            setQueryResponse(payload as TraceabilityQueryResponse);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Unknown query error";
+            toast({
+                title: "Traceability query failed",
+                description: message,
+                variant: "destructive",
+            });
+        } finally {
+            setQueryLoading(false);
+        }
+    };
 
     return (
         <div className="space-y-4">
@@ -261,6 +418,116 @@ export function SupplyChainKnowledgeGraphBuilder() {
             <Card className="rounded-3xl"><CardContent className="p-4 md:p-6">
                 <div className="grid gap-4 md:grid-cols-12">
                     <div className="md:col-span-9">
+                        <form className="mb-4 rounded-2xl border p-3" onSubmit={runTraceabilityQuery}>
+                            <div className="flex flex-col gap-2 md:flex-row">
+                                <Input
+                                    className="rounded-2xl"
+                                    placeholder="Ask your traceability data… (e.g. Where did lot ABC-2025-001 come from?)"
+                                    value={traceabilityQuery}
+                                    onChange={(e) => setTraceabilityQuery(e.target.value)}
+                                />
+                                <Button
+                                    type="submit"
+                                    className="rounded-2xl"
+                                    disabled={queryLoading || !traceabilityQuery.trim()}
+                                >
+                                    {queryLoading ? (
+                                        <span className="inline-flex items-center gap-2">
+                                            <Spinner size="sm" className="h-4 w-4 border-2" />
+                                            Querying
+                                        </span>
+                                    ) : (
+                                        "Ask"
+                                    )}
+                                </Button>
+                            </div>
+                            <p className="mt-2 text-xs text-muted-foreground">
+                                Try: “Where did lot ABC-2025-001 come from?” or “Show lettuce events from last 30 days”.
+                            </p>
+                        </form>
+
+                        {queryResponse && (
+                            <div className="mb-4 space-y-3">
+                                <div className="rounded-2xl border bg-background/70 p-3">
+                                    <div className="mb-1 flex items-center gap-2">
+                                        <div className="text-sm font-semibold">Answer</div>
+                                        {confidenceInfo && (
+                                            <Badge className={confidenceInfo.className}>
+                                                Confidence {confidenceInfo.label} ({Math.round(queryResponse.confidence * 100)}%)
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{queryResponse.answer}</p>
+                                </div>
+
+                                {showWarningBanner && (
+                                    <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3 text-amber-200">
+                                        <div className="mb-1 inline-flex items-center gap-2 text-sm font-medium">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            Query warnings
+                                        </div>
+                                        <div className="text-xs leading-relaxed">
+                                            {queryResponse.warnings.length > 0
+                                                ? queryResponse.warnings.join(" ")
+                                                : "Interpretation confidence is below 70%; verify filters before acting."}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="rounded-2xl border p-3">
+                                    <div className="mb-2 text-sm font-medium">Results ({queryRows.length})</div>
+                                    {queryRows.length > 0 ? (
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>TLC</TableHead>
+                                                    <TableHead>Product</TableHead>
+                                                    <TableHead>Facility</TableHead>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead>Event Type</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {queryRows.map((row, idx) => (
+                                                    <TableRow key={`${row.tlc}-${row.eventType}-${row.date}-${idx}`}>
+                                                        <TableCell>{row.tlc || "—"}</TableCell>
+                                                        <TableCell>{row.product || "—"}</TableCell>
+                                                        <TableCell>{row.facility || "—"}</TableCell>
+                                                        <TableCell>{row.date || "—"}</TableCell>
+                                                        <TableCell>{row.eventType || "—"}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">No rows returned for this query.</p>
+                                    )}
+                                </div>
+
+                                <details className="rounded-2xl border p-3">
+                                    <summary className="cursor-pointer text-sm font-medium">
+                                        Evidence ({queryResponse.evidence?.length || 0})
+                                    </summary>
+                                    <div className="mt-3 space-y-2">
+                                        {(queryResponse.evidence || []).map((item, idx) => (
+                                            <div key={`${item.endpoint}-${idx}`} className="rounded-xl border p-2 text-xs">
+                                                <div><span className="font-medium">Endpoint:</span> {item.endpoint}</div>
+                                                <div><span className="font-medium">Result count:</span> {item.result_count ?? 0}</div>
+                                                {item.next_cursor ? (
+                                                    <div><span className="font-medium">Next cursor:</span> {item.next_cursor}</div>
+                                                ) : null}
+                                                {item.params ? (
+                                                    <pre className="mt-2 overflow-auto rounded-lg bg-muted p-2 text-[11px]">
+                                                        {JSON.stringify(item.params, null, 2)}
+                                                    </pre>
+                                                ) : null}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </details>
+                            </div>
+                        )}
+
                         <div className="flex flex-wrap items-center gap-2 mb-4">
                             <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="w-[240px] rounded-2xl pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
                             <Select value={trMode} onValueChange={v => setTrMode(v as any)}><SelectTrigger className="w-[160px] rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="forward">→ Forward</SelectItem><SelectItem value="backward">← Backward</SelectItem><SelectItem value="bidirectional">↔ Both</SelectItem></SelectContent></Select>
