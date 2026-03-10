@@ -39,12 +39,12 @@ const ALPHA_PERKS = [
     {
         icon: TrendingUp,
         title: 'Locked-In Pricing',
-        description: 'Alpha partners lock in founding-member pricing — permanently grandfathered when we launch publicly.',
+        description: 'Alpha partners lock in founding-member pricing for the duration of their account.',
     },
     {
         icon: Users,
         title: 'Direct Founder Access',
-        description: 'Weekly office hours with the founding team. Your feedback directly shapes the product roadmap.',
+        description: 'Weekly office hours with the founding team. Your feedback helps inform product direction.',
     },
     {
         icon: FileCheck,
@@ -64,9 +64,8 @@ const ALPHA_PERKS = [
 ];
 
 const TIMELINE = [
-    { phase: 'Private Alpha', status: 'current', date: 'Now', detail: 'Invite-only · 25 companies' },
-    { phase: 'Closed Beta', status: 'upcoming', date: 'Q2 2026', detail: 'Expanded access · Full API' },
-    { phase: 'Public Launch', status: 'upcoming', date: 'Q3 2026', detail: 'General availability' },
+    { phase: 'Private Alpha', status: 'current', date: 'Current', detail: 'Invite-only · 25 companies' },
+    { phase: 'Design Partner Cohort', status: 'upcoming', date: 'Rolling', detail: 'Application review · Guided onboarding' },
     { phase: 'FSMA 204 Deadline', status: 'deadline', date: 'Jul 2028', detail: 'FDA enforcement begins' },
 ];
 
@@ -516,7 +515,7 @@ export default function AlphaPage() {
                         margin: '0 auto 48px',
                     }}
                 >
-                    This isn&apos;t a beta test. You&apos;re shaping the future of food safety compliance.
+                    This is a working design partner program focused on production readiness.
                 </p>
 
                 <div
@@ -594,7 +593,7 @@ export default function AlphaPage() {
                             marginBottom: '48px',
                         }}
                     >
-                        Product Roadmap
+                        Program Milestones
                     </h2>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>

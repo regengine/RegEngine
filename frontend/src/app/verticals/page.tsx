@@ -32,10 +32,10 @@ export default function VerticalsPage() {
                 <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-8">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-3">Current Focus</h2>
                     <p className="text-gray-600 dark:text-gray-300 mb-4">
-                        Non-FSMA vertical surfaces are intentionally hidden from active navigation during the FSMA pilot phase.
+                        RegEngine is currently focused on FSMA 204 traceability workflows for food supply chains.
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                        If you are evaluating a non-food-safety use case, use the waitlist flow and include your industry plus regulatory scope.
+                        Product documentation, tooling, and onboarding on this site are aligned to food safety and traceability operations.
                     </p>
                 </div>
             </div>
