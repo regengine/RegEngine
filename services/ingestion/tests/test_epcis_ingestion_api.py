@@ -13,7 +13,7 @@ sys.path.insert(0, str(service_dir))
 pytest.importorskip("fastapi")
 
 from app.epcis_ingestion import _epcis_idempotency_index, _epcis_store, router as epcis_ingestion_router
-from app.webhook_router import _verify_api_key
+from app.webhook_compat import _verify_api_key
 
 
 @pytest.fixture()

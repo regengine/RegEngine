@@ -29,7 +29,7 @@ from app.webhook_models import (
     WebhookCTEType,
     WebhookPayload,
 )
-from app.webhook_router import _verify_api_key, ingest_events
+from app.webhook_compat import _verify_api_key, ingest_events
 
 logger = logging.getLogger("sensitech-parser")
 
@@ -175,6 +175,7 @@ async def import_sensitech(
     location_gln: Optional[str] = Form(None, description="Facility GLN (optional)"),
     cold_threshold: float = Form(5.0, description="Max temperature threshold (°C)"),
     _: None = Depends(_verify_api_key),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> SensitechImportResponse:
     """Import Sensitech temperature data and create CTE events."""
 
@@ -240,7 +241,10 @@ async def import_sensitech(
 
     # Ingest via webhook pipeline
     payload = WebhookPayload(source="sensitech", events=events)
-    ingestion_result = await ingest_events(payload)
+    ingestion_result = await ingest_events(
+        payload,
+        x_regengine_api_key=x_regengine_api_key,
+    )
 
     return SensitechImportResponse(
         readings_parsed=len(readings),
