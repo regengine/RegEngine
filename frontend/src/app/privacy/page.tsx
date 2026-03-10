@@ -1,20 +1,14 @@
-'use client';
+import type { Metadata } from 'next';
 
-import { useState, useEffect } from "react";
-
-const T = {
-    bg: "var(--re-surface-base)",
-    surface: "rgba(255,255,255,0.02)",
-    border: "rgba(255,255,255,0.06)",
-    accent: "var(--re-brand)",
-    accentBg: "rgba(16,185,129,0.08)",
-    textPrimary: "var(--re-text-primary)",
-    textBody: "var(--re-text-secondary)",
-    textMuted: "var(--re-text-muted)",
-    textDim: "var(--re-text-disabled)",
-    textGhost: "var(--re-text-disabled)",
-    sans: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-    mono: "'JetBrains Mono', monospace",
+export const metadata: Metadata = {
+    title: 'Privacy Policy | RegEngine',
+    description: 'Plain language privacy policy. What RegEngine collects, why, and what we do with your compliance data.',
+    openGraph: {
+        title: 'Privacy Policy | RegEngine',
+        description: 'Plain language privacy policy for FSMA 204 compliance.',
+        url: 'https://www.regengine.co/privacy',
+        type: 'website',
+    },
 };
 
 const sections = [
@@ -137,49 +131,22 @@ const sections = [
 ];
 
 export default function PrivacyPage() {
-    const [animateIn, setAnimateIn] = useState(false);
-
-    useEffect(() => {
-        setAnimateIn(true);
-    }, []);
-
     return (
         <div className="re-page">
-            <link
-                href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-                rel="stylesheet"
-            />
-
-            <div
-                style={{
-                    position: "fixed", inset: 0, opacity: 0.015, pointerEvents: "none", zIndex: 1,
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-                    backgroundSize: "128px 128px",
-                }}
-            />
-
             {/* Hero */}
             <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-12">
-                <div
-                    style={{
-                        opacity: animateIn ? 1 : 0,
-                        transform: animateIn ? "translateY(0)" : "translateY(16px)",
-                        transition: "all 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
-                    }}
-                >
-                    <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
-                        Legal
-                    </span>
-                    <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 12px", lineHeight: 1.15 }}>
-                        Privacy Policy
-                    </h1>
-                    <p style={{ fontSize: "14px", color: T.textDim, fontFamily: T.mono }}>
-                        Effective: February 5, 2026 · Last updated: February 5, 2026
-                    </p>
-                    <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: "20px 0 0" }}>
-                        Plain language. No legalese walls. Here's what we collect, why, and what we do with it.
-                    </p>
-                </div>
+                <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
+                    Legal
+                </span>
+                <h1 className="text-4xl font-bold text-re-text-primary mt-4 mb-3 leading-tight">
+                    Privacy Policy
+                </h1>
+                <p className="text-sm text-re-text-disabled font-mono">
+                    Effective: February 5, 2026 · Last updated: February 5, 2026
+                </p>
+                <p className="text-base text-re-text-muted leading-relaxed mt-5">
+                    Plain language. No legalese walls. Here&apos;s what we collect, why, and what we do with it.
+                </p>
             </section>
 
             {/* Sections */}
@@ -187,25 +154,21 @@ export default function PrivacyPage() {
                 {sections.map((section, si) => (
                     <div
                         key={si}
-                        style={{
-                            padding: "32px 0",
-                            borderTop: si > 0 ? `1px solid ${T.border}` : "none",
-                        }}
+                        className={si > 0 ? "pt-8 border-t border-white/[0.06]" : "pt-8"}
                     >
-                        <h2 style={{ fontSize: "20px", fontWeight: 700, color: T.textPrimary, margin: "0 0 20px" }}>
+                        <h2 className="text-xl font-bold text-re-text-primary mb-5">
                             {section.title}
                         </h2>
-
-                        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div className="flex flex-col gap-4">
                             {section.content.map((item, i) => (
                                 <div key={i}>
                                     {'subtitle' in item && item.subtitle && (
-                                        <h3 style={{ fontSize: "14px", fontWeight: 600, color: T.accent, margin: "0 0 4px" }}>
+                                        <h3 className="text-sm font-semibold text-re-brand mb-1">
                                             {item.subtitle}
                                         </h3>
                                     )}
                                     {item.text && (
-                                        <p style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
+                                        <p className="text-sm text-re-text-muted leading-relaxed">
                                             {item.text}
                                         </p>
                                     )}
@@ -215,8 +178,6 @@ export default function PrivacyPage() {
                     </div>
                 ))}
             </section>
-
-            <style>{`* { box-sizing: border-box; margin: 0; }`}</style>
         </div>
     );
 }
