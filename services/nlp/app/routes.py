@@ -15,6 +15,7 @@ from .config import settings
 from .query_planner import QueryPlan, parse_query
 from shared.auth import APIKey, require_api_key
 from shared.api_key_store import APIKeyResponse
+from shared.funnel_events import emit_funnel_event
 from shared.permissions import has_permission
 
 logger = structlog.get_logger("nlp.test")
@@ -82,6 +83,15 @@ async def query_traceability(
         request=request,
         tenant_id=tenant_id,
         plan=plan,
+    )
+
+    emit_funnel_event(
+        tenant_id=tenant_id,
+        event_name="first_nlp_query",
+        metadata={
+            "intent": plan.intent,
+            "confidence": plan.confidence,
+        },
     )
 
     filters = plan.model_dump(

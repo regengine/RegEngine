@@ -12,7 +12,8 @@ from urllib.parse import unquote, urlparse
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from app.authz import require_permission
+from app.authz import IngestionPrincipal, require_permission
+from shared.funnel_events import emit_funnel_event
 
 logger = logging.getLogger("qr-decoder")
 
@@ -251,7 +252,7 @@ def _decode_image_bytes(image_bytes: bytes) -> str:
 )
 async def decode_qr_image(
     file: UploadFile = File(..., description="Image containing a QR/barcode"),
-    _auth=Depends(require_permission("scan.decode")),
+    principal: IngestionPrincipal = Depends(require_permission("scan.decode")),
 ) -> QRDecodeResponse:
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload must be an image content type")
@@ -268,9 +269,17 @@ async def decode_qr_image(
         fields.traceability_lot_code or (fields.gtin and fields.valid_gtin is not False)
     )
 
+    emit_funnel_event(
+        tenant_id=principal.tenant_id,
+        event_name="first_scan",
+        metadata={
+            "source_format": fields.source_format,
+            "fsma_compatible": fsma_compatible,
+        },
+    )
+
     return QRDecodeResponse(
         raw_value=raw_value,
         fields=fields,
         fsma_compatible=fsma_compatible,
     )
-

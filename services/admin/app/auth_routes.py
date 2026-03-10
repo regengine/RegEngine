@@ -17,6 +17,7 @@ from app.audit import AuditLogger
 from app.password_policy import validate_password, PasswordPolicyError
 from app.session_store import RedisSessionStore, SessionData
 from shared.supabase_client import get_supabase
+from shared.funnel_events import emit_funnel_event
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -300,6 +301,16 @@ async def signup(
         resource_type="tenant",
         resource_id=str(new_tenant.id),
         metadata={"tenant_name": new_tenant.name, "signup": True},
+    )
+
+    emit_funnel_event(
+        tenant_id=str(new_tenant.id),
+        event_name="signup_completed",
+        metadata={
+            "source": "auth.signup",
+            "user_id": str(new_user.id),
+        },
+        db_session=db,
     )
 
     db.commit()
