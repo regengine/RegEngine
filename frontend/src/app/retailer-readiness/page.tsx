@@ -160,7 +160,7 @@ export default function RetailerSuppliersPage() {
     const founder = useScrollReveal();
     const faqReveal = useScrollReveal();
     const competitorReveal = useScrollReveal();
-    const socialReveal = useScrollReveal();
+
     const integrationsReveal = useScrollReveal();
 
     // Animated counter
@@ -1264,70 +1264,6 @@ export default function RetailerSuppliersPage() {
                             </Link>
                         </div>
                     )}
-                </div>
-            </section>
-
-            {/* ═══════════════════════════════════════════════════════════
-               9. SOCIAL PROOF / CASE STUDY
-               ═══════════════════════════════════════════════════════════ */}
-            <section ref={socialReveal.ref} style={{
-                position: 'relative', zIndex: 2,
-                maxWidth: 800, margin: '0 auto', padding: '60px 24px',
-                opacity: socialReveal.visible ? 1 : 0,
-                transform: socialReveal.visible ? 'translateY(0)' : 'translateY(30px)',
-                transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
-            }}>
-                <div className="text-center mb-10">
-                    <p className="re-section-label">
-                        Proof It Works
-                    </p>
-                    <h2 className="re-section-title">
-                        From 0% to Retailer-Ready in 18 Days
-                    </h2>
-                </div>
-                <div style={{
-                    background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
-                    padding: '32px 28px', position: 'relative', overflow: 'hidden',
-                }}>
-                    <div style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                        background: `linear-gradient(90deg, ${T.accent}, #34d399)`,
-                    }} />
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-                        <div style={{
-                            width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-                            background: `${T.accent}12`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 20,
-                        }}>🥬</div>
-                        <div>
-                            <p style={{ fontSize: 16, fontWeight: 600, color: T.heading }}>
-                                Mid-size Produce Supplier · $40M Annual Revenue
-                            </p>
-                            <p className="text-[13px] text-re-text-muted">Central California · 3 Major Retailer DCs</p>
-                        </div>
-                    </div>
-                    <p style={{ fontSize: 14, color: T.text, lineHeight: 1.8, marginBottom: 24 }}>
-                        &ldquo;We were tracking everything in Excel and knew we&apos;d fail our retailer&apos;s next review.
-                        RegEngine imported 2 years of our historical data, mapped all our CTEs in one onboarding call,
-                        and we passed our first mock trace drill in under 5 seconds.
-                        We went from zero traceability infrastructure to fully compliant in 18 days.&rdquo;
-                    </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16 }}>
-                        {[
-                            { value: '18 days', label: 'Time to compliance' },
-                            { value: '3.1s', label: 'Average trace time' },
-                            { value: '12,400+', label: 'CTEs captured' },
-                            { value: '$0', label: 'Retailer penalties' },
-                        ].map((s, i) => (
-                            <div key={i} style={{
-                                background: `${T.accent}06`, borderRadius: 10, padding: '14px 12px', textAlign: 'center',
-                                border: `1px solid ${T.accent}10`,
-                            }}>
-                                <p style={{ fontSize: 20, fontWeight: 700, color: T.accent, fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</p>
-                                <p style={{ fontSize: 11, color: T.textDim, marginTop: 4 }}>{s.label}</p>
-                            </div>
-                        ))}
-                    </div>
                 </div>
             </section>
 

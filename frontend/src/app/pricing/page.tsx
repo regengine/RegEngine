@@ -41,6 +41,8 @@ const PRICING_TIERS = [
         highlighted: false,
         cta: 'Start Growth Plan',
         features: [
+            'Up to 10,000 CTEs/month',
+            'Up to 3 locations',
             'FSMA 204 traceability workspace',
             'Supplier onboarding + FTL scoping',
             'CSV upload + API ingestion',
@@ -59,9 +61,10 @@ const PRICING_TIERS = [
         highlighted: true,
         cta: 'Start Scale Plan',
         features: [
+            'Up to 100,000 CTEs/month',
+            'Up to 10 locations',
             'Everything in Growth',
             'Multi-facility operations',
-            'Expanded API + webhook limits',
             'Priority onboarding support',
             'Retailer-specific readiness benchmarks',
             'Priority support',
@@ -77,6 +80,7 @@ const PRICING_TIERS = [
         highlighted: false,
         cta: 'Talk to us',
         features: [
+            'Unlimited CTEs + locations',
             'Everything in Scale',
             'Dedicated implementation plan',
             'Custom SLA + security review support',

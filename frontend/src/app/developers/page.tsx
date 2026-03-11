@@ -110,7 +110,7 @@ const DEV_FEATURES = [
     { Icon: Zap, title: 'Quick Integration', description: 'Record your first CTE with a single API call. Full REST API with cURL examples.' },
     { Icon: Clock, title: 'Real-Time Webhooks', description: 'Ingest traceability events via webhooks with SHA-256 chain verification.' },
     { Icon: Shield, title: 'Per-Tenant API Keys', description: 'Scoped keys with RBAC. Multi-tenant isolation by design.' },
-    { Icon: BookOpen, title: 'Interactive API Docs', description: 'Swagger UI with live endpoint testing. Python and Node.js SDKs coming soon.' },
+    { Icon: BookOpen, title: 'Interactive API Docs', description: 'Swagger UI with live endpoint testing and full endpoint reference.' },
 ];
 export default function DevelopersPage() {
     return (
