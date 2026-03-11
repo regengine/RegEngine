@@ -1,33 +1,10 @@
-'use client';
-
-/**
- * /checkout — Enterprise Checkout Page
- *
- * Wraps the CheckoutWizard component and reads the ?plan= query param
- * from the pricing page CTAs.
- */
-
 import { Suspense } from 'react';
-import { PageContainer } from '@/components/layout/page-container';
-import { CheckoutWizard } from '@/components/billing/CheckoutWizard';
-import { Spinner } from '@/components/ui/spinner';
+import CheckoutPage from './CheckoutClient';
 
-export default function CheckoutPage() {
+export default function CheckoutPageWrapper() {
     return (
-        <div
-            className="min-h-screen relative bg-re-surface-base"
-        >
-            <PageContainer>
-                <Suspense
-                    fallback={
-                        <div className="flex items-center justify-center min-h-[60vh]">
-                            <Spinner />
-                        </div>
-                    }
-                >
-                    <CheckoutWizard />
-                </Suspense>
-            </PageContainer>
-        </div>
+        <Suspense>
+            <CheckoutPage />
+        </Suspense>
     );
 }

@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { TLCValidatorClient } from "./components/TLCValidatorClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
@@ -43,7 +44,9 @@ export default function TLCValidatorPage() {
                         { label: "TLC Validator" }
                     ]}
                 />
-                <TLCValidatorClient />
+                <Suspense>
+                    <TLCValidatorClient />
+                </Suspense>
             </div>
         </div>
     );

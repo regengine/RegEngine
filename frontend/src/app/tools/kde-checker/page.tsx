@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { KDECheckerClient } from "./components/KDECheckerClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
@@ -43,7 +44,9 @@ export default function KDECheckerPage() {
                         { label: "KDE Checker" }
                     ]}
                 />
-                <KDECheckerClient />
+                <Suspense>
+                    <KDECheckerClient />
+                </Suspense>
             </div>
         </div>
     );
