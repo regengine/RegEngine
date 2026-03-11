@@ -55,7 +55,7 @@ export default function DocsHomePage() {
               justifyContent: 'space-between',
               alignItems: 'center',
             }}>
-              <span className="text-xs text-re-text-muted">POST /v1/records</span>
+              <span className="text-xs text-re-text-muted">POST /api/v1/webhooks/ingest</span>
               <span className="text-xs text-re-brand">bash</span>
             </div>
             <pre style={{
@@ -66,19 +66,25 @@ export default function DocsHomePage() {
               overflowX: 'auto',
               color: 'var(--re-text-primary)',
             }}>
-              <code>{`curl -X POST https://api.regengine.co/v1/records \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+              <code>{`curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
+  -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "type": "compliance_event",
-    "framework": "FSMA_204",
-    "data": {
-      "event_type": "receiving",
-      "lot_code": "LOT-2026-001",
-      "product": "Romaine Lettuce",
+    "source": "erp",
+    "events": [{
+      "cte_type": "receiving",
+      "traceability_lot_code": "00012345678901-LOT-2026-001",
+      "product_description": "Romaine Lettuce",
       "quantity": 500,
-      "unit": "cases"
-    }
+      "unit_of_measure": "cases",
+      "location_name": "Distribution Center #4",
+      "timestamp": "2026-02-05T08:30:00Z",
+      "kdes": {
+        "receive_date": "2026-02-05",
+        "receiving_location": "Distribution Center #4"
+      }
+    }]
   }'`}</code>
             </pre>
           </div>
@@ -110,13 +116,17 @@ export default function DocsHomePage() {
               color: 'var(--re-text-tertiary)',
             }}>
               <code>{`{
-  "id": "rec_3x7Kp9mN2vL",
-  "record_hash": "a3f2b891c4d5e6f78901a2b3c4d5e6f7...",
-  "prev_hash": "7f6e5d4c3b2a19087f6e5d4c3b2a1908...",
-  "chain_position": 1847,
-  "created_at": "2026-02-05T18:54:31Z",
-  "signature": "MEUCIQC7...base64...==",
-  "public_key_id": "regengine-prod-2026-02"
+  "accepted": 1,
+  "rejected": 0,
+  "total": 1,
+  "events": [{
+    "traceability_lot_code": "00012345678901-LOT-2026-001",
+    "cte_type": "receiving",
+    "status": "accepted",
+    "event_id": "a1b2c3d4-...",
+    "sha256_hash": "a3f2b891c4d5e6f7...",
+    "chain_hash": "7f6e5d4c3b2a1908..."
+  }]
 }`}</code>
             </pre>
           </div>

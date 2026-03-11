@@ -135,7 +135,8 @@ export default function QuickstartPage() {
                                     <span className="text-xs text-re-text-muted">Terminal</span>
                                 </div>
                                 <pre className="re-code-block">
-                                    <code>{`export REGENGINE_API_KEY="rk_live_your_key_here"`}</code>
+                                    <code>{`export REGENGINE_API_KEY="rge_your_key_here"
+export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}</code>
                                 </pre>
                             </div>
                         </div>
@@ -163,8 +164,8 @@ export default function QuickstartPage() {
                                 Create your first compliance record
                             </h2>
                             <p className="re-body">
-                                Use the <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>/v1/records</code> endpoint
-                                to create a tamper-evident compliance event:
+                                Use the <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>/api/v1/webhooks/ingest</code> endpoint
+                                to create a compliant traceability event:
                             </p>
 
                             <div style={{
@@ -181,7 +182,7 @@ export default function QuickstartPage() {
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                 }}>
-                                    <span className="text-xs text-re-text-muted">POST /v1/records</span>
+                                    <span className="text-xs text-re-text-muted">POST /api/v1/webhooks/ingest</span>
                                     <span className="text-xs text-re-brand">bash</span>
                                 </div>
                                 <pre style={{
@@ -192,19 +193,27 @@ export default function QuickstartPage() {
                                     overflowX: 'auto',
                                     color: 'var(--re-text-primary)',
                                 }}>
-                                    <code>{`curl -X POST https://api.regengine.co/v1/records \\
-  -H "Authorization: Bearer $REGENGINE_API_KEY" \\
+                                    <code>{`curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
+  -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "type": "compliance_event",
-    "framework": "FSMA_204",
-    "data": {
-      "event_type": "receiving",
-      "lot_code": "LOT-2026-001",
-      "product": "Romaine Lettuce",
-      "quantity": 500,
-      "unit": "cases"
-    }
+    "source": "erp",
+    "events": [
+      {
+        "cte_type": "receiving",
+        "traceability_lot_code": "00012345678901-LOT-2026-001",
+        "product_description": "Romaine Lettuce",
+        "quantity": 500,
+        "unit_of_measure": "cases",
+        "location_name": "Distribution Center #4",
+        "timestamp": "2026-02-05T14:23:00Z",
+        "kdes": {
+          "receive_date": "2026-02-05",
+          "receiving_location": "Distribution Center #4"
+        }
+      }
+    ]
   }'`}</code>
                                 </pre>
                             </div>
@@ -229,13 +238,19 @@ export default function QuickstartPage() {
                                 </div>
                                 <pre className="re-code-block">
                                     <code>{`{
-  "id": "rec_3x7Kp9mN2vL",
-  "record_hash": "a3f2b891c4d5e6f78901a2b3c4d5e6f7...",
-  "prev_hash": "7f6e5d4c3b2a19087f6e5d4c3b2a1908...",
-  "chain_position": 1847,
-  "created_at": "2026-02-05T14:23:01Z",
-  "signature": "MEUCIQC7...base64...==",
-  "public_key_id": "regengine-prod-2026-02"
+  "accepted": 1,
+  "rejected": 0,
+  "total": 1,
+  "events": [
+    {
+      "traceability_lot_code": "00012345678901-LOT-2026-001",
+      "cte_type": "receiving",
+      "status": "accepted",
+      "event_id": "a1b2c3d4-...",
+      "sha256_hash": "a3f2b891c4d5e6f7...",
+      "chain_hash": "7f6e5d4c3b2a1908..."
+    }
+  ]
 }`}</code>
                                 </pre>
                             </div>
@@ -264,7 +279,7 @@ export default function QuickstartPage() {
                                 Verify your record
                             </h2>
                             <p className="re-body">
-                                Every record is cryptographically hashed. Verify the integrity independently:
+                                Every ingested event is cryptographically hashed. Verify integrity independently from an export file:
                             </p>
 
                             <div style={{
@@ -281,14 +296,12 @@ export default function QuickstartPage() {
                                     <span className="text-xs text-re-text-muted">Terminal</span>
                                 </div>
                                 <pre className="re-code-block">
-                                    <code>{`python verify_chain.py --record rec_3x7Kp9mN2vL
+                                    <code>{`python verify_chain.py --file export_2026_02.json --offline
 
 # Output:
-# ✓ Record rec_3x7Kp9mN2vL verified
-# ✓ Record hash: a3f2b891c4d5e6f78901a2b3c4d5e6f7...
-# ✓ Prev hash: 7f6e5d4c3b2a19087f6e5d4c3b2a1908...
-# ✓ Chain position: 1847
-# ✓ Signature valid (key: regengine-prod-2026-02)`}</code>
+# ✓ Chain integrity verified
+# ✓ 1847 records validated
+# ✓ No hash mismatches detected`}</code>
                                 </pre>
                             </div>
                         </div>
