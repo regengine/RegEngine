@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
+    AlertTriangle,
     Settings,
     Building2,
     Key,
@@ -79,6 +80,11 @@ export default function SettingsPage() {
                     </Button>
                 </div>
 
+                <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+                </div>
+
                 {/* Plan Card */}
                 <Card className="border-[var(--re-brand)] overflow-hidden">
                     <div className="h-1 bg-gradient-to-r from-[var(--re-brand)] to-blue-500" />
@@ -96,7 +102,7 @@ export default function SettingsPage() {
                                     <BarChart3 className="h-3 w-3" /> 2/5 facilities
                                 </div>
                                 <div>12,847/50K events</div>
-                                <Button variant="outline" size="sm" className="rounded-xl text-xs">Manage Plan</Button>
+                                <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl text-xs">Manage Plan</Button>
                             </div>
                         </div>
                     </CardContent>
@@ -191,13 +197,13 @@ export default function SettingsPage() {
                                                 <button onClick={() => setShowKey(!showKey)}>
                                                     {showKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                                                 </button>
-                                                <button><Copy className="h-3 w-3" /></button>
+                                                <button disabled title="Coming Soon"><Copy className="h-3 w-3" /></button>
                                             </div>
                                         </div>
                                         <Badge className="text-[9px] bg-emerald-500/10 text-emerald-500">{key.status}</Badge>
                                     </div>
                                 ))}
-                                <Button variant="outline" className="w-full rounded-xl">
+                                <Button disabled title="Coming Soon" variant="outline" className="w-full rounded-xl">
                                     <Key className="h-4 w-4 mr-1" /> Generate New Key
                                 </Button>
                             </CardContent>
@@ -251,7 +257,7 @@ export default function SettingsPage() {
                                             <div className="w-2 h-2 rounded-full" style={{ background: STATUS_COLOR[int.status] }} />
                                             <span className="text-xs capitalize" style={{ color: STATUS_COLOR[int.status] }}>{int.status}</span>
                                             {int.status === 'disconnected' && (
-                                                <Button variant="outline" size="sm" className="rounded-xl text-xs ml-2">Connect</Button>
+                                                <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl text-xs ml-2">Connect</Button>
                                             )}
                                         </div>
                                     </div>

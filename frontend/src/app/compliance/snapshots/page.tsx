@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/lib/tenant-context';
+import { useAuth } from '@/lib/auth-context';
 import { generateBrandedPDF, type PDFSection } from '@/lib/pdf-report';
 import {
     Camera,
@@ -79,22 +80,10 @@ interface DiffResult {
     changes?: DiffChange[];
 }
 
-/**
- * Get current user email from session storage.
- * TODO: Replace with proper auth session context (e.g., next-auth useSession)
- * once user authentication is fully integrated.
- */
-function getUserEmail(tenantId: string): string {
-    if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('regengine_user_email');
-        if (stored) return stored;
-    }
-    return `admin@tenant-${tenantId.slice(0, 8)}.regengine.io`;
-}
-
 export default function SnapshotsPage() {
     const { tenantId } = useTenant();
-    const userEmail = getUserEmail(tenantId);
+    const { user } = useAuth();
+    const userEmail = user?.email || `admin@tenant-${tenantId.slice(0, 8)}.regengine.io`;
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);

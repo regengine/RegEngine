@@ -385,11 +385,11 @@ export default function AdminAPIConsolePage() {
                                                 </div>
 
                                                 <div className="flex gap-2">
-                                                    <Button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700">
+                                                    <Button disabled title="Coming Soon" className="flex-1 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-600 hover:to-pink-700">
                                                         <Play className="w-4 h-4 mr-2" />
                                                         Try it out
                                                     </Button>
-                                                    <Button variant="outline" className="bg-white/5 border-white/10 text-white hover:bg-white/10">
+                                                    <Button disabled title="Coming Soon" variant="outline" className="bg-white/5 border-white/10 text-white hover:bg-white/10">
                                                         <Copy className="w-4 h-4" />
                                                     </Button>
                                                 </div>

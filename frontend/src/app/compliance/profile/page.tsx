@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 
 import { PageContainer } from "@/components/layout/page-container";
 import { useTenant } from "@/lib/tenant-context";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ const MAJOR_RETAILERS = [
 
 export default function ProductProfilePage() {
     const { tenantId } = useTenant();
+    const { apiKey } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -77,7 +79,12 @@ export default function ProductProfilePage() {
 
     const fetchProfile = async () => {
         try {
-            const response = await fetch(`/api/v1/compliance/profile/${tenantId}`);
+            const response = await fetch(`/api/v1/compliance/profile/${tenantId}`, {
+                headers: {
+                    'X-RegEngine-API-Key': apiKey || '',
+                    'X-Tenant-ID': tenantId,
+                },
+            });
             if (response.ok) {
                 const data = await response.json();
                 setProfile(data);
@@ -97,7 +104,11 @@ export default function ProductProfilePage() {
         try {
             const response = await fetch(`/api/v1/compliance/profile/${tenantId}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    'X-RegEngine-API-Key': apiKey || '',
+                    'X-Tenant-ID': tenantId,
+                },
                 body: JSON.stringify(profile),
             });
 

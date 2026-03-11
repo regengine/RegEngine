@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useInitializeLabelBatch } from '@/hooks/use-api';
 import { Package, QrCode, Printer, CheckCircle, FileDown } from 'lucide-react';
+import { useTenant } from '@/lib/tenant-context';
 import type { LabelFormData, LabelBatchInitResponse } from '@/types/labels';
 import QRCode from 'qrcode';
 import { PDFDownloadLink } from '@react-pdf/renderer';
@@ -18,6 +19,7 @@ import { LabelPdfDocument } from '@/components/labels/LabelPdfDocument';
 type Step = 'input' | 'generating' | 'preview';
 
 export default function LabelsPage() {
+  const { tenantId } = useTenant();
   const [step, setStep] = useState<Step>('input');
   const [formData, setFormData] = useState<LabelFormData>({
     packerGln: '',
@@ -67,7 +69,7 @@ export default function LabelsPage() {
     };
 
     initializeBatch(
-      { request, tenantId: 'default' },
+      { request, tenantId },
       {
         onSuccess: (data) => {
           setLabelResponse(data);

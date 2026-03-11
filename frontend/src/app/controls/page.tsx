@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth-context';
 
 interface Control {
   id: string;
@@ -13,6 +14,7 @@ interface Control {
 }
 
 export default function MyControlsPage() {
+  const { apiKey, isLoggedIn } = useAuth();
   const [controls, setControls] = useState<Control[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -32,7 +34,7 @@ export default function MyControlsPage() {
     try {
       const response = await fetch('/api/controls/controls', {
         headers: {
-          'X-RegEngine-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'demo-key'
+          'X-RegEngine-API-Key': apiKey || ''
         }
       });
       const data = await response.json();
@@ -51,7 +53,7 @@ export default function MyControlsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-RegEngine-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'demo-key'
+          'X-RegEngine-API-Key': apiKey || ''
         },
         body: JSON.stringify(formData)
       });
@@ -73,7 +75,7 @@ export default function MyControlsPage() {
       await fetch(`/api/controls/controls/${controlId}`, {
         method: 'DELETE',
         headers: {
-          'X-RegEngine-API-Key': process.env.NEXT_PUBLIC_API_KEY || 'demo-key'
+          'X-RegEngine-API-Key': apiKey || ''
         }
       });
       fetchControls();

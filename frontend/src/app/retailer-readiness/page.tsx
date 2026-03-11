@@ -252,12 +252,23 @@ export default function RetailerSuppliersPage() {
         if (trace.visible) startTrace();
     }, [trace.visible, startTrace]);
 
-    const handleAssessment = (e: React.FormEvent) => {
+    const handleAssessment = async (e: React.FormEvent) => {
         e.preventDefault();
         if (email && companyName) {
-            localStorage.setItem('retailer_supplier_lead', JSON.stringify({
-                email, companyName, date: new Date().toISOString()
-            }));
+            const payload = { email, companyName, date: new Date().toISOString() };
+
+            try {
+                const res = await fetch('/api/v1/assessments/retailer-readiness', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error(`API responded ${res.status}`);
+            } catch {
+                // Fallback: persist locally so the submission is not lost
+                localStorage.setItem('retailer_supplier_lead', JSON.stringify(payload));
+            }
+
             trackEvent('assessment_submitted', { email, companyName });
             setSubmitted(true);
         }

@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Get Started | RegEngine',
+  description: 'Choose your onboarding path to FSMA 204 compliance. Step-by-step wizard or bulk data import.',
+};
 import { ListOrdered, Upload } from 'lucide-react';
 
 const ONBOARDING_OPTIONS = [

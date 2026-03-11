@@ -35,14 +35,24 @@ export default function RateLimitsDocsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid md:grid-cols-2 gap-6">
+                            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 <div className="p-6 bg-background border rounded-lg text-center">
                                     <div className="text-3xl font-bold text-primary mb-1">100</div>
                                     <div className="text-sm text-muted-foreground">Requests per Minute</div>
-                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Free Tier</div>
+                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Starter</div>
+                                </div>
+                                <div className="p-6 bg-background border rounded-lg text-center">
+                                    <div className="text-3xl font-bold text-primary mb-1">500</div>
+                                    <div className="text-sm text-muted-foreground">Requests per Minute</div>
+                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Growth</div>
                                 </div>
                                 <div className="p-6 bg-background border rounded-lg text-center">
                                     <div className="text-3xl font-bold text-primary mb-1">1,000</div>
+                                    <div className="text-sm text-muted-foreground">Requests per Minute</div>
+                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Scale</div>
+                                </div>
+                                <div className="p-6 bg-background border rounded-lg text-center">
+                                    <div className="text-3xl font-bold text-primary mb-1">Custom</div>
                                     <div className="text-sm text-muted-foreground">Requests per Minute</div>
                                     <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Enterprise</div>
                                 </div>
@@ -98,8 +108,11 @@ export default function RateLimitsDocsPage() {
                                 Retry-After: 30<br />
                                 <br />
                                 {"{"}<br />
-                                &nbsp;&nbsp;"error": "Too Many Requests",<br />
-                                &nbsp;&nbsp;"message": "You have exceeded your rate limit. Please try again in 30 seconds."<br />
+                                &nbsp;&nbsp;"error": {"{"}<br />
+                                &nbsp;&nbsp;&nbsp;&nbsp;"code": "rate_limit_exceeded",<br />
+                                &nbsp;&nbsp;&nbsp;&nbsp;"message": "Rate limit exceeded. Try again in 30 seconds.",<br />
+                                &nbsp;&nbsp;&nbsp;&nbsp;"request_id": "req_abc123"<br />
+                                &nbsp;&nbsp;{"}"}<br />
                                 {"}"}
                             </div>
                         </CardContent>

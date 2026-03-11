@@ -108,9 +108,8 @@ export default function AlertsDashboardPage() {
         try {
             await acknowledgeAlert(tenantId, alertId);
             setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a));
-        } catch {
-            // Optimistic update fallback
-            setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to acknowledge alert');
         }
     };
 

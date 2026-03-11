@@ -119,19 +119,8 @@ export default function TeamPage() {
             await apiInviteMember(tenantId, newName, newEmail, newRole);
             setNewName(''); setNewEmail(''); setShowInvite(false);
             await loadTeam();
-        } catch {
-            // Optimistic: add to local list
-            setTeam(prev => [...prev, {
-                id: `u-${Date.now()}`,
-                name: newName,
-                email: newEmail,
-                role: newRole,
-                status: 'invited',
-                last_active: null,
-                invited_at: new Date().toISOString(),
-                avatar_initials: newName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2),
-            }]);
-            setNewName(''); setNewEmail(''); setShowInvite(false);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to invite team member');
         } finally {
             setInviting(false);
         }

@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'SDKs & Libraries | RegEngine',
+  description: 'Official RegEngine client libraries for Python, Node.js, and Go. Beta program and REST API usage.',
+};
 import { ArrowLeft, Package, Mail, Github, FileText } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 

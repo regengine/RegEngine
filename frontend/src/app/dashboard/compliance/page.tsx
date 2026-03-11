@@ -264,11 +264,11 @@ export default function ComplianceDashboardPage() {
                                             <span className="text-xs">Run Mock Drill</span>
                                         </Button>
                                     </Link>
-                                    <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 rounded-xl">
+                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto py-4 flex flex-col gap-2 rounded-xl">
                                         <Download className="h-5 w-5 text-[var(--re-brand)]" />
                                         <span className="text-xs">FDA Report</span>
                                     </Button>
-                                    <Button variant="outline" className="h-auto py-4 flex flex-col gap-2 rounded-xl">
+                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto py-4 flex flex-col gap-2 rounded-xl">
                                         <FileText className="h-5 w-5 text-[var(--re-brand)]" />
                                         <span className="text-xs">EPCIS Export</span>
                                     </Button>

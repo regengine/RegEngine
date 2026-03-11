@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Spinner } from '@/components/ui/spinner';
 import { apiClient } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 import {
     ShieldCheck,
     Search,
@@ -28,6 +29,7 @@ interface DiscoveryItem {
 }
 
 export default function CurationDashboard() {
+    const { isLoggedIn, apiKey } = useAuth();
     const [items, setItems] = useState<DiscoveryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<number | null>(null);
@@ -159,6 +161,23 @@ export default function CurationDashboard() {
             setProcessing(null);
         }
     };
+
+    if (!isLoggedIn || !apiKey) {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950/50">
+                <PageContainer>
+                    <div className="max-w-6xl mx-auto py-24 text-center">
+                        <ShieldCheck className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                        <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
+                        <p className="text-slate-500 mb-4">You must be signed in to access the curation dashboard.</p>
+                        <a href="/login?next=/ingest/curation">
+                            <Button>Sign In</Button>
+                        </a>
+                    </div>
+                </PageContainer>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950/50">

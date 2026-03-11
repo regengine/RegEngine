@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Quickstart | RegEngine',
+  description: 'Create your first tamper-evident compliance record in under 5 minutes with the RegEngine API.',
+};
 import { ArrowLeft, Zap, Terminal, CheckCircle, Key, FileText, Code, ArrowRight } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
