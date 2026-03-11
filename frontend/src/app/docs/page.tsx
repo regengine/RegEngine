@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'Documentation | RegEngine',
   description: 'RegEngine API documentation. Quickstart guides, endpoint references, SDKs, and compliance vertical guides.',
 };
-import { ArrowRight, Key, Book, Code, Webhook, Zap, TrendingUp, Cpu, Atom, ShieldCheck, AlertCircle, FileText, UtensilsCrossed } from 'lucide-react';
+import { ArrowRight, Key, Book, Code, Webhook, Zap, AlertCircle, FileText, UtensilsCrossed } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
 export default function DocsHomePage() {
@@ -223,7 +223,7 @@ export default function DocsHomePage() {
           </div>
         </section>
 
-        {/* Row 3: By Vertical - Food & Beverage FIRST */}
+        {/* Row 3: Compliance Vertical */}
         <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
@@ -233,60 +233,27 @@ export default function DocsHomePage() {
             letterSpacing: '1px',
             marginBottom: '16px',
           }}>
-            By Vertical
+            Compliance Vertical
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-            {[
-              { name: 'Food & Beverage', href: '/docs/fsma-204', icon: UtensilsCrossed, framework: 'FSMA 204', featured: true, live: true },
-              { name: 'Finance', href: null, icon: TrendingUp, framework: 'SEC / SOX 404', featured: false, live: false },
-              { name: 'Energy', href: null, icon: Zap, framework: 'NERC CIP-013', featured: false, live: false },
-              { name: 'Nuclear', href: null, icon: Atom, framework: '10 CFR / NRC', featured: false, live: false },
-              { name: 'Technology', href: null, icon: Cpu, framework: 'SOC 2 / ISO', featured: false, live: false },
-              { name: 'Healthcare', href: null, icon: ShieldCheck, framework: 'HIPAA', featured: false, live: false },
-            ].map((item) => {
-              const inner = (
-                <>
-                  {item.featured && (
-                    <div style={{
-                      position: 'absolute', top: '12px', right: '12px',
-                      background: T.accent, color: 'white', fontSize: '10px', fontWeight: 600,
-                      padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase',
-                    }}>
-                      Live
-                    </div>
-                  )}
-                  {!item.live && (
-                    <div style={{
-                      position: 'absolute', top: '12px', right: '12px',
-                      background: 'rgba(255,255,255,0.06)', color: T.textMuted, fontSize: '10px', fontWeight: 600,
-                      padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.5px',
-                    }}>
-                      Coming Soon
-                    </div>
-                  )}
-                  <item.icon style={{ width: 20, height: 20, color: item.featured ? T.accent : T.textMuted, marginBottom: '12px' }} />
-                  <div style={{ fontWeight: 600, color: item.live ? 'var(--re-text-primary)' : T.textMuted, fontSize: '15px', marginBottom: '4px' }}>
-                    {item.name}
-                  </div>
-                  <div style={{ color: T.textMuted, fontSize: '13px' }}>{item.framework}</div>
-                </>
-              );
-              const sharedStyle = {
-                padding: '20px', borderRadius: '8px', position: 'relative' as const,
-                background: item.featured ? 'rgba(16,185,129,0.1)' : T.surface,
-                border: `1px solid ${item.featured ? 'rgba(16,185,129,0.3)' : T.border}`,
-              };
-              return item.href ? (
-                <Link key={item.name} href={item.href} style={{ ...sharedStyle, textDecoration: 'none' }}>
-                  {inner}
-                </Link>
-              ) : (
-                <div key={item.name} style={{ ...sharedStyle, cursor: 'default', opacity: 0.5 }}>
-                  {inner}
-                </div>
-              );
-            })}
-          </div>
+          <Link
+            href="/docs/fsma-204"
+            style={{
+              display: 'block', padding: '20px', borderRadius: '8px', position: 'relative',
+              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+              textDecoration: 'none', maxWidth: '320px',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: '12px', right: '12px',
+              background: T.accent, color: 'white', fontSize: '10px', fontWeight: 600,
+              padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase',
+            }}>
+              Live
+            </div>
+            <UtensilsCrossed style={{ width: 20, height: 20, color: T.accent, marginBottom: '12px' }} />
+            <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>Food &amp; Beverage</div>
+            <div style={{ color: T.textMuted, fontSize: '13px' }}>FSMA 204</div>
+          </Link>
         </section>
 
         {/* Row 4: Popular Pages */}
