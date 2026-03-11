@@ -67,14 +67,14 @@ langchain-core>=1.2.11,<2.0.0
 langchain-community~=0.4.0
 langchain-text-splitters~=1.1.0
 langchain-groq~=1.1.0
-pypdf~=6.7.2
+pypdf>=6.7.3
 python-docx~=0.8.11
 docx2txt~=0.8
 neo4j~=5.15.0
 redis~=5.0.0
 httpx~=0.25.0
 stripe>=11.6.0,<12
-Pillow>=10.4.0,<12
+Pillow>=11.1.0,<12
 pyzbar>=0.1.9,<1
 
 # CSV/Excel parsing
