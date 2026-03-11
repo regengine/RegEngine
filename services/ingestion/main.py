@@ -33,6 +33,10 @@ from app.routes import router as ingestion_router
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("ingestion_service_startup")
+    # Register all integration connectors
+    from shared.external_connectors.register_all import register_all_connectors
+    register_all_connectors()
+    logger.info("integration_connectors_registered")
     yield
     # Shutdown
     logger.info("ingestion_service_shutdown")
@@ -186,6 +190,10 @@ app.include_router(team_mgmt_router)
 # Settings
 from app.settings import router as settings_router
 app.include_router(settings_router)
+
+# Integration Connectors (SafetyCulture, CSV/SFTP, retailers, IoT)
+from app.integration_router import router as integration_router
+app.include_router(integration_router)
 
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
