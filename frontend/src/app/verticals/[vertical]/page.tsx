@@ -24,7 +24,7 @@ const VERTICAL_CONTENT: Record<
     focus: "FTL coverage, CTE/KDE completeness, and recall response execution.",
     primaryHref: "/tools/ftl-checker",
     primaryLabel: "Run FTL Coverage Checker",
-    secondaryHref: "/demo/recall-simulation",
+    secondaryHref: "/tools/drill-simulator",
     secondaryLabel: "Open Recall Simulation",
   },
 };

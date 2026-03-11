@@ -28,7 +28,7 @@ const CTE_TYPES = [
     { id: 'transformation', label: 'Transformation', description: 'Processing/mixing events' },
 ];
 
-const EXAMPLE_CURL = `curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+const EXAMPLE_CURL = `curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -d '{

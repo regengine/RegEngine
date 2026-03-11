@@ -97,10 +97,10 @@ export default function AuthenticationDocsPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Shield className="h-5 w-5 text-primary" />
-                                Bearer Token Scheme
+                                API Key Header
                             </CardTitle>
                             <CardDescription>
-                                Authenticate your HTTP requests by including your API Key in the Authorization header.
+                                Authenticate your HTTP requests by including your API Key in the X-RegEngine-API-Key header.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
@@ -108,14 +108,14 @@ export default function AuthenticationDocsPage() {
                                 <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-4">
                                     <span className="text-slate-400">HTTP Header</span>
                                 </div>
-                                Authorization: Bearer <span className="text-blue-400">rge_live_...</span>
+                                X-RegEngine-API-Key: <span className="text-blue-400">rge_live_...</span>
                             </div>
 
                             <div>
                                 <h3 className="font-semibold mb-2">Example Request</h3>
                                 <div className="bg-slate-950 rounded-lg p-6 font-mono text-sm text-slate-50 overflow-x-auto">
-                                    <span className="text-purple-400">curl</span> https://api.regengine.co/v1/energy/snapshots \<br />
-                                    &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"Authorization: Bearer rge_live_12345"</span> \<br />
+                                    <span className="text-purple-400">curl</span> https://www.regengine.co/v1/energy/snapshots \<br />
+                                    &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"X-RegEngine-API-Key: rge_live_12345"</span> \<br />
                                     &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"Content-Type: application/json"</span>
                                 </div>
                             </div>

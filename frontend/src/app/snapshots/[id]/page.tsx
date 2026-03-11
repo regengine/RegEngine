@@ -36,7 +36,7 @@ async function getSnapshot(id: string) {
         };
     }
 
-    const response = await fetch(`http://localhost:3000/api/snapshots/${id}`, {
+    const response = await fetch(`/api/snapshots/${id}`, {
         cache: 'no-store', // Always fetch fresh data for compliance
     });
 

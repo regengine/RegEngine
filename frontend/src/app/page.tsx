@@ -324,7 +324,7 @@ export default function RegEngineLanding() {
               <p className="text-4xl font-bold">96%</p>
               <p className="text-sm opacity-80">Reduction in recall response time (synthetic scenario)</p>
             </div>
-            <Link href="/demo/recall-simulation">
+            <Link href="/tools/drill-simulator">
               <Button className="h-11 px-6 rounded-xl bg-[var(--re-brand)] text-white hover:opacity-95">
                 Run This Simulation
                 <ArrowRight className="ml-2 h-4 w-4" />

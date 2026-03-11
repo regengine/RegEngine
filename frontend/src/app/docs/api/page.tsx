@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { getServiceURL } from '@/lib/api-config';
 
 // API Endpoint Documentation
 const API_SERVICES = [
@@ -448,7 +449,7 @@ export default function ApiReferencePage() {
                         <div className="flex gap-2">
                             <Badge variant="outline">v1.0.0</Badge>
                             <a
-                                href="http://localhost:8400/docs"
+                                href={`${getServiceURL('admin')}/docs`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                             >
