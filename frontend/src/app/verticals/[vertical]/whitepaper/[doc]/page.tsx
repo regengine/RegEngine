@@ -43,8 +43,8 @@ export default async function WhitepaperDocPage({ params }: PageProps) {
     DOC_CONTENT[`${vertical}/${doc}`] ?? {
       title: "Compliance Whitepaper",
       summary: "This document is available through the RegEngine resource library.",
-      ctaHref: "/resources/whitepapers",
-      ctaLabel: "Open Resource Library",
+      ctaHref: "/docs/fsma-204",
+      ctaLabel: "View FSMA 204 Guide",
     };
 
   return (

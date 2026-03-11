@@ -43,9 +43,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const resourcePages = [
         { url: `${baseUrl}/tools`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/retailer-readiness`, changeFrequency: 'monthly' as const, priority: 0.7 },
-        { url: `${baseUrl}/resources`, changeFrequency: 'monthly' as const, priority: 0.6 },
-        { url: `${baseUrl}/resources/guides`, changeFrequency: 'monthly' as const, priority: 0.6 },
-        { url: `${baseUrl}/resources/whitepapers`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/docs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/api`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/docs/quickstart`, changeFrequency: 'monthly' as const, priority: 0.7 },
