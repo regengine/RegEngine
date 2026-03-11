@@ -5,71 +5,71 @@ import { AlertTriangle, Code, Zap, Shield } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
-const nuclearExample = `// Nuclear SDK - Create Compliance Record
-import { NuclearCompliance } from '@regengine/nuclear-sdk';
-
-const nuclear = new NuclearCompliance(process.env.API_KEY);
-
-const record = await nuclear.records.create({
-  facilityId: 'NPP-UNIT-1',
-  reactorId: 'UNIT-1',
-  docketNumber: '50-12345',
-  recordType: 'CYBER_SECURITY_PLAN',
-  classification: 'STANDARD',
-  content: {
-    programElement: 'Defensive Architecture',
-    reviewDate: '2026-01-25',
-    reviewer: {
-      name: 'John Smith',
-      license: 'SRO-12345'
-    }
+const ingestExample = `// Ingest a Critical Tracking Event (FSMA 204)
+const response = await fetch('https://www.regengine.co/api/v1/webhooks/ingest', {
+  method: 'POST',
+  headers: {
+    'X-RegEngine-API-Key': 'YOUR_API_KEY',
+    'X-Tenant-ID': 'YOUR_TENANT_UUID',
+    'Content-Type': 'application/json',
   },
-  regulatoryRefs: [
-    { cfr: '10-CFR-73.54', note: 'Cybersecurity Program evidence' }
-  ],
-  retentionPolicyId: 'NRC_73_54_LICENSE_LIFE_PLUS_3'
+  body: JSON.stringify({
+    source: 'erp',
+    events: [{
+      cte_type: 'receiving',
+      traceability_lot_code: '00012345678901-LOT-2026-001',
+      product_description: 'Romaine Lettuce',
+      quantity: 500,
+      unit_of_measure: 'cases',
+      location_name: 'Distribution Center #4',
+      timestamp: new Date().toISOString(),
+      kdes: {
+        receive_date: '2026-03-11',
+        receiving_location: 'Distribution Center #4',
+      }
+    }]
+  })
 });
 
-console.log('Record ID:', record.record.id);
-console.log('Content Hash:', record.record.integrity.contentHash);
-console.log('Sealed:', record.record.integrity.sealed);
+const result = await response.json();
+console.log('Accepted:', result.accepted);
+console.log('SHA-256 hash:', result.events?.[0]?.sha256_hash);
+console.log('Chain hash:', result.events?.[0]?.chain_hash);
 `;
 
-const verifyExample = `// Verify Record Integrity
-import { NuclearCompliance } from '@regengine/nuclear-sdk';
+const verifyExample = `// Verify event chain integrity
+const response = await fetch(
+  'https://www.regengine.co/api/v1/epcis/chain/verify?tenant_id=YOUR_TENANT_UUID',
+  {
+    headers: { 'X-RegEngine-API-Key': 'YOUR_API_KEY' }
+  }
+);
 
-const nuclear = new NuclearCompliance(process.env.API_KEY);
-
-const recordId = 'rec_0193abc...';
-const verification = await nuclear.records.verify(recordId);
-
-if (verification.status === 'valid') {
-  console.log('✅ Record integrity verified');
-  console.log('Content hash valid:', verification.results.contentHashValid);
-  console.log('Chain intact:', verification.results.chainIntact);
+const result = await response.json();
+if (result.valid) {
+  console.log('✅ Chain integrity verified');
+  console.log('Events verified:', result.events_checked);
+  console.log('Hash mismatches:', result.hash_failures);
 } else {
-  console.error('❌ Verification failed:', verification.reason);
+  console.error('❌ Chain integrity failed:', result.reason);
 }
 `;
 
 const demoExample = `// Try JavaScript here!
-const facilities = [
-  { id: 'NPP-1', name: 'Unit 1', status: 'operational' },
-  { id: 'NPP-2', name: 'Unit 2', status: 'maintenance' }
+const lots = [
+  { id: 'LOT-2026-001', product: 'Romaine Lettuce', ctes: 3 },
+  { id: 'LOT-2026-002', product: 'Baby Spinach', ctes: 5 },
+  { id: 'LOT-2026-003', product: 'Cherry Tomatoes', ctes: 2 },
 ];
 
-console.log('Total facilities:', facilities.length);
+console.log('Total lots tracked:', lots.length);
 
-facilities.forEach(f => {
-  console.log(\`\${f.name}: \${f.status}\`);
+lots.forEach(lot => {
+  console.log(\`\${lot.product} (\${lot.id}): \${lot.ctes} CTEs\`);
 });
 
-// Calculate something
-const operationalCount = facilities.filter(
-  f => f.status === 'operational'
-).length;
-
-console.log('Operational units:', operationalCount);
+const totalCTEs = lots.reduce((sum, lot) => sum + lot.ctes, 0);
+console.log('Total CTEs across all lots:', totalCTEs);
 `;
 
 export default function PlaygroundPage() {
@@ -123,23 +123,23 @@ export default function PlaygroundPage() {
                     />
                 </div>
 
-                {/* Nuclear SDK Examples */}
+                {/* FSMA 204 API Examples */}
                 <div className="space-y-8">
-                    <h2 className="text-2xl font-bold">Nuclear SDK Examples</h2>
+                    <h2 className="text-2xl font-bold">FSMA 204 API Examples</h2>
 
                     <CodePlayground
-                        title="Create Compliance Record"
-                        description="Example: Creating an immutable compliance record"
-                        initialCode={nuclearExample}
-                        language="typescript"
+                        title="Ingest a Critical Tracking Event"
+                        description="POST a CTE to the RegEngine ingest endpoint"
+                        initialCode={ingestExample}
+                        language="javascript"
                         height="600px"
                     />
 
                     <CodePlayground
-                        title="Verify Record Integrity"
-                        description="Example: Cryptographic verification of a compliance record"
+                        title="Verify Chain Integrity"
+                        description="Cryptographically verify your entire event chain"
                         initialCode={verifyExample}
-                        language="typescript"
+                        language="javascript"
                         height="500px"
                     />
                 </div>
@@ -148,7 +148,7 @@ export default function PlaygroundPage() {
                 <div className="mt-12 p-6 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
                     <h3 className="font-semibold mb-4">Next Steps</h3>
                     <div className="grid md:grid-cols-3 gap-4">
-                        <Link href="/api-reference/nuclear">
+                        <Link href="/docs/api">
                             <Button variant="outline" className="w-full">
                                 API Reference
                             </Button>

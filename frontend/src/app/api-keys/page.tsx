@@ -1,20 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Key, Copy, Check, RefreshCw, Zap, TrendingUp, Cpu, Atom } from 'lucide-react';
+import { AlertTriangle, Key, Copy, Check, RefreshCw, UtensilsCrossed } from 'lucide-react';
 import Link from 'next/link';
 
 export default function APIKeysPage() {
     const [keys, setKeys] = useState<Array<{ id: string; name: string; key: string; vertical: string; created: string }>>([]);
     const [showNewKeyForm, setShowNewKeyForm] = useState(false);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
-    const [formData, setFormData] = useState({ name: '', vertical: 'energy' });
+    const [formData, setFormData] = useState({ name: '', vertical: 'fsma204' });
 
     const verticals = [
-        { id: 'energy', name: 'Energy (NERC CIP-013)', icon: Zap, color: 'blue' },
-        { id: 'finance', name: 'Finance (SEC/SOX)', icon: TrendingUp, color: 'emerald' },
-        { id: 'technology', name: 'Technology (SOC 2)', icon: Cpu, color: 'purple' },
-        { id: 'nuclear', name: 'Nuclear (10 CFR/NRC)', icon: Atom, color: 'orange' },
+        { id: 'fsma204', name: 'Food & Beverage (FSMA 204)', icon: UtensilsCrossed, color: 'emerald' },
     ];
 
     const generateKey = () => {
@@ -39,7 +36,7 @@ export default function APIKeysPage() {
         };
 
         setKeys([newKey, ...keys]);
-        setFormData({ name: '', vertical: 'energy' });
+        setFormData({ name: '', vertical: 'fsma204' });
         setShowNewKeyForm(false);
     };
 
@@ -236,7 +233,7 @@ export default function APIKeysPage() {
                                 Installation
                             </h3>
                             <div className="bg-gray-900 dark:bg-black rounded-lg p-4 font-mono text-sm text-green-400">
-                                <code>npm install @regengine/[vertical]-sdk</code>
+                                <code>npm install @regengine/fsma-sdk</code>
                             </div>
                         </div>
 
@@ -245,9 +242,10 @@ export default function APIKeysPage() {
                                 Authentication
                             </h3>
                             <div className="bg-gray-900 dark:bg-black rounded-lg p-4 font-mono text-sm text-green-400">
-                                <code>{`import { EnergyCompliance } from '@regengine/energy-sdk';
-
-const client = new EnergyCompliance('YOUR_API_KEY');`}</code>
+                                <code>{`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
+  -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
+  -H "Content-Type: application/json"`}</code>
                             </div>
                         </div>
 
@@ -271,14 +269,14 @@ const client = new EnergyCompliance('YOUR_API_KEY');`}</code>
                         </h3>
                         <div className="grid md:grid-cols-2 gap-4">
                             <Link
-                                href="/verticals"
+                                href="/docs/fsma-204"
                                 className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 transition-colors"
                             >
                                 <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                                    Browse Verticals
+                                    FSMA 204 Guide
                                 </h4>
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Explore API documentation for each vertical
+                                    API documentation and compliance reference
                                 </p>
                             </Link>
                             <Link

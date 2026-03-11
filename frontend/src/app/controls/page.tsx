@@ -147,11 +147,10 @@ export default function MyControlsPage() {
                 onChange={(e) => setFormData({ ...formData, framework: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-4 py-2"
               >
-                <option value="NIST CSF">NIST CSF</option>
-                <option value="SOC2">SOC2</option>
-                <option value="ISO27001">ISO 27001</option>
-                <option value="PCI DSS">PCI DSS</option>
-                <option value="HIPAA">HIPAA</option>
+                <option value="FSMA 204">FSMA 204</option>
+                <option value="EPCIS 2.0">EPCIS 2.0</option>
+                <option value="GS1">GS1</option>
+                <option value="FDA CTE">FDA CTE</option>
               </select>
             </div>
             <div className="flex gap-4">

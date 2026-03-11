@@ -257,18 +257,18 @@ export default function CompliancePage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Multi-Industry Support</CardTitle>
+                <CardTitle>FSMA 204 Coverage</CardTitle>
                 <CardDescription>
-                  Pre-built checklists for Healthcare (HIPAA, FDA), Finance, Gaming, Energy, and Technology
+                  Pre-built checklists and KDE templates for all 16 FDA Food Traceability List categories
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
-                  <Badge>HIPAA</Badge>
-                  <Badge>FDA</Badge>
-                  <Badge>SOC 2</Badge>
-                  <Badge>PCI DSS</Badge>
-                  <Badge>GDPR</Badge>
+                  <Badge>FSMA 204</Badge>
+                  <Badge>EPCIS 2.0</Badge>
+                  <Badge>GS1</Badge>
+                  <Badge>FDA CTEs</Badge>
+                  <Badge>KDEs</Badge>
                 </div>
               </CardContent>
             </Card>
