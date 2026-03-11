@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from "next/link";
-import { Mail, MessageSquare, PhoneCall, Send, CheckCircle, AlertCircle } from "lucide-react";
+import { Mail, MessageSquare, Clock, Send, CheckCircle, AlertCircle } from "lucide-react";
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', company: '', message: '' });
@@ -112,8 +112,8 @@ export default function ContactPage() {
 
                 <p className="text-xs text-[var(--re-text-disabled)] mt-1">
                   Or email us directly at{' '}
-                  <a href="mailto:chris@regengine.com" className="text-[var(--re-brand)] hover:underline">
-                    chris@regengine.com
+                  <a href="mailto:chris@regengine.co" className="text-[var(--re-brand)] hover:underline">
+                    chris@regengine.co
                   </a>
                 </p>
               </form>
@@ -132,7 +132,7 @@ export default function ContactPage() {
             </div>
 
             <div className="p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-              <PhoneCall className="h-5 w-5 text-[var(--re-brand)] mb-2" />
+              <Clock className="h-5 w-5 text-[var(--re-brand)] mb-2" />
               <p className="text-sm font-semibold text-[var(--re-text-primary)]">Response Window</p>
               <p className="text-sm text-[var(--re-text-muted)] mt-1">Typical response within one business day.</p>
             </div>
