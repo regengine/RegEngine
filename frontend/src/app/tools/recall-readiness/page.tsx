@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { RecallReadinessClient } from "./components/RecallReadinessClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
@@ -43,7 +44,9 @@ export default function RecallReadinessPage() {
                         { label: "Recall Readiness Score" }
                     ]}
                 />
-                <RecallReadinessClient />
+                <Suspense>
+                    <RecallReadinessClient />
+                </Suspense>
             </div>
         </div>
     );

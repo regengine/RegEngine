@@ -169,11 +169,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearCredentials();
   }, [clearCredentials]);
 
-  // Don't render children until hydrated to prevent hydration mismatch
-  if (!isHydrated) {
-    return null;
-  }
-
   return (
     <AuthContext.Provider
       value={{
