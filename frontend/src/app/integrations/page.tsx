@@ -14,7 +14,6 @@ import {
     Code2,
     Shield,
     Zap,
-    CheckCircle2,
     FileJson,
     Link2,
     Send,
@@ -27,11 +26,11 @@ const INTEGRATION_CATEGORIES = [
         icon: Shield,
         color: 'var(--re-brand)',
         partners: [
-            { name: 'SafetyCulture', role: 'Inspections & audit sync', ready: true },
-            { name: 'FoodReady', role: 'HACCP & temp monitoring', ready: true },
-            { name: 'FoodDocs', role: 'AI monitoring tasks', ready: true },
-            { name: 'Tive Trackers', role: 'GPS + cold chain tracking', ready: true },
-            { name: 'Sensitech TempTale', role: 'IoT sensor data', ready: true },
+            { name: 'SafetyCulture', role: 'Inspections & audit sync', status: 'live' as const },
+            { name: 'FoodReady', role: 'HACCP & temp monitoring', status: 'live' as const },
+            { name: 'FoodDocs', role: 'AI monitoring tasks', status: 'live' as const },
+            { name: 'Tive Trackers', role: 'GPS + cold chain tracking', status: 'live' as const },
+            { name: 'Sensitech TempTale', role: 'IoT sensor data', status: 'live' as const },
         ],
     },
     {
@@ -40,23 +39,23 @@ const INTEGRATION_CATEGORIES = [
         icon: Database,
         color: 'var(--re-info)',
         partners: [
-            { name: 'CSV / SFTP Import', role: 'Universal ERP connector', ready: true },
-            { name: 'SAP S/4HANA', role: 'Via CSV/EDI export', ready: true },
-            { name: 'Oracle NetSuite', role: 'Via CSV/SFTP export', ready: true },
-            { name: 'Fishbowl', role: 'Via CSV export', ready: true },
-            { name: 'QuickBooks', role: 'Via CSV export', ready: true },
+            { name: 'CSV / SFTP Import', role: 'Universal ERP connector', status: 'live' as const },
+            { name: 'SAP S/4HANA', role: 'Via CSV/EDI export', status: 'csv' as const },
+            { name: 'Oracle NetSuite', role: 'Via CSV/SFTP export', status: 'csv' as const },
+            { name: 'Fishbowl', role: 'Via CSV export', status: 'csv' as const },
+            { name: 'QuickBooks', role: 'Via CSV export', status: 'csv' as const },
         ],
     },
     {
         title: 'Retailer Networks',
-        description: 'Push shipping traceability data to major retailer compliance portals.',
+        description: 'Push EPCIS-formatted traceability data to retailer compliance portals via export.',
         icon: ShoppingCart,
         color: 'var(--re-brand)',
         partners: [
-            { name: 'Walmart', role: 'GDSN / ASN shipping data', ready: true },
-            { name: 'Kroger', role: '84.51° supplier exchange', ready: true },
-            { name: 'Whole Foods', role: 'Amazon supplier portal', ready: true },
-            { name: 'Costco', role: 'Supplier food safety portal', ready: true },
+            { name: 'Walmart', role: 'GDSN / ASN — EPCIS export', status: 'export' as const },
+            { name: 'Kroger', role: '84.51° supplier exchange', status: 'export' as const },
+            { name: 'Whole Foods', role: 'Amazon supplier portal', status: 'export' as const },
+            { name: 'Costco', role: 'Supplier food safety portal', status: 'export' as const },
         ],
     },
     {
@@ -65,11 +64,11 @@ const INTEGRATION_CATEGORIES = [
         icon: Code2,
         color: 'var(--re-info)',
         partners: [
-            { name: 'REST API', role: 'Full traceability CRUD', ready: true },
-            { name: 'Webhooks', role: 'Real-time event push', ready: true },
-            { name: 'GS1 EPCIS 2.0', role: 'JSON-LD ingest & export', ready: true },
-            { name: 'CSV Import', role: 'Bulk data migration', ready: true },
-            { name: 'EDI 856', role: 'ASN inbound processing', ready: true },
+            { name: 'REST API', role: 'Full traceability CRUD', status: 'live' as const },
+            { name: 'Webhooks', role: 'Real-time event push', status: 'live' as const },
+            { name: 'GS1 EPCIS 2.0', role: 'JSON-LD ingest & export', status: 'live' as const },
+            { name: 'CSV Import', role: 'Bulk data migration', status: 'live' as const },
+            { name: 'EDI 856', role: 'ASN inbound processing', status: 'live' as const },
         ],
     },
 ];
@@ -251,8 +250,14 @@ export default function IntegrationsPage() {
                                                         <span className="font-medium text-sm">
                                                             {p.name}
                                                         </span>
-                                                        {p.ready && (
-                                                            <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" />
+                                                        {p.status === 'live' && (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Live</span>
+                                                        )}
+                                                        {p.status === 'csv' && (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">CSV</span>
+                                                        )}
+                                                        {p.status === 'export' && (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">Export</span>
                                                         )}
                                                     </div>
                                                     <span className="text-xs text-muted-foreground">

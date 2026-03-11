@@ -49,7 +49,7 @@ export default function AlphaPage() {
         <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
             {/* Hero */}
             <section style={{ position: 'relative', zIndex: 2, maxWidth: '800px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
-                <Badge style={{ background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', border: '1px solid rgba(139,92,246,0.2)', marginBottom: '20px' }}>
+                <Badge style={{ background: T.accentBg, color: T.accent, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '20px' }}>
                     Private Alpha &middot; 25 Spots
                 </Badge>
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
