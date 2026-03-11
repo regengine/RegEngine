@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
     title: 'Privacy Policy | RegEngine',
@@ -113,6 +114,14 @@ const sections = [
         ],
     },
     {
+        title: "Beta Service Notice",
+        content: [
+            {
+                text: "RegEngine is currently in beta. Features and workflows may change as we improve the platform, and access may be modified during beta operations. This Privacy Policy applies during beta and after general availability.",
+            },
+        ],
+    },
+    {
         title: "Changes to This Policy",
         content: [
             {
@@ -142,10 +151,16 @@ export default function PrivacyPage() {
                     Privacy Policy
                 </h1>
                 <p className="text-sm text-re-text-disabled font-mono">
-                    Effective: February 5, 2026 · Last updated: February 5, 2026
+                    Effective: March 11, 2026 · Last updated: March 11, 2026
                 </p>
                 <p className="text-base text-re-text-muted leading-relaxed mt-5">
                     Plain language. No legalese walls. Here&apos;s what we collect, why, and what we do with it.
+                </p>
+                <p className="text-sm text-re-text-muted leading-relaxed mt-4">
+                    Related documents:{' '}
+                    <Link href="/terms" className="text-re-brand underline hover:opacity-90">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link href="/security" className="text-re-brand underline hover:opacity-90">Security</Link>.
                 </p>
             </section>
 
