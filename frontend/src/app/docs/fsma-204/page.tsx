@@ -134,7 +134,7 @@ export default function FSMA204GuidePage() {
                             justifyContent: 'space-between',
                             alignItems: 'center',
                         }}>
-                            <span className="text-xs text-re-text-muted">POST /v1/records</span>
+                            <span className="text-xs text-re-text-muted">POST /api/v1/webhooks/ingest</span>
                             <span className="text-xs text-re-brand">bash</span>
                         </div>
                         <pre style={{
@@ -145,28 +145,28 @@ export default function FSMA204GuidePage() {
                             overflowX: 'auto',
                             color: 'var(--re-text-primary)',
                         }}>
-                            <code>{`curl -X POST https://api.regengine.co/v1/records \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+                            <code>{`curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
+  -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "type": "compliance_event",
-    "framework": "FSMA_204",
-    "data": {
-      "event_type": "receiving",
-      "lot_code": "LOT-2026-001",
-      "product": "Romaine Lettuce",
-      "quantity": 500,
-      "unit": "cases",
-      "location": {
-        "name": "Distribution Center #4",
-        "fda_traceability_lot_code": "TLC-DC4-2026"
-      },
-      "source": {
-        "name": "Valley Fresh Farms",
-        "lot_code": "VFF-2026-0142"
-      },
-      "timestamp": "2026-02-05T08:30:00Z"
-    }
+    "source": "erp",
+    "events": [
+      {
+        "cte_type": "receiving",
+        "traceability_lot_code": "00012345678901-LOT-2026-001",
+        "product_description": "Romaine Lettuce",
+        "quantity": 500,
+        "unit_of_measure": "cases",
+        "location_name": "Distribution Center #4",
+        "timestamp": "2026-02-05T08:30:00Z",
+        "kdes": {
+          "receive_date": "2026-02-05",
+          "receiving_location": "Distribution Center #4",
+          "ship_from_location": "Valley Fresh Farms"
+        }
+      }
+    ]
   }'`}</code>
                         </pre>
                     </div>
@@ -191,13 +191,20 @@ export default function FSMA204GuidePage() {
                         </div>
                         <pre className="re-code-block">
                             <code>{`{
-  "id": "rec_3x7Kp9mN2vL",
-  "record_hash": "a3f2b891c4d5e6f78901a2b3c4d5e6f7...",
-  "prev_hash": "7f6e5d4c3b2a19087f6e5d4c3b2a1908...",
-  "chain_position": 1847,
-  "created_at": "2026-02-05T08:30:01Z",
-  "signature": "MEUCIQC7...base64...==",
-  "public_key_id": "regengine-prod-2026-02"
+  "accepted": 1,
+  "rejected": 0,
+  "total": 1,
+  "events": [
+    {
+      "traceability_lot_code": "00012345678901-LOT-2026-001",
+      "cte_type": "receiving",
+      "status": "accepted",
+      "event_id": "a1b2c3d4-...",
+      "sha256_hash": "a3f2b891c4d5e6f7...",
+      "chain_hash": "7f6e5d4c3b2a1908..."
+    }
+  ],
+  "ingestion_timestamp": "2026-02-05T08:30:01Z"
 }`}</code>
                         </pre>
                     </div>
@@ -230,7 +237,7 @@ export default function FSMA204GuidePage() {
                                 {[
                                     { cte: 'Harvesting', event: 'harvesting', kdes: 'Location, Harvest Date, Lot Code, Product' },
                                     { cte: 'Cooling', event: 'cooling', kdes: 'Location, Cooling Date, Lot Code, Product' },
-                                    { cte: 'Initial Packing', event: 'packing', kdes: 'Location, Pack Date, TLC, Quantity' },
+                                    { cte: 'Initial Packing', event: 'initial_packing', kdes: 'Location, Pack Date, TLC, Quantity' },
                                     { cte: 'Shipping', event: 'shipping', kdes: 'Ship From/To, TLC, Carrier, Date' },
                                     { cte: 'Receiving', event: 'receiving', kdes: 'Location, TLC, Source, Quantity, Date' },
                                     { cte: 'Transformation', event: 'transformation', kdes: 'Input TLCs, Output TLC, Date, Location' },
@@ -276,7 +283,7 @@ export default function FSMA204GuidePage() {
                             padding: '8px 16px',
                             borderBottom: `1px solid ${T.border}`,
                         }}>
-                            <span className="text-xs text-re-text-muted">GET /fsma/v1/export/fda-request</span>
+                            <span className="text-xs text-re-text-muted">GET /v1/fsma/export/fda-request</span>
                         </div>
                         <pre style={{
                             padding: '20px',
@@ -286,12 +293,12 @@ export default function FSMA204GuidePage() {
                             overflowX: 'auto',
                             color: 'var(--re-text-primary)',
                         }}>
-                            <code>{`curl https://api.regengine.co/fsma/v1/export/fda-request \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+                            <code>{`curl https://api.regengine.co/v1/fsma/export/fda-request \\
+  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
+  -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
   -G \\
   -d "start_date=2026-01-01" \\
   -d "end_date=2026-02-05" \\
-  -d "lot_code=LOT-2026-001" \\
   -o fda_response.csv`}</code>
                         </pre>
                     </div>
@@ -310,7 +317,7 @@ export default function FSMA204GuidePage() {
                         color: 'var(--re-text-tertiary)',
                         overflowX: 'auto',
                     }}>
-                        <code>Entry #, Event Type, Event Date, Product, TLC, Quantity, Unit, Location, Source, Destination, Reference Doc URL</code>
+                        <code>Traceability Lot Code, Traceability Lot Code Description, Product Description, Quantity, Unit of Measure, Location Description, Location Identifier (GLN), Date, Time, Reference Document Type, Reference Document Number</code>
                     </div>
                 </section>
 
@@ -339,7 +346,7 @@ export default function FSMA204GuidePage() {
                             <span className="text-xs text-re-text-muted">Forward Trace (where did this lot go?)</span>
                         </div>
                         <pre className="re-code-block">
-                            <code>{`GET /graph/v1/trace/forward?lot_code=LOT-2026-001`}</code>
+                            <code>{`GET /v1/fsma/trace/forward/LOT-2026-001`}</code>
                         </pre>
                     </div>
 
@@ -358,7 +365,7 @@ export default function FSMA204GuidePage() {
                             <span className="text-xs text-re-text-muted">Backward Trace (where did this lot come from?)</span>
                         </div>
                         <pre className="re-code-block">
-                            <code>{`GET /graph/v1/trace/backward?lot_code=LOT-2026-001`}</code>
+                            <code>{`GET /v1/fsma/trace/backward/LOT-2026-001`}</code>
                         </pre>
                     </div>
                 </section>
@@ -403,11 +410,11 @@ export default function FSMA204GuidePage() {
 
                     <div className="grid gap-3">
                         {[
-                            { path: 'POST /v1/records', desc: 'Create compliance events' },
-                            { path: 'GET /fsma/v1/export/fda-request', desc: 'Generate FDA-compliant export' },
-                            { path: 'GET /graph/v1/trace/forward', desc: 'Forward supply chain trace' },
-                            { path: 'GET /graph/v1/trace/backward', desc: 'Backward supply chain trace' },
-                            { path: 'GET /compliance/coverage', desc: 'Coverage status and freshness' },
+                            { path: 'POST /api/v1/webhooks/ingest', desc: 'Create compliance events' },
+                            { path: 'GET /v1/fsma/export/fda-request', desc: 'Generate FDA-compliant export' },
+                            { path: 'GET /v1/fsma/trace/forward/{tlc}', desc: 'Forward supply chain trace' },
+                            { path: 'GET /v1/fsma/trace/backward/{tlc}', desc: 'Backward supply chain trace' },
+                            { path: 'GET /v1/fsma/coverage', desc: 'Coverage status and freshness' },
                         ].map((ep) => (
                             <div key={ep.path} style={{
                                 padding: '12px 16px',
