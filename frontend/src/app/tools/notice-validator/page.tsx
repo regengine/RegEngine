@@ -420,7 +420,7 @@ export default function NoticeValidatorPage() {
                         <div className="nv-breadcrumb">
                             <Link href="/">RegEngine</Link>
                             <span>/</span>
-                            <Link href="/verticals/food-safety">Food Safety</Link>
+                            <Link href="/developers/compliance-verticals">Compliance Tools</Link>
                             <span>/</span>
                             <span>Notice Validator</span>
                         </div>
@@ -564,8 +564,8 @@ export default function NoticeValidatorPage() {
                                     automatically — pulling reason codes, CRA data, and score disclosures directly
                                     from your decision pipeline.
                                 </p>
-                                <Link href="/verticals/food-safety" className="nv-cta-btn">
-                                    Explore Food Safety API <ArrowRight size={16} />
+                                <Link href="/developers/compliance-verticals" className="nv-cta-btn">
+                                    Explore Compliance API <ArrowRight size={16} />
                                 </Link>
                             </div>
                         </div>
@@ -609,8 +609,8 @@ export default function NoticeValidatorPage() {
                             <Link href="/tools/obligation-scanner" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
                                 Obligation Scanner →
                             </Link>
-                            <Link href="/verticals/food-safety" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
-                                ← Food Safety Vertical
+                            <Link href="/developers/compliance-verticals" style={{ color: 'var(--nv-accent)', fontSize: '0.82rem' }}>
+                                ← Compliance Tools
                             </Link>
                         </div>
                     </footer>

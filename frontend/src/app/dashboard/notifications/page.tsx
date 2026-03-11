@@ -158,9 +158,8 @@ export default function NotificationPrefsPage() {
             await apiSavePrefs(tenantId, prefs);
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
-        } catch {
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to save preferences');
         } finally {
             setSaving(false);
         }

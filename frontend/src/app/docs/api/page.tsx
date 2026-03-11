@@ -511,7 +511,7 @@ export default function ApiReferencePage() {
                                     <Icon className="h-4 w-4" />
                                     {service.name}
                                     <Badge variant="secondary" className="ml-1 text-xs">
-                                        :{service.port}
+                                        {service.endpoints.length} endpoint{service.endpoints.length !== 1 ? 's' : ''}
                                     </Badge>
                                 </Button>
                             );
@@ -543,7 +543,7 @@ export default function ApiReferencePage() {
                                         Base URL: {API_SERVICES[selectedService].baseUrl}
                                     </Badge>
                                     <Badge variant="outline" className="font-mono">
-                                        Port: {API_SERVICES[selectedService].port}
+                                        www.regengine.co
                                     </Badge>
                                 </div>
                             </CardHeader>
@@ -639,7 +639,7 @@ GET /v1/admin/review/flagged-extractions?limit=20&cursor=eyJpZCI6IjEyMyJ9`}
                             </div>
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-3 mt-3">
                                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                                    <strong>Tier Limits:</strong> Starter (60/min), Growth (300/min), Scale (1000/min), Enterprise (custom)
+                                    <strong>Tier Limits:</strong> Starter (100/min), Growth (500/min), Scale (1000/min), Enterprise (custom)
                                 </p>
                             </div>
                         </CardContent>

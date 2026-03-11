@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Webhooks | RegEngine',
+  description: 'Real-time event notifications for compliance changes. Planned event types and payload previews.',
+};
 import { ArrowLeft, Webhook, Mail, Zap, FileText } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 

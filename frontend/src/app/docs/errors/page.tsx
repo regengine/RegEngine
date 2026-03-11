@@ -1,11 +1,17 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Error Codes | RegEngine',
+  description: 'HTTP status codes and API-specific error responses for the RegEngine API, with fixes and retry strategies.',
+};
 import { ArrowLeft, AlertCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
 const errorCodes = [
     // 4xx Client Errors
     { code: 400, name: 'Bad Request', description: 'The request body is malformed or missing required fields.', fix: 'Check your JSON syntax and required fields in the API reference.', category: 'client' },
-    { code: 401, name: 'Unauthorized', description: 'Missing or invalid API key.', fix: 'Ensure the Authorization header is set with a valid Bearer token.', category: 'client' },
+    { code: 401, name: 'Unauthorized', description: 'Missing or invalid API key.', fix: 'Ensure the X-RegEngine-API-Key header is set with a valid API key.', category: 'client' },
     { code: 403, name: 'Forbidden', description: 'API key lacks permission for this operation.', fix: 'Check key scope and tenant permissions.', category: 'client' },
     { code: 404, name: 'Not Found', description: 'The requested resource does not exist.', fix: 'Verify the resource ID and endpoint path.', category: 'client' },
     { code: 409, name: 'Conflict', description: 'Resource already exists or state conflict.', fix: 'Check for duplicate record IDs or race conditions.', category: 'client' },

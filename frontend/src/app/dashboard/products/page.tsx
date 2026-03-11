@@ -122,16 +122,8 @@ export default function ProductCatalogPage() {
             await apiAddProduct(tenantId, newName, newCategory, newSku);
             setNewName(''); setNewSku(''); setShowAdd(false);
             await loadProducts();
-        } catch {
-            // Optimistic fallback
-            setProducts(prev => [...prev, {
-                id: `prod-new-${Date.now()}`, name: newName, category: newCategory,
-                sku: newSku || `SKU-${Date.now().toString(36).toUpperCase()}`,
-                gtin: '', description: '', suppliers: [], facilities: [],
-                cte_count: 0, last_cte: null, created_at: new Date().toISOString(),
-                ftl_covered: FTL_CATEGORIES.includes(newCategory),
-            }]);
-            setNewName(''); setNewSku(''); setShowAdd(false);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to add product');
         } finally {
             setAdding(false);
         }

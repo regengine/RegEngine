@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users, Search, Plus, Filter } from 'lucide-react';
+import { AlertTriangle, Users, Search, Plus, Filter } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,11 @@ export default function TenantsPage() {
                     Add Tenant
                 </Button>
             </motion.div>
+
+            <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+            </div>
 
             {/* Search and Filters */}
             <motion.div

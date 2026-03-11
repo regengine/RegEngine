@@ -90,6 +90,11 @@ export default function InvoicesDashboard() {
                 </Badge>
             </motion.div>
 
+            <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+            </div>
+
             {/* Revenue KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 {[

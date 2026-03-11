@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'FSMA 204 Integration Guide | RegEngine',
+  description: 'Build FDA-compliant traceability systems with RegEngine. CTEs, KDEs, FDA Request Mode, and supply chain tracing.',
+};
 import { ArrowLeft, Utensils, CheckCircle, Clock, FileText, Zap, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 

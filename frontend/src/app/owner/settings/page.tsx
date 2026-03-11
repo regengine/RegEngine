@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, Building2, Palette, Bell, Globe, CreditCard } from 'lucide-react';
+import { AlertTriangle, Settings, Building2, Palette, Bell, Globe, CreditCard } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,11 @@ export default function SettingsPage() {
                     <p className="text-white/60 mt-1">Platform configuration and preferences</p>
                 </div>
             </motion.div>
+
+            <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+            </div>
 
             <motion.div
                 initial={{ opacity: 0, y: 20 }}

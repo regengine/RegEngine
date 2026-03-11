@@ -1,4 +1,10 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: 'Documentation | RegEngine',
+  description: 'RegEngine API documentation. Quickstart guides, endpoint references, SDKs, and compliance vertical guides.',
+};
 import { ArrowRight, Key, Book, Code, Webhook, Zap, TrendingUp, Cpu, Atom, ShieldCheck, AlertCircle, FileText, UtensilsCrossed } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
