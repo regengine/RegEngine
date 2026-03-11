@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
-    title: 'Developers | RegEngine FSMA API',
-    description: 'RegEngine developer docs. Node.js, Python, and cURL SDKs for FSMA 204 compliance API.',
+    title: 'Developers | RegEngine FSMA 204 API',
+    description: 'RegEngine REST API for FSMA 204 compliance. Record CTEs, run recall simulations, and export FDA packages programmatically.',
     openGraph: {
-        title: 'Developers | RegEngine FSMA API',
-        description: 'RegEngine developer docs. Node.js, Python, and cURL SDKs for FSMA 204 compliance API.',
+        title: 'Developers | RegEngine FSMA 204 API',
+        description: 'RegEngine REST API for FSMA 204 compliance. Record CTEs, run recall simulations, and export FDA packages programmatically.',
         url: 'https://www.regengine.co/developers',
         type: 'website',
     },
@@ -29,102 +29,103 @@ const T = {
     accentBg: 'rgba(16,185,129,0.1)',
     mono: "'JetBrains Mono', monospace",
 };
+/* ── Real code examples using actual REST endpoints ── */
 
-const QUICKSTART_NODE = `import { RegEngine } from '@regengine/fsma-sdk';
-
-const rg = new RegEngine('rge_your_api_key_here');
-
-const event = await rg.events.create({
-  type: 'RECEIVING',
-  tlc: 'LOT-2024-001',
-  product: {
-    description: 'Fresh Romaine Lettuce',
-    gtin: '00614141000012'
-  },
-  quantity: { value: 500, unit: 'cases' },
-  location: { gln: '0614141000012', name: 'Main Warehouse' },
-  timestamp: new Date().toISOString(),
-  kdes: {
-    supplier_lot: 'SUPP-TF-2024-001',
-    po_number: 'PO-12345',
-    carrier: 'FastFreight Logistics'
-  }
-});
-
-console.log('Event recorded:', event.id);`;
-
-const QUICKSTART_PYTHON = `from regengine import RegEngine
-
-rg = RegEngine(api_key='rge_your_api_key_here')
-
-event = rg.events.create(
-    event_type='RECEIVING',
-    tlc='LOT-2024-001',
-    product={
-        'description': 'Fresh Romaine Lettuce',
-        'gtin': '00614141000012'
-    },
-    quantity={'value': 500, 'unit': 'cases'},
-    location={'gln': '0614141000012', 'name': 'Main Warehouse'},
-    kdes={
-        'supplier_lot': 'SUPP-TF-2024-001',
-        'po_number': 'PO-12345',
-        'carrier': 'FastFreight Logistics'
-    }
-)
-
-print(f'Event recorded: {event.id}')`;
-
-const QUICKSTART_CURL = `curl -X POST https://api.regengine.co/v1/fsma/events \\
+const EXAMPLE_INGEST_CTE = `# Record a Critical Tracking Event (Receiving)
+curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: rge_your_api_key_here" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "type": "RECEIVING",
-    "tlc": "LOT-2024-001",
-    "product": {
-      "description": "Fresh Romaine Lettuce",
-      "gtin": "00614141000012"
-    },
-    "quantity": {"value": 500, "unit": "cases"},
-    "location": {"gln": "0614141000012"},
-    "kdes": {
-      "supplier_lot": "SUPP-TF-2024-001",
-      "po_number": "PO-12345"
-    }
+    "events": [{
+      "event_type": "receiving",
+      "tlc": "LOT-2024-001",
+      "product_description": "Fresh Romaine Lettuce",
+      "gtin": "00614141000012",
+      "quantity": 500,
+      "unit": "cases",
+      "location_gln": "0614141000012",
+      "location_name": "Main Warehouse",
+      "timestamp": "2025-03-10T14:30:00Z",
+      "kdes": {
+        "supplier_lot": "SUPP-TF-2024-001",
+        "po_number": "PO-12345",
+        "carrier": "FastFreight Logistics"
+      }
+    }]
   }'`;
 
+const EXAMPLE_EPCIS = `# Ingest EPCIS 2.0 event
+curl -X POST https://www.regengine.co/api/v1/epcis/events \\
+  -H "X-RegEngine-API-Key: rge_your_api_key_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "eventList": [{
+      "type": "ObjectEvent",
+      "action": "OBSERVE",
+      "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+      "epcList": ["urn:epc:id:sgtin:0614141.000012.LOT2024001"],
+      "eventTime": "2025-03-10T14:30:00Z",
+      "bizLocation": {"id": "urn:epc:id:sgln:0614141.00001.0"},
+      "ilmd": {
+        "lotNumber": "LOT-2024-001",
+        "itemDescription": "Fresh Romaine Lettuce"
+      }
+    }]
+  }'`;
+
+const EXAMPLE_COMPLIANCE = `# Get compliance score
+curl https://www.regengine.co/api/v1/compliance/score/your_tenant_id \\
+  -H "X-RegEngine-API-Key: rge_your_api_key_here"
+
+# Run a recall simulation
+curl -X POST https://www.regengine.co/api/v1/recall-simulations/run \\
+  -H "X-RegEngine-API-Key: rge_your_api_key_here" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "tenant_id": "your_tenant_id",
+    "tlc": "LOT-2024-001",
+    "reason": "Quarterly drill"
+  }'
+
+# Export FDA compliance package
+curl https://www.regengine.co/api/v1/fda/export?tenant_id=your_tenant_id \\
+  -H "X-RegEngine-API-Key: rge_your_api_key_here" \\
+  --output fda_package.json`;
+/* ── Actual API endpoints that exist in the backend ── */
+
 const API_ENDPOINTS = [
-    { method: 'POST', path: '/v1/fsma/events', description: 'Create a Critical Tracking Event' },
-    { method: 'GET', path: '/v1/fsma/events', description: 'List events with filters' },
-    { method: 'GET', path: '/v1/fsma/events/:id', description: 'Get event by ID' },
-    { method: 'POST', path: '/v1/fsma/export', description: 'Generate FDA compliance package' },
-    { method: 'POST', path: '/v1/fsma/recall-simulation', description: 'Run recall drill' },
-    { method: 'GET', path: '/v1/fsma/compliance-score', description: 'Get compliance score' },
-    { method: 'POST', path: '/v1/fsma/qr/decode', description: 'Decode GS1 barcode' },
-    { method: 'POST', path: '/v1/fsma/query', description: 'Natural language traceability query' },
+    { method: 'POST', path: '/api/v1/webhooks/ingest', description: 'Ingest Critical Tracking Events (batch)' },
+    { method: 'POST', path: '/api/v1/epcis/events', description: 'Ingest EPCIS 2.0 events' },
+    { method: 'GET', path: '/api/v1/epcis/events/:id', description: 'Get event by ID' },
+    { method: 'GET', path: '/api/v1/epcis/chain/verify', description: 'Verify event chain integrity' },
+    { method: 'GET', path: '/api/v1/fda/export', description: 'Export FDA compliance package' },
+    { method: 'POST', path: '/api/v1/recall-simulations/run', description: 'Run recall simulation drill' },
+    { method: 'GET', path: '/api/v1/compliance/score/:tenant_id', description: 'Get compliance risk score' },
+    { method: 'POST', path: '/api/v1/qr/decode', description: 'Decode GS1 / GTIN barcode' },
+    { method: 'POST', path: '/api/v1/integrations/csv-upload/:tenant_id', description: 'Upload CSV traceability data' },
+    { method: 'GET', path: '/api/v1/integrations/status/:tenant_id', description: 'List connected integrations' },
 ];
 
 const DEV_FEATURES = [
-    { Icon: Zap, title: '5-Minute Quickstart', description: 'Get your first CTE recorded in under 5 minutes with our SDK.' },
-    { Icon: Clock, title: 'Real-Time Webhooks', description: 'Subscribe to compliance events. Get notified when scores change.' },
-    { Icon: Shield, title: 'Per-Tenant API Keys', description: 'Scoped keys with RBAC. No cross-tenant leakage by design.' },
-    { Icon: BookOpen, title: 'Full OpenAPI Spec', description: 'Every endpoint documented with schemas, examples, and error codes.' },
+    { Icon: Zap, title: 'Quick Integration', description: 'Record your first CTE with a single API call. Full REST API with cURL examples.' },
+    { Icon: Clock, title: 'Real-Time Webhooks', description: 'Ingest traceability events via webhooks with SHA-256 chain verification.' },
+    { Icon: Shield, title: 'Per-Tenant API Keys', description: 'Scoped keys with RBAC. Multi-tenant isolation by design.' },
+    { Icon: BookOpen, title: 'Interactive API Docs', description: 'Swagger UI with live endpoint testing. Python and Node.js SDKs coming soon.' },
 ];
-
 export default function DevelopersPage() {
     return (
         <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
             {/* Hero */}
             <section style={{ position: 'relative', zIndex: 2, maxWidth: '800px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
                 <Badge style={{ background: T.accentBg, color: T.accent, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '20px' }}>
-                    Developer Docs
+                    REST API
                 </Badge>
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
                     Ship FSMA 204 compliance<br />
                     <span className="text-re-brand">with one API call</span>
                 </h1>
                 <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '560px', margin: '0 auto 32px', lineHeight: 1.6 }}>
-                    Node.js, Python, and cURL SDKs. Record CTEs, run recall simulations, and export FDA packages programmatically.
+                    REST API with full EPCIS 2.0 support. Record CTEs, run recall simulations, and export FDA packages programmatically.
                 </p>
                 <div className="flex gap-3 justify-center flex-wrap">
                     <Link href="/alpha">
@@ -139,7 +140,6 @@ export default function DevelopersPage() {
                     </Link>
                 </div>
             </section>
-
             {/* Developer Features */}
             <section style={{ position: 'relative', zIndex: 2, maxWidth: '900px', margin: '0 auto', padding: '0 24px 60px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
@@ -153,56 +153,57 @@ export default function DevelopersPage() {
                 </div>
             </section>
 
-            {/* Quickstart Code Examples */}
+            {/* Code Examples */}
             <section style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.01)' }}>
                 <div style={{ maxWidth: '800px', margin: '0 auto', padding: '60px 24px' }}>
                     <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, marginBottom: '8px' }}>
-                        Quickstart: Record your first CTE
+                        Record your first CTE
                     </h2>
                     <p style={{ fontSize: '14px', color: T.textMuted, marginBottom: '32px' }}>
-                        Send your first Critical Tracking Event in 5 minutes. Available in Node.js, Python, and cURL.
+                        Send Critical Tracking Events via our webhook endpoint or EPCIS 2.0 standard format.
                     </p>
 
-                    {/* Node.js */}
+                    {/* Webhook Ingest */}
+                    <div style={{ marginBottom: '24px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <Terminal style={{ width: 16, height: 16, color: T.accent }} />
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: T.heading }}>Webhook Ingest</span>
+                        </div>
+                        <pre style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${T.border}`, borderRadius: '8px', padding: '16px', overflow: 'auto', fontSize: '12px', lineHeight: 1.6, fontFamily: T.mono, color: T.textMuted }}>
+                            <code>{EXAMPLE_INGEST_CTE}</code>
+                        </pre>
+                    </div>
+                    {/* EPCIS 2.0 */}
                     <div style={{ marginBottom: '24px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                             <Code2 style={{ width: 16, height: 16, color: T.accent }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: T.heading }}>Node.js</span>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: T.heading }}>EPCIS 2.0</span>
                         </div>
                         <pre style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${T.border}`, borderRadius: '8px', padding: '16px', overflow: 'auto', fontSize: '12px', lineHeight: 1.6, fontFamily: T.mono, color: T.textMuted }}>
-                            <code>{QUICKSTART_NODE}</code>
+                            <code>{EXAMPLE_EPCIS}</code>
                         </pre>
                     </div>
 
-                    {/* Python */}
-                    <div style={{ marginBottom: '24px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <Terminal style={{ width: 16, height: 16, color: T.accent }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: T.heading }}>Python</span>
-                        </div>
-                        <pre style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${T.border}`, borderRadius: '8px', padding: '16px', overflow: 'auto', fontSize: '12px', lineHeight: 1.6, fontFamily: T.mono, color: T.textMuted }}>
-                            <code>{QUICKSTART_PYTHON}</code>
-                        </pre>
-                    </div>
-
-                    {/* cURL */}
+                    {/* Compliance & Recall */}
                     <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <Terminal style={{ width: 16, height: 16, color: T.accent }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: T.heading }}>cURL</span>
+                            <Shield style={{ width: 16, height: 16, color: T.accent }} />
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: T.heading }}>Compliance & Recall</span>
                         </div>
                         <pre style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${T.border}`, borderRadius: '8px', padding: '16px', overflow: 'auto', fontSize: '12px', lineHeight: 1.6, fontFamily: T.mono, color: T.textMuted }}>
-                            <code>{QUICKSTART_CURL}</code>
+                            <code>{EXAMPLE_COMPLIANCE}</code>
                         </pre>
                     </div>
                 </div>
             </section>
-
             {/* API Endpoints */}
             <section style={{ position: 'relative', zIndex: 2, maxWidth: '800px', margin: '0 auto', padding: '60px 24px' }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, marginBottom: '24px' }}>
+                <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, marginBottom: '8px' }}>
                     API Endpoints
                 </h2>
+                <p style={{ fontSize: '14px', color: T.textMuted, marginBottom: '24px' }}>
+                    Core endpoints for FSMA 204 traceability. All endpoints require <code style={{ fontFamily: T.mono, fontSize: '12px', color: T.accent }}>X-RegEngine-API-Key</code> header.
+                </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {API_ENDPOINTS.map((ep, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '8px' }}>
@@ -210,6 +211,7 @@ export default function DevelopersPage() {
                                 fontSize: '11px', fontWeight: 700, fontFamily: T.mono, padding: '2px 8px', borderRadius: '4px',
                                 background: ep.method === 'POST' ? 'rgba(16,185,129,0.15)' : 'rgba(96,165,250,0.15)',
                                 color: ep.method === 'POST' ? T.accent : '#60a5fa',
+                                minWidth: '44px', textAlign: 'center',
                             }}>
                                 {ep.method}
                             </span>
@@ -220,6 +222,29 @@ export default function DevelopersPage() {
                 </div>
             </section>
 
+            {/* Authentication */}
+            <section style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.01)' }}>
+                <div style={{ maxWidth: '800px', margin: '0 auto', padding: '60px 24px' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, marginBottom: '8px' }}>
+                        Authentication
+                    </h2>
+                    <p style={{ fontSize: '14px', color: T.textMuted, marginBottom: '24px' }}>
+                        All API requests require a per-tenant API key passed via header.
+                    </p>
+                    <pre style={{ background: 'rgba(0,0,0,0.3)', border: `1px solid ${T.border}`, borderRadius: '8px', padding: '16px', overflow: 'auto', fontSize: '12px', lineHeight: 1.8, fontFamily: T.mono, color: T.textMuted }}>
+                        <code>{`# Required headers
+X-RegEngine-API-Key: rge_your_api_key_here
+Content-Type: application/json
+
+# Response codes
+200  OK (sync response)
+202  Accepted (async job queued)
+400  Bad Request (validation error)
+401  Unauthorized (missing or invalid key)
+422  Unprocessable Entity (schema violation)`}</code>
+                    </pre>
+                </div>
+            </section>
             {/* CTA */}
             <section style={{ position: 'relative', zIndex: 2, background: T.accentBg, borderTop: `1px solid ${T.border}`, padding: '48px 24px', textAlign: 'center' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: 700, color: T.heading, marginBottom: '8px' }}>
