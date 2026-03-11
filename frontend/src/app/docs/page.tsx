@@ -237,48 +237,55 @@ export default function DocsHomePage() {
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
             {[
-              { name: 'Food & Beverage', href: '/docs/fsma-204', icon: UtensilsCrossed, framework: 'FSMA 204', featured: true },
-              { name: 'Finance', href: '/docs/finance', icon: TrendingUp, framework: 'SEC / SOX 404', featured: false },
-              { name: 'Energy', href: '/docs/energy', icon: Zap, framework: 'NERC CIP-013', featured: false },
-              { name: 'Nuclear', href: '/docs/nuclear', icon: Atom, framework: '10 CFR / NRC', featured: false },
-              { name: 'Technology', href: '/docs/technology', icon: Cpu, framework: 'SOC 2 / ISO', featured: false },
-              { name: 'Healthcare', href: '/docs/healthcare', icon: ShieldCheck, framework: 'HIPAA', featured: false },
-            ].map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                style={{
-                  padding: '20px',
-                  background: item.featured ? 'rgba(16,185,129,0.1)' : T.surface,
-                  borderRadius: '8px',
-                  border: `1px solid ${item.featured ? 'rgba(16,185,129,0.3)' : T.border}`,
-                  textDecoration: 'none',
-                  position: 'relative',
-                }}
-              >
-                {item.featured && (
-                  <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '12px',
-                    background: T.accent,
-                    color: 'white',
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    textTransform: 'uppercase',
-                  }}>
-                    Most Complete
+              { name: 'Food & Beverage', href: '/docs/fsma-204', icon: UtensilsCrossed, framework: 'FSMA 204', featured: true, live: true },
+              { name: 'Finance', href: null, icon: TrendingUp, framework: 'SEC / SOX 404', featured: false, live: false },
+              { name: 'Energy', href: null, icon: Zap, framework: 'NERC CIP-013', featured: false, live: false },
+              { name: 'Nuclear', href: null, icon: Atom, framework: '10 CFR / NRC', featured: false, live: false },
+              { name: 'Technology', href: null, icon: Cpu, framework: 'SOC 2 / ISO', featured: false, live: false },
+              { name: 'Healthcare', href: null, icon: ShieldCheck, framework: 'HIPAA', featured: false, live: false },
+            ].map((item) => {
+              const inner = (
+                <>
+                  {item.featured && (
+                    <div style={{
+                      position: 'absolute', top: '12px', right: '12px',
+                      background: T.accent, color: 'white', fontSize: '10px', fontWeight: 600,
+                      padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase',
+                    }}>
+                      Live
+                    </div>
+                  )}
+                  {!item.live && (
+                    <div style={{
+                      position: 'absolute', top: '12px', right: '12px',
+                      background: 'rgba(255,255,255,0.06)', color: T.textMuted, fontSize: '10px', fontWeight: 600,
+                      padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.5px',
+                    }}>
+                      Coming Soon
+                    </div>
+                  )}
+                  <item.icon style={{ width: 20, height: 20, color: item.featured ? T.accent : T.textMuted, marginBottom: '12px' }} />
+                  <div style={{ fontWeight: 600, color: item.live ? 'var(--re-text-primary)' : T.textMuted, fontSize: '15px', marginBottom: '4px' }}>
+                    {item.name}
                   </div>
-                )}
-                <item.icon style={{ width: 20, height: 20, color: item.featured ? T.accent : T.textMuted, marginBottom: '12px' }} />
-                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>
-                  {item.name}
+                  <div style={{ color: T.textMuted, fontSize: '13px' }}>{item.framework}</div>
+                </>
+              );
+              const sharedStyle = {
+                padding: '20px', borderRadius: '8px', position: 'relative' as const,
+                background: item.featured ? 'rgba(16,185,129,0.1)' : T.surface,
+                border: `1px solid ${item.featured ? 'rgba(16,185,129,0.3)' : T.border}`,
+              };
+              return item.href ? (
+                <Link key={item.name} href={item.href} style={{ ...sharedStyle, textDecoration: 'none' }}>
+                  {inner}
+                </Link>
+              ) : (
+                <div key={item.name} style={{ ...sharedStyle, cursor: 'default', opacity: 0.5 }}>
+                  {inner}
                 </div>
-                <div style={{ color: T.textMuted, fontSize: '13px' }}>{item.framework}</div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         </section>
 
