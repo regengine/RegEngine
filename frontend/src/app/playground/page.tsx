@@ -158,7 +158,7 @@ export default function PlaygroundPage() {
                                 Get API Key
                             </Button>
                         </Link>
-                        <Link href="/docs/nuclear">
+                        <Link href="/docs/fsma-204">
                             <Button variant="outline" className="w-full">
                                 Documentation
                             </Button>

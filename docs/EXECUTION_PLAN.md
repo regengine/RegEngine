@@ -1,123 +1,15 @@
-# REGENGINE — 60-DAY EXECUTION PLAN
+# Archived Execution Plan
 
-**Created:** 2026-02-08
-**Status:** ACTIVE
-**Audience:** Founder / Board / Advisors
+This file contained a broader execution snapshot that referenced non-FSMA product surfaces.
 
----
+Use these files instead:
 
-## 0. Current Verified State (Ground Truth)
+- `README.md`
+- `docs/PRODUCT_ROADMAP.md`
+- `docs/specs/FSMA_204_MVP_SPEC.md`
+- `docs/AI_ENGINEERING_STANDARDS.md`
 
-Before planning what's next, here is what **actually exists today**, verified against code:
-
-| Dimension                    | Verified Count / Status                                                       |
-|------------------------------|-------------------------------------------------------------------------------|
-| Backend services             | 17 service directories (admin, ingestion, nlp, graph, compliance, opportunity, scheduler, energy, aerospace, automotive, construction, entertainment, gaming, manufacturing, shared, internal, test_data) |
-| Test files                   | 281 test files                                                                |
-| Frontend routes (pages)      | 130 `page.tsx` files                                                          |
-| Database migrations          | 55 SQL migration files                                                        |
-| Docker services              | 9 buildable services in `docker-compose.yml`                                  |
-| Industry verticals (frontend)| 14 vertical pages (aerospace, automotive, construction, energy, entertainment, finance, food-safety, gaming, healthcare, manufacturing, nuclear, technology, + dashboard, + index) |
-| Demo scripts                 | 13 scripts in `scripts/demo/` — **all now passing** (fixed 2026-02-08)        |
-| SDK                          | `sdk/` directory exists; `tools/verification_sdk/` has chain verifier          |
-| RLS enforcement              | 5+ migration files with `ROW LEVEL SECURITY` policies                         |
-| Cryptographic evidence       | SHA-256 hashing in verification SDK + graph provision upserts                  |
-| Knowledge Graph              | Neo4j-backed with Provision→Document→Jurisdiction relationships               |
-| Alpha waitlist               | `/alpha` page live with signup form, perks, and roadmap timeline              |
-| Production URL               | `regengine.vercel.app` / `regengine.co` (Vercel-deployed frontend)            |
-
-### Known Gaps (Honest Assessment)
-
-| Gap                                                  | Severity | Impact                                    |
-|------------------------------------------------------|----------|-------------------------------------------|
-| Full CI suite not verified green post-today's fixes   | HIGH     | Cannot claim "622 passing tests" until re-run |
-| `load_demo_data.py` had async bug until today         | FIXED    | Was a demo-blocker; now resolved           |
-| Kafka publisher crashed on non-Docker execution       | FIXED    | Was crashing graph service from host       |
-| NLP + compliance-worker not running = partial pipeline| KNOWN    | E2E ingestion works; graph trace times out |
-| Alpha signup form is client-only (no backend)         | MEDIUM   | Needs API or email integration to capture leads |
-| No automated patent claim traceability                | LOW      | Patent filing is legal work, not code      |
-
----
-
-## 1. PHASE 1 — STABILIZE & VERIFY (Days 1–7)
-
-**Goal:** Establish an auditable, board-presentable baseline.
-
-### 1.1 Full CI Green Light
-
-| # | Task                                                    | Owner     | Status |
-|---|--------------------------------------------------------|-----------|--------|
-| 1 | Push today's fixes to `origin/main`                    | Eng       | ☐      |
-| 2 | Run full test suite across all 17 services             | CI/Eng    | ☐      |
-| 3 | Fix any remaining test failures                        | Eng       | ☐      |
-| 4 | Record exact passing test count for board materials    | Eng       | ☐      |
-| 5 | Generate CI badge / screenshot for pitch materials     | Eng       | ☐      |
-
-**Deliverable:** Single-line claim: *"X passing tests across Y services, verified [date]"*
-
-### 1.2 Demo Script Suite (Completed)
-
-| # | Script                 | Status | Notes                                            |
-|---|------------------------|--------|--------------------------------------------------|
-| 1 | `quick_demo.sh`        | ✅     | POSIX-compatible (tr instead of bash 4+ syntax)   |
-| 2 | `investor_demo.sh`     | ✅     | Was already passing                               |
-| 3 | `load_demo_data.py`    | ✅     | Async/await fix + Kafka graceful degradation       |
-| 4 | `test_recall_flow.py`  | ✅     | Graceful partial pipeline (exit 0)                |
-
-### 1.3 Alpha Waitlist Backend
-
-| # | Task                                                    | Owner     | Status |
-|---|--------------------------------------------------------|-----------|--------|
-| 1 | Wire `/alpha` form to email capture (Resend / Loops)   | Eng       | ☐      |
-| 2 | Add submission to Supabase `alpha_signups` table        | Eng       | ☐      |
-| 3 | Auto-reply email with confirmation                      | Eng       | ☐      |
-| 4 | Admin view of signups in `/owner` dashboard             | Eng       | ☐      |
-
----
-
-## 2. PHASE 2 — COMMERCIAL PACKAGING (Days 8–21)
-
-**Goal:** Everything a prospect or acquirer sees must be polished and verifiable.
-
-### 2.1 FSMA 204 Sales Demo
-
-| # | Task                                                    | Priority | Status |
-|---|--------------------------------------------------------|----------|--------|
-| 1 | Record 3-minute video demo: Ingest → Trace → Export    | P0       | ☐      |
-| 2 | Create guided demo script (Rizo Lopez recall scenario)  | P0       | ☐      |
-| 3 | Ensure demo tenant has 430+ seeded records              | P0       | ✅     |
-| 4 | FTL Checker → 23 categories confirmed in production     | P0       | ✅     |
-| 5 | FDA Request Mode export generates valid CSV              | P1       | ☐      |
-| 6 | One-click "Request Demo" flow from `/alpha`              | P1       | ☐      |
-
-### 2.2 Developer Portal & SDK Polish
-
-| # | Task                                                    | Priority | Status |
-|---|--------------------------------------------------------|----------|--------|
-| 1 | Verify `sdk/` Python package installs cleanly           | P1       | ☐      |
-| 2 | Publish verification SDK to PyPI (or private index)     | P2       | ☐      |
-| 3 | API docs at `/docs` — ensure all endpoints documented   | P1       | ☐      |
-| 4 | Quickstart guide: "First CTE in 5 minutes" walkthrough  | P0       | ☐      |
-| 5 | Sandbox environment for prospects (read-only demo data) | P2       | ☐      |
-
-### 2.3 Pricing & Onboarding Flow
-
-| # | Task                                                    | Priority | Status |
-|---|--------------------------------------------------------|----------|--------|
-| 1 | Pricing page at `/pricing`                              | P0       | ✅     |
-| 2 | Onboarding flow at `/onboarding`                        | P1       | ✅     |
-| 3 | Stripe integration for payment capture                  | P2       | ☐      |
-| 4 | Tenant provisioning automation                           | P2       | ☐      |
-
----
-
-## 3. PHASE 3 — IP & LEGAL (Days 8–30, parallel)
-
-**Goal:** File provisional patents, establish IP moat.
-
-### 3.1 Provisional Patent Bundle
-
-| # | Patent Title                                    | Code Evidence                                        | Status |
+Do not use this file as active planning guidance.
 |---|-------------------------------------------------|------------------------------------------------------|--------|
 | 1 | Database-Enforced Tenant Isolation              | `auth_utils.py`, `rls_migration_v1.sql`, V12–V22    | ☐ File |
 | 2 | Cryptographic Evidence Chains                   | `verify_snapshot_chain.py`, `verify_chain.py`         | ☐ File |

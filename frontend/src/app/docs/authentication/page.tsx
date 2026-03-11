@@ -114,7 +114,7 @@ export default function AuthenticationDocsPage() {
                             <div>
                                 <h3 className="font-semibold mb-2">Example Request</h3>
                                 <div className="bg-slate-950 rounded-lg p-6 font-mono text-sm text-slate-50 overflow-x-auto">
-                                    <span className="text-purple-400">curl</span> https://www.regengine.co/v1/energy/snapshots \<br />
+                                    <span className="text-purple-400">curl</span> https://www.regengine.co/api/v1/fda/export?tlc=00012345678901-LOT-2026-001&amp;tenant_id=YOUR_TENANT_UUID \<br />
                                     &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"X-RegEngine-API-Key: rge_live_12345"</span> \<br />
                                     &nbsp;&nbsp;<span className="text-slate-400">-H</span> <span className="text-green-400">"Content-Type: application/json"</span>
                                 </div>

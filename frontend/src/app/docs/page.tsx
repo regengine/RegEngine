@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Documentation | RegEngine',
-  description: 'RegEngine API documentation. Quickstart guides, endpoint references, SDKs, and compliance vertical guides.',
+  description: 'RegEngine FSMA 204 API documentation. Quickstart guides, endpoint references, SDKs, and food traceability implementation guides.',
 };
 import { ArrowRight, Key, Book, Code, Webhook, Zap, AlertCircle, FileText, UtensilsCrossed } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
@@ -223,7 +223,7 @@ export default function DocsHomePage() {
           </div>
         </section>
 
-        {/* Row 3: Compliance Vertical */}
+        {/* Row 3: FSMA Guide */}
         <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
@@ -233,7 +233,7 @@ export default function DocsHomePage() {
             letterSpacing: '1px',
             marginBottom: '16px',
           }}>
-            Compliance Vertical
+            FSMA Guide
           </h2>
           <Link
             href="/docs/fsma-204"

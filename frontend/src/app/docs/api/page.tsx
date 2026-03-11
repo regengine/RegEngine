@@ -145,7 +145,7 @@ const API_SERVICES = [
                 description: 'Get compliance checklists',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['industry=food|finance|healthcare'],
+                params: ['industry=food'],
                 response: '{ "checklists": [...], "total": 10 }',
             },
             {
@@ -168,10 +168,10 @@ const API_SERVICES = [
             {
                 method: 'GET',
                 path: '/industries',
-                description: 'List supported industries',
+                description: 'List supported food compliance domains',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "industries": ["food", "finance", "healthcare"], "total": 3 }',
+                response: '{ "industries": ["food"], "total": 1 }',
             },
         ],
     },

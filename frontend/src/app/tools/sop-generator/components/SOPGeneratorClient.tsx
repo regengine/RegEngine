@@ -73,7 +73,7 @@ ${facList}
 ${formData.company_type === 'grower' || formData.company_type === 'manufacturer' ? '✅ Harvesting (§1.1325a)\n✅ Cooling (§1.1325b)\n' : ''}✅ Shipping (§1.1340)
 ✅ Receiving (§1.1345)
 ${formData.company_type === 'manufacturer' ? '✅ Transformation (§1.1350)\n' : ''}
-## Technology
+## Operations
 ${formData.has_iot ? '✅ IoT Temperature Monitoring (Sensitech)' : '⬜ No IoT monitoring'}
 ${formData.has_erp ? '✅ ERP/WMS Integration via Webhook API' : '⬜ Manual data entry / CSV upload'}
 

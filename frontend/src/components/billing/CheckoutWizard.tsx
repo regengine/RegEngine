@@ -4,7 +4,7 @@
  * CheckoutWizard — 4-step premium checkout flow
  *
  * Steps:
- * 1. Industry — Select your industry vertical
+ * 1. Industry — Confirm FSMA-focused deployment
  * 2. Plan — Choose pricing tier with billing cycle toggle
  * 3. Payment — Credit code + Stripe Checkout redirect
  * 4. Activation — Success confirmation with onboarding CTA
@@ -27,11 +27,6 @@ import {
     Building2,
     Heart,
     Leaf,
-    Plane,
-    Car,
-    HardHat,
-    Factory,
-    Gamepad2,
     Zap,
     ExternalLink,
 } from 'lucide-react';
@@ -49,13 +44,7 @@ type WizardStep = 'industry' | 'plan' | 'payment' | 'activation';
 
 const INDUSTRIES = [
     { id: 'food-safety', name: 'Food Safety & FSMA', icon: Leaf, color: '#10b981', desc: 'FSMA 204, traceability, FDA compliance' },
-    { id: 'healthcare', name: 'Healthcare', icon: Heart, color: '#ef4444', desc: 'HIPAA, clinical trials, medical devices' },
-    { id: 'aerospace', name: 'Aerospace & Defense', icon: Plane, color: '#3b82f6', desc: 'ITAR, AS9100, FAA Part 21' },
-    { id: 'automotive', name: 'Automotive', icon: Car, color: '#f59e0b', desc: 'IATF 16949, ISO 26262, UNECE' },
-    { id: 'construction', name: 'Construction', icon: HardHat, color: '#8b5cf6', desc: 'OSHA, building codes, permits' },
-    { id: 'manufacturing', name: 'Manufacturing', icon: Factory, color: '#06b6d4', desc: 'ISO 9001, GMP, supply chain' },
-    { id: 'energy', name: 'Energy', icon: Zap, color: '#22c55e', desc: 'NERC CIP, DOE, pipeline safety' },
-    { id: 'gaming', name: 'Gaming & Entertainment', icon: Gamepad2, color: '#ec4899', desc: 'PCOS, responsible gaming, content rating' },
+    { id: 'food-ops', name: 'Supplier Ops & Recall Readiness', icon: Heart, color: '#ef4444', desc: 'Supplier onboarding, traceability gaps, recall drills' },
 ];
 
 const PLANS = [

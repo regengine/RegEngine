@@ -3,26 +3,15 @@ import Link from "next/link";
 export const dynamic = "force-static";
 export const generateStaticParams = async () => {
   return [
-    { slug: ["automotive"] },
-    { slug: ["automotive", "ppap"] },
-    { slug: ["automotive", "lpa"] },
-    { slug: ["automotive", "8d"] },
-    { slug: ["construction"] },
-    { slug: ["construction", "bim"] },
-    { slug: ["construction", "safety"] },
-    { slug: ["construction", "toolbox"] },
-    { slug: ["gaming"] },
-    { slug: ["gaming", "quickstart"] },
-    { slug: ["gaming", "surveillance"] },
-    { slug: ["gaming", "responsible-gaming"] },
-    { slug: ["healthcare", "quickstart"] },
-    { slug: ["healthcare", "risk-monitor"] },
-    { slug: ["healthcare", "audit-export"] },
-    { slug: ["technology", "quickstart"] },
-    { slug: ["technology", "drift-detection"] },
-    { slug: ["technology", "vendor-tracking"] },
-    { slug: ["energy", "verification"] },
-    { slug: ["energy", "incident"] },
+    { slug: ["fsma-204"] },
+    { slug: ["quickstart"] },
+    { slug: ["api"] },
+    { slug: ["webhooks"] },
+    { slug: ["authentication"] },
+    { slug: ["errors"] },
+    { slug: ["rate-limits"] },
+    { slug: ["sdks"] },
+    { slug: ["changelog"] },
   ];
 };
 

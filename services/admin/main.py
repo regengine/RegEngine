@@ -85,11 +85,11 @@ RegEngine Admin API provides tenant self-service capabilities for regulatory com
 ## Features
 
 * **API Key Management**: Create and manage API keys for authentication
-* **Content Graph Overlay**: Build custom control frameworks mapped to regulatory provisions
-* **Tenant Controls**: Define internal controls (NIST CSF, SOC2, ISO27001, etc.)
-* **Product Catalog**: Manage products requiring regulatory compliance
-* **Compliance Gap Analysis**: Identify unmapped regulatory requirements
-* **Provision Mapping**: Link controls to specific regulatory provisions
+* **Content Graph Overlay**: Build FSMA-aligned controls mapped to traceability obligations
+* **Tenant Controls**: Define internal traceability controls and operating checks
+* **Product Catalog**: Manage foods and traceability-lot coverage
+* **Compliance Gap Analysis**: Identify missing FSMA coverage and evidence gaps
+* **Provision Mapping**: Link controls to FDA traceability requirements
 
 ## Authentication
 
@@ -188,7 +188,7 @@ app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=[
 from app.pcos import router as pcos_router
 app.include_router(pcos_router)
 
-# Vertical Expansion (Healthcare, Finance, etc.)
+# Legacy extension routes
 from app.verticals.router import router as verticals_router
 app.include_router(verticals_router)
 
