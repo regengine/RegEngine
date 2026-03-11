@@ -17,7 +17,7 @@ const footerLinks = {
     solutions: [
         { label: 'Retailer Readiness', href: '/retailer-readiness' },
         { label: 'Partner Program', href: '/partners' },
-        { label: 'Sales Resources', href: '/resources' },
+        { label: 'FSMA 204 Guide', href: '/docs/fsma-204' },
     ],
     developers: [
         { label: 'API Documentation', href: '/docs' },
