@@ -1,13 +1,12 @@
 'use client';
 
 /**
- * CheckoutWizard — 4-step premium checkout flow
+ * CheckoutWizard — 3-step premium checkout flow
  *
  * Steps:
- * 1. Industry — Confirm FSMA-focused deployment
- * 2. Plan — Choose pricing tier with billing cycle toggle
- * 3. Payment — Credit code + Stripe Checkout redirect
- * 4. Activation — Success confirmation with onboarding CTA
+ * 1. Plan — Choose pricing tier with billing cycle toggle
+ * 2. Payment — Credit code + Stripe Checkout redirect
+ * 3. Activation — Success confirmation with onboarding CTA
  *
  * Dark glassmorphism design with animated step transitions.
  */
@@ -24,9 +23,6 @@ import {
     Shield,
     Lock,
     Rocket,
-    Building2,
-    Heart,
-    Leaf,
     Zap,
     ExternalLink,
 } from 'lucide-react';
@@ -40,12 +36,7 @@ import { useCreateCheckout, type RedeemResult } from '@/hooks/use-billing';
 
 // ── Constants ─────────────────────────────────────────────────────
 
-type WizardStep = 'industry' | 'plan' | 'payment' | 'activation';
-
-const INDUSTRIES = [
-    { id: 'food-safety', name: 'Food Safety & FSMA', icon: Leaf, color: '#10b981', desc: 'FSMA 204, traceability, FDA compliance' },
-    { id: 'food-ops', name: 'Supplier Ops & Recall Readiness', icon: Heart, color: '#ef4444', desc: 'Supplier onboarding, traceability gaps, recall drills' },
-];
+type WizardStep = 'plan' | 'payment' | 'activation';
 
 const PLANS = [
     {
@@ -87,10 +78,9 @@ const PLANS = [
 ];
 
 const stepsMeta: { id: WizardStep; title: string; number: number }[] = [
-    { id: 'industry', title: 'Industry', number: 1 },
-    { id: 'plan', title: 'Select Plan', number: 2 },
-    { id: 'payment', title: 'Payment', number: 3 },
-    { id: 'activation', title: 'Activation', number: 4 },
+    { id: 'plan', title: 'Select Plan', number: 1 },
+    { id: 'payment', title: 'Payment', number: 2 },
+    { id: 'activation', title: 'Activation', number: 3 },
 ];
 
 // ── Animation Variants ────────────────────────────────────────────
@@ -118,8 +108,7 @@ export function CheckoutWizard() {
     const createCheckout = useCreateCheckout();
     const billingParam = searchParams?.get('billing');
 
-    const [currentStep, setCurrentStep] = useState<WizardStep>('industry');
-    const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
+    const [currentStep, setCurrentStep] = useState<WizardStep>('plan');
     const [selectedPlan, setSelectedPlan] = useState<string>(searchParams?.get('plan') || 'growth');
     const [isAnnual, setIsAnnual] = useState(billingParam !== 'monthly');
     const [appliedCredits, setAppliedCredits] = useState(0);
@@ -244,105 +233,7 @@ export function CheckoutWizard() {
 
             {/* ─── Step Content ─── */}
             <AnimatePresence mode="wait">
-                {/* ═══════════ Step 1: Industry ═══════════ */}
-                {currentStep === 'industry' && (
-                    <motion.div key="industry" variants={cardVariants} initial="enter" animate="center" exit="exit">
-                        <Card
-                            className="overflow-hidden border-[var(--re-border-default)] bg-re-surface-card"
-                        >
-                            <div
-                                className="h-1"
-                                style={{ background: 'linear-gradient(90deg, var(--re-brand), var(--re-info), var(--re-brand-light))' }}
-                            />
-                            <CardHeader className="text-center pb-2">
-                                <motion.div
-                                    initial={{ scale: 0.5, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
-                                    className="mx-auto mb-4 p-4 rounded-2xl"
-                                    style={{ background: 'rgba(16, 185, 129, 0.1)', boxShadow: 'var(--re-shadow-glow)' }}
-                                >
-                                    <Building2 className="w-10 h-10 text-re-brand" />
-                                </motion.div>
-                                <CardTitle className="text-2xl font-bold text-re-text-primary">
-                                    What industry are you in?
-                                </CardTitle>
-                                <CardDescription className="text-re-text-tertiary">
-                                    We&apos;ll customize your compliance workflows
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <motion.div
-                                    className="grid grid-cols-2 gap-3"
-                                    variants={staggerChildren}
-                                    initial="initial"
-                                    animate="animate"
-                                >
-                                    {INDUSTRIES.map((ind) => (
-                                        <motion.button
-                                            key={ind.id}
-                                            variants={fadeUp}
-                                            onClick={() => setSelectedIndustry(ind.id)}
-                                            whileHover={{ scale: 1.02 }}
-                                            whileTap={{ scale: 0.98 }}
-                                            className="flex items-start gap-3 p-4 rounded-xl border text-left transition-all"
-                                            style={{
-                                                background:
-                                                    selectedIndustry === ind.id
-                                                        ? 'var(--re-surface-elevated)'
-                                                        : 'var(--re-surface-card)',
-                                                borderColor:
-                                                    selectedIndustry === ind.id ? ind.color : 'var(--re-border-default)',
-                                                boxShadow:
-                                                    selectedIndustry === ind.id
-                                                        ? `0 0 12px ${ind.color}20`
-                                                        : 'none',
-                                            }}
-                                        >
-                                            <div className="p-2 rounded-lg" style={{ background: `${ind.color}15` }}>
-                                                <ind.icon className="w-5 h-5" style={{ color: ind.color }} />
-                                            </div>
-                                            <div>
-                                                <p className="font-medium text-sm text-re-text-primary">
-                                                    {ind.name}
-                                                </p>
-                                                <p className="text-xs mt-0.5 text-re-text-muted">
-                                                    {ind.desc}
-                                                </p>
-                                            </div>
-                                        </motion.button>
-                                    ))}
-                                </motion.div>
-
-                                <div className="flex gap-3 mt-6">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => router.push('/pricing')}
-                                        className="border-[var(--re-border-default)] text-re-text-secondary"
-                                    >
-                                        <ArrowLeft className="mr-2 w-4 h-4" />
-                                        Back
-                                    </Button>
-                                    <Button
-                                        className="flex-1 font-semibold"
-                                        onClick={() => setCurrentStep('plan')}
-                                        disabled={!selectedIndustry}
-                                        style={
-                                            selectedIndustry
-                                                ? { background: 'var(--re-brand)', color: 'var(--re-surface-base)' }
-                                                : undefined
-                                        }
-                                    >
-                                        Continue
-                                        <ArrowRight className="ml-2 w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                )}
-
-                {/* ═══════════ Step 2: Plan Selection ═══════════ */}
+                {/* ═══════════ Step 1: Plan Selection ═══════════ */}
                 {currentStep === 'plan' && (
                     <motion.div key="plan" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
@@ -437,7 +328,7 @@ export function CheckoutWizard() {
                                 <div className="flex gap-3 mt-6">
                                     <Button
                                         variant="outline"
-                                        onClick={() => setCurrentStep('industry')}
+                                        onClick={() => router.push('/pricing')}
                                         className="border-[var(--re-border-default)] text-re-text-secondary"
                                     >
                                         <ArrowLeft className="mr-2 w-4 h-4" />
@@ -456,7 +347,7 @@ export function CheckoutWizard() {
                     </motion.div>
                 )}
 
-                {/* ═══════════ Step 3: Payment ═══════════ */}
+                {/* ═══════════ Step 2: Payment ═══════════ */}
                 {currentStep === 'payment' && (
                     <motion.div key="payment" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
@@ -590,7 +481,7 @@ export function CheckoutWizard() {
                     </motion.div>
                 )}
 
-                {/* ═══════════ Step 4: Activation ═══════════ */}
+                {/* ═══════════ Step 3: Activation ═══════════ */}
                 {currentStep === 'activation' && (
                     <motion.div key="activation" variants={cardVariants} initial="enter" animate="center" exit="exit">
                         <Card
