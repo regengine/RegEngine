@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/lib/auth-context"
+import { getServiceURL } from "@/lib/api-config"
 
 interface ServiceInfo {
     name: string;
@@ -49,14 +50,16 @@ export default function SysAdminDashboard() {
                 "Authorization": `Bearer ${accessToken}`
             }
 
+            const adminBase = getServiceURL('admin')
+
             // Fetch Status
-            const statusRes = await fetch("http://localhost:8400/v1/system/status", { headers })
+            const statusRes = await fetch(`${adminBase}/v1/system/status`, { headers })
             if (!statusRes.ok) throw new Error("Failed to fetch system status")
             const statusData = await statusRes.json()
             setStatus(statusData)
 
             // Fetch Metrics
-            const metricsRes = await fetch("http://localhost:8400/v1/system/metrics", { headers })
+            const metricsRes = await fetch(`${adminBase}/v1/system/metrics`, { headers })
             if (!metricsRes.ok) throw new Error("Failed to fetch system metrics")
             const metricsData = await metricsRes.json()
             setMetrics(metricsData)

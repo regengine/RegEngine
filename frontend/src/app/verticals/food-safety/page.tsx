@@ -215,7 +215,7 @@ export default function FoodSafetyVerticalPage() {
                                             FSMA Dashboard
                                         </Button>
                                     </Link>
-                                    <Link href="/demo/recall-simulation">
+                                    <Link href="/tools/drill-simulator">
                                         <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
                                             <ClipboardCheck className="mr-2 h-4 w-4" />
                                             Recall Simulation

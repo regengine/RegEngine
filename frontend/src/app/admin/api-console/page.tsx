@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getServiceURL } from '@/lib/api-config';
 import {
     Terminal,
     Key,
@@ -378,7 +379,7 @@ export default function AdminAPIConsolePage() {
                                                     <h4 className="text-sm font-semibold text-white mb-2">Request Example</h4>
                                                     <pre className="bg-black/50 p-4 rounded-lg text-xs text-gray-300 overflow-x-auto border border-white/10">
                                                         <code>{`curl -X ${selectedEndpoint.method} \\
-  http://localhost:8400${selectedEndpoint.path} \\${selectedEndpoint.requiresAuth ? '\n  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\' : ''}
+  ${getServiceURL('admin')}${selectedEndpoint.path} \\${selectedEndpoint.requiresAuth ? '\n  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\' : ''}
   -H "Content-Type: application/json"`}</code>
                                                     </pre>
                                                 </div>
@@ -395,7 +396,7 @@ export default function AdminAPIConsolePage() {
 
                                                 <div className="pt-4 border-t border-white/10">
                                                     <a
-                                                        href={`http://localhost:8400/docs#${selectedEndpoint.path.replace(/\//g, '-')}`}
+                                                        href={`${getServiceURL('admin')}/docs#${selectedEndpoint.path.replace(/\//g, '-')}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
@@ -435,7 +436,7 @@ export default function AdminAPIConsolePage() {
                                 </CardHeader>
                                 <CardContent className="space-y-2">
                                     <a
-                                        href="http://localhost:8400/docs"
+                                        href={`${getServiceURL('admin')}/docs`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"
@@ -444,7 +445,7 @@ export default function AdminAPIConsolePage() {
                                         <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
                                     </a>
                                     <a
-                                        href="http://localhost:8400/redoc"
+                                        href={`${getServiceURL('admin')}/redoc`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors border border-white/10 group"

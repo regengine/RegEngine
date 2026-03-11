@@ -145,7 +145,7 @@ export default function FSMA204GuidePage() {
                             overflowX: 'auto',
                             color: 'var(--re-text-primary)',
                         }}>
-                            <code>{`curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+                            <code>{`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
   -H "Content-Type: application/json" \\
@@ -293,7 +293,7 @@ export default function FSMA204GuidePage() {
                             overflowX: 'auto',
                             color: 'var(--re-text-primary)',
                         }}>
-                            <code>{`curl https://api.regengine.co/v1/fsma/export/fda-request \\
+                            <code>{`curl https://www.regengine.co/v1/fsma/export/fda-request \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
   -G \\

@@ -21,7 +21,7 @@ const DOC_CONTENT: Record<
     title: "FSMA 204 Compliance Playbook",
     summary:
       "Practical implementation sequence for traceability lot codes, CTE/KDE capture, and FDA request response workflows.",
-    ctaHref: "/demo/recall-simulation",
+    ctaHref: "/tools/drill-simulator",
     ctaLabel: "Run Recall Simulation",
   },
   "energy/cip-013": {
