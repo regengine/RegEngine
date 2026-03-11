@@ -66,14 +66,6 @@ const nextConfig = {
     },
 }
 
-const withPWA = require("next-pwa")({
-    dest: "public",
-    disable: process.env.NODE_ENV === "development",
-    register: true,
-    skipWaiting: true,
-});
-
-// Compose: PWA → Sentry → Next.js
 const sentryWebpackPluginOptions = {
     // Suppresses source map upload logs during build
     silent: true,
@@ -88,4 +80,4 @@ const sentryWebpackPluginOptions = {
     hideSourceMaps: true,
 };
 
-module.exports = withSentryConfig(withPWA(nextConfig), sentryWebpackPluginOptions);
+module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
