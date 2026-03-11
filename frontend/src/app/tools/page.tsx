@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    "name": "RegEngine Multi-Vertical Compliance Toolkit",
+    "name": "RegEngine FSMA 204 Compliance Toolkit",
     "description": "A collection of free interactive tools for FSMA 204 food traceability compliance.",
     "publisher": {
         "@type": "Organization",

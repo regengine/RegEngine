@@ -199,22 +199,16 @@ Every API request requires an API key scoped to a tenant. Let's create a demo te
 
 This will:
 - Verify services are running
-- Create a demo tenant with NIST controls
-- Load sample data (controls, products, mappings)
+- Create a demo FSMA tenant
+- Load sample traceability data
 - Display your API key and tenant ID
 - Save credentials to `.demo_env`
 
 ### Method 2: Manual CLI Creation
 
 ```bash
-# Create tenant with NIST framework
-python scripts/regctl/tenant.py create "Demo Corp" --demo-mode --framework nist
-
-# OR with SOC 2 framework
-python scripts/regctl/tenant.py create "Demo Corp" --demo-mode --framework soc2
-
-# OR with ISO 27001 framework
-python scripts/regctl/tenant.py create "Demo Corp" --demo-mode --framework iso27001
+# Create demo FSMA tenant
+python scripts/regctl/tenant.py create "Demo Foods" --demo-mode
 ```
 
 ### Save Your Credentials

@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'RegEngine',
-    description: 'API-first regulatory compliance. Built for food safety, energy, healthcare, and more.',
+    description: 'FSMA 204 compliance platform for food traceability, recall readiness, and FDA-ready exports.',
     siteName: 'RegEngine',
     url: 'https://regengine.co',
     type: 'website',

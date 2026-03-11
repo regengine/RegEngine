@@ -14,7 +14,7 @@
 #   ./export_pdf.sh [whitepaper_file.md] [--all]
 #   
 # Examples:
-#   ./export_pdf.sh finance_sox_whitepaper.md    # Export single white paper
+#   ./export_pdf.sh fsma_whitepaper.md           # Export single white paper
 #   ./export_pdf.sh --all                         # Export all white papers
 ###############################################################################
 
@@ -136,7 +136,7 @@ if [ $# -eq 0 ]; then
     echo "Usage: $0 [whitepaper_file.md] [--all]"
     echo ""
     echo "Examples:"
-    echo "  $0 finance_sox_whitepaper.md    # Export single white paper"
+    echo "  $0 fsma_whitepaper.md           # Export single white paper"
     echo "  $0 --all                         # Export all white papers"
     exit 1
 fi

@@ -37,17 +37,7 @@ interface VerticalDashboardLayoutProps {
 }
 
 const VERTICALS = [
-    { label: 'Aerospace', value: 'aerospace' },
-    { label: 'Automotive', value: 'automotive' },
-    { label: 'Construction', value: 'construction' },
-    { label: 'Energy', value: 'energy' },
-    { label: 'Entertainment', value: 'entertainment' },
-    { label: 'Finance', value: 'finance' },
-    { label: 'Gaming', value: 'gaming' },
-    { label: 'Healthcare', value: 'healthcare' },
-    { label: 'Manufacturing', value: 'manufacturing' },
-    { label: 'Nuclear', value: 'nuclear' },
-    { label: 'Technology', value: 'technology' },
+    { label: 'Food Safety', value: 'food-safety' },
 ];
 
 export function VerticalDashboardLayout({
@@ -119,7 +109,7 @@ export function VerticalDashboardLayout({
                             {/* Vertical Quick Switcher */}
                             <Select value={currentVertical} onValueChange={handleVerticalChange}>
                                 <SelectTrigger className="w-48">
-                                    <SelectValue placeholder="Switch vertical" />
+                                    <SelectValue placeholder="Current surface" />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {VERTICALS.map((vertical) => (
@@ -160,4 +150,3 @@ export function VerticalDashboardLayout({
         </div>
     );
 }
-

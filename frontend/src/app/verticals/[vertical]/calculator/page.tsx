@@ -2,11 +2,7 @@ import Link from "next/link";
 
 export const dynamic = "force-static";
 export const generateStaticParams = async () => {
-  return [
-    { vertical: "food-safety" },
-    { vertical: "energy" },
-    { vertical: "healthcare" },
-  ];
+  return [{ vertical: "food-safety" }];
 };
 
 const CALCULATOR_LINKS: Record<string, { href: string; label: string; helper: string }> = {
@@ -14,16 +10,6 @@ const CALCULATOR_LINKS: Record<string, { href: string; label: string; helper: st
     href: "/tools/roi-calculator",
     label: "Open FSMA ROI Calculator",
     helper: "Estimate labor and recall-response savings from operational traceability.",
-  },
-  energy: {
-    href: "/tools/roi-calculator",
-    label: "Open Compliance ROI Calculator",
-    helper: "Model control-workflow efficiency gains for critical infrastructure teams.",
-  },
-  healthcare: {
-    href: "/tools/roi-calculator",
-    label: "Open Compliance ROI Calculator",
-    helper: "Estimate reduced audit prep and policy management overhead.",
   },
 };
 
