@@ -132,7 +132,6 @@ export function MarketingHeader() {
             >
                 <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
                     <RegEngineWordmark size="md" />
-                    <span className="ml-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">Beta</span>
                 </Link>
 
                 {/* Desktop Nav */}
