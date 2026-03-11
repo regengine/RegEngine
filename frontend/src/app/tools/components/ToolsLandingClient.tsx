@@ -126,7 +126,6 @@ const STRATEGIC_TOOLS = [
 
 const ALL_TOOL_LINKS = [
     { id: 'anomaly-simulator', label: 'Anomaly Simulator' },
-    { id: 'bias-checker', label: 'Bias Checker' },
     { id: 'cte-mapper', label: 'CTE Coverage Mapper' },
     { id: 'data-import', label: 'Data Import Assistant' },
     { id: 'drill-simulator', label: '24-Hour Drill Simulator' },
@@ -134,8 +133,7 @@ const ALL_TOOL_LINKS = [
     { id: 'ftl-checker', label: 'FTL Coverage Checker' },
     { id: 'kde-checker', label: 'KDE Completeness Checker' },
     { id: 'knowledge-graph', label: 'Knowledge Graph' },
-    { id: 'notice-validator', label: 'Notice Validator' },
-    { id: 'obligation-scanner', label: 'Obligation Scanner' },
+
     { id: 'readiness-assessment', label: 'FSMA Readiness Assessment' },
     { id: 'recall-readiness', label: 'Recall Readiness Score' },
     { id: 'retailer-readiness', label: 'Retailer Readiness' },
@@ -300,7 +298,7 @@ export function ToolsLandingClient() {
                     <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
                         <h2 className="text-2xl re-heading-industrial">Full Tool Index</h2>
                         <span className="text-xs font-bold uppercase tracking-wider text-[var(--re-text-muted)]">
-                            17 free tools
+                            14 free tools
                         </span>
                     </div>
 

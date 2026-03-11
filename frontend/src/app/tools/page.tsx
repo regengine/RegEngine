@@ -17,7 +17,7 @@ const jsonLd = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     "name": "RegEngine Multi-Vertical Compliance Toolkit",
-    "description": "A collection of free interactive tools for FSMA 204 and Financial Regulatory assessment.",
+    "description": "A collection of free interactive tools for FSMA 204 food traceability compliance.",
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -25,12 +25,12 @@ const jsonLd = {
     "mainEntity": {
         "@type": "ItemList",
         "itemListElement": [
-            { "@type": "ListItem", "position": 1, "url": "https://regengine.vercel.app/tools/ftl-checker", "name": "FTL Coverage Checker" },
-            { "@type": "ListItem", "position": 2, "url": "https://regengine.vercel.app/tools/fsma-unified", "name": "Unified FSMA Dashboard" },
-            { "@type": "ListItem", "position": 3, "url": "https://regengine.vercel.app/tools/bias-checker", "name": "AI Model Bias Checker" },
-            { "@type": "ListItem", "position": 4, "url": "https://regengine.vercel.app/tools/obligation-scanner", "name": "Regulatory Obligation Scanner" },
-            { "@type": "ListItem", "position": 5, "url": "https://regengine.vercel.app/tools/notice-validator", "name": "Adverse Action Notice Validator" },
-            { "@type": "ListItem", "position": 6, "url": "https://regengine.vercel.app/tools/roi-calculator", "name": "Regulatory ROI Calculator" },
+            { "@type": "ListItem", "position": 1, "url": "https://www.regengine.co/tools/ftl-checker", "name": "FTL Coverage Checker" },
+            { "@type": "ListItem", "position": 2, "url": "https://www.regengine.co/tools/fsma-unified", "name": "Unified FSMA Dashboard" },
+            { "@type": "ListItem", "position": 3, "url": "https://www.regengine.co/tools/kde-checker", "name": "KDE Completeness Checker" },
+            { "@type": "ListItem", "position": 4, "url": "https://www.regengine.co/tools/cte-mapper", "name": "CTE Coverage Mapper" },
+            { "@type": "ListItem", "position": 5, "url": "https://www.regengine.co/tools/recall-readiness", "name": "Recall Readiness Score" },
+            { "@type": "ListItem", "position": 6, "url": "https://www.regengine.co/tools/roi-calculator", "name": "Regulatory ROI Calculator" },
         ]
     }
 };

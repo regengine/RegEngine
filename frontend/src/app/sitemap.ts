@@ -31,9 +31,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'sop-generator',
         'data-import',
         'readiness-assessment',
-        'bias-checker',
-        'notice-validator',
-        'obligation-scanner',
+
         'fsma-unified',
     ].map((tool) => ({
         url: `${baseUrl}/tools/${tool}`,
