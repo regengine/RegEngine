@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
     title: 'Terms of Service | RegEngine',
@@ -15,6 +16,8 @@ const sections = [
     {
         title: "1. What RegEngine Is",
         content: `RegEngine Inc. provides API-first regulatory compliance tools, starting with FSMA 204 food traceability. We help food companies manage Critical Tracking Events (CTEs), Key Data Elements (KDEs), and Traceability Lot Codes (TLCs) to meet FDA requirements.
+
+RegEngine is currently in beta. Features may change without notice, and we may suspend or modify access during the beta period.
 
 We are a software tool. We are not a law firm, compliance consultancy, or government agency. Our tools help you organize and manage compliance data — they do not constitute legal advice or guarantee regulatory compliance. You are responsible for your own compliance decisions.`,
     },
@@ -52,7 +55,7 @@ Free tools may be modified, updated, or discontinued at any time.`,
 
 You can upgrade at any time (prorated). You can downgrade at the end of your current billing cycle. You can cancel at any time — no cancellation fees.
 
-If you exceed your CTE limit, we charge $0.001 per additional CTE. We will notify you before overage charges apply.
+If you exceed your CTE limit, we charge $0.001 per additional CTE. We will notify you by email before any overage charges are applied.
 
 Refunds are discretionary and evaluated on a case-by-case basis. Except as required by law, RegEngine Inc. does not guarantee refunds beyond the express terms stated in these Terms. If you're genuinely unhappy with the service within the first 30 days, contact us at support@regengine.co.`,
     },
@@ -90,7 +93,9 @@ You are responsible for keeping your API keys and account credentials secure. If
         title: "10. Acceptable Use",
         content: `Don't use RegEngine to: violate laws or regulations (ironic, we know), attempt to access other tenants' data, reverse engineer the platform, send spam through our systems, store data unrelated to regulatory compliance, or impersonate others.
 
-We reserve the right to suspend or terminate accounts that violate these terms.`,
+We reserve the right to suspend or terminate accounts that violate these terms.
+
+You agree to defend, indemnify, and hold harmless RegEngine Inc., its officers, employees, and affiliates from any claims, damages, liabilities, and expenses (including reasonable attorneys' fees) arising out of your misuse of the Service, violation of these Terms, or violation of applicable laws or third-party rights.`,
     },
     {
         title: "11. Force Majeure",
@@ -108,7 +113,7 @@ Upon termination: you have 90 days to export your data, after which it is perman
         title: "13. Changes to These Terms",
         content: `We may update these terms. Material changes get 30 days' email notice. Continued use after changes take effect constitutes acceptance.
 
-If you disagree with changes, you can close your account and receive a prorated refund for any prepaid period.`,
+If you disagree with changes, you can close your account before the updated terms take effect.`,
     },
     {
         title: "14. Dispute Resolution & Arbitration",
@@ -145,7 +150,7 @@ export default function TermsPage() {
                     Terms of Service
                 </h1>
                 <p className="text-sm text-re-text-disabled font-mono">
-                    Effective: February 5, 2026 · Last updated: February 6, 2026
+                    Effective: March 11, 2026 · Last updated: March 11, 2026
                 </p>
                 <p className="text-base text-re-text-muted leading-relaxed mt-5">
                     These are the rules for using RegEngine. We&apos;ve written them in plain language because compliance professionals shouldn&apos;t need a lawyer to understand a terms page.
@@ -177,6 +182,15 @@ export default function TermsPage() {
                         <p className="text-sm text-re-text-muted leading-relaxed whitespace-pre-line">
                             {section.content}
                         </p>
+                        {section.title === "3. Your Data" && (
+                            <p className="text-sm text-re-text-muted leading-relaxed mt-3">
+                                See our{' '}
+                                <Link href="/privacy" className="text-re-brand underline hover:opacity-90">
+                                    Privacy Policy
+                                </Link>{' '}
+                                for details on how we collect and process personal data.
+                            </p>
+                        )}
                     </div>
                 ))}
             </section>
