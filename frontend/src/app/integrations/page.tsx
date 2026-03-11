@@ -22,39 +22,41 @@ import {
 
 const INTEGRATION_CATEGORIES = [
     {
-        title: 'Food Safety Platforms',
-        description: 'RegEngine adds cryptographic traceability under your existing operational tools.',
+        title: 'Food Safety & IoT',
+        description: 'Pull audit, inspection, and sensor data from your food safety platforms.',
         icon: Shield,
         color: 'var(--re-brand)',
         partners: [
-            { name: 'foodflou', role: 'Daily ops & supplier management' },
-            { name: 'SafetyCulture', role: 'Inspections & checklists' },
-            { name: 'FoodReady', role: 'HACCP planning' },
-            { name: 'FoodDocs', role: 'Monitoring automation' },
+            { name: 'SafetyCulture', role: 'Inspections & audit sync', ready: true },
+            { name: 'FoodReady', role: 'HACCP & temp monitoring', ready: true },
+            { name: 'FoodDocs', role: 'AI monitoring tasks', ready: true },
+            { name: 'Tive Trackers', role: 'GPS + cold chain tracking', ready: true },
+            { name: 'Sensitech TempTale', role: 'IoT sensor data', ready: true },
         ],
     },
     {
         title: 'ERP & Warehouse Systems',
-        description: 'Connect RegEngine to your existing inventory and logistics stack.',
+        description: 'Import traceability data via CSV/SFTP from any ERP that exports tabular data.',
         icon: Database,
         color: 'var(--re-info)',
         partners: [
-            { name: 'SAP', role: 'Enterprise resource planning' },
-            { name: 'Oracle NetSuite', role: 'Cloud ERP' },
-            { name: 'Fishbowl', role: 'Warehouse management' },
-            { name: 'QuickBooks', role: 'Small business accounting' },
+            { name: 'CSV / SFTP Import', role: 'Universal ERP connector', ready: true },
+            { name: 'SAP S/4HANA', role: 'Via CSV/EDI export', ready: true },
+            { name: 'Oracle NetSuite', role: 'Via CSV/SFTP export', ready: true },
+            { name: 'Fishbowl', role: 'Via CSV export', ready: true },
+            { name: 'QuickBooks', role: 'Via CSV export', ready: true },
         ],
     },
     {
         title: 'Retailer Networks',
-        description: 'Automated GS1 EPCIS 2.0 data exchange with major retailers.',
+        description: 'Push shipping traceability data to major retailer compliance portals.',
         icon: ShoppingCart,
         color: 'var(--re-brand)',
         partners: [
-            { name: 'Walmart', role: 'FSMA 204 supplier compliance' },
-            { name: 'Kroger', role: 'Supply chain transparency' },
-            { name: 'Whole Foods', role: 'Organic traceability' },
-            { name: 'Costco', role: 'Supplier quality programs' },
+            { name: 'Walmart', role: 'GDSN / ASN shipping data', ready: true },
+            { name: 'Kroger', role: '84.51° supplier exchange', ready: true },
+            { name: 'Whole Foods', role: 'Amazon supplier portal', ready: true },
+            { name: 'Costco', role: 'Supplier food safety portal', ready: true },
         ],
     },
     {
@@ -63,10 +65,11 @@ const INTEGRATION_CATEGORIES = [
         icon: Code2,
         color: 'var(--re-info)',
         partners: [
-            { name: 'REST API', role: 'Full traceability CRUD' },
-            { name: 'Webhooks', role: 'Real-time event notifications' },
-            { name: 'GS1 EPCIS 2.0', role: 'JSON-LD & XML export' },
-            { name: 'CSV Import', role: 'Bulk data migration' },
+            { name: 'REST API', role: 'Full traceability CRUD', ready: true },
+            { name: 'Webhooks', role: 'Real-time event push', ready: true },
+            { name: 'GS1 EPCIS 2.0', role: 'JSON-LD ingest & export', ready: true },
+            { name: 'CSV Import', role: 'Bulk data migration', ready: true },
+            { name: 'EDI 856', role: 'ASN inbound processing', ready: true },
         ],
     },
 ];
@@ -244,9 +247,14 @@ export default function IntegrationsPage() {
                                                     key={p.name}
                                                     className="flex items-center justify-between p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]"
                                                 >
-                                                    <span className="font-medium text-sm">
-                                                        {p.name}
-                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-medium text-sm">
+                                                            {p.name}
+                                                        </span>
+                                                        {p.ready && (
+                                                            <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" />
+                                                        )}
+                                                    </div>
                                                     <span className="text-xs text-muted-foreground">
                                                         {p.role}
                                                     </span>
