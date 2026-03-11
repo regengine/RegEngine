@@ -195,6 +195,10 @@ export default function PricingPage() {
                         );
                     })}
                 </div>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: T.textDim, marginTop: '20px' }}>
+                    All plans include a standard CTE volume. Additional Critical Tracking Events billed at $0.001/CTE.{' '}
+                    <Link href="/terms" style={{ color: T.accent, textDecoration: 'underline' }}>See Terms</Link> for full details.
+                </p>
             </section>
 
             {/* Competitor Comparison */}
