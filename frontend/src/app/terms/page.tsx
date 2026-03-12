@@ -17,7 +17,7 @@ const sections = [
         title: "1. What RegEngine Is",
         content: `RegEngine Inc. provides API-first regulatory compliance tools, starting with FSMA 204 food traceability. We help food companies manage Critical Tracking Events (CTEs), Key Data Elements (KDEs), and Traceability Lot Codes (TLCs) to meet FDA requirements.
 
-RegEngine is currently in beta. Features may change without notice, and we may suspend or modify access during the beta period.
+Features may change without notice, and we may suspend or modify access during staged rollouts, maintenance windows, or broader service updates.
 
 We are a software tool. We are not a law firm, compliance consultancy, or government agency. Our tools help you organize and manage compliance data — they do not constitute legal advice or guarantee regulatory compliance. You are responsible for your own compliance decisions.`,
     },

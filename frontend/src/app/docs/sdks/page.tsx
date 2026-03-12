@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'SDKs & Libraries | RegEngine',
-  description: 'Official RegEngine client libraries for Python, Node.js, and Go. Beta program and REST API usage.',
+  description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
 };
 import { ArrowLeft, Package, Mail, Github, FileText } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
@@ -43,7 +43,7 @@ export default function SDKsDocsPage() {
                             padding: '4px 10px',
                             borderRadius: '4px',
                         }}>
-                            Beta Program Live
+                            SDK Access
                         </span>
                     </div>
 

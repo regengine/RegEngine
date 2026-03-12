@@ -168,7 +168,7 @@ export default function LoginPage() {
                 <div className="grid items-stretch gap-6 lg:grid-cols-[1.05fr_0.95fr]">
                     <div className="rounded-3xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/70 p-8 shadow-[0_20px_80px_rgba(0,0,0,0.25)] lg:p-10">
                         <div className="inline-flex items-center gap-2 rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--re-brand)]">
-                            RegEngine Beta
+                            RegEngine
                         </div>
 
                         <h1 className="mt-4 text-3xl font-bold leading-tight text-[var(--re-text-primary)] lg:text-4xl">
