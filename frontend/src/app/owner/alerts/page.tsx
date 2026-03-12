@@ -46,7 +46,7 @@ const mockRules = [
 const mockEvents = [
     { id: 'evt_pay', title: 'Payment Failed — MedSecure', message: 'Retry #2 declined for INV-2026-1009', severity: 'critical', channels: ['email', 'slack'], acknowledged: false, time: '6h ago' },
     { id: 'evt_usage', title: 'API Usage at 85% — Acme Foods', message: '42,500 of 50,000 API calls used', severity: 'warning', channels: ['in_app'], acknowledged: false, time: '18h ago' },
-    { id: 'evt_trial', title: 'Trial Expiring — BetaCorp', message: 'Enterprise trial expires in 2 days', severity: 'info', channels: ['email'], acknowledged: false, time: '1d ago' },
+    { id: 'evt_trial', title: 'Trial Expiring — Northstar Analytics', message: 'Enterprise trial expires in 2 days', severity: 'info', channels: ['email'], acknowledged: false, time: '1d ago' },
     { id: 'evt_contract', title: 'Contract Renewal — FreshLeaf', message: 'RE-2026-002 expires in 28 days', severity: 'warning', channels: ['email', 'slack'], acknowledged: false, time: '2d ago' },
     { id: 'evt_plan', title: 'Upgrade — Acme Foods', message: 'Pro → Enterprise, proration $2,100', severity: 'info', channels: ['in_app'], acknowledged: true, time: '12d ago' },
 ];

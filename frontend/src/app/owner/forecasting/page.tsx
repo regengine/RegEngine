@@ -45,7 +45,7 @@ const mockChurn = [
     { tenant: 'OldCo Logistics', risk: 'critical', score: 95, action: 'Win-back campaign with 50% discount', trend: 'down' },
     { tenant: 'SafetyFirst Mfg', risk: 'high', score: 72, action: 'Executive intervention required', trend: 'down' },
     { tenant: 'MedSecure Health', risk: 'medium', score: 45, action: 'Customer success call', trend: 'down' },
-    { tenant: 'BetaCorp Analytics', risk: 'medium', score: 40, action: 'Convert trial with Enterprise', trend: 'flat' },
+    { tenant: 'Northstar Analytics', risk: 'medium', score: 40, action: 'Convert trial with Enterprise', trend: 'flat' },
     { tenant: 'FreshLeaf Produce', risk: 'low', score: 18, action: 'Offer annual contract', trend: 'up' },
     { tenant: 'NewCo Foods', risk: 'low', score: 15, action: 'Guided onboarding', trend: 'up' },
     { tenant: 'Acme Foods Inc.', risk: 'low', score: 12, action: 'Upsell to Enterprise+', trend: 'up' },

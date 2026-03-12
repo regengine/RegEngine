@@ -42,7 +42,7 @@ const mockChanges = [
 ];
 
 const mockTrials = [
-    { tenant: 'BetaCorp Analytics', plan: 'Enterprise', daysLeft: 2, started: '12d ago', converted: false },
+    { tenant: 'Northstar Analytics', plan: 'Enterprise', daysLeft: 2, started: '12d ago', converted: false },
     { tenant: 'NewCo Foods', plan: 'Professional', daysLeft: 7, started: '7d ago', converted: false },
     { tenant: 'ConvertedInc', plan: 'Starter', daysLeft: 0, started: '20d ago', converted: true },
 ];

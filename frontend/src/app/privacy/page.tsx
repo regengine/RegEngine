@@ -114,10 +114,10 @@ const sections = [
         ],
     },
     {
-        title: "Beta Service Notice",
+        title: "Service Availability Notice",
         content: [
             {
-                text: "RegEngine is currently in beta. Features and workflows may change as we improve the platform, and access may be modified during beta operations. This Privacy Policy applies during beta and after general availability.",
+                text: "RegEngine features and workflows may change as we improve the platform, and access may be modified during staged rollouts or service updates. This Privacy Policy applies throughout those updates and after general availability.",
             },
         ],
     },

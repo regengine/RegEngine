@@ -169,7 +169,7 @@ export function DataImportClient() {
                                         Supports .csv files up to 10MB
                                     </div>
                                     <Badge variant="outline" className="mt-4 text-[9px] uppercase tracking-widest">
-                                        UI Release in Beta — API Available Now
+                                        API Available Now
                                     </Badge>
                                 </div>
                             </CardContent>
@@ -240,7 +240,7 @@ export function DataImportClient() {
                                         POST /api/v1/ingest/iot/sensitech — available now via API
                                     </div>
                                     <Badge variant="outline" className="mt-4 text-[9px] uppercase tracking-widest">
-                                        UI Upload Beta Rollout — API Available Now
+                                        API Available Now
                                     </Badge>
                                 </div>
 

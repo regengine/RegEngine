@@ -42,7 +42,7 @@ const FSMA_JOURNEY = [
         icon: Truck,
         color: 'var(--re-info)',
         tag: 'Integration',
-        status: 'beta'
+        status: 'standard'
     },
     {
         step: 3,
@@ -53,7 +53,7 @@ const FSMA_JOURNEY = [
         icon: ClipboardList,
         color: 'var(--re-info)',
         tag: 'Data Quality',
-        status: 'beta'
+        status: 'standard'
     },
     {
         step: 4,
@@ -97,7 +97,7 @@ const FSMA_JOURNEY = [
         icon: Timer,
         color: 'var(--re-danger)',
         tag: 'Simulation',
-        status: 'beta'
+        status: 'standard'
     },
     {
         step: 8,
@@ -235,7 +235,6 @@ export function ToolsLandingClient() {
                                                     <div className="flex items-center gap-3 mb-2">
                                                         <Badge variant="outline" className="text-[10px] uppercase font-black text-[var(--re-brand)] border-[var(--re-brand-muted)] rounded-full">
                                                             {tool.tag}
-                                                            {tool.status === 'beta' && ' (BETA)'}
                                                         </Badge>
                                                         <span className="text-[var(--re-text-muted)] text-xs font-bold uppercase tracking-widest md:hidden">Step {tool.step}</span>
                                                     </div>

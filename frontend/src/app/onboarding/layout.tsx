@@ -40,9 +40,6 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
             <span className="md:hidden inline-flex">
               <RegEngineWordmark size="sm" showText={false} />
             </span>
-            <span className="ml-0.5 text-[9px] font-bold uppercase tracking-widest text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
-              Beta
-            </span>
           </Link>
 
           <div className="flex items-center gap-4 text-[13px]">

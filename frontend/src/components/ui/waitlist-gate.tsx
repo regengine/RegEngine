@@ -29,8 +29,8 @@ export function WaitlistGate({ featureName }: { featureName: string }) {
                                 {featureName} Locked
                             </h1>
                             <p className="text-sm leading-relaxed" style={{ color: 'var(--re-text-secondary)' }}>
-                                The RegEngine {featureName} compliance features are currently in private beta.
-                                Enter your email to join the waitlist and get notified when early market access opens.
+                                The RegEngine {featureName} compliance features are currently on a limited-access rollout.
+                                Enter your email to join the waitlist and get notified when broader access opens.
                             </p>
                         </div>
 
