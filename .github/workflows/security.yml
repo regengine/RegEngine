@@ -102,9 +102,27 @@ jobs:
       - name: pip-audit
         run: |
           python -m pip install -U pip pip-audit
-          if [ -f requirements.txt ]; then
-            pip-audit -r requirements.txt --format json --output pip-audit-results.json || true
-            pip-audit -r requirements.txt || true
+          python_files=$(find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*" | sort)
+          if [ -n "$python_files" ]; then
+            printf '%s\n' "$python_files" > pip-audit-targets.txt
+            printf '{\n  "audits": [\n' > pip-audit-results.json
+            first=1
+            while IFS= read -r req_file; do
+              [ -n "$req_file" ] || continue
+              echo "Auditing $req_file"
+              audit_json=$(mktemp)
+              pip-audit -r "$req_file" --format json --output "$audit_json" || true
+              pip-audit -r "$req_file" || true
+              if [ $first -eq 0 ]; then
+                printf ',\n' >> pip-audit-results.json
+              fi
+              printf '    {\n      "file": "%s",\n      "results": ' "$req_file" >> pip-audit-results.json
+              cat "$audit_json" >> pip-audit-results.json
+              printf '\n    }' >> pip-audit-results.json
+              first=0
+              rm -f "$audit_json"
+            done < pip-audit-targets.txt
+            printf '\n  ]\n}\n' >> pip-audit-results.json
           elif [ -f pyproject.toml ]; then
             pip-audit --format json --output pip-audit-results.json || true
             pip-audit || true
@@ -121,6 +139,7 @@ jobs:
           path: |
             npm-audit-results.json
             pip-audit-results.json
+            pip-audit-targets.txt
           retention-days: 90
 
   # ──────────────────────────────────────────────
