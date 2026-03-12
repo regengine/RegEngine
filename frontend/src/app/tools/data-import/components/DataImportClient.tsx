@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -17,7 +17,11 @@ import {
     AlertTriangle,
     Copy,
     ArrowRight,
+    Loader2,
+    Database,
 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { apiClient } from '@/lib/api-client';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -54,16 +58,124 @@ const EXAMPLE_CURL = `curl -X POST https://www.regengine.co/api/v1/webhooks/inge
     ]
   }'`;
 
+// Synthetic FSMA 204 traceability dataset — mirrors test_data/regengine_test_traceability.csv
+const SAMPLE_EVENTS = [
+    { event_type: 'CREATION',       event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Green Valley Farm, Salinas, CA',             product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
+    { event_type: 'RECEIVING',      event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Salinas Cold Storage, Salinas, CA',           product_description: 'Romaine Lettuce', gtin: '09524000059109' },
+    { event_type: 'INITIAL_PACKING',event_date: '2026-03-11', tlc: 'TLC1001', location_identifier: 'Pacific Produce Packers, Watsonville, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
+    { event_type: 'SHIPPING',       event_date: '2026-03-12', tlc: 'TLC1001', location_identifier: 'Pacific Produce Packers, Watsonville, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
+    { event_type: 'RECEIVING',      event_date: '2026-03-13', tlc: 'TLC1001', location_identifier: 'FreshChain Distribution, Los Angeles, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1185, uom: 'cases' },
+    { event_type: 'SHIPPING',       event_date: '2026-03-14', tlc: 'TLC1001', location_identifier: 'FreshChain Distribution, Los Angeles, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1185, uom: 'cases' },
+    { event_type: 'RECEIVING',      event_date: '2026-03-15', tlc: 'TLC1001', location_identifier: 'MarketFresh Pasadena, Pasadena, CA',          product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 400,  uom: 'cases' },
+    { event_type: 'RECEIVING',      event_date: '2026-03-15', tlc: 'TLC1001', location_identifier: 'MarketFresh Glendale, Glendale, CA',          product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 350,  uom: 'cases' },
+    { event_type: 'RECEIVING',      event_date: '2026-03-15', tlc: 'TLC1001', location_identifier: 'MarketFresh SantaMonica, Santa Monica, CA',   product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 435,  uom: 'cases' },
+];
+
 type TabId = 'csv' | 'iot' | 'api';
+type UploadState = 'idle' | 'uploading' | 'success' | 'error';
+type SampleState = 'idle' | 'running' | 'done' | 'error';
+
+interface SampleStepResult {
+    label: string;
+    ok: boolean;
+    detail: string;
+}
 
 export function DataImportClient() {
+    const { apiKey } = useAuth();
     const [activeTab, setActiveTab] = useState<TabId>('csv');
     const [copied, setCopied] = useState(false);
+
+    // Real file upload state
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadState, setUploadState] = useState<UploadState>('idle');
+    const [uploadResult, setUploadResult] = useState<{ jobId?: string; status?: number; error?: string } | null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
+
+    // Sample dataset simulation state
+    const [sampleState, setSampleState] = useState<SampleState>('idle');
+    const [sampleSteps, setSampleSteps] = useState<SampleStepResult[]>([]);
 
     const handleCopy = useCallback(() => {
         navigator.clipboard.writeText(EXAMPLE_CURL);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    }, []);
+
+    const handleFileChange = useCallback((file: File | null) => {
+        if (!file) return;
+        setSelectedFile(file);
+        setUploadState('idle');
+        setUploadResult(null);
+    }, []);
+
+    const handleUpload = useCallback(async () => {
+        if (!selectedFile) return;
+        setUploadState('uploading');
+        setUploadResult(null);
+        try {
+            const effectiveKey = apiKey || process.env.NEXT_PUBLIC_API_KEY || '';
+            const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'fsma');
+            const jobId = (result as any).job_id || (result as any).id || (result as any).task_id;
+            setUploadResult({ jobId, status: 200 });
+            setUploadState('success');
+        } catch (err: any) {
+            const status = err?.response?.status;
+            const msg = err?.response?.data?.detail || err?.message || 'Upload failed';
+            setUploadResult({ status, error: msg });
+            setUploadState('error');
+        }
+    }, [selectedFile, apiKey]);
+
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) handleFileChange(file);
+    }, [handleFileChange]);
+
+    const handleLoadSample = useCallback(async () => {
+        setSampleState('running');
+        setSampleSteps([]);
+
+        const addStep = (label: string, ok: boolean, detail: string) => {
+            setSampleSteps((prev) => [...prev, { label, ok, detail }]);
+        };
+
+        let posted = 0;
+        for (let i = 0; i < SAMPLE_EVENTS.length; i++) {
+            const evt = SAMPLE_EVENTS[i];
+            try {
+                await apiClient.logTraceabilityEvent(evt as any);
+                posted++;
+                addStep(
+                    `${evt.event_type} — ${evt.location_identifier.split(',')[0]}`,
+                    true,
+                    `TLC ${evt.tlc} · ${evt.event_date}${evt.quantity ? ` · ${evt.quantity} ${evt.uom}` : ''}`
+                );
+            } catch (err: any) {
+                const msg = err?.response?.data?.detail || err?.message || 'failed';
+                addStep(
+                    `${evt.event_type} — ${evt.location_identifier.split(',')[0]}`,
+                    false,
+                    msg
+                );
+            }
+        }
+
+        // Compliance validation check
+        try {
+            const result = await apiClient.validateConfig({
+                config: { tlc: 'TLC1001', cte_type: 'CREATION', event_date: '2026-03-10', location: 'Salinas, CA', lot_size_unit: 'cases', supplier_reference: 'HARVESTLOG-9912', product_description: 'Romaine Lettuce' },
+                strict: false,
+            });
+            addStep('Compliance validation (TLC1001)', result.valid, `${result.errors.length} errors · ${result.warnings.length} warnings`);
+        } catch {
+            addStep('Compliance validation (TLC1001)', false, 'compliance service unreachable');
+        }
+
+        setSampleState(posted > 0 ? 'done' : 'error');
     }, []);
 
     const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
@@ -83,6 +195,7 @@ export function DataImportClient() {
                 {tabs.map((tab) => (
                     <button
                         key={tab.id}
+                        type="button"
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-all ${activeTab === tab.id
                                 ? 'bg-[var(--re-brand)] text-white shadow-lg'
@@ -159,20 +272,167 @@ export function DataImportClient() {
                                     </div>
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                <div className="border-2 border-dashed border-[var(--re-border-default)] rounded-2xl p-12 text-center hover:border-[var(--re-brand)] transition-colors">
-                                    <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
-                                    <div className="text-sm font-medium mb-1">
-                                        Drag & drop your CSV here, or click to browse
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        Supports .csv files up to 10MB
-                                    </div>
-                                    <Badge variant="outline" className="mt-4 text-[9px] uppercase tracking-widest">
-                                        API Available Now
-                                    </Badge>
+                            <CardContent className="space-y-4">
+                                {/* Hidden file input */}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    aria-label="Upload CSV file"
+                                    title="Upload CSV file"
+                                    className="hidden"
+                                    onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                                />
+
+                                {/* Drop zone */}
+                                <div
+                                    className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors cursor-pointer ${
+                                        isDragging
+                                            ? 'border-[var(--re-brand)] bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)]'
+                                            : selectedFile
+                                            ? 'border-emerald-500/50 bg-emerald-500/5'
+                                            : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
+                                    }`}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                    onDragLeave={() => setIsDragging(false)}
+                                    onDrop={handleDrop}
+                                >
+                                    {selectedFile ? (
+                                        <>
+                                            <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-4" />
+                                            <div className="text-sm font-medium mb-1">{selectedFile.name}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {(selectedFile.size / 1024).toFixed(1)} KB — click to change
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+                                            <div className="text-sm font-medium mb-1">
+                                                Drag & drop your CSV here, or click to browse
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                Supports .csv files up to 10MB
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
+
+                                {/* Upload button */}
+                                {selectedFile && (
+                                    <Button
+                                        onClick={handleUpload}
+                                        disabled={uploadState === 'uploading'}
+                                        className="w-full bg-[var(--re-brand)] hover:brightness-110 text-white h-11 rounded-xl font-semibold"
+                                    >
+                                        {uploadState === 'uploading' ? (
+                                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading…</>
+                                        ) : (
+                                            <><Upload className="mr-2 h-4 w-4" /> Submit to Ingestion Pipeline</>
+                                        )}
+                                    </Button>
+                                )}
+
+                                {/* Upload result */}
+                                <AnimatePresence>
+                                    {uploadResult && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 6 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0 }}
+                                            className={`p-4 rounded-xl border text-sm ${
+                                                uploadState === 'success'
+                                                    ? 'border-emerald-500/30 bg-emerald-500/5'
+                                                    : 'border-red-500/30 bg-red-500/5'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2 font-medium mb-1">
+                                                {uploadState === 'success' ? (
+                                                    <><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Uploaded successfully</>
+                                                ) : (
+                                                    <><XCircle className="h-4 w-4 text-red-500" /> Upload failed</>
+                                                )}
+                                            </div>
+                                            {uploadResult.jobId && (
+                                                <div className="text-xs text-muted-foreground font-mono">Job ID: {uploadResult.jobId}</div>
+                                            )}
+                                            {uploadResult.error && (
+                                                <div className="text-xs text-red-600">{uploadResult.error}</div>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </CardContent>
+                        </Card>
+
+                        {/* Sample Dataset */}
+                        <Card className="border-[var(--re-border-default)]">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-sm font-bold text-muted-foreground">
+                                            <Database className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-lg">Load Sample Dataset</CardTitle>
+                                            <CardDescription>
+                                                Push a synthetic Romaine Lettuce supply chain (TLC1001) through the full pipeline — 9 CTE events from farm to retailer.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        onClick={handleLoadSample}
+                                        disabled={sampleState === 'running'}
+                                        variant="outline"
+                                        className="shrink-0 rounded-xl border-[var(--re-brand)] text-[var(--re-brand)] hover:bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)]"
+                                    >
+                                        {sampleState === 'running' ? (
+                                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Running…</>
+                                        ) : (
+                                            'Run Simulation'
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            {sampleSteps.length > 0 && (
+                                <CardContent>
+                                    <div className="space-y-2">
+                                        {sampleSteps.map((step, i) => (
+                                            <motion.div
+                                                key={i}
+                                                initial={{ opacity: 0, x: -8 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: i * 0.05 }}
+                                                className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${
+                                                    step.ok
+                                                        ? 'border-emerald-500/20 bg-emerald-500/5'
+                                                        : 'border-red-500/20 bg-red-500/5'
+                                                }`}
+                                            >
+                                                {step.ok ? (
+                                                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                                                ) : (
+                                                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-medium truncate">{step.label}</div>
+                                                    <div className="text-xs text-muted-foreground">{step.detail}</div>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                        {sampleState === 'done' && (
+                                            <motion.div
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                className="pt-2 text-xs text-muted-foreground text-center"
+                                            >
+                                                Dataset loaded — run a recall drill from the Mock Audit Drill tool to trace TLC1001.
+                                            </motion.div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            )}
                         </Card>
                     </motion.div>
                 )}
