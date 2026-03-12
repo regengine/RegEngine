@@ -14,7 +14,7 @@ interface Control {
 }
 
 export default function MyControlsPage() {
-  const { apiKey, isLoggedIn } = useAuth();
+  const { apiKey, isAuthenticated, isHydrated } = useAuth();
   const [controls, setControls] = useState<Control[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -22,13 +22,22 @@ export default function MyControlsPage() {
     control_id: '',
     title: '',
     description: '',
-    framework: 'NIST CSF'
+    framework: 'FSMA 204'
   });
   const router = useRouter();
 
   useEffect(() => {
+    if (!isHydrated) {
+      return;
+    }
+
+    if (!isAuthenticated || !apiKey) {
+      setLoading(false);
+      return;
+    }
+
     fetchControls();
-  }, []);
+  }, [apiKey, isAuthenticated, isHydrated]);
 
   const fetchControls = async () => {
     try {
@@ -84,10 +93,18 @@ export default function MyControlsPage() {
     }
   };
 
-  if (loading) {
+  if (!isHydrated || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-xl">Loading controls...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !apiKey) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl">Sign in to view your controls.</div>
       </div>
     );
   }
@@ -148,9 +165,9 @@ export default function MyControlsPage() {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2"
               >
                 <option value="FSMA 204">FSMA 204</option>
+                <option value="FDA CTE">FDA CTE</option>
                 <option value="EPCIS 2.0">EPCIS 2.0</option>
                 <option value="GS1">GS1</option>
-                <option value="FDA CTE">FDA CTE</option>
               </select>
             </div>
             <div className="flex gap-4">

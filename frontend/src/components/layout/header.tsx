@@ -7,29 +7,15 @@ import {
   Database,
   TrendingUp,
   CheckCircle,
-  Zap,
-  Server as ServerIcon,
   Key,
   ClipboardCheck,
   Shield,
   Book,
-  User,
   LogOut,
   Settings,
   ChevronDown,
   Leaf,
   Camera,
-  Clapperboard,
-  Film,
-  Users,
-  FileText,
-  Atom,
-  Cpu,
-  Plane,
-  Car,
-  Building,
-  Cog,
-  Gamepad2,
   Scan,
   ShieldCheck,
 } from 'lucide-react';
@@ -56,8 +42,7 @@ import { TenantSwitcher } from './tenant-switcher';
 import { MobileNav } from './mobile-nav';
 
 export function Header() {
-  const { apiKey, clearCredentials, isOnboarded } = useAuth();
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const { apiKey, clearCredentials } = useAuth();
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -88,7 +73,6 @@ export function Header() {
 
   const unhealthyServices = services.filter(s => s.status !== 'healthy' && !s.isLoading);
   const isLoading = services.some(s => s.isLoading);
-  const allHealthy = unhealthyServices.length === 0 && !isLoading;
 
   let statusText = 'All Systems Operational';
   let badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline' = 'outline';
@@ -103,7 +87,6 @@ export function Header() {
 
   const handleLogout = () => {
     clearCredentials();
-    setShowUserMenu(false);
   };
 
   return (
@@ -289,46 +272,6 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
-                onMouseEnter={() => handleMouseEnter('verticals')}
-                onMouseLeave={handleMouseLeave}
-              >
-                <Activity className="h-4 w-4 text-pink-500" />
-                <span>Verticals</span>
-                <ChevronDown className="h-3 w-3 opacity-50" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="w-64"
-              onMouseEnter={() => handleMouseEnter('verticals')}
-              onMouseLeave={handleMouseLeave}
-            >
-              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Current Product Surface</DropdownMenuLabel>
-              <DropdownMenuItem asChild>
-                <Link href="/verticals/food-safety" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Leaf className="h-4 w-4 text-green-500" />
-                  <div>
-                    <div className="font-medium">Food Safety (FSMA)</div>
-                    <div className="text-xs text-muted-foreground">FSMA 204 traceability</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/docs/fsma-204" className="cursor-pointer w-full flex items-center gap-3 py-2">
-                  <Activity className="h-4 w-4 text-emerald-500" />
-                  <div>
-                    <div className="font-medium">FSMA 204 Guide</div>
-                    <div className="text-xs text-muted-foreground">Requirements, CTEs, KDEs, exports</div>
-                  </div>
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           {/* Opportunities */}
           <Link
