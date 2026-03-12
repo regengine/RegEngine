@@ -34,6 +34,7 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
     { label: "Security", href: "/security" },
+    { label: "Trust Center", href: "/trust" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
     { label: "Design Partner Program", href: "/design-partner" },

@@ -80,7 +80,7 @@ export function DrillSimulatorClient() {
     const [checklist, setChecklist] = useState<Record<string, boolean>>({});
     const [grade, setGrade] = useState<{ score: number; grade: string; feedback: string[] } | null>(null);
 
-    // Live recall drill state
+    // Active recall drill state
     const [drillRunning, setDrillRunning] = useState(false);
     const [liveDrill, setLiveDrill] = useState<LiveDrillResult | null>(null);
 
@@ -229,7 +229,7 @@ export function DrillSimulatorClient() {
                                     </div>
                                 </div>
 
-                                {/* Live recall drill status */}
+                                {/* Active recall drill status */}
                                 <div className={`flex items-center gap-3 p-3 rounded-xl border text-sm ${
                                     drillRunning
                                         ? 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]'
@@ -240,7 +240,7 @@ export function DrillSimulatorClient() {
                                     {drillRunning ? (
                                         <>
                                             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                                            <span className="text-muted-foreground text-xs">Running live recall drill against graph service…</span>
+                                            <span className="text-muted-foreground text-xs">Running recall drill against graph service…</span>
                                         </>
                                     ) : liveDrill?.error ? (
                                         <>
@@ -255,7 +255,7 @@ export function DrillSimulatorClient() {
                                             <Network className="h-4 w-4 text-emerald-500 shrink-0" />
                                             <div>
                                                 <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                                                    Live recall drill active — {liveDrill.status ?? 'running'}
+                                                    Recall drill active — {liveDrill.status ?? 'running'}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground font-mono">
                                                     {liveDrill.drill_id && `ID: ${liveDrill.drill_id}`}
@@ -344,13 +344,13 @@ export function DrillSimulatorClient() {
                             </CardContent>
                         </Card>
 
-                        {/* Live drill result card */}
+                        {/* Drill result card */}
                         {liveDrill && !liveDrill.error && (
                             <Card className="border-[var(--re-border-default)]">
                                 <CardHeader>
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <Network className="h-4 w-4 text-[var(--re-brand)]" />
-                                        Live Recall Drill Result
+                                        Recall Drill Result
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>

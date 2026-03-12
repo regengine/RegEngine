@@ -7,11 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import AlphaSignupForm from './AlphaSignupForm';
 
 export const metadata: Metadata = {
-    title: 'Design Partner Program | RegEngine Private Alpha',
-    description: "Join RegEngine's private alpha. 25 spots for design partners shaping food traceability compliance.",
+    title: 'Design Partner Program | RegEngine',
+    description: "Join RegEngine's design partner cohort for custom integrations, guided rollout, and customer-specific FSMA implementation support.",
     openGraph: {
-        title: 'Design Partner Program | RegEngine Private Alpha',
-        description: "Join RegEngine's private alpha. 25 spots for design partners shaping food traceability compliance.",
+        title: 'Design Partner Program | RegEngine',
+        description: "Join RegEngine's design partner cohort for custom integrations, guided rollout, and customer-specific FSMA implementation support.",
         url: 'https://www.regengine.co/alpha',
         type: 'website',
     },
@@ -39,8 +39,8 @@ const ALPHA_PERKS = [
 ];
 
 const TIMELINE = [
-    { phase: 'Private Alpha', status: 'current', date: 'Current', detail: 'Invite-only \u00b7 25 companies' },
-    { phase: 'Design Partner Cohort', status: 'upcoming', date: 'Rolling', detail: 'Application review \u00b7 Guided onboarding' },
+    { phase: 'Design Partner Cohort', status: 'current', date: 'Current', detail: 'Custom integrations \u00b7 Guided onboarding' },
+    { phase: 'Customer Pilot Rollout', status: 'upcoming', date: 'Rolling', detail: 'Application review \u00b7 Customer-specific implementation' },
     { phase: 'FSMA 204 Deadline', status: 'deadline', date: 'Jul 2028', detail: 'FDA enforcement begins' },
 ];
 
@@ -50,15 +50,15 @@ export default function AlphaPage() {
             {/* Hero */}
             <section style={{ position: 'relative', zIndex: 2, maxWidth: '800px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
                 <Badge style={{ background: T.accentBg, color: T.accent, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '20px' }}>
-                    Private Alpha &middot; 25 Spots
+                    Design Partner Cohort
                 </Badge>
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
                     Shape the future of<br />
                     <span className="text-re-brand">food traceability</span>
                 </h1>
                 <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '560px', margin: '0 auto 16px', lineHeight: 1.6 }}>
-                    Join 25 food companies building FSMA 204 compliance infrastructure alongside our engineering team.
-                    Founding-member pricing. Direct founder access. White-glove onboarding.
+                    Designed for teams that need custom integrations, mapping review, and guided rollout before calling a deployment production-ready.
+                    Direct founder access. White-glove onboarding. Explicit implementation scope.
                 </p>
             </section>
 
@@ -110,7 +110,7 @@ export default function AlphaPage() {
                     Apply for design partner access
                 </h2>
                 <p style={{ fontSize: '14px', color: T.textMuted, textAlign: 'center', marginBottom: '32px' }}>
-                    We review applications within 48 hours. No credit card required.
+                    We review applications within 48 hours. Use this path for guided rollout and custom-scoped integrations, not standard self-serve workspace access.
                 </p>
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px', padding: '24px' }}>
                     <AlphaSignupForm />

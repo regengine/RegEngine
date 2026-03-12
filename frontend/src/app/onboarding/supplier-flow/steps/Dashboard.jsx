@@ -108,7 +108,7 @@ export default function Dashboard({ facilityId, refreshKey, isLoggedIn }) {
       {/* Gaps table */}
       <Card>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Compliance Gaps</div>
-        {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Refreshing score from live supplier records...</div>}
+        {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Refreshing score from current supplier records...</div>}
         {gaps.map((g, i) => (
           <div key={i} style={{
             display: "flex", alignItems: "center", gap: 10,
@@ -134,7 +134,7 @@ export default function Dashboard({ facilityId, refreshKey, isLoggedIn }) {
         Compliance score = coverage (75%) + freshness (15%) + chain integrity (10%).
         {scoreData && (
           <span>
-            {" "}Live ratios: coverage {(scoreData.coverage_ratio * 100).toFixed(0)}%, freshness {(scoreData.freshness_ratio * 100).toFixed(0)}%, integrity {(scoreData.integrity_ratio * 100).toFixed(0)}%.
+            {" "}Current ratios: coverage {(scoreData.coverage_ratio * 100).toFixed(0)}%, freshness {(scoreData.freshness_ratio * 100).toFixed(0)}%, integrity {(scoreData.integrity_ratio * 100).toFixed(0)}%.
           </span>
         )}
       </InfoCallout>

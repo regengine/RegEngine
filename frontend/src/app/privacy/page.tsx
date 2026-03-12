@@ -72,7 +72,7 @@ const sections = [
             },
             {
                 subtitle: "Retention",
-                text: "We retain your compliance data for the duration of your subscription plus 90 days. After cancellation, you can request a full data export. After the retention period, data is permanently deleted.",
+                text: "We retain your compliance data for the duration of your subscription plus 90 days. After cancellation, you can request a full data export. Customers with regulatory retention obligations should maintain recurring exports or an external archive rather than relying on an active subscription alone. After the retention period, data is permanently deleted.",
             },
         ],
     },
@@ -81,7 +81,7 @@ const sections = [
         content: [
             {
                 subtitle: "Access & Export",
-                text: "You can export all of your compliance data at any time via the API or dashboard. We support FDA-compliant CSV formats.",
+                text: "You can export your compliance data through the API and dashboard surfaces available to your plan. We support FDA-oriented export workflows and customer-managed off-platform archiving.",
             },
             {
                 subtitle: "Deletion",
@@ -117,7 +117,7 @@ const sections = [
         title: "Service Availability Notice",
         content: [
             {
-                text: "RegEngine features and workflows may change as we improve the platform, and access may be modified during staged rollouts or service updates. This Privacy Policy applies throughout those updates and after general availability.",
+                text: "RegEngine features and workflows may change as we improve the platform, and access may be modified during staged rollouts or service updates. This Privacy Policy applies throughout those updates and after broader rollout.",
             },
         ],
     },

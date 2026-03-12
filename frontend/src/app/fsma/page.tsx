@@ -31,6 +31,7 @@ import {
   useCreateRecallDrill,
   useExportTrace,
   useExportComplianceReport,
+  useSupplierHealth,
 } from '@/hooks/use-fsma';
 
 // Types
@@ -76,6 +77,7 @@ export default function FSMADashboardPage() {
   const createDrill = useCreateRecallDrill(apiKey || '');
   const exportTrace = useExportTrace(apiKey || '');
   const exportCompliance = useExportComplianceReport(apiKey || '');
+  const supplierHealth = useSupplierHealth(apiKey || '');
 
   // Trace query (only when activeTlc is set)
   const traceResult = useForwardTrace(activeTlc || '', apiKey || '', !!activeTlc && !!apiKey);
@@ -120,7 +122,10 @@ export default function FSMADashboardPage() {
                 <Shield className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold">FSMA 204 Dashboard</h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-4xl font-bold">FSMA 204 Dashboard</h1>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs">GA</Badge>
+                </div>
                 <p className="text-muted-foreground mt-1">
                   Food Safety Traceability & Recall Management
                   <HelpTooltip content="FDA Food Safety Modernization Act Section 204 requires food facilities to maintain traceability records and respond to recalls within 24 hours." />
@@ -364,10 +369,57 @@ export default function FSMADashboardPage() {
                 onExportReport={() => exportCompliance.mutate()}
               />
 
+              {/* Supplier Data Quality */}
+              {supplierHealth.data?.suppliers && supplierHealth.data.suppliers.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-purple-500" />
+                      Supplier Data Quality
+                    </CardTitle>
+                    <CardDescription>KDE completeness by supplier</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {supplierHealth.data.suppliers.slice(0, 5).map((supplier: { gln: string; name?: string; completeness_rate?: number; alert_count?: number }) => (
+                        <div key={supplier.gln} className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{supplier.name || supplier.gln}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    (supplier.completeness_rate || 0) >= 90 ? 'bg-green-500' :
+                                    (supplier.completeness_rate || 0) >= 70 ? 'bg-amber-500' : 'bg-red-500'
+                                  } ${
+                                    (supplier.completeness_rate || 0) >= 95 ? 'w-[95%]' :
+                                    (supplier.completeness_rate || 0) >= 90 ? 'w-[90%]' :
+                                    (supplier.completeness_rate || 0) >= 80 ? 'w-4/5' :
+                                    (supplier.completeness_rate || 0) >= 70 ? 'w-[70%]' :
+                                    (supplier.completeness_rate || 0) >= 50 ? 'w-1/2' :
+                                    (supplier.completeness_rate || 0) >= 25 ? 'w-1/4' : 'w-[10%]'
+                                  }`}
+                                />
+                              </div>
+                              <span className="text-xs text-muted-foreground w-10 text-right">
+                                {Math.round(supplier.completeness_rate || 0)}%
+                              </span>
+                            </div>
+                          </div>
+                          {(supplier.alert_count || 0) > 0 && (
+                            <Badge variant="secondary" className="ml-2 text-xs">
+                              {supplier.alert_count} alert{supplier.alert_count !== 1 ? 's' : ''}
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Drift Alerts Widget */}
               <DriftAlertsWidget />
-
-              {/* Recent Alerts */}
 
               {/* Recent Alerts */}
               {dashboard.data?.recent_alerts && dashboard.data.recent_alerts.length > 0 && (

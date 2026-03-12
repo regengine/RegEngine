@@ -3,10 +3,10 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
     title: 'About | RegEngine',
-    description: 'Compliance infrastructure for FSMA 204, built from the ground up by a solo technical founder.',
+    description: 'Founder-led FSMA 204 compliance infrastructure with an explicit trust surface for customer diligence and implementation readiness.',
     openGraph: {
         title: 'About | RegEngine',
-        description: 'Compliance infrastructure for FSMA 204, built from the ground up by a solo technical founder.',
+        description: 'Founder-led FSMA 204 compliance infrastructure with an explicit trust surface for customer diligence and implementation readiness.',
         url: 'https://www.regengine.co/about',
         type: 'website',
     },
@@ -27,7 +27,7 @@ export default function AboutPage() {
                     Compliance infrastructure, built from the ground up
                 </h1>
                 <p className="text-base text-[var(--re-text-muted)] leading-[1.7]">
-                    RegEngine turns FSMA 204 requirements into machine-readable, cryptographically verifiable records. Scan a barcode, trace a lot, export an FDA-ready package &mdash; in minutes, not days.
+                    RegEngine turns FSMA 204 requirements into machine-readable, cryptographically verifiable records. The product is founder-led, FSMA-first, and explicit about where customer process, upstream data quality, and off-platform archives still matter.
                 </p>
             </section>
 
@@ -49,7 +49,7 @@ export default function AboutPage() {
                                 </div>
                                 <div className="flex gap-2.5 items-baseline">
                                     <span className="text-xs font-mono font-medium text-[var(--re-text-disabled)] min-w-[20px]">03</span>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">Built every layer of RegEngine &mdash; architecture, backend, frontend, compliance logic, and cryptographic verification. Solo technical founder.</p>
+                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">Built every layer of RegEngine &mdash; architecture, backend, frontend, compliance logic, and cryptographic verification. Founder-led product with a public trust center rather than enterprise theater.</p>
                                 </div>
                             </div>
                             <a href="https://www.linkedin.com/in/clsellers/" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] text-[var(--re-brand)] font-medium mt-4 hover:underline">LinkedIn &rarr;</a>
@@ -74,9 +74,9 @@ export default function AboutPage() {
 
             <section className="relative z-[2] border-t border-white/[0.06] max-w-[720px] mx-auto py-12 px-6 text-center">
                 <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-2">Talk to the founder directly</h2>
-                <p className="text-[15px] text-[var(--re-text-muted)] mb-6">chris@regengine.co &mdash; no sales team, no gatekeepers.</p>
+                <p className="text-[15px] text-[var(--re-text-muted)] mb-6">chris@regengine.co &mdash; no sales team, no gatekeepers, and the trust center documents the current status model versus guided rollout.</p>
                 <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="/signup" className="inline-flex items-center gap-2 px-7 py-3.5 bg-[var(--re-brand)] text-[var(--re-surface-base)] rounded-lg text-[15px] font-semibold hover:opacity-90 transition-opacity">Start Free Trial &rarr;</Link>
+                    <Link href="/trust" className="inline-flex items-center gap-2 px-7 py-3.5 bg-[var(--re-brand)] text-[var(--re-surface-base)] rounded-lg text-[15px] font-semibold hover:opacity-90 transition-opacity">Review Trust Center &rarr;</Link>
                     <Link href="/pricing" className="inline-flex items-center gap-2 px-7 py-3.5 bg-transparent text-[var(--re-text-primary)] rounded-lg text-[15px] font-semibold border border-white/[0.06] hover:border-white/[0.12] transition-colors">View Pricing</Link>
                 </div>
             </section>

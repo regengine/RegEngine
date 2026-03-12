@@ -91,7 +91,7 @@ curl -X POST https://www.regengine.co/api/v1/recall-simulations/run \\
 curl https://www.regengine.co/api/v1/fda/export?tenant_id=your_tenant_id \\
   -H "X-RegEngine-API-Key: rge_your_api_key_here" \\
   --output fda_package.json`;
-/* ── Actual API endpoints that exist in the backend ── */
+/* ── API endpoints currently documented on this page ── */
 
 const API_ENDPOINTS = [
     { method: 'POST', path: '/api/v1/webhooks/ingest', description: 'Ingest Critical Tracking Events (batch)' },
@@ -102,15 +102,13 @@ const API_ENDPOINTS = [
     { method: 'POST', path: '/api/v1/recall-simulations/run', description: 'Run recall simulation drill' },
     { method: 'GET', path: '/api/v1/compliance/score/:tenant_id', description: 'Get compliance risk score' },
     { method: 'POST', path: '/api/v1/qr/decode', description: 'Decode GS1 / GTIN barcode' },
-    { method: 'POST', path: '/api/v1/integrations/csv-upload/:tenant_id', description: 'Upload CSV traceability data' },
-    { method: 'GET', path: '/api/v1/integrations/status/:tenant_id', description: 'List connected integrations' },
 ];
 
 const DEV_FEATURES = [
     { Icon: Zap, title: 'Quick Integration', description: 'Record your first CTE with a single API call. Full REST API with cURL examples.' },
     { Icon: Clock, title: 'Real-Time Webhooks', description: 'Ingest traceability events via webhooks with SHA-256 chain verification.' },
     { Icon: Shield, title: 'Per-Tenant API Keys', description: 'Scoped keys with RBAC. Multi-tenant isolation by design.' },
-    { Icon: BookOpen, title: 'Interactive API Docs', description: 'Swagger UI with live endpoint testing and full endpoint reference.' },
+    { Icon: BookOpen, title: 'Interactive API Docs', description: 'Swagger UI and endpoint reference for the currently documented FSMA API surface.' },
 ];
 export default function DevelopersPage() {
     return (
@@ -128,14 +126,14 @@ export default function DevelopersPage() {
                     REST API with full EPCIS 2.0 support. Record CTEs, run recall simulations, and export FDA packages programmatically.
                 </p>
                 <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="/alpha">
+                    <Link href="/docs/api">
                         <Button style={{ background: T.accent, color: '#000', fontWeight: 600, padding: '12px 24px' }}>
-                            Get API Access <ArrowRight className="ml-2 w-4 h-4" />
+                            View API Docs <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
-                    <Link href="/tools/ftl-checker">
+                    <Link href="/trust">
                         <Button variant="outline" style={{ border: `1px solid ${T.border}`, color: T.text, padding: '12px 24px' }}>
-                            Try Free Tools
+                            Review Trust Center
                         </Button>
                     </Link>
                 </div>
@@ -245,17 +243,30 @@ Content-Type: application/json
                     </pre>
                 </div>
             </section>
+            <section style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}` }}>
+                <div style={{ maxWidth: '800px', margin: '0 auto', padding: '60px 24px' }}>
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, marginBottom: '8px' }}>
+                        Delivery mode and rollout posture
+                    </h2>
+                    <p style={{ fontSize: '14px', color: T.textMuted, marginBottom: '16px' }}>
+                        Public docs are GA. Core API access is available for paid tenants. Advanced partner-specific integrations should be treated as custom-scoped or design-partner work, not turnkey connectors.
+                    </p>
+                    <p style={{ fontSize: '14px', color: T.textMuted }}>
+                        See the <Link href="/trust" style={{ color: T.accent, textDecoration: 'underline' }}>Trust Center</Link> for the status model and customer-facing delivery modes.
+                    </p>
+                </div>
+            </section>
             {/* CTA */}
             <section style={{ position: 'relative', zIndex: 2, background: T.accentBg, borderTop: `1px solid ${T.border}`, padding: '48px 24px', textAlign: 'center' }}>
                 <h2 style={{ fontSize: '22px', fontWeight: 700, color: T.heading, marginBottom: '8px' }}>
                     Ready to integrate?
                 </h2>
                 <p style={{ fontSize: '14px', color: T.textMuted, marginBottom: '20px' }}>
-                    Join the design partner program for API access and dedicated onboarding.
+                    Use the public API docs for current endpoints. Use the design partner path only if you need custom integration work or guided rollout.
                 </p>
-                <Link href="/alpha">
+                <Link href="/contact">
                     <Button style={{ background: T.accent, color: '#000', fontWeight: 600, padding: '12px 24px' }}>
-                        Apply for Access <ArrowRight className="ml-2 w-4 h-4" />
+                        Scope an Integration <ArrowRight className="ml-2 w-4 h-4" />
                     </Button>
                 </Link>
             </section>

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Settings as SettingsIcon, User, Bell, Lock, Key, Globe } from 'lucide-react';
+import { Settings as SettingsIcon, User, Bell, Lock, Key, Globe, LifeBuoy, Archive } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -172,6 +172,56 @@ export default function SettingsPage() {
                             </Link>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center gap-2">
+                                <Archive className="h-5 w-5 text-primary" />
+                                <CardTitle>Archive & Retention</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Manage recurring export jobs and external archive posture
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="text-sm">
+                                <div className="font-medium mb-1">Retention Controls</div>
+                                <p className="text-muted-foreground text-xs">
+                                    Schedule off-platform archive bundles for long-term FSMA retention
+                                </p>
+                            </div>
+                            <Link href="/dashboard/export-jobs">
+                                <Button variant="outline" className="w-full">
+                                    Open Archive Jobs
+                                </Button>
+                            </Link>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center gap-2">
+                                <LifeBuoy className="h-5 w-5 text-primary" />
+                                <CardTitle>Support</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Review response windows and emergency recall escalation guidance
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <div className="text-sm">
+                                <div className="font-medium mb-1">Support Model</div>
+                                <p className="text-muted-foreground text-xs">
+                                    See plan-specific support posture and escalation instructions
+                                </p>
+                            </div>
+                            <Link href="/settings/support">
+                                <Button variant="outline" className="w-full">
+                                    Open Support Settings
+                                </Button>
+                            </Link>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 {/* Quick Links */}
@@ -186,6 +236,9 @@ export default function SettingsPage() {
                         </Link>
                         <Link href="/compliance" className="text-primary hover:underline">
                             Compliance Dashboard
+                        </Link>
+                        <Link href="/trust" className="text-primary hover:underline">
+                            Trust Center
                         </Link>
                     </div>
                 </div>

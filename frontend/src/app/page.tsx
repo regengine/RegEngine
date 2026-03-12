@@ -145,7 +145,7 @@ export default function RegEngineLanding() {
         <div className="flex gap-3 flex-wrap">
           <Link href="/onboarding" className="w-full sm:w-auto">
             <Button size="lg" className="w-full sm:w-auto h-16 px-10 rounded-3xl bg-[var(--re-brand)] text-white text-lg font-black italic uppercase shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] group">
-              Start Free Trial
+              Start Workspace
               <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>
@@ -347,7 +347,7 @@ export default function RegEngineLanding() {
             Your traceability data should be verified, exportable, and ready before anyone asks for it.
           </p>
           <p className="text-sm text-[var(--re-text-secondary)] mt-4">
-            Every Retailer Readiness Assessment is scored automatically against live FDA requirements and retailer-specific benchmarks. Results in minutes, not weeks.
+            Every Retailer Readiness Assessment is scored automatically against the current FDA rule model and retailer-specific benchmarks reflected in RegEngine. Results in minutes, not weeks.
             <Link href="/retailer-readiness" className="text-[var(--re-brand)] hover:underline ml-1">
               Run the assessment.
             </Link>
@@ -392,7 +392,7 @@ export default function RegEngineLanding() {
                 Start with a free assessment, then see exactly what it takes to move from reactive traceability to recall-ready infrastructure.
               </p>
               <p className="text-sm text-[var(--re-text-muted)] mt-3">
-                Start with a free 14-day trial. <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">See all plans.</Link>
+                Start with pricing, self-serve onboarding, or a free assessment. <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">See all plans.</Link>
               </p>
             </div>
           </div>

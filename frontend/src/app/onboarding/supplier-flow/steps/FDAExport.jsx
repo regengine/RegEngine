@@ -84,7 +84,7 @@ export default function FDAExport({ facilityId, refreshKey, onEvent, isLoggedIn 
     }
   };
 
-  // Normalize rows: live API rows have different field names than FDA_SAMPLE_ROWS
+  // Normalize rows: current API rows have different field names than FDA_SAMPLE_ROWS
   const normalizeRow = (row) => ({
     tlc: row.tlc || row.tlc_code || "",
     product: row.product || row.product_description || "-",
@@ -180,7 +180,7 @@ export default function FDAExport({ facilityId, refreshKey, onEvent, isLoggedIn 
       {/* Export preview table */}
       <Card style={{ marginTop: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Export Preview</div>
-        {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Loading live FDA preview rows...</div>}
+        {loading && <div style={{ fontSize: 11, color: GRAY, marginBottom: 8 }}>Loading current FDA preview rows...</div>}
         <div className="onb-table-scroll" style={{ border: `1px solid ${BORDER}`, borderRadius: 6, overflow: "hidden", fontSize: 11 }}>
           <div className="onb-fda-grid" style={{
             display: "grid", gridTemplateColumns: "1.4fr 1.4fr 1fr 1.4fr 1.3fr 0.8fr 1fr 1.2fr",

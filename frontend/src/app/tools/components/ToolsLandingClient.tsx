@@ -21,6 +21,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+type ToolMaturity = 'ga' | 'pilot';
+
 const FSMA_JOURNEY = [
     {
         step: 1,
@@ -31,7 +33,8 @@ const FSMA_JOURNEY = [
         icon: Leaf,
         color: 'var(--re-brand)',
         tag: 'Essential',
-        status: 'featured'
+        status: 'featured',
+        maturity: 'ga' as ToolMaturity,
     },
     {
         step: 2,
@@ -42,7 +45,8 @@ const FSMA_JOURNEY = [
         icon: Truck,
         color: 'var(--re-info)',
         tag: 'Integration',
-        status: 'standard'
+        status: 'standard',
+        maturity: 'ga' as ToolMaturity,
     },
     {
         step: 3,
@@ -53,7 +57,8 @@ const FSMA_JOURNEY = [
         icon: ClipboardList,
         color: 'var(--re-info)',
         tag: 'Data Quality',
-        status: 'standard'
+        status: 'standard',
+        maturity: 'ga' as ToolMaturity,
     },
     {
         step: 4,
@@ -64,7 +69,8 @@ const FSMA_JOURNEY = [
         icon: FlaskConical,
         color: 'var(--re-brand)',
         tag: 'Data Integrity',
-        status: 'standard'
+        status: 'standard',
+        maturity: 'ga' as ToolMaturity,
     },
     {
         step: 5,
@@ -75,7 +81,8 @@ const FSMA_JOURNEY = [
         icon: CheckCircle2,
         color: 'var(--re-brand)',
         tag: 'Assessment',
-        status: 'standard'
+        status: 'standard',
+        maturity: 'ga' as ToolMaturity,
     },
     {
         step: 6,
@@ -86,18 +93,20 @@ const FSMA_JOURNEY = [
         icon: ShieldCheck,
         color: 'var(--re-brand)',
         tag: 'Operations',
-        status: 'standard'
+        status: 'standard',
+        maturity: 'ga' as ToolMaturity,
     },
     {
         step: 7,
         id: 'drill-simulator',
-        title: 'Live Simulation',
+        title: 'Scenario Simulation',
         toolTitle: '24-Hour Drill Simulator',
         description: 'A scenario-based quest to see if your manual processes can survive a real FDA outbreak investigation.',
         icon: Timer,
         color: 'var(--re-danger)',
         tag: 'Simulation',
-        status: 'standard'
+        status: 'standard',
+        maturity: 'pilot' as ToolMaturity,
     },
     {
         step: 8,
@@ -109,7 +118,8 @@ const FSMA_JOURNEY = [
         color: 'var(--re-brand)',
         tag: 'Strategic',
         isFeatured: true,
-        status: 'featured'
+        status: 'featured',
+        maturity: 'ga' as ToolMaturity,
     }
 ];
 
@@ -235,6 +245,13 @@ export function ToolsLandingClient() {
                                                     <div className="flex items-center gap-3 mb-2">
                                                         <Badge variant="outline" className="text-[10px] uppercase font-black text-[var(--re-brand)] border-[var(--re-brand-muted)] rounded-full">
                                                             {tool.tag}
+                                                        </Badge>
+                                                        <Badge className={`text-[10px] uppercase font-semibold rounded-full ${
+                                                            tool.maturity === 'ga'
+                                                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                                                : 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                                                        }`}>
+                                                            {tool.maturity === 'ga' ? 'GA' : 'Pilot'}
                                                         </Badge>
                                                         <span className="text-[var(--re-text-muted)] text-xs font-bold uppercase tracking-widest md:hidden">Step {tool.step}</span>
                                                     </div>

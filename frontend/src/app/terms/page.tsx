@@ -37,6 +37,8 @@ We store and process your data solely to provide RegEngine services. We do not c
 
 You can export all of your data at any time via the API or dashboard. If you cancel your subscription or if RegEngine Inc. terminates your account, you have 90 days to export your data before it is permanently deleted. This 90-day export window applies regardless of the reason for termination.
 
+If you have statutory or contractual retention obligations, you are responsible for maintaining an off-platform archive or recurring export process that satisfies those obligations.
+
 You grant us a limited license to store, process, and display your data as necessary to operate the service — nothing more.`,
     },
     {

@@ -100,6 +100,12 @@ const securityControls = [
     { item: "Incident response plan (internal)", timeline: "Current" },
 ];
 
+const diligenceArtifacts = [
+    { label: 'Trust Center', detail: 'Public product status, retention posture, and support model', href: '/trust' },
+    { label: 'Security details', detail: 'Implemented controls and verification-oriented security copy', href: '/security' },
+    { label: 'Additional artifacts', detail: 'Subprocessors, diligence materials, and extra security artifacts are available on request or under NDA where applicable', href: '/contact' },
+];
+
 const infrastructure = [
     { label: "Database", value: "PostgreSQL (Supabase)", detail: "Row-Level Security enforced" },
     { label: "Hosting", value: "Cloud infrastructure", detail: "US data residency" },
@@ -221,6 +227,36 @@ export default function SecurityPage() {
                             </span>
                         </div>
                     ))}
+                </div>
+            </section>
+
+            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.01)" }}>
+                <div className="max-w-[720px] mx-auto py-[60px] px-6">
+                    <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 8px" }}>
+                        Diligence artifacts
+                    </h2>
+                    <p style={{ fontSize: "14px", color: T.textMuted, margin: "0 0 24px" }}>
+                        Security copy is only part of the diligence surface. Product status, retention, support posture, and additional materials are surfaced separately to avoid overstating what is publicly available.
+                    </p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {diligenceArtifacts.map((artifact) => (
+                            <a
+                                key={artifact.label}
+                                href={artifact.href}
+                                style={{
+                                    display: "block",
+                                    padding: "16px",
+                                    borderRadius: "10px",
+                                    border: `1px solid ${T.border}`,
+                                    background: T.surface,
+                                    textDecoration: "none",
+                                }}
+                            >
+                                <div style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary }}>{artifact.label}</div>
+                                <div style={{ fontSize: "13px", color: T.textMuted, marginTop: "4px" }}>{artifact.detail}</div>
+                            </a>
+                        ))}
+                    </div>
                 </div>
             </section>
 

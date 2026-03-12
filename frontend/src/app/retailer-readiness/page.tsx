@@ -627,14 +627,14 @@ export default function RetailerSuppliersPage() {
             }}>
                 <div className="text-center mb-12">
                     <p className="re-section-label">
-                        Live Trace Demo
+                        Trace Demo
                     </p>
                     <h2 className="re-section-title">
                         {traceDirection === 'forward' ? '5-Second Trace. Farm to Store.' : '5-Second Trace. Store to Farm.'}
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 520, margin: '0 auto', marginBottom: 24 }}>
                         {traceDirection === 'forward'
-                            ? 'Watch a romaine lettuce lot trace across the entire supply chain in real time.'
+                            ? 'Watch a romaine lettuce lot trace across the entire supply chain in an animated walkthrough.'
                             : 'Simulate a recall investigation — trace a contaminated product back to its source in seconds.'}
                     </p>
 
@@ -1140,7 +1140,7 @@ export default function RetailerSuppliersPage() {
                             Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
                             I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation.
                             Your traceability data should be verified, exportable, and ready before anyone asks for it.
-                            Every Retailer Readiness Assessment is scored automatically against live FDA requirements and retailer-specific benchmarks. Results in minutes, not weeks.
+                            Every Retailer Readiness Assessment is scored automatically against the current FDA rule model and retailer-specific benchmarks reflected in RegEngine. Results in minutes, not weeks.
                         </p>
                         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                             {[
