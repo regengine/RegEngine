@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import {
     ArrowRight,
+    CheckCircle,
     Webhook,
     Database,
     ShoppingCart,
@@ -307,7 +308,7 @@ export default function IntegrationsPage() {
                                                 key={item}
                                                 className="flex items-start gap-2 text-sm"
                                             >
-                                                <CheckCircle2
+                                                <CheckCircle
                                                     className={`h-4 w-4 mt-0.5 flex-shrink-0 ${i === 2 ? 'text-[var(--re-brand)]' : 'text-muted-foreground'}`}
                                                 />
                                                 {item}
