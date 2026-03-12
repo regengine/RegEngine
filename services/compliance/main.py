@@ -7,15 +7,15 @@ _SERVICE_DIR = Path(__file__).resolve().parent
 if str(_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICE_DIR))
 
-from app.routes import router as fair_lending_router
+from app.routes import router as fsma_router
 
 
 app = FastAPI(
-    title="RegEngine Fair Lending Compliance OS",
-    version="0.1.0",
+    title="RegEngine FSMA 204 Compliance Service",
+    version="1.0.0",
     description=(
-        "API-first Fair Lending Compliance OS focused on ECOA/FHA obligations, "
-        "bias monitoring, model governance, immutable audit artifacts, and executive risk scoring."
+        "FSMA 204 compliance API providing checklists, industry categories, "
+        "and configuration validation for food traceability requirements."
     ),
 )
 
@@ -29,20 +29,18 @@ async def health_check() -> dict:
 async def root() -> dict:
     return {
         "service": "compliance-api",
-        "product": "RegEngine Fair Lending Compliance OS",
+        "product": "RegEngine FSMA 204 Compliance Service",
         "version": app.version,
         "docs": "/docs",
         "key_endpoints": {
-            "regulatory_mapping": "/v1/regulatory/map",
-            "fair_lending_analysis": "/v1/fair-lending/analyze",
-            "audit_export": "/v1/audit/export",
-            "risk_summary": "/v1/risk/summary",
-            "model_registry": "/v1/models",
+            "industries": "/industries",
+            "checklists": "/checklists",
+            "validate": "/validate",
         },
     }
 
 
-app.include_router(fair_lending_router)
+app.include_router(fsma_router)
 
 
 if __name__ == "__main__":

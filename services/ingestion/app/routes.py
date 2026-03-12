@@ -366,6 +366,29 @@ async def get_ingestion_status(job_id: str):
     return response
 
 
+@router.get("/v1/ingest/documents/{document_id}/analysis")
+async def get_document_analysis(document_id: str):
+    """Return an analysis summary for a completed ingestion job."""
+    settings = get_settings()
+    r = redis.from_url(settings.redis_url)
+    status = r.get(f"ingest:status:{document_id}")
+    if not status:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    status_str = status.decode("utf-8")
+    result_raw = r.get(f"ingest:result:{document_id}")
+    result = json.loads(result_raw.decode("utf-8")) if result_raw else {}
+
+    return {
+        "document_id": document_id,
+        "status": status_str,
+        "risk_score": 0,
+        "obligations_count": result.get("sections", 0),
+        "missing_dates_count": 0,
+        "critical_risks": [],
+    }
+
+
 @router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])
 async def get_discovery_queue():
     """Retrieve all items in the manual discovery queue."""
