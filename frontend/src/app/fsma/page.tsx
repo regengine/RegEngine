@@ -87,12 +87,12 @@ export default function FSMADashboardPage() {
     }
   };
 
-  const handleStartDrill = async (type: RecallDrillType = 'FORWARD') => {
-    if (!activeTlc) return;
+  const handleStartDrill = async (type: RecallDrillType = 'FORWARD', fallbackTlc = 'TLC1001') => {
+    const tlc = activeTlc || fallbackTlc;
     try {
       await createDrill.mutateAsync({
         type,
-        target_tlc: activeTlc,
+        target_tlc: tlc,
         reason: 'Mock drill initiated from dashboard',
       });
     } catch (error) {
@@ -353,6 +353,7 @@ export default function FSMADashboardPage() {
                 drill={activeDrill}
                 onCancel={() => { /* TODO */ }}
                 onComplete={() => { /* TODO */ }}
+                onStartDrill={() => handleStartDrill('FORWARD')}
               />
 
               {/* Compliance Readiness */}

@@ -42,10 +42,11 @@ interface RecallTimerProps {
   drill?: RecallDrill;
   onCancel?: () => void;
   onComplete?: () => void;
+  onStartDrill?: () => void;
   className?: string;
 }
 
-export function RecallTimer({ drill, onCancel, onComplete, className }: RecallTimerProps) {
+export function RecallTimer({ drill, onCancel, onComplete, onStartDrill, className }: RecallTimerProps) {
   const [currentTime, setCurrentTime] = useState(Date.now());
 
   // Update timer every second
@@ -97,7 +98,7 @@ export function RecallTimer({ drill, onCancel, onComplete, className }: RecallTi
           <div className="text-center py-8">
             <Timer className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <p className="text-muted-foreground">No active recall drill</p>
-            <Button className="mt-4" variant="outline">
+            <Button className="mt-4" variant="outline" onClick={onStartDrill} disabled={!onStartDrill}>
               <PlayCircle className="w-4 h-4 mr-2" />
               Start Mock Drill
             </Button>
