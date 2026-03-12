@@ -52,10 +52,6 @@ const nextConfig = {
                 destination: '/api/admin/auth/:path*',
             },
             {
-                source: '/api/fsma/:path*',
-                destination: `${ingestionUrl}/v1/:path*`,
-            },
-            {
                 source: '/api/compliance/:path*',
                 destination: `${complianceUrl}/:path*`,
             },
