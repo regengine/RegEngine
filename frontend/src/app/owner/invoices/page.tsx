@@ -44,18 +44,18 @@ const mockAgingBuckets = [
 
 const mockInvoices = [
     { id: 'inv_seed_0005', number: 'INV-2026-1006', tenant: 'Acme Foods Inc.', amount: '$6,528.13', status: 'sent', issueDate: 'Jan 10', dueDate: 'Feb 09', tier: 'Enterprise' },
-    { id: 'inv_seed_0008', number: 'INV-2026-1009', tenant: 'MedSecure Health', amount: '$12,049.55', status: 'overdue', issueDate: 'Dec 11', dueDate: 'Jan 10', tier: 'Scale' },
-    { id: 'inv_seed_0010', number: 'INV-2026-1011', tenant: 'SafetyFirst Manufacturing', amount: '$3,289.84', status: 'sent', issueDate: 'Jan 10', dueDate: 'Feb 09', tier: 'Growth' },
+    { id: 'inv_seed_0008', number: 'INV-2026-1009', tenant: 'Northstar Cold Chain', amount: '$12,049.55', status: 'overdue', issueDate: 'Dec 11', dueDate: 'Jan 10', tier: 'Scale' },
+    { id: 'inv_seed_0010', number: 'INV-2026-1011', tenant: 'Harvest Table Foods', amount: '$3,289.84', status: 'sent', issueDate: 'Jan 10', dueDate: 'Feb 09', tier: 'Growth' },
     { id: 'inv_seed_0004', number: 'INV-2026-1005', tenant: 'Acme Foods Inc.', amount: '$7,612.50', status: 'paid', issueDate: 'Dec 11', dueDate: 'Jan 10', paidDate: 'Dec 23', tier: 'Enterprise' },
-    { id: 'inv_seed_0007', number: 'INV-2026-1008', tenant: 'MedSecure Health', amount: '$10,478.25', status: 'paid', issueDate: 'Nov 11', dueDate: 'Dec 11', paidDate: 'Nov 23', tier: 'Scale' },
+    { id: 'inv_seed_0007', number: 'INV-2026-1008', tenant: 'Northstar Cold Chain', amount: '$10,478.25', status: 'paid', issueDate: 'Nov 11', dueDate: 'Dec 11', paidDate: 'Nov 23', tier: 'Scale' },
     { id: 'inv_seed_0003', number: 'INV-2026-1004', tenant: 'Acme Foods Inc.', amount: '$8,415.00', status: 'paid', issueDate: 'Nov 11', dueDate: 'Dec 11', paidDate: 'Nov 23', tier: 'Enterprise' },
 ];
 
 const mockPayments = [
     { id: 'pay_seed_0004', invoice: 'INV-2026-1005', tenant: 'Acme Foods Inc.', amount: '$7,612.50', method: 'Visa •4242', date: 'Dec 23, 2025', status: 'succeeded' },
-    { id: 'pay_seed_0007', invoice: 'INV-2026-1008', tenant: 'MedSecure Health', amount: '$10,478.25', method: 'MC •8888', date: 'Nov 23, 2025', status: 'succeeded' },
+    { id: 'pay_seed_0007', invoice: 'INV-2026-1008', tenant: 'Northstar Cold Chain', amount: '$10,478.25', method: 'MC •8888', date: 'Nov 23, 2025', status: 'succeeded' },
     { id: 'pay_seed_0003', invoice: 'INV-2026-1004', tenant: 'Acme Foods Inc.', amount: '$8,415.00', method: 'Amex •3782', date: 'Nov 23, 2025', status: 'succeeded' },
-    { id: 'pay_seed_0006', invoice: 'INV-2026-1007', tenant: 'MedSecure Health', amount: '$5,812.50', method: 'Visa •4242', date: 'Oct 23, 2025', status: 'succeeded' },
+    { id: 'pay_seed_0006', invoice: 'INV-2026-1007', tenant: 'Northstar Cold Chain', amount: '$5,812.50', method: 'Visa •4242', date: 'Oct 23, 2025', status: 'succeeded' },
 ];
 
 const statusConfig: Record<string, { color: string; bg: string; icon: React.ElementType }> = {

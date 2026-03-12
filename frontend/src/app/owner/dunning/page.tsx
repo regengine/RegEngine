@@ -35,10 +35,10 @@ const mockSummary = {
 };
 
 const mockCases = [
-    { id: 'dun_medsecure_01', tenant: 'MedSecure Health', invoice: 'INV-2026-1009', amount: '$12,049.55', stage: 'second_notice', status: 'active', retries: 2, daysPast: 16, lastResult: 'Insufficient funds' },
-    { id: 'dun_safety_01', tenant: 'SafetyFirst Manufacturing', invoice: 'INV-2026-1011', amount: '$3,289.84', stage: 'reminder', status: 'active', retries: 1, daysPast: 3, lastResult: 'Card expired' },
+    { id: 'dun_northstar_01', tenant: 'Northstar Cold Chain', invoice: 'INV-2026-1009', amount: '$12,049.55', stage: 'second_notice', status: 'active', retries: 2, daysPast: 16, lastResult: 'Insufficient funds' },
+    { id: 'dun_harvest_01', tenant: 'Harvest Table Foods', invoice: 'INV-2026-1011', amount: '$3,289.84', stage: 'reminder', status: 'active', retries: 1, daysPast: 3, lastResult: 'Card expired' },
     { id: 'dun_freshleaf_01', tenant: 'FreshLeaf Produce', invoice: 'INV-2026-0998', amount: '$4,862.50', stage: 'first_notice', status: 'recovered', retries: 2, daysPast: 9, lastResult: 'Succeeded' },
-    { id: 'dun_oldco_01', tenant: 'OldCo Logistics', invoice: 'INV-2025-0845', amount: '$1,890.00', stage: 'collections', status: 'written_off', retries: 3, daysPast: 50, lastResult: 'Card declined' },
+    { id: 'dun_oldco_01', tenant: 'Legacy Foods Co.', invoice: 'INV-2025-0845', amount: '$1,890.00', stage: 'collections', status: 'written_off', retries: 3, daysPast: 50, lastResult: 'Card declined' },
 ];
 
 const mockSchedule = [

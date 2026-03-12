@@ -23,7 +23,6 @@ export default function robots(): MetadataRoute.Robots {
                     '/fsma/assessment',
                     '/fsma/field-capture',
                     '/fsma/integration',
-                    '/pcos/',
                     '/onboarding/',
                     '/accept-invite',
                     '/verify',

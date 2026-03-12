@@ -47,8 +47,8 @@ const mockPartners = [
 const mockReferrals = [
     { partner: 'CompliancePro', tenant: 'Acme Foods Inc.', tier: 'Enterprise', monthly: '$5,000', commission: '$1,000', date: 'Aug 2025' },
     { partner: 'CompliancePro', tenant: 'FreshLeaf Produce', tier: 'Scale', monthly: '$1,500', commission: '$300', date: 'Nov 2025' },
-    { partner: 'FoodSafe Solutions', tenant: 'MedSecure Health', tier: 'Scale', monthly: '$1,800', commission: '$270', date: 'Oct 2025' },
-    { partner: 'TechIntegrations', tenant: 'EnergyFlow Corp', tier: 'Growth', monthly: '$800', commission: '$80', date: 'Dec 2025' },
+    { partner: 'FoodSafe Solutions', tenant: 'Northstar Cold Chain', tier: 'Scale', monthly: '$1,800', commission: '$270', date: 'Oct 2025' },
+    { partner: 'TechIntegrations', tenant: 'Riverbend Packers', tier: 'Growth', monthly: '$800', commission: '$80', date: 'Dec 2025' },
 ];
 
 const mockPayouts = [

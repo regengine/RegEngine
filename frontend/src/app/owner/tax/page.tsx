@@ -40,7 +40,7 @@ const mockJurisdictions = [
 
 const mockExemptions = [
     { id: 'txe_acme_01', tenant: 'Acme Foods Inc.', jurisdiction: 'Oregon', reason: 'Reseller', cert: 'OR-RES-2025-4477', verified: true, expires: 'Aug 2026' },
-    { id: 'txe_med_01', tenant: 'MedSecure Health', jurisdiction: 'California', reason: 'Healthcare', cert: 'CA-HC-2025-8891', verified: true, expires: 'Nov 2026' },
+    { id: 'txe_fresh_01', tenant: 'FreshLeaf Produce', jurisdiction: 'California', reason: 'Reseller', cert: 'CA-RES-2025-8891', verified: true, expires: 'Nov 2026' },
     { id: 'txe_gov_01', tenant: 'USDA Inspection Unit', jurisdiction: 'New York', reason: 'Government', cert: 'FED-GOV-0001', verified: true, expires: 'N/A' },
 ];
 
