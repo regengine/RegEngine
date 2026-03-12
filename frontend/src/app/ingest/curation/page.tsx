@@ -29,7 +29,7 @@ interface DiscoveryItem {
 }
 
 export default function CurationDashboard() {
-    const { isLoggedIn, apiKey } = useAuth();
+    const { apiKey, isAuthenticated, isHydrated } = useAuth();
     const [items, setItems] = useState<DiscoveryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState<number | null>(null);
@@ -162,7 +162,20 @@ export default function CurationDashboard() {
         }
     };
 
-    if (!isLoggedIn || !apiKey) {
+    if (!isHydrated) {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950/50">
+                <PageContainer>
+                    <div className="max-w-6xl mx-auto py-24 text-center">
+                        <Spinner className="h-8 w-8 mx-auto mb-4" />
+                        <p className="text-slate-500">Loading session...</p>
+                    </div>
+                </PageContainer>
+            </div>
+        );
+    }
+
+    if (!isAuthenticated || !apiKey) {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-950/50">
                 <PageContainer>
@@ -272,8 +285,8 @@ export default function CurationDashboard() {
                                     <Globe className="h-5 w-5 text-emerald-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-slate-500">Global Coverage</p>
-                                    <p className="text-2xl font-bold">100+</p>
+                                    <p className="text-sm font-medium text-slate-500">FDA Sources</p>
+                                    <p className="text-2xl font-bold">FSMA</p>
                                 </div>
                             </CardContent>
                         </Card>
@@ -419,15 +432,11 @@ export default function CurationDashboard() {
                         </div>
                         <div className="bg-slate-900 rounded-2xl p-6 text-white overflow-hidden relative">
                             <div className="relative z-10">
-                                <h3 className="text-lg font-semibold mb-2">Automated Discovery v15</h3>
+                                <h3 className="text-lg font-semibold mb-2">FSMA 204 Discovery</h3>
                                 <p className="text-slate-400 text-sm mb-4">
-                                    The RegEngine global discovery engine has scanned 1,200+ sources tonight.
-                                    Low-confidence links and disallowed domains are routed here for human intelligence injection.
+                                    RegEngine monitors FDA, USDA, and food safety regulatory sources for FSMA 204 traceability guidance.
+                                    Low-confidence links and disallowed domains are routed here for human review.
                                 </p>
-                                <div className="flex items-center gap-2 text-indigo-400 text-sm font-medium">
-                                    Learn about the Ethics Engine
-                                    <ArrowRight className="h-4 w-4" />
-                                </div>
                             </div>
                             <div className="absolute top-0 right-0 p-8 opacity-10">
                                 <Globe className="h-24 w-24" />

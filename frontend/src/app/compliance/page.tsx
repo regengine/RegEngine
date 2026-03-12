@@ -43,8 +43,8 @@ export default function CompliancePage() {
             <div>
               <h1 className="text-4xl font-bold">Compliance Checklists</h1>
               <p className="text-muted-foreground mt-1">
-                Browse and validate against industry-specific compliance requirements
-                <HelpTooltip content="Pre-built checklists help you validate your configuration against regulatory requirements for various industries." />
+                Browse and validate against FSMA 204 compliance requirements
+                <HelpTooltip content="Pre-built checklists help you validate your configuration against FSMA 204 traceability requirements." />
               </p>
             </div>
           </div>
@@ -104,7 +104,7 @@ export default function CompliancePage() {
                     size="sm"
                     onClick={() => setSelectedIndustry(undefined)}
                   >
-                    All Industries
+                    All
                   </Button>
                   {industriesLoading ? (
                     <>
