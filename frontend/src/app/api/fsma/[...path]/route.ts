@@ -48,7 +48,7 @@ async function proxyRequest(
             path.startsWith('gaps') ||
             path.startsWith('export/')
         ) {
-            targetUrl = `${GRAPH_SERVICE_URL}/v1/fsma/${path}${queryString}`;
+            targetUrl = `${GRAPH_SERVICE_URL}/api/v1/fsma/${path}${queryString}`;
         } else {
             // Wizard / applicability / exemptions — handled by Compliance Service
             targetUrl = `${COMPLIANCE_URL}/fsma-204/${path}${queryString}`;

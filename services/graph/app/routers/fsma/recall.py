@@ -90,7 +90,7 @@ class CreateDrillRequest(BaseModel):
     reason: str = "manual_drill"
 
 
-@router.get("/recall/history")
+@router.get("/history")
 def get_recall_history(
     limit: int = 20,
     tenant_id: Optional[str] = Query(None),
@@ -104,7 +104,7 @@ def get_recall_history(
     return {"drills": [d.to_dict() for d in drills]}
 
 
-@router.post("/recall/drill")
+@router.post("/drill")
 async def create_recall_drill(
     request: CreateDrillRequest,
     api_key=Depends(require_api_key),
@@ -144,7 +144,7 @@ async def create_recall_drill(
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/recall/drill/{drill_id}")
+@router.get("/drill/{drill_id}")
 def get_drill_details(
     drill_id: str,
     api_key=Depends(require_api_key),
@@ -160,7 +160,7 @@ def get_drill_details(
     return drill.to_dict()
 
 
-@router.delete("/recall/drill/{drill_id}")
+@router.delete("/drill/{drill_id}")
 def cancel_recall_drill(
     drill_id: str,
     api_key=Depends(require_api_key),
@@ -182,7 +182,7 @@ def cancel_recall_drill(
 # ============================================================================
 
 
-@router.get("/recall/readiness")
+@router.get("/readiness")
 def get_recall_readiness(
     api_key=Depends(require_api_key),
 ):
@@ -218,7 +218,7 @@ def get_recall_readiness(
     }
 
 
-@router.get("/recall/sla")
+@router.get("/sla")
 def get_recall_sla(
     api_key=Depends(require_api_key),
 ):
@@ -239,7 +239,7 @@ def get_recall_sla(
 # ============================================================================
 
 
-@router.get("/recall/schedules")
+@router.get("/schedules")
 def get_recall_schedules(
     api_key=Depends(require_api_key),
 ):
@@ -257,7 +257,7 @@ class CreateScheduleRequest(BaseModel):
     target_strategy: str = "random"
 
 
-@router.post("/recall/schedule")
+@router.post("/schedule")
 def create_recall_schedule(
     request: CreateScheduleRequest,
     api_key=Depends(require_api_key),
