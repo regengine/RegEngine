@@ -33,21 +33,21 @@ const mockPipeline = {
             key: 'draft', label: 'Draft', color: 'from-slate-500/30 to-slate-600/30',
             textColor: 'text-slate-300', badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/20',
             deals: [
-                { id: 'ctr_safety005', name: 'SafetyFirst Manufacturing', tier: 'Enterprise', acv: '$120,000', owner: 'Sarah', daysInStage: 5 },
+                { id: 'ctr_harvest005', name: 'Harvest Table Foods', tier: 'Enterprise', acv: '$120,000', owner: 'Sarah', daysInStage: 5 },
             ],
         },
         {
             key: 'proposed', label: 'Proposed', color: 'from-blue-500/30 to-blue-600/30',
             textColor: 'text-blue-300', badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
             deals: [
-                { id: 'ctr_energy004', name: 'EnergyFlow Corp', tier: 'Growth', acv: '$9,588', owner: 'James', daysInStage: 12 },
+                { id: 'ctr_riverbend004', name: 'Riverbend Packers', tier: 'Growth', acv: '$9,588', owner: 'James', daysInStage: 12 },
             ],
         },
         {
             key: 'negotiating', label: 'Negotiating', color: 'from-amber-500/30 to-amber-600/30',
             textColor: 'text-amber-300', badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
             deals: [
-                { id: 'ctr_global003', name: 'GlobalTech Solutions', tier: 'Scale', acv: '$60,000', owner: 'Sarah', daysInStage: 18 },
+                { id: 'ctr_freshleaf003', name: 'FreshLeaf Produce', tier: 'Scale', acv: '$60,000', owner: 'Sarah', daysInStage: 18 },
             ],
         },
         {
@@ -64,16 +64,16 @@ const mockPipeline = {
 
 const mockActiveContracts = [
     { id: 'ctr_acme001', name: 'Acme Foods Inc.', tier: 'Enterprise', acv: '$150,000', tcv: '$450,000', termYears: 3, slaLevel: 'Premium', startDate: 'Aug 2025', renewalDate: 'Jun 2028', daysToRenewal: 885, compliance: 'passing' },
-    { id: 'ctr_medsec002', name: 'MedSecure Health', tier: 'Scale', acv: '$180,000', tcv: '$360,000', termYears: 2, slaLevel: 'Enterprise', startDate: 'Nov 2025', renewalDate: 'Sep 2027', daysToRenewal: 610, compliance: 'passing' },
+    { id: 'ctr_northstar002', name: 'Northstar Cold Chain', tier: 'Scale', acv: '$180,000', tcv: '$360,000', termYears: 2, slaLevel: 'Enterprise', startDate: 'Nov 2025', renewalDate: 'Sep 2027', daysToRenewal: 610, compliance: 'passing' },
 ];
 
 const mockSLAStatuses = [
     { contractId: 'ctr_acme001', tenant: 'Acme Foods Inc.', slaLevel: 'Premium', uptimeTarget: 99.99, uptimeActual: 99.97, responseTarget: 1, responseActual: 1.5, resolutionTarget: 4, resolutionActual: 3.2, compliance: 'breached', breaches: [{ metric: 'response_time', target: '1h', actual: '1.5h', severity: 'warning' }] },
-    { contractId: 'ctr_medsec002', tenant: 'MedSecure Health', slaLevel: 'Enterprise', uptimeTarget: 99.95, uptimeActual: 99.97, responseTarget: 2, responseActual: 1.5, resolutionTarget: 8, resolutionActual: 3.2, compliance: 'passing', breaches: [] },
+    { contractId: 'ctr_northstar002', tenant: 'Northstar Cold Chain', slaLevel: 'Enterprise', uptimeTarget: 99.95, uptimeActual: 99.97, responseTarget: 2, responseActual: 1.5, resolutionTarget: 8, resolutionActual: 3.2, compliance: 'passing', breaches: [] },
 ];
 
 const mockRenewals = [
-    { contractId: 'ctr_medsec002', tenant: 'MedSecure Health', tier: 'Scale', acv: '$180,000', renewalDate: '2027-09-20', daysUntil: 610, urgency: 'upcoming', owner: 'James' },
+    { contractId: 'ctr_northstar002', tenant: 'Northstar Cold Chain', tier: 'Scale', acv: '$180,000', renewalDate: '2027-09-20', daysUntil: 610, urgency: 'upcoming', owner: 'James' },
     { contractId: 'ctr_acme001', tenant: 'Acme Foods Inc.', tier: 'Enterprise', acv: '$150,000', renewalDate: '2028-06-15', daysUntil: 885, urgency: 'upcoming', owner: 'Sarah' },
 ];
 

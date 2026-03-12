@@ -29,11 +29,6 @@ import {
     Layers,
     Activity,
     Settings,
-    Film,
-    Heart,
-    DollarSign,
-    Gamepad2,
-    Cpu,
     Search,
     ChevronRight,
     ExternalLink,
@@ -85,13 +80,6 @@ const endpoints: Endpoint[] = [
     { method: 'GET', path: '/v1/compliance/snapshots/{tenant_id}', description: 'List snapshots', requiresAuth: true, category: 'Compliance' },
     { method: 'GET', path: '/v1/compliance/alerts/{tenant_id}', description: 'List alerts', requiresAuth: true, category: 'Compliance' },
 
-    // PCOS (Production Compliance OS)
-    { method: 'POST', path: '/pcos/projects', description: 'Create project', requiresAuth: true, category: 'PCOS' },
-    { method: 'GET', path: '/pcos/projects', description: 'List projects', requiresAuth: true, category: 'PCOS' },
-    { method: 'POST', path: '/pcos/companies', description: 'Create company', requiresAuth: true, category: 'PCOS' },
-    { method: 'GET', path: '/pcos/projects/{project_id}/gate-status', description: 'Get regulatory gate status', requiresAuth: true, category: 'PCOS' },
-    { method: 'POST', path: '/pcos/budgets/{budget_id}/validate-rates', description: 'Validate union rates', requiresAuth: true, category: 'PCOS' },
-
 ];
 
 const categoryIcons: Record<string, any> = {
@@ -101,7 +89,6 @@ const categoryIcons: Record<string, any> = {
     'Tenants': Users,
     'Overlay': Layers,
     'Compliance': Shield,
-    'PCOS': Film,
     'Verticals': Globe,
 };
 
@@ -112,7 +99,6 @@ const categoryColors: Record<string, string> = {
     'Tenants': 'from-blue-500 to-cyan-600',
     'Overlay': 'from-pink-500 to-rose-600',
     'Compliance': 'from-red-500 to-orange-600',
-    'PCOS': 'from-violet-500 to-purple-600',
     'Verticals': 'from-teal-500 to-green-600',
 };
 

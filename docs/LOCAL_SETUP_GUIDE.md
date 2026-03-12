@@ -102,11 +102,8 @@ REGENGINE_ENV=development
 ### Step 1: Start All Services
 
 ```bash
-# Using Make (recommended)
-make up
-
-# OR using docker-compose directly
-docker-compose up --build -d
+# Start the local stack
+docker compose up --build -d
 ```
 
 This will start all backend services:
@@ -120,7 +117,6 @@ This will start all backend services:
 - **Ingestion Service** (port 8000) - Document ingestion
 - **NLP Service** (port 8100) - ML extraction
 - **Graph Service** (port 8200) - Graph operations
-- **Opportunity API** (port 8300) - Regulatory analysis
 - **Compliance API** (port 8500) - Compliance evaluation
 - **Kafka UI** (port 8080) - Stream monitoring
 
@@ -128,10 +124,10 @@ This will start all backend services:
 
 ```bash
 # Check service status
-docker-compose ps
+docker compose ps
 
 # Watch logs (optional)
-docker-compose logs -f
+docker compose logs -f
 ```
 
 **Expected startup time**: 30-90 seconds on first run (longer if pulling images)
@@ -423,7 +419,6 @@ Here's a summary of all available endpoints and UIs:
 | **Ingestion API** | http://localhost:8000 | http://localhost:8000/docs |
 | **NLP Service** | http://localhost:8100 | http://localhost:8100/docs |
 | **Graph Service** | http://localhost:8200 | http://localhost:8200/docs |
-| **Opportunity API** | http://localhost:8300 | http://localhost:8300/docs |
 | **Compliance API** | http://localhost:8500 | http://localhost:8500/docs |
 
 ### Frontend & UIs
@@ -457,16 +452,16 @@ Here's a summary of all available endpoints and UIs:
 docker ps
 
 # View service logs
-docker-compose logs -f admin-api
-docker-compose logs -f ingestion-service
+docker compose logs -f admin-api
+docker compose logs -f ingestion-service
 
 # Check environment variables are set
 cat .env | grep NEO4J_PASSWORD
 cat .env | grep ADMIN_MASTER_KEY
 
 # Restart services
-docker-compose down -v  # Remove volumes
-docker-compose up --build -d
+docker compose down -v  # Remove volumes
+docker compose up --build -d
 ```
 
 ### "Missing Required Secret" Error
@@ -478,7 +473,7 @@ docker-compose up --build -d
 1. Edit `.env` file
 2. Generate secrets as described in [Initial Setup](#step-3-generate-required-secrets)
 3. Save the file
-4. Restart services: `docker-compose up -d`
+4. Restart services: `docker compose up -d`
 
 ### Ollama Model Not Downloading
 
@@ -493,7 +488,7 @@ docker exec -it $(docker ps -qf name=ollama) ollama pull llama3:8b
 # Wait for download (this may take 5-10 minutes)
 
 # Restart NLP service
-docker-compose restart nlp-service
+docker compose restart nlp-service
 ```
 
 ### Frontend Build Errors
@@ -535,13 +530,13 @@ npm run dev
 docker ps | grep neo4j
 
 # Check Neo4j logs
-docker-compose logs neo4j
+docker compose logs neo4j
 
 # Verify password in .env matches
 docker exec -it $(docker ps -qf name=neo4j) cypher-shell -u neo4j -p YOUR_PASSWORD "RETURN 1;"
 
 # Restart Neo4j
-docker-compose restart neo4j
+docker compose restart neo4j
 ```
 
 ### Out of Disk Space
@@ -558,7 +553,7 @@ docker system prune -a --volumes
 docker system df
 
 # Remove RegEngine volumes (WARNING: deletes all data)
-docker-compose down -v
+docker compose down -v
 ```
 
 ### Kafka Topics Not Created
@@ -569,7 +564,7 @@ docker-compose down -v
 
 ```bash
 # Check Redpanda is healthy
-docker-compose logs redpanda
+docker compose logs redpanda
 
 # List topics
 docker exec -it $(docker ps -qf name=redpanda) rpk topic list
@@ -624,16 +619,16 @@ Now that you have RegEngine running locally:
 
 ```bash
 # Start everything
-make up
+docker compose up --build -d
 
 # Stop everything
 make down
 
 # View logs
-docker-compose logs -f [service-name]
+docker compose logs -f [service-name]
 
 # Restart a service
-docker-compose restart [service-name]
+docker compose restart [service-name]
 
 # Create tenant
 python scripts/regctl/tenant.py create "Company Name" --demo-mode
