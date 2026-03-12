@@ -102,6 +102,14 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
                 bg: 'bg-amber-100 dark:bg-amber-900/30',
             },
             {
+                title: 'Archive Jobs',
+                description: 'Recurring export retention',
+                icon: Upload,
+                href: '/dashboard/export-jobs',
+                color: 'text-emerald-500',
+                bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+            },
+            {
                 title: 'Audit Log',
                 description: 'Immutable event history',
                 icon: Search,
@@ -113,7 +121,7 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
                 title: 'Mock Drill',
                 description: 'FDA recall simulation',
                 icon: Truck,
-                href: '/tools/drill-simulator',
+                href: '/dashboard/recall-drills',
                 color: 'text-indigo-500',
                 bg: 'bg-indigo-100 dark:bg-indigo-900/30',
             },
@@ -145,6 +153,14 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
             href: '/dashboard/audit-log',
             color: 'text-purple-500',
             bg: 'bg-purple-100 dark:bg-purple-900/30',
+        },
+        {
+            title: 'Archive Jobs',
+            description: 'Retention & export scheduling',
+            icon: Upload,
+            href: '/dashboard/export-jobs',
+            color: 'text-amber-500',
+            bg: 'bg-amber-100 dark:bg-amber-900/30',
         },
     ];
 };

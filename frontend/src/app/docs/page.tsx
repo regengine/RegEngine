@@ -248,7 +248,7 @@ export default function DocsHomePage() {
               background: T.accent, color: 'white', fontSize: '10px', fontWeight: 600,
               padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase',
             }}>
-              Live
+              Current
             </div>
             <UtensilsCrossed style={{ width: 20, height: 20, color: T.accent, marginBottom: '12px' }} />
             <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>Food &amp; Beverage</div>

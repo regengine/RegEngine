@@ -246,7 +246,7 @@ export function CheckoutWizard() {
                             <CardHeader>
                                 <CardTitle className="text-re-text-primary">Choose Your Plan</CardTitle>
                                 <CardDescription className="text-re-text-tertiary">
-                                    All plans include a 14-day free trial
+                                    Growth and Scale start with a 14-day trial. Enterprise is handled separately.
                                 </CardDescription>
 
                                 {/* Billing toggle */}
@@ -417,7 +417,7 @@ export function CheckoutWizard() {
                                             </span>
                                         </div>
                                         <p className="text-xs text-center mt-1 text-re-text-muted">
-                                            14-day free trial — you won&apos;t be charged until the trial ends
+                                            14-day trial — you won&apos;t be charged until the trial ends
                                         </p>
                                     </div>
                                 </div>
@@ -470,7 +470,7 @@ export function CheckoutWizard() {
                                             </>
                                         ) : (
                                             <>
-                                                Start Free Trial
+                                                Start 14-Day Trial
                                                 <ArrowRight className="ml-2 w-4 h-4" />
                                             </>
                                         )}
@@ -505,7 +505,7 @@ export function CheckoutWizard() {
                                     You&apos;re All Set!
                                 </CardTitle>
                                 <CardDescription className="text-base text-re-text-tertiary">
-                                    Your {selectedPlanData?.name} plan trial is now active
+                                    Your {selectedPlanData?.name} trial workspace is now active
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
@@ -520,7 +520,7 @@ export function CheckoutWizard() {
                                         { icon: Shield, label: 'Plan', value: selectedPlanData?.name || 'Growth', color: 'var(--re-brand)' },
                                         { icon: Zap, label: 'CTE Limit', value: selectedPlanData?.cteLimit || '100,000', color: 'var(--re-info)' },
                                         { icon: CreditCard, label: 'Billing', value: isAnnual ? 'Annual' : 'Monthly', color: 'var(--re-success)' },
-                                        { icon: Rocket, label: 'Trial', value: '14 days free', color: 'var(--re-warning)' },
+                                        { icon: Rocket, label: 'Trial', value: '14-day trial', color: 'var(--re-warning)' },
                                     ].map((stat) => (
                                         <motion.div
                                             key={stat.label}

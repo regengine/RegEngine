@@ -102,6 +102,25 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">What this flow still depends on</h2>
+                <p className="text-sm text-re-text-muted text-center mb-10 max-w-xl mx-auto">
+                    RegEngine accelerates traceability evidence, but implementation still depends on clean upstream records, identity normalization, and customer-controlled archives.
+                </p>
+                <div className="grid md:grid-cols-2 gap-4">
+                    {[
+                        'Source-system data still has to be mapped into FSMA CTE and KDE structures.',
+                        'Lot codes, GLNs, products, and facilities have to be normalized before lineage is trustworthy.',
+                        'Missing KDEs and conflicting identities require review, not blind automation.',
+                        'Hashing proves integrity after ingest, not the correctness of the upstream source record.',
+                    ].map((item) => (
+                        <div key={item} className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4 text-sm text-re-text-muted">
+                            {item}
+                        </div>
+                    ))}
+                </div>
+            </section>
+
             {/* Free Tools */}
             <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
                 <div className="text-center mb-10">
@@ -154,7 +173,7 @@ export default function ProductPage() {
             {/* CTA */}
             <section className="relative z-[2] bg-emerald-500/[0.08] border-t border-white/[0.06]">
                 <div className="max-w-[600px] mx-auto py-12 px-6 text-center">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-2">Ready to see it live?</h2>
+                    <h2 className="text-2xl font-bold text-re-text-primary mb-2">Ready to explore the workflow?</h2>
                     <p className="text-sm text-re-text-muted mb-6">
                         Start with the free tools or book a 30-minute walkthrough.
                     </p>
@@ -165,9 +184,9 @@ export default function ProductPage() {
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
-                        <Link href="/alpha">
+                        <Link href="/trust">
                             <Button variant="outline" className="border-white/10 text-re-text-secondary hover:border-emerald-500/30 px-6">
-                                Talk to Us
+                                Review Trust Center
                             </Button>
                         </Link>
                     </div>

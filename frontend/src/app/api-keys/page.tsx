@@ -81,7 +81,7 @@ export default function APIKeysPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+                    <span>Demo Data — This page shows simulated keys and usage. Connect your backend and tenant context for production behavior.</span>
                 </div>
 
                 {/* New Key Form */}

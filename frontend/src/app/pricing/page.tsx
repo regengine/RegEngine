@@ -104,7 +104,8 @@ const FAQ = [
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we\u2019ll prorate. Downgrade at the end of your billing cycle." },
     { q: 'Do you offer pilot engagements?', a: 'Yes. We run structured pilot engagements for qualified teams preparing for retailer and FDA traceability requirements.' },
     { q: 'Do you offer annual contracts?', a: 'Yes. Annual contracts are available for all plans.' },
-    { q: 'What integrations are available?', a: 'We support GS1 EPCIS 2.0 and REST APIs for ERP/WMS integrations today, with custom connector scoping available during enterprise onboarding.' },
+    { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system work should be evaluated by delivery mode: native API, webhook, CSV/SFTP import, export-only, or custom-scoped implementation.' },
+    { q: 'How does self-serve differ from the design partner path?', a: 'Growth and Scale are the standard workspace plans. The design partner path is for customers who need custom integrations, guided rollout, or implementation support beyond standard onboarding.' },
 ];
 
 export default function PricingPage() {
@@ -124,6 +125,9 @@ export default function PricingPage() {
                 </p>
                 <p style={{ fontSize: '14px', color: T.textDim }}>
                     Annual pricing shown below (save ~17%). Monthly billing also available.
+                </p>
+                <p style={{ fontSize: '13px', color: T.textDim, marginTop: '12px' }}>
+                    Standard plans cover the core workspace. Custom integrations and contractual SLA work route through the design partner or enterprise process.
                 </p>
             </section>
 
@@ -180,7 +184,7 @@ export default function PricingPage() {
                                         ))}
                                     </div>
 
-                                    <Link href={tier.id === 'enterprise' ? '/alpha' : `/checkout?plan=${tier.id}&billing=annual`}>
+                                    <Link href={tier.id === 'enterprise' ? '/contact' : `/checkout?plan=${tier.id}&billing=annual`}>
                                         <Button
                                             style={{
                                                 width: '100%', marginTop: '24px',
@@ -202,6 +206,11 @@ export default function PricingPage() {
                 <p style={{ textAlign: 'center', fontSize: '12px', color: T.textDim, marginTop: '20px' }}>
                     All plans include a standard CTE volume. Additional Critical Tracking Events billed at $0.001/CTE.{' '}
                     <Link href="/terms" style={{ color: T.accent, textDecoration: 'underline' }}>See Terms</Link> for full details.
+                </p>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: T.textDim, marginTop: '10px' }}>
+                    Review the{' '}
+                    <Link href="/trust" style={{ color: T.accent, textDecoration: 'underline' }}>Trust Center</Link>
+                    {' '}for retention posture, support windows, and integration delivery modes before production rollout.
                 </p>
             </section>
 
@@ -276,14 +285,14 @@ export default function PricingPage() {
                         Book a fast fit-check and we will map your operation to the right FSMA plan.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/alpha">
+                        <Link href="/contact">
                             <Button style={{ background: '#fff', color: T.accent, fontWeight: 600, padding: '14px 24px' }}>
                                 Talk to Us <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
-                        <Link href="/tools/ftl-checker">
+                        <Link href="/trust">
                             <Button variant="outline" style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '14px 24px' }}>
-                                Check Your FTL Coverage First
+                                Review Trust Center
                             </Button>
                         </Link>
                     </div>

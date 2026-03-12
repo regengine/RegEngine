@@ -83,13 +83,13 @@ export default function PlaygroundPage() {
                         <h1 className="text-4xl font-bold">API Playground</h1>
                     </div>
                     <p className="text-xl text-muted-foreground max-w-3xl">
-                        Test API calls interactively with live code execution and instant feedback.
+                        Test API examples interactively with sandboxed code execution and instant feedback.
                     </p>
                 </div>
 
                 <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+                    <span>Demo Data — This page shows simulated output. Use your own API key and tenant data for production behavior.</span>
                 </div>
 
                 {/* Safety Notice */}

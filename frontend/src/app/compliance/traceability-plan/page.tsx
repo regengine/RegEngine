@@ -32,7 +32,7 @@ export default function TraceabilityPlanPage() {
                                 </Badge>
                             </div>
                             <CardDescription>
-                                This section is not yet connected to live tenant traceability-plan records.
+                                This section is not yet connected to current tenant traceability-plan records.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">

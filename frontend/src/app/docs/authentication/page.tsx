@@ -50,11 +50,11 @@ export default function AuthenticationDocsPage() {
                                 <div className="grid gap-3">
                                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                                         <code className="bg-primary/10 text-primary px-2 py-1 rounded text-xs font-bold">rge_live_</code>
-                                        <span className="text-sm">Production key — full access to live data</span>
+                                        <span className="text-sm">Production key — access to your production tenant data</span>
                                     </div>
                                     <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                                         <code className="bg-orange-500/10 text-orange-600 px-2 py-1 rounded text-xs font-bold">rge_test_</code>
-                                        <span className="text-sm">Test key — sandbox environment, no real data</span>
+                                        <span className="text-sm">Test key — non-production testing environment, no production tenant data</span>
                                     </div>
                                 </div>
                             </div>
