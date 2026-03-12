@@ -52,7 +52,7 @@ export default function AboutPage() {
                                     <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">Built every layer of RegEngine &mdash; architecture, backend, frontend, compliance logic, and cryptographic verification. Solo technical founder.</p>
                                 </div>
                             </div>
-                            <a href="https://www.linkedin.com/in/christophersellers" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] text-[var(--re-brand)] font-medium mt-4 hover:underline">LinkedIn &rarr;</a>
+                            <a href="https://www.linkedin.com/in/clsellers/" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] text-[var(--re-brand)] font-medium mt-4 hover:underline">LinkedIn &rarr;</a>
                         </div>
                     </div>
                 </div>
