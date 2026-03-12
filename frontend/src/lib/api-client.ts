@@ -374,6 +374,27 @@ class APIClient {
     return data;
   }
 
+  async createRecallDrill(request: {
+    type?: string;
+    target_tlc?: string;
+    target_gtin?: string;
+    severity?: string;
+    reason?: string;
+  }): Promise<any> {
+    const { data } = await this.graphClient.post('/api/v1/fsma/recall/recall/drill', request);
+    return data;
+  }
+
+  async traceForward(tlc: string): Promise<any> {
+    const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/forward/${encodeURIComponent(tlc)}`);
+    return data;
+  }
+
+  async traceBackward(tlc: string): Promise<any> {
+    const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/backward/${encodeURIComponent(tlc)}`);
+    return data;
+  }
+
   async createTenant(adminKey: string, name: string): Promise<TenantResponse> {
     const { data } = await this.adminClient.post(
       '/v1/admin/tenants',

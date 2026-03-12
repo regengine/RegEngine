@@ -15,7 +15,10 @@ import {
     FileText,
     ArrowRight,
     Clock,
+    Loader2,
+    Network,
 } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 
 type DrillPhase = 'ready' | 'active' | 'checklist' | 'graded';
 
@@ -25,7 +28,7 @@ const SCENARIOS = [
         description:
             'FDA has identified a potential Salmonella link. Provide all traceability records for the flagged lot within 24 hours.',
         targetProduct: 'Romaine Lettuce',
-        targetTLC: 'ROM-0226-A1-001',
+        targetTLC: 'TLC1001',
         citation: '21 CFR 1.1455(a)',
     },
     {
@@ -62,6 +65,13 @@ function formatTime(seconds: number): string {
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
+interface LiveDrillResult {
+    drill_id?: string;
+    status?: string;
+    impacted_count?: number;
+    error?: string;
+}
+
 export function DrillSimulatorClient() {
     const [phase, setPhase] = useState<DrillPhase>('ready');
     const [selectedScenario, setSelectedScenario] = useState(0);
@@ -69,6 +79,10 @@ export function DrillSimulatorClient() {
     const [startTime, setStartTime] = useState<Date | null>(null);
     const [checklist, setChecklist] = useState<Record<string, boolean>>({});
     const [grade, setGrade] = useState<{ score: number; grade: string; feedback: string[] } | null>(null);
+
+    // Live recall drill state
+    const [drillRunning, setDrillRunning] = useState(false);
+    const [liveDrill, setLiveDrill] = useState<LiveDrillResult | null>(null);
 
     useEffect(() => {
         if (phase !== 'active' && phase !== 'checklist') return;
@@ -78,13 +92,42 @@ export function DrillSimulatorClient() {
         return () => clearInterval(interval);
     }, [phase]);
 
+    const runLiveDrill = useCallback(async (scenario: typeof SCENARIOS[0]) => {
+        setDrillRunning(true);
+        setLiveDrill(null);
+        try {
+            const result = await apiClient.createRecallDrill({
+                type: 'forward_trace',
+                target_tlc: scenario.targetTLC,
+                severity: 'class_ii',
+                reason: `${scenario.title} — drill`,
+            });
+            const impacted = result.impacted_lots?.length
+                ?? result.nodes?.length
+                ?? result.trace?.length
+                ?? undefined;
+            setLiveDrill({
+                drill_id: result.drill_id || result.id,
+                status: result.status,
+                impacted_count: impacted,
+            });
+        } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || 'Recall service unreachable';
+            setLiveDrill({ error: msg });
+        } finally {
+            setDrillRunning(false);
+        }
+    }, []);
+
     const handleStartDrill = useCallback(() => {
         setPhase('active');
         setStartTime(new Date());
         setTimeRemaining(24 * 60 * 60);
         setChecklist({});
         setGrade(null);
-    }, []);
+        setLiveDrill(null);
+        runLiveDrill(SCENARIOS[selectedScenario]);
+    }, [selectedScenario, runLiveDrill]);
 
     const handleToggleItem = useCallback((id: string) => {
         setChecklist((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -131,6 +174,7 @@ export function DrillSimulatorClient() {
                             {SCENARIOS.map((s, i) => (
                                 <button
                                     key={i}
+                                    type="button"
                                     onClick={() => setSelectedScenario(i)}
                                     className={`text-left p-4 rounded-xl border transition-all ${selectedScenario === i
                                             ? 'border-[var(--re-brand)] bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)] shadow-lg'
@@ -184,6 +228,44 @@ export function DrillSimulatorClient() {
                                         <div className="text-sm font-mono font-bold">{scenario.targetTLC}</div>
                                     </div>
                                 </div>
+
+                                {/* Live recall drill status */}
+                                <div className={`flex items-center gap-3 p-3 rounded-xl border text-sm ${
+                                    drillRunning
+                                        ? 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]'
+                                        : liveDrill?.error
+                                        ? 'border-amber-500/30 bg-amber-500/5'
+                                        : 'border-emerald-500/30 bg-emerald-500/5'
+                                }`}>
+                                    {drillRunning ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                                            <span className="text-muted-foreground text-xs">Running live recall drill against graph service…</span>
+                                        </>
+                                    ) : liveDrill?.error ? (
+                                        <>
+                                            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                                            <div>
+                                                <div className="text-xs font-medium">Graph service offline — drill running in simulation mode</div>
+                                                <div className="text-xs text-muted-foreground">{liveDrill.error}</div>
+                                            </div>
+                                        </>
+                                    ) : liveDrill ? (
+                                        <>
+                                            <Network className="h-4 w-4 text-emerald-500 shrink-0" />
+                                            <div>
+                                                <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                                                    Live recall drill active — {liveDrill.status ?? 'running'}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground font-mono">
+                                                    {liveDrill.drill_id && `ID: ${liveDrill.drill_id}`}
+                                                    {liveDrill.impacted_count !== undefined && ` · ${liveDrill.impacted_count} impacted lots`}
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : null}
+                                </div>
+
                                 <Button
                                     onClick={() => setPhase('checklist')}
                                     className="w-full bg-[var(--re-brand)] hover:brightness-110 text-white h-12 rounded-xl font-bold"
@@ -208,6 +290,7 @@ export function DrillSimulatorClient() {
                             {CHECKLIST_ITEMS.map((item) => (
                                 <button
                                     key={item.id}
+                                    type="button"
                                     onClick={() => handleToggleItem(item.id)}
                                     className={`w-full text-left p-4 rounded-xl border transition-all flex items-center gap-4 ${checklist[item.id]
                                             ? 'border-emerald-500/50 bg-emerald-500/5'
@@ -249,7 +332,7 @@ export function DrillSimulatorClient() {
                                         )}
                                     </motion.div>
                                     <div>
-                                        <div className="text-6xl font-bold" style={{ color: grade.score >= 70 ? 'var(--re-brand)' : '#ef4444' }}>
+                                        <div className={`text-6xl font-bold ${grade.score >= 70 ? 'text-[var(--re-brand)]' : 'text-red-500'}`}>
                                             {grade.grade}
                                         </div>
                                         <div className="text-lg text-muted-foreground">{grade.score}/100</div>
@@ -260,6 +343,36 @@ export function DrillSimulatorClient() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Live drill result card */}
+                        {liveDrill && !liveDrill.error && (
+                            <Card className="border-[var(--re-border-default)]">
+                                <CardHeader>
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Network className="h-4 w-4 text-[var(--re-brand)]" />
+                                        Live Recall Drill Result
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-2 gap-3 text-sm">
+                                        <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                            <div className="text-xs text-muted-foreground mb-1">Status</div>
+                                            <div className="font-medium capitalize">{liveDrill.status ?? '—'}</div>
+                                        </div>
+                                        <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                            <div className="text-xs text-muted-foreground mb-1">Impacted Lots</div>
+                                            <div className="font-medium">{liveDrill.impacted_count ?? '—'}</div>
+                                        </div>
+                                        {liveDrill.drill_id && (
+                                            <div className="col-span-2 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                                <div className="text-xs text-muted-foreground mb-1">Drill ID</div>
+                                                <div className="font-mono text-xs">{liveDrill.drill_id}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         <Card className="border-[var(--re-border-default)]">
                             <CardHeader>
