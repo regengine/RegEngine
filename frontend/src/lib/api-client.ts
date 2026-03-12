@@ -74,7 +74,6 @@ export interface SystemMetricsResponse {
 class APIClient {
   private adminClient: AxiosInstance;
   private ingestionClient: AxiosInstance;
-  private opportunityClient: AxiosInstance;
   private complianceClient: AxiosInstance;
   private graphClient: AxiosInstance;
 
@@ -153,7 +152,6 @@ class APIClient {
     // For server-side, use the backend service directly
     const ingestionBaseUrl = getServiceURL('ingestion');
     this.ingestionClient = this.createClient(ingestionBaseUrl);
-    this.opportunityClient = this.createClient(getServiceURL('opportunity'));
     this.complianceClient = this.createClient(getServiceURL('compliance'));
     this.graphClient = this.createClient(getServiceURL('graph'));
   }
@@ -237,11 +235,6 @@ class APIClient {
   }
 
 
-  async getIngestionStatus(jobId: string): Promise<{ status: string; step?: string }> {
-    const { data } = await this.ingestionClient.get(`/ingestion/status/${jobId}`);
-    return data;
-  }
-
   async ingestFile(apiKey: string, file: File, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -263,7 +256,7 @@ class APIClient {
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
-    const { data } = await this.ingestionClient.get(`/v1/ingestion/jobs/${jobId}`);
+    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${jobId}`);
     return data;
   }
 
@@ -297,9 +290,9 @@ class APIClient {
     return data;
   }
 
-  // Opportunity API
+  // Opportunity API (served by Graph service)
   async getOpportunityHealth(): Promise<HealthCheckResponse> {
-    const { data } = await this.opportunityClient.get('/health');
+    const { data } = await this.graphClient.get('/health');
     return data;
   }
 
@@ -311,7 +304,7 @@ class APIClient {
     limit?: number;
     since?: string;
   }): Promise<OpportunityArbitrage[]> {
-    const { data } = await this.opportunityClient.get('/opportunities/arbitrage', { params });
+    const { data } = await this.graphClient.get('/graph/arbitrage', { params });
     return data.items || [];
   }
 
@@ -320,7 +313,7 @@ class APIClient {
     j2?: string;
     limit?: number;
   }): Promise<ComplianceGap[]> {
-    const { data } = await this.opportunityClient.get('/opportunities/gaps', { params });
+    const { data } = await this.graphClient.get('/graph/gaps', { params });
     return data.items || [];
   }
 
@@ -349,7 +342,7 @@ class APIClient {
   }
 
   async getDocumentAnalysis(documentId: string, apiKey: string): Promise<AnalysisSummary> {
-    const { data } = await this.complianceClient.get(`/documents/${documentId}/analysis`, {
+    const { data } = await this.ingestionClient.get(`/v1/ingest/documents/${documentId}/analysis`, {
       headers: { 'X-RegEngine-API-Key': apiKey }
     });
     return data;

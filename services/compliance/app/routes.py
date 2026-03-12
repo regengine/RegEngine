@@ -1,307 +1,248 @@
 from __future__ import annotations
 
-from datetime import date
-import logging
-from uuid import UUID
+import uuid
+from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
-from app.analysis import (
-    calculate_dir,
-    classify_risk,
-    drift_detection,
-    exposure_score,
-    regression_proxy,
-    threshold_sensitivity,
-)
-from app.models import (
-    AuditExportRequest,
-    AuditExportResponse,
-    CKGSummaryResponse,
-    FairLendingAnalyzeRequest,
-    FairLendingAnalyzeResponse,
-    ModelChangeRequest,
-    ModelRecordResponse,
-    ModelRegistrationRequest,
-    RegulationMapRequest,
-    RegulationMapResponse,
-    RiskSummaryResponse,
-    ValidationRequest,
-)
-from app.regulatory_intelligence import generate_obligations
-from app.security import stable_hash, tokenize_pii, utc_now
-from app.store import DEFAULT_TENANT_ID, STORE
+router = APIRouter(tags=["fsma-compliance"])
 
 
-logger = logging.getLogger("compliance-api")
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
 
-router = APIRouter(prefix="/v1", tags=["fair-lending-compliance-os"])
-
-
-def tenant_id_dependency(
-    x_tenant_id: str = Header(default=DEFAULT_TENANT_ID, alias="X-Tenant-Id"),
-) -> str:
-    try:
-        return str(UUID(x_tenant_id))
-    except ValueError as error:
-        raise HTTPException(status_code=422, detail="X-Tenant-Id must be a valid UUID") from error
-
-
-@router.post("/regulatory/map", response_model=RegulationMapResponse)
-async def map_regulation(
-    request: RegulationMapRequest,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> RegulationMapResponse:
-    obligations = generate_obligations(request)
-    regulation_id = STORE.save_regulatory_map(tenant_id=tenant_id, request=request.model_dump(), generated_obligations=obligations)
-    logger.info(
-        "regulation_mapped",
-        extra={
-            "tenant": tenant_id,
-            "regulation_id": regulation_id,
-            "citation": request.citation,
-        },
-    )
-    return RegulationMapResponse(regulation_id=regulation_id, obligations=obligations)
+class ComplianceRequirement(BaseModel):
+    id: str
+    title: str
+    description: str
+    category: str | None = None
+    priority: str | None = None  # LOW | MEDIUM | HIGH | CRITICAL
+    status: str | None = None    # NOT_STARTED | IN_PROGRESS | COMPLIANT | NON_COMPLIANT
 
 
-@router.post("/models", response_model=ModelRecordResponse)
-async def register_model(
-    request: ModelRegistrationRequest,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> ModelRecordResponse:
-    model = STORE.register_model(tenant_id, request)
-    logger.info(
-        "model_registered",
-        extra={
-            "tenant": tenant_id,
-            "model": tokenize_pii(request.id),
-            "owner": tokenize_pii(request.owner),
-        },
-    )
-    return model
+class ComplianceChecklist(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    industry: str
+    framework: str | None = None
+    version: str | None = None
+    requirements: list[ComplianceRequirement] = []
+    items: list[ComplianceRequirement] = []
 
 
-@router.get("/models/{model_id}", response_model=ModelRecordResponse)
-async def get_model(
-    model_id: str,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> ModelRecordResponse:
-    model = STORE.get_model(tenant_id, model_id)
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-    return model
+class Industry(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+    checklist_count: int = 0
 
 
-@router.post("/models/{model_id}/validations")
-async def add_validation(
-    model_id: str,
-    request: ValidationRequest,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> dict:
-    if not STORE.get_model(tenant_id, model_id):
-        raise HTTPException(status_code=404, detail="Model not found")
-    row = STORE.add_validation(tenant_id, model_id, request)
-    return {"validation_id": row["id"], "status": row["status"]}
+class ValidationRequest(BaseModel):
+    config: dict[str, Any]
+    framework: str | None = None
+    strict: bool = False
 
 
-@router.post("/models/{model_id}/changes")
-async def add_model_change(
-    model_id: str,
-    request: ModelChangeRequest,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> dict:
-    if not STORE.get_model(tenant_id, model_id):
-        raise HTTPException(status_code=404, detail="Model not found")
-    row = STORE.add_model_change(tenant_id, model_id, request)
-    return {
-        "change_id": row["id"],
-        "requires_revalidation": row["requires_revalidation"],
-    }
+class ValidationError(BaseModel):
+    path: str
+    message: str
+    code: str | None = None
 
 
-@router.post("/fair-lending/analyze", response_model=FairLendingAnalyzeResponse)
-async def analyze_fair_lending(
-    request: FairLendingAnalyzeRequest,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> FairLendingAnalyzeResponse:
-    dir_results, min_dir = calculate_dir(request.groups)
-
-    regression_result = None
-    if "regression" in request.analysis_type:
-        regression_result = regression_proxy(request.groups)
-
-    drift_results = []
-    if "drift" in request.analysis_type:
-        drift_results = drift_detection(request.historical_approval_rates)
-
-    flags = classify_risk(min_dir=min_dir, regression=regression_result, drift_results=drift_results)
-    sensitivity = threshold_sensitivity(min_dir)
-    analyzed_at = utc_now()
-
-    saved = STORE.save_compliance_result(
-        tenant_id=tenant_id,
-        request=request,
-        analyzed_at=analyzed_at,
-        min_dir=min_dir,
-        dir_results=[result.model_dump() for result in dir_results],
-        regression_result=regression_result,
-        drift_results=drift_results,
-        risk_level=flags.risk_level,
-        recommended_action=flags.recommended_action,
-        regression_bias_flag=flags.regression_bias_flag,
-        drift_flag=flags.drift_flag,
-    )
-
-    logger.info(
-        "fair_lending_analysis_completed",
-        extra={
-            "tenant": tenant_id,
-            "model": tokenize_pii(request.model_id),
-            "analysis_id": saved.id,
-            "risk_level": flags.risk_level,
-        },
-    )
-
-    return FairLendingAnalyzeResponse(
-        model_id=request.model_id,
-        analysis_id=saved.id,
-        dir_results=dir_results,
-        regression_bias_flag=flags.regression_bias_flag,
-        drift_flag=flags.drift_flag,
-        risk_level=flags.risk_level,
-        recommended_action=flags.recommended_action,
-        threshold_sensitivity=sensitivity,
-        regression_result=regression_result,
-        drift_results=drift_results,
-        analyzed_at=analyzed_at,
-    )
+class ValidationWarning(BaseModel):
+    path: str
+    message: str
+    suggestion: str | None = None
 
 
-@router.post("/audit/export", response_model=AuditExportResponse)
-async def export_audit_artifact(
-    request: AuditExportRequest,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> AuditExportResponse:
-    latest = STORE.latest_compliance_result(tenant_id=tenant_id, model_id=request.model_id)
-    if not latest:
-        raise HTTPException(status_code=404, detail="No compliance result found for model")
-
-    model = STORE.get_model(tenant_id, request.model_id)
-    model_version = model.version if model else "unknown"
-
-    package_payload = {
-        "regulation_citation": "Fair Lending corpus (ECOA/FHA/CFPB/Interagency)",
-        "control_description": "DIR, regression proxy, drift monitoring",
-        "test_methodology": {
-            "dir": "Disparate Impact Ratio",
-            "regression": latest.regression_result.model_dump() if latest.regression_result else None,
-            "drift": [entry.model_dump() for entry in latest.drift_results],
-        },
-        "statistical_output": {
-            "dir_results": latest.dir_results,
-            "risk_level": latest.risk_level,
-            "recommended_action": latest.recommended_action,
-        },
-        "model_version": model_version,
-        "timestamp": latest.analyzed_at.isoformat(),
-        "reviewer_sign_off": request.reviewer,
-    }
-    hash_sha256 = stable_hash(package_payload)
-
-    artifact = STORE.save_audit_artifact(
-        tenant_id=tenant_id,
-        request=request,
-        reviewer_token=tokenize_pii(request.reviewer),
-        hash_sha256=hash_sha256,
-        metadata={
-            "immutable": "true",
-            "versioned": "true",
-            "audit_trail": "enabled",
-        },
-    )
-
-    return AuditExportResponse(
-        artifact_id=artifact.id,
-        model_id=artifact.model_id,
-        output_type=artifact.output_type,
-        version=artifact.version,
-        immutable=True,
-        hash_sha256=artifact.hash_sha256,
-        generated_at=artifact.generated_at,
-        metadata=artifact.metadata,
-    )
+class ValidationResult(BaseModel):
+    valid: bool
+    errors: list[ValidationError] = []
+    warnings: list[ValidationWarning] = []
 
 
-@router.get("/risk/summary", response_model=RiskSummaryResponse)
-async def risk_summary(
-    model_id: str,
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> RiskSummaryResponse:
-    latest = STORE.latest_compliance_result(tenant_id, model_id)
-    if not latest:
-        raise HTTPException(status_code=404, detail="No compliance result found for model")
+# ---------------------------------------------------------------------------
+# FSMA 204 seed data
+# ---------------------------------------------------------------------------
 
-    recency_days = max(0, (utc_now().date() - latest.analyzed_at.date()).days)
-    score = exposure_score(
-        min_dir=latest.min_dir,
-        regression_result=latest.regression_result,
-        drift_results=latest.drift_results,
-        recency_days=recency_days,
-    )
+_FSMA_204 = "FSMA 204"
+_CTE_RECEIVING = "Receiving CTE Records"
+_CTE_SHIPPING = "Shipping CTE Records"
 
-    if latest.min_dir < 0.75:
-        dir_status = "Red"
-    elif latest.min_dir < 0.80:
-        dir_status = "Yellow"
-    else:
-        dir_status = "Green"
+_INDUSTRIES: list[Industry] = [
+    Industry(id="fresh-produce", name="Fresh Produce", description="Leafy greens, herbs, melons, and fresh-cut produce", checklist_count=1),
+    Industry(id="seafood", name="Seafood", description="Finfish, shellfish, and aquaculture products", checklist_count=1),
+    Industry(id="dairy", name="Dairy", description="Milk, cheese, yogurt, and cultured dairy products", checklist_count=1),
+    Industry(id="deli-prepared", name="Deli & Prepared Foods", description="Ready-to-eat and mixed-ingredient products", checklist_count=1),
+    Industry(id="shell-eggs", name="Shell Eggs", description="Fresh and processed shell egg products", checklist_count=1),
+]
 
-    if latest.drift_flag:
-        drift_status = "Yellow"
-    else:
-        drift_status = "Green"
+_PRODUCE_REQS = [
+    ComplianceRequirement(id="fp-1", title="Traceability Lot Code (TLC)", description="Assign a unique TLC to each lot of fresh produce at the point of receiving or initial packing.", category="KDE", priority="CRITICAL"),
+    ComplianceRequirement(id="fp-2", title=_CTE_RECEIVING, description="Capture grower lot ID, harvest date, and cooling location at the RECEIVING CTE.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="fp-3", title="Transformation CTE Records", description="Link input TLCs to output TLCs when produce is cut, mixed, or repackaged.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="fp-4", title=_CTE_SHIPPING, description="Record TLC, quantity, destination, and ship date for every outbound lot.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="fp-5", title="24-Hour Recall Response", description="Demonstrate ability to produce all required KDE records within 24 hours of an FDA request.", category="Readiness", priority="CRITICAL"),
+    ComplianceRequirement(id="fp-6", title="Supplier TLC Linkage", description="Maintain upstream TLC references from direct suppliers for at least 2 years.", category="Records", priority="MEDIUM"),
+]
 
-    if score >= 70:
-        overall = "High"
-    elif score >= 40:
-        overall = "Medium"
-    else:
-        overall = "Low"
+_SEAFOOD_REQS = [
+    ComplianceRequirement(id="sf-1", title="Source Vessel / Harvest Reference", description="Record source vessel name or aquaculture site ID as a KDE for all finfish and shellfish.", category="KDE", priority="CRITICAL"),
+    ComplianceRequirement(id="sf-2", title="Landing Date KDE", description="Capture the date seafood was landed or harvested as part of the HARVESTING CTE.", category="KDE", priority="HIGH"),
+    ComplianceRequirement(id="sf-3", title="Temperature Log", description="Maintain cold-chain temperature records throughout the supply chain as a supporting KDE.", category="KDE", priority="HIGH"),
+    ComplianceRequirement(id="sf-4", title=_CTE_RECEIVING, description="Document TLC, quantity, supplier reference, and receiving date at each receiving point.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="sf-5", title="Lot Transformation Linkage", description="Link input lots to output lots when fish is processed, portioned, or repackaged.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="sf-6", title=_CTE_SHIPPING, description="Record TLC, destination, ship date, and quantity for every outbound seafood lot.", category="CTE", priority="HIGH"),
+]
 
-    return RiskSummaryResponse(
-        overall_fair_lending_risk=overall,
-        dir_status=dir_status,
-        regression_bias_flag=latest.regression_bias_flag,
-        drift_status=drift_status,
-        last_tested=latest.analyzed_at.date(),
-        exposure_score=score,
-    )
+_DAIRY_REQS = [
+    ComplianceRequirement(id="da-1", title="Supplier Lot KDE", description="Capture the supplier's lot number for all incoming dairy ingredients as a receiving KDE.", category="KDE", priority="CRITICAL"),
+    ComplianceRequirement(id="da-2", title="Co-Mingling Event Records", description="Document all lots that were combined during processing, preserving individual lot references.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="da-3", title="Production Line KDE", description="Record the production line identifier for each finished product batch.", category="KDE", priority="MEDIUM"),
+    ComplianceRequirement(id="da-4", title="Hold & Release Status", description="Track hold and release decisions for every lot and link to the associated TLC.", category="KDE", priority="HIGH"),
+    ComplianceRequirement(id="da-5", title="Packing CTE Records", description="Record TLC, pack date, package size, and production line at the PACKING CTE.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="da-6", title=_CTE_SHIPPING, description="Capture TLC, destination, ship date, and quantity at the SHIPPING CTE.", category="CTE", priority="HIGH"),
+]
+
+_DELI_REQS = [
+    ComplianceRequirement(id="dl-1", title="Input Lot Map", description="Maintain a complete map of all input lot TLCs that contributed to each finished RTE product lot.", category="KDE", priority="CRITICAL"),
+    ComplianceRequirement(id="dl-2", title="Recipe Revision KDE", description="Record the recipe or formulation version used for each production batch.", category="KDE", priority="MEDIUM"),
+    ComplianceRequirement(id="dl-3", title="Pack Timestamp KDE", description="Capture the date and time of packing for each RTE product lot.", category="KDE", priority="HIGH"),
+    ComplianceRequirement(id="dl-4", title=_CTE_RECEIVING, description="Document TLC, supplier lot, and receiving date for all incoming ingredients.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="dl-5", title="Transformation CTE Records", description="Link all input TLCs to output TLCs for every transformation step.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="dl-6", title=_CTE_SHIPPING, description="Record TLC, destination, ship date, and quantity for outbound RTE lots.", category="CTE", priority="HIGH"),
+]
+
+_EGGS_REQS = [
+    ComplianceRequirement(id="eg-1", title="Pack Date KDE", description="Record the Julian pack date on every carton and in traceability records.", category="KDE", priority="CRITICAL"),
+    ComplianceRequirement(id="eg-2", title="Facility Registration Number", description="Capture the FDA facility registration number as a KDE at the packing facility.", category="KDE", priority="HIGH"),
+    ComplianceRequirement(id="eg-3", title="Distributor Reference KDE", description="Maintain distributor name and reference number linking packed lots to downstream buyers.", category="KDE", priority="HIGH"),
+    ComplianceRequirement(id="eg-4", title=_CTE_RECEIVING, description="Document incoming flock source, lay date range, and quantity at receiving.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="eg-5", title="Packing CTE Records", description="Record pack date, facility registration, lot size, and carton count at packing.", category="CTE", priority="HIGH"),
+    ComplianceRequirement(id="eg-6", title=_CTE_SHIPPING, description="Capture TLC, distributor reference, ship date, and quantity at shipping.", category="CTE", priority="HIGH"),
+]
+
+_CHECKLISTS: list[ComplianceChecklist] = [
+    ComplianceChecklist(
+        id="fsma-204-fresh-produce",
+        name="FSMA 204 Fresh Produce Traceability",
+        description="CTE and KDE compliance checklist for leafy greens, herbs, melons, and fresh-cut produce under FSMA Section 204.",
+        industry="Fresh Produce",
+        framework=_FSMA_204,
+        version="1.0",
+        requirements=_PRODUCE_REQS,
+        items=_PRODUCE_REQS,
+    ),
+    ComplianceChecklist(
+        id="fsma-204-seafood",
+        name="FSMA 204 Seafood Traceability",
+        description="CTE and KDE compliance checklist for finfish and shellfish chain-of-custody under FSMA Section 204.",
+        industry="Seafood",
+        framework=_FSMA_204,
+        version="1.0",
+        requirements=_SEAFOOD_REQS,
+        items=_SEAFOOD_REQS,
+    ),
+    ComplianceChecklist(
+        id="fsma-204-dairy",
+        name="FSMA 204 Dairy Traceability",
+        description="CTE and KDE compliance checklist for soft cheeses and fluid dairy products under FSMA Section 204.",
+        industry="Dairy",
+        framework=_FSMA_204,
+        version="1.0",
+        requirements=_DAIRY_REQS,
+        items=_DAIRY_REQS,
+    ),
+    ComplianceChecklist(
+        id="fsma-204-deli-prepared",
+        name="FSMA 204 Deli & Prepared Foods Traceability",
+        description="CTE and KDE compliance checklist for ready-to-eat and mixed-ingredient products under FSMA Section 204.",
+        industry="Deli & Prepared Foods",
+        framework=_FSMA_204,
+        version="1.0",
+        requirements=_DELI_REQS,
+        items=_DELI_REQS,
+    ),
+    ComplianceChecklist(
+        id="fsma-204-shell-eggs",
+        name="FSMA 204 Shell Egg Traceability",
+        description="CTE and KDE compliance checklist for shell eggs under FSMA Section 204.",
+        industry="Shell Eggs",
+        framework=_FSMA_204,
+        version="1.0",
+        requirements=_EGGS_REQS,
+        items=_EGGS_REQS,
+    ),
+]
+
+_CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS}
+
+# Required FSMA 204 KDE fields for validation
+_REQUIRED_FSMA_FIELDS = {"tlc", "cte_type", "event_date", "location"}
 
 
-@router.get("/ckg/summary", response_model=CKGSummaryResponse)
-async def ckg_summary(
-    tenant_id: str = Depends(tenant_id_dependency),
-) -> CKGSummaryResponse:
-    return CKGSummaryResponse(**STORE.ckg_summary(tenant_id))
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+@router.get("/industries")
+async def list_industries() -> dict:
+    return {"industries": [i.model_dump() for i in _INDUSTRIES], "total": len(_INDUSTRIES)}
 
 
-@router.get("/scope-wall")
-async def scope_wall() -> dict:
-    return {
-        "in_scope": [
-            "Fair lending regulatory intelligence",
-            "Bias and disparate impact testing",
-            "Model governance for underwriting models",
-            "Audit artifact generation",
-            "Executive fair lending risk scoring",
-        ],
-        "out_of_scope": [
-            "AML rules engine",
-            "KYC onboarding",
-            "Complaint systems",
-            "Vendor risk tracking",
-            "Multi-industry modules",
-        ],
-        "timestamp": date.today().isoformat(),
-    }
+@router.get("/checklists")
+async def list_checklists(industry: str | None = None) -> dict:
+    results = _CHECKLISTS
+    if industry:
+        results = [c for c in results if c.industry.lower() == industry.lower()]
+    return {"checklists": [c.model_dump() for c in results], "total": len(results)}
+
+
+@router.get("/checklists/{checklist_id}")
+async def get_checklist(checklist_id: str) -> ComplianceChecklist:
+    checklist = _CHECKLIST_INDEX.get(checklist_id)
+    if not checklist:
+        raise HTTPException(status_code=404, detail=f"Checklist '{checklist_id}' not found")
+    return checklist
+
+
+@router.post("/validate")
+async def validate_config(request: ValidationRequest) -> ValidationResult:
+    errors: list[ValidationError] = []
+    warnings: list[ValidationWarning] = []
+
+    config = request.config
+    strict = request.strict
+
+    # Check for required FSMA 204 top-level fields
+    for field in _REQUIRED_FSMA_FIELDS:
+        if field not in config:
+            errors.append(ValidationError(
+                path=field,
+                message=f"Required FSMA 204 field '{field}' is missing from configuration.",
+                code="MISSING_REQUIRED_FIELD",
+            ))
+
+    # Warn on missing optional but recommended fields
+    recommended = {"lot_size_unit", "supplier_reference", "product_description"}
+    for field in recommended:
+        if field not in config:
+            warnings.append(ValidationWarning(
+                path=field,
+                message=f"Recommended field '{field}' is not present.",
+                suggestion=f"Add '{field}' to improve traceability record completeness.",
+            ))
+
+    if strict and warnings:
+        for w in warnings:
+            errors.append(ValidationError(
+                path=w.path,
+                message=w.message,
+                code="STRICT_MODE_WARNING",
+            ))
+        warnings = []
+
+    return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)

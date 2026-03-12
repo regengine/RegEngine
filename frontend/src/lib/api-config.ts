@@ -7,7 +7,7 @@ export function isStaticExport(): boolean {
             process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export');
 }
 
-export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'admin' | 'opportunity' | 'nlp'): string {
+export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'admin' | 'nlp'): string {
     const isClient = typeof window !== 'undefined';
     const isCapacitorClient = isClient && (window as any).Capacitor !== undefined;
 
@@ -26,8 +26,6 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
                 return process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
             case 'admin':
                 return process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
-            case 'opportunity':
-                return process.env.OPPORTUNITY_SERVICE_URL || 'http://localhost:8300';
             case 'nlp':
                 return process.env.NLP_SERVICE_URL || 'http://localhost:8100';
         }
@@ -56,8 +54,6 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
             return process.env.NEXT_PUBLIC_INGESTION_URL || 'http://localhost:8002';
         case 'graph':
             return process.env.NEXT_PUBLIC_GRAPH_URL || 'http://localhost:8200';
-        case 'opportunity':
-            return process.env.NEXT_PUBLIC_OPPORTUNITY_URL || 'http://localhost:8300';
         case 'compliance':
             return process.env.NEXT_PUBLIC_COMPLIANCE_URL || 'http://localhost:8500';
         case 'nlp':
