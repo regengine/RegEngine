@@ -238,7 +238,7 @@ def step_recall(result: SimResult, client: httpx.Client) -> None:
     }
     try:
         resp = client.post(
-            f"{GRAPH_URL}/api/v1/fsma/recall/recall/drill",
+            f"{GRAPH_URL}/api/v1/fsma/recall/drill",
             json=payload,
             headers=headers(),
             timeout=15,
