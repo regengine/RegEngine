@@ -9,7 +9,6 @@ scrape_configs:
       - targets:
         - 'compliance-service:80'
         - 'admin-service:80'
-        - 'energy-api:80'
         - 'ingestion-service:80'
         - 'scheduler:80'
   

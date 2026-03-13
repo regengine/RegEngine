@@ -12,10 +12,10 @@
 
 ```tsx
 // Before: Static import (loads everything upfront)
-import { EnergyDashboard } from '@/features/energy';
+import { SupplierOnboarding } from '@/features/supplier';
 
 // After: Dynamic import (loads on demand)
-const EnergyDashboard = dynamic(() => import('@/features/energy/Dashboard'), {
+const SupplierOnboarding = dynamic(() => import('@/features/supplier/Onboarding'), {
   loading: () => <LoadingSpinner />,
   ssr: false,
 });

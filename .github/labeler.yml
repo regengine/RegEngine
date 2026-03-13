@@ -75,23 +75,6 @@ agent:ui:
       - 'frontend/tailwind.config.ts'
       - 'frontend/src/app/globals.css'
 
-agent:energy:
-  - changed-files:
-    - any-glob-to-any-file:
-      - 'services/energy-api/**'
-      - 'industry_plugins/energy/**'
-
-agent:healthcare:
-  - changed-files:
-    - any-glob-to-any-file:
-      - 'services/healthcare/**'
-      - 'industry_plugins/healthcare/**'
-
-agent:aerospace:
-  - changed-files:
-    - any-glob-to-any-file:
-      - 'services/aerospace/**'
-      - 'industry_plugins/aerospace/**'
 
 # ── Agent Swarm Meta Labels ──────────────────────────────
 agent:swarm-config:

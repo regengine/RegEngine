@@ -12,5 +12,4 @@ export { VerticalDashboardLayout } from './VerticalDashboardLayout';
 
 // Existing components
 export { VerticalTabs, type VerticalTab } from './VerticalTabs';
-export { IndustryOverviewSection } from './IndustryOverviewSection';
 export { ApiReferenceSection } from './ApiReferenceSection';
