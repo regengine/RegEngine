@@ -15,7 +15,6 @@ SERVICE_URLS = {
     "ingestion": "http://localhost:8002",
     "compliance": "http://localhost:8500",
     "graph": "http://localhost:8200",
-    "opportunity": "http://localhost:8300",
 }
 
 
@@ -112,18 +111,6 @@ class TestGraphServiceContract:
             assert response.status_code == 200
         except httpx.ConnectError:
             pytest.skip("Graph service not running")
-
-
-class TestOpportunityServiceContract:
-    """Contract tests for Opportunity service."""
-
-    def test_opportunity_api_available(self, clients):
-        """Opportunity service should be accessible."""
-        try:
-            response = clients["opportunity"].get("/health")
-            assert response.status_code == 200
-        except httpx.ConnectError:
-            pytest.skip("Opportunity service not running")
 
 
 class TestCrossServiceErrorHandling:

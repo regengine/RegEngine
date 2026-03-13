@@ -19,8 +19,8 @@ class TestServiceNameEnum:
         assert ServiceName.INGESTION.value == "ingestion-service"
         assert ServiceName.NLP.value == "nlp-service"
         assert ServiceName.GRAPH.value == "graph-service"
-        assert ServiceName.OPPORTUNITY.value == "opportunity-api"
         assert ServiceName.COMPLIANCE.value == "compliance-service"
+        assert ServiceName.SCHEDULER.value == "scheduler"
 
 
 class TestServiceIdentity:

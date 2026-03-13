@@ -100,8 +100,7 @@ services:
       REGENGINE_ENV: ${REGENGINE_ENV:-development}
       # Override DATABASE_URL to use the async admin database
       DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
-      # Entertainment DB for PCOS vertical (migrated Jan 31, 2026)
-      # Pointing to regengine_admin for now as migration applied there
+      # PCOS payroll database (shares regengine_admin schema)
       ENTERTAINMENT_DATABASE_URL: ${ENTERTAINMENT_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
     deploy:
       resources:
@@ -116,9 +115,6 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-
-  # finance-api: REMOVED — services/finance_api/ directory does not exist.
-  # Re-add when the Finance service is implemented.
 
 
   ingestion-service:

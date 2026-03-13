@@ -52,8 +52,8 @@ class ServiceName(str, Enum):
     INGESTION = "ingestion-service"
     NLP = "nlp-service"
     GRAPH = "graph-service"
-    OPPORTUNITY = "opportunity-api"
     COMPLIANCE = "compliance-service"
+    SCHEDULER = "scheduler"
 
 
 @dataclass
