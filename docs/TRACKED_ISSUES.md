@@ -37,42 +37,11 @@ The PCOS page currently uses hardcoded mock data. Needs backend API integration 
 
 ---
 
-### ISSUE-003: Energy Snapshot Test Database
-**File:** `services/energy/tests/test_snapshot_integrity.py:299`  
-**Priority:** P2 (Medium)  
-**Type:** Test Coverage  
-
-```python
-# TODO: Implement with actual test database
-```
-
-An integration test that needs a real database connection to verify snapshot integrity end-to-end.
-
-**Action:** Create a `conftest.py` fixture that provisions a test Postgres database (or uses `testcontainers`) for this test.
-
----
-
-### ISSUE-004: Energy Model User ID Enforcement
-**File:** `services/energy/app/models.py:69`  
-**Priority:** P2 (Medium)  
-**Type:** Security — Business Logic  
-
-```python
-# TODO: In production, enforce user_id requirement based on generated_by type
-```
-
-Currently `user_id` is not required when `generated_by` indicates an automated process. In production, this should enforce user identity for audit trail completeness.
-
-**Action:** Add a Pydantic validator that requires `user_id` when `generated_by != 'SYSTEM'`.
-
----
-
 ## Summary
 
 | Priority | Count | Status |
 |----------|-------|--------|
-| P2       | 2     | Open   |
 | P3       | 2     | Open   |
-| **Total**| **4** |        |
+| **Total**| **2** |        |
 
 > Previous TODOs (PPAP vault storage, placeholder tests) have been resolved in Sprint 5.

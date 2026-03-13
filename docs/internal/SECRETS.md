@@ -190,7 +190,6 @@ aws secretsmanager update-secret \
 
 # 4. Restart services
 kubectl rollout restart deployment/graph-service
-kubectl rollout restart deployment/opportunity-api
 ```
 
 **MinIO / S3 Access Key Pair (if used outside LocalStack):**

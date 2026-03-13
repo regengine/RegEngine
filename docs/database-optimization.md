@@ -86,33 +86,6 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 
 ## 2. Index Optimization
 
-### Energy Service Indexes
-
-**File:** `services/energy/migrations/V004__performance_indexes.sql`
-
-```sql
--- Snapshot queries by substation_id and time range
-CREATE INDEX IF NOT EXISTS idx_snapshots_substation_time
-ON snapshots(substation_id, created_at DESC);
-
--- Snapshot lookup by chain_hash
-CREATE INDEX IF NOT EXISTS idx_snapshots_chain_hash
-ON snapshots(chain_hash);
-
--- Mismatch queries by snapshot
-CREATE INDEX IF NOT EXISTS idx_mismatches_snapshot
-ON mismatches(snapshot_id, created_at DESC);
-
--- Export queries by time range
-CREATE INDEX IF NOT EXISTS idx_snapshots_export
-ON snapshots(created_at DESC, substation_id)
-WHERE deleted_at IS NULL;
-
--- Analyze tables
-ANALYZE snapshots;
-ANALYZE mismatches;
-```
-
 ### Admin Service Indexes
 
 **File:** `services/admin/migrations/V023__performance_indexes.sql`
@@ -139,28 +112,6 @@ ANALYZE users;
 ANALYZE tenants;
 ANALYZE api_keys;
 ANALYZE audit_logs;
-```
-
-### Opportunity Service Indexes
-
-**File:** `services/opportunity/migrations/V003__performance_indexes.sql`
-
-```sql
--- Arbitrage queries by frameworks
-CREATE INDEX IF NOT EXISTS idx_arbitrage_frameworks
-ON arbitrage_opportunities(framework_from, framework_to);
-
--- Compliance gaps by tenant
-CREATE INDEX IF NOT EXISTS idx_gaps_tenant
-ON compliance_gaps(tenant_id, created_at DESC);
-
--- Savings calculations
-CREATE INDEX IF NOT EXISTS idx_opportunities_savings
-ON arbitrage_opportunities(estimated_savings DESC, tenant_id);
-
--- Analyze tables
-ANALYZE arbitrage_opportunities;
-ANALYZE compliance_gaps;
 ```
 
 ---
@@ -360,7 +311,7 @@ curl http://localhost:8000/metrics/database
 ### Run Migrations
 
 ```bash
-cd services/energy
+cd services/admin
 python -m alembic upgrade head
 ```
 

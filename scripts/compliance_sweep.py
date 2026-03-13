@@ -12,11 +12,8 @@ from regengine.swarm.coordinator import AgentSwarm
 log = structlog.get_logger("compliance-sweep")
 
 SERVICES = [
-    "admin", "aerospace", "analytics", "automotive", "billing", 
-    "compliance", "construction", "energy", "entertainment", 
-    "evidence", "finance_api", "gaming", "graph", "ingestion", 
-    "manufacturing", "nlp", "opportunity", "regulatory_engine", 
-    "scheduler"
+    "admin", "compliance", "graph", "ingestion",
+    "nlp", "scheduler"
 ]
 
 async def roll_out_compliance(standard: str = "FSMA-204"):
