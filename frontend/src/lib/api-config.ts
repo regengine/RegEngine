@@ -1,5 +1,8 @@
 // API Configuration for RegEngine services
 
+/** FSMA 204 is the only supported vertical. */
+export const DEFAULT_VERTICAL = "food-safety" as const;
+
 export function isStaticExport(): boolean {
     // Detect if we are running in a static/mobile context (e.g. Capacitor)
     return typeof window !== 'undefined' &&
