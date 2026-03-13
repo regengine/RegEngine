@@ -18,9 +18,9 @@ TEST_VECTORS = [
         "vertical": "fsma"
     },
     {
-        "name": "Vector B: Massive SEC Final Rule (Unstructured PDF)",
-        "url": "https://www.sec.gov/rules/final/2023/33-11216.pdf",
-        "vertical": "finance"
+        "name": "Vector B: Large FDA Guidance Document (Unstructured PDF)",
+        "url": "https://www.fda.gov/media/145048/download",
+        "vertical": "fsma"
     },
     {
         "name": "Vector C: Federal Register API (JSON/HTML Mix)",

@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Search / Discovery
     google_api_key: Optional[str] = None
     google_cx: Optional[str] = None
-    discovery_query: str = "site:gov filetype:pdf financial regulation"
+    discovery_query: str = "site:gov filetype:pdf FSMA food traceability"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

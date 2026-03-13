@@ -407,7 +407,7 @@ class APIClient {
   // Review Workflow
   async getReviewItems(adminKey: string, status: string = 'PENDING'): Promise<ReviewItem[]> {
     // Call Admin API directly
-    const { data } = await this.adminClient.get('/v1/review/items', {
+    const { data } = await this.adminClient.get('/v1/admin/review/flagged-extractions', {
       params: { status },
       headers: { 'X-Admin-Key': adminKey }
     });

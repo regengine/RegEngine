@@ -15,10 +15,10 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator
 
 # Example constants to avoid duplication in schema examples
-EX_SUBJECT = "financial institutions"
+EX_SUBJECT = "food facilities on the FTL"
 EX_ACTION = "must maintain"
-EX_OBJECT = "capital reserves"
-EX_TEXT = "Financial institutions must maintain capital reserves of at least 8%"
+EX_OBJECT = "traceability records"
+EX_TEXT = "Food facilities on the FTL must maintain traceability records for at least 2 years"
 
 
 class ObligationType(str, Enum):
@@ -28,10 +28,8 @@ class ObligationType(str, Enum):
     MUST_NOT = "MUST_NOT"
     SHOULD = "SHOULD"
     MAY = "MAY"
-    CONDUCT = "CONDUCT"
     RECORDKEEPING = "RECORDKEEPING"
     REPORTING = "REPORTING"
-    DISCLOSURE = "DISCLOSURE"
 
 
 class JurisdictionScope(str, Enum):
@@ -73,10 +71,10 @@ class Threshold(BaseModel):
     model_config = {
         "json_schema_extra": {
             "example": {
-                "value": 5.0,
-                "unit": "percent",
+                "value": 2.0,
+                "unit": "years",
                 "operator": "gte",
-                "context": "capital requirement",
+                "context": "record retention period",
             }
         }
     }
@@ -86,7 +84,7 @@ class ExtractionPayload(BaseModel):
     """NLP extraction output - canonical format for regulatory provisions."""
 
     provision_id: Optional[str] = Field(None, description="Unique provision identifier")
-    subject: str = Field(..., description="Subject of the obligation (e.g., 'financial entities')")
+    subject: str = Field(..., description="Subject of the obligation (e.g., 'food facilities on the FTL')")
     action: str = Field(..., description="Required action (e.g., 'must maintain', 'shall report')")
     object: Optional[str] = Field(None, description="Object of the obligation")
     obligation_type: ObligationType = Field(..., description="Type of regulatory obligation")
@@ -114,11 +112,11 @@ class ExtractionPayload(BaseModel):
                 "action": EX_ACTION,
                 "object": EX_OBJECT,
                 "obligation_type": "MUST",
-                "thresholds": [{"value": 8.0, "unit": "percent", "operator": "gte"}],
+                "thresholds": [{"value": 2.0, "unit": "years", "operator": "gte"}],
                 "confidence_score": 0.92,
-                "source_text": "Financial institutions must maintain capital reserves of at least 8%",
+                "source_text": EX_TEXT,
                 "source_offset": 1024,
-                "jurisdiction": "US-SEC",
+                "jurisdiction": "US-FDA",
                 "jurisdiction_codes": ["US"],
             }
         }
@@ -174,12 +172,12 @@ class GraphEvent(BaseModel):
                     "action": EX_ACTION,
                     "object": EX_OBJECT,
                     "obligation_type": "MUST",
-                    "thresholds": [{"value": 8.0, "unit": "percent", "operator": "gte"}],
+                    "thresholds": [{"value": 2.0, "unit": "years", "operator": "gte"}],
                     "confidence_score": 0.92,
                     "source_text": EX_TEXT,
                     "source_offset": 1024,
                 },
-                "provenance": {"source_url": "https://example.com/reg.pdf", "page": 5},
+                "provenance": {"source_url": "https://example.com/fsma204.pdf", "page": 5},
                 "status": "APPROVED",
             }
         }

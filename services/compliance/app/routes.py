@@ -194,12 +194,12 @@ _REQUIRED_FSMA_FIELDS = {"tlc", "cte_type", "event_date", "location"}
 # Routes
 # ---------------------------------------------------------------------------
 
-@router.get("/industries")
+@router.get("/industries", dependencies=[Depends(require_api_key)])
 async def list_industries() -> dict:
     return {"industries": [i.model_dump() for i in _INDUSTRIES], "total": len(_INDUSTRIES)}
 
 
-@router.get("/checklists")
+@router.get("/checklists", dependencies=[Depends(require_api_key)])
 async def list_checklists(industry: str | None = None) -> dict:
     results = _CHECKLISTS
     if industry:
@@ -207,7 +207,7 @@ async def list_checklists(industry: str | None = None) -> dict:
     return {"checklists": [c.model_dump() for c in results], "total": len(results)}
 
 
-@router.get("/checklists/{checklist_id}")
+@router.get("/checklists/{checklist_id}", dependencies=[Depends(require_api_key)])
 async def get_checklist(checklist_id: str) -> ComplianceChecklist:
     checklist = _CHECKLIST_INDEX.get(checklist_id)
     if not checklist:
@@ -215,7 +215,7 @@ async def get_checklist(checklist_id: str) -> ComplianceChecklist:
     return checklist
 
 
-@router.post("/validate")
+@router.post("/validate", dependencies=[Depends(require_api_key)])
 async def validate_config(request: ValidationRequest) -> ValidationResult:
     errors: list[ValidationError] = []
     warnings: list[ValidationWarning] = []
