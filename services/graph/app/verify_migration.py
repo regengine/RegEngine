@@ -75,14 +75,26 @@ sys.modules["fastapi"].Query = Mock(return_value=None)
 sys.modules["fastapi"].Header = Mock(return_value=None)
 sys.modules["fastapi"].Body = Mock(return_value=None)
 
-# Set env vars from environment (no hardcoded credentials)
-os.environ.setdefault("NEO4J_URI", os.getenv("NEO4J_URI", "bolt://neo4j:7687"))
-os.environ.setdefault("NEO4J_USER", os.getenv("NEO4J_USER", "neo4j"))
-os.environ.setdefault("NEO4J_PASSWORD", os.getenv("NEO4J_PASSWORD", ""))
-os.environ.setdefault("NEO4J_DATABASE", os.getenv("NEO4J_DATABASE", "neo4j"))
+# ── Credential retrieval via centralised secrets manager ──
+try:
+    from shared.secrets_manager import SecretsManager as _SM
+
+    _neo4j_creds = _SM().get_neo4j_credentials()
+    os.environ.setdefault("NEO4J_URI", _neo4j_creds.get("uri", ""))
+    os.environ.setdefault("NEO4J_USER", _neo4j_creds.get("username", ""))
+    os.environ.setdefault("NEO4J_PASSWORD", _neo4j_creds.get("password", ""))
+    os.environ.setdefault("NEO4J_DATABASE", os.getenv("NEO4J_DATABASE", "neo4j"))
+except ImportError:
+    logger.warning(
+        "shared.secrets_manager unavailable — falling back to raw env vars"
+    )
+    os.environ.setdefault("NEO4J_URI", os.getenv("NEO4J_URI", ""))
+    os.environ.setdefault("NEO4J_USER", os.getenv("NEO4J_USER", ""))
+    os.environ.setdefault("NEO4J_PASSWORD", os.getenv("NEO4J_PASSWORD", ""))
+    os.environ.setdefault("NEO4J_DATABASE", os.getenv("NEO4J_DATABASE", "neo4j"))
 
 if not os.environ.get("NEO4J_PASSWORD"):
-    logger.warning("NEO4J_PASSWORD not set. Set via environment variable before running.")
+    logger.warning("NEO4J_PASSWORD not set. Provide via environment variable or secrets manager.")
     logger.warning("  export NEO4J_PASSWORD=your_password")
 
 def check_async(name, func):

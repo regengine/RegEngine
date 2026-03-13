@@ -121,6 +121,49 @@ def apply_constraints(neo4j_client: Neo4jClient):
                 FOR (c:CTE) ON (c.event_time)
             """,
         },
+        # TraceEvent indexes for trace queries and broken chain detection
+        {
+            "name": "trace_event_type_index",
+            "query": """
+                CREATE INDEX trace_event_type_index IF NOT EXISTS
+                FOR (e:TraceEvent) ON (e.type)
+            """,
+        },
+        {
+            "name": "trace_event_id_index",
+            "query": """
+                CREATE INDEX trace_event_id_index IF NOT EXISTS
+                FOR (e:TraceEvent) ON (e.event_id)
+            """,
+        },
+        {
+            "name": "trace_event_date_index",
+            "query": """
+                CREATE INDEX trace_event_date_index IF NOT EXISTS
+                FOR (e:TraceEvent) ON (e.event_date)
+            """,
+        },
+        {
+            "name": "trace_event_tenant_index",
+            "query": """
+                CREATE INDEX trace_event_tenant_index IF NOT EXISTS
+                FOR (e:TraceEvent) ON (e.tenant_id)
+            """,
+        },
+        {
+            "name": "lot_tenant_index",
+            "query": """
+                CREATE INDEX lot_tenant_index IF NOT EXISTS
+                FOR (l:Lot) ON (l.tenant_id)
+            """,
+        },
+        {
+            "name": "facility_gln_index",
+            "query": """
+                CREATE INDEX facility_gln_index IF NOT EXISTS
+                FOR (f:Facility) ON (f.gln)
+            """,
+        },
     ]
 
     print("🔧 Applying Neo4j Database Constraints...")

@@ -975,3 +975,90 @@ def audit_action(
 def get_audit_logger() -> AuditLogger:
     """Get the global audit logger instance."""
     return AuditLogger.get_instance()
+
+
+# =============================================================================
+# Hash-Chain Integrity Verification (ISO 27001 Tamper-Evident Audit)
+# =============================================================================
+
+
+def verify_audit_chain(
+    events: List[AuditEvent],
+    integrity: Optional[AuditIntegrity] = None,
+) -> Dict[str, Any]:
+    """
+    Verify hash-chain integrity for a sequence of audit log entries.
+
+    Each audit entry contains an ``integrity_hash`` computed over its contents
+    plus a ``previous_hash`` that references the preceding entry's hash.
+    This function walks the chain and detects:
+
+    1. **Hash tampering** -- an entry's ``integrity_hash`` does not match a
+       fresh recomputation of its canonical fields.
+    2. **Chain breaks** -- an entry's ``previous_hash`` does not match the
+       ``integrity_hash`` of its predecessor.
+    3. **Missing hashes** -- an entry has no ``integrity_hash`` at all.
+
+    Args:
+        events: Ordered list of ``AuditEvent`` objects (oldest first).
+        integrity: Optional ``AuditIntegrity`` instance for HMAC
+            verification.  If ``None``, a default instance is created.
+
+    Returns:
+        Dict with:
+            - ``total_entries`` (int): Number of entries examined.
+            - ``is_valid`` (bool): ``True`` if the entire chain is intact.
+            - ``tampered_entries`` (list[dict]): Details for each
+              violation found, with ``event_id``, ``index``, and
+              ``issue`` keys.
+    """
+    if integrity is None:
+        integrity = AuditIntegrity()
+
+    tampered: List[Dict[str, Any]] = []
+
+    if not events:
+        return {
+            "total_entries": 0,
+            "is_valid": True,
+            "tampered_entries": [],
+        }
+
+    previous_hash: Optional[str] = None
+
+    for i, event in enumerate(events):
+        # Check 1: integrity_hash must be present.
+        if not event.integrity_hash:
+            tampered.append({
+                "event_id": event.event_id,
+                "index": i,
+                "issue": "missing_integrity_hash",
+            })
+            previous_hash = None
+            continue
+
+        # Check 2: previous_hash must reference predecessor.
+        if event.previous_hash != previous_hash:
+            tampered.append({
+                "event_id": event.event_id,
+                "index": i,
+                "issue": "chain_link_broken",
+                "expected_previous": previous_hash,
+                "actual_previous": event.previous_hash,
+            })
+
+        # Check 3: recompute the HMAC and compare.
+        if not integrity.verify_event(event):
+            tampered.append({
+                "event_id": event.event_id,
+                "index": i,
+                "issue": "hash_mismatch",
+            })
+
+        previous_hash = event.integrity_hash
+
+    return {
+        "total_entries": len(events),
+        "is_valid": len(tampered) == 0,
+        "tampered_entries": tampered,
+    }

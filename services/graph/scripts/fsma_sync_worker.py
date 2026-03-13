@@ -11,7 +11,17 @@ import json
 import os
 import signal
 import sys
+from pathlib import Path
 from typing import Any
+
+# --- Ensure shared module is importable ---
+_SERVICES_DIR = Path(__file__).resolve().parents[2]
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.logging import get_logger
+
+logger = get_logger("fsma-sync-worker")
 
 from neo4j import GraphDatabase
 
@@ -40,7 +50,7 @@ class FSMASyncWorker:
         self.running = False
 
     def run(self) -> None:
-        print(f"FSMA sync worker started. Queue={QUEUE_KEY}")
+        logger.info("sync_worker_started", queue=QUEUE_KEY, tenant_id="system", request_id="worker-init")
         while self.running:
             message = self.redis.blpop(QUEUE_KEY, timeout=BLOCK_TIMEOUT_SEC)
             if message is None:
@@ -51,10 +61,10 @@ class FSMASyncWorker:
                 decoded = json.loads(payload.decode("utf-8"))
                 self._dispatch(decoded)
             except Exception as exc:
-                print(f"sync_worker_error: {exc}")
+                logger.error("sync_worker_error", error=str(exc), tenant_id="system", request_id="worker-loop")
 
         self.driver.close()
-        print("FSMA sync worker stopped")
+        logger.info("sync_worker_stopped", tenant_id="system", request_id="worker-shutdown")
 
     def _dispatch(self, payload: dict[str, Any]) -> None:
         event = payload.get("event")
@@ -67,7 +77,7 @@ class FSMASyncWorker:
         elif event == "location.created":
             self._sync_location(data.get("location", {}))
         else:
-            print(f"sync_worker_skipped_unknown_event: {event}")
+            logger.warning("sync_worker_skipped_unknown_event", event=event, tenant_id="system", request_id="worker-dispatch")
 
     def _sync_cte(self, cte: dict[str, Any]) -> None:
         cte_id = cte.get("id")

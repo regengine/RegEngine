@@ -188,9 +188,7 @@ app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=[
 from app.pcos import router as pcos_router
 app.include_router(pcos_router)
 
-# Legacy extension routes
-from app.verticals.router import router as verticals_router
-app.include_router(verticals_router)
+# Legacy verticals router removed — non-FSMA verticals pruned
 
 # Review Queue for curator workflow
 from app.review_routes import router as review_router

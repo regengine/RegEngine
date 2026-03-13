@@ -10,9 +10,14 @@ IdentifierType          – enum of supported identifier kinds
 ValidationSeverity      – enum for error/warning/info
 ValidationError         – single validation issue
 ValidationResult        – full validation outcome (incl. identifier_type & warnings)
+calculate_gs1_check_digit – GS1 check digit calculation
+verify_gs1_check_digit  – verify a GS1 check digit
+normalize_gtin          – normalize any GTIN to GTIN-14
+extract_company_prefix  – extract GS1 Company Prefix from GTIN-14
+detect_identifier_type  – auto-detect identifier kind from format
 validate_gln            – GLN-13 with GS1 check digit
 validate_gtin           – GTIN-8/12/13/14 with GS1 check digit
-validate_tlc            – Traceability Lot Code (flexible format)
+validate_tlc            – Traceability Lot Code (GTIN-14 prefix in strict mode)
 validate_sscc           – SSCC-18 with GS1 check digit
 validate_identifier     – auto-detecting dispatcher
 validate_batch          – batch validation helper
@@ -159,12 +164,21 @@ def validate_gtin(gtin: str) -> ValidationResult:
     )
 
 
+_TLC_PRODUCTION_PATTERN = re.compile(r"^\d{14}[A-Za-z0-9\-\.]+$")
+
+
 def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
     """
     Validate Traceability Lot Code (TLC).
 
-    FSMA 204 allows flexible TLC formats.  We enforce minimum length (3)
-    and optional strict pattern matching.
+    A production TLC must match the GTIN-14 prefix pattern:
+    ``^\\d{14}[A-Za-z0-9\\-\\.]+$`` (14 numeric digits followed by an
+    alphanumeric lot suffix).  In non-strict mode the format is more
+    permissive (minimum 3 chars, alphanumeric + common separators).
+
+    Args:
+        tlc: Raw TLC string to validate.
+        strict: When True, enforce the production GTIN-14 prefix pattern.
     """
     raw = str(tlc) if tlc else ""
     cleaned = raw.strip()
@@ -180,17 +194,25 @@ def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
     warnings: List[str] = []
 
     if strict:
-        # Strict mode: alphanumeric + hyphens only
-        if not re.match(r"^[A-Za-z0-9\-]+$", cleaned):
+        # Production mode: GTIN-14 prefix + alphanumeric lot suffix
+        if not _TLC_PRODUCTION_PATTERN.match(cleaned):
             return ValidationResult(
                 is_valid=False,
                 identifier_type=IdentifierType.TLC,
                 original_value=raw,
                 errors=[ValidationError(
                     field="tlc",
-                    message="TLC contains invalid characters (strict mode: alphanumeric + hyphens only)",
+                    message=(
+                        "TLC does not match production pattern "
+                        "(expected 14-digit GTIN prefix + alphanumeric lot suffix, "
+                        "e.g. '00012345678901-LotA')"
+                    ),
                 )],
             )
+    else:
+        # Permissive mode: reject obviously invalid characters
+        if not re.match(r"^[A-Za-z0-9\-\._/]+$", cleaned):
+            warnings.append("TLC contains unusual characters; consider strict validation")
 
     # Warn on very long TLCs
     if len(cleaned) > 50:
@@ -233,8 +255,55 @@ def validate_sscc(sscc: str) -> ValidationResult:
 
 
 # ---------------------------------------------------------------------------
+# Public GS1 helpers
+# ---------------------------------------------------------------------------
+
+def calculate_gs1_check_digit(digits: str) -> int:
+    """Calculate the GS1 check digit for a numeric string (sans check digit).
+
+    Raises ``ValueError`` if *digits* contains non-numeric characters.
+    """
+    if not digits.isdigit():
+        raise ValueError(f"Expected numeric string, got '{digits}'")
+    return _gs1_check_digit(digits)
+
+
+def verify_gs1_check_digit(number: str) -> bool:
+    """Return ``True`` if *number*'s last digit is a valid GS1 check digit."""
+    clean = re.sub(r"\D", "", number)
+    if len(clean) < 2:
+        return False
+    try:
+        expected = _gs1_check_digit(clean[:-1])
+    except (ValueError, IndexError):
+        return False
+    return int(clean[-1]) == expected
+
+
+def normalize_gtin(gtin: str) -> str:
+    """Normalize a GTIN to 14 digits (zero-padded)."""
+    clean = re.sub(r"\D", "", gtin)
+    return clean.zfill(14)
+
+
+def extract_company_prefix(gtin14: str, prefix_length: int = 7) -> str:
+    """Extract the GS1 Company Prefix from a GTIN-14.
+
+    By default returns the 7-digit prefix (digits 2–8 of GTIN-14, i.e.
+    skipping the indicator digit at position 0).
+    """
+    clean = re.sub(r"\D", "", gtin14).zfill(14)
+    return clean[1 : 1 + prefix_length]
+
+
+# ---------------------------------------------------------------------------
 # Auto-detecting dispatcher
 # ---------------------------------------------------------------------------
+
+def detect_identifier_type(value: str) -> IdentifierType:
+    """Best-effort auto-detection of identifier type from its format."""
+    return _detect_identifier_type(value)
+
 
 def _detect_identifier_type(value: str) -> IdentifierType:
     """Best-effort auto-detection of identifier type from its format."""

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+import httpx
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from .fsma_spreadsheet import generate_fda_csv
 
 router = APIRouter(tags=["fsma-compliance"])
 
@@ -246,3 +251,55 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
         warnings = []
 
     return ValidationResult(valid=len(errors) == 0, errors=errors, warnings=warnings)
+
+
+# ---------------------------------------------------------------------------
+# FDA Audit Spreadsheet Export
+# ---------------------------------------------------------------------------
+
+_GRAPH_SERVICE_URL = os.getenv("GRAPH_SERVICE_URL", "http://localhost:8003")
+
+
+@router.get("/fsma/audit/spreadsheet")
+async def fsma_audit_spreadsheet(
+    start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
+    tlc: str | None = Query(None, description="Filter by Traceability Lot Code"),
+    requesting_entity: str | None = Query(None, description="Name of requesting entity"),
+) -> StreamingResponse:
+    """Generate an FDA 204 Sortable Spreadsheet CSV for the given date range."""
+
+    params: dict[str, str] = {
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+    if tlc:
+        params["tlc"] = tlc
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(
+            f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
+            params=params,
+        )
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Graph service returned {resp.status_code}: {resp.text[:200]}",
+            )
+        data = resp.json()
+
+    events = data.get("events") or data.get("results") or []
+
+    csv_content = generate_fda_csv(
+        events,
+        start_date=start_date,
+        end_date=end_date,
+        requesting_entity=requesting_entity or "",
+    )
+
+    filename = f"fsma_204_audit_{start_date}_{end_date}.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

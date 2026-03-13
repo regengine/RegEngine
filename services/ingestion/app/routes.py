@@ -103,38 +103,6 @@ GENERIC_STATE_SCRAPER = GenericStateScraper()
 _PIPELINE = ScraperPipeline()
 
 
-@router.post("/v1/scrape/nydfs", status_code=202)
-async def scrape_nydfs(
-    url: str,
-    background_tasks: BackgroundTasks,
-    api_key=Depends(require_api_key)
-):
-    # Entitlement gating for US-NY
-    verify_jurisdiction_access(api_key, "US-NY")
-
-    # Use the specific NYDFS adaptor if available, otherwise fallback to generic
-    adaptor = ADAPTORS.get("nydfs")
-    
-    logger.info("scrape_nydfs_triggered", url=url, tenant_id=api_key.tenant_id)
-    
-    if adaptor:
-        background_tasks.add_task(
-            run_state_scrape_job,
-            adaptor_name="nydfs",
-            adaptor_instance=adaptor,
-            url=url,
-            jurisdiction_code="US-NY",
-            tenant_id=api_key.tenant_id
-        )
-        return {"status": "accepted", "message": "NYDFS scrape job started"}
-
-    background_tasks.add_task(
-        run_generic_scrape_job,
-        url=url,
-        jurisdiction_code="US-NY",
-        tenant_id=api_key.tenant_id
-    )
-    return {"status": "accepted", "message": "Generic scrape job started"}
 
 
 @router.post("/v1/scrape/cppa", status_code=202)
@@ -203,9 +171,6 @@ from .scrapers.state_adaptors.base import (
 from .scrapers.state_adaptors.base import StateRegistryScraper as AdaptorRegistryScraper
 from .scrapers.state_adaptors.cppa import CPPAScraper
 from .scrapers.state_adaptors.fl_rss import FloridaRSSScraper
-from .scrapers.state_adaptors.nj_gaming import NewJerseyGamingScraper
-from .scrapers.state_adaptors.nv_gaming import NevadaGamingScraper
-from .scrapers.state_adaptors.nydfs import NYDFSScraper
 from .scrapers.state_adaptors.tx_rss import TexasRegistryScraper
 from .scrapers.state_adaptors.google_discovery import GoogleDiscoveryScraper
 from .scrapers.state_adaptors.fda_enforcement import FDAEnforcementScraper
@@ -217,10 +182,7 @@ from kernel.discovery import discovery
 from plugins.fsma.sources import FSMA_SOURCES
 
 ADAPTORS: dict[str, AdaptorRegistryScraper] = {
-    "nydfs": NYDFSScraper(),
     "cppa": CPPAScraper(),
-    "nv_gaming": NevadaGamingScraper(),
-    "nj_gaming": NewJerseyGamingScraper(),
     "tx_rss": TexasRegistryScraper(),
     "fl_rss": FloridaRSSScraper(),
     "google_discovery": GoogleDiscoveryScraper(),

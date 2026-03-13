@@ -18,6 +18,13 @@ import structlog
 
 logger = structlog.get_logger("fsma-extractor")
 
+# Kafka topic constants for FSMA event routing
+TOPIC_GRAPH_UPDATE = "graph.update"
+TOPIC_NEEDS_REVIEW = "nlp.needs_review"
+
+# Confidence threshold below which extractions require human review
+HITL_CONFIDENCE_THRESHOLD = 0.85
+
 
 class CTEType(str, Enum):
     """Critical Tracking Event Types per FSMA 204."""
@@ -40,7 +47,7 @@ class DocumentType(str, Enum):
 class ExtractionConfidence(str, Enum):
     """
     Model Risk Management confidence levels per SR 11-7.
-    
+
     Used to gate automated acceptance of extracted data.
     """
     HIGH = "HIGH"      # >= 0.95: Auto-accept
@@ -135,15 +142,24 @@ class FSMAExtractor:
     1. Layout Analysis: Identify document type
     2. Entity Extraction: Regex-based KDE extraction
     3. LLM Enhancement: Contextual extraction for complex fields
+
+    Routing behaviour:
+    - High-confidence events (>= 0.85) with both TLC and Event Date present
+      are emitted to the ``graph.update`` topic for automated graph ingestion.
+    - Events below the 0.85 confidence threshold are routed to the
+      ``nlp.needs_review`` topic for human-in-the-loop (HITL) intervention.
     """
+
+    # Production GTIN-14 TLC pattern: 14-digit GTIN prefix + alphanumeric lot suffix
+    GTIN14_TLC_PATTERN = r"^\d{14}[A-Za-z0-9\-\.]+$"
 
     # Regex patterns for KDE extraction
     PATTERNS = {
         "lot_code": [
+            # GTIN-14 + variable lot format per FSMA 204 spec (highest priority)
+            r"(?:Lot|L/C|Batch|TLC|Traceability\s*Lot\s*Code)\s*[:#]?\s*(\d{14}[A-Za-z0-9\-\.]+)",
             r"(?:LOT|BATCH|L/C|TLC|Lot\s*#?|Batch\s*#?)\s*[:#]?\s*([A-Z0-9\-\.]{5,})",
             r"(?:Traceability\s*Lot\s*Code)\s*[:#]?\s*([A-Z0-9\-\.]{5,})",
-            # GTIN-14 + variable lot format per FSMA 204 spec
-            r"(?:Lot|L/C|Batch)\s*[:#]?\s*(\d{14}[A-Za-z0-9\-\.]+)",
         ],
         "gtin": [
             r"(?:GTIN|UPC|EAN)\s*[:#]?\s*(\d{8,14})",
@@ -224,7 +240,7 @@ class FSMAExtractor:
     }
 
     def __init__(
-        self, 
+        self,
         confidence_threshold: float = 0.85,
         threshold_high: float = 0.95,
         threshold_medium: float = 0.85
@@ -242,7 +258,7 @@ class FSMAExtractor:
         self.threshold_medium = threshold_medium
         self._table_extractor = None  # Lazy-loaded
         logger.info(
-            "fsma_extractor_initialized", 
+            "fsma_extractor_initialized",
             threshold_high=threshold_high,
             threshold_medium=threshold_medium
         )
@@ -260,8 +276,6 @@ class FSMAExtractor:
                 self._table_extractor = False  # Mark as unavailable
         return self._table_extractor if self._table_extractor else None
 
-        return self._table_extractor if self._table_extractor else None
-
     def _determine_risk_level(self, confidence: float) -> ExtractionConfidence:
         """Map numerical confidence to SR 11-7 risk levels."""
         if confidence >= self.threshold_high:
@@ -275,6 +289,11 @@ class FSMAExtractor:
     ) -> FSMAExtractionResult:
         """
         Extract FSMA CTEs and KDEs from document text.
+
+        Only emits high-confidence events to ``graph.update`` when both the
+        Traceability Lot Code (TLC) and Event Date KDE minimums are satisfied.
+        Events that fail the KDE minimum check or fall below the 0.85
+        confidence threshold are routed to ``nlp.needs_review`` for HITL.
 
         Args:
             text: Raw text content from document
@@ -302,16 +321,32 @@ class FSMAExtractor:
             doc_confidence = min(cte.confidence for cte in ctes)
         elif line_items:
              # Fallback if only line items but no full CTEs (rare)
-             doc_confidence = 0.7 
-        
+             doc_confidence = 0.7
+
         # Determine risk level
         risk_level = self._determine_risk_level(doc_confidence)
         review_required = risk_level != ExtractionConfidence.HIGH
+
+        # KDE Minimum Gate: require both TLC and Event Date on every CTE.
+        # CTEs missing either mandatory KDE are flagged for human review
+        # regardless of their confidence score.
+        kde_minimums_met = True
+        for cte in ctes:
+            if not cte.kdes.traceability_lot_code or not cte.kdes.event_date:
+                kde_minimums_met = False
+                review_required = True
+                break
+
+        # HITL routing: confidence < 0.85 always requires human review
+        if doc_confidence < HITL_CONFIDENCE_THRESHOLD:
+            review_required = True
 
         # Calculate warnings
         warnings = self._validate_extraction(ctes, doc_type)
         if review_required:
              warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
+        if not kde_minimums_met:
+            warnings.append("KDE minimum not met: TLC and Event Date are both required")
 
         result = FSMAExtractionResult(
             document_id=document_id,
@@ -332,10 +367,47 @@ class FSMAExtractor:
             line_item_count=len(line_items),
             warnings=len(warnings),
             confidence=doc_confidence,
-            risk_level=risk_level.value
+            risk_level=risk_level.value,
+            kde_minimums_met=kde_minimums_met,
         )
 
         return result
+
+    def route_extraction(self, result: FSMAExtractionResult) -> Dict[str, Any]:
+        """
+        Determine the downstream Kafka topic for an extraction result and
+        return a routing envelope.
+
+        Routing rules:
+        1. If ``review_required`` is True (confidence < 0.85 or KDE minimums
+           not met), route to ``nlp.needs_review`` for human-in-the-loop.
+        2. Otherwise route to ``graph.update`` for automated graph ingestion.
+
+        Returns:
+            Dict with ``topic``, ``payload``, and ``routed_at`` keys.
+        """
+        if result.review_required:
+            topic = TOPIC_NEEDS_REVIEW
+            logger.info(
+                "fsma_extraction_routed_hitl",
+                document_id=result.document_id,
+                confidence=result.confidence_level.value,
+                topic=topic,
+            )
+        else:
+            topic = TOPIC_GRAPH_UPDATE
+            logger.info(
+                "fsma_extraction_routed_graph",
+                document_id=result.document_id,
+                confidence=result.confidence_level.value,
+                topic=topic,
+            )
+
+        return {
+            "topic": topic,
+            "payload": self.to_graph_event(result),
+            "routed_at": datetime.utcnow().isoformat() + "Z",
+        }
 
     def _classify_document(self, text: str) -> DocumentType:
         """Classify document type based on content indicators."""
@@ -936,10 +1008,10 @@ class FSMAExtractor:
         for i, cte in enumerate(ctes):
             prefix = f"CTE[{i}]"
 
-            # Check TLC format (GTIN-14 + alphanumeric)
+            # Check TLC format against production GTIN-14 pattern
             if cte.kdes.traceability_lot_code:
                 if not re.match(
-                    r"^\d{14}[A-Za-z0-9\-\.]+$", cte.kdes.traceability_lot_code
+                    self.GTIN14_TLC_PATTERN, cte.kdes.traceability_lot_code
                 ):
                     if not re.match(
                         r"^[A-Za-z0-9\-\.]{5,}$", cte.kdes.traceability_lot_code
@@ -966,7 +1038,18 @@ class FSMAExtractor:
         return warnings
 
     def to_graph_event(self, result: FSMAExtractionResult) -> Dict[str, Any]:
-        """Convert extraction result to GraphEvent format for Neo4j ingestion."""
+        """
+        Convert extraction result to GraphEvent format for Neo4j ingestion.
+
+        Only CTEs that satisfy KDE minimums (TLC + Event Date) are included
+        in the graph event payload. CTEs missing either field are omitted to
+        prevent incomplete nodes from entering the knowledge graph.
+        """
+        qualified_ctes = [
+            cte for cte in result.ctes
+            if cte.kdes.traceability_lot_code and cte.kdes.event_date
+        ]
+
         return {
             "event_type": "fsma.extraction",
             "document_id": result.document_id,
@@ -990,7 +1073,7 @@ class FSMAExtractor:
                     },
                     "confidence": cte.confidence,
                 }
-                for cte in result.ctes
+                for cte in qualified_ctes
             ],
             "warnings": result.warnings,
             "risk_assessment": {
@@ -1059,13 +1142,15 @@ class FSMAExtractor:
         - raw_row_index: Row index for tabular sources
         - kdes: List of all 7 extracted KDEs with confidence
 
+        Only events that satisfy KDE minimums (TLC + Event Date) are emitted.
+
         Returns:
             List of FSMAEvent-compatible dictionaries
         """
         events = []
 
         for idx, cte in enumerate(result.ctes):
-            # Skip if missing required TLC or date
+            # KDE Minimum Gate: skip if missing required TLC or date
             if not cte.kdes.traceability_lot_code or not cte.kdes.event_date:
                 logger.debug(
                     "fsma_event_skipped_missing_required",
@@ -1239,7 +1324,7 @@ class FSMAExtractor:
         """
         if not tlc:
             return False
-        return bool(re.match(self.TLC_FORMAT_REGEX, tlc))
+        return bool(re.match(self.GTIN14_TLC_PATTERN, tlc))
 
     @staticmethod
     def _extract_gln_from_urn(value: Optional[str]) -> Optional[str]:

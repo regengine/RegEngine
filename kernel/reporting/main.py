@@ -311,45 +311,106 @@ def assess_fsma_readiness(
 # ============================================================================
 
 from fastapi.responses import StreamingResponse
-from fsma_spreadsheet import generate_fda_spreadsheet
+from fsma_spreadsheet import generate_fda_spreadsheet, generate_spreadsheet_from_graph
+
+
+def _query_graph_events(tlc: str, start_date: str, end_date: str) -> tuple:
+    """Query Neo4j graph for traceability events and facilities.
+
+    Returns (events, facilities) lists.  Falls back to empty lists when
+    the graph service is unavailable so the endpoint still returns a
+    valid (empty-data) CSV rather than a 500.
+    """
+    events: list = []
+    facilities: list = []
+    try:
+        from neo4j import GraphDatabase
+
+        neo4j_uri = settings.neo4j_uri
+        neo4j_user = settings.neo4j_user
+        neo4j_password = settings.neo4j_password
+
+        if neo4j_uri:
+            driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+            with driver.session() as session:
+                result = session.run(
+                    """
+                    MATCH (e:CTEEvent)
+                    WHERE e.traceability_lot_code CONTAINS $tlc
+                      AND ($start = '' OR e.event_date >= $start)
+                      AND ($end   = '' OR e.event_date <= $end)
+                    OPTIONAL MATCH (e)-[:AT_FACILITY]->(f:Facility)
+                    RETURN e, f
+                    ORDER BY e.event_date
+                    """,
+                    tlc=tlc,
+                    start=start_date or "",
+                    end=end_date or "",
+                )
+                seen_facilities: dict = {}
+                for record in result:
+                    node = record["e"]
+                    event_dict = dict(node)
+                    events.append(event_dict)
+                    fac_node = record.get("f")
+                    if fac_node:
+                        fac_dict = dict(fac_node)
+                        gln = fac_dict.get("gln")
+                        if gln and gln not in seen_facilities:
+                            seen_facilities[gln] = fac_dict
+                            facilities.append(fac_dict)
+            driver.close()
+    except Exception as exc:
+        _compliance_logger.warning("graph_query_fallback", error=str(exc))
+    return events, facilities
 
 
 @app.get("/fsma/audit/spreadsheet")
 def get_fsma_audit_spreadsheet(
     tlc: str,
-    start_date: str,
-    end_date: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     api_key: APIKey = Depends(require_api_key),
 ):
     """
     Generate FDA-compliant CSV spreadsheet for FSMA 204 audit.
-    
-    Args:
+
+    Queries the Neo4j traceability graph for all CTEs matching the
+    provided TLC and date range, then returns a downloadable CSV
+    containing every mandatory FSMA 204 column.
+
+    Query params:
         tlc: Traceability Lot Code to trace
-        start_date: Start date filter (YYYY-MM-DD)
-        end_date: End date filter (YYYY-MM-DD)
-        
+        start_date: Start date filter (YYYY-MM-DD), optional
+        end_date: End date filter (YYYY-MM-DD), optional
+
     Returns:
-        Downloadable CSV file
+        Downloadable CSV file with Content-Disposition header
     """
-    # For now, generate with empty events (graph integration pending)
-    # In production, this would query the Neo4j graph
+    _start = start_date or ""
+    _end = end_date or ""
+
+    events, facilities = _query_graph_events(tlc, _start, _end)
+
     csv_content = generate_fda_spreadsheet(
         tlc=tlc,
-        start_date=start_date,
-        end_date=end_date,
-        events=[],
-        facilities=[],
+        start_date=_start,
+        end_date=_end,
+        events=events,
+        facilities=facilities,
     )
-    
-    # Return as downloadable CSV
-    filename = f"fsma_audit_{tlc.replace('/', '_')}_{start_date}_to_{end_date}.csv"
-    
+
+    # Build a filesystem-safe filename
+    safe_tlc = "".join(c if c.isalnum() or c in {"-", "_"} else "_" for c in tlc)[:64]
+    date_suffix = f"_{_start}_to_{_end}" if _start and _end else ""
+    filename = f"fsma_audit_{safe_tlc}{date_suffix}.csv"
+
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
         headers={
             "Content-Disposition": f"attachment; filename={filename}",
+            "X-Record-Count": str(len(events)),
         },
     )
 

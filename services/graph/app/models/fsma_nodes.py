@@ -7,8 +7,14 @@ Defines the node schemas for food supply chain traceability:
 - Facility: A physical location (Farm, Processor, Distributor, Retailer)
 - FoodItem: Abstract product type
 - Document: Source document for audit trail
+
+Every node that participates in the tamper-evident hash chain exposes
+``sha256_hash`` and ``chain_hash`` properties, mirroring the columns in
+``fsma.cte_events`` and the ``fsma.hash_chain`` ledger table
+(see ``migrations/V002__fsma_cte_persistence.sql``).
 """
 
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -37,6 +43,67 @@ class FacilityType(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+# ---------------------------------------------------------------------------
+# Hash-chaining helpers
+# ---------------------------------------------------------------------------
+
+_GENESIS_HASH = "GENESIS"
+
+
+def _compute_sha256(canonical: str) -> str:
+    """Return hex-encoded SHA-256 of *canonical* (UTF-8)."""
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def compute_event_hash(event_id: str, event_type: str, event_date: str) -> str:
+    """
+    Compute the per-event SHA-256 hash (``sha256_hash`` column).
+
+    The canonical form is the pipe-delimited concatenation of the three
+    immutable identity fields, matching the SQL-side convention in
+    ``fsma.cte_events.sha256_hash``.
+    """
+    canonical = f"{event_id}|{event_type}|{event_date}"
+    return _compute_sha256(canonical)
+
+
+def compute_chain_hash(previous_chain_hash: Optional[str], event_hash: str) -> str:
+    """
+    Compute the chained hash: ``SHA-256(previous_chain_hash | event_hash)``.
+
+    Uses ``GENESIS`` as the seed when *previous_chain_hash* is ``None``
+    (first event in the tenant chain).
+    """
+    prev = previous_chain_hash or _GENESIS_HASH
+    return _compute_sha256(f"{prev}|{event_hash}")
+
+
+def compute_lot_hash(tlc: str, tenant_id: Optional[str] = None) -> str:
+    """Compute a content-addressable hash for a Lot node."""
+    canonical = f"{tlc}|{tenant_id or ''}"
+    return _compute_sha256(canonical)
+
+
+def compute_facility_hash(
+    gln: Optional[str] = None,
+    fda_registration: Optional[str] = None,
+    name: str = "",
+) -> str:
+    """Compute a content-addressable hash for a Facility node."""
+    identifier = gln or fda_registration or name
+    return _compute_sha256(f"facility|{identifier}")
+
+
+def compute_document_hash(document_id: str, document_type: str) -> str:
+    """Compute a content-addressable hash for a Document node."""
+    return _compute_sha256(f"{document_id}|{document_type}")
+
+
+# ---------------------------------------------------------------------------
+# Node models
+# ---------------------------------------------------------------------------
+
+
 @dataclass
 class Lot:
     """
@@ -60,6 +127,14 @@ class Lot:
     # TLC Source fields - required for TRANSFORMATION/INITIAL_PACKING/CREATION
     tlc_source_gln: Optional[str] = None  # GLN of facility that assigned the TLC
     tlc_source_fda_reg: Optional[str] = None  # FDA Registration of TLC source facility
+    # Merkle hash-chain integrity
+    sha256_hash: Optional[str] = None
+    chain_hash: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Derive sha256_hash if not explicitly provided."""
+        if self.sha256_hash is None:
+            self.sha256_hash = compute_lot_hash(self.tlc, self.tenant_id)
 
     # Cypher properties
     @property
@@ -82,6 +157,11 @@ class Lot:
             props["tlc_source_gln"] = self.tlc_source_gln
         if self.tlc_source_fda_reg:
             props["tlc_source_fda_reg"] = self.tlc_source_fda_reg
+        # Hash-chain fields -- always written so the graph stays verifiable
+        if self.sha256_hash:
+            props["sha256_hash"] = self.sha256_hash
+        if self.chain_hash:
+            props["chain_hash"] = self.chain_hash
         return props
 
     @staticmethod
@@ -145,6 +225,12 @@ class TraceEvent:
     A Critical Tracking Event (CTE) representing movement or transformation.
 
     Neo4j Label: TraceEvent
+
+    Hash-chain fields:
+      - ``sha256_hash``: SHA-256 of the canonical event form
+        (``event_id|type|event_date``).
+      - ``chain_hash``: ``SHA-256(previous_chain_hash | sha256_hash)``
+        linking this event to the append-only hash chain ledger.
     """
 
     event_id: str  # Unique event identifier
@@ -155,6 +241,31 @@ class TraceEvent:
     document_id: Optional[str] = None  # Source document reference
     confidence: Optional[float] = None
     tenant_id: Optional[str] = None
+    # Merkle hash-chain integrity
+    sha256_hash: Optional[str] = None
+    chain_hash: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Derive sha256_hash from identity fields if not provided."""
+        if self.sha256_hash is None:
+            event_type = (
+                self.type.value if isinstance(self.type, CTEType) else str(self.type)
+            )
+            self.sha256_hash = compute_event_hash(
+                self.event_id, event_type, self.event_date
+            )
+
+    def set_chain_hash(self, previous_chain_hash: Optional[str]) -> str:
+        """
+        Compute and store the chain_hash given the predecessor's chain_hash.
+
+        Returns the newly computed chain_hash so it can be forwarded to the
+        next event in sequence.
+        """
+        if self.sha256_hash is None:
+            raise ValueError("sha256_hash must be set before computing chain_hash")
+        self.chain_hash = compute_chain_hash(previous_chain_hash, self.sha256_hash)
+        return self.chain_hash
 
     @property
     def node_properties(self) -> Dict[str, Any]:
@@ -174,6 +285,11 @@ class TraceEvent:
             props["confidence"] = self.confidence
         if self.tenant_id:
             props["tenant_id"] = self.tenant_id
+        # Hash-chain fields
+        if self.sha256_hash:
+            props["sha256_hash"] = self.sha256_hash
+        if self.chain_hash:
+            props["chain_hash"] = self.chain_hash
         return props
 
     @staticmethod
@@ -203,6 +319,18 @@ class Facility:
     country: Optional[str] = "US"
     facility_type: FacilityType = FacilityType.UNKNOWN
     tenant_id: Optional[str] = None
+    # Merkle hash-chain integrity
+    sha256_hash: Optional[str] = None
+    chain_hash: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Derive sha256_hash if not explicitly provided."""
+        if self.sha256_hash is None:
+            self.sha256_hash = compute_facility_hash(
+                gln=self.gln,
+                fda_registration=self.fda_registration,
+                name=self.name,
+            )
 
     @property
     def identifier(self) -> str:
@@ -232,6 +360,10 @@ class Facility:
         )
         if self.tenant_id:
             props["tenant_id"] = self.tenant_id
+        if self.sha256_hash:
+            props["sha256_hash"] = self.sha256_hash
+        if self.chain_hash:
+            props["chain_hash"] = self.chain_hash
         return props
 
     @staticmethod
@@ -308,6 +440,16 @@ class Document:
     raw_content: Optional[str] = None  # Storage for Base64 or specific fact extraction results
     extraction_timestamp: Optional[str] = None
     tenant_id: Optional[str] = None
+    # Merkle hash-chain integrity
+    sha256_hash: Optional[str] = None
+    chain_hash: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Derive sha256_hash if not explicitly provided."""
+        if self.sha256_hash is None:
+            self.sha256_hash = compute_document_hash(
+                self.document_id, self.document_type
+            )
 
     @property
     def node_properties(self) -> Dict[str, Any]:
@@ -324,6 +466,10 @@ class Document:
             props["extraction_timestamp"] = self.extraction_timestamp
         if self.tenant_id:
             props["tenant_id"] = self.tenant_id
+        if self.sha256_hash:
+            props["sha256_hash"] = self.sha256_hash
+        if self.chain_hash:
+            props["chain_hash"] = self.chain_hash
         return props
 
     @staticmethod
@@ -428,6 +574,10 @@ FSMA_CONSTRAINTS = [
     # TLC Source indexes - support FSMA 204 mandate for tracking lot assignment provenance
     "CREATE INDEX lot_tlc_source_gln_idx IF NOT EXISTS FOR (l:Lot) ON (l.tlc_source_gln)",
     "CREATE INDEX lot_tlc_source_fda_idx IF NOT EXISTS FOR (l:Lot) ON (l.tlc_source_fda_reg)",
+    # Hash-chain indexes - support verification queries against the graph
+    "CREATE INDEX event_sha256_idx IF NOT EXISTS FOR (e:TraceEvent) ON (e.sha256_hash)",
+    "CREATE INDEX event_chain_hash_idx IF NOT EXISTS FOR (e:TraceEvent) ON (e.chain_hash)",
+    "CREATE INDEX lot_sha256_idx IF NOT EXISTS FOR (l:Lot) ON (l.sha256_hash)",
     # Performance indexes
     "CREATE INDEX lot_tenant_idx IF NOT EXISTS FOR (l:Lot) ON (l.tenant_id)",
     "CREATE INDEX event_date_idx IF NOT EXISTS FOR (e:TraceEvent) ON (e.event_date)",

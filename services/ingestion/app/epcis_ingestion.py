@@ -3,10 +3,16 @@
 Primary path persists events to Postgres via shared CTEPersistence.
 Local/test fallback keeps in-memory behavior only when DB is unavailable
 outside production.
+
+Supports both JSON-LD and XML EPCIS 2.0 payloads. Extracts FSMA KDEs
+(Key Data Elements) including TLC, product description, quantities,
+readPoint, bizLocation, and FSMA-specific extensions. Handles
+ObjectEvent, AggregationEvent, TransactionEvent, and TransformationEvent.
 """
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import os
@@ -15,14 +21,400 @@ from hashlib import sha256
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("epcis-ingestion")
+
+# ---------------------------------------------------------------------------
+# EPCIS 2.0 XML Namespace constants
+# ---------------------------------------------------------------------------
+_EPCIS_NS = "urn:epcglobal:epcis:xsd:2"
+_CBV_NS = "urn:epcglobal:cbv:xsd"
+_EPCIS_QUERY_NS = "urn:epcglobal:epcis-query:xsd:2"
+_FSMA_NS = "urn:fsma:food:traceability"
+_GS1_NS = "https://ref.gs1.org/standards/epcis/2.0.0"
+_SBDH_NS = "http://www.unece.org/cefact/namespaces/StandardBusinessDocumentHeader"
+
+_NS_MAP = {
+    "epcis": _EPCIS_NS,
+    "cbv": _CBV_NS,
+    "fsma": _FSMA_NS,
+    "gs1": _GS1_NS,
+    "sbdh": _SBDH_NS,
+    "epcisq": _EPCIS_QUERY_NS,
+}
+
+_EVENT_TYPE_TAGS = [
+    "ObjectEvent",
+    "AggregationEvent",
+    "TransactionEvent",
+    "TransformationEvent",
+]
+
+
+def _xml_local(tag: str) -> str:
+    """Strip namespace from an XML tag."""
+    if "}" in tag:
+        return tag.split("}", 1)[1]
+    return tag
+
+
+def _xml_child_text(element, path: str) -> str | None:
+    """Get text from a direct child element by local name."""
+    for child in element:
+        if _xml_local(child.tag) == path:
+            return (child.text or "").strip() or None
+    return None
+
+
+def _xml_find_events(parent) -> list:
+    """Find all EPCIS event elements, deduplicating."""
+    events = []
+    for tag_name in _EVENT_TYPE_TAGS:
+        for ns_uri in [_EPCIS_NS, _GS1_NS, ""]:
+            qname = f"{{{ns_uri}}}{tag_name}" if ns_uri else tag_name
+            events.extend(parent.iter(qname))
+    seen: set[int] = set()
+    unique = []
+    for ev in events:
+        eid = id(ev)
+        if eid not in seen:
+            seen.add(eid)
+            unique.append(ev)
+    return unique
+
+
+def _xml_collect_list(element, list_tag: str, item_tag: str) -> list[str]:
+    """Collect text values from a list container element."""
+    items = []
+    for child in element:
+        if _xml_local(child.tag) == list_tag:
+            for item in child:
+                if _xml_local(item.tag) == item_tag and item.text:
+                    items.append(item.text.strip())
+    return items
+
+
+def _xml_collect_quantity_list(element) -> list[dict]:
+    """Extract quantityList elements from an event."""
+    quantity_tags = {"quantityList", "childQuantityList", "inputQuantityList", "outputQuantityList"}
+    quantities: list[dict] = []
+    for child in element:
+        if _xml_local(child.tag) not in quantity_tags:
+            continue
+        for qe in child:
+            if _xml_local(qe.tag) != "quantityElement":
+                continue
+            q = _xml_parse_quantity_element(qe)
+            if q:
+                quantities.append(q)
+    return quantities
+
+
+def _xml_parse_quantity_element(qe) -> dict[str, Any]:
+    """Parse a single quantityElement."""
+    q: dict[str, Any] = {}
+    for field in qe:
+        fl = _xml_local(field.tag)
+        if fl == "epcClass" and field.text:
+            q["epcClass"] = field.text.strip()
+        elif fl == "quantity" and field.text:
+            try:
+                q["quantity"] = float(field.text.strip())
+            except ValueError:
+                q["quantity"] = field.text.strip()
+        elif fl == "uom" and field.text:
+            q["uom"] = field.text.strip()
+    return q
+
+
+def _xml_extract_location(element, tag_name: str) -> dict | None:
+    """Extract bizLocation or readPoint as {id: ...}."""
+    for child in element:
+        if _xml_local(child.tag) == tag_name:
+            loc_id = _xml_child_text(child, "id")
+            if loc_id:
+                return {"id": loc_id}
+    return None
+
+
+def _xml_extract_source_dest_list(element, list_tag: str, item_tag: str) -> list[dict]:
+    """Extract sourceList/destinationList."""
+    results: list[dict] = []
+    for child in element:
+        if _xml_local(child.tag) != list_tag:
+            continue
+        for item in child:
+            if _xml_local(item.tag) != item_tag:
+                continue
+            entry: dict[str, str] = {}
+            stype = item.get("type") or ""
+            if stype:
+                entry["type"] = stype
+            if item.text and item.text.strip():
+                entry[item_tag.lower()] = item.text.strip()
+            if entry:
+                results.append(entry)
+    return results
+
+
+def _xml_ns_prefix(tag: str) -> str:
+    """Reconstruct namespace prefix for downstream compatibility."""
+    if "}" not in tag:
+        return ""
+    ns_uri = tag.split("}")[0].lstrip("{")
+    for prefix, uri in _NS_MAP.items():
+        if uri == ns_uri:
+            return f"{prefix}:"
+    return ""
+
+
+def _xml_extract_ilmd(element) -> dict:
+    """Extract ILMD (Instance/Lot Master Data) including FSMA extensions."""
+    ilmd: dict[str, Any] = {}
+    for child in element:
+        local = _xml_local(child.tag)
+        if local == "ilmd":
+            _xml_populate_ilmd_fields(child, ilmd)
+        elif local == "extension":
+            nested = _xml_extract_ilmd(child)
+            ilmd.update(nested)
+    return ilmd
+
+
+def _xml_populate_ilmd_fields(ilmd_element, ilmd: dict) -> None:
+    """Populate ilmd dict from an ilmd XML element."""
+    for field in ilmd_element:
+        fl = _xml_local(field.tag)
+        ns = _xml_ns_prefix(field.tag)
+        key = f"{ns}{fl}" if ns else fl
+        if field.text and field.text.strip():
+            ilmd[key] = field.text.strip()
+        for sub in field:
+            sub_local = _xml_local(sub.tag)
+            sub_ns = _xml_ns_prefix(sub.tag)
+            sub_key = f"{sub_ns}{sub_local}" if sub_ns else sub_local
+            if sub.text and sub.text.strip():
+                ilmd[sub_key] = sub.text.strip()
+
+
+def _xml_extract_biz_transactions(ev_element) -> list[dict]:
+    """Extract bizTransactionList from an event element."""
+    biz_transactions: list[dict] = []
+    for child in ev_element:
+        if _xml_local(child.tag) != "bizTransactionList":
+            continue
+        for bt in child:
+            if _xml_local(bt.tag) != "bizTransaction":
+                continue
+            bt_entry: dict[str, str] = {}
+            if bt.get("type"):
+                bt_entry["type"] = bt.get("type", "")
+            if bt.text and bt.text.strip():
+                bt_entry["bizTransaction"] = bt.text.strip()
+            if bt_entry:
+                biz_transactions.append(bt_entry)
+    return biz_transactions
+
+
+def _xml_event_to_dict(ev_element) -> dict:
+    """Convert an XML event element into the canonical dict format."""
+    event_type = _xml_local(ev_element.tag)
+    event: dict[str, Any] = {"type": event_type}
+
+    # Core scalar fields
+    for field_name in ("eventTime", "eventTimeZoneOffset", "action", "bizStep",
+                       "disposition", "eventID", "recordTime"):
+        val = _xml_child_text(ev_element, field_name)
+        if val:
+            event[field_name] = val
+
+    # EPC lists
+    for list_tag, item_tag, key in [
+        ("epcList", "epc", "epcList"),
+        ("childEPCs", "epc", "childEPCs"),
+        ("inputEPCList", "epc", "inputEPCList"),
+        ("outputEPCList", "epc", "outputEPCList"),
+    ]:
+        items = _xml_collect_list(ev_element, list_tag, item_tag)
+        if items:
+            event[key] = items
+
+    parent_id = _xml_child_text(ev_element, "parentID")
+    if parent_id:
+        event["parentID"] = parent_id
+
+    # Quantity lists
+    quantities = _xml_collect_quantity_list(ev_element)
+    if quantities:
+        event.setdefault("extension", {})["quantityList"] = quantities
+
+    # Locations
+    for tag, key in [("bizLocation", "bizLocation"), ("readPoint", "readPoint")]:
+        loc = _xml_extract_location(ev_element, tag)
+        if loc:
+            event[key] = loc
+
+    # Source / Destination
+    sources = _xml_extract_source_dest_list(ev_element, "sourceList", "source")
+    if sources:
+        event["sourceList"] = sources
+    destinations = _xml_extract_source_dest_list(ev_element, "destinationList", "destination")
+    if destinations:
+        event["destinationList"] = destinations
+
+    # ILMD
+    ilmd = _xml_extract_ilmd(ev_element)
+    if ilmd:
+        event["ilmd"] = ilmd
+
+    # Business transactions
+    biz_transactions = _xml_extract_biz_transactions(ev_element)
+    if biz_transactions:
+        event["bizTransactionList"] = biz_transactions
+
+    return event
+
+
+def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
+    """Parse EPCIS 2.0 XML document and return a list of event dicts.
+
+    Supports both namespace-qualified and bare-element XML. Extracts all four
+    event types and converts them into the same dict structure used by the
+    JSON-LD path so downstream normalization works identically.
+    """
+    try:
+        from lxml import etree
+    except ImportError:
+        logger.warning("lxml_not_available_for_epcis_xml_parsing")
+        return []
+
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+
+    try:
+        parser = etree.XMLParser(
+            remove_blank_text=True,
+            recover=True,
+            resolve_entities=False,
+            no_network=True,
+        )
+        tree = etree.parse(io.BytesIO(raw), parser)
+        root = tree.getroot()
+    except Exception as exc:
+        logger.warning("epcis_xml_parse_failed error=%s", str(exc))
+        return []
+
+    event_elements = _xml_find_events(root)
+    return [_xml_event_to_dict(ev) for ev in event_elements]
+
+
+def _is_xml_content(raw: bytes) -> bool:
+    """Detect whether raw bytes look like XML content."""
+    stripped = raw.lstrip()
+    return stripped[:5] == b"<?xml" or stripped[:1] == b"<"
+
+
+def _audit_log_validation_failure(
+    errors: list[dict],
+    tenant_id: str | None,
+    normalized: dict,
+) -> None:
+    """Fire-and-forget audit log for FSMA validation failures."""
+    try:
+        import asyncio
+        from shared.audit_logging import (
+            AuditLogger,
+            AuditActor,
+            AuditResource,
+            AuditEventType,
+            AuditEventCategory,
+            AuditSeverity,
+        )
+
+        failed_fields = [e.get("loc", ["unknown"])[-1] for e in errors]
+        audit = AuditLogger.get_instance()
+        actor = AuditActor(
+            actor_id="epcis-ingestion",
+            actor_type="service",
+            tenant_id=tenant_id,
+        )
+        resource = AuditResource(
+            resource_type="fsma_event",
+            resource_id=normalized.get("idempotency_key") or "unknown",
+            tenant_id=tenant_id,
+            attributes={"tlc": normalized.get("tlc"), "event_time": normalized.get("event_time")},
+        )
+
+        coro = audit.log(
+            event_type=AuditEventType.DATA_CREATE,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            severity=AuditSeverity.WARNING,
+            actor=actor,
+            action="fsma_event_validation",
+            outcome="failure",
+            resource=resource,
+            message=f"FSMAEvent validation rejected: failed KDEs {failed_fields}",
+            details={"validation_errors": errors, "tenant_id": tenant_id},
+            tags=["fsma", "validation", "kde_rejection"],
+        )
+        # Best-effort: schedule on running loop or skip
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(coro)
+        except RuntimeError:
+            pass  # No running loop — skip async audit (logged via stdlib above)
+    except Exception:
+        logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
+
+
+def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> dict | None:
+    """Validate a normalized CTE dict against the FSMAEvent Pydantic model.
+
+    Returns the validated model dict on success, or None if validation fails
+    (errors are logged and audit-trailed but do not block ingestion).
+    """
+    try:
+        from shared.schemas import FSMAEvent, FSMAEventType
+
+        # Map internal event_type strings to FSMAEventType enum
+        event_type_map = {
+            "shipping": FSMAEventType.SHIPPING,
+            "receiving": FSMAEventType.RECEIVING,
+            "transformation": FSMAEventType.TRANSFORMATION,
+            "initial_packing": FSMAEventType.CREATION,
+            "creation": FSMAEventType.CREATION,
+        }
+        raw_type = (normalized.get("event_type") or "receiving").lower()
+        fsma_type = event_type_map.get(raw_type, FSMAEventType.RECEIVING)
+
+        fsma_event = FSMAEvent(
+            event_type=fsma_type,
+            tlc=normalized.get("tlc") or "UNKNOWN",
+            product_description=normalized.get("product_description") or _default_product_description(normalized),
+            quantity=normalized.get("quantity"),
+            unit_of_measure=normalized.get("unit_of_measure"),
+            location_gln=normalized.get("location_id"),
+            event_time=normalized.get("event_time") or datetime.now(timezone.utc).isoformat(),
+            source_gln=normalized.get("source_location_id"),
+            destination_gln=normalized.get("dest_location_id"),
+            reference_document_type="EPCIS",
+            reference_document_number=None,
+            tenant_id=tenant_id,
+        )
+        return fsma_event.model_dump()
+    except ValidationError as exc:
+        logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, exc.errors())
+        _audit_log_validation_failure(exc.errors(), tenant_id, normalized)
+        return None
+    except ImportError:
+        logger.debug("shared.schemas not available for FSMAEvent validation")
+        return None
 
 router = APIRouter(prefix="/api/v1/epcis", tags=["EPCIS 2.0 Ingestion"])
 
@@ -110,6 +502,23 @@ def _extract_party_id(payload: dict, key: str, nested_key: str) -> str:
     return str(value) if value else ""
 
 
+def _validate_gln_format(gln: str) -> bool:
+    """Validate a GLN using GS1 check digit algorithm."""
+    if not gln or not gln.isdigit() or len(gln) != 13:
+        return False
+    total = sum(
+        int(digit) * (3 if index % 2 else 1)
+        for index, digit in enumerate(reversed(gln[:-1]))
+    )
+    expected = (10 - (total % 10)) % 10
+    return int(gln[-1]) == expected
+
+
+def _validate_tlc_format(tlc: str) -> bool:
+    """Validate TLC has minimum required length (3+ chars)."""
+    return bool(tlc) and len(tlc.strip()) >= 3
+
+
 def _validate_epcis(event: dict) -> list[str]:
     errors: list[str] = []
     required = ["type", "eventTime", "action", "bizStep"]
@@ -123,8 +532,21 @@ def _validate_epcis(event: dict) -> list[str]:
     lot_code, tlc = _extract_lot_data(event.get("ilmd") or event.get("extension", {}).get("ilmd"))
     if not tlc and not lot_code:
         errors.append("Missing traceability lot code (fsma:traceabilityLotCode or cbvmda:lotNumber)")
+    elif tlc and not _validate_tlc_format(tlc):
+        errors.append(f"TLC '{tlc}' is too short (minimum 3 characters)")
 
     return errors
+
+
+def _validate_epcis_glns(normalized: dict) -> list[str]:
+    """Validate GLN format on location fields, returning warnings."""
+    warnings: list[str] = []
+    gln_fields = ["location_id", "source_location_id", "dest_location_id"]
+    for field in gln_fields:
+        value = normalized.get(field)
+        if value and value.isdigit() and len(value) == 13 and not _validate_gln_format(value):
+            warnings.append(f"Invalid GLN check digit in {field}: {value}")
+    return warnings
 
 
 def _event_idempotency_key(event: dict) -> str:
@@ -535,6 +957,20 @@ def _ingest_single_event_fallback(event: dict) -> tuple[dict, int]:
     normalized = _normalize_epcis_to_cte(event)
     kdes = _extract_kdes(event)
     alerts = _compliance_alerts(normalized, kdes)
+    alerts.extend(_validate_epcis_glns(normalized))
+
+    # Validate against FSMAEvent Pydantic model before storing
+    fsma_validated = _validate_as_fsma_event(normalized)
+    if fsma_validated:
+        normalized["fsma_validation_status"] = "passed"
+    else:
+        normalized["fsma_validation_status"] = "failed"
+        alerts.append({
+            "severity": "warning",
+            "alert_type": "fsma_validation",
+            "message": "Event did not pass FSMAEvent schema validation",
+        })
+
     stored = {
         "id": event_id,
         "ingested_at": datetime.now(timezone.utc).isoformat(),
@@ -572,7 +1008,20 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     normalized = _normalize_epcis_to_cte(event)
     kdes = _extract_kdes(event)
     alerts = _compliance_alerts(normalized, kdes)
+    alerts.extend(_validate_epcis_glns(normalized))
     kde_map = _build_kde_map(event, normalized, idempotency_key)
+
+    # Validate against FSMAEvent Pydantic model before DB persistence
+    fsma_validated = _validate_as_fsma_event(normalized, tenant_id)
+    if fsma_validated:
+        kde_map["fsma_validation_status"] = "passed"
+    else:
+        kde_map["fsma_validation_status"] = "failed"
+        alerts.append({
+            "severity": "warning",
+            "alert_type": "fsma_validation",
+            "message": "Event did not pass FSMAEvent schema validation",
+        })
 
     event_time = normalized.get("event_time") or datetime.now(timezone.utc).isoformat()
     quantity = normalized.get("quantity")
@@ -809,3 +1258,65 @@ async def validate_epcis_event(
         "errors": errors,
         "normalized_cte": normalized,
     }
+
+
+@router.post("/events/xml", status_code=201, summary="Ingest EPCIS 2.0 XML document")
+async def ingest_epcis_xml(
+    request: Request,
+    tenant_id: Optional[str] = Query(default=None, description="Optional tenant override"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    _: None = Depends(_verify_api_key),
+):
+    """Ingest an EPCIS 2.0 XML document containing one or more events.
+
+    Parses the XML, extracts ObjectEvent, AggregationEvent, TransactionEvent,
+    and TransformationEvent elements, then ingests each through the standard
+    EPCIS pipeline with FSMAEvent validation.
+    """
+    resolved_tenant = _resolve_tenant_id(tenant_id, x_tenant_id, x_regengine_api_key)
+    if not resolved_tenant:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    raw_body = await request.body()
+    if not raw_body:
+        raise HTTPException(status_code=400, detail="Empty XML payload")
+
+    if not _is_xml_content(raw_body):
+        raise HTTPException(status_code=400, detail="Payload does not appear to be XML")
+
+    events = _parse_epcis_xml(raw_body)
+    if not events:
+        raise HTTPException(
+            status_code=422,
+            detail="No EPCIS events found in XML document",
+        )
+
+    created: list[dict] = []
+    failed: list[dict] = []
+    processed: list[dict] = []
+
+    for idx, event in enumerate(events):
+        try:
+            payload, status_code = _ingest_single_event(resolved_tenant, event)
+            processed.append({"index": idx, "status_code": status_code, **payload})
+            if status_code == 201:
+                created.append(payload)
+        except HTTPException as exc:
+            failed.append({"index": idx, "detail": exc.detail})
+
+    response_payload = {
+        "total": len(events),
+        "created": len(created),
+        "failed": len(failed),
+        "results": processed,
+        "errors": failed,
+        "format": "EPCIS_XML_2.0",
+    }
+
+    successful = len(processed)
+    if failed and successful:
+        return JSONResponse(content=response_payload, status_code=207)
+    if failed and not successful:
+        return JSONResponse(content=response_payload, status_code=400)
+    return JSONResponse(content=response_payload, status_code=201)

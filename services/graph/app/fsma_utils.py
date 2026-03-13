@@ -3,6 +3,11 @@ FSMA 204 Traceability Query Utilities.
 
 Provides forward and backward tracing through the supply chain graph
 to support FDA 24-hour recall requirements.
+
+Physics Engine:
+- Time Arrow enforcement via shared.fsma_rules.TimeArrowRule
+- Broken chain detection for SHIPPING events
+- Strict temporal filtering on trace paths
 """
 
 from __future__ import annotations
@@ -36,36 +41,6 @@ class TraceResult:
     # Physics Engine additions
     time_violations: Optional[List[Dict[str, Any]]] = None
     risk_flags: Optional[List[str]] = None
-
-
-@dataclass
-class MassBalanceResult:
-    """Result of a mass balance check on a transformation event."""
-
-    event_id: str
-    event_type: str
-    event_date: Optional[str]
-    input_lots: List[Dict[str, Any]]
-    output_lots: List[Dict[str, Any]]
-    input_quantity: float
-    output_quantity: float
-    imbalance_ratio: float
-    is_balanced: bool
-    tolerance: float
-    risk_flag: Optional[str]
-
-
-@dataclass
-class MassBalanceReport:
-    """Aggregate mass balance report for a lot's transformations."""
-
-    lot_id: str
-    transformation_count: int
-    balanced_count: int
-    imbalanced_count: int
-    events: List[MassBalanceResult]
-    flagged_events: List[str]
-    query_time_ms: float
 
 
 # Legacy wrapper functions for backward compatibility with tests.
@@ -124,6 +99,11 @@ def _validate_temporal_order(events: list) -> list:
     return violations
 
 
+# ============================================================================
+# FORWARD / BACKWARD TRACING
+# ============================================================================
+
+
 async def trace_forward(
     client: Neo4jClient,
     tlc: str,
@@ -139,7 +119,11 @@ async def trace_forward(
 
     Physics Engine Enhancement:
     - Time Arrow: Only follows paths where events are in temporal order
-      (event_next.date >= event_prev.date)
+      (event_next.date >= event_prev.date).  When ``enforce_time_arrow``
+      is True the Cypher query pre-filters paths, **and** a post-query
+      validation pass via ``TimeArrowRule`` strips any events that still
+      violate strict UTC ordering (handles time-zone edge cases that
+      string comparison in Cypher cannot catch).
 
     Args:
         client: Neo4j client
@@ -153,53 +137,70 @@ async def trace_forward(
     """
     start_time = time.time()
 
-    # Enhanced Cypher query with temporal ordering hint
-    # The query now collects event dates for post-filtering
+    # Cap variable-length expansion to avoid combinatorial blowup.
+    # Each logical hop (Lot->Event->Lot) is 2 relationships, so
+    # max_depth hops = max_depth * 2 relationship traversals.
+    # Neo4j Cypher does not support parameterized bounds in *1..N,
+    # so we must interpolate — but we cap at 20 to keep plans bounded.
+    rel_depth = min(max_depth * 2, 20)
+
+    # Optimized Cypher query with temporal ordering hint.
+    # Performance notes:
+    # - USING INDEX hint on Lot(tlc) forces the planner to anchor on
+    #   the indexed start node rather than scanning all Lot nodes
+    # - Dropped unused `rels` variable from WITH to reduce memory
+    # - LIMIT 5000 caps result set to prevent runaway expansion on
+    #   dense supply chain graphs
     query = (
         """
     MATCH path = (start:Lot {tlc: $tlc})-[:UNDERWENT|PRODUCED*1.."""
-        + str(max_depth * 2)
+        + str(rel_depth)
         + """]->(end)
+    USING INDEX start:Lot(tlc)
     WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
-    WITH path, nodes(path) as path_nodes, relationships(path) as rels
-    
+    WITH path, nodes(path) as path_nodes
+
     // Extract events with dates for temporal validation
-    WITH path, path_nodes, rels,
-         [n IN path_nodes WHERE n:TraceEvent | {event_id: n.event_id, event_date: n.event_date}] as event_dates
-    
+    WITH path, path_nodes,
+         [n IN path_nodes WHERE n:TraceEvent | {event_id: n.event_id, event_date: n.event_date, type: n.type}] as event_nodes
+
     // Filter paths: all events must be in temporal order (Time Arrow constraint)
-    WITH path, path_nodes, event_dates
-    WHERE size(event_dates) <= 1 OR 
-          all(idx IN range(0, size(event_dates)-2) 
-              WHERE event_dates[idx].event_date IS NULL 
-                 OR event_dates[idx+1].event_date IS NULL
-                 OR event_dates[idx].event_date <= event_dates[idx+1].event_date)
-    
+    WITH path, path_nodes, event_nodes
+    WHERE size(event_nodes) <= 1 OR
+          all(idx IN range(0, size(event_nodes)-2)
+              WHERE event_nodes[idx].event_date IS NULL
+                 OR event_nodes[idx+1].event_date IS NULL
+                 OR event_nodes[idx].event_date <= event_nodes[idx+1].event_date)
+
     UNWIND path_nodes as node
     WITH DISTINCT node, path
-    RETURN 
+    RETURN
         labels(node) as labels,
         properties(node) as props,
         length(path) as hop_count
     ORDER BY hop_count
+    LIMIT 5000
     """
     )
 
-    # Fallback query without temporal filtering (for comparison or if disabled)
+    # Fallback query without temporal filtering (for comparison or if disabled).
+    # Same optimizations: index hint, capped depth, LIMIT.
     query_no_time_filter = (
         """
     MATCH path = (start:Lot {tlc: $tlc})-[:UNDERWENT|PRODUCED*1.."""
-        + str(max_depth * 2)
+        + str(rel_depth)
         + """]->(end)
+    USING INDEX start:Lot(tlc)
     WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
-    WITH path, nodes(path) as nodes, relationships(path) as rels
-    UNWIND nodes as node
+    WITH path, nodes(path) as path_nodes
+    UNWIND path_nodes as node
     WITH DISTINCT node, path
-    RETURN 
+    RETURN
         labels(node) as labels,
         properties(node) as props,
         length(path) as hop_count
     ORDER BY hop_count
+    LIMIT 5000
     """
     )
 
@@ -275,39 +276,71 @@ async def trace_forward(
                     }
                 )
 
-    # Validate temporal ordering using shared SSOT rule
-    time_violations = []
-    if enforce_time_arrow:
-        # Convert to shared TraceEvent models for validation
-        trace_events = []
-        for e in events:
-            # We skip events without basic data for validation, or let the model handle it
-            if e.get("event_id") and e.get("event_date"): 
+    # ------------------------------------------------------------------
+    # Strict Time Arrow enforcement via shared SSOT rule
+    # ------------------------------------------------------------------
+    # The Cypher string-comparison filter above handles the common case,
+    # but cannot account for timezone normalization.  We run the canonical
+    # TimeArrowRule as a second pass and *remove* any events that create
+    # a temporal paradox, ensuring only causally valid events survive.
+    # ------------------------------------------------------------------
+    time_violations: List[Dict[str, Any]] = []
+
+    if enforce_time_arrow and len(events) >= 2:
+        # Build SharedTraceEvent list (skip events we cannot parse)
+        parseable_events: List[SharedTraceEvent] = []
+        parseable_indices: List[int] = []
+        for idx, e in enumerate(events):
+            if e.get("event_id") and e.get("event_date"):
                 try:
-                    trace_events.append(SharedTraceEvent(
+                    parseable_events.append(SharedTraceEvent(
                         event_id=e["event_id"],
-                        tlc="N/A", # Not available in simple event node
+                        tlc=tlc,
                         event_date=e["event_date"],
-                        event_type=e.get("type")
+                        event_type=e.get("type"),
                     ))
-                except ValueError as err:
-                    logger.warning("trace_event_validation_skip", event_id=e["event_id"], error=str(err))
-        
-        rule = TimeArrowRule()
-        result = rule.validate(trace_events)
-        
-        if not result.passed:
-             for v in result.violations:
-                 # Map ValidationViolation to legacy dict structure 
-                 details = v.details or {}
-                 time_violations.append({
-                     "violation_type": "TIME_ARROW",
-                     "description": v.description,
-                     "prev_event_id": v.event_ids[0] if v.event_ids else None,
-                     "curr_event_id": v.event_ids[1] if len(v.event_ids) > 1 else None,
-                     "prev_event_date": details.get("upstream_date"),
-                     "curr_event_date": details.get("downstream_date")
-                 })
+                    parseable_indices.append(idx)
+                except (ValueError, TypeError) as err:
+                    logger.warning(
+                        "trace_event_validation_skip",
+                        event_id=e["event_id"],
+                        error=str(err),
+                    )
+
+        if len(parseable_events) >= 2:
+            rule = TimeArrowRule()
+            validation = rule.validate(parseable_events)
+
+            if not validation.passed:
+                # Collect violating event IDs so we can strip them
+                violating_ids: set = set()
+                for v in validation.violations:
+                    details = v.details or {}
+                    time_violations.append({
+                        "violation_type": "TIME_ARROW",
+                        "description": v.description,
+                        "prev_event_id": v.event_ids[0] if v.event_ids else None,
+                        "curr_event_id": v.event_ids[1] if len(v.event_ids) > 1 else None,
+                        "prev_event_date": details.get("upstream_date"),
+                        "curr_event_date": details.get("downstream_date"),
+                    })
+                    # The *downstream* event is the one that violates causality
+                    if len(v.event_ids) > 1:
+                        violating_ids.add(v.event_ids[1])
+
+                # Strip violating events from the result set so callers
+                # never see causally-impossible paths.
+                if violating_ids:
+                    events = [
+                        e for e in events
+                        if e.get("event_id") not in violating_ids
+                    ]
+                    logger.info(
+                        "time_arrow_events_stripped",
+                        tlc=tlc,
+                        stripped_count=len(violating_ids),
+                        stripped_ids=list(violating_ids),
+                    )
 
     # Collect risk flags from events
     risk_flags = list(set(e.get("risk_flag") for e in events if e.get("risk_flag")))
@@ -361,22 +394,31 @@ async def trace_backward(
     """
     start_time = time.time()
 
-    # Cypher query to trace backward through transformations
+    # Cap variable-length expansion (same rationale as trace_forward)
+    rel_depth = min(max_depth * 2, 20)
+
+    # Optimized Cypher query to trace backward through transformations.
     # Path: Lot <- PRODUCED <- TraceEvent <- CONSUMED <- Lot
+    # Performance notes:
+    # - USING INDEX hint anchors on indexed Lot(tlc) start node
+    # - Capped rel_depth prevents combinatorial blowup
+    # - LIMIT 5000 provides a safety net on dense graphs
     query = (
         """
     MATCH path = (start:Lot {tlc: $tlc})<-[:PRODUCED|CONSUMED*1.."""
-        + str(max_depth * 2)
+        + str(rel_depth)
         + """]-(source)
+    USING INDEX start:Lot(tlc)
     WHERE ($tenant_id IS NULL OR start.tenant_id = $tenant_id)
-    WITH path, nodes(path) as nodes
-    UNWIND nodes as node
+    WITH path, nodes(path) as path_nodes
+    UNWIND path_nodes as node
     WITH DISTINCT node, path
-    RETURN 
+    RETURN
         labels(node) as labels,
         properties(node) as props,
         length(path) as hop_count
     ORDER BY hop_count
+    LIMIT 5000
     """
     )
 
@@ -471,6 +513,11 @@ async def trace_backward(
     )
 
 
+# ============================================================================
+# GAP ANALYSIS & BROKEN CHAIN DETECTION
+# ============================================================================
+
+
 async def find_gaps(
     client: Neo4jClient,
     tenant_id: Optional[str] = None,
@@ -495,7 +542,7 @@ async def find_gaps(
         e.event_date = '' OR
         NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }
     )
-    RETURN 
+    RETURN
         e.event_id as event_id,
         e.type as type,
         e.event_date as event_date,
@@ -534,61 +581,238 @@ async def find_broken_chains(
     tenant_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Find SHIPPING events for Lots that have no CREATION or RECEIVING history.
+    Find SHIPPING events that violate chain-of-custody requirements.
 
-    A "Broken Chain" violation occurs when a SHIPPING event exists for a Lot
-    that has no preceding CREATION or RECEIVING event, indicating the Lot
-    appeared in the supply chain without a documented origin.
+    Detects two classes of broken-chain violations:
 
-    FSMA 204 requires full chain of custody - products cannot be shipped
-    without documented receipt or creation.
+    1. **Missing Origin** -- A SHIPPING event exists for a Lot that has no
+       preceding CREATION, RECEIVING, INITIAL_PACKING, or TRANSFORMATION
+       event, meaning the Lot appeared in the supply chain without a
+       documented origin.
+
+    2. **Temporal Paradox** -- A SHIPPING event exists for a Lot where the
+       earliest origin event (CREATION/RECEIVING/INITIAL_PACKING/TRANSFORMATION) has a date
+       *after* the SHIPPING event, violating the Time Arrow constraint.
+
+    FSMA 204 requires full chain of custody -- products cannot be shipped
+    without documented receipt or creation, and the origin must precede
+    the shipment in time.
 
     Returns:
-        List of events with broken chain violations
+        List of violation dicts, each containing event details and
+        violation_type ``"broken_chain"``.
     """
     start_time = time.time()
 
-    # Find SHIPPING events where the Lot has no CREATION or RECEIVING events
-    query = """
+    # ------------------------------------------------------------------ #
+    # Query 1: SHIPPING with no origin event at all
+    # Optimization: single-hop UNDERWENT only (no variable-length path),
+    # LIMIT 2000 caps result set on large tenants for sub-second response.
+    # ------------------------------------------------------------------ #
+    missing_origin_query = """
     MATCH (l:Lot)-[:UNDERWENT]->(shipping:TraceEvent {type: 'SHIPPING'})
     WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
     AND NOT EXISTS {
         MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
-        WHERE origin.type IN ['CREATION', 'RECEIVING']
+        WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
     }
-    RETURN 
-        shipping.event_id as event_id,
-        shipping.type as type,
-        shipping.event_date as event_date,
-        shipping.document_id as document_id,
-        l.tlc as lot_tlc,
-        l.product_description as product_description,
-        'SHIPPING without CREATION or RECEIVING' as violation_reason
+    RETURN
+        shipping.event_id    AS event_id,
+        shipping.type         AS type,
+        shipping.event_date   AS event_date,
+        shipping.document_id  AS document_id,
+        l.tlc                 AS lot_tlc,
+        l.product_description AS product_description
     ORDER BY shipping.event_date
+    LIMIT 2000
     """
 
-    violations = []
+    # ------------------------------------------------------------------ #
+    # Query 2: SHIPPING that precedes its own origin (Time Arrow violation)
+    # ------------------------------------------------------------------ #
+    temporal_paradox_query = """
+    MATCH (l:Lot)-[:UNDERWENT]->(shipping:TraceEvent {type: 'SHIPPING'})
+    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+      AND shipping.event_date IS NOT NULL
+    WITH l, shipping
+    MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
+    WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
+      AND origin.event_date IS NOT NULL
+    // Optimization: min() aggregate computes earliest origin date in a single
+    // pass, replacing ORDER BY + collect()[0] that sorted all origins per lot.
+    WITH l, shipping,
+         min(origin.event_date) AS earliest_origin_date,
+         head(collect(origin.event_id)) AS earliest_origin_id
+    WHERE earliest_origin_date > shipping.event_date
+    RETURN
+        shipping.event_id            AS event_id,
+        shipping.type                AS type,
+        shipping.event_date          AS event_date,
+        shipping.document_id         AS document_id,
+        l.tlc                        AS lot_tlc,
+        l.product_description        AS product_description,
+        earliest_origin_id           AS origin_event_id,
+        earliest_origin_date         AS origin_date
+    ORDER BY shipping.event_date
+    LIMIT 2000
+    """
+
+    violations: List[Dict[str, Any]] = []
+    seen_event_ids: set = set()
+
     async with client.session() as session:
-        result = await session.run(query, tenant_id=tenant_id)
+        # --- Missing origin violations --------------------------------
+        result = await session.run(missing_origin_query, tenant_id=tenant_id)
         async for record in result:
+            eid = record["event_id"]
+            if eid in seen_event_ids:
+                continue
+            seen_event_ids.add(eid)
             violations.append(
                 {
-                    "event_id": record["event_id"],
+                    "event_id": eid,
                     "type": record["type"],
                     "event_date": record["event_date"],
                     "document_id": record["document_id"],
                     "lot_tlc": record["lot_tlc"],
                     "product_description": record["product_description"],
                     "violation_type": "broken_chain",
-                    "violation_reason": record["violation_reason"],
+                    "violation_reason": (
+                        "SHIPPING without CREATION, RECEIVING, INITIAL_PACKING, or TRANSFORMATION"
+                    ),
                     "gaps": ["missing_origin_event"],
                 }
             )
+
+        # --- Temporal paradox violations ------------------------------
+        result = await session.run(temporal_paradox_query, tenant_id=tenant_id)
+        async for record in result:
+            eid = record["event_id"]
+            if eid in seen_event_ids:
+                continue
+            seen_event_ids.add(eid)
+
+            # Validate via TimeArrowRule for authoritative UTC check
+            try:
+                origin_evt = SharedTraceEvent(
+                    event_id=record["origin_event_id"],
+                    tlc=record["lot_tlc"] or "N/A",
+                    event_date=str(record["origin_date"]),
+                    event_type="ORIGIN",
+                )
+                shipping_evt = SharedTraceEvent(
+                    event_id=eid,
+                    tlc=record["lot_tlc"] or "N/A",
+                    event_date=str(record["event_date"]),
+                    event_type="SHIPPING",
+                )
+                rule = TimeArrowRule()
+                rule_result = rule.validate([origin_evt, shipping_evt])
+                if not rule_result.passed:
+                    desc = rule_result.violations[0].description
+                else:
+                    # Cypher flagged it but TimeArrowRule disagrees
+                    # (edge case with time precision). Skip false positive.
+                    continue
+            except (ValueError, TypeError):
+                desc = (
+                    f"SHIPPING {eid} on {record['event_date']} precedes "
+                    f"origin {record['origin_event_id']} on {record['origin_date']}"
+                )
+
+            violations.append(
+                {
+                    "event_id": eid,
+                    "type": record["type"],
+                    "event_date": record["event_date"],
+                    "document_id": record["document_id"],
+                    "lot_tlc": record["lot_tlc"],
+                    "product_description": record["product_description"],
+                    "violation_type": "broken_chain",
+                    "violation_reason": desc,
+                    "gaps": ["temporal_paradox"],
+                    "origin_event_id": record["origin_event_id"],
+                    "origin_date": (
+                        str(record["origin_date"]) if record["origin_date"] else None
+                    ),
+                }
+            )
+
+        # ------------------------------------------------------------------ #
+        # Query 3: Cryptographic gap -- SHIPPING events where origin events
+        # exist but the merkle_prev_hash chain does not connect the SHIPPING
+        # event to any origin event for the same Lot.
+        # ------------------------------------------------------------------ #
+        crypto_gap_query = """
+        MATCH (l:Lot)-[:UNDERWENT]->(shipping:TraceEvent {type: 'SHIPPING'})
+        WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
+          AND shipping.merkle_hash IS NOT NULL
+        AND EXISTS {
+            MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
+            WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING']
+        }
+        WITH l, shipping
+        MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
+        WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING']
+        WITH shipping, l,
+             collect({
+                 event_id: origin.event_id,
+                 type: origin.type,
+                 event_date: origin.event_date,
+                 merkle_hash: origin.merkle_hash
+             }) AS origins
+        WHERE shipping.merkle_prev_hash IS NULL
+           OR NOT any(o IN origins WHERE o.merkle_hash = shipping.merkle_prev_hash)
+        RETURN
+            shipping.event_id          AS event_id,
+            shipping.type              AS type,
+            shipping.event_date        AS event_date,
+            shipping.document_id       AS document_id,
+            shipping.merkle_hash       AS merkle_hash,
+            shipping.merkle_prev_hash  AS merkle_prev_hash,
+            l.tlc                      AS lot_tlc,
+            l.product_description      AS product_description,
+            origins                    AS expected_predecessors
+        ORDER BY shipping.event_date
+        """
+
+        result = await session.run(crypto_gap_query, tenant_id=tenant_id)
+        async for record in result:
+            eid = record["event_id"]
+            if eid in seen_event_ids:
+                continue
+            seen_event_ids.add(eid)
+            violations.append({
+                "event_id": eid,
+                "type": record["type"],
+                "event_date": record["event_date"],
+                "document_id": record["document_id"],
+                "lot_tlc": record["lot_tlc"],
+                "product_description": record["product_description"],
+                "violation_type": "broken_chain",
+                "violation_reason": (
+                    "SHIPPING event hash-chain does not link to any "
+                    "CREATION, RECEIVING, or INITIAL_PACKING event"
+                ),
+                "merkle_hash": record["merkle_hash"],
+                "merkle_prev_hash": record["merkle_prev_hash"],
+                "expected_predecessor": record["expected_predecessors"],
+                "gaps": ["missing_cryptographic_link"],
+            })
 
     query_time = (time.time() - start_time) * 1000
     logger.info(
         "broken_chain_analysis_completed",
         violation_count=len(violations),
+        missing_origin_count=sum(
+            1 for v in violations if "missing_origin_event" in v["gaps"]
+        ),
+        temporal_paradox_count=sum(
+            1 for v in violations if "temporal_paradox" in v["gaps"]
+        ),
+        cryptographic_gap_count=sum(
+            1 for v in violations if "missing_cryptographic_link" in v["gaps"]
+        ),
         query_time_ms=round(query_time, 2),
     )
 
@@ -645,7 +869,7 @@ async def get_lot_timeline(
     MATCH (l:Lot {tlc: $tlc})-[:UNDERWENT]->(e:TraceEvent)
     WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
     OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
-    RETURN 
+    RETURN
         e.event_id as event_id,
         e.type as type,
         e.event_date as event_date,
@@ -695,16 +919,16 @@ async def query_events_by_range(
 ) -> List[Dict[str, Any]]:
     """
     Query all TraceEvents within a date range for FDA reporting.
-    
+
     Includes joined Lot and Facility data for each event to populate
     the FDA Sortable Spreadsheet columns.
-    
+
     Args:
         client: Neo4j client
         start_date: Start date (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
         end_date: End date
         tenant_id: Optional tenant filter
-        
+
     Returns:
         List of event objects with lot and facility details
     """
@@ -716,10 +940,10 @@ async def query_events_by_range(
     AND e.event_date >= $start_date AND e.event_date <= $end_date
     AND ($cte_type IS NULL OR toUpper(e.type) = toUpper($cte_type))
     AND ($starting_after IS NULL OR e.event_id > $starting_after)
-    
+
     // Join with Lot (Input/Output)
     OPTIONAL MATCH (e)<-[:UNDERWENT]-(l:Lot)
-    
+
     // Join with Facility (Location)
     OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
 
@@ -734,8 +958,8 @@ async def query_events_by_range(
             coalesce(f.name, '') + ' ' + coalesce(f.address, '') + ' ' + coalesce(f.gln, '')
         ) CONTAINS toLower($facility_contains)
     )
-    
-    RETURN 
+
+    RETURN
         e.event_id as event_id,
         e.type as type,
         e.event_date as event_date,
@@ -751,13 +975,13 @@ async def query_events_by_range(
     ORDER BY e.event_date, e.event_time, e.event_id
     LIMIT $limit
     """
-    
+
     events = []
     async with client.session() as session:
         result = await session.run(
-            query, 
-            start_date=start_date, 
-            end_date=end_date, 
+            query,
+            start_date=start_date,
+            end_date=end_date,
             tenant_id=tenant_id,
             product_contains=product_contains,
             facility_contains=facility_contains,
@@ -781,7 +1005,7 @@ async def query_events_by_range(
                 "reference_doc_type": "Invoice", # Placeholder for now
                 "reference_doc_num": record["event_id"], # Using Event ID as proxy for Ref Doc
             })
-            
+
     logger.info(
         "range_query_completed",
         start=start_date,
@@ -792,136 +1016,6 @@ async def query_events_by_range(
         has_facility_filter=bool(facility_contains),
     )
     return events
-
-
-# ============================================================================
-# PHYSICS ENGINE: MASS BALANCE VALIDATION
-# ============================================================================
-
-
-async def check_mass_balance(
-    client: Neo4jClient,
-    event_id: str,
-    tolerance: float = 0.10,
-    tenant_id: Optional[str] = None,
-    tag_imbalance: bool = True,
-) -> MassBalanceResult:
-    """
-    Check mass balance for a single transformation event.
-
-    Mass Balance Rule: We cannot output more product than went in,
-    plus/minus a yield threshold (default 10% tolerance).
-
-    Formula: sum(inputs.quantity) * (1 + tolerance) >= sum(outputs.quantity)
-
-    Args:
-        client: Neo4j client
-        event_id: The TraceEvent event_id to check
-        tolerance: Allowed variance (0.10 = 10% gain allowed)
-        tenant_id: Optional tenant filter
-        tag_imbalance: If True, tags event node with risk_flag on imbalance
-
-    Returns:
-        MassBalanceResult with balance details and risk flag if applicable
-    """
-    # Query to get inputs (CONSUMED) and outputs (PRODUCED) for an event
-    query = """
-    MATCH (e:TraceEvent {event_id: $event_id})
-    WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
-    OPTIONAL MATCH (input:Lot)-[:CONSUMED]->(e)
-    OPTIONAL MATCH (e)-[:PRODUCED]->(output:Lot)
-    RETURN 
-        e.event_id as event_id,
-        e.type as event_type,
-        e.event_date as event_date,
-        e.risk_flag as existing_risk_flag,
-        collect(DISTINCT {
-            tlc: input.tlc, 
-            quantity: input.quantity, 
-            unit: input.unit_of_measure
-        }) as inputs,
-        collect(DISTINCT {
-            tlc: output.tlc, 
-            quantity: output.quantity, 
-            unit: output.unit_of_measure
-        }) as outputs
-    """
-
-    async with client.session() as session:
-        result = await session.run(query, event_id=event_id, tenant_id=tenant_id)
-        record = await result.single()
-
-        if not record:
-            logger.warning("mass_balance_event_not_found", event_id=event_id)
-            return MassBalanceResult(
-                event_id=event_id,
-                event_type="UNKNOWN",
-                event_date=None,
-                input_lots=[],
-                output_lots=[],
-                input_quantity=0.0,
-                output_quantity=0.0,
-                imbalance_ratio=0.0,
-                is_balanced=True,
-                tolerance=tolerance,
-                risk_flag=None,
-            )
-
-        event_type = record["event_type"] or "UNKNOWN"
-        event_date = record["event_date"]
-
-        # Filter out null entries and calculate totals
-        inputs = [i for i in record["inputs"] if i.get("tlc")]
-        outputs = [o for o in record["outputs"] if o.get("tlc")]
-
-        input_qty = sum(i.get("quantity", 0) or 0 for i in inputs)
-        output_qty = sum(o.get("quantity", 0) or 0 for o in outputs)
-
-        # Calculate imbalance ratio
-        # Positive = gain (more out than in), Negative = loss (less out than in)
-        if input_qty > 0:
-            imbalance_ratio = (output_qty - input_qty) / input_qty
-        else:
-            # No inputs - can't compute ratio meaningfully
-            imbalance_ratio = 0.0 if output_qty == 0 else float("inf")
-
-        # Check if balanced within tolerance
-        # Allow up to 'tolerance' gain (e.g., 10% for moisture absorption)
-        # Loss is always acceptable (yield loss, waste)
-        is_balanced = imbalance_ratio <= tolerance
-
-        risk_flag = None
-        if not is_balanced:
-            risk_flag = "MASS_IMBALANCE"
-
-            # Tag the event node if requested
-            if tag_imbalance:
-                await _tag_event_risk_flag(client, event_id, "MASS_IMBALANCE")
-
-        logger.info(
-            "mass_balance_checked",
-            event_id=event_id,
-            event_type=event_type,
-            input_qty=input_qty,
-            output_qty=output_qty,
-            imbalance_ratio=round(imbalance_ratio, 4),
-            is_balanced=is_balanced,
-            risk_flag=risk_flag,
-        )
-
-        return MassBalanceResult(
-            event_id=event_id,
-            event_type=event_type,
-            event_date=event_date,
-            input_lots=inputs,
-            output_lots=outputs,
-            input_quantity=input_qty,
-            output_quantity=output_qty,
-            imbalance_ratio=round(imbalance_ratio, 4),
-            is_balanced=is_balanced,
-            tolerance=tolerance,
-            risk_flag=risk_flag,
-        )
 
 
 async def _tag_event_risk_flag(
@@ -935,7 +1029,7 @@ async def _tag_event_risk_flag(
     Args:
         client: Neo4j client
         event_id: The event to tag
-        risk_flag: The risk flag value (e.g., "MASS_IMBALANCE")
+        risk_flag: The risk flag value (e.g., "BROKEN_CHAIN", "TIME_ARROW")
 
     Returns:
         True if tag was set, False otherwise
@@ -967,98 +1061,6 @@ async def _tag_event_risk_flag(
             error=str(e),
         )
         return False
-
-
-async def check_mass_balance_for_lot(
-    client: Neo4jClient,
-    tlc: str,
-    tolerance: float = 0.10,
-    tenant_id: Optional[str] = None,
-    tag_imbalance: bool = True,
-) -> MassBalanceReport:
-    """
-    Check mass balance for all transformation events involving a lot.
-
-    This finds all transformation events where the lot was consumed or produced
-    and validates mass conservation for each.
-
-    Args:
-        client: Neo4j client
-        tlc: Traceability Lot Code
-        tolerance: Allowed variance (default 10%)
-        tenant_id: Optional tenant filter
-        tag_imbalance: If True, tags event nodes with risk_flag on imbalance
-
-    Returns:
-        MassBalanceReport with all transformation events and their balance status
-    """
-    start_time = time.time()
-
-    # Find all transformation events involving this lot
-    query = """
-    MATCH (l:Lot {tlc: $tlc})
-    WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
-    OPTIONAL MATCH (l)-[:CONSUMED]->(consumed_event:TraceEvent)
-    WHERE consumed_event.type = 'TRANSFORMATION'
-    OPTIONAL MATCH (produced_event:TraceEvent)-[:PRODUCED]->(l)
-    WHERE produced_event.type = 'TRANSFORMATION'
-    WITH collect(DISTINCT consumed_event.event_id) + collect(DISTINCT produced_event.event_id) as all_events
-    UNWIND all_events as event_id
-    WITH DISTINCT event_id
-    WHERE event_id IS NOT NULL
-    RETURN event_id
-    """
-
-    event_ids = []
-    async with client.session() as session:
-        result = await session.run(query, tlc=tlc, tenant_id=tenant_id)
-        async for record in result:
-            if record["event_id"]:
-                event_ids.append(record["event_id"])
-
-    # Check mass balance for each transformation event
-    events = []
-    flagged_events = []
-    balanced_count = 0
-    imbalanced_count = 0
-
-    for event_id in event_ids:
-        balance_result = await check_mass_balance(
-            client,
-            event_id,
-            tolerance=tolerance,
-            tenant_id=tenant_id,
-            tag_imbalance=tag_imbalance,
-        )
-        events.append(balance_result)
-
-        if balance_result.is_balanced:
-            balanced_count += 1
-        else:
-            imbalanced_count += 1
-            flagged_events.append(event_id)
-
-    query_time = (time.time() - start_time) * 1000
-
-    logger.info(
-        "mass_balance_report_completed",
-        tlc=tlc,
-        transformation_count=len(events),
-        balanced_count=balanced_count,
-        imbalanced_count=imbalanced_count,
-        flagged_events=flagged_events,
-        query_time_ms=round(query_time, 2),
-    )
-
-    return MassBalanceReport(
-        lot_id=tlc,
-        transformation_count=len(events),
-        balanced_count=balanced_count,
-        imbalanced_count=imbalanced_count,
-        events=events,
-        flagged_events=flagged_events,
-        query_time_ms=round(query_time, 2),
-    )
 
 
 # ============================================================================
@@ -1143,7 +1145,7 @@ async def find_orphaned_lots(
     query = """
     MATCH (l:Lot)
     WHERE ($tenant_id IS NULL OR l.tenant_id = $tenant_id)
-    
+
     // Must have at least one inbound event
     AND EXISTS {
         MATCH (l)-[:UNDERWENT]->(e:TraceEvent)
@@ -1151,7 +1153,7 @@ async def find_orphaned_lots(
     } OR EXISTS {
         MATCH (trans:TraceEvent)-[:PRODUCED]->(l)
     }
-    
+
     // Must NOT have any outbound events
     AND NOT EXISTS {
         MATCH (l)-[:UNDERWENT]->(ship:TraceEvent {type: 'SHIPPING'})
@@ -1159,19 +1161,19 @@ async def find_orphaned_lots(
     AND NOT EXISTS {
         MATCH (l)-[:CONSUMED]->(trans:TraceEvent)
     }
-    
+
     // Get the most recent event for this lot
     OPTIONAL MATCH (l)-[:UNDERWENT]->(last_event:TraceEvent)
     WITH l, last_event
     ORDER BY last_event.event_date DESC
     WITH l, collect(last_event)[0] as most_recent_event
-    
+
     // Filter by stagnant days
-    WHERE most_recent_event IS NULL 
-       OR most_recent_event.event_date IS NULL 
+    WHERE most_recent_event IS NULL
+       OR most_recent_event.event_date IS NULL
        OR most_recent_event.event_date <= $cutoff_date
-    
-    RETURN 
+
+    RETURN
         l.tlc as tlc,
         l.product_description as product_description,
         l.quantity as quantity,
@@ -1262,15 +1264,15 @@ async def analyze_kde_completeness(
     query = """
     MATCH (e:TraceEvent)
     WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
-    
+
     WITH e.type as event_type,
          count(e) as total,
          sum(CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 1 ELSE 0 END) as missing_date,
          sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN 1 ELSE 0 END) as missing_lot,
          sum(CASE WHEN e.confidence IS NOT NULL AND e.confidence < $threshold THEN 1 ELSE 0 END) as low_confidence,
          avg(CASE WHEN e.confidence IS NOT NULL THEN e.confidence ELSE 0 END) as avg_confidence
-    
-    RETURN 
+
+    RETURN
         event_type,
         total,
         missing_date,
@@ -1284,7 +1286,7 @@ async def analyze_kde_completeness(
     total_events = 0
     total_complete = 0
 
-    with client.session() as session:
+    async with client.session() as session:
         result = await session.run(query, tenant_id=tenant_id, threshold=confidence_threshold)
 
         async for record in result:
