@@ -190,11 +190,6 @@ python -m regengine_ingestion.cli verify --document-id <id>
 | Vertical   | CFR Titles | Primary Sources |
 |------------|------------|-----------------|
 | FSMA       | 21         | FDA, Federal Register, eCFR |
-| Energy     | 10, 18     | DOE, FERC, Federal Register |
-| Nuclear    | 10         | NRC, Federal Register |
-| Healthcare | 42, 45     | HHS, CMS, Federal Register |
-| Gaming     | Various    | State Gaming Commissions |
-| General    | All        | All sources |
 
 ## Environment Variables
 

@@ -27,7 +27,7 @@ class DemoBootstrapper:
         """
         Executes the provisioning sequence.
         1. Create DB schema/RLS policies.
-        2. Seed vertical data (e.g., mock FDA or NERC records).
+        2. Seed vertical data (e.g., mock FDA FSMA 204 records).
         3. Notify the Swarm to watch for 'Demo Interaction' events.
         """
         logger.info(f"Provisioning Demo Tenant: {self.tenant_id} for vertical: {self.vertical}")

@@ -14,9 +14,6 @@ body:
         - "Bot-Security (The CISO)"
         - "Bot-Infra (The SRE)"
         - "Bot-UI (Design System Guardian)"
-        - "Bot-Energy (NERC CIP Specialist)"
-        - "Bot-Health (HIPAA Specialist)"
-        - "Bot-Aero (AS9100D Specialist)"
         - "Bot-QA (Quality Assurance)"
     validations:
       required: true

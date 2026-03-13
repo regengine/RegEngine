@@ -24,23 +24,6 @@ verticals:
     keywords: [traceability, food, safety, FSMA]
     enabled: true
   
-  energy:
-    cfr_titles: [10, 18]
-    agencies: [DOE, FERC]
-    keywords: [energy, grid, compliance]
-    enabled: true
-  
-  nuclear:
-    cfr_titles: [10]
-    agencies: [NRC]
-    keywords: [nuclear, reactor, safety]
-    enabled: true
-  
-  healthcare:
-    cfr_titles: [42, 45]
-    agencies: [HHS, CMS]
-    keywords: [healthcare, HIPAA, medicare]
-    enabled: true
   
   gaming:
     cfr_titles: []
