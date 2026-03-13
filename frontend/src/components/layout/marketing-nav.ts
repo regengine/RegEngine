@@ -21,7 +21,6 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
     { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
     { emoji: "📊", label: "Cold Chain Monitor", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
-    { emoji: "🧠", label: "Knowledge Graph", desc: "Interactive traceability graph builder", href: "/tools/knowledge-graph" },
 ];
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
