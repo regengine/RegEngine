@@ -15,7 +15,7 @@ def cli():
 
 @cli.command()
 @click.option("--source", "-s", type=click.Choice(["federal_register", "ecfr", "fda"]), required=True)
-@click.option("--vertical", "-v", required=True, help="Regulatory vertical (fsma, energy, nuclear, healthcare)")
+@click.option("--vertical", "-v", required=True, help="Regulatory vertical (fsma)")
 @click.option("--max-documents", "-n", default=10, help="Maximum documents to ingest")
 @click.option("--data-path", default="./data", help="Local data directory")
 @click.option("--date-from", type=click.DateTime(), help="Start date (YYYY-MM-DD)")

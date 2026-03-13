@@ -160,23 +160,5 @@ class FrameworkConfig:
                     agencies=["FDA"],
                     keywords=["traceability", "food", "safety", "FSMA"]
                 ),
-                "energy": VerticalConfig(
-                    name="energy",
-                    cfr_titles=[10, 18],
-                    agencies=["DOE", "FERC"],
-                    keywords=["energy", "grid", "compliance"]
-                ),
-                "nuclear": VerticalConfig(
-                    name="nuclear",
-                    cfr_titles=[10],
-                    agencies=["NRC"],
-                    keywords=["nuclear", "reactor", "safety"]
-                ),
-                "healthcare": VerticalConfig(
-                    name="healthcare",
-                    cfr_titles=[42, 45],
-                    agencies=["HHS", "CMS"],
-                    keywords=["healthcare", "HIPAA", "medicare"]
-                ),
             }
         )

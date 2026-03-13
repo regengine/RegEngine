@@ -79,7 +79,7 @@ class NormalizedEvent(BaseModel):
 class FederalRegisterIngestRequest(BaseModel):
     """Request payload for Federal Register ingestion."""
 
-    vertical: str = Field(..., description="Regulatory vertical (e.g., fsma, energy)")
+    vertical: str = Field(..., description="Regulatory vertical (e.g., fsma)")
     max_documents: int = Field(default=10, ge=1, le=100)
     date_from: Optional[datetime] = None
     agencies: Optional[List[str]] = None

@@ -281,11 +281,11 @@ class TestNYDFSExtractor:
         result = extractor._map_to_obligation_enum(obligation)
         assert result == ObligationType.REPORTING
 
-    def test_obligation_type_mapping_conduct(self, extractor):
-        """Test mapping to CONDUCT obligation type (default)."""
+    def test_obligation_type_mapping_must(self, extractor):
+        """Test mapping to MUST obligation type (default fallback)."""
         obligation = "implement security controls"
         result = extractor._map_to_obligation_enum(obligation)
-        assert result == ObligationType.CONDUCT
+        assert result == ObligationType.MUST
 
 
 # Integration tests

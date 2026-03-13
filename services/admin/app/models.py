@@ -112,7 +112,7 @@ class ReviewItem(BaseModel):
                 "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
                 "document_id": "doc_001",
                 "extraction_data": {
-                    "subject": "financial institutions",
+                    "subject": "food facilities on the FTL",
                     "action": "must maintain",
                     "confidence_score": 0.72,
                 },
@@ -153,7 +153,7 @@ class AssessmentResult(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     tenant_id: UUID
     product_id: str
-    framework: str  # e.g., "FSMA_204", "GDPR", "SOC2"
+    framework: str  # e.g., "FSMA_204"
     status: str  # "pass", "fail", "partial"
     score: Optional[float] = None  # 0.0 - 1.0
     findings: list[dict] = Field(default_factory=list)
@@ -164,13 +164,13 @@ class AssessmentResult(BaseModel):
         schema_extra = {
             "example": {
                 "tenant_id": "550e8400-e29b-41d4-a716-446655440000",
-                "product_id": "crypto-trading-platform",
+                "product_id": "romaine-lettuce-12ct",
                 "framework": "FSMA_204",
                 "status": "partial",
                 "score": 0.75,
                 "findings": [
-                    {"requirement": "CTF-001", "status": "pass"},
-                    {"requirement": "CTF-002", "status": "fail"},
+                    {"requirement": "CTE-SHIPPING-001", "status": "pass"},
+                    {"requirement": "CTE-RECEIVING-002", "status": "fail"},
                 ],
             }
         }
