@@ -69,7 +69,7 @@ export default function MyControlsPage() {
 
       if (response.ok) {
         setShowCreateForm(false);
-        setFormData({ control_id: '', title: '', description: '', framework: 'NIST CSF' });
+        setFormData({ control_id: '', title: '', description: '', framework: 'FSMA 204' });
         fetchControls();
       }
     } catch (error) {

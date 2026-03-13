@@ -110,30 +110,6 @@ reviews:
         - No token removals without migration
         - Color palette remains harmonious
 
-    # Bot-Energy scope
-    - path: "services/energy-api/**"
-      instructions: |
-        Energy regulation API. Verify:
-        - NERC CIP standard mapping accuracy
-        - BES Cyber System classification (High/Medium/Low)
-        - FERC vs. state PUC jurisdictional distinction
-
-    # Bot-Health scope
-    - path: "services/healthcare/**"
-      instructions: |
-        Healthcare compliance. EXTRA SCRUTINY for PHI:
-        - No PHI in logs, errors, or API responses
-        - Encryption at rest for PHI fields
-        - BAA chain coverage validated
-        - HIPAA safeguard category mapping
-
-    # Bot-Aero scope
-    - path: "services/aerospace/**"
-      instructions: |
-        Aerospace quality management. Verify:
-        - AS9100D clause mapping accuracy
-        - FAI record completeness
-        - Configuration revision tracking
 
   # ── Review Focus Areas ──────────────────────────────────
   focus:

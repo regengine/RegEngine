@@ -6,7 +6,6 @@ namespace: regengine-prod
 resources:
   - ../../base/namespace.yaml
   - ../../base/compliance/deployment.yaml
-  - ../../base/energy/deployment.yaml
   - ../../base/admin/deployment.yaml
   - ../../base/ingestion/deployment.yaml
   - ../../base/scheduler/deployment.yaml
@@ -15,9 +14,6 @@ resources:
 images:
   - name: regengine/compliance-service
     newName: ghcr.io/regengine/compliance
-    newTag: v1.1.0
-  - name: regengine/energy-api
-    newName: ghcr.io/regengine/energy
     newTag: v1.1.0
 
 patchesStrategicMerge:

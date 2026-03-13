@@ -27,7 +27,6 @@ from shared.funnel_events import get_funnel_stage_metrics
 from .config import get_settings
 from .database import get_session
 from .dependencies import PermissionChecker
-from .metrics import get_hallucination_tracker
 from .review_consumer import get_consumer_health
 
 # Health/metrics router at root level (operational endpoints)
@@ -37,7 +36,6 @@ router = APIRouter()
 v1_router = APIRouter(prefix="/v1", tags=["v1"])
 
 logger = structlog.get_logger("admin")
-REVIEW_ITEM_NOT_FOUND = "Review item not found"
 
 
 class CreateKeyRequest(BaseModel):
@@ -77,42 +75,17 @@ class APIKeyInfo(BaseModel):
     scopes: list[str]
 
 
-class HallucinationCreateRequest(BaseModel):
-    """Payload for recording a hallucination that requires review."""
+class KDEValidationErrorModel(BaseModel):
+    """Tracks missing mandatory FSMA 204 Key Data Elements on a CTE event."""
 
-    tenant_id: Optional[str] = Field(None, description="Tenant UUID that owns the document")
-    document_id: str
-    doc_hash: str
-    extractor: str
-    confidence_score: float = Field(..., ge=0.0, le=1.0)
-    extraction: dict
-    provenance: Optional[dict] = None
-    text_raw: Optional[str] = None
-
-
-class ReviewActionRequest(BaseModel):
-    """Reviewer action payload for approve/reject."""
-
-    reviewer_id: str
-    notes: Optional[str] = None
-
-
-class ReviewItemResponse(BaseModel):
-    """Response model for review queue items."""
-
-    review_id: str
-    tenant_id: Optional[str]
-    document_id: Optional[str]
-    doc_hash: str
-    extractor: Optional[str]
-    confidence_score: float
-    status: str
-    created_at: datetime
-    updated_at: Optional[datetime]
-    reviewer_id: Optional[str]
-    extraction: dict
-    provenance: Optional[dict]
-    text_raw: Optional[str]
+    tenant_id: Optional[str] = Field(None, description="Tenant UUID that owns the record")
+    event_id: str = Field(..., description="CTE event identifier")
+    cte_type: str = Field(..., description="Critical Tracking Event type (e.g. receiving, shipping)")
+    missing_kdes: list[str] = Field(..., description="List of missing mandatory KDE field names")
+    facility_gln: Optional[str] = Field(None, description="GLN of the facility where the gap was detected")
+    traceability_lot_code: Optional[str] = None
+    severity: str = Field("HIGH", description="HIGH if blocks compliance, MEDIUM if degraded")
+    detected_at: Optional[datetime] = None
 
 
 class TenantCreateRequest(BaseModel):
@@ -167,10 +140,6 @@ def verify_admin_key(
         )
     return True
 
-
-
-def _tracker():
-    return get_hallucination_tracker()
 
 
 def require_funnel_read(
@@ -398,60 +367,6 @@ async def revoke_api_key(
     )
 
 
-@v1_router.post("/admin/review/flagged-extractions", response_model=ReviewItemResponse)
-def create_flagged_extraction_record(
-    request: HallucinationCreateRequest,
-    _: bool = Depends(verify_admin_key),
-):
-    """Persist a hallucination review item and update tracker state."""
-
-    tracker = _tracker()
-    try:
-        record = tracker.record_hallucination(
-            tenant_id=request.tenant_id,
-            document_id=request.document_id,
-            doc_hash=request.doc_hash,
-            extractor=request.extractor,
-            confidence_score=request.confidence_score,
-            extraction=request.extraction,
-            provenance=request.provenance,
-            text_raw=request.text_raw,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    return ReviewItemResponse(**record)
-
-
-@v1_router.get("/admin/review/flagged-extractions")
-def list_flagged_extraction_records(
-    status_filter: Optional[str] = Query("PENDING", description="Status filter: PENDING/APPROVED/REJECTED"),
-    tenant_id: Optional[str] = None,
-    limit: int = Query(50, ge=1, le=500),
-    cursor: Optional[str] = Query(None, description="Pagination cursor from previous response"),
-    _: bool = Depends(verify_admin_key),
-):
-    """Return hallucination review items for reviewers with cursor-based pagination."""
-
-    tracker = _tracker()
-    try:
-        result = tracker.list_hallucinations(
-            status=status_filter,
-            tenant_id=tenant_id,
-            limit=limit,
-            cursor=cursor,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    return {
-        "items": [ReviewItemResponse(**item) for item in result["items"]],
-        "next_cursor": result["next_cursor"],
-        "has_more": result["has_more"],
-    }
-
-
-
 @v1_router.post("/admin/tenants", response_model=TenantCreateResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     request: TenantCreateRequest,
@@ -478,67 +393,3 @@ async def get_funnel_metrics(
     return FunnelResponse(stages=[FunnelStageResponse(**stage) for stage in stages])
 
 
-@v1_router.get("/admin/review/flagged-extractions/{review_id}", response_model=ReviewItemResponse)
-def get_flagged_extraction_record(
-    review_id: str,
-    _: bool = Depends(verify_admin_key),
-):
-    """Fetch a single hallucination review item."""
-
-    tracker = _tracker()
-    try:
-        item = tracker.get_hallucination(review_id)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=REVIEW_ITEM_NOT_FOUND) from exc
-
-    return ReviewItemResponse(**item)
-
-
-@v1_router.post("/admin/review/flagged-extractions/{review_id}/approve", response_model=ReviewItemResponse)
-def approve_flagged_extraction(
-    review_id: str,
-    request: ReviewActionRequest,
-    _: bool = Depends(verify_admin_key),
-):
-    """Approve a hallucination after human review."""
-
-    tracker = _tracker()
-    try:
-        updated = tracker.resolve_hallucination(
-            review_id,
-            new_status="APPROVED",
-            reviewer_id=request.reviewer_id,
-            notes=request.notes,
-        )
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=REVIEW_ITEM_NOT_FOUND) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    logger.info("hallucination_approved", review_id=review_id, reviewer_id=request.reviewer_id)
-    return ReviewItemResponse(**updated)
-
-
-@v1_router.post("/admin/review/flagged-extractions/{review_id}/reject", response_model=ReviewItemResponse)
-def reject_flagged_extraction(
-    review_id: str,
-    request: ReviewActionRequest,
-    _: bool = Depends(verify_admin_key),
-):
-    """Reject a hallucination and capture reviewer notes."""
-
-    tracker = _tracker()
-    try:
-        updated = tracker.resolve_hallucination(
-            review_id,
-            new_status="REJECTED",
-            reviewer_id=request.reviewer_id,
-            notes=request.notes,
-        )
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=REVIEW_ITEM_NOT_FOUND) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    logger.info("hallucination_rejected", review_id=review_id, reviewer_id=request.reviewer_id)
-    return ReviewItemResponse(**updated)

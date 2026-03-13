@@ -29,8 +29,6 @@ merged to reduce container count, simplify deployment, and lower maintenance ove
 | `ingestion-service` | PostgreSQL + Kafka | 1 | High | Document intake, NLP trigger |
 | `nlp-service` | PostgreSQL + Kafka | 1 | High | Entity extraction, classification |
 | `scheduler-service` | PostgreSQL | 1 | Medium | Job scheduling, leader election |
-| `energy-api` | PostgreSQL | 1 | Low | Energy vertical endpoints |
-| `opportunity-api` | Neo4j + PostgreSQL | 1 | Low | Arbitrage detection |
 | Infrastructure | — | 5 | — | PostgreSQL, Neo4j, Redis, Kafka, Redpanda Console |
 
 ---
@@ -48,25 +46,7 @@ container and simplifies tenant lifecycle management.
 - **Risk:** Low — no shared state conflicts
 - **Savings:** 1 container, ~200MB RAM
 
-### 3.2 `energy-api` → `graph-service` (Consider ⚠️)
-
-**Rationale:** Energy-api has thin endpoints that primarily query snapshots. However,
-energy uses PostgreSQL while graph-service is Neo4j-primary.
-
-- **Shared DB:** No (different databases)
-- **Risk:** Medium — different data access patterns
-- **Recommendation:** Defer unless energy grows thin enough to not justify a container
-
-### 3.3 `opportunity-api` → `graph-service` (Consider ⚠️)
-
-**Rationale:** Both use Neo4j. Opportunity-api is a single-endpoint service for
-arbitrage detection.
-
-- **Shared DB:** Yes (Neo4j)
-- **Risk:** Low — single router to merge
-- **Recommendation:** Good candidate if opportunity-api remains narrow
-
-### 3.4 `compliance-worker` → `scheduler-service` (Not Recommended ❌)
+### 3.2 `compliance-worker` → `scheduler-service` (Not Recommended ❌)
 
 **Rationale:** Different concerns (async job processing vs cron scheduling). Despite
 both being "background workers," merging complicates error isolation and scaling.
@@ -75,14 +55,12 @@ both being "background workers," merging complicates error isolation and scaling
 
 ## 4. Recommended Q2 Actions
 
-| # | Action | Priority | Effort |
-|---|--------|----------|--------|
-| 1 | Merge `billing-service` → `admin-api` | P1 | 4h |
-| 2 | Merge `opportunity-api` → `graph-service` | P2 | 2h |
-| 3 | Evaluate energy-api size quarterly | P3 | — |
-| 4 | Keep compliance-worker, nlp, ingestion separate | — | — |
+| #   | Action                                          | Priority | Effort |
+| --- | ----------------------------------------------- | -------- | ------ |
+| 1   | Merge `billing-service` into `admin-api`        | P1       | 4h     |
+| 2   | Keep compliance-worker, nlp, ingestion separate | n/a      | n/a    |
 
-**Expected outcome:** Reduce from 17 → 15 containers, simplify 2 deployment targets.
+**Expected outcome:** Reduce from 16 → 15 containers, simplify 1 deployment target.
 
 ---
 
