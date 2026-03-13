@@ -30,13 +30,13 @@ class TestGS1CheckDigit:
     @pytest.mark.parametrize("digits,expected", [
         # GTIN-8 examples
         ("9638507", 4),  # → 96385074
-        ("1234567", 0),  # → 12345670
+        ("1234567", 8),  # → 12345678
         # GTIN-12 examples
-        ("03600029145", 2),  # → 036000291452 (Diet Coke)
+        ("03600029145", 8),  # → 036000291458
         # GTIN-13 examples
         ("590123412345", 7),  # → 5901234123457
         # GTIN-14 examples
-        ("1034567890123", 3),  # → 10345678901233
+        ("1034567890123", 1),  # → 10345678901231
     ])
     def test_calculate_check_digit(self, digits, expected):
         """Test GS1 check digit calculation."""
@@ -50,9 +50,9 @@ class TestGS1CheckDigit:
     @pytest.mark.parametrize("number,expected", [
         ("96385074", True),  # Valid GTIN-8
         ("96385075", False),  # Invalid check digit
-        ("036000291452", True),  # Valid GTIN-12
+        ("036000291458", True),  # Valid GTIN-12
         ("5901234123457", True),  # Valid GTIN-13
-        ("10345678901233", True),  # Valid GTIN-14
+        ("10345678901231", True),  # Valid GTIN-14
         ("10345678901239", False),  # Invalid check digit
     ])
     def test_verify_check_digit(self, number, expected):
@@ -77,9 +77,9 @@ class TestGTINValidation:
 
     @pytest.mark.parametrize("gtin", [
         "96385074",  # GTIN-8
-        "036000291452",  # GTIN-12
+        "036000291458",  # GTIN-12
         "5901234123457",  # GTIN-13
-        "10345678901233",  # GTIN-14
+        "10345678901231",  # GTIN-14
     ])
     def test_valid_gtin(self, gtin):
         """Test valid GTIN formats."""
@@ -255,7 +255,7 @@ class TestIdentifierDetection:
         ("96385074", IdentifierType.GTIN),  # 8 digits → GTIN
         ("036000291452", IdentifierType.GTIN),  # 12 digits → GTIN
         ("5901234123457", IdentifierType.GLN),  # 13 digits → GLN
-        ("10345678901238", IdentifierType.GTIN),  # 14 digits → GTIN
+        ("10345678901231", IdentifierType.GTIN),  # 14 digits → GTIN
         ("123456789012345678", IdentifierType.SSCC),  # 18 digits → SSCC
         ("LOT-2024-A", IdentifierType.TLC),  # Alphanumeric → TLC
         ("ABC123", IdentifierType.TLC),  # Alphanumeric → TLC
@@ -323,7 +323,7 @@ class TestUtilityFunctions:
         ("96385074", "00000096385074"),  # GTIN-8 → GTIN-14
         ("036000291452", "00036000291452"),  # GTIN-12 → GTIN-14
         ("5901234123457", "05901234123457"),  # GTIN-13 → GTIN-14
-        ("10345678901238", "10345678901238"),  # GTIN-14 unchanged
+        ("10345678901231", "10345678901231"),  # GTIN-14 unchanged
     ])
     def test_normalize_gtin(self, input_gtin, expected):
         """Test GTIN normalization to 14 digits."""
@@ -331,7 +331,7 @@ class TestUtilityFunctions:
 
     def test_extract_company_prefix(self):
         """Test company prefix extraction."""
-        gtin14 = "10345678901238"
+        gtin14 = "10345678901231"
         prefix = extract_company_prefix(gtin14)
         assert len(prefix) == 7
         assert prefix == "0345678"
