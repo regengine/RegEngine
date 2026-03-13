@@ -36,6 +36,7 @@ async def root() -> dict:
             "industries": "/industries",
             "checklists": "/checklists",
             "validate": "/validate",
+            "fda_audit_spreadsheet": "/v1/fsma/audit/spreadsheet",
         },
     }
 

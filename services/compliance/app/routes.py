@@ -5,10 +5,11 @@ import uuid
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from shared.auth import require_api_key
 from .fsma_spreadsheet import generate_fda_csv
 
 router = APIRouter(tags=["fsma-compliance"])
@@ -260,7 +261,7 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
 _GRAPH_SERVICE_URL = os.getenv("GRAPH_SERVICE_URL", "http://localhost:8003")
 
 
-@router.get("/fsma/audit/spreadsheet")
+@router.get("/v1/fsma/audit/spreadsheet", dependencies=[Depends(require_api_key)])
 async def fsma_audit_spreadsheet(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
