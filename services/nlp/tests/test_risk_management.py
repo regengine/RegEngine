@@ -16,8 +16,6 @@ _MOCKED_MODULES = [
     "langchain", "langchain.agents",
     "openai", "jsonschema", "requests", "tenacity",
     "services.nlp.app.extractors.llm_extractor",
-    "services.nlp.app.extractors.dora_extractor",
-    "services.nlp.app.extractors.nydfs_extractor",
     "services.nlp.app.extractors.sec_sci_extractor",
 ]
 
@@ -40,6 +38,9 @@ from services.nlp.app.extractors.fsma_extractor import (
     FSMAExtractionResult,
     DocumentType,
     CTE,
+    TOPIC_GRAPH_UPDATE,
+    TOPIC_NEEDS_REVIEW,
+    HITL_CONFIDENCE_THRESHOLD,
 )
 
 # IMMEDIATELY restore all original modules so later imports are not affected
@@ -69,11 +70,11 @@ class TestFSMARiskManagement(unittest.TestCase):
         # HIGH risk (>= 0.95)
         self.assertEqual(self.extractor._determine_risk_level(1.0), ExtractionConfidence.HIGH)
         self.assertEqual(self.extractor._determine_risk_level(0.95), ExtractionConfidence.HIGH)
-        
+
         # MEDIUM risk (0.85 - 0.94)
         self.assertEqual(self.extractor._determine_risk_level(0.94), ExtractionConfidence.MEDIUM)
         self.assertEqual(self.extractor._determine_risk_level(0.85), ExtractionConfidence.MEDIUM)
-        
+
         # LOW risk (< 0.85)
         self.assertEqual(self.extractor._determine_risk_level(0.84), ExtractionConfidence.LOW)
         self.assertEqual(self.extractor._determine_risk_level(0.0), ExtractionConfidence.LOW)
@@ -88,11 +89,54 @@ class TestFSMARiskManagement(unittest.TestCase):
             confidence_level=ExtractionConfidence.MEDIUM,
             review_required=True
         )
-        
+
         graph_event = self.extractor.to_graph_event(result)
         self.assertIn("risk_assessment", graph_event)
         self.assertEqual(graph_event["risk_assessment"]["level"], "MEDIUM")
         self.assertTrue(graph_event["risk_assessment"]["review_required"])
+
+    def test_hitl_threshold_constant(self):
+        """Verify the HITL threshold is set to 0.85."""
+        self.assertEqual(HITL_CONFIDENCE_THRESHOLD, 0.85)
+
+    def test_topic_constants(self):
+        """Verify Kafka topic names for FSMA routing."""
+        self.assertEqual(TOPIC_GRAPH_UPDATE, "graph.update")
+        self.assertEqual(TOPIC_NEEDS_REVIEW, "nlp.needs_review")
+
+    def test_route_extraction_high_confidence(self):
+        """High-confidence extractions with KDE minimums route to graph.update."""
+        result = FSMAExtractionResult(
+            document_id="doc-high",
+            document_type=DocumentType.BILL_OF_LADING,
+            ctes=[],
+            extraction_timestamp="2024-01-01T00:00:00Z",
+            confidence_level=ExtractionConfidence.HIGH,
+            review_required=False,
+        )
+        envelope = self.extractor.route_extraction(result)
+        self.assertEqual(envelope["topic"], "graph.update")
+
+    def test_route_extraction_low_confidence(self):
+        """Low-confidence extractions route to nlp.needs_review."""
+        result = FSMAExtractionResult(
+            document_id="doc-low",
+            document_type=DocumentType.BILL_OF_LADING,
+            ctes=[],
+            extraction_timestamp="2024-01-01T00:00:00Z",
+            confidence_level=ExtractionConfidence.LOW,
+            review_required=True,
+        )
+        envelope = self.extractor.route_extraction(result)
+        self.assertEqual(envelope["topic"], "nlp.needs_review")
+
+    def test_tlc_format_validation_gtin14(self):
+        """Production GTIN-14 TLC pattern validates correctly."""
+        self.assertTrue(self.extractor.validate_tlc_format("00012345678901LotA"))
+        self.assertTrue(self.extractor.validate_tlc_format("00012345678901-Lot.123"))
+        self.assertFalse(self.extractor.validate_tlc_format("SHORT"))
+        self.assertFalse(self.extractor.validate_tlc_format(""))
+        self.assertFalse(self.extractor.validate_tlc_format("12345"))
 
 if __name__ == '__main__':
     unittest.main()

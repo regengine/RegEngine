@@ -20,13 +20,12 @@ router = APIRouter()
 # Versioned API router for graph endpoints
 v1_router = APIRouter(tags=["v1"])
 
-from .routers import arbitrage, labels, lineage_traversal, regulations
+from .routers import labels, lineage_traversal, regulations
 from .routers.fsma import trace_router, science_router, recall_router, metrics_router, compliance_router
 
 logger = structlog.get_logger("graph-api")
 
 v1_router.include_router(regulations.router, prefix="/regulations", tags=["regulations"])
-v1_router.include_router(arbitrage.arbitrage_router, prefix="/arbitrage", tags=["arbitrage"])
 v1_router.include_router(labels.router, prefix="/labels", tags=["labels"])
 v1_router.include_router(lineage_traversal.router, prefix="/lineage", tags=["lineage"])
 

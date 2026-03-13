@@ -2,9 +2,36 @@ import structlog
 import logging
 import sys
 import os
+from contextvars import ContextVar
 from opentelemetry import trace
 
-# Configure base structlog processors
+# ---------------------------------------------------------------------------
+# Context variables for multi-tenant isolation audit fields.
+# Middleware (TenantContextMiddleware / RequestIDMiddleware) should set these
+# per-request so every log line carries tenant_id and request_id.
+# ---------------------------------------------------------------------------
+_tenant_id_ctx: ContextVar[str] = ContextVar("tenant_id", default="unknown")
+_request_id_ctx: ContextVar[str] = ContextVar("request_id", default="unknown")
+
+
+def set_tenant_context(tenant_id: str, request_id: str) -> None:
+    """Set per-request tenant and request identifiers for structured logging."""
+    _tenant_id_ctx.set(tenant_id)
+    _request_id_ctx.set(request_id)
+
+
+def _inject_service_context(logger_instance, method_name, event_dict):
+    """Inject service name, tenant_id, and request_id into every log record.
+
+    These fields are required for multi-tenant isolation audit compliance.
+    """
+    event_dict.setdefault("service", os.getenv("SERVICE_NAME", "regengine"))
+    event_dict.setdefault("tenant_id", _tenant_id_ctx.get("unknown"))
+    event_dict.setdefault("request_id", _request_id_ctx.get("unknown"))
+    return event_dict
+
+
+# Configure base structlog processors with JSON output and audit fields
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -12,6 +39,7 @@ structlog.configure(
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.TimeStamper(fmt="iso"),
+        _inject_service_context,
         structlog.processors.JSONRenderer(),
     ],
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -35,8 +63,8 @@ def setup_logging():
     # 1. Stdout listener
     handlers = [logging.StreamHandler(sys.stdout)]
     
-    # 2. OTel Bridge (If available and enabled)
-    enable_otel = os.getenv("ENABLE_OTEL", "true").lower() != "false"
+    # 2. OTel Bridge (only when explicitly opted-in via ENABLE_OTEL=true)
+    enable_otel = os.getenv("ENABLE_OTEL", "false").lower() == "true"
     if OTEL_LOGGING_AVAILABLE and enable_otel:
         handlers.append(LoggingHandler(logger_provider=logs.get_logger_provider()))
         

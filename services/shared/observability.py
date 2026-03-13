@@ -8,8 +8,23 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.trace import NoOpTracerProvider
 from fastapi import FastAPI
 import os
+import structlog
+
+logger = structlog.get_logger("observability")
+
+
+def _otel_enabled() -> bool:
+    """Determine whether OTEL should be active.
+
+    OTEL is strictly opt-in: only enabled when ENABLE_OTEL is explicitly
+    set to "true".  Defaults to **disabled** so local dev environments
+    don't produce noisy gRPC connection errors to otel-collector.
+    """
+    return os.getenv("ENABLE_OTEL", "false").lower() == "true"
+
 
 def get_shared_resource(service_name: str):
     """Standardized resource with K8s Downward API metadata."""
@@ -28,7 +43,9 @@ def get_shared_resource(service_name: str):
 
 def add_observability(app: FastAPI, service_name: str):
     """Unified entry point for FastAPI OTel (Tracing + Baggage + Logs)."""
-    if os.getenv("ENABLE_OTEL", "true").lower() == "false":
+    if not _otel_enabled():
+        trace.set_tracer_provider(NoOpTracerProvider())
+        logger.info("otel_disabled", service=service_name)
         return
 
     try:
@@ -49,15 +66,17 @@ def add_observability(app: FastAPI, service_name: str):
             log_exporter = OTLPLogExporter(endpoint=endpoint)
             log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
         except Exception as e:
-            print(f"Failed to setup OTel logging: {e}")
+            logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
 
         FastAPIInstrumentor.instrument_app(app)
     except Exception as e:
-        print(f"Failed to setup OTel observability: {e}")
+        logger.error("otel_setup_failed", service=service_name, error=str(e))
 
 def setup_standalone_observability(service_name: str):
     """Setup OTel for workers and consumers (no FastAPI app)."""
-    if os.getenv("ENABLE_OTEL", "true").lower() == "false":
+    if not _otel_enabled():
+        trace.set_tracer_provider(NoOpTracerProvider())
+        logger.info("otel_disabled", service=service_name)
         return trace.get_tracer(service_name)
 
     try:
@@ -78,8 +97,8 @@ def setup_standalone_observability(service_name: str):
             log_exporter = OTLPLogExporter(endpoint=endpoint)
             log_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
         except Exception as e:
-            print(f"Failed to setup OTel logging: {e}")
+            logger.warning("otel_log_setup_failed", service=service_name, error=str(e))
     except Exception as e:
-        print(f"Failed to setup standalone OTel observability: {e}")
-    
+        logger.error("otel_standalone_setup_failed", service=service_name, error=str(e))
+
     return trace.get_tracer(service_name)

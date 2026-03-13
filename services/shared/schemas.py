@@ -6,6 +6,7 @@ across NLP, Review, and Graph services, preventing schema drift.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
@@ -293,43 +294,137 @@ class KDE(BaseModel):
     }
 
 
+class FSMAEventType(str, Enum):
+    """FSMA event type enum for validated FSMAEvent payloads."""
+    CREATION = "CREATION"
+    TRANSFORMATION = "TRANSFORMATION"
+    SHIPPING = "SHIPPING"
+    RECEIVING = "RECEIVING"
+
+
+_TLC_PRODUCTION_RE = re.compile(r"^\d{14}[A-Za-z0-9\-\.]+$")
+
+
 class FSMAEvent(BaseModel):
     """FSMA event model for Critical Tracking Events.
-    
-    Represents a single event extracted from shipping documents (BOL, invoices, ASN).
-    Contains the 7 required KDEs for FSMA 204 compliance.
+
+    Represents a single validated event extracted from EPCIS, EDI, or other
+    supply chain documents. Contains the required KDEs for FSMA 204 compliance.
+    All extracted data from EPCIS and EDI pipelines is validated against this
+    model before being emitted to Kafka.
+
+    Required KDEs (rejection triggers):
+      - ``tlc``        – must match GTIN-14 prefix pattern
+      - ``event_time`` – ISO 8601 timestamp (required)
     """
-    
-    tlc: str = Field(..., description="Traceability Lot Code (GTIN-14 + variable lot)")
-    cte_type: CTEType = Field(default=CTEType.SHIPPING, description="Critical Tracking Event type")
-    date: str = Field(..., description="Event date in YYYY-MM-DD format")
-    quantity: Optional[float] = Field(None, description="Numeric quantity")
-    unit: Optional[str] = Field(None, description="Unit of measure (cases, lbs, kg, etc.)")
-    product: Optional[ProductDescription] = Field(None, description="Product information")
+
+    event_id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        description="Unique event identifier",
+    )
+    event_type: FSMAEventType = Field(
+        ...,
+        description="FSMA event type: CREATION, TRANSFORMATION, SHIPPING, RECEIVING",
+    )
+    tlc: str = Field(
+        ...,
+        description="Traceability Lot Code (GTIN-14 + variable lot)",
+        min_length=15,
+    )
+    product_description: str = Field(
+        default="Unknown Product",
+        description="Human-readable product description",
+    )
+    quantity: Optional[float] = Field(None, description="Numeric quantity", ge=0)
+    unit_of_measure: Optional[str] = Field(
+        None, description="Unit of measure (cases, lbs, kg, etc.)"
+    )
+    location_gln: Optional[str] = Field(
+        None, description="Primary location GLN (13-digit GS1)"
+    )
+    event_time: str = Field(
+        ..., description="ISO 8601 timestamp of the event", min_length=1
+    )
+    source_gln: Optional[str] = Field(None, description="Source/ship-from GLN")
+    destination_gln: Optional[str] = Field(
+        None, description="Destination/ship-to GLN"
+    )
+    reference_document_type: Optional[str] = Field(
+        None,
+        description="Source document type (EPCIS, EDI_856, EDI_850, etc.)",
+    )
+    reference_document_number: Optional[str] = Field(
+        None, description="Source document reference number"
+    )
+    tenant_id: Optional[str] = Field(
+        None, description="Tenant identifier for multi-tenancy"
+    )
+
+    # Legacy fields retained for backward compatibility with document extraction
+    date: Optional[str] = Field(None, description="Event date in YYYY-MM-DD format")
+    cte_type: Optional[CTEType] = Field(
+        None, description="Legacy CTE type (use event_type instead)"
+    )
+    unit: Optional[str] = Field(
+        None, description="Legacy unit field (use unit_of_measure instead)"
+    )
+    product: Optional[ProductDescription] = Field(
+        None, description="Product information"
+    )
     ship_from: Optional[Location] = Field(None, description="Ship from location")
     ship_to: Optional[Location] = Field(None, description="Ship to location")
-    document_source: Optional[str] = Field(None, description="Source document identifier")
-    document_hash: Optional[str] = Field(None, description="Source document hash")
-    raw_row_index: Optional[int] = Field(None, description="Row index in source table (for tabular docs)")
-    kdes: List[KDE] = Field(default_factory=list, description="All extracted Key Data Elements")
-    
+    document_source: Optional[str] = Field(
+        None, description="Source document identifier"
+    )
+    document_hash: Optional[str] = Field(
+        None, description="Source document hash"
+    )
+    raw_row_index: Optional[int] = Field(
+        None, description="Row index in source table (for tabular docs)"
+    )
+    kdes: List[KDE] = Field(
+        default_factory=list, description="All extracted Key Data Elements"
+    )
+
+    @field_validator("tlc")
+    @classmethod
+    def validate_tlc_format(cls, v: str) -> str:
+        """Enforce GTIN-14 prefix pattern: 14 digits + alphanumeric lot suffix."""
+        if not _TLC_PRODUCTION_RE.match(v):
+            raise ValueError(
+                f"TLC '{v}' does not match FSMA 204 production pattern "
+                f"(expected 14-digit GTIN prefix + lot suffix, "
+                f"e.g. '00012345678901-LotA')"
+            )
+        return v
+
+    @field_validator("event_time")
+    @classmethod
+    def validate_event_time_nonempty(cls, v: str) -> str:
+        """Reject empty or whitespace-only event_time."""
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError(
+                "event_time is a required KDE and must not be blank"
+            )
+        return stripped
+
     model_config = {
         "json_schema_extra": {
             "example": {
+                "event_id": "550e8400-e29b-41d4-a716-446655440000",
+                "event_type": "SHIPPING",
                 "tlc": "00012345678901-L2025-1105-A",
-                "cte_type": "SHIPPING",
-                "date": "2025-11-05",
+                "product_description": "Romaine Lettuce Hearts 12ct",
                 "quantity": 50,
-                "unit": "cases",
-                "product": {
-                    "text": "Romaine Lettuce Hearts 12ct",
-                    "gtin": "00012345678901"
-                },
-                "ship_from": {"gln": "1234567890123", "name": "Fresh Farms"},
-                "ship_to": {"gln": "9876543210987", "name": "Metro Distribution"},
-                "kdes": [
-                    {"name": "traceability_lot_code", "value": "00012345678901-L2025-1105-A", "confidence": 0.92}
-                ]
+                "unit_of_measure": "cases",
+                "location_gln": "1234567890123",
+                "event_time": "2025-11-05T14:30:00Z",
+                "source_gln": "1234567890123",
+                "destination_gln": "9876543210987",
+                "reference_document_type": "EPCIS",
+                "reference_document_number": "ASN-2025-001",
+                "tenant_id": "tenant-001",
             }
         }
     }

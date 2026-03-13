@@ -1,16 +1,12 @@
 """Deterministic extractor registry for provenance and replay flows."""
 
-from .dora_extractor import DORAExtractor
+from .fsma_extractor import FSMAExtractor
 from .llm_extractor import LLMGenerativeExtractor
-from .nydfs_extractor import NYDFSExtractor
-from .sec_sci_extractor import SECSCIExtractor
 
 # Hard-coded registry ensures replay tooling can map framework identifiers to
 # concrete extractor classes without resorting to dynamic imports.
 EXTRACTOR_REGISTRY = {
-    "DORA": DORAExtractor,
-    "US-SEC-SCI": SECSCIExtractor,
-    "US-NY-500": NYDFSExtractor,
+    "FSMA-204": FSMAExtractor,
     "GENERIC": LLMGenerativeExtractor,
 }
 
@@ -25,10 +21,8 @@ def get_extractor(framework_name: str):
 
 
 __all__ = [
-    "DORAExtractor",
+    "FSMAExtractor",
     "LLMGenerativeExtractor",
-    "NYDFSExtractor",
-    "SECSCIExtractor",
     "EXTRACTOR_REGISTRY",
     "get_extractor",
 ]

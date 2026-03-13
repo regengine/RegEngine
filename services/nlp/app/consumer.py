@@ -58,6 +58,7 @@ CONFIDENCE_THRESHOLD = getattr(settings, 'extraction_confidence_high', 0.85) if 
 TOPIC_GRAPH_UPDATE = "graph.update"
 TOPIC_NEEDS_REVIEW = "nlp.needs_review"
 TOPIC_DLQ = "nlp.extracted.dlq"
+TOPIC_FSMA_DLQ = "fsma.dead_letter"
 
 # Max retries before sending to DLQ
 MAX_RETRIES = 3
@@ -362,6 +363,37 @@ def _send_to_dlq(
         logger.error("dlq_send_failed", document_id=doc_id, error=str(dlq_exc))
 
 
+def _is_fsma_event(evt: dict) -> bool:
+    """Heuristic: does this event relate to FSMA traceability?"""
+    source = str(evt.get("source_url", ""))
+    doc_id = str(evt.get("document_id", ""))
+    return "fsma" in source.lower() or "fsma" in doc_id.lower() or "204" in source
+
+
+def _send_to_fsma_dlq(
+    producer: KafkaProducer,
+    event: any,
+    error: str,
+    doc_id: str | None = None,
+    headers: list | None = None,
+) -> None:
+    """Route failed message to fsma.dead_letter if FSMA-related, else standard DLQ."""
+    topic = TOPIC_FSMA_DLQ if isinstance(event, dict) and _is_fsma_event(event) else TOPIC_DLQ
+    try:
+        payload = {
+            "original_event": event if isinstance(event, dict) else str(event),
+            "error": error,
+            "failed_at": _now_iso(),
+            "source_topic": settings.topic_in if settings else "ingest.normalized",
+            "dlq_topic": topic,
+        }
+        producer.send(topic, key=doc_id or "unknown", value=payload, headers=headers or [])
+        producer.flush(timeout=1.0)
+        logger.info("message_routed_to_dlq", topic=topic, document_id=doc_id, error=error)
+    except Exception as dlq_exc:
+        logger.error("dlq_routing_failed", topic=topic, document_id=doc_id, error=str(dlq_exc))
+
+
 def stop_consumer() -> None:
     _shutdown_event.set()
 
@@ -373,6 +405,7 @@ def run_consumer() -> None:
     # Ensure topics exist
     _ensure_topic(TOPIC_GRAPH_UPDATE)
     _ensure_topic(TOPIC_NEEDS_REVIEW)
+    _ensure_topic(TOPIC_FSMA_DLQ)
     _ensure_topic(TOPIC_DLQ)
 
     # Use raw consumer to handle poison pills manually
@@ -418,116 +451,130 @@ def run_consumer() -> None:
                         continue
 
                     if not evt: continue
-                    
+
                     doc_id = evt.get("document_id") or evt.get("doc_id") or "unknown"
                     span.set_attribute("document_id", doc_id)
-                doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
-                norm_path = evt.get("normalized_s3_path")
-                inline_text = evt.get("text_clean")
-                tenant_id = evt.get("tenant_id")
-                provenance = evt.get("provenance") or {}
 
-                if not doc_id or (not norm_path and not inline_text):
-                    logger.warning("skipping_event_missing_keys", event=evt)
-                    MESSAGES_COUNTER.labels(status="skipped").inc()
-                    consumer.commit()
-                    continue
-
-                try:
-                    if inline_text:
-                        text = str(inline_text)[:2_000_000]
-                        source_url = provenance.get(
-                            "source_url", evt.get("source_url", "unknown")
-                        )
-                    else:
-                        _, _, bucket_key = norm_path.partition("s3://")
-                        bucket, _, key = bucket_key.partition("/")
-                        payload = json.loads(get_bytes(bucket, key))
-                        text = payload.get("text", "")[:2_000_000]
-                        source_url = payload.get("source_url", "unknown")
-
-                    # Extract entities using existing extractor
-                    entities = extract_entities(text)
-
-                    # Convert to canonical ExtractionPayload format
-                    extractions = _convert_entities_to_extraction(
-                        entities, doc_id, source_url
-                    )
-
-                    # Route each extraction based on confidence
-                    for extraction in extractions:
-                        _route_extraction(
-                            extraction,
-                            doc_id,
-                            doc_hash,
-                            source_url,
-                            producer,
-                            tenant_id,
-                        )
-
-                    # Also send to legacy topic for backward compatibility
-                    legacy_out = {
-                        "event_id": str(uuid.uuid4()),
-                        "document_id": doc_id,
-                        "tenant_id": tenant_id,
-                        "source_url": source_url,
-                        "timestamp": _now_iso(),
-                        "entities": entities,
-                    }
-                    validator.validate(legacy_out)
-                    producer.send(settings.topic_out, key=doc_id, value=legacy_out)
-
-                    producer.flush(timeout=1.0)
-
-
-                    logger.info(
-                        "nlp_extraction_complete",
-                        document_id=doc_id,
-                        extraction_count=len(extractions),
-                        high_confidence=sum(
-                            1
-                            for e in extractions
-                            if e.confidence_score >= settings.extraction_confidence_high
-                        ),
-                        needs_review=sum(
-                            1
-                            for e in extractions
-                            if e.confidence_score < settings.extraction_confidence_high
-                        ),
-                    )
-                    MESSAGES_COUNTER.labels(status="success").inc()
-                    consumer.commit()
-                except (ValidationError, KafkaTimeoutError) as exc:
-                    # Track retries per document
-                    retry_key = doc_id or "unknown"
-                    _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
-
-                    if _retry_counts[retry_key] >= MAX_RETRIES:
+                    try:
+                        doc_hash = evt.get("document_hash") or evt.get("content_hash") or doc_id
+                        norm_path = evt.get("normalized_s3_path")
+                        inline_text = evt.get("text_clean")
+                        tenant_id = evt.get("tenant_id")
+                        provenance = evt.get("provenance") or {}
+                    except Exception as field_exc:
                         logger.error(
-                            "nlp_max_retries_exceeded_sending_to_dlq",
+                            "malformed_event_fields",
+                            error=str(field_exc),
+                            offset=record.offset,
+                        )
+                        _send_to_fsma_dlq(
+                            producer, evt, f"Field extraction failed: {field_exc}",
+                            doc_id, kafka_headers,
+                        )
+                        MESSAGES_COUNTER.labels(status="error").inc()
+                        consumer.commit()
+                        continue
+
+                    if not doc_id or (not norm_path and not inline_text):
+                        logger.warning("skipping_event_missing_keys", event=evt)
+                        MESSAGES_COUNTER.labels(status="skipped").inc()
+                        consumer.commit()
+                        continue
+
+                    try:
+                        if inline_text:
+                            text = str(inline_text)[:2_000_000]
+                            source_url = provenance.get(
+                                "source_url", evt.get("source_url", "unknown")
+                            )
+                        else:
+                            _, _, bucket_key = norm_path.partition("s3://")
+                            bucket, _, key = bucket_key.partition("/")
+                            payload = json.loads(get_bytes(bucket, key))
+                            text = payload.get("text", "")[:2_000_000]
+                            source_url = payload.get("source_url", "unknown")
+
+                        # Extract entities using existing extractor
+                        entities = extract_entities(text)
+
+                        # Convert to canonical ExtractionPayload format
+                        extractions = _convert_entities_to_extraction(
+                            entities, doc_id, source_url
+                        )
+
+                        # Route each extraction based on confidence
+                        for extraction in extractions:
+                            _route_extraction(
+                                extraction,
+                                doc_id,
+                                doc_hash,
+                                source_url,
+                                producer,
+                                tenant_id,
+                            )
+
+                        # Also send to legacy topic for backward compatibility
+                        legacy_out = {
+                            "event_id": str(uuid.uuid4()),
+                            "document_id": doc_id,
+                            "tenant_id": tenant_id,
+                            "source_url": source_url,
+                            "timestamp": _now_iso(),
+                            "entities": entities,
+                        }
+                        validator.validate(legacy_out)
+                        producer.send(settings.topic_out, key=doc_id, value=legacy_out)
+
+                        producer.flush(timeout=1.0)
+
+                        logger.info(
+                            "nlp_extraction_complete",
                             document_id=doc_id,
-                            retries=_retry_counts[retry_key],
+                            extraction_count=len(extractions),
+                            high_confidence=sum(
+                                1
+                                for e in extractions
+                                if e.confidence_score >= settings.extraction_confidence_high
+                            ),
+                            needs_review=sum(
+                                1
+                                for e in extractions
+                                if e.confidence_score < settings.extraction_confidence_high
+                            ),
+                        )
+                        MESSAGES_COUNTER.labels(status="success").inc()
+                        consumer.commit()
+                    except (ValidationError, KafkaTimeoutError) as exc:
+                        # Track retries per document
+                        retry_key = doc_id or "unknown"
+                        _retry_counts[retry_key] = _retry_counts.get(retry_key, 0) + 1
+
+                        if _retry_counts[retry_key] >= MAX_RETRIES:
+                            logger.error(
+                                "nlp_max_retries_exceeded_sending_to_dlq",
+                                document_id=doc_id,
+                                retries=_retry_counts[retry_key],
+                                error=str(exc),
+                            )
+                            _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
+                            _retry_counts.pop(retry_key, None)
+                            consumer.commit()  # Don't re-process
+                        else:
+                            logger.warning(
+                                "nlp_validation_or_kafka_error_will_retry",
+                                document_id=doc_id,
+                                retry=_retry_counts[retry_key],
+                                error=str(exc),
+                            )
+                        MESSAGES_COUNTER.labels(status="error").inc()
+                    except Exception as exc:  # pragma: no cover - requires infra
+                        logger.exception(
+                            "nlp_processing_error_sending_to_dlq",
+                            document_id=doc_id,
                             error=str(exc),
                         )
-                        _send_to_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
-                        _retry_counts.pop(retry_key, None)
-                        consumer.commit()  # Don't re-process
-                    else:
-                        logger.warning(
-                            "nlp_validation_or_kafka_error_will_retry",
-                            document_id=doc_id,
-                            retry=_retry_counts[retry_key],
-                            error=str(exc),
-                        )
-                    MESSAGES_COUNTER.labels(status="error").inc()
-                except Exception as exc:  # pragma: no cover - requires infra
-                    logger.exception(
-                        "nlp_processing_error_sending_to_dlq",
-                        document_id=doc_id,
-                        error=str(exc),
-                    )
-                    _send_to_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
-                    consumer.commit()  # Don't re-process unexpected failures
-                    MESSAGES_COUNTER.labels(status="error").inc()
+                        _send_to_fsma_dlq(producer, evt, str(exc), doc_id, headers=kafka_headers)
+                        consumer.commit()  # Don't re-process unexpected failures
+                        MESSAGES_COUNTER.labels(status="error").inc()
     consumer.close()
     producer.close()
