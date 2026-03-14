@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'Documentation | RegEngine',
   description: 'RegEngine FSMA 204 API documentation. Quickstart guides, endpoint references, SDKs, and food traceability implementation guides.',
 };
-import { ArrowRight, Key, Book, Code, Webhook, Zap, AlertCircle, FileText, UtensilsCrossed } from 'lucide-react';
+import { ArrowRight, Key, Code, FileText, UtensilsCrossed } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
 export default function DocsHomePage() {
@@ -140,7 +140,7 @@ export default function DocsHomePage() {
           {/* Get API Key CTA */}
           <div style={{ marginTop: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Link
-              href="/api-keys"
+              href="/developer/register"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -155,10 +155,10 @@ export default function DocsHomePage() {
               }}
             >
               <Key className="w-4 h-4" />
-              Get API Key
+              Get Developer Access
             </Link>
             <Link
-              href="/docs/quickstart"
+              href="/docs/fsma-204"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -173,7 +173,7 @@ export default function DocsHomePage() {
                 border: `1px solid ${T.border}`,
               }}
             >
-              Full Quickstart Guide
+              FSMA 204 Guide
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
@@ -182,7 +182,7 @@ export default function DocsHomePage() {
 
       <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px' }}>
 
-        {/* Row 2: By Task */}
+        {/* Developer Portal CTA */}
         <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
@@ -192,35 +192,35 @@ export default function DocsHomePage() {
             letterSpacing: '1px',
             marginBottom: '16px',
           }}>
-            By Task
+            Developer Resources
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-            {[
-              { name: 'Quickstart', href: '/docs/quickstart', icon: Zap, desc: '5 min setup' },
-              { name: 'API Reference', href: '/docs/api', icon: Code, desc: 'Full endpoints' },
-              { name: 'SDKs & Libraries', href: '/docs/sdks', icon: Book, desc: 'Python, Node, Go' },
-              { name: 'Webhooks', href: '/docs/webhooks', icon: Webhook, desc: 'Real-time events' },
-            ].map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                style={{
-                  padding: '20px',
-                  background: T.surface,
-                  borderRadius: '8px',
-                  border: `1px solid ${T.border}`,
-                  textDecoration: 'none',
-                  transition: 'border-color 0.2s',
-                }}
-              >
-                <item.icon style={{ width: 20, height: 20, color: T.accent, marginBottom: '12px' }} />
-                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>
-                  {item.name}
+          <Link
+            href="/developer/register"
+            style={{
+              display: 'block', padding: '24px', borderRadius: '8px',
+              background: T.surface, border: `1px solid ${T.border}`,
+              textDecoration: 'none', maxWidth: '100%',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{
+                background: 'rgba(16,185,129,0.15)',
+                borderRadius: '8px',
+                padding: '12px',
+              }}>
+                <Code style={{ width: 24, height: 24, color: T.accent }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '16px', marginBottom: '4px' }}>
+                  Developer Portal
                 </div>
-                <div style={{ color: T.textMuted, fontSize: '13px' }}>{item.desc}</div>
-              </Link>
-            ))}
-          </div>
+                <div style={{ color: T.textMuted, fontSize: '13px' }}>
+                  API reference, SDKs, quickstart guides, webhooks, and API key management. Request access to get started.
+                </div>
+              </div>
+              <ArrowRight style={{ width: 20, height: 20, color: T.textMuted, marginLeft: 'auto' }} />
+            </div>
+          </Link>
         </section>
 
         {/* Row 3: FSMA Guide */}
@@ -256,7 +256,7 @@ export default function DocsHomePage() {
           </Link>
         </section>
 
-        {/* Row 4: Popular Pages */}
+        {/* Popular Pages - only public docs */}
         <section className="mb-12">
           <h2 style={{
             fontSize: '12px',
@@ -266,14 +266,13 @@ export default function DocsHomePage() {
             letterSpacing: '1px',
             marginBottom: '16px',
           }}>
-            Popular Pages
+            Resources
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
             {[
-              { name: 'Authentication', href: '/docs/authentication', icon: Key },
-              { name: 'Rate Limits', href: '/docs/rate-limits', icon: AlertCircle },
-              { name: 'Error Codes', href: '/docs/errors', icon: AlertCircle },
-              { name: 'Changelog', href: '/docs/changelog', icon: FileText },
+              { name: 'FSMA 204 Guide', href: '/docs/fsma-204', icon: UtensilsCrossed },
+              { name: 'Developer Portal', href: '/developer/register', icon: Code },
+              { name: 'Contact Support', href: 'mailto:support@regengine.co', icon: FileText },
             ].map((item) => (
               <Link
                 key={item.name}
@@ -322,11 +321,11 @@ export default function DocsHomePage() {
             </span>
           </div>
           <div style={{ display: 'flex', gap: '24px' }}>
-            <Link href="/docs/api" className="text-re-text-muted text-[13px] no-underline">
-              API Reference
+            <Link href="/developer/register" className="text-re-text-muted text-[13px] no-underline">
+              Developer Portal
             </Link>
-            <Link href="/docs/errors" className="text-re-text-muted text-[13px] no-underline">
-              Error Codes
+            <Link href="/docs/fsma-204" className="text-re-text-muted text-[13px] no-underline">
+              FSMA 204
             </Link>
             <a href="mailto:support@regengine.co" className="text-re-text-muted text-[13px] no-underline">
               Support

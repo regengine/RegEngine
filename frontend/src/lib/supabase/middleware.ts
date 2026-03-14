@@ -1,6 +1,26 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Routes that require an authenticated developer session
+const GATED_PATTERNS = [
+    '/developer/portal',
+    '/developers',
+    '/docs/api',
+    '/docs/authentication',
+    '/docs/quickstart',
+    '/docs/sdks',
+    '/docs/webhooks',
+    '/docs/rate-limits',
+    '/docs/errors',
+    '/docs/changelog',
+    '/playground',
+    '/api-keys',
+];
+
+function requiresAuth(pathname: string): boolean {
+    return GATED_PATTERNS.some(p => pathname === p || pathname.startsWith(p + '/'));
+}
+
 export async function updateSession(request: NextRequest) {
     let supabaseResponse = NextResponse.next({ request })
 
@@ -26,17 +46,18 @@ export async function updateSession(request: NextRequest) {
     )
 
     const { data: { user } } = await supabase.auth.getUser()
+    const { pathname } = request.nextUrl
 
-    // Gate developer portal routes
-    if (request.nextUrl.pathname.startsWith('/developer/portal')) {
+    // Gate protected developer routes
+    if (requiresAuth(pathname)) {
         if (!user) {
             const url = request.nextUrl.clone()
             url.pathname = '/developer/login'
-            url.searchParams.set('next', request.nextUrl.pathname)
+            url.searchParams.set('next', pathname)
             return NextResponse.redirect(url)
         }
 
-        // Check developer profile exists and is active
+        // Verify developer profile exists and is active
         const { data: profile } = await supabase
             .from('developer_profiles')
             .select('status')
@@ -52,7 +73,7 @@ export async function updateSession(request: NextRequest) {
     }
 
     // Redirect logged-in developers away from login/register
-    if (user && (request.nextUrl.pathname === '/developer/login' || request.nextUrl.pathname === '/developer/register')) {
+    if (user && (pathname === '/developer/login' || pathname === '/developer/register')) {
         const url = request.nextUrl.clone()
         url.pathname = '/developer/portal'
         return NextResponse.redirect(url)

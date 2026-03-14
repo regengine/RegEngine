@@ -475,7 +475,7 @@ export default function FSMA204GuidePage() {
                     </h3>
                     <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         <Link
-                            href="/api-keys"
+                            href="/developer/register"
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
@@ -490,10 +490,10 @@ export default function FSMA204GuidePage() {
                             }}
                         >
                             <Zap className="w-4 h-4" />
-                            Get API Key
+                            Get Developer Access
                         </Link>
                         <Link
-                            href="/docs/api"
+                            href="/developer/register"
                             style={{
                                 display: 'inline-flex',
                                 alignItems: 'center',
