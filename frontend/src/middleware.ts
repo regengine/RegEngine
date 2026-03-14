@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
 
 // Only FSMA verticals are supported — all others redirect to home.
 const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
@@ -16,8 +17,13 @@ const ALLOWED_DOCS_ROOT = [
     '/docs/webhooks',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
+
+    // Developer portal auth gating
+    if (pathname.startsWith('/developer')) {
+        return await updateSession(request);
+    }
 
     // Block non-FSMA verticals
     const verticalMatch = pathname.match(/^\/verticals\/([^/]+)/);
@@ -35,5 +41,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/verticals/:path*', '/docs/:path*'],
+    matcher: ['/verticals/:path*', '/docs/:path*', '/developer/:path*'],
 };
