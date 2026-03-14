@@ -68,7 +68,6 @@ function Toggle({ label, description, checked, onChange, id }: {
         className="relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
         style={{
           background: checked ? 'var(--re-brand)' : 'var(--re-surface-border)',
-          focusRingColor: 'var(--re-brand)',
         }}
       >
         <span
