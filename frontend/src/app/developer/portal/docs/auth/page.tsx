@@ -116,7 +116,7 @@ fetch('https://api.regengine.io/v1/events', {
           <h2 className="text-2xl font-semibold" style={{ color: 'var(--re-text-primary)' }}>
             Key Security Best Practices
           </h2>
-        </div>        <ul style={{ color: 'var(--re-text-muted)', paddingLeft: '24px', space: '8px' }}>
+        </div>        <ul style={{ color: 'var(--re-text-muted)', paddingLeft: '24px' }}>
           <li style={{ marginBottom: '8px' }}>Never commit API keys to version control. Always use environment variables.</li>
           <li style={{ marginBottom: '8px' }}>Use separate API keys for development and production environments.</li>
           <li style={{ marginBottom: '8px' }}>Rotate API keys every 90 days or after exposure.</li>
