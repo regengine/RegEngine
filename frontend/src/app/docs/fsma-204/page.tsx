@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'FSMA 204 Integration Guide | RegEngine',
-  description: 'Build FDA-compliant traceability systems with RegEngine. CTEs, KDEs, FDA Request Mode, and supply chain tracing.',
+  title: 'FSMA 204 Developer Integration Guide | RegEngine',
+  description: 'Build FDA-compliant traceability systems with RegEngine APIs. CTEs, KDEs, FDA Request Mode, supply chain tracing, and cryptographic verification.',
 };
 import { ArrowLeft, Utensils, CheckCircle, Clock, FileText, Zap, Shield, AlertTriangle, ExternalLink } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
@@ -80,7 +80,32 @@ export default function FSMA204GuidePage() {
                 </div>
             </div>
 
-            {/* Content */}
+            {/* Non-technical redirect */}
+            <div style={{
+                background: 'rgba(16,185,129,0.06)',
+                borderBottom: `1px solid ${T.border}`,
+                padding: '12px 24px',
+            }}>
+                <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <span className="text-sm text-re-text-secondary">Not a developer?</span>
+                    <Link
+                        href="/fsma-204"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: T.accent,
+                            fontSize: '14px',
+                            fontWeight: 600,
+                            textDecoration: 'none',
+                        }}
+                    >
+                        Read the plain-English FSMA 204 guide →
+                    </Link>
+                </div>
+            </div>
+
+            {/* Content */
             <div className="max-w-[900px] mx-auto py-12 px-6">
 
                 {/* What is FSMA 204? */}
