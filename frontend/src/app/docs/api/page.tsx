@@ -24,7 +24,6 @@ import { getServiceURL } from '@/lib/api-config';
 
 // API Endpoint Documentation
 const API_SERVICES = [
-    },
     {
         name: 'Ingestion API',
         port: 8000,
