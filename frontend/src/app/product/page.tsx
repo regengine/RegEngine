@@ -47,11 +47,11 @@ export default function ProductPage() {
     return (
         <div className="re-page">
             {/* Hero */}
-            <section className="relative z-[2] max-w-[800px] mx-auto pt-20 px-6 pb-16 text-center">
+            <section className="relative z-[2] max-w-[800px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-12 sm:pb-16 text-center">
                 <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
                     Product Tour
                 </Badge>
-                <h1 className="text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
                     FSMA 204 compliance<br />
                     <span className="text-re-brand">in three moves</span>
                 </h1>
@@ -75,8 +75,8 @@ export default function ProductPage() {
             </section>
 
             {/* Three Pillars */}
-            <section className="relative z-[2] max-w-[1000px] mx-auto px-6 pb-16">
-                <div className="grid md:grid-cols-3 gap-5">
+            <section className="relative z-[2] max-w-[1000px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-5">
                     {PILLARS.map((p) => (
                         <article
                             key={p.title}
@@ -106,7 +106,7 @@ export default function ProductPage() {
                     <p className="text-sm text-re-text-muted text-center mb-10 max-w-md mx-auto">
                         Four stages from raw supply-chain data to FDA-ready compliance package.
                     </p>
-                    <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                         {FLOW_STEPS.map((s, i) => (
                             <div
                                 key={s.title}
@@ -129,7 +129,7 @@ export default function ProductPage() {
             {/* What this flow depends on — callout box */}
             <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
                 <div
-                    className="rounded-2xl border-2 border-[var(--re-warning-bg)] p-8"
+                    className="rounded-2xl border-2 border-[var(--re-warning-bg)] p-5 sm:p-8"
                     style={{
                         background: 'var(--re-warning-bg)',
                         boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
@@ -161,7 +161,7 @@ export default function ProductPage() {
             </section>
 
             {/* Free Tools */}
-            <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
+            <section className="relative z-[2] max-w-[900px] mx-auto py-12 sm:py-16 px-4 sm:px-6">
                 <div className="text-center mb-10">
                     <Badge className="mb-4 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
                         Free Tools

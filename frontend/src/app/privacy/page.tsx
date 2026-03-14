@@ -142,7 +142,7 @@ export default function PrivacyPage() {
   return (
     <div className="re-page">
       {/* ── Hero ───────────────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-6">
+      <section className="relative z-[2] max-w-[720px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-6">
         <div className="flex items-center gap-2.5 mb-5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-3 py-1 text-[11px] font-semibold tracking-wide text-[var(--re-brand)]">
             <Sparkles className="h-3 w-3" /> Privacy by Design
@@ -169,7 +169,7 @@ export default function PrivacyPage() {
       </section>
 
       {/* ── TL;DR callout ──────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto px-6 pb-10">
+      <section className="relative z-[2] max-w-[720px] mx-auto px-4 sm:px-6 pb-10">
         <div
           className="rounded-2xl border border-[var(--re-brand)]/20 p-6"
           style={{ background: 'var(--re-brand-muted)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
@@ -191,8 +191,8 @@ export default function PrivacyPage() {
       </section>
 
       {/* ── Two-column layout: TOC + Content ───────────────── */}
-      <section className="relative z-[2] max-w-[1020px] mx-auto px-6 pb-12">
-        <div className="flex gap-10">
+      <section className="relative z-[2] max-w-[1020px] mx-auto px-4 sm:px-6 pb-12">
+        <div className="flex gap-6 lg:gap-10">
           {/* Sticky TOC — desktop only */}
           <nav className="hidden lg:block w-[220px] shrink-0">
             <div className="sticky top-24">
@@ -267,7 +267,7 @@ export default function PrivacyPage() {
             {/* ── What We Don't Do — highlighted callout ──── */}
             <div id="dont" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
               <div
-                className="rounded-2xl border-2 border-red-500/20 p-6"
+                className="rounded-2xl border-2 border-red-500/20 p-4 sm:p-6"
                 style={{ background: 'rgba(239,68,68,0.04)', boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}
               >
                 <div className="flex items-center gap-2.5 mb-4">
@@ -454,9 +454,9 @@ export default function PrivacyPage() {
       </section>
 
       {/* ── Alpha CTA callout ──────────────────────────────── */}
-      <section className="relative z-[2] max-w-[700px] mx-auto px-6 pb-16">
+      <section className="relative z-[2] max-w-[700px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
         <div
-          className="rounded-2xl border border-[var(--re-brand)]/20 p-8 text-center"
+          className="rounded-2xl border border-[var(--re-brand)]/20 p-5 sm:p-8 text-center"
           style={{
             background: 'var(--re-brand-muted)',
             boxShadow: '0 4px 24px rgba(0,0,0,0.08)',

@@ -67,7 +67,7 @@ export default function AboutPage() {
   return (
     <div className="re-page">
       {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-14">
+      <section className="relative z-[2] max-w-[720px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10 sm:pb-14">
         <div className="flex items-center gap-2.5 mb-5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-3 py-1 text-[11px] font-semibold tracking-wide text-[var(--re-brand)]">
             <Sparkles className="h-3 w-3" /> Founder-Led &bull; FSMA-First
@@ -86,18 +86,18 @@ export default function AboutPage() {
       </section>
 
       {/* ── Founder bio card ──────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[720px] mx-auto px-6 pb-14">
+      <section className="relative z-[2] max-w-[720px] mx-auto px-4 sm:px-6 pb-10 sm:pb-14">
         <div
-          className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8"
+          className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 sm:p-8"
           style={{
             borderTop: '3px solid var(--re-brand)',
             boxShadow:
               '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
           }}
         >
-          <div className="flex gap-6 items-start">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
             {/* Avatar placeholder */}
-            <div className="w-[72px] h-[72px] rounded-xl shrink-0 bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center text-[28px] font-bold text-[var(--re-brand)]">
+            <div className="w-16 h-16 sm:w-[72px] sm:h-[72px] rounded-xl shrink-0 bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center text-2xl sm:text-[28px] font-bold text-[var(--re-brand)]">
               CS
             </div>
 
@@ -144,7 +144,7 @@ export default function AboutPage() {
       </section>
 
       {/* ── What we believe — 3-card grid ─────────────────────── */}
-      <section className="relative z-[2] max-w-[900px] mx-auto px-6 pb-14">
+      <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-10 sm:pb-14">
         <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-6 text-center">
           What we believe
         </h2>
@@ -175,9 +175,9 @@ export default function AboutPage() {
       </section>
 
       {/* ── Alpha CTA callout ─────────────────────────────────── */}
-      <section className="relative z-[2] max-w-[700px] mx-auto px-6 pb-16">
+      <section className="relative z-[2] max-w-[700px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
         <div
-          className="rounded-2xl border border-[var(--re-brand)]/20 p-8 text-center"
+          className="rounded-2xl border border-[var(--re-brand)]/20 p-5 sm:p-8 text-center"
           style={{
             background: 'var(--re-brand-muted)',
             boxShadow: '0 4px 24px rgba(0,0,0,0.08)',

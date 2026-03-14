@@ -251,6 +251,22 @@
     }
 }
 
+/* ─── Mobile utilities ─── */
+.scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+
+/* Safe area handling for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .re-page {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
 /* Screen reader only styles - hidden visually but accessible to screen readers */
 .sr-only {
     position: absolute;

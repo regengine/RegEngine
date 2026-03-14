@@ -52,7 +52,7 @@ export default function RegEngineLanding() {
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
 
       {/* ── HERO ── */}
-      <section className="max-w-[1100px] mx-auto px-6 pt-20 pb-16">
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
           {/* Left — copy */}
@@ -148,7 +148,7 @@ export default function RegEngineLanding() {
 
       {/* ── EVIDENCE STRIP ── */}
       <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[1100px] mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-6">
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-between gap-4 sm:gap-6">
           {EVIDENCE.map((e) => (
             <div key={e.label} className="flex items-baseline gap-2.5">
               <span className="font-serif text-[1.75rem] font-bold text-[var(--re-brand-dark)] tracking-tight">
@@ -163,11 +163,11 @@ export default function RegEngineLanding() {
       </div>
 
       {/* ── FREE TOOLS ── */}
-      <section className="max-w-[1100px] mx-auto px-6 py-20">
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">
         <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
           Free tools — no signup
         </p>
-        <h2 className="font-serif text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
           Check your exposure before you commit.
         </h2>
         <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-10">
@@ -206,12 +206,12 @@ export default function RegEngineLanding() {
       </section>
 
       {/* ── FINAL CTA ── */}
-      <section className="bg-[var(--re-text-primary)] text-white py-20 px-6">
+      <section className="bg-[var(--re-text-primary)] text-white py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-[1100px] mx-auto text-center">
           <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
             FSMA 204 Deadline: July 20, 2028
           </p>
-          <h2 className="font-serif text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
+          <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
             Ready to close the gap?
           </h2>
           <p className="text-[1.05rem] text-[#aaa] max-w-[560px] mx-auto leading-relaxed mb-8">
