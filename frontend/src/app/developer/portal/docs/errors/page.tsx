@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertCircle, Info } from 'lucide-react';
-import Badge from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { CodeBlock } from '@/components/developer/CodeBlock';
 
 export default function ErrorCodesPage() {
@@ -103,9 +103,7 @@ export default function ErrorCodesPage() {
         <p style={{ color: 'var(--re-text-muted)' }}>
           All error responses follow a consistent JSON structure with error code, message, and optional details.
         </p>
-        <CodeBlock
-          language="json"
-          code={`{
+        <CodeBlock snippets={[{ language: 'json', label: 'JSON', code: `{
   "error": {
     "code": "invalid_api_key",
     "message": "The provided API key is invalid or expired",
@@ -116,8 +114,7 @@ export default function ErrorCodesPage() {
       }
     ]
   }
-}`}
-        />
+}` }]} />
       </section>
 
       {/* Common Error Codes Section */}
