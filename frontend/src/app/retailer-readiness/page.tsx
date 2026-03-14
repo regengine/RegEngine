@@ -9,24 +9,24 @@ import FSMAChecklist from '@/components/fsma-checklist';
    ───────────────────────────────────────────────────────────── */
 const T = {
     bg: 'var(--re-surface-base)',
-    surface: 'rgba(255,255,255,0.02)',
-    surfaceHover: 'rgba(255,255,255,0.05)',
-    border: 'rgba(255,255,255,0.06)',
-    borderHover: 'rgba(255,255,255,0.12)',
+    surface: 'var(--re-surface-card)',
+    surfaceHover: 'var(--re-surface-elevated)',
+    border: 'var(--re-surface-border)',
+    borderHover: 'var(--re-border-default)',
     text: 'var(--re-text-secondary)',
     textMuted: 'var(--re-text-muted)',
     textDim: 'var(--re-text-disabled)',
     heading: 'var(--re-text-primary)',
     accent: 'var(--re-brand)',
     accentHover: 'var(--re-brand-dark)',
-    accentGlow: 'rgba(16,185,129,0.15)',
+    accentGlow: 'var(--re-brand-muted)',
     warning: 'var(--re-warning)',
-    warningBg: 'rgba(245,158,11,0.08)',
-    warningBorder: 'rgba(245,158,11,0.15)',
+    warningBg: 'var(--re-warning-bg, rgba(245,158,11,0.08))',
+    warningBorder: 'var(--re-warning-border, rgba(245,158,11,0.15))',
     danger: 'var(--re-danger)',
-    dangerBg: 'rgba(239,68,68,0.08)',
+    dangerBg: 'var(--re-danger-bg, rgba(239,68,68,0.08))',
     blue: 'var(--re-accent-blue)',
-    blueBg: 'rgba(59,130,246,0.08)',
+    blueBg: 'var(--re-info-bg, rgba(59,130,246,0.08))',
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ export default function RetailerSuppliersPage() {
             {/* ─── STICKY CTA BAR ─── */}
             <div style={{
                 position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9998,
-                background: 'rgba(6,9,15,0.92)', backdropFilter: 'blur(12px)',
+                background: 'var(--re-sticky-bg, rgba(6,9,15,0.92))', backdropFilter: 'blur(12px)',
                 borderTop: `1px solid ${T.border}`,
                 padding: '12px 24px',
                 transform: showSticky ? 'translateY(0)' : 'translateY(100%)',
@@ -1293,7 +1293,7 @@ export default function RetailerSuppliersPage() {
                     <div className="competitor-row" style={{
                         display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
                         padding: '16px 20px', borderBottom: `1px solid ${T.border}`,
-                        background: 'rgba(255,255,255,0.02)',
+                        background: T.surface,
                     }}>
                         <span className="text-xs text-re-text-disabled font-medium">Feature</span>
                         <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>RegEngine</span>
@@ -1454,7 +1454,7 @@ export default function RetailerSuppliersPage() {
                     width: 100%;
                     height: 6px;
                     border-radius: 3px;
-                    background: rgba(255,255,255,0.06);
+                    background: var(--re-surface-border);
                     outline: none;
                 }
                 input[type="range"]::-webkit-slider-thumb {
