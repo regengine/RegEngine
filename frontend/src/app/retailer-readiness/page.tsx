@@ -56,13 +56,13 @@ function useScrollReveal(threshold = 0.15) {
 const PRICING_TIERS = [
     {
         revenue: 'Under $50M',
-        price: '$999',
+        price: '$1,299',
         period: '/mo',
         features: ['Up to 10,000 CTEs/month', '3 locations', 'Email support', 'FDA 204 export'],
     },
     {
         revenue: '$50M – $200M',
-        price: '$1,999',
+        price: '$2,499',
         period: '/mo',
         features: ['Up to 100,000 CTEs/month', '10 locations', 'Priority support', 'Mock recall drills', 'Integration support'],
         highlighted: true,
@@ -99,7 +99,7 @@ const TRACE_NODES_BACKWARD = [
    ───────────────────────────────────────────────────────────── */
 const FAQ_ITEMS = [
     { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When a major retailer or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
-    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine\'s $999/mo tier is built specifically for companies under $50M revenue.' },
+    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine\'s $1,299/mo Growth tier is built specifically for companies under $50M revenue.' },
     { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Major retailers\' internal deadlines are estimated at Q1 2027 — over a year before the FDA mandate. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during the next category review. By the time the FDA deadline hits, it\'s already too late.' },
     { q: 'How long does integration take?', a: 'Most suppliers are fully operational within 2–4 weeks. RegEngine is API-first, so there are no portal logins or manual data entry. If you have existing data in spreadsheets, we can bulk-import it during onboarding.' },
     { q: 'What if we don\'t sell FTL products?', a: 'Use our free FTL Checker tool to verify whether your products fall under the FDA\'s 23 Food Traceability List categories. Even if your primary products aren\'t on the list, many suppliers are surprised to find that secondary product lines (like pre-cut salads or certain cheeses) are covered.' },
@@ -109,7 +109,7 @@ const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 const COMPETITORS = [
-    { feature: 'Starting price', regengine: '$999/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
+    { feature: 'Starting price', regengine: '$1,299/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
     { feature: 'Setup time', regengine: '2–4 weeks', foodlogiq: '3–6 months', tracelink: '6–12 months' },
     { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Limited', tracelink: 'Portal-based' },
     { feature: 'FDA export format', regengine: '✓ One-click', foodlogiq: 'Manual config', tracelink: 'Custom build' },
@@ -1006,7 +1006,7 @@ export default function RetailerSuppliersPage() {
                         <span style={{ fontSize: 18 }}>💡</span>
                         <p style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }}>
                             RegEngine costs <strong className="text-re-brand">
-                                {annualRevenue <= 50 ? '$999' : annualRevenue <= 200 ? '$1,999' : 'a fraction'}/mo
+                                {annualRevenue <= 50 ? '$1,299' : annualRevenue <= 200 ? '$2,499' : 'a fraction'}/mo
                             </strong> — that's <strong className="text-re-brand">
                                 {((monthlyRisk / (annualRevenue <= 50 ? 999 : annualRevenue <= 200 ? 1999 : 4999)) * 100).toFixed(0)}x less
                             </strong> than what you risk losing every month.

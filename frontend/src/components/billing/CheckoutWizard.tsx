@@ -40,10 +40,10 @@ type WizardStep = 'plan' | 'payment' | 'activation';
 
 const PLANS = [
     {
-        id: 'growth', name: 'Growth', description: 'Single-facility teams under $50M annual revenue',
-        monthlyPrice: 999, annualPrice: 832, cteLimit: '50,000', highlighted: false,
+        id: 'growth', name: 'Growth', description: 'Under $50M annual revenue',
+        monthlyPrice: 1299, annualPrice: 1079, cteLimit: '10,000', highlighted: false,
         features: [
-            { text: '1 facility', included: true },
+            { text: 'Up to 3 locations', included: true },
             { text: 'Supplier onboarding + FTL scoping', included: true },
             { text: 'CSV upload + API ingestion', included: true },
             { text: 'Compliance scoring + FDA-ready export', included: true },
@@ -52,11 +52,11 @@ const PLANS = [
         ] as PlanFeature[],
     },
     {
-        id: 'scale', name: 'Scale', description: 'Multi-facility operations from $50M-$200M annual revenue',
-        monthlyPrice: 1999, annualPrice: 1666, cteLimit: '250,000', highlighted: true,
+        id: 'scale', name: 'Scale', description: '$50M–$200M annual revenue',
+        monthlyPrice: 2499, annualPrice: 2079, cteLimit: '100,000', highlighted: true,
         features: [
             { text: 'Everything in Growth', included: true },
-            { text: '5 facilities', included: true },
+            { text: 'Up to 10 locations', included: true },
             { text: 'Expanded API + webhook limits', included: true },
             { text: 'Retailer-specific readiness benchmarks', included: true },
             { text: 'Priority onboarding support', included: true },

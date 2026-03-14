@@ -39,7 +39,7 @@ export default function RateLimitsDocsPage() {
                                 <div className="p-6 bg-background border rounded-lg text-center">
                                     <div className="text-3xl font-bold text-primary mb-1">100</div>
                                     <div className="text-sm text-muted-foreground">Requests per Minute</div>
-                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Starter</div>
+                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Growth</div>
                                 </div>
                                 <div className="p-6 bg-background border rounded-lg text-center">
                                     <div className="text-3xl font-bold text-primary mb-1">500</div>

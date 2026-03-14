@@ -34,22 +34,22 @@ const mockSummary = {
 };
 
 const mockChanges = [
-    { id: 'chg_acme_up01', tenant: 'Acme Foods Inc.', type: 'upgrade', from: 'Professional', to: 'Enterprise', proration: '$2,100.00', status: 'applied', date: '12d ago' },
-    { id: 'chg_med_up01', tenant: 'MedSecure Health', type: 'upgrade', from: 'Starter', to: 'Professional', proration: '$733.34', status: 'applied', date: '25d ago' },
-    { id: 'chg_safety_down', tenant: 'SafetyFirst Mfg', type: 'downgrade', from: 'Enterprise', to: 'Professional', proration: '-$1,750.00', status: 'scheduled', date: 'in 15d' },
-    { id: 'chg_fresh_addon', tenant: 'FreshLeaf Produce', type: 'addon', from: 'Professional', to: 'Pro + FDA Export', proration: '—', status: 'applied', date: '8d ago' },
-    { id: 'chg_old_cancel', tenant: 'OldCo Logistics', type: 'cancellation', from: 'Starter', to: 'Cancelled', proration: '—', status: 'applied', date: '45d ago' },
+    { id: 'chg_acme_up01', tenant: 'Acme Foods Inc.', type: 'upgrade', from: 'Scale', to: 'Enterprise', proration: '$2,100.00', status: 'applied', date: '12d ago' },
+    { id: 'chg_med_up01', tenant: 'MedSecure Health', type: 'upgrade', from: 'Growth', to: 'Scale', proration: '$733.34', status: 'applied', date: '25d ago' },
+    { id: 'chg_safety_down', tenant: 'SafetyFirst Mfg', type: 'downgrade', from: 'Enterprise', to: 'Scale', proration: '-$1,750.00', status: 'scheduled', date: 'in 15d' },
+    { id: 'chg_fresh_addon', tenant: 'FreshLeaf Produce', type: 'addon', from: 'Scale', to: 'Scale + FDA Export', proration: '—', status: 'applied', date: '8d ago' },
+    { id: 'chg_old_cancel', tenant: 'OldCo Logistics', type: 'cancellation', from: 'Growth', to: 'Cancelled', proration: '—', status: 'applied', date: '45d ago' },
 ];
 
 const mockTrials = [
     { tenant: 'Northstar Analytics', plan: 'Enterprise', daysLeft: 2, started: '12d ago', converted: false },
-    { tenant: 'NewCo Foods', plan: 'Professional', daysLeft: 7, started: '7d ago', converted: false },
-    { tenant: 'ConvertedInc', plan: 'Starter', daysLeft: 0, started: '20d ago', converted: true },
+    { tenant: 'NewCo Foods', plan: 'Scale', daysLeft: 7, started: '7d ago', converted: false },
+    { tenant: 'ConvertedInc', plan: 'Growth', daysLeft: 0, started: '20d ago', converted: true },
 ];
 
 const mockPlans = [
-    { name: 'Starter', price: '$499/mo', tier: 1, color: 'from-slate-500/20 to-slate-600/20' },
-    { name: 'Professional', price: '$1,499/mo', tier: 2, color: 'from-blue-500/20 to-indigo-600/20' },
+    { name: 'Growth', price: '$1,299/mo', tier: 1, color: 'from-slate-500/20 to-slate-600/20' },
+    { name: 'Scale', price: '$2,499/mo', tier: 2, color: 'from-blue-500/20 to-indigo-600/20' },
     { name: 'Enterprise', price: '$4,999/mo', tier: 3, color: 'from-violet-500/20 to-purple-600/20' },
     { name: 'Enterprise+', price: '$9,999/mo', tier: 4, color: 'from-amber-500/20 to-orange-600/20' },
 ];

@@ -639,7 +639,7 @@ GET /v1/admin/review/flagged-extractions?limit=20&cursor=eyJpZCI6IjEyMyJ9`}
                             </div>
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-3 mt-3">
                                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                                    <strong>Tier Limits:</strong> Starter (100/min), Growth (500/min), Scale (1000/min), Enterprise (custom)
+                                    <strong>Tier Limits:</strong> Growth (500/min), Scale (1000/min), Enterprise (custom), Enterprise (custom)
                                 </p>
                             </div>
                         </CardContent>

@@ -9,12 +9,12 @@ import { Badge } from '@/components/ui/badge';
 
 const mockTenants = [
     { id: '1', name: 'Acme Foods Inc.', plan: 'Enterprise', status: 'active', mrr: 12500, documents: 2340, users: 24, createdAt: '2024-01-15' },
-    { id: '2', name: 'FreshLeaf Produce', plan: 'Professional', status: 'active', mrr: 4999, documents: 890, users: 8, createdAt: '2024-02-20' },
+    { id: '2', name: 'FreshLeaf Produce', plan: 'Scale', status: 'active', mrr: 4999, documents: 890, users: 8, createdAt: '2024-02-20' },
     { id: '3', name: 'Northstar Cold Chain', plan: 'Enterprise', status: 'active', mrr: 15000, documents: 4200, users: 45, createdAt: '2023-11-10' },
-    { id: '4', name: 'Riverbend Packers', plan: 'Starter', status: 'trial', mrr: 0, documents: 45, users: 2, createdAt: '2024-03-01' },
-    { id: '5', name: 'Harvest Table Foods', plan: 'Professional', status: 'active', mrr: 4999, documents: 1200, users: 12, createdAt: '2024-01-28' },
+    { id: '4', name: 'Riverbend Packers', plan: 'Growth', status: 'trial', mrr: 0, documents: 45, users: 2, createdAt: '2024-03-01' },
+    { id: '5', name: 'Harvest Table Foods', plan: 'Scale', status: 'active', mrr: 4999, documents: 1200, users: 12, createdAt: '2024-01-28' },
     { id: '6', name: 'Blue Harbor Seafood', plan: 'Enterprise', status: 'active', mrr: 25000, documents: 8900, users: 67, createdAt: '2023-08-05' },
-    { id: '7', name: 'Summit Fresh Logistics', plan: 'Professional', status: 'churned', mrr: 0, documents: 560, users: 5, createdAt: '2023-12-01' },
+    { id: '7', name: 'Summit Fresh Logistics', plan: 'Scale', status: 'churned', mrr: 0, documents: 560, users: 5, createdAt: '2023-12-01' },
 ];
 
 function formatCurrency(num: number): string {

@@ -32,14 +32,14 @@ export interface PlanCardProps {
 }
 
 const TIER_ICONS: Record<string, React.ElementType> = {
-    starter: Zap,
+
     growth: Zap,
     scale: Rocket,
     enterprise: Crown,
 };
 
 const TIER_GRADIENTS: Record<string, string> = {
-    starter: 'linear-gradient(135deg, #10b981, #059669)',
+
     growth: 'linear-gradient(135deg, #3b82f6, #2563eb)',
     scale: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
     enterprise: 'linear-gradient(135deg, #f59e0b, #d97706)',
@@ -60,7 +60,7 @@ export function PlanCard({
     appliedCredit = 0,
 }: PlanCardProps) {
     const Icon = TIER_ICONS[id] || Building2;
-    const gradient = TIER_GRADIENTS[id] || TIER_GRADIENTS.starter;
+    const gradient = TIER_GRADIENTS[id] || TIER_GRADIENTS.growth;
     const price = isAnnual ? annualPrice : monthlyPrice;
     const isEnterprise = monthlyPrice === null;
 
