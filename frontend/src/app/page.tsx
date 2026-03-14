@@ -1,412 +1,418 @@
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ArrowRight,
-  BookOpen,
-  CheckCircle2,
-  ClipboardCheck,
-  Database,
-  FileSearch,
-  FlaskConical,
-  Gauge,
-  Layers,
-  ShieldCheck,
-  Siren,
-  Truck,
-  Users,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+/* ------------------------------------------------------------------ */
+/*  DATA                                                               */
+/* ------------------------------------------------------------------ */
 
-const PERSONAS = [
-  {
-    title: "Food Safety and QA Directors",
-    pain: "You own FDA readiness, but traceability data is split across spreadsheets, emails, and supplier portals that do not connect.",
-    outcome: "Get unified traceability records across your supply chain, audit-ready in minutes.",
-    icon: ShieldCheck,
-  },
-  {
-    title: "Mid-Market Supplier Ops Leads",
-    pain: "Walmart, Kroger, and Costco expect supplier-level FSMA 204 readiness now, not in 2028.",
-    outcome: "Produce retailer-ready EPCIS 2.0 exports without custom integration projects.",
-    icon: Truck,
-  },
-  {
-    title: "Compliance Officers",
-    pain: "If the FDA requested traceability records tomorrow, most teams would miss the 24-hour window.",
-    outcome: "Generate recall-ready records fast with versioned, hashed, independently verifiable data.",
-    icon: ClipboardCheck,
-  },
-];
-
-const HOW_IT_WORKS = [
-  {
-    title: "Connect Your Supply Chain",
-    description:
-      "Ingest traceability data by API, CSV, or supplier portal. RegEngine normalizes everything to EPCIS 2.0.",
-    icon: Layers,
-  },
-  {
-    title: "Monitor Compliance in Real Time",
-    description:
-      "Track CTE and KDE coverage, flag gaps, and score recall readiness across FTL-covered products.",
-    icon: Gauge,
-  },
-  {
-    title: "Export When It Matters",
-    description:
-      "For FDA requests or retailer audits, export recall-ready records in minutes, not days.",
-    icon: FileSearch,
-  },
+const EVIDENCE = [
+  { value: "23", label: "FDA food categories verified and mapped" },
+  { value: "1", label: "API call to generate FDA-ready export" },
+  { value: "24hr", label: "Recall response window — fully covered" },
+  { value: "EPCIS 2.0", label: "Native export format, no conversion needed" },
 ];
 
 const FREE_TOOLS = [
   {
     title: "FTL Coverage Checker",
-    subtitle: "Are your products on the FDA Food Traceability List?",
+    desc: "Are your products on the FDA Food Traceability List? Find out in seconds.",
     href: "/tools/ftl-checker",
-    icon: CheckCircle2,
+    tag: null,
   },
   {
     title: "Retailer Readiness Assessment",
-    subtitle: "Could you pass a Walmart supplier audit today?",
+    desc: "Could you pass a Walmart supplier audit today? Scored automatically.",
     href: "/retailer-readiness",
-    icon: ClipboardCheck,
+    tag: "Popular",
   },
   {
     title: "Supply Chain Explorer",
-    subtitle: "See how traceability works across real recall scenarios.",
+    desc: "See how traceability works across real recall scenarios.",
     href: "/demo/supply-chains",
-    icon: Database,
+    tag: null,
   },
   {
-    title: "Anomaly Simulator",
-    subtitle: "Test your cold-chain monitoring against real failure patterns.",
+    title: "Cold-Chain Anomaly Simulator",
+    desc: "Test your monitoring against real failure patterns.",
     href: "/tools/drill-simulator",
-    icon: FlaskConical,
+    tag: null,
   },
 ];
 
-const COMMAND_CENTER_FEATURES = [
-  {
-    title: "Compliance Dashboard",
-    description:
-      "See exactly where you stand with real-time scoring across every product, supplier, and traceability event.",
-    icon: Gauge,
-    href: "/dashboard/compliance",
-  },
-  {
-    title: "Smart Alerts",
-    description:
-      "Know before the FDA does with automated alerts for data gaps, cold-chain breaks, and deadline risk.",
-    icon: AlertTriangle,
-    href: "/dashboard/alerts",
-  },
-  {
-    title: "Recall Readiness",
-    description:
-      "Six-dimension scoring shows where you would fail and what to fix before a real recall request.",
-    icon: Siren,
-    href: "/dashboard/recall-report",
-  },
-  {
-    title: "Audit Trail",
-    description:
-      "Every record is versioned, hashed, and independently verifiable so your team can prove chain integrity on demand.",
-    icon: BookOpen,
-    href: "/verify",
-  },
+const DASHBOARD_ROWS = [
+  { product: "Romaine Lettuce (Lot R-2026-0312)", ftl: "Complete", cte: "12/12", last: "2h ago", status: "complete" },
+  { product: "Atlantic Salmon (Lot S-2026-0311)", ftl: "Complete", cte: "10/10", last: "6h ago", status: "complete" },
+  { product: "Shell Eggs (Lot E-2026-0310)", ftl: "Partial", cte: "7/9", last: "1d ago", status: "partial" },
+  { product: "Peanut Butter (Lot P-2026-0308)", ftl: "Gap", cte: "4/8", last: "3d ago", status: "missing" },
 ];
+
+/* ------------------------------------------------------------------ */
+/*  PAGE                                                               */
+/* ------------------------------------------------------------------ */
 
 export default function RegEngineLanding() {
   return (
-    <div className="re-page overflow-x-hidden">
-      <div className="re-noise" />
+    <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
 
-      <section className="relative z-[2] max-w-[1120px] mx-auto pt-[96px] pb-[72px] px-6">
-        <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.08)_0%,transparent_72%)] pointer-events-none" />
+      {/* ── HERO ── */}
+      <section className="max-w-[1100px] mx-auto px-6 pt-20 pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
 
-        <div className="re-badge-brand mb-7">
-          <span className="re-dot bg-[var(--re-brand)] animate-pulse" />
-          RegEngine - FSMA 204 Compliance Infrastructure
-        </div>
+          {/* Left — copy */}
+          <div>
+            <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-5">
+              FSMA 204 Compliance Infrastructure
+            </p>
+            <h1 className="font-serif text-[clamp(2rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight mb-6">
+              The FDA gives you 24 hours.{" "}
+              <em className="font-medium text-[var(--re-brand-dark)]">Can you deliver?</em>
+            </h1>
+            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[480px]">
+              RegEngine connects your suppliers, lots, and traceability events into one auditable record — so when the FDA or Walmart asks, you respond in minutes.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/onboarding"
+                className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-lg text-[0.925rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
+              >
+                Start Workspace
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/retailer-readiness"
+                className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-lg text-[0.925rem] font-medium hover:border-[var(--re-text-muted)] transition-all"
+              >
+                Free Readiness Assessment
+              </Link>
+            </div>
+          </div>
 
-        <h1 className="text-[clamp(36px,5vw,56px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-6 max-w-[860px] tracking-[-0.02em]">
-          The FDA will require your traceability data in 24 hours.
-          <br />
-          Can you deliver?
-        </h1>
+          {/* Right — recall simulation card */}
+          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden shadow-re-md">
+            {/* Sim header */}
+            <div className="px-5 py-3 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-[var(--re-danger)] animate-pulse" />
+              <span className="font-mono text-[0.72rem] font-medium text-[var(--re-text-muted)] tracking-wide">
+                RECALL SIMULATION — LIVE
+              </span>
+            </div>
 
-        <p className="text-lg text-[var(--re-text-muted)] leading-relaxed mb-10 max-w-[760px]">
-          RegEngine connects your suppliers, lots, and events into one auditable record - so when
-          the FDA or Walmart asks, you respond in minutes, not days.
-        </p>
+            {/* Sim body */}
+            <div className="p-5">
+              <p className="font-mono text-[0.72rem] text-[var(--re-text-muted)] uppercase tracking-[0.06em] mb-2">
+                Incoming FDA Request
+              </p>
+              <p className="font-serif text-[1.1rem] font-medium text-[var(--re-text-primary)] leading-snug mb-5">
+                <span className="text-[var(--re-danger)]"><em>E.&nbsp;coli O157:H7</em></span> detected in romaine lettuce.<br />
+                Trace all affected lots from farm to shelf.
+              </p>
 
-        <div className="flex gap-3 flex-wrap">
-          <Link href="/onboarding" className="w-full sm:w-auto">
-            <Button size="lg" className="w-full sm:w-auto h-16 px-10 rounded-3xl bg-[var(--re-brand)] text-white text-lg font-black italic uppercase shadow-[0_20px_40px_-10px_rgba(16,185,129,0.4)] group">
-              Start Workspace
-              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </Link>
-          <Link href="/retailer-readiness" className="w-full sm:w-auto">
-            <Button size="lg" variant="outline" className="w-full sm:w-auto h-16 px-10 rounded-3xl text-lg font-black italic uppercase border-2 group">
-              Retailer Readiness Assessment
-              <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </Link>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Without */}
+                <div className="p-4 rounded-lg bg-[var(--re-danger-muted)] border border-[rgba(220,38,38,0.2)]">
+                  <p className="font-mono text-[0.65rem] font-medium text-[var(--re-danger)] uppercase tracking-[0.08em] mb-3">Without RegEngine</p>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Response time", value: "18 hours", bad: true },
+                      { label: "Data sources", value: "7 systems", bad: false },
+                      { label: "Completeness", value: "62%", bad: true },
+                      { label: "Verifiable", value: "No", bad: true },
+                    ].map((r) => (
+                      <div key={r.label}>
+                        <p className="text-[0.7rem] text-[var(--re-text-muted)]">{r.label}</p>
+                        <p className={`font-mono text-[0.85rem] font-medium ${r.bad ? "text-[var(--re-danger)]" : "text-[var(--re-text-primary)]"}`}>{r.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* With */}
+                <div className="p-4 rounded-lg bg-[var(--re-success-muted)] border border-[rgba(22,163,74,0.2)]">
+                  <p className="font-mono text-[0.65rem] font-medium text-[var(--re-brand-dark)] uppercase tracking-[0.08em] mb-3">With RegEngine</p>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Response time", value: "42 min", good: true },
+                      { label: "Data sources", value: "1 API call", good: false },
+                      { label: "Completeness", value: "98%", good: true },
+                      { label: "Verifiable", value: "Cryptographic", good: true },
+                    ].map((r) => (
+                      <div key={r.label}>
+                        <p className="text-[0.7rem] text-[var(--re-text-muted)]">{r.label}</p>
+                        <p className={`font-mono text-[0.85rem] font-medium ${r.good ? "text-[var(--re-brand-dark)]" : "text-[var(--re-text-primary)]"}`}>{r.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sim footer */}
+            <div className="px-5 py-3 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center justify-between">
+              <span className="font-mono text-sm">
+                <strong className="text-[var(--re-brand-dark)] text-lg">96%</strong>{" "}
+                <span className="text-[var(--re-text-muted)] text-xs">faster recall response</span>
+              </span>
+              <Link
+                href="/tools/drill-simulator"
+                className="font-mono text-[0.72rem] font-medium bg-[var(--re-text-primary)] text-[var(--re-surface-base)] px-4 py-2 rounded-md hover:opacity-90 transition-opacity"
+              >
+                Run Full Simulation →
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="relative z-[2] border-y border-white/[0.04] bg-white/[0.01]">
-        <div className="max-w-[1120px] mx-auto px-6 grid grid-cols-2 md:grid-cols-4">
+      {/* ── EVIDENCE STRIP ── */}
+      <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+        <div className="max-w-[1100px] mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-6">
+          {EVIDENCE.map((e) => (
+            <div key={e.label} className="flex items-baseline gap-2.5">
+              <span className="font-serif text-[1.75rem] font-bold text-[var(--re-brand-dark)] tracking-tight">
+                {e.value}
+              </span>
+              <span className="text-[0.85rem] text-[var(--re-text-secondary)] max-w-[180px] leading-snug">
+                {e.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── HOW IT WORKS — Pipeline ── */}
+      <section className="max-w-[1100px] mx-auto px-6 py-20">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          How it works
+        </p>
+        <h2 className="font-serif text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+          Data in, compliance out.
+        </h2>
+        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-10">
+          No twelve-month implementation. No six-figure platform fee. Connect your supply chain data and get audit-ready exports from day one.
+        </p>
+
+        <div className="flex flex-col md:flex-row bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden">
           {[
-            { value: "23", label: "FDA categories verified" },
-            { value: "1 API call", label: "to generate FDA-ready records" },
-            { value: "24hr", label: "Recall response window" },
-            { value: "Verifiable", label: "Independent verification tooling included" },
-          ].map((stat, idx) => (
+            { tag: "Ingest", title: "Connect your supply chain", desc: "API, CSV, EDI 856, or supplier portal. RegEngine normalizes everything into EPCIS 2.0 automatically." },
+            { tag: "Monitor", title: "Track compliance live", desc: "CTE/KDE coverage scoring, gap detection, and cold-chain alerts across every FTL-covered product." },
+            { tag: "Export", title: "Respond in minutes", desc: "FDA requests, retailer audits, recall simulations — one call, complete chain of custody, cryptographically verifiable." },
+          ].map((step, i, arr) => (
             <div
-              key={stat.label}
-              className={`py-7 px-5 text-center ${idx < 3 ? "md:border-r md:border-white/[0.04]" : ""}`}
+              key={step.tag}
+              className={`flex-1 p-7 ${i < arr.length - 1 ? "md:border-r border-b md:border-b-0 border-[var(--re-surface-border)]" : ""} relative`}
             >
-              <div className="text-2xl font-bold text-[var(--re-brand)] mb-1">{stat.value}</div>
-              <div className="text-[13px] font-semibold text-[var(--re-text-primary)]">{stat.label}</div>
+              <span className="inline-block font-mono text-[0.65rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.06em] bg-[var(--re-brand-muted)] px-2.5 py-1 rounded mb-3">
+                {step.tag}
+              </span>
+              <h3 className="font-serif text-[1.1rem] font-medium text-[var(--re-text-primary)] mb-2">
+                {step.title}
+              </h3>
+              <p className="text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
+                {step.desc}
+              </p>
+              {i < arr.length - 1 && (
+                <span className="hidden md:block absolute right-[-0.6rem] top-1/2 -translate-y-1/2 text-[1.2rem] text-[var(--re-text-muted)] z-10">
+                  →
+                </span>
+              )}
             </div>
           ))}
         </div>
       </section>
 
-      <section className="relative z-[2] max-w-[1120px] mx-auto py-[88px] px-6">
-        <div className="text-center mb-10">
-          <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
-            Who Is This For?
-          </span>
-          <h2 className="text-[32px] font-bold text-[var(--re-text-primary)] mt-3">
-            Built for teams that get the FDA call
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {PERSONAS.map((persona) => {
-            const Icon = persona.icon;
-            return (
-              <article
-                key={persona.title}
-                className="p-7 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl"
-              >
-                <div className="flex items-center gap-2 text-[var(--re-brand)] mb-4">
-                  <Icon size={18} />
-                  <span className="text-[11px] re-mono uppercase tracking-widest">Buyer Persona</span>
-                </div>
-                <h3 className="text-[18px] font-semibold text-[var(--re-text-primary)] mb-3">{persona.title}</h3>
-                <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mb-4">{persona.pain}</p>
-                <p className="text-sm text-[var(--re-text-primary)] font-medium leading-relaxed">{persona.outcome}</p>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="relative z-[2] bg-[rgba(239,68,68,0.04)] border-y border-[rgba(239,68,68,0.16)]">
-        <div className="max-w-[1120px] mx-auto py-[72px] px-6">
-          <span className="text-[11px] re-mono font-medium text-red-500 tracking-widest uppercase">The Problem</span>
-          <h2 className="text-[32px] font-bold text-[var(--re-text-primary)] mt-3 mb-4 max-w-[840px]">
-            FSMA 204 requires traceability records within 24 hours of FDA request.
-          </h2>
-          <p className="text-base text-[var(--re-text-muted)] max-w-[860px] leading-relaxed">
-            The deadline is July 20, 2028. Most teams still need 3 to 5 days because traceability data
-            sits across suppliers, spreadsheets, and disconnected systems that were never built for
-            regulatory export.
+      {/* ── PRODUCT DASHBOARD MOCKUP ── */}
+      <section className="bg-[var(--re-surface-card)] border-y border-[var(--re-surface-border)] py-20 px-6">
+        <div className="max-w-[1100px] mx-auto">
+          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+            The product
           </p>
-        </div>
-      </section>
-
-      <section className="relative z-[2] max-w-[1120px] mx-auto py-[88px] px-6">
-        <div className="text-center mb-10">
-          <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
-            How It Works
-          </span>
-          <h2 className="text-[32px] font-bold text-[var(--re-text-primary)] mt-3 mb-2">
-            Three steps to recall-ready operations
+          <h2 className="font-serif text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+            This is what recall-ready looks like.
           </h2>
-        </div>
+          <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-10">
+            Not a slide deck. Not a roadmap. This is the compliance command center your team logs into.
+          </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {HOW_IT_WORKS.map((step, index) => {
-            const Icon = step.icon;
-            return (
-              <article
-                key={step.title}
-                className="p-7 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl"
-              >
-                <div className="flex items-center justify-between mb-5">
-                  <div className="h-9 w-9 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] flex items-center justify-center font-bold">
-                    {index + 1}
-                  </div>
-                  <Icon size={18} className="text-[var(--re-brand)]" />
+          {/* Fake browser window */}
+          <div className="bg-[#111] rounded-xl overflow-hidden shadow-re-lg">
+            {/* Title bar */}
+            <div className="bg-[#1a1a1a] px-4 py-3 flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-[#28CA41]" />
+              <span className="font-mono text-[0.7rem] text-[#666] ml-2">app.regengine.co/dashboard</span>
+            </div>
+
+            {/* Dashboard content */}
+            <div className="p-6 grid grid-cols-1 md:grid-cols-[200px_1fr] gap-5 min-h-[380px]">
+              {/* Sidebar */}
+              <div className="md:border-r md:border-[#2a2a2a] md:pr-5 flex md:flex-col flex-wrap gap-0.5">
+                {["Dashboard", "Facilities", "Products", "Suppliers", "CTE Events", "FDA Export", "Alerts", "Audit Log"].map((item) => (
+                  <span
+                    key={item}
+                    className={`font-mono text-[0.72rem] px-3 py-2 rounded-md cursor-default ${item === "Dashboard" ? "text-[var(--re-brand)] bg-[rgba(13,150,104,0.1)]" : "text-[#888]"}`}
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+
+              {/* Main area */}
+              <div className="text-[#ddd]">
+                <div className="flex justify-between items-center mb-5">
+                  <span className="font-serif text-[1.15rem] font-medium text-white">Compliance Overview</span>
+                  <span className="font-mono text-[0.72rem] font-medium px-3 py-1.5 rounded-full bg-[rgba(13,150,104,0.15)] text-[var(--re-brand)] border border-[rgba(13,150,104,0.3)]">
+                    Recall Ready: 94%
+                  </span>
                 </div>
-                <h3 className="text-[18px] font-semibold text-[var(--re-text-primary)] mb-3">{step.title}</h3>
-                <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{step.description}</p>
-              </article>
-            );
-          })}
+
+                {/* Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                  {[
+                    { label: "CTE Coverage", value: "96%", color: "text-[var(--re-brand)]" },
+                    { label: "Supplier Score", value: "91%", color: "text-[var(--re-brand)]" },
+                    { label: "Open Gaps", value: "3", color: "text-[#EAB308]" },
+                  ].map((m) => (
+                    <div key={m.label} className="bg-[rgba(255,255,255,0.03)] border border-[#2a2a2a] rounded-lg p-4">
+                      <p className="font-mono text-[0.65rem] text-[#666] uppercase tracking-[0.06em] mb-2">{m.label}</p>
+                      <p className={`font-serif text-[1.5rem] font-bold ${m.color}`}>{m.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Table */}
+                <div className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr] px-0 py-2 border-b border-[#2a2a2a] font-mono text-[0.65rem] text-[#555] uppercase tracking-[0.06em]">
+                  <span>Product</span>
+                  <span>FTL Status</span>
+                  <span>CTE/KDE</span>
+                  <span>Last Event</span>
+                </div>
+                {DASHBOARD_ROWS.map((row) => (
+                  <div key={row.product} className="hidden sm:grid grid-cols-[2fr_1fr_1fr_1fr] py-2.5 border-b border-[rgba(255,255,255,0.03)] text-[0.8rem] text-[#bbb] items-center">
+                    <span>{row.product}</span>
+                    <span>
+                      <span className={`font-mono text-[0.65rem] font-medium px-2 py-0.5 rounded ${
+                        row.status === "complete"
+                          ? "bg-[rgba(13,150,104,0.15)] text-[var(--re-brand)]"
+                          : row.status === "partial"
+                          ? "bg-[rgba(234,179,8,0.15)] text-[#EAB308]"
+                          : "bg-[rgba(220,38,38,0.15)] text-[#F87171]"
+                      }`}>
+                        {row.ftl}
+                      </span>
+                    </span>
+                    <span>{row.cte}</span>
+                    <span className="font-mono text-[0.75rem]">{row.last}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="relative z-[2] bg-[rgba(16,185,129,0.03)] border-y border-[rgba(16,185,129,0.08)]">
-        <div className="max-w-[1120px] mx-auto py-[70px] px-6">
-          <div className="text-center mb-10">
-            <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
-              Free Compliance Tools
-            </span>
-            <h2 className="text-[30px] font-bold text-[var(--re-text-primary)] mt-3 mb-3">
-              No signup required
-            </h2>
-            <p className="text-base text-[var(--re-text-muted)] max-w-[760px] mx-auto leading-relaxed">
-              Built by a food industry founder who knows the FSMA 204 deadline is real.
+      {/* ── FREE TOOLS ── */}
+      <section className="max-w-[1100px] mx-auto px-6 py-20">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          Free tools — no signup
+        </p>
+        <h2 className="font-serif text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+          Check your exposure before you commit.
+        </h2>
+        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-10">
+          Built by a food industry founder who knows the FSMA 204 deadline is real. Use these now, upgrade when you&apos;re ready.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {FREE_TOOLS.map((tool) => (
+            <Link
+              key={tool.title}
+              href={tool.href}
+              className="group flex justify-between items-start bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 transition-all hover:border-[var(--re-brand)] hover:shadow-re-md hover:-translate-y-0.5"
+            >
+              <div>
+                <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-1.5">
+                  {tool.title}
+                </h3>
+                <p className="text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
+                  {tool.desc}
+                </p>
+              </div>
+              {tool.tag ? (
+                <span className="font-mono text-[0.65rem] font-medium text-[var(--re-brand)] bg-[var(--re-brand-muted)] px-2.5 py-1 rounded whitespace-nowrap ml-4">
+                  {tool.tag}
+                </span>
+              ) : (
+                <span className="text-[1.2rem] text-[var(--re-text-muted)] ml-4 group-hover:translate-x-1 group-hover:text-[var(--re-brand)] transition-all">
+                  →
+                </span>
+              )}
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* ── FOUNDER ── */}
+      <section className="border-t border-[var(--re-surface-border)] bg-[var(--re-surface-base)] py-20 px-6">
+        <div className="max-w-[1100px] mx-auto grid grid-cols-1 md:grid-cols-[280px_1fr] gap-12 items-start">
+          {/* Photo placeholder */}
+          <div className="w-full md:w-[280px] h-[320px] bg-gradient-to-br from-[var(--re-brand-muted)] to-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] rounded-xl flex items-center justify-center">
+            <p className="font-mono text-[0.72rem] text-[var(--re-text-muted)] text-center leading-relaxed px-4">
+              [ Your photo here ]
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {FREE_TOOLS.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <Link
-                  key={tool.title}
-                  href={tool.href}
-                  className="p-6 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl transition-all duration-300 hover:-translate-y-1 hover:border-[var(--re-brand-muted)] hover:shadow-[0_12px_24px_-10px_rgba(16,185,129,0.15)]"
-                >
-                  <Icon size={18} className="text-[var(--re-brand)] mb-4" />
-                  <h3 className="text-[16px] font-semibold text-[var(--re-text-primary)] mb-2">{tool.title}</h3>
-                  <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{tool.subtitle}</p>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="relative z-[2] max-w-[1120px] mx-auto py-[88px] px-6">
-        <div className="p-8 md:p-10 rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-[10px] font-black uppercase tracking-[0.18em] border border-[var(--re-brand-muted)]">
-            Recall Simulation
-          </span>
-          <h2 className="text-[30px] font-bold text-[var(--re-text-primary)] mt-5 mb-3">What happens when the FDA calls?</h2>
-          <p className="text-[var(--re-text-muted)] leading-relaxed max-w-[860px] mb-8">
-            Scenario: E. coli O157:H7 detected in romaine lettuce. A regional distributor must trace
-            affected lots from farm to shelf and respond inside the FDA window.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            <div className="p-6 rounded-xl border border-red-300/20 bg-red-500/5">
-              <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">Without RegEngine</h3>
-              <ul className="space-y-2 text-sm text-[var(--re-text-muted)]">
-                <li>Response time: 18 hours</li>
-                <li>Data sources: 7 disconnected systems</li>
-                <li>Data completeness: 62%</li>
-                <li>Chain of custody: difficult to verify</li>
-              </ul>
-            </div>
-            <div className="p-6 rounded-xl border border-[var(--re-brand-muted)] bg-[rgba(16,185,129,0.08)]">
-              <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-4">With RegEngine</h3>
-              <ul className="space-y-2 text-sm text-[var(--re-text-primary)]">
-                <li>Response time: 42 minutes (synthetic scenario)</li>
-                <li>Data sources: 1 API call</li>
-                <li>Data completeness: 98% (synthetic scenario)</li>
-                <li>Chain of custody: cryptographically verifiable</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-black text-white dark:bg-white dark:text-black flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-            <div>
-              <p className="text-4xl font-bold">96%</p>
-              <p className="text-sm opacity-80">Reduction in recall response time (synthetic scenario)</p>
-            </div>
-            <Link href="/tools/drill-simulator">
-              <Button className="h-11 px-6 rounded-xl bg-[var(--re-brand)] text-white hover:opacity-95">
-                Run This Simulation
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+          <div>
+            <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+              From the founder
+            </p>
+            <h2 className="font-serif text-[1.75rem] font-bold text-[var(--re-text-primary)] tracking-tight mb-6">
+              Built by someone who knows food compliance.
+            </h2>
+            <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-4 max-w-[540px]">
+              Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
+            </p>
+            <blockquote className="font-serif italic text-[1.15rem] text-[var(--re-text-primary)] border-l-[3px] border-[var(--re-brand)] pl-5 my-6 leading-relaxed max-w-[540px]">
+              &ldquo;Compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation. Your traceability data should be verified, exportable, and ready before anyone asks for it.&rdquo;
+            </blockquote>
+            <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed max-w-[540px]">
+              Every record in RegEngine is deterministic, versioned, and independently verifiable. No AI guessing. No black boxes.
+            </p>
+            <Link
+              href="/retailer-readiness"
+              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2.5 rounded-lg text-[0.925rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all mt-6"
+            >
+              Run Free Assessment
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
-
-          <p className="text-xs text-[var(--re-text-disabled)]">
-            Simulated scenario using synthetic supply chain data based on FSMA 204 requirements and common FDA recall response patterns.
-          </p>
         </div>
       </section>
 
-      <section className="relative z-[2] max-w-[1120px] mx-auto pb-[24px] px-6">
-        <div className="p-7 rounded-2xl border border-[var(--re-surface-border)] bg-white/[0.01]">
-          <h2 className="text-[24px] font-bold text-[var(--re-text-primary)] mb-3">Built by someone who knows food compliance</h2>
-          <p className="text-sm text-[var(--re-text-muted)] leading-relaxed max-w-[880px]">
-            Family restaurant kid. Organic farm hand. AmeriCorps volunteer. U.S. Senate staff. Startup closer.
-            I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a twelve-month implementation.
-            Your traceability data should be verified, exportable, and ready before anyone asks for it.
+      {/* ── FINAL CTA ── */}
+      <section className="bg-[var(--re-text-primary)] text-white py-20 px-6">
+        <div className="max-w-[1100px] mx-auto text-center">
+          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
+            FSMA 204 Deadline: July 20, 2028
           </p>
-          <p className="text-sm text-[var(--re-text-secondary)] mt-4">
-            Every Retailer Readiness Assessment is scored automatically against the current FDA rule model and retailer-specific benchmarks reflected in RegEngine. Results in minutes, not weeks.
-            <Link href="/retailer-readiness" className="text-[var(--re-brand)] hover:underline ml-1">
-              Run the assessment.
+          <h2 className="font-serif text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
+            Ready to close the gap?
+          </h2>
+          <p className="text-[1.05rem] text-[#aaa] max-w-[560px] mx-auto leading-relaxed mb-8">
+            Start with a free assessment. See exactly what it takes to move from reactive traceability to recall-ready infrastructure.
+          </p>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link
+              href="/retailer-readiness"
+              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[#0BAE78] transition-all hover:-translate-y-0.5"
+            >
+              Retailer Readiness Assessment
             </Link>
-          </p>
-        </div>
-      </section>
-
-      <section className="relative z-[2] max-w-[1120px] mx-auto pb-[90px] px-6" id="product">
-        <span className="text-[11px] re-mono font-medium text-[var(--re-brand)] tracking-widest uppercase">
-          Compliance Command Center
-        </span>
-        <h2 className="sr-only">Compliance Command Center</h2>
-        <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[880px] mt-4 mb-8">
-          Every record in RegEngine is deterministic, versioned, and independently verifiable. No
-          AI guessing. No black boxes.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {COMMAND_CENTER_FEATURES.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <Link
-                key={feature.title}
-                href={feature.href}
-                className="p-5 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl transition-all duration-300 hover:-translate-y-1 hover:border-[var(--re-brand-muted)]"
-              >
-                <Icon size={18} className="text-[var(--re-brand)] mb-3" />
-                <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">{feature.title}</h3>
-                <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{feature.description}</p>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="relative z-[2] max-w-[1120px] mx-auto py-[88px] px-6">
-        <div className="rounded-2xl p-9 md:p-12 bg-gradient-to-r from-[rgba(16,185,129,0.2)] to-[rgba(59,130,246,0.18)] border border-[var(--re-surface-border)]">
-          <div className="flex items-start gap-4 mb-4">
-            <Users size={20} className="text-[var(--re-brand)] mt-1" />
-            <div>
-              <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] mb-2">Ready to close your FSMA 204 gap?</h2>
-              <p className="text-[var(--re-text-secondary)] leading-relaxed">
-                Start with a free assessment, then see exactly what it takes to move from reactive traceability to recall-ready infrastructure.
-              </p>
-              <p className="text-sm text-[var(--re-text-muted)] mt-3">
-                Start with pricing, self-serve onboarding, or a free assessment. <Link href="/pricing" className="font-semibold text-[var(--re-brand)] hover:underline">See all plans.</Link>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3 mt-7">
-            <Link href="/retailer-readiness" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto h-14 px-8 rounded-2xl bg-[var(--re-brand)] text-white font-bold uppercase">
-                Retailer Readiness Assessment
-              </Button>
-            </Link>
-            <Link href="/pricing" className="w-full sm:w-auto">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto h-14 px-8 rounded-2xl font-bold uppercase border-2">
-                View Pricing
-              </Button>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center gap-2 border border-[#444] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-medium hover:border-[#888] transition-all"
+            >
+              View Pricing
             </Link>
           </div>
         </div>
