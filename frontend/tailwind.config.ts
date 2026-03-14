@@ -19,7 +19,8 @@ const config = {
         },
         extend: {
             fontFamily: {
-                sans: ["'Instrument Sans'", "system-ui", "-apple-system", "sans-serif"],
+                sans: ["'Inter'", "system-ui", "-apple-system", "sans-serif"],
+                serif: ["'Fraunces'", "Georgia", "serif"],
                 mono: ["'JetBrains Mono'", "'Fira Code'", "monospace"],
             },
             colors: {

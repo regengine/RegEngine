@@ -7,12 +7,10 @@ import {
     MARKETING_FOOTER_PRODUCT_LINKS,
     MARKETING_FREE_TOOLS,
 } from '@/components/layout/marketing-nav';
-import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 
 export function MarketingFooter() {
     const pathname = usePathname();
 
-    // Hide global footer on standalone mobile app and dashboard routes
     if (
         pathname === '/mobile/capture' ||
         pathname === '/fsma/field-capture' ||
@@ -25,53 +23,32 @@ export function MarketingFooter() {
     return (
         <footer
             aria-label="Site footer"
-            style={{
-                position: "relative",
-                zIndex: 2,
-                borderTop: "1px solid rgba(255,255,255,0.04)",
-                background: "rgba(0,0,0,0.2)",
-                fontFamily: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif",
-            }}
+            className="relative z-[2] border-t border-[#2a2a2a] bg-[#111] text-[#888]"
         >
-            <div
-                style={{
-                    maxWidth: "1120px",
-                    margin: "0 auto",
-                    padding: "48px 24px 32px",
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr 1fr 1fr",
-                    gap: "40px",
-                }}
-            >
+            <div className="max-w-[1100px] mx-auto px-6 pt-12 pb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr] gap-10">
                 <div>
-                    <Link href="/" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", textDecoration: "none" }}>
-                        <RegEngineWordmark size="sm" />
+                    <Link href="/" className="flex items-center gap-2 mb-3 no-underline">
+                        <span className="font-mono text-[0.85rem] text-[#aaa]">
+                            Reg<span className="text-[var(--re-brand-light)]">Engine</span>
+                        </span>
                     </Link>
-                    <p style={{ fontSize: "13px", color: "var(--re-text-disabled)", lineHeight: 1.6, margin: "0 0 16px", maxWidth: "280px" }}>
+                    <p className="text-[13px] text-[#666] leading-relaxed mb-4 max-w-[280px]">
                         API-first regulatory compliance.
                     </p>
-                    <div style={{ fontSize: "12px", fontFamily: "'JetBrains Mono', monospace", color: "var(--re-text-disabled)" }}>
+                    <div className="font-mono text-[12px] text-[#555]">
                         FSMA 204 Deadline: July 20, 2028
                     </div>
                 </div>
 
                 <div>
-                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
+                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[#555] mb-3">
                         Product
                     </h4>
                     {MARKETING_FOOTER_PRODUCT_LINKS.map((link) => (
                         <Link
                             key={link.label}
                             href={link.href}
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                fontSize: "13px",
-                                color: "var(--re-text-tertiary)",
-                                textDecoration: "none",
-                                marginBottom: "10px",
-                            }}
+                            className="block text-[13px] text-[#888] no-underline mb-2.5 hover:text-white transition-colors"
                         >
                             {link.label}
                         </Link>
@@ -79,48 +56,35 @@ export function MarketingFooter() {
                 </div>
 
                 <div>
-                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
+                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[#555] mb-3">
                         Free Tools
                     </h4>
                     {MARKETING_FREE_TOOLS.map((link) => (
                         <Link
-                            key={link.label}
+                            key={link.href}
                             href={link.href}
-                            style={{
-                                display: "block",
-                                fontSize: "13px",
-                                color: "var(--re-text-tertiary)",
-                                textDecoration: "none",
-                                marginBottom: "10px",
-                            }}
+                            className="block text-[13px] text-[#888] no-underline mb-2.5 hover:text-white transition-colors"
                         >
                             {link.label}
                         </Link>
                     ))}
                     <Link
                         href="/tools"
-                        style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "var(--re-brand)",
-                            textDecoration: "none",
-                            marginTop: "4px",
-                            fontWeight: 600,
-                        }}
+                        className="block text-[13px] text-[var(--re-brand-light)] no-underline mt-1 font-semibold hover:text-white transition-colors"
                     >
                         View all tools →
                     </Link>
                 </div>
 
                 <div>
-                    <h4 className="text-xs font-semibold text-re-text-muted tracking-wider uppercase mb-4">
+                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[#555] mb-3">
                         Company
                     </h4>
                     {MARKETING_FOOTER_COMPANY_LINKS.map((item) => (
                         <Link
                             key={item.label}
                             href={item.href}
-                            className="text-[13px] text-re-text-tertiary no-underline mb-2.5 block"
+                            className="block text-[13px] text-[#888] no-underline mb-2.5 hover:text-white transition-colors"
                         >
                             {item.label}
                         </Link>
@@ -128,23 +92,13 @@ export function MarketingFooter() {
                 </div>
             </div>
 
-            <div
-                style={{
-                    maxWidth: "1120px",
-                    margin: "0 auto",
-                    padding: "20px 24px",
-                    borderTop: "1px solid rgba(255,255,255,0.03)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                }}
-            >
-                <span className="text-xs text-re-text-disabled">
-                    © 2026 RegEngine Inc. All rights reserved.
+            <div className="max-w-[1100px] mx-auto px-6 py-5 border-t border-[#2a2a2a] flex flex-wrap justify-between items-center gap-4">
+                <span className="text-[0.72rem] text-[#444]">
+                    &copy; 2026 RegEngine Inc. All rights reserved.
                 </span>
-                <span style={{ fontSize: "11px", color: "var(--re-text-disabled)", fontFamily: "'JetBrains Mono', monospace" }}>
+                <code className="font-mono text-[0.68rem] text-[#555]">
                     verify_chain.py — don&apos;t trust, verify
-                </span>
+                </code>
             </div>
         </footer>
     );
