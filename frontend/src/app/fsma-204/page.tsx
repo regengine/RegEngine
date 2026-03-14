@@ -71,7 +71,7 @@ const STEPS = [
     num: "2",
     title: "Upload your data",
     desc: "Download our CSV or Excel template, fill in your lot codes, locations, and dates. Upload it to RegEngine. No code, no API — just a spreadsheet.",
-    cta: { label: "Download Templates", href: "/tools/bulk-upload" },
+    cta: { label: "Download Templates", href: "/onboarding/bulk-upload" },
   },
   {
     num: "3",
