@@ -26,9 +26,9 @@ const FREE_TOOLS = [
     tag: "Popular",
   },
   {
-    title: "Supply Chain Explorer",
-    desc: "See how traceability works across real recall scenarios.",
-    href: "/demo/supply-chains",
+    title: "FSMA 204 Compliance Guide",
+    desc: "Plain-English guide to the food traceability rule. No jargon.",
+    href: "/fsma-204",
     tag: null,
   },
   {
