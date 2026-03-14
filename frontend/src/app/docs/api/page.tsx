@@ -12,7 +12,6 @@ import {
     ChevronRight,
     Copy,
     Check,
-    ExternalLink,
     Leaf,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 
 import { PageContainer } from '@/components/layout/page-container';
-import { getServiceURL } from '@/lib/api-config';
 
 // API Endpoint Documentation
 const API_SERVICES = [
@@ -346,16 +344,6 @@ export default function ApiReferencePage() {
                         </div>
                         <div className="flex gap-2">
                             <Badge variant="outline">v1.0.0</Badge>
-                            <a
-                                href={`${getServiceURL('admin')}/docs`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <Button variant="outline" size="sm">
-                                    <ExternalLink className="h-4 w-4 mr-2" />
-                                    OpenAPI Docs
-                                </Button>
-                            </a>
                         </div>
                     </div>
 
