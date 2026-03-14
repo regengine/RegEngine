@@ -161,7 +161,7 @@ export default function APIPlayground() {
         </div>
 
         {/* Main Layout */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', '@media (maxWidth: 768px)': { gridTemplateColumns: '1fr' } }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Panel: Request */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Endpoint Selector */}
