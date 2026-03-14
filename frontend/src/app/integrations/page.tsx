@@ -14,6 +14,10 @@ import {
     Link2,
     Send,
     FileJson,
+    Thermometer,
+    Database,
+    ShoppingCart,
+    Terminal,
 } from 'lucide-react';
 import {
     DELIVERY_MODE_LABELS,
@@ -28,26 +32,38 @@ const CATEGORY_SECTIONS = [
         title: 'Food Safety & IoT',
         description: 'Audit, inspection, and sensor records can be mapped into RegEngine without pretending every system has a native connector.',
         color: 'var(--re-brand)',
+        icon: Thermometer,
     },
     {
         id: 'erp_warehouse' as const,
         title: 'ERP & Warehouse Systems',
         description: 'Most ERP integrations land as CSV or SFTP imports plus mapping review. That is the supported posture we expose publicly.',
         color: 'var(--re-info)',
+        icon: Database,
     },
     {
         id: 'retailer_network' as const,
         title: 'Retailer Networks',
         description: 'Retailer support is modeled as export readiness unless a managed integration is explicitly available.',
         color: 'var(--re-brand)',
+        icon: ShoppingCart,
     },
     {
         id: 'developer_api' as const,
         title: 'Developer APIs',
         description: 'Core APIs are available today, while advanced customer-specific integrations still run through scoped implementation work.',
         color: 'var(--re-info)',
+        icon: Terminal,
     },
 ];
+
+/* Status badge color mapping */
+function statusBadgeClass(status: string): string {
+    const label = STATUS_LABELS[status as keyof typeof STATUS_LABELS] || status;
+    if (label === 'GA' || label === 'Live') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+    if (label === 'Pilot') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+    return 'bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20';
+}
 
 const IMPLEMENTATION_REALITIES = [
     {
@@ -125,6 +141,19 @@ export default function IntegrationsPage() {
                         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
                             RegEngine does not replace your food safety software. It ingests traceability data, normalizes it for FSMA workflows, and prepares export packages your team can defend.
                         </p>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                            <Link href="/alpha">
+                                <Button size="lg" className="bg-[var(--re-brand)] text-white font-semibold px-8 h-12 rounded-xl shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5">
+                                    Request a Custom Integration
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </Link>
+                            <Link href="/tools">
+                                <Button size="lg" variant="outline" className="h-12 px-8 rounded-xl font-semibold">
+                                    Explore Free Tools
+                                </Button>
+                            </Link>
+                        </div>
                     </motion.div>
                 </div>
             </section>
@@ -186,9 +215,14 @@ export default function IntegrationsPage() {
                                 viewport={{ once: true }}
                                 transition={{ delay: i * 0.1 }}
                             >
-                                <Card className="h-full border-[var(--re-border-default)] bg-background">
+                                <Card className="h-full border-[var(--re-border-default)] bg-background shadow-sm">
                                     <CardHeader>
-                                        <CardTitle className="text-lg">{category.title}</CardTitle>
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <div className="w-9 h-9 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] flex items-center justify-center flex-shrink-0">
+                                                <category.icon className="h-4.5 w-4.5 text-[var(--re-brand)]" />
+                                            </div>
+                                            <CardTitle className="text-lg">{category.title}</CardTitle>
+                                        </div>
                                         <CardDescription>{category.description}</CardDescription>
                                     </CardHeader>
                                     <CardContent>
@@ -200,7 +234,7 @@ export default function IntegrationsPage() {
                                                 >
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         <span className="font-medium text-sm">{item.name}</span>
-                                                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusBadgeClass(item.status)}`}>
                                                             {STATUS_LABELS[item.status]}
                                                         </span>
                                                         <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -229,7 +263,7 @@ export default function IntegrationsPage() {
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {IMPLEMENTATION_REALITIES.map((item) => (
-                        <Card key={item.title} className="border-[var(--re-border-default)]">
+                        <Card key={item.title} className="border-[var(--re-border-default)] shadow-sm">
                             <CardHeader>
                                 <CardTitle className="text-base">{item.title}</CardTitle>
                             </CardHeader>
@@ -238,6 +272,22 @@ export default function IntegrationsPage() {
                             </CardContent>
                         </Card>
                     ))}
+                </div>
+            </section>
+
+            {/* Alpha callout */}
+            <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+                <div className="rounded-2xl border-2 border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 p-6 sm:p-8 text-center">
+                    <p className="text-sm font-medium text-[var(--re-brand)] mb-2">Most alpha partners start here</p>
+                    <p className="text-muted-foreground text-sm mb-5 max-w-lg mx-auto">
+                        Week 1: CSV/SFTP import with mapping review. Week 2–4: native API pilot scoped to your stack. No multi-year contract, no rip-and-replace.
+                    </p>
+                    <Link href="/alpha">
+                        <Button className="bg-[var(--re-brand)] text-white font-semibold px-6 h-11 rounded-xl shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5">
+                            Apply for Alpha Program
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    </Link>
                 </div>
             </section>
 
