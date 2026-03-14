@@ -16,19 +16,6 @@ export const metadata: Metadata = {
         type: 'website',
     },
 };
-
-const T = {
-    bg: 'var(--re-surface-base)',
-    surface: 'rgba(255,255,255,0.02)',
-    border: 'rgba(255,255,255,0.06)',
-    text: 'var(--re-text-secondary)',
-    textMuted: 'var(--re-text-muted)',
-    textDim: 'var(--re-text-disabled)',
-    heading: 'var(--re-text-primary)',
-    accent: 'var(--re-brand)',
-    accentBg: 'rgba(16,185,129,0.1)',
-};
-
 const ALPHA_PERKS = [
     { Icon: Zap, title: 'Priority API Access', description: "Be the first to integrate with RegEngine's traceability API and shape the developer experience." },
     { Icon: TrendingUp, title: 'Locked-In Pricing', description: 'Alpha partners lock in founding-member pricing for the duration of their account.' },
@@ -39,63 +26,108 @@ const ALPHA_PERKS = [
 ];
 
 const TIMELINE = [
-    { phase: 'Design Partner Cohort', status: 'current', date: 'Current', detail: 'Custom integrations \u00b7 Guided onboarding' },
+    { phase: 'Design Partner Cohort', status: 'current', date: 'Now Open', detail: 'Custom integrations \u00b7 Guided onboarding \u00b7 Direct founder access' },
     { phase: 'Customer Pilot Rollout', status: 'upcoming', date: 'Rolling', detail: 'Application review \u00b7 Customer-specific implementation' },
-    { phase: 'FSMA 204 Deadline', status: 'deadline', date: 'Jul 2028', detail: 'FDA enforcement begins' },
+    { phase: 'FSMA 204 Deadline', status: 'deadline', date: 'Jul 2028', detail: 'FDA enforcement begins \u00b7 Retailer audits expected earlier' },
 ];
-
 export default function AlphaPage() {
     return (
-        <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
-            {/* Hero */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '800px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
-                <Badge style={{ background: T.accentBg, color: T.accent, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '20px' }}>
-                    Design Partner Cohort
-                </Badge>
-                <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
-                    Shape the future of<br />
-                    <span className="text-re-brand">food traceability</span>
-                </h1>
-                <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '560px', margin: '0 auto 16px', lineHeight: 1.6 }}>
-                    Designed for teams that need custom integrations, mapping review, and guided rollout before calling a deployment production-ready.
-                    Direct founder access. White-glove onboarding. Explicit implementation scope.
-                </p>
+        <div className="re-page" style={{ minHeight: '100vh' }}>
+            {/* ═══ HERO with subtle background visual ═══ */}
+            <section className="relative z-[2] overflow-hidden" style={{ maxWidth: '800px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
+                {/* Faint supply-chain grid background */}
+                <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{
+                    backgroundImage: `
+                        linear-gradient(var(--re-brand) 1px, transparent 1px),
+                        linear-gradient(90deg, var(--re-brand) 1px, transparent 1px)
+                    `,
+                    backgroundSize: '60px 60px',
+                    maskImage: 'radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 80%)',
+                    WebkitMaskImage: 'radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 80%)',
+                }} />
+                {/* Accent glow */}
+                <div className="absolute top-[-60px] left-1/2 -translate-x-1/2 w-[600px] h-[400px] pointer-events-none"
+                    style={{ background: 'radial-gradient(ellipse, var(--re-brand-muted) 0%, transparent 70%)' }}
+                />
+                <div className="relative z-10">
+                    <Badge className="bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20 mb-5 text-xs font-bold uppercase tracking-widest">
+                        Design Partner Cohort
+                    </Badge>
+                    <h1 className="text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] mb-4">
+                        Shape the future of<br />
+                        <span className="bg-gradient-to-r from-[var(--re-brand)] to-emerald-400 bg-clip-text text-transparent">
+                            food traceability
+                        </span>
+                    </h1>
+                    <p className="text-lg text-[var(--re-text-muted)] max-w-[560px] mx-auto leading-relaxed mb-6">
+                        Custom integrations. Guided rollout. Direct founder access.
+                        Built for teams who want to be FSMA 204 ready before anyone asks.
+                    </p>
+                    <a href="#apply">
+                        <button className="px-8 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
+                            Apply for Design Partner Access →
+                        </button>
+                    </a>
+                </div>
             </section>
-
-            {/* Perks Grid */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '900px', margin: '0 auto', padding: '0 24px 60px' }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '32px' }}>
+            {/* ═══ PERKS GRID with shadows + hover ═══ */}
+            <section className="relative z-[2]" style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px 60px' }}>
+                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-8">
                     What design partners get
                 </h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {ALPHA_PERKS.map((perk) => (
-                        <div key={perk.title} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px', padding: '24px' }}>
-                            <perk.Icon style={{ width: 20, height: 20, color: T.accent, marginBottom: '12px' }} />
-                            <h3 style={{ fontSize: '15px', fontWeight: 600, color: T.heading, marginBottom: '6px' }}>{perk.title}</h3>
-                            <p style={{ fontSize: '13px', color: T.textMuted, lineHeight: 1.5 }}>{perk.description}</p>
+                        <div
+                            key={perk.title}
+                            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm hover:shadow-md hover:border-[var(--re-brand)] hover:-translate-y-0.5 transition-all"
+                        >
+                            <div className="w-10 h-10 rounded-xl bg-[var(--re-brand-muted)] flex items-center justify-center mb-4 group-hover:bg-[var(--re-brand)] transition-colors">
+                                <perk.Icon className="w-5 h-5 text-[var(--re-brand)] group-hover:text-white transition-colors" />
+                            </div>
+                            <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-1.5">
+                                {perk.title}
+                            </h3>
+                            <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
+                                {perk.description}
+                            </p>
                         </div>
                     ))}
                 </div>
             </section>
-
-            {/* Timeline */}
-            <section style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.01)' }}>
+            {/* ═══ TIMELINE with styled nodes + connecting line ═══ */}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
                 <div style={{ maxWidth: '600px', margin: '0 auto', padding: '60px 24px' }}>
-                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '32px' }}>
+                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-8">
                         Program timeline
                     </h2>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div className="relative flex flex-col gap-4">
+                        {/* Connecting line */}
+                        <div className="absolute left-[19px] top-[28px] bottom-[28px] w-[2px] bg-gradient-to-b from-[var(--re-brand)] via-[var(--re-brand)]/40 to-red-400/40" />
+
                         {TIMELINE.map((t, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 20px', background: T.surface, border: `1px solid ${t.status === 'current' ? 'rgba(16,185,129,0.3)' : T.border}`, borderRadius: '10px' }}>
-                                <div style={{
-                                    width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0,
-                                    background: t.status === 'current' ? T.accent : t.status === 'deadline' ? '#ef4444' : T.textDim,
-                                }} />
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: '14px', fontWeight: 600, color: T.heading }}>{t.phase}</div>
-                                    <div style={{ fontSize: '12px', color: T.textMuted }}>{t.detail}</div>
+                            <div
+                                key={i}
+                                className="relative flex items-center gap-4 p-4 pl-12 rounded-xl border bg-[var(--re-surface-card)] shadow-sm transition-all"
+                                style={{ borderColor: t.status === 'current' ? 'var(--re-brand)' : 'var(--re-surface-border)' }}
+                            >
+                                {/* Node */}
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                                    <div className={`w-[14px] h-[14px] rounded-full border-[3px] ${
+                                        t.status === 'current'
+                                            ? 'bg-[var(--re-brand)] border-[var(--re-brand-muted)] shadow-[0_0_8px_var(--re-brand)]'
+                                            : t.status === 'deadline'
+                                                ? 'bg-red-500 border-red-200 dark:border-red-900'
+                                                : 'bg-[var(--re-text-disabled)] border-[var(--re-surface-border)]'
+                                    }`} />
+                                </div>                                <div className="flex-grow">
+                                    <div className="text-sm font-semibold text-[var(--re-text-primary)]">{t.phase}</div>
+                                    <div className="text-xs text-[var(--re-text-muted)] mt-0.5">{t.detail}</div>
                                 </div>
-                                <span style={{ fontSize: '12px', fontWeight: 600, color: t.status === 'current' ? T.accent : T.textDim }}>
+                                <span className={`text-xs font-bold shrink-0 ${
+                                    t.status === 'current' ? 'text-[var(--re-brand)]'
+                                        : t.status === 'deadline' ? 'text-red-500'
+                                            : 'text-[var(--re-text-disabled)]'
+                                }`}>
                                     {t.date}
                                 </span>
                             </div>
@@ -103,16 +135,15 @@ export default function AlphaPage() {
                     </div>
                 </div>
             </section>
-
-            {/* Signup Form */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '480px', margin: '0 auto', padding: '60px 24px 80px' }}>
-                <h2 style={{ fontSize: '24px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '8px' }}>
+            {/* ═══ SIGNUP FORM with solid CTA ═══ */}
+            <section id="apply" className="relative z-[2]" style={{ maxWidth: '480px', margin: '0 auto', padding: '60px 24px 80px' }}>
+                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-2">
                     Apply for design partner access
                 </h2>
-                <p style={{ fontSize: '14px', color: T.textMuted, textAlign: 'center', marginBottom: '32px' }}>
-                    We review applications within 48 hours. Use this path for guided rollout and custom-scoped integrations, not standard self-serve workspace access.
+                <p className="text-sm text-[var(--re-text-muted)] text-center mb-8">
+                    We review applications within 48 hours. This path is for guided rollout and custom-scoped integrations.
                 </p>
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px', padding: '24px' }}>
+                <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
                     <AlphaSignupForm />
                 </div>
             </section>
