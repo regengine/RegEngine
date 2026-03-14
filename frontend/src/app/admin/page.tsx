@@ -109,12 +109,12 @@ export default function AdminPage() {
           className="max-w-6xl mx-auto"
         >
           {/* Page Header */}
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
             <div className="p-3 rounded-lg bg-orange-100 dark:bg-orange-900">
               <Key className="h-8 w-8 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold">API Management</h1>
+              <h1 className="text-3xl sm:text-4xl font-bold">API Management</h1>
               <p className="text-muted-foreground mt-1">
                 Manage API keys and access controls
               </p>
@@ -235,7 +235,7 @@ export default function AdminPage() {
               {/* Quick Generate API Key */}
               <Card className="mb-8">
                 <CardHeader className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                       <CardTitle>Developer Settings</CardTitle>
                       <CardDescription>
@@ -308,7 +308,7 @@ export default function AdminPage() {
               {/* New Key Creation */}
               <Card className="mb-8">
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                       <CardTitle>Create New API Key</CardTitle>
                       <CardDescription>

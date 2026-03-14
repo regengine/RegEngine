@@ -9,14 +9,14 @@ import { Label } from '@/components/ui/label';
 
 export default function SettingsPage() {
     return (
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between mb-8"
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
             >
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Settings</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white">Settings</h1>
                     <p className="text-white/60 mt-1">Platform configuration and preferences</p>
                 </div>
             </motion.div>

@@ -40,14 +40,14 @@ const securityItems = [
 
 export default function SecurityPage() {
     return (
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between mb-8"
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
             >
                 <div>
-                    <h1 className="text-3xl font-bold text-white">Security</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white">Security</h1>
                     <p className="text-white/60 mt-1">Access controls and security settings</p>
                 </div>
             </motion.div>
@@ -72,7 +72,7 @@ export default function SecurityPage() {
                             </div>
                             <div>
                                 <p className="text-white/60 text-sm">Security Score</p>
-                                <p className="text-4xl font-bold text-white">98<span className="text-xl text-white/60">/100</span></p>
+                                <p className="text-3xl sm:text-4xl font-bold text-white">98<span className="text-lg sm:text-xl text-white/60">/100</span></p>
                             </div>
                         </div>
                         <div className="text-right">

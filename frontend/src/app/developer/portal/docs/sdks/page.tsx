@@ -128,7 +128,7 @@ func main() {
           <div className="flex items-center gap-3 mb-4">
             <Package className="w-8 h-8" style={{ color: 'var(--re-brand)' }} />
             <h1
-              className="text-4xl font-bold"
+              className="text-3xl sm:text-4xl font-bold"
               style={{ color: 'var(--re-text-primary)' }}
             >
               SDKs & Libraries

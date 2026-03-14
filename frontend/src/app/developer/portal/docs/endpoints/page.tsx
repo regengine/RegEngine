@@ -7,8 +7,8 @@ export default function EndpointsPage() {
   return (
     <div style={{ background: 'var(--re-surface-base)', color: 'var(--re-text-primary)' }}>
       {/* Header */}
-      <div style={{ padding: '40px 32px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 700, margin: '0 0 8px 0' }}>API Reference</h1>
+      <div style={{ padding: 'clamp(1.5rem, 5vw, 40px) clamp(1rem, 4vw, 32px)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <h1 style={{ fontSize: 'clamp(1.5rem, 4vw, 2rem)', fontWeight: 700, margin: '0 0 8px 0' }}>API Reference</h1>
         <p style={{ color: 'var(--re-text-muted)', margin: 0, fontSize: '16px' }}>
           FSMA 204 food traceability endpoints for supply chain visibility and compliance
         </p>
@@ -17,8 +17,8 @@ export default function EndpointsPage() {
       {/* Base URL Callout */}
       <div
         style={{
-          margin: '32px',
-          padding: '16px',
+          margin: 'clamp(1rem, 4vw, 32px)',
+          padding: 'clamp(0.75rem, 3vw, 16px)',
           background: 'rgba(16, 185, 129, 0.08)',
           border: '1px solid rgba(16, 185, 129, 0.3)',
           borderRadius: '8px',
@@ -31,11 +31,11 @@ export default function EndpointsPage() {
       </div>
 
       {/* Ingestion API Section */}
-      <div style={{ padding: '0 32px' }}>
-        <div style={{ marginTop: '48px', marginBottom: '32px' }}>
+      <div style={{ padding: '0 clamp(1rem, 4vw, 32px)' }}>
+        <div style={{ marginTop: 'clamp(1.5rem, 5vw, 48px)', marginBottom: 'clamp(1rem, 4vw, 32px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <Zap size={24} style={{ color: 'var(--re-brand)' }} />
-            <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Ingestion API</h2>
+            <h2 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.5rem)', fontWeight: 700, margin: 0 }}>Ingestion API</h2>
           </div>
           <p style={{ color: 'var(--re-text-muted)', margin: '0', fontSize: '14px' }}>
             Ingest Critical Tracking Events and EPCIS 2.0 data into RegEngine
@@ -343,11 +343,11 @@ fetch(\`https://api.regengine.co/api/v1/epcis/events/\${eventId}\`, {
       </div>
 
       {/* Compliance API Section */}
-      <div style={{ padding: '0 32px' }}>
-        <div style={{ marginTop: '48px', marginBottom: '32px' }}>
+      <div style={{ padding: '0 clamp(1rem, 4vw, 32px)' }}>
+        <div style={{ marginTop: 'clamp(1.5rem, 5vw, 48px)', marginBottom: 'clamp(1rem, 4vw, 32px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <Shield size={24} style={{ color: 'var(--re-brand)' }} />
-            <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Compliance API</h2>
+            <h2 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.5rem)', fontWeight: 700, margin: 0 }}>Compliance API</h2>
           </div>
           <p style={{ color: 'var(--re-text-muted)', margin: '0', fontSize: '14px' }}>
             FSMA 204 compliance scoring, FDA export, and event chain verification
@@ -539,11 +539,11 @@ fetch(\`https://api.regengine.co/api/v1/epcis/chain/verify?lot_code=\${lotCode}\
       </div>
 
       {/* Recall & Simulation Section */}
-      <div style={{ padding: '0 32px' }}>
-        <div style={{ marginTop: '48px', marginBottom: '32px' }}>
+      <div style={{ padding: '0 clamp(1rem, 4vw, 32px)' }}>
+        <div style={{ marginTop: 'clamp(1.5rem, 5vw, 48px)', marginBottom: 'clamp(1rem, 4vw, 32px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <AlertCircle size={24} style={{ color: 'var(--re-brand)' }} />
-            <h2 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Recall & Simulation</h2>
+            <h2 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.5rem)', fontWeight: 700, margin: 0 }}>Recall & Simulation</h2>
           </div>
           <p style={{ color: 'var(--re-text-muted)', margin: '0', fontSize: '14px' }}>
             Run recall simulations and decode barcodes for rapid traceability drills
@@ -732,7 +732,7 @@ fetch('https://api.regengine.co/api/v1/qr/decode', {
       </div>
 
       {/* Footer */}
-      <div style={{ padding: '48px 32px', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '48px' }}>
+      <div style={{ padding: 'clamp(1.5rem, 5vw, 48px) clamp(1rem, 4vw, 32px)', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 'clamp(1.5rem, 5vw, 48px)' }}>
         <p style={{ color: 'var(--re-text-muted)', fontSize: '14px', margin: 0 }}>
           Need help? Email support@regengine.co or visit our{' '}
           <a href="#" style={{ color: 'var(--re-brand)', textDecoration: 'none' }}>documentation</a>.

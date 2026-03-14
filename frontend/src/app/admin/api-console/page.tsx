@@ -159,7 +159,7 @@ export default function AdminAPIConsolePage() {
                             <Terminal className="w-10 h-10 text-white" />
                         </motion.div>
 
-                        <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-4 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                             Admin API Console
                         </h1>
                         <p className="text-xl text-gray-300 max-w-3xl mx-auto">
