@@ -8,7 +8,6 @@ import {
     FileText,
     Search,
     Shield,
-    AlertTriangle,
     ChevronDown,
     ChevronRight,
     Copy,
@@ -25,72 +24,6 @@ import { getServiceURL } from '@/lib/api-config';
 
 // API Endpoint Documentation
 const API_SERVICES = [
-    {
-        name: 'Admin API',
-        port: 8400,
-        baseUrl: '/api/admin',
-        icon: Key,
-        description: 'Tenant management, API keys, and control overlays',
-        endpoints: [
-            {
-                method: 'GET',
-                path: '/health',
-                description: 'Service health check',
-                auth: false,
-                response: '{ "status": "healthy", "version": "0.4.0" }',
-            },
-            {
-                method: 'POST',
-                path: '/v1/admin/keys',
-                description: 'Create a new API key',
-                auth: true,
-                headers: ['X-Admin-Key'],
-                body: '{ "name": "My API Key", "tenant_id": "uuid", "description": "optional" }',
-                response: '{ "key": "rge_xxx", "id": "uuid", "created_at": "2026-01-01T00:00:00Z" }',
-            },
-            {
-                method: 'GET',
-                path: '/v1/admin/keys',
-                description: 'List all API keys',
-                auth: true,
-                headers: ['X-Admin-Key'],
-                response: '[{ "id": "uuid", "name": "...", "created_at": "...", "last_used": "..." }]',
-            },
-            {
-                method: 'DELETE',
-                path: '/v1/admin/keys/{keyId}',
-                description: 'Revoke an API key',
-                auth: true,
-                headers: ['X-Admin-Key'],
-                response: '204 No Content',
-            },
-            {
-                method: 'POST',
-                path: '/v1/admin/tenants',
-                description: 'Create a new tenant',
-                auth: true,
-                headers: ['X-Admin-Key'],
-                body: '{ "name": "Acme Foods" }',
-                response: '{ "id": "uuid", "name": "Acme Foods", "created_at": "..." }',
-            },
-            {
-                method: 'GET',
-                path: '/v1/admin/review/flagged-extractions',
-                description: 'Get items pending human review',
-                auth: true,
-                headers: ['X-Admin-Key'],
-                params: ['status=PENDING|APPROVED|REJECTED'],
-                response: '[{ "id": "uuid", "content": "...", "confidence": 0.75, "created_at": "..." }]',
-            },
-            {
-                method: 'POST',
-                path: '/v1/admin/review/{reviewId}/approve',
-                description: 'Approve a review item',
-                auth: true,
-                headers: ['X-Admin-Key'],
-                response: '204 No Content',
-            },
-        ],
     },
     {
         name: 'Ingestion API',
@@ -286,40 +219,6 @@ const API_SERVICES = [
             },
         ],
     },
-    {
-        name: 'Opportunity API',
-        port: 8300,
-        baseUrl: '/api/opportunity',
-        icon: AlertTriangle,
-        description: 'Regulatory arbitrage and gap detection',
-        endpoints: [
-            {
-                method: 'GET',
-                path: '/health',
-                description: 'Service health check',
-                auth: false,
-                response: '{ "status": "healthy" }',
-            },
-            {
-                method: 'GET',
-                path: '/opportunities/arbitrage',
-                description: 'Find regulatory arbitrage opportunities',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                params: ['j1=US', 'j2=EU', 'concept=capital_requirements', 'limit=10'],
-                response: '{ "items": [{ "j1": "US", "j2": "EU", "delta": 0.15, ... }] }',
-            },
-            {
-                method: 'GET',
-                path: '/opportunities/gaps',
-                description: 'Find compliance gaps between jurisdictions',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                params: ['j1=US', 'j2=EU', 'limit=10'],
-                response: '{ "items": [{ "requirement": "...", "present_in": "US", "missing_in": "EU" }] }',
-            },
-        ],
-    },
 ];
 
 function CopyButton({ text }: { text: string }) {
@@ -473,21 +372,13 @@ export default function ApiReferencePage() {
                             <p className="text-sm">
                                 All authenticated endpoints require one of the following headers:
                             </p>
-                            <div className="grid md:grid-cols-2 gap-4">
+                            <div >
                                 <div className="bg-white dark:bg-gray-900 rounded p-3">
                                     <code className="text-xs font-mono text-amber-700 dark:text-amber-400">
                                         X-RegEngine-API-Key: rge_your_api_key
                                     </code>
                                     <p className="text-xs text-muted-foreground mt-1">
                                         Standard API access (tenant-scoped)
-                                    </p>
-                                </div>
-                                <div className="bg-white dark:bg-gray-900 rounded p-3">
-                                    <code className="text-xs font-mono text-amber-700 dark:text-amber-400">
-                                        X-Admin-Key: admin_master_key
-                                    </code>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Administrative operations
                                     </p>
                                 </div>
                             </div>
@@ -595,13 +486,13 @@ export default function ApiReferencePage() {
                                     </pre>
                                 </div>
                                 <div className="bg-white dark:bg-gray-900 rounded p-3">
-                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Review Items</h4>
+                                    <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Compliance Checklists</h4>
                                     <pre className="text-xs font-mono text-blue-700 dark:text-blue-400 whitespace-pre-wrap">
                                         {`# First page
-GET /v1/admin/review/flagged-extractions?limit=20
+GET /checklists?industry=food?limit=20
 
 # Next page
-GET /v1/admin/review/flagged-extractions?limit=20&cursor=eyJpZCI6IjEyMyJ9`}
+GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`}
                                     </pre>
                                 </div>
                             </div>
@@ -639,7 +530,7 @@ GET /v1/admin/review/flagged-extractions?limit=20&cursor=eyJpZCI6IjEyMyJ9`}
                             </div>
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-3 mt-3">
                                 <p className="text-xs text-amber-800 dark:text-amber-200">
-                                    <strong>Tier Limits:</strong> Growth (500/min), Scale (1000/min), Enterprise (custom), Enterprise (custom)
+                                    <strong>Tier Limits:</strong> Growth (500/min), Scale (1,000/min), Enterprise (custom)
                                 </p>
                             </div>
                         </CardContent>
