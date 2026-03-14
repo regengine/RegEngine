@@ -1,29 +1,51 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import {
-    LayoutDashboard,
-    Key,
-    BarChart3,
-    BookOpen,
-    LogOut,
-    ShieldCheck,
+    LayoutDashboard, Key, BarChart3, BookOpen, LogOut,
+    ShieldCheck, Terminal, Code2, Webhook, Package,
+    AlertCircle, ChevronDown, ChevronRight, Zap,
+    FileText, ExternalLink,
 } from 'lucide-react';
 
-const NAV_ITEMS = [
-    { label: 'Dashboard', href: '/developer/portal', icon: LayoutDashboard },
-    { label: 'API Keys', href: '/developer/portal/keys', icon: Key },
-    { label: 'Usage', href: '/developer/portal/usage', icon: BarChart3 },
-    { label: 'API Docs', href: '/developer/portal/docs', icon: BookOpen },
+const NAV_SECTIONS = [
+    {
+        label: 'Overview',
+        items: [
+            { label: 'Dashboard', href: '/developer/portal', icon: LayoutDashboard },
+            { label: 'API Keys', href: '/developer/portal/keys', icon: Key },
+            { label: 'Usage & Logs', href: '/developer/portal/usage', icon: BarChart3 },
+        ],
+    },
+    {
+        label: 'Documentation',
+        items: [
+            { label: 'Quickstart', href: '/developer/portal/docs', icon: Zap },
+            { label: 'API Reference', href: '/developer/portal/docs/endpoints', icon: BookOpen },
+            { label: 'Authentication', href: '/developer/portal/docs/auth', icon: ShieldCheck },
+            { label: 'Error Codes', href: '/developer/portal/docs/errors', icon: AlertCircle },
+            { label: 'Webhooks', href: '/developer/portal/docs/webhooks', icon: Webhook },
+            { label: 'SDKs & Libraries', href: '/developer/portal/docs/sdks', icon: Package },
+            { label: 'Changelog', href: '/developer/portal/docs/changelog', icon: FileText },
+        ],
+    },
+    {
+        label: 'Tools',
+        items: [
+            { label: 'API Playground', href: '/developer/portal/playground', icon: Terminal },
+            { label: 'Code Generator', href: '/developer/portal/codegen', icon: Code2 },
+        ],
+    },
 ];
 
 export default function DeveloperPortalLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const supabase = createSupabaseBrowserClient();
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
     async function handleLogout() {
         await supabase.auth.signOut();
@@ -31,57 +53,111 @@ export default function DeveloperPortalLayout({ children }: { children: React.Re
         router.refresh();
     }
 
+    function toggleSection(label: string) {
+        setCollapsed(prev => ({ ...prev, [label]: !prev[label] }));
+    }
+
+    function isActive(href: string) {
+        if (href === '/developer/portal') return pathname === href;
+        return pathname === href || pathname.startsWith(href + '/');
+    }
+
     return (
         <div className="min-h-screen flex" style={{ background: 'var(--re-surface-base)' }}>
-            {/* Sidebar */}
-            <aside className="w-56 flex-shrink-0 flex flex-col" style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.01)' }}>
-                <div className="p-4 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    <ShieldCheck className="w-5 h-5" style={{ color: 'var(--re-brand)' }} />
-                    <span className="font-semibold text-sm" style={{ color: 'var(--re-text-primary)' }}>Dev Portal</span>
-                </div>
+            {/* Stripe-style sidebar */}
+            <aside className="w-60 flex-shrink-0 flex flex-col" style={{
+                borderRight: '1px solid rgba(255,255,255,0.06)',
+                background: 'rgba(0,0,0,0.15)',
+            }}>
+                {/* Logo / Brand */}
+                <Link href="/developer/portal" className="p-4 flex items-center gap-2.5 no-underline" style={{
+                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                    <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{
+                        background: 'linear-gradient(135deg, rgba(16,185,129,0.3), rgba(6,182,212,0.2))',
+                    }}>
+                        <ShieldCheck className="w-4 h-4" style={{ color: 'var(--re-brand)' }} />
+                    </div>
+                    <div>
+                        <span className="font-semibold text-sm block" style={{ color: 'var(--re-text-primary)' }}>RegEngine</span>
+                        <span className="text-[10px] font-medium" style={{ color: 'var(--re-text-disabled)' }}>Developer Portal</span>
+                    </div>
+                </Link>
 
-                <nav className="flex-1 p-2 space-y-1">
-                    {NAV_ITEMS.map((item) => {
-                        const isActive = pathname === item.href || (item.href !== '/developer/portal' && pathname.startsWith(item.href));
+                {/* Nav sections */}
+                <nav className="flex-1 overflow-y-auto py-3 px-2">
+                    {NAV_SECTIONS.map((section) => {
+                        const isCollapsed = collapsed[section.label];
                         return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors"
-                                style={{
-                                    color: isActive ? 'var(--re-text-primary)' : 'var(--re-text-muted)',
-                                    background: isActive ? 'rgba(16,185,129,0.1)' : 'transparent',
-                                }}
-                            >
-                                <item.icon className="w-4 h-4" style={{ color: isActive ? 'var(--re-brand)' : 'var(--re-text-disabled)' }} />
-                                {item.label}
-                            </Link>
+                            <div key={section.label} className="mb-1">
+                                <button
+                                    onClick={() => toggleSection(section.label)}
+                                    className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider rounded"
+                                    style={{ color: 'var(--re-text-disabled)' }}
+                                >
+                                    {section.label}
+                                    {isCollapsed
+                                        ? <ChevronRight className="w-3 h-3" />
+                                        : <ChevronDown className="w-3 h-3" />
+                                    }
+                                </button>
+                                {!isCollapsed && (
+                                    <div className="mt-0.5 space-y-0.5">
+                                        {section.items.map((item) => {
+                                            const active = isActive(item.href);
+                                            return (
+                                                <Link
+                                                    key={item.href}
+                                                    href={item.href}
+                                                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-all no-underline"
+                                                    style={{
+                                                        color: active ? 'var(--re-text-primary)' : 'var(--re-text-muted)',
+                                                        background: active ? 'rgba(16,185,129,0.1)' : 'transparent',
+                                                        fontWeight: active ? 500 : 400,
+                                                    }}
+                                                >
+                                                    <item.icon className="w-3.5 h-3.5 flex-shrink-0" style={{
+                                                        color: active ? 'var(--re-brand)' : 'var(--re-text-disabled)',
+                                                    }} />
+                                                    {item.label}
+                                                    {active && <div className="ml-auto w-1 h-1 rounded-full" style={{ background: 'var(--re-brand)' }} />}
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         );
                     })}
                 </nav>
 
-                <div className="p-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <button
-                        onClick={handleLogout}
-                        className="flex items-center gap-3 px-3 py-2 rounded-md text-sm w-full transition-colors hover:bg-red-500/10"
-                        style={{ color: 'var(--re-text-muted)' }}
-                    >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
-                    </button>
-                    <Link
-                        href="/"
-                        className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mt-1"
+                {/* Footer */}
+                <div className="p-2 space-y-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <a
+                        href="https://status.regengine.co"
+                        target="_blank"
+                        rel="noopener"
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] no-underline transition-colors"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
-                        regengine.co
-                    </Link>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e' }} />
+                        API Status
+                        <ExternalLink className="w-3 h-3 ml-auto" />
+                    </a>
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] w-full transition-colors hover:bg-red-500/10 no-underline"
+                        style={{ color: 'var(--re-text-disabled)' }}
+                    >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Sign Out
+                    </button>
                 </div>
             </aside>
 
             {/* Main content */}
             <main className="flex-1 overflow-auto">
-                <div className="max-w-5xl mx-auto p-6">
+                <div className="max-w-5xl mx-auto px-8 py-8">
                     {children}
                 </div>
             </main>
