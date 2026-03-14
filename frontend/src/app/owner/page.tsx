@@ -174,15 +174,15 @@ export default function OwnerDashboard() {
     }
 
     return (
-        <div className="min-h-screen bg-[#06090f] p-8 text-slate-200">
+        <div className="min-h-screen bg-[#06090f] p-4 sm:p-6 lg:p-8 text-slate-200">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between mb-8"
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
             >
                 <div>
-                    <h1 className="text-3xl font-bold text-white tracking-tight">Executive Dashboard</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Executive Dashboard</h1>
                     <p className="text-slate-400 mt-1">Welcome back. Here&apos;s your business overview.</p>
                 </div>
                 <Button

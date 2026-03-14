@@ -72,11 +72,11 @@ export default function InvoicesDashboard() {
     const [tab, setTab] = useState<'invoices' | 'payments'>('invoices');
 
     return (
-        <div className="p-8 max-w-[1600px] mx-auto">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
             {/* Header */}
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-gradient-to-br from-teal-500/20 to-cyan-600/20">
                             <Receipt className="h-7 w-7 text-teal-400" />
                         </div>

@@ -220,10 +220,10 @@ export default function DashboardPage() {
                     className="space-y-8"
                 >
                     {/* Welcome Header */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
                             <div className="flex items-center gap-3">
-                                <h1 className="text-3xl font-bold">Dashboard</h1>
+                                <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
                                 {dashboardData && (
                                     <span className="text-2xl" title={dashboardData.industryLabel}>
                                         {dashboardData.industryIcon}
@@ -369,7 +369,7 @@ export default function DashboardPage() {
                     {/* FSMA 204 Deadline Banner */}
                     <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-emerald-800">
                         <CardContent className="pt-6">
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
                                     <div className="p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
                                         <BarChart3 className="h-6 w-6 text-emerald-600" />

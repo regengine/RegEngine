@@ -134,10 +134,10 @@ export default function ProductCatalogPage() {
     const uniqueCategories = [...new Set(products.map(p => p.category))].sort();
 
     return (
-        <div className="min-h-screen bg-background py-10 px-4">
+        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold flex items-center gap-3">
                             <Package className="h-6 w-6 text-[var(--re-brand)]" />
@@ -223,7 +223,7 @@ export default function ProductCatalogPage() {
                         )}
 
                         {/* Category Filter */}
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 -mx-1 px-1">
                             <button
                                 onClick={() => setFilterCategory('all')}
                                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${

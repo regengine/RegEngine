@@ -166,10 +166,10 @@ export default function NotificationPrefsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-background py-10 px-4">
+        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-2xl font-bold flex items-center gap-3">
                             <Settings className="h-6 w-6 text-[var(--re-brand)]" />
