@@ -114,7 +114,7 @@ export default function ChangelogPage() {
               </div>
             </div>
 
-            <ul style={{ color: 'var(--re-text-muted)', paddingLeft: '24px', space: '8px' }}>
+            <ul style={{ color: 'var(--re-text-muted)', paddingLeft: '24px' }}>
               {entry.changes.map((change, changeIndex) => (
                 <li key={changeIndex} style={{ marginBottom: '8px' }}>
                   {change}
