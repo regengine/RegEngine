@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
 import { motion } from 'framer-motion';
-import { Shield, AlertCircle, AlertTriangle, CheckCircle2, ArrowRight, Download } from 'lucide-react';
+import { Shield, AlertCircle, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
+import { submitAssessment, AssessmentFormData } from '@/app/actions/submit-assessment';
 
 const READINESS_TOOL_CONFIG: ToolConfig = {
     id: 'recall-readiness',
@@ -120,32 +121,71 @@ const READINESS_TOOL_CONFIG: ToolConfig = {
                 ]
             }
         ],
-        leadGate: {
-            title: 'Get Your Official Readiness Scorecard',
-            description: 'We will send you a detailed A–F grade report plus a step-by-step gap remediation checklist rooted in CFR citations.',
-            cta: 'Generate My Report'
-        }
+        /* leadGate removed — using inline lead capture form in results instead */
     }
 };
 
 export function RecallReadinessClient() {
-    const evaluateResults = (answers: Record<string, any>) => {
-        // Calculate score based on weights
+    const [leadSubmitted, setLeadSubmitted] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
+    const [lastScore, setLastScore] = useState<{ score: number; grade: string }>({ score: 0, grade: 'F' });
+    const [lastAnswers, setLastAnswers] = useState<Record<string, any>>({});
+
+    function calcScore(answers: Record<string, any>) {
         let totalScore = 0;
         READINESS_TOOL_CONFIG.stages.questions.forEach(q => {
             const selectedValue = answers[q.id];
             const option = q.options?.find(opt => opt.value === selectedValue);
-            if (option?.weight) {
-                totalScore += option.weight;
-            }
+            if (option?.weight) totalScore += option.weight;
         });
-
         let grade = 'F';
+        if (totalScore >= 90) grade = 'A';
+        else if (totalScore >= 80) grade = 'B';
+        else if (totalScore >= 70) grade = 'C';
+        else if (totalScore >= 55) grade = 'D';
+        return { score: totalScore, grade };
+    }
+
+    const handleLeadSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        setSubmitting(true);
+        setSubmitError('');
+        const form = new FormData(e.currentTarget);
+        const data: AssessmentFormData = {
+            name: form.get('name') as string,
+            email: form.get('email') as string,
+            company: form.get('company') as string,
+            role: form.get('role') as string,
+            facilityCount: form.get('facilityCount') as string,
+            phone: form.get('phone') as string,
+            quizScore: lastScore.score,
+            quizGrade: lastScore.grade,
+            quizAnswers: lastAnswers,
+            source: 'recall-readiness',
+        };
+        const result = await submitAssessment(data);
+        setSubmitting(false);
+        if (result.success) {
+            setLeadSubmitted(true);
+        } else {
+            setSubmitError(result.error || 'Something went wrong.');
+        }
+    };
+
+    const evaluateResults = (answers: Record<string, any>) => {
+        const { score: totalScore, grade } = calcScore(answers);
+        // Store for lead form
+        if (lastScore.score !== totalScore) {
+            setLastScore({ score: totalScore, grade });
+            setLastAnswers(answers);
+        }
+
         let color = 'var(--re-danger)';
-        if (totalScore >= 90) { grade = 'A'; color = 'var(--re-brand)'; }
-        else if (totalScore >= 80) { grade = 'B'; color = 'var(--re-brand)'; }
-        else if (totalScore >= 70) { grade = 'C'; color = 'var(--re-warning)'; }
-        else if (totalScore >= 55) { grade = 'D'; color = 'var(--re-warning)'; }
+        if (totalScore >= 90) color = 'var(--re-brand)';
+        else if (totalScore >= 80) color = 'var(--re-brand)';
+        else if (totalScore >= 70) color = 'var(--re-warning)';
+        else if (totalScore >= 55) color = 'var(--re-warning)';
 
         const gaps = [];
         if (answers.pull_24h !== 'yes') gaps.push('Non-compliant: Cannot meet 24-hour FDA records retrieval mandate (21 CFR §1.1455(b)(3))');
@@ -169,60 +209,116 @@ export function RecallReadinessClient() {
                     <p className="text-[var(--re-text-tertiary)] mt-1">Total score: {totalScore} / 100</p>
                 </div>
 
-                {gaps.length > 0 && (
-                    <div className="space-y-4">
-                        <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">Critical Gaps Detected</h4>
-                        <div className="space-y-2">
-                            {gaps.map((gap, i) => (
-                                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--re-danger-muted)] border border-[var(--re-danger)] / 20 text-sm">
-                                    <AlertCircle className="h-4 w-4 shrink-0 text-[var(--re-danger)]" />
-                                    <span className="text-[var(--re-text-primary)]">{gap}</span>
-                                </div>
-                            ))}
+                {/* Lead capture form - gate detailed results */}
+                {!leadSubmitted && (
+                    <div className="p-6 rounded-2xl border-2 border-[var(--re-brand)] bg-[var(--re-brand-muted)]">
+                        <div className="text-center mb-5">
+                            <h3 className="text-lg font-bold text-[var(--re-text-primary)]">Get Your Full Compliance Report</h3>
+                            <p className="text-sm text-[var(--re-text-tertiary)] mt-1">
+                                Our founder personally reviews every assessment within 24 hours
+                                and sends you a detailed gap analysis with CFR citations.
+                            </p>
                         </div>
+                        <form onSubmit={handleLeadSubmit} className="space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input name="name" required placeholder="Full Name" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
+                                <input name="email" type="email" required placeholder="Work Email" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input name="company" required placeholder="Company Name" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
+                                <select name="role" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]">
+                                    <option value="">Your Role</option>
+                                    <option value="qa-food-safety">QA / Food Safety</option>
+                                    <option value="operations">Operations</option>
+                                    <option value="compliance">Compliance / Regulatory</option>
+                                    <option value="supply-chain">Supply Chain</option>
+                                    <option value="executive">Executive / Owner</option>
+                                    <option value="it">IT / Engineering</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <select name="facilityCount" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]">
+                                    <option value="">Number of Facilities</option>
+                                    <option value="1">1 facility</option>
+                                    <option value="2-5">2–5 facilities</option>
+                                    <option value="6-20">6–20 facilities</option>
+                                    <option value="20+">20+ facilities</option>
+                                </select>
+                                <input name="phone" type="tel" placeholder="Phone (optional)" className="w-full px-4 py-3 rounded-xl text-sm border border-[var(--re-border-default)] bg-[var(--re-surface-base)] text-[var(--re-text-primary)] placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:ring-2 focus:ring-[var(--re-brand)]" />
+                            </div>
+                            {submitError && <p className="text-sm text-[var(--re-danger)] text-center">{submitError}</p>}
+                            <Button type="submit" disabled={submitting} className="w-full h-12 text-base bg-[var(--re-brand)] hover:brightness-110 mt-2">
+                                {submitting ? 'Submitting...' : 'Get My Free Assessment Report'} {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
+                            </Button>
+                            <p className="text-[10px] text-center text-[var(--re-text-muted)]">No spam. Your data is encrypted and never shared.</p>
+                        </form>
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="p-6 rounded-2xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
-                        <h4 className="font-bold mb-3 flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-[var(--re-warning)]" /> Regulatory Risks
-                        </h4>
-                        <ul className="text-xs space-y-3 text-[var(--re-text-tertiary)]">
-                            <li>• Potential citations for <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455" target="_blank" rel="noopener noreferrer" className="text-[var(--re-brand)] hover:underline">21 CFR §1.1455</a> violations</li>
-                            <li>• Delayed response times during active recalls</li>
-                            <li>• Operational chaos during FDA audits</li>
-                        </ul>
-                    </div>
-                    <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)] / 20">
-                        <h4 className="font-bold mb-3 flex items-center gap-2">
-                            <Shield className="h-4 w-4 text-[var(--re-brand)]" /> RegEngine Solution
-                        </h4>
-                        <p className="text-xs text-[var(--re-text-secondary)] leading-relaxed mb-4">
-                            RegEngine automates KDE capture and guarantees 24-hour retrieval with one-click sortable spreadsheet exports.
-                        </p>
-                        <Button className="w-full bg-[var(--re-brand)] text-xs h-8">
-                            Book a Compliance Audit
-                        </Button>
-                    </div>
-                </div>
+                {/* Detailed results - shown after lead capture */}
+                {leadSubmitted && (
+                    <>
+                        <div className="p-4 rounded-xl bg-[var(--re-success-muted)] border border-[var(--re-success)] text-center">
+                            <p className="text-sm font-semibold text-[var(--re-text-primary)]">
+                                <CheckCircle2 className="inline h-4 w-4 mr-1 text-[var(--re-success)]" />
+                                Assessment submitted! Check your inbox within 24 hours for your personalized report.
+                            </p>
+                        </div>
 
-                <div className="flex flex-col items-center gap-3 pt-4">
-                    <Button variant="outline" className="w-full gap-2">
-                        <Download className="h-4 w-4" /> Download PDF Report
-                    </Button>
-                    <div className="w-full p-4 rounded-xl border border-[var(--re-brand)] bg-[var(--re-brand-muted)] text-center">
-                        <p className="text-xs font-bold mb-2">Recommended Next Step:</p>
-                        <Link href="/tools/kde-checker">
-                            <Button className="w-full bg-[var(--re-brand)] gap-2">
-                                Generate Your KDE Checklist <ArrowRight className="h-4 w-4" />
-                            </Button>
-                        </Link>
-                    </div>
-                    <Link href="/tools" className="text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] underline">
-                        Back to Toolkit Hub
-                    </Link>
-                </div>
+                        {gaps.length > 0 && (
+                            <div className="space-y-4">
+                                <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">Critical Gaps Detected</h4>
+                                <div className="space-y-2">
+                                    {gaps.map((gap, i) => (
+                                        <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--re-danger-muted)] border border-[var(--re-danger)]/20 text-sm">
+                                            <AlertCircle className="h-4 w-4 shrink-0 text-[var(--re-danger)]" />
+                                            <span className="text-[var(--re-text-primary)]">{gap}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="p-6 rounded-2xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                <h4 className="font-bold mb-3 flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-[var(--re-warning)]" /> Regulatory Risks
+                                </h4>
+                                <ul className="text-xs space-y-3 text-[var(--re-text-tertiary)]">
+                                    <li>Potential citations for <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455" target="_blank" rel="noopener noreferrer" className="text-[var(--re-brand)] hover:underline">21 CFR §1.1455</a> violations</li>
+                                    <li>Delayed response times during active recalls</li>
+                                    <li>Operational chaos during FDA audits</li>
+                                </ul>
+                            </div>
+                            <div className="p-6 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
+                                <h4 className="font-bold mb-3 flex items-center gap-2">
+                                    <Shield className="h-4 w-4 text-[var(--re-brand)]" /> RegEngine Solution
+                                </h4>
+                                <p className="text-xs text-[var(--re-text-secondary)] leading-relaxed mb-4">
+                                    RegEngine automates KDE capture and guarantees 24-hour retrieval with one-click sortable spreadsheet exports.
+                                </p>
+                                <Button className="w-full bg-[var(--re-brand)] text-xs h-8">
+                                    Book a Compliance Audit
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-3 pt-4">
+                            <div className="w-full p-4 rounded-xl border border-[var(--re-brand)] bg-[var(--re-brand-muted)] text-center">
+                                <p className="text-xs font-bold mb-2">Recommended Next Step:</p>
+                                <Link href="/tools/kde-checker">
+                                    <Button className="w-full bg-[var(--re-brand)] gap-2">
+                                        Generate Your KDE Checklist <ArrowRight className="h-4 w-4" />
+                                    </Button>
+                                </Link>
+                            </div>
+                            <Link href="/tools" className="text-sm text-[var(--re-text-muted)] hover:text-[var(--re-brand)] underline">
+                                Back to Toolkit Hub
+                            </Link>
+                        </div>
+                    </>
+                )}
             </div>
         );
     };
