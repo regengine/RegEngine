@@ -1,85 +1,209 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import {
+  ArrowRight,
+  Award,
+  Code2,
+  DollarSign,
+  Globe,
+  Landmark,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 
 export const metadata: Metadata = {
+  title: 'About | RegEngine',
+  description:
+    'Founder-led FSMA 204 compliance infrastructure with an explicit trust surface for customer diligence and implementation readiness.',
+  openGraph: {
     title: 'About | RegEngine',
-    description: 'Founder-led FSMA 204 compliance infrastructure with an explicit trust surface for customer diligence and implementation readiness.',
-    openGraph: {
-        title: 'About | RegEngine',
-        description: 'Founder-led FSMA 204 compliance infrastructure with an explicit trust surface for customer diligence and implementation readiness.',
-        url: 'https://www.regengine.co/about',
-        type: 'website',
-    },
+    description:
+      'Founder-led FSMA 204 compliance infrastructure with an explicit trust surface for customer diligence and implementation readiness.',
+    url: 'https://www.regengine.co/about',
+    type: 'website',
+  },
 };
 
+/* ── data ────────────────────────────────────────────────────────── */
+
 const beliefs = [
-    { title: "Compliance data should be verifiable, not trusted.", body: "Every record is SHA-256 hashed. Run our open verification script \u2014 if the hashes don\u2019t match, don\u2019t trust us." },
-    { title: "Pricing should be public.", body: "We publish our prices. No \u2018contact sales\u2019 gates, no opaque enterprise contracts." },
-    { title: "Regulations are public. Tooling should be accessible.", body: "The CFR is free. We charge for the infrastructure that makes it operationally useful." },
+  {
+    Icon: ShieldCheck,
+    title: 'Compliance data should be verifiable, not trusted.',
+    body: 'Every record is SHA-256 hashed. Run our open verification script — if the hashes don't match, don't trust us.',
+  },
+  {
+    Icon: DollarSign,
+    title: 'Pricing should be public.',
+    body: 'We publish our prices. No "contact sales" gates, no opaque enterprise contracts.',
+  },
+  {
+    Icon: Globe,
+    title: 'Regulations are public. Tooling should be accessible.',
+    body: 'The CFR is free. We charge for the infrastructure that makes it operationally useful.',
+  },
 ];
 
+const bio = [
+  {
+    Icon: Landmark,
+    text: 'U.S. Senate — served as aide to Senator Jeff Merkley, supporting 150+ constituent engagements statewide.',
+  },
+  {
+    Icon: Award,
+    text: 'AmeriCorps NCCC — Team Leader during Hurricane Katrina disaster response. President\u2019s Volunteer Service Award.',
+  },
+  {
+    Icon: Code2,
+    text: 'Built every layer of RegEngine — architecture, backend, frontend, compliance logic, and cryptographic verification. Founder-led product with a public trust center rather than enterprise theater.',
+  },
+];
+
+/* ── page ────────────────────────────────────────────────────────── */
+
 export default function AboutPage() {
-    return (
-        <div className="re-page">
-            <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-12">
-                <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">About</span>
-                <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-5 leading-[1.15] tracking-tight">
-                    Compliance infrastructure, built from the ground up
-                </h1>
-                <p className="text-base text-[var(--re-text-muted)] leading-[1.7]">
-                    RegEngine turns FSMA 204 requirements into machine-readable, cryptographically verifiable records. The product is founder-led, FSMA-first, and explicit about where customer process, upstream data quality, and off-platform archives still matter.
-                </p>
-            </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] bg-white/[0.02]">
-                <div className="max-w-[720px] mx-auto py-12 px-6">
-                    <div className="flex gap-6 items-start">
-                        <div className="w-[72px] h-[72px] rounded-xl shrink-0 bg-[rgba(16,185,129,0.08)] border border-[rgba(16,185,129,0.2)] flex items-center justify-center text-[28px] font-bold text-[var(--re-brand)]">CS</div>
-                        <div>
-                            <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-1">Christopher Sellers</h2>
-                            <p className="text-sm font-semibold text-[var(--re-brand)] mb-4">Founder &amp; CEO</p>
-                            <div className="flex flex-col gap-3">
-                                <div className="flex gap-2.5 items-baseline">
-                                    <span className="text-xs font-mono font-medium text-[var(--re-text-disabled)] min-w-[20px]">01</span>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">U.S. Senate &mdash; served as aide to Senator Jeff Merkley, supporting 150+ constituent engagements statewide.</p>
-                                </div>
-                                <div className="flex gap-2.5 items-baseline">
-                                    <span className="text-xs font-mono font-medium text-[var(--re-text-disabled)] min-w-[20px]">02</span>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">AmeriCorps NCCC &mdash; Team Leader during Hurricane Katrina disaster response. President&apos;s Volunteer Service Award.</p>
-                                </div>
-                                <div className="flex gap-2.5 items-baseline">
-                                    <span className="text-xs font-mono font-medium text-[var(--re-text-disabled)] min-w-[20px]">03</span>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">Built every layer of RegEngine &mdash; architecture, backend, frontend, compliance logic, and cryptographic verification. Founder-led product with a public trust center rather than enterprise theater.</p>
-                                </div>
-                            </div>
-                            <a href="https://www.linkedin.com/in/clsellers/" target="_blank" rel="noopener noreferrer" className="inline-block text-[13px] text-[var(--re-brand)] font-medium mt-4 hover:underline">LinkedIn &rarr;</a>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06]">
-                <div className="max-w-[720px] mx-auto py-12 px-6">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-6">What we believe</h2>
-                    <div className="flex flex-col gap-4">
-                        {beliefs.map((b, i) => (
-                            <div key={i} className="p-4 px-5 bg-white/[0.02] rounded-lg border border-white/[0.06]">
-                                <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-1">{b.title}</h3>
-                                <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">{b.body}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] max-w-[720px] mx-auto py-12 px-6 text-center">
-                <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-2">Talk to the founder directly</h2>
-                <p className="text-[15px] text-[var(--re-text-muted)] mb-6">chris@regengine.co &mdash; no sales team, no gatekeepers, and the trust center documents the current status model versus guided rollout.</p>
-                <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="/trust" className="inline-flex items-center gap-2 px-7 py-3.5 bg-[var(--re-brand)] text-[var(--re-surface-base)] rounded-lg text-[15px] font-semibold hover:opacity-90 transition-opacity">Review Trust Center &rarr;</Link>
-                    <Link href="/pricing" className="inline-flex items-center gap-2 px-7 py-3.5 bg-transparent text-[var(--re-text-primary)] rounded-lg text-[15px] font-semibold border border-white/[0.06] hover:border-white/[0.12] transition-colors">View Pricing</Link>
-                </div>
-            </section>
+  return (
+    <div className="re-page">
+      {/* ── Hero ──────────────────────────────────────────────── */}
+      <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-14">
+        <div className="flex items-center gap-2.5 mb-5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-3 py-1 text-[11px] font-semibold tracking-wide text-[var(--re-brand)]">
+            <Sparkles className="h-3 w-3" /> Founder-Led &bull; FSMA-First
+          </span>
         </div>
-    );
+
+        <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mb-5 leading-[1.15] tracking-tight">
+          Compliance infrastructure, built from the ground up
+        </h1>
+        <p className="text-base text-[var(--re-text-muted)] leading-[1.7] max-w-[640px]">
+          RegEngine turns FSMA 204 requirements into machine-readable,
+          cryptographically verifiable records. The product is founder-led,
+          FSMA-first, and explicit about where customer process, upstream data
+          quality, and off-platform archives still matter.
+        </p>
+      </section>
+
+      {/* ── Founder bio card ──────────────────────────────────── */}
+      <section className="relative z-[2] max-w-[720px] mx-auto px-6 pb-14">
+        <div
+          className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8"
+          style={{
+            borderTop: '3px solid var(--re-brand)',
+            boxShadow:
+              '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
+          }}
+        >
+          <div className="flex gap-6 items-start">
+            {/* Avatar placeholder */}
+            <div className="w-[72px] h-[72px] rounded-xl shrink-0 bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center text-[28px] font-bold text-[var(--re-brand)]">
+              CS
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-0.5">
+                Christopher Sellers
+              </h2>
+              <p className="text-sm font-semibold text-[var(--re-brand)] mb-5">
+                Founder &amp; CEO
+              </p>
+
+              <div className="flex flex-col gap-4">
+                {bio.map((item, i) => (
+                  <div key={i} className="group flex gap-3.5 items-start">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
+                      <item.Icon className="h-4 w-4" />
+                    </div>
+                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                      {item.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-4 mt-5">
+                <a
+                  href="https://www.linkedin.com/in/clsellers/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[13px] text-[var(--re-brand)] font-medium hover:underline"
+                >
+                  <Users className="h-3.5 w-3.5" /> LinkedIn &rarr;
+                </a>
+                <a
+                  href="mailto:chris@regengine.co"
+                  className="inline-flex items-center gap-1.5 text-[13px] text-[var(--re-brand)] font-medium hover:underline"
+                >
+                  <Mail className="h-3.5 w-3.5" /> chris@regengine.co
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── What we believe — 3-card grid ─────────────────────── */}
+      <section className="relative z-[2] max-w-[900px] mx-auto px-6 pb-14">
+        <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-6 text-center">
+          What we believe
+        </h2>
+
+        <div className="grid gap-6 sm:grid-cols-3">
+          {beliefs.map((b, i) => (
+            <article
+              key={i}
+              className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 flex flex-col"
+              style={{
+                borderTop: '3px solid var(--re-brand)',
+                boxShadow:
+                  '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
+              }}
+            >
+              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
+                <b.Icon className="h-5 w-5" />
+              </div>
+              <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2 leading-snug">
+                {b.title}
+              </h3>
+              <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
+                {b.body}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Alpha CTA callout ─────────────────────────────────── */}
+      <section className="relative z-[2] max-w-[700px] mx-auto px-6 pb-16">
+        <div
+          className="rounded-2xl border border-[var(--re-brand)]/20 p-8 text-center"
+          style={{
+            background: 'var(--re-brand-muted)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+          }}
+        >
+          <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-2">
+            Built by a founder who&apos;s been in your shoes
+          </h2>
+          <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">
+            Join the Alpha Program for direct access to the team that ships real
+            FSMA 204 infrastructure — no sales team, no gatekeepers.
+          </p>
+          <div className="flex gap-3 justify-center flex-wrap">
+            <Link href="/alpha">
+              <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--re-brand)] text-white text-[15px] font-semibold shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                Join Alpha Program <ArrowRight className="h-4 w-4" />
+              </button>
+            </Link>
+            <a href="mailto:chris@regengine.co">
+              <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] text-[var(--re-text-primary)] text-[15px] font-semibold hover:border-[var(--re-brand)]/40 transition-colors">
+                <Mail className="h-4 w-4" /> Talk to the founder
+              </button>
+            </a>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
