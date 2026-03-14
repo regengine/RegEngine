@@ -49,10 +49,11 @@
 
 /* ─── Cards & Surfaces ─── */
 .re-card {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--re-surface-card);
+    border: 1px solid var(--re-surface-border);
     border-radius: 16px;
     padding: 32px 28px;
+    box-shadow: var(--re-shadow-sm);
 }
 
 .re-card-elevated {
@@ -145,8 +146,8 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.15);
+    background: var(--re-brand-muted);
+    border: 1px solid var(--re-brand);
     border-radius: 9999px;
     padding: 4px 12px;
     font-size: 12px;
@@ -176,7 +177,7 @@
 .re-btn-secondary {
     background: transparent;
     color: var(--re-text-secondary);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--re-border-default);
     padding: 14px 28px;
     font-size: 15px;
     border-radius: 10px;
@@ -185,7 +186,7 @@
 }
 
 .re-btn-secondary:hover {
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: var(--re-border-strong);
 }
 
 /* ─── Tables ─── */
@@ -206,7 +207,7 @@
     padding: 12px 16px;
     font-size: 14px;
     color: var(--re-text-secondary);
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    border-top: 1px solid var(--re-border-subtle);
 }
 
 /* ─── Scroll Reveal Animation ─── */

@@ -4,6 +4,7 @@ import { MarketingHeader } from '@/components/layout/marketing-header'
 import { MarketingFooter } from '@/components/layout/marketing-footer'
 import { Analytics } from '@vercel/analytics/react'
 import { PWAElements } from '@/components/mobile/PWAElements'
+import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
 import type { Metadata } from 'next'
 
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
@@ -33,7 +34,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link
-          href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+          rel="stylesheet"
+        />
+        <link
+          href="https://fonts.cdnfonts.com/css/opendyslexic"
           rel="stylesheet"
         />
       </head>
@@ -54,6 +59,7 @@ export default function RootLayout({
           </main>
           <MarketingFooter />
         </Providers>
+        <AccessibilityWidget />
         <PWAElements />
         {enableVercelAnalytics ? <Analytics /> : null}
       </body>

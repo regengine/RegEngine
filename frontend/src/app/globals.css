@@ -141,100 +141,103 @@
 
     /* ─── Light Theme ──────────────────────────────────── */
     .light {
-        /* Core surfaces */
+        /* Core surfaces — warm white base, strong foreground */
         --background: 0 0% 100%;
-        --foreground: 220 43% 11%;
+        --foreground: 222 47% 11%;
 
-        /* Cards & popovers */
-        --card: 210 20% 98%;
-        --card-foreground: 220 43% 11%;
+        /* Cards & popovers — subtle warm gray lift */
+        --card: 220 14% 97%;
+        --card-foreground: 222 47% 11%;
         --popover: 0 0% 100%;
-        --popover-foreground: 220 43% 11%;
+        --popover-foreground: 222 47% 11%;
 
-        /* Primary (emerald, slightly deeper for contrast on white) */
-        --primary: 160 84% 36%;
+        /* Primary (emerald, WCAG AA on white) */
+        --primary: 162 72% 28%;
         --primary-foreground: 0 0% 100%;
 
         /* Secondary */
-        --secondary: 210 20% 96%;
-        --secondary-foreground: 220 43% 11%;
+        --secondary: 220 14% 95%;
+        --secondary-foreground: 222 47% 11%;
 
         /* Muted */
-        --muted: 210 20% 96%;
-        --muted-foreground: 215 16% 47%;
+        --muted: 220 14% 95%;
+        --muted-foreground: 215 20% 40%;
 
         /* Accent */
-        --accent: 160 84% 36%;
+        --accent: 162 72% 28%;
         --accent-foreground: 0 0% 100%;
 
         /* Destructive */
-        --destructive: 0 84% 60%;
-        --destructive-foreground: 0 0% 98%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 100%;
 
-        /* Borders & inputs */
-        --border: 214 20% 88%;
-        --input: 214 20% 88%;
-        --ring: 160 84% 36%;
+        /* Borders & inputs — stronger borders for light mode */
+        --border: 214 20% 84%;
+        --input: 214 20% 84%;
+        --ring: 162 72% 28%;
 
-        /* Brand */
-        --re-brand: #059669;
-        --re-brand-dark: #047857;
-        --re-brand-light: #10b981;
-        --re-brand-muted: rgba(5, 150, 105, 0.08);
+        /* Brand — darker green for WCAG AA contrast on white */
+        --re-brand: #047857;
+        --re-brand-dark: #065f46;
+        --re-brand-light: #059669;
+        --re-brand-muted: rgba(4, 120, 87, 0.08);
 
-        /* Stage Colors */
-        --re-discovery: #2563eb;
-        --re-decomposition: #059669;
-        --re-linkage: #9333ea;
-        --re-evidence: #d97706;
+        /* Stage Colors — deepened for white backgrounds */
+        --re-discovery: #1d4ed8;
+        --re-decomposition: #047857;
+        --re-linkage: #7c3aed;
+        --re-evidence: #b45309;
 
-        /* Surfaces */
+        /* Surfaces — crisp whites with visible card separation */
         --re-surface-base: #ffffff;
         --re-surface-card: #f8fafc;
-        --re-surface-border: #e2e8f0;
+        --re-surface-border: #cbd5e1;
         --re-surface-elevated: #f1f5f9;
-        --re-surface-overlay: rgba(255, 255, 255, 0.80);
+        --re-surface-overlay: rgba(255, 255, 255, 0.90);
 
-        /* Text */
+        /* Text — maximum readability, strong hierarchy */
         --re-text-primary: #0f172a;
-        --re-text-secondary: #334155;
-        --re-text-tertiary: #64748b;
-        --re-text-muted: #94a3b8;
-        --re-text-disabled: #cbd5e1;
+        --re-text-secondary: #1e293b;
+        --re-text-tertiary: #475569;
+        --re-text-muted: #64748b;
+        --re-text-disabled: #94a3b8;
 
-        /* Borders */
-        --re-border-default: #e2e8f0;
-        --re-border-subtle: #cbd5e1;
-        --re-border-strong: #94a3b8;
+        /* Borders — more visible in light mode */
+        --re-border-default: #cbd5e1;
+        --re-border-subtle: #e2e8f0;
+        --re-border-strong: #64748b;
 
-        /* Status */
-        --re-success: #16a34a;
-        --re-success-muted: rgba(22, 163, 74, 0.1);
-        --re-warning: #d97706;
-        --re-warning-muted: rgba(217, 119, 6, 0.1);
-        --re-danger: #dc2626;
-        --re-danger-muted: rgba(220, 38, 38, 0.1);
-        --re-info: #2563eb;
-        --re-info-muted: rgba(37, 99, 235, 0.1);
+        /* Status — deepened for contrast on white */
+        --re-success: #15803d;
+        --re-success-muted: rgba(21, 128, 61, 0.1);
+        --re-warning: #b45309;
+        --re-warning-muted: rgba(180, 83, 9, 0.1);
+        --re-danger: #b91c1c;
+        --re-danger-muted: rgba(185, 28, 28, 0.1);
+        --re-info: #1d4ed8;
+        --re-info-muted: rgba(29, 78, 216, 0.1);
 
-        /* Shadows */
-        --re-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        --re-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-        --re-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
-        --re-shadow-glow: 0 0 20px rgba(5, 150, 105, 0.1);
-        --re-shadow-glow-strong: 0 0 40px rgba(5, 150, 105, 0.15);
+        /* Shadows — visible but soft on white */
+        --re-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
+        --re-shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+        --re-shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.1), 0 4px 8px -4px rgba(0, 0, 0, 0.06);
+        --re-shadow-glow: 0 0 20px rgba(4, 120, 87, 0.12);
+        --re-shadow-glow-strong: 0 0 40px rgba(4, 120, 87, 0.18);
 
         /* Theme-Aware Nav/Layout Tokens */
-        --re-nav-bg: rgba(255, 255, 255, 0.85);
-        --re-nav-border: rgba(0, 0, 0, 0.06);
+        --re-nav-bg: rgba(255, 255, 255, 0.92);
+        --re-nav-border: rgba(0, 0, 0, 0.08);
         --re-nav-dropdown-bg: rgba(255, 255, 255, 0.98);
-        --re-nav-dropdown-border: rgba(0, 0, 0, 0.08);
-        --re-nav-dropdown-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
-        --re-nav-hover: rgba(0, 0, 0, 0.04);
-        --re-nav-divider: rgba(0, 0, 0, 0.06);
-        --re-mobile-menu-bg: rgba(255, 255, 255, 0.97);
-        --re-mobile-border: rgba(0, 0, 0, 0.06);
-        --re-mobile-toggle-border: rgba(0, 0, 0, 0.12);
+        --re-nav-dropdown-border: rgba(0, 0, 0, 0.1);
+        --re-nav-dropdown-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+        --re-nav-hover: rgba(0, 0, 0, 0.05);
+        --re-nav-divider: rgba(0, 0, 0, 0.08);
+        --re-mobile-menu-bg: rgba(255, 255, 255, 0.98);
+        --re-mobile-border: rgba(0, 0, 0, 0.08);
+        --re-mobile-toggle-border: rgba(0, 0, 0, 0.15);
+
+        /* Light mode typography boost */
+        font-size: 16px;
     }
 }
 
@@ -286,4 +289,138 @@ body.barcode-scanner-active .barcode-scanner-ui {
         transform: none !important;
         transition: none !important;
     }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Accessibility Feature Classes
+   Toggled by AccessibilityWidget via <html> classList
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Font Size: Large (120%) ─── */
+html.a11y-font-large {
+    font-size: 120% !important;
+}
+
+html.a11y-font-large body {
+    line-height: 1.6;
+}
+
+/* ─── Font Size: Extra Large (140%) ─── */
+html.a11y-font-xl {
+    font-size: 140% !important;
+}
+
+html.a11y-font-xl body {
+    line-height: 1.7;
+}
+
+/* ─── Dyslexia-Friendly Font ─── */
+html.a11y-dyslexic,
+html.a11y-dyslexic body,
+html.a11y-dyslexic p,
+html.a11y-dyslexic span,
+html.a11y-dyslexic li,
+html.a11y-dyslexic td,
+html.a11y-dyslexic th,
+html.a11y-dyslexic label,
+html.a11y-dyslexic input,
+html.a11y-dyslexic textarea,
+html.a11y-dyslexic select,
+html.a11y-dyslexic button {
+    font-family: 'OpenDyslexic', 'Comic Sans MS', sans-serif !important;
+    word-spacing: 0.15em;
+}
+
+/* ─── High Contrast ─── */
+html.a11y-high-contrast {
+    --re-text-primary: #000000 !important;
+    --re-text-secondary: #1a1a1a !important;
+    --re-text-tertiary: #333333 !important;
+    --re-text-muted: #555555 !important;
+    --re-surface-border: #000000 !important;
+    --re-border-default: #000000 !important;
+    --border: 0 0% 0% !important;
+    --foreground: 0 0% 0% !important;
+}
+
+html.a11y-high-contrast.light {
+    --background: 0 0% 100% !important;
+    --re-surface-base: #ffffff !important;
+    --re-surface-card: #ffffff !important;
+    --re-brand: #005c3a !important;
+}
+
+html.a11y-high-contrast:not(.light) {
+    --background: 0 0% 0% !important;
+    --re-surface-base: #000000 !important;
+    --re-surface-card: #0a0a0a !important;
+    --re-text-primary: #ffffff !important;
+    --re-text-secondary: #f0f0f0 !important;
+    --re-brand: #4ade80 !important;
+}
+
+/* ─── Reduced Motion ─── */
+html.a11y-reduced-motion *,
+html.a11y-reduced-motion *::before,
+html.a11y-reduced-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}
+
+html.a11y-reduced-motion .re-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+/* ─── Increased Line Height ─── */
+html.a11y-line-height body {
+    line-height: 2.0 !important;
+}
+
+html.a11y-line-height p,
+html.a11y-line-height li,
+html.a11y-line-height td,
+html.a11y-line-height span {
+    line-height: 2.0 !important;
+}
+
+/* ─── Increased Letter Spacing ─── */
+html.a11y-letter-spacing body {
+    letter-spacing: 0.08em !important;
+    word-spacing: 0.16em !important;
+}
+
+/* ─── Enhanced Focus Indicators ─── */
+html.a11y-focus-highlight *:focus {
+    outline: 3px solid var(--re-brand) !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.25) !important;
+}
+
+html.a11y-focus-highlight *:focus:not(:focus-visible) {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+html.a11y-focus-highlight *:focus-visible {
+    outline: 3px solid var(--re-brand) !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.25) !important;
+}
+
+/* ─── Large Cursor ─── */
+html.a11y-cursor-large,
+html.a11y-cursor-large * {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M4 4l16 40 6-16 16-6z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 4 4, auto !important;
+}
+
+html.a11y-cursor-large a,
+html.a11y-cursor-large button,
+html.a11y-cursor-large [role="button"],
+html.a11y-cursor-large input[type="submit"] {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M8 4v40h6V28h12v-6H14V10h20V4z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 8 4, pointer !important;
 }
