@@ -2,7 +2,6 @@
 
 import { Code2, Shield, AlertCircle, Zap } from 'lucide-react';
 import { EndpointCard } from '@/components/developer/EndpointCard';
-import { CodeSnippet } from '@/components/developer/CodeBlock';
 
 export default function EndpointsPage() {
   return (
@@ -59,11 +58,11 @@ export default function EndpointsPage() {
               { id: 'evt_1a2b3c', timestamp: '2025-03-14T10:30:00Z', status: 'processed' },
             ],
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X POST https://api.regengine.co/api/v1/webhooks/ingest \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -79,12 +78,12 @@ export default function EndpointsPage() {
       }
     ],
     "source": "erp"
-  }'`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+  }'`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 headers = {
@@ -112,12 +111,12 @@ response = requests.post(
     json=payload,
     headers=headers
 )
-print(response.json())`}
-          />
-          <CodeSnippet
-            language="javascript"
-            label="Node.js"
-            code={`const fetch = require('node-fetch');
+print(response.json())`,
+            },
+            {
+              language: 'javascript',
+              label: 'Node.js',
+              code: `const fetch = require('node-fetch');
 
 const apiKey = process.env.REGENGINE_API_KEY;
 const headers = {
@@ -146,12 +145,12 @@ fetch('https://api.regengine.co/api/v1/webhooks/ingest', {
   body: JSON.stringify(payload)
 })
   .then(res => res.json())
-  .then(data => console.log(data));`}
-          />
-          <CodeSnippet
-            language="go"
-            label="Go"
-            code={`package main
+  .then(data => console.log(data));`,
+            },
+            {
+              language: 'go',
+              label: 'Go',
+              code: `package main
 
 import (
   "bytes"
@@ -197,9 +196,10 @@ req.Header.Set("Content-Type", "application/json")
 
 client := &http.Client{}
 resp, _ := client.Do(req)
-fmt.Println(resp.Status)`}
-          />
-        </EndpointCard>
+fmt.Println(resp.Status)`,
+            },
+          ]}
+        />
 
         {/* Endpoint: POST /api/v1/epcis/events */}
         <EndpointCard
@@ -215,11 +215,11 @@ fmt.Println(resp.Status)`}
             status: 'ingested',
             timestamp: '2025-03-14T11:15:00Z',
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X POST https://api.regengine.co/api/v1/epcis/events \\
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X POST https://api.regengine.co/api/v1/epcis/events \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -237,12 +237,12 @@ fmt.Println(resp.Status)`}
         "readPoint": "urn:epc:id:sgln:0614141.00001.0"
       }
     ]
-  }'`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+  }'`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 import json
 
 api_key = "YOUR_API_KEY"
@@ -273,9 +273,10 @@ response = requests.post(
     json=epcis_doc,
     headers=headers
 )
-print(response.json())`}
-          />
-        </EndpointCard>
+print(response.json())`,
+            },
+          ]}
+        />
 
         {/* Endpoint: GET /api/v1/epcis/events/:id */}
         <EndpointCard
@@ -296,18 +297,18 @@ print(response.json())`}
             quantity: 100,
             status: 'processed',
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X GET https://api.regengine.co/api/v1/epcis/events/evt_abc123xyz \\
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X GET https://api.regengine.co/api/v1/epcis/events/evt_abc123xyz \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json"`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+  -H "Content-Type: application/json"`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 event_id = "evt_abc123xyz"
@@ -317,12 +318,12 @@ response = requests.get(
     f"https://api.regengine.co/api/v1/epcis/events/{event_id}",
     headers=headers
 )
-print(response.json())`}
-          />
-          <CodeSnippet
-            language="javascript"
-            label="Node.js"
-            code={`const fetch = require('node-fetch');
+print(response.json())`,
+            },
+            {
+              language: 'javascript',
+              label: 'Node.js',
+              code: `const fetch = require('node-fetch');
 
 const apiKey = process.env.REGENGINE_API_KEY;
 const eventId = 'evt_abc123xyz';
@@ -335,9 +336,10 @@ fetch(\`https://api.regengine.co/api/v1/epcis/events/\${eventId}\`, {
   headers
 })
   .then(res => res.json())
-  .then(data => console.log(data));`}
-          />
-        </EndpointCard>
+  .then(data => console.log(data));`,
+            },
+          ]}
+        />
       </div>
 
       {/* Compliance API Section */}
@@ -372,17 +374,17 @@ fetch(\`https://api.regengine.co/api/v1/epcis/events/\${eventId}\`, {
             },
             timestamp: '2025-03-14T12:00:00Z',
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X GET https://api.regengine.co/api/v1/compliance/score/tenant_xyz789 \\
-  -H "Authorization: Bearer YOUR_API_KEY"`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X GET https://api.regengine.co/api/v1/compliance/score/tenant_xyz789 \\
+  -H "Authorization: Bearer YOUR_API_KEY"`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 tenant_id = "tenant_xyz789"
@@ -394,12 +396,12 @@ response = requests.get(
 )
 data = response.json()
 print(f"Score: {data['score']}, Grade: {data['grade']}")
-print(f"Breakdown: {data['breakdown']}")`}
-          />
-          <CodeSnippet
-            language="javascript"
-            label="Node.js"
-            code={`const fetch = require('node-fetch');
+print(f"Breakdown: {data['breakdown']}")`,
+            },
+            {
+              language: 'javascript',
+              label: 'Node.js',
+              code: `const fetch = require('node-fetch');
 
 const apiKey = process.env.REGENGINE_API_KEY;
 const tenantId = 'tenant_xyz789';
@@ -410,9 +412,10 @@ fetch(\`https://api.regengine.co/api/v1/compliance/score/\${tenantId}\`, { heade
   .then(data => {
     console.log(\`Score: \${data.score}, Grade: \${data.grade}\`);
     console.log('Breakdown:', data.breakdown);
-  });`}
-          />
-        </EndpointCard>
+  });`,
+            },
+          ]}
+        />
 
         {/* Endpoint: GET /api/v1/fda/export */}
         <EndpointCard
@@ -433,18 +436,18 @@ fetch(\`https://api.regengine.co/api/v1/compliance/score/\${tenantId}\`, { heade
             download_url: 'https://api.regengine.co/exports/exp_2025031401.json',
             expires_at: '2025-03-21T12:00:00Z',
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X GET "https://api.regengine.co/api/v1/fda/export?format=json&date_from=2025-01-01&date_to=2025-03-14" \\
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X GET "https://api.regengine.co/api/v1/fda/export?format=json&date_from=2025-01-01&date_to=2025-03-14" \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
-  -o fda_export.json`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+  -o fda_export.json`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 headers = {"Authorization": f"Bearer {api_key}"}
@@ -461,9 +464,10 @@ response = requests.get(
 )
 data = response.json()
 print(f"Records: {data['records']}")
-print(f"Download: {data['download_url']}")`}
-          />
-        </EndpointCard>
+print(f"Download: {data['download_url']}")`,
+            },
+          ]}
+        />
 
         {/* Endpoint: GET /api/v1/epcis/chain/verify */}
         <EndpointCard
@@ -484,17 +488,17 @@ print(f"Download: {data['download_url']}")`}
               last_event: '2025-03-14T14:22:00Z',
             },
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X GET "https://api.regengine.co/api/v1/epcis/chain/verify?lot_code=LOT2025031401" \\
-  -H "Authorization: Bearer YOUR_API_KEY"`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X GET "https://api.regengine.co/api/v1/epcis/chain/verify?lot_code=LOT2025031401" \\
+  -H "Authorization: Bearer YOUR_API_KEY"`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 headers = {"Authorization": f"Bearer {api_key}"}
@@ -509,12 +513,12 @@ result = response.json()
 if result['chain_valid']:
     print(f"Chain verified: {result['event_count']} events")
 else:
-    print("Chain validation failed")`}
-          />
-          <CodeSnippet
-            language="javascript"
-            label="Node.js"
-            code={`const fetch = require('node-fetch');
+    print("Chain validation failed")`,
+            },
+            {
+              language: 'javascript',
+              label: 'Node.js',
+              code: `const fetch = require('node-fetch');
 
 const apiKey = process.env.REGENGINE_API_KEY;
 const lotCode = 'LOT2025031401';
@@ -528,9 +532,10 @@ fetch(\`https://api.regengine.co/api/v1/epcis/chain/verify?lot_code=\${lotCode}\
     } else {
       console.log('Chain validation failed');
     }
-  });`}
-          />
-        </EndpointCard>
+  });`,
+            },
+          ]}
+        />
       </div>
 
       {/* Recall & Simulation Section */}
@@ -565,22 +570,22 @@ fetch(\`https://api.regengine.co/api/v1/epcis/chain/verify?lot_code=\${lotCode}\
             downstream_customers: 18,
             recall_duration_hours: 2.5,
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X POST https://api.regengine.co/api/v1/recall-simulations/run \\
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X POST https://api.regengine.co/api/v1/recall-simulations/run \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "lot_code": "LOT2025031401",
     "depth": 3
-  }'`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+  }'`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 headers = {
@@ -601,12 +606,12 @@ response = requests.post(
 result = response.json()
 print(f"Simulation ID: {result['simulation_id']}")
 print(f"Affected units: {result['total_affected_units']}")
-print(f"Duration: {result['recall_duration_hours']} hours")`}
-          />
-          <CodeSnippet
-            language="javascript"
-            label="Node.js"
-            code={`const fetch = require('node-fetch');
+print(f"Duration: {result['recall_duration_hours']} hours")`,
+            },
+            {
+              language: 'javascript',
+              label: 'Node.js',
+              code: `const fetch = require('node-fetch');
 
 const apiKey = process.env.REGENGINE_API_KEY;
 const headers = {
@@ -628,9 +633,10 @@ fetch('https://api.regengine.co/api/v1/recall-simulations/run', {
   .then(data => {
     console.log(\`Simulation: \${data.simulation_id}\`);
     console.log(\`Affected units: \${data.total_affected_units}\`);
-  });`}
-          />
-        </EndpointCard>
+  });`,
+            },
+          ]}
+        />
 
         {/* Endpoint: POST /api/v1/qr/decode */}
         <EndpointCard
@@ -653,21 +659,21 @@ fetch('https://api.regengine.co/api/v1/recall-simulations/run', {
               ai_21: 'SN789456',
             },
           }}
-        >
-          <CodeSnippet
-            language="bash"
-            label="curl"
-            code={`curl -X POST https://api.regengine.co/api/v1/qr/decode \\
+          snippets={[
+            {
+              language: 'bash',
+              label: 'curl',
+              code: `curl -X POST https://api.regengine.co/api/v1/qr/decode \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "barcode": "(01)00012345678905(10)LOT2025031401(21)SN789456"
-  }'`}
-          />
-          <CodeSnippet
-            language="python"
-            label="Python"
-            code={`import requests
+  }'`,
+            },
+            {
+              language: 'python',
+              label: 'Python',
+              code: `import requests
 
 api_key = "YOUR_API_KEY"
 headers = {
@@ -689,12 +695,12 @@ if result['valid']:
     print(f"GTIN: {result['product_gtin']}")
     print(f"Lot: {result['lot_code']}")
 else:
-    print("Invalid barcode format")`}
-          />
-          <CodeSnippet
-            language="javascript"
-            label="Node.js"
-            code={`const fetch = require('node-fetch');
+    print("Invalid barcode format")`,
+            },
+            {
+              language: 'javascript',
+              label: 'Node.js',
+              code: `const fetch = require('node-fetch');
 
 const apiKey = process.env.REGENGINE_API_KEY;
 const headers = {
@@ -719,9 +725,10 @@ fetch('https://api.regengine.co/api/v1/qr/decode', {
     } else {
       console.log('Invalid barcode');
     }
-  });`}
-          />
-        </EndpointCard>
+  });`,
+            },
+          ]}
+        />
       </div>
 
       {/* Footer */}

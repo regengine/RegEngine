@@ -1,15 +1,18 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { CodeBlock, CodeSnippet } from './CodeBlock';
+import { CodeBlock } from './CodeBlock';
+import type { CodeSnippet } from './CodeBlock';
 
 interface EndpointCardProps {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-    path: string;
+    path?: string;
+    endpoint?: string;
+    title?: string;
     description: string;
     snippets: CodeSnippet[];
-    parameters?: { name: string; type: string; required: boolean; desc: string }[];
-    responseExample?: string;
+    parameters?: { name: string; type: string; required: boolean; desc?: string; description?: string }[];
+    responseExample?: string | Record<string, unknown>;
 }
 
 const METHOD_COLORS: Record<string, { text: string; bg: string; border: string }> = {
@@ -20,11 +23,13 @@ const METHOD_COLORS: Record<string, { text: string; bg: string; border: string }
     PATCH: { text: '#a78bfa', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.2)' },
 };
 
-export function EndpointCard({ method, path, description, snippets, parameters, responseExample }: EndpointCardProps) {
+export function EndpointCard({ method, path, endpoint, title, description, snippets, parameters, responseExample }: EndpointCardProps) {
     const colors = METHOD_COLORS[method] || METHOD_COLORS.GET;
+    const displayPath = path || endpoint || '';
+    const responseStr = typeof responseExample === 'string' ? responseExample : responseExample ? JSON.stringify(responseExample, null, 2) : undefined;
 
     return (
-        <div className="rounded-lg p-5 space-y-4" style={{
+        <div className="rounded-lg p-5 space-y-4 mb-6" style={{
             background: 'rgba(255,255,255,0.02)',
             border: '1px solid rgba(255,255,255,0.06)',
         }}>
@@ -35,8 +40,11 @@ export function EndpointCard({ method, path, description, snippets, parameters, 
                 }}>
                     {method}
                 </Badge>
-                <code className="text-sm font-mono" style={{ color: 'var(--re-text-primary)' }}>{path}</code>
+                <code className="text-sm font-mono" style={{ color: 'var(--re-text-primary)' }}>{displayPath}</code>
             </div>
+
+            {/* Title */}
+            {title && <h3 className="text-base font-semibold" style={{ color: 'var(--re-text-primary)', margin: 0 }}>{title}</h3>}
 
             {/* Description */}
             <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>{description}</p>
@@ -56,7 +64,7 @@ export function EndpointCard({ method, path, description, snippets, parameters, 
                                 <code className="font-mono font-medium w-36" style={{ color: 'var(--re-text-primary)' }}>{p.name}</code>
                                 <span className="w-16" style={{ color: 'var(--re-text-disabled)' }}>{p.type}</span>
                                 {p.required && <Badge variant="outline" className="text-[10px] px-1.5" style={{ color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)' }}>required</Badge>}
-                                <span className="flex-1" style={{ color: 'var(--re-text-muted)' }}>{p.desc}</span>
+                                <span className="flex-1" style={{ color: 'var(--re-text-muted)' }}>{p.desc || p.description}</span>
                             </div>
                         ))}
                     </div>
@@ -67,9 +75,9 @@ export function EndpointCard({ method, path, description, snippets, parameters, 
             <CodeBlock snippets={snippets} title="Request" />
 
             {/* Response example */}
-            {responseExample && (
+            {responseStr && (
                 <CodeBlock
-                    snippets={[{ language: 'json', label: 'Response', code: responseExample }]}
+                    snippets={[{ language: 'json', label: 'Response', code: responseStr }]}
                     title="Response · 200"
                 />
             )}
