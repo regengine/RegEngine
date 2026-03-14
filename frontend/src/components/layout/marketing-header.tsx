@@ -262,7 +262,7 @@ export function MarketingHeader() {
                                     tabIndex={toolsOpen ? 0 : -1}
                                     className="flex items-center gap-2.5 py-2.5 px-4 no-underline transition-[background] duration-150"
                                     onClick={() => setToolsOpen(false)}
-                                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)")}
+                                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "var(--re-nav-hover)")}
                                     onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "transparent")}
                                 >
                                     <span aria-hidden="true" className="text-sm">🧰</span>
@@ -310,19 +310,22 @@ export function MarketingHeader() {
                                 Log In
                             </Link>
                             <Link
-                                href="/onboarding"
+                                href="/alpha"
                                 style={{
                                     fontSize: "13px",
                                     fontWeight: 600,
-                                    color: "var(--re-surface-base)",
-                                    background: "linear-gradient(135deg, var(--re-brand), #3b82f6)",
+                                    color: "#fff",
+                                    background: "var(--re-brand)",
                                     padding: "7px 18px",
                                     borderRadius: "6px",
                                     textDecoration: "none",
                                     transition: "all 0.2s",
+                                    boxShadow: "0 2px 8px var(--re-brand-muted)",
                                 }}
+                                onMouseEnter={(e) => { (e.target as HTMLElement).style.transform = "translateY(-1px)"; (e.target as HTMLElement).style.boxShadow = "0 4px 16px var(--re-brand-muted)"; }}
+                                onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 2px 8px var(--re-brand-muted)"; }}
                             >
-                                Get Started →
+                                Join Alpha →
                             </Link>
                         </>
                     )}
