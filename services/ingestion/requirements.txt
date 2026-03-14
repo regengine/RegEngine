@@ -74,7 +74,7 @@ neo4j~=5.15.0
 redis~=5.0.0
 httpx~=0.25.0
 stripe>=11.6.0,<12
-Pillow>=11.1.0,<12
+Pillow>=11.2.1,<12
 pyzbar>=0.1.9,<1
 
 # CSV/Excel parsing

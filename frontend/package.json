@@ -101,6 +101,7 @@
     "serialize-javascript": "7.0.3",
     "workbox-build": {
       "rollup": "2.79.2"
-    }
+    },
+    "yauzl": ">=2.10.1"
   }
 }
