@@ -1,86 +1,139 @@
-import type { Metadata } from 'next';
+'use client';
+
+import { useState, useRef } from 'react';
 import Link from 'next/link';
+import { ArrowRight, Check, Loader2 } from 'lucide-react';
 
-export const metadata: Metadata = {
-  title: 'Get Started | RegEngine',
-  description: 'Choose your onboarding path to FSMA 204 compliance. Step-by-step wizard or bulk data import.',
-};
-import { ListOrdered, Upload } from 'lucide-react';
+export default function OnboardingPage() {
+  const [email, setEmail] = useState('');
+  const [company, setCompany] = useState('');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
+  const formRef = useRef<HTMLFormElement>(null);
 
-const ONBOARDING_OPTIONS = [
-  {
-    title: 'Step-by-Step Setup',
-    description:
-      "Walk through 8 guided steps - from buyer invite to FDA export. Best if you're setting up for the first time.",
-    eta: '~15 minutes',
-    cta: 'Start Wizard →',
-    href: '/onboarding/supplier-flow',
-    icon: ListOrdered,
-  },
-  {
-    title: 'Bulk Data Import',
-    description:
-      'Already have facilities, TLCs, and events in CSV/XLSX? Upload everything in one pass. Template included.',
-    eta: '~5 minutes',
-    cta: 'Upload Data →',
-    href: '/onboarding/bulk-upload',
-    icon: Upload,
-  },
-];
+  const canSubmit = email.includes('@') && company.trim().length > 0;
 
-export default function OnboardingHubPage() {
-  return (
-    <main className="re-page overflow-x-hidden">
-      <div className="re-noise" />
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit || status !== 'idle') return;
+    setStatus('submitting');
 
-      <section className="relative z-[2] max-w-[1120px] mx-auto px-4 sm:px-6 pt-[84px] pb-[72px]">
-        <div className="absolute top-[-90px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.09)_0%,transparent_72%)] pointer-events-none" />
+    // Simulate a short network delay — swap for real API call later
+    await new Promise((r) => setTimeout(r, 1200));
+    setStatus('success');
+  }
 
-        <div className="text-center mb-12">
-          <h1 className="text-[clamp(32px,5vw,50px)] font-bold tracking-[-0.02em] text-[var(--re-text-primary)] leading-[1.08]">
-            Get Started with RegEngine
+  /* ── Success state ── */
+  if (status === 'success') {
+    return (
+      <main className="min-h-[80vh] flex items-center justify-center px-6">
+        <div className="max-w-[440px] w-full text-center animate-[fadeUp_0.5s_ease-out]">
+          <div className="mx-auto mb-6 h-14 w-14 rounded-full bg-[var(--re-brand)] flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+            <Check className="h-7 w-7 text-white" strokeWidth={2.5} />
+          </div>
+          <h1 className="font-serif text-[1.75rem] font-bold text-[var(--re-text-primary)] tracking-tight mb-3">
+            You&apos;re on the list.
           </h1>
-          <p className="mt-4 text-lg text-[var(--re-text-muted)] max-w-[760px] mx-auto leading-relaxed">
-            Choose your onboarding path. Both lead to full FSMA 204 compliance - pick the one that
-            fits your data.
+          <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+            We&apos;ll reach out to <strong className="text-[var(--re-text-primary)]">{email}</strong> with
+            next steps for setting up <strong className="text-[var(--re-text-primary)]">{company}</strong>&apos;s
+            workspace. Usually within 24 hours.
           </p>
-          <Link
-            href="/login"
-            className="mt-4 inline-block text-sm text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)]"
-          >
-            Already have an account? Log in
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              href="/retailer-readiness"
+              className="group inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.9rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_6px_24px_rgba(16,185,129,0.25)]"
+            >
+              Run Free Assessment
+              <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+            </Link>
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-xl text-[0.9rem] font-medium transition-all duration-300 hover:border-[var(--re-text-muted)]"
+            >
+              Back to Home
+            </Link>
+          </div>
         </div>
+      </main>
+    );
+  }
 
-        <div className="max-w-[960px] mx-auto grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {ONBOARDING_OPTIONS.map((option) => {
-            const Icon = option.icon;
-            return (
-              <article
-                key={option.title}
-                className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8 transition-colors duration-200 hover:border-[color-mix(in_srgb,var(--re-brand)_30%,transparent)]"
-              >
-                <div className="h-11 w-11 rounded-lg bg-[var(--re-brand-muted)] flex items-center justify-center mb-5">
-                  <Icon className="h-5 w-5 text-[var(--re-brand)]" />
-                </div>
-                <h2 className="text-2xl font-semibold text-[var(--re-text-primary)] mb-3">{option.title}</h2>
-                <p className="text-sm text-[var(--re-text-secondary)] leading-relaxed min-h-[72px]">
-                  {option.description}
-                </p>
-                <div className="mt-7 flex items-center justify-between gap-3">
-                  <span className="text-sm text-[var(--re-text-muted)]">{option.eta}</span>
-                  <Link
-                    href={option.href}
-                    className="inline-flex items-center justify-center bg-[var(--re-brand)] text-[var(--re-surface-base)] px-6 py-2.5 rounded-lg font-semibold text-sm transition-opacity hover:opacity-90"
-                  >
-                    {option.cta}
-                  </Link>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
+  /* ── Form state ── */
+  return (
+    <main className="min-h-[80vh] flex items-center justify-center px-6">
+      <div className="max-w-[440px] w-full animate-[fadeUp_0.4s_ease-out]">
+
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-3">
+          Get Started
+        </p>
+        <h1 className="font-serif text-[clamp(1.5rem,4vw,2rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-2">
+          Start your workspace
+        </h1>
+        <p className="text-[0.95rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+          Tell us who you are and we&apos;ll set up your FSMA 204 compliance workspace.
+        </p>
+
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
+          {/* Email */}
+          <div>
+            <label htmlFor="email" className="block font-mono text-[0.7rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.06em] mb-2">
+              Work Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              className="w-full px-4 py-3 rounded-xl bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] text-[0.925rem] placeholder:text-[var(--re-text-muted)] outline-none transition-all duration-200 focus:border-[var(--re-brand)] focus:shadow-[0_0_0_3px_rgba(16,185,129,0.12)]"
+            />
+          </div>
+
+          {/* Company */}
+          <div>
+            <label htmlFor="company" className="block font-mono text-[0.7rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.06em] mb-2">
+              Company Name
+            </label>
+            <input
+              id="company"
+              type="text"
+              required
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Acme Foods Inc."
+              className="w-full px-4 py-3 rounded-xl bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] text-[0.925rem] placeholder:text-[var(--re-text-muted)] outline-none transition-all duration-200 focus:border-[var(--re-brand)] focus:shadow-[0_0_0_3px_rgba(16,185,129,0.12)]"
+            />
+          </div>
+
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={!canSubmit || status === 'submitting'}
+            className="group relative w-full inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none overflow-hidden"
+          >
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:group-enabled:translate-x-[200%] transition-transform duration-700 ease-in-out" />
+            {status === 'submitting' ? (
+              <>
+                <Loader2 className="relative h-4 w-4 animate-spin" />
+                <span className="relative">Setting up…</span>
+              </>
+            ) : (
+              <>
+                <span className="relative">Create Workspace</span>
+                <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:group-enabled:translate-x-1" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-[0.8rem] text-[var(--re-text-muted)]">
+          Already have an account?{' '}
+          <Link href="/login" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors font-medium">
+            Log in
+          </Link>
+        </p>
+      </div>
     </main>
   );
 }

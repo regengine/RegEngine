@@ -73,14 +73,15 @@ export default function RegEngineLanding() {
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/onboarding"
-                className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-lg text-[0.925rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
+                className="group relative inline-flex items-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden"
               >
-                Start Workspace
-                <ArrowRight className="h-4 w-4" />
+                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
+                <span className="relative">Start Workspace</span>
+                <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/retailer-readiness"
-                className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-lg text-[0.925rem] font-medium hover:border-[var(--re-text-muted)] transition-all"
+                className="inline-flex items-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)]"
               >
                 Free Readiness Assessment
               </Link>
@@ -154,9 +155,9 @@ export default function RegEngineLanding() {
               </span>
               <Link
                 href="/tools/drill-simulator"
-                className="font-mono text-[0.72rem] font-medium bg-[var(--re-text-primary)] text-[var(--re-surface-base)] px-4 py-2 rounded-md hover:opacity-90 transition-opacity"
+                className="group font-mono text-[0.72rem] font-medium bg-[var(--re-text-primary)] text-[var(--re-surface-base)] px-4 py-2 rounded-md transition-all duration-300 ease-out hover:opacity-90 hover:shadow-[0_4px_12px_rgba(0,0,0,0.2)]"
               >
-                Run Full Simulation →
+                Run Full Simulation <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5">→</span>
               </Link>
             </div>
           </div>
@@ -380,10 +381,10 @@ export default function RegEngineLanding() {
             </p>
             <Link
               href="/retailer-readiness"
-              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-5 py-2.5 rounded-lg text-[0.925rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all mt-6"
+              className="group inline-flex items-center gap-2.5 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_6px_24px_rgba(16,185,129,0.25)] active:translate-y-0 mt-6"
             >
               Run Free Assessment
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
             </Link>
           </div>
         </div>
@@ -404,13 +405,14 @@ export default function RegEngineLanding() {
           <div className="flex flex-wrap gap-3 justify-center">
             <Link
               href="/retailer-readiness"
-              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[#0BAE78] transition-all hover:-translate-y-0.5"
+              className="group relative inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.95rem] font-semibold transition-all duration-300 ease-out hover:bg-[#0BAE78] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.35)] active:translate-y-0 overflow-hidden"
             >
-              Retailer Readiness Assessment
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
+              <span className="relative">Retailer Readiness Assessment</span>
             </Link>
             <Link
               href="/pricing"
-              className="inline-flex items-center gap-2 border border-[#444] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-medium hover:border-[#888] transition-all"
+              className="inline-flex items-center gap-2 border border-[#444] text-white px-7 py-3.5 rounded-xl text-[0.95rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand-light)] hover:-translate-y-[2px]"
             >
               View Pricing
             </Link>
