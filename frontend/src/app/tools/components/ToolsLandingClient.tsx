@@ -7,16 +7,17 @@ import {
     Leaf, ClipboardList, Truck, Timer, FlaskConical,
     CheckCircle2, ShieldCheck, TrendingUp, LayoutDashboard,
     FileText, Upload, Network, AlertTriangle, Zap, ArrowRight,
+    Map, ListChecks, BarChart3,
 } from 'lucide-react';
 
 /* ─── CATEGORY DEFINITIONS ─── */
 type Category = 'all' | 'assess' | 'validate' | 'simulate' | 'plan';
-const CATEGORIES: { id: Category; label: string }[] = [
-    { id: 'all', label: 'All Tools' },
-    { id: 'assess', label: 'Assessments & Scoring' },
-    { id: 'validate', label: 'Mapping & Validation' },
-    { id: 'simulate', label: 'Simulations & Drills' },
-    { id: 'plan', label: 'Dashboards & Planning' },
+const CATEGORIES: { id: Category; label: string; Icon: typeof Leaf }[] = [
+    { id: 'all', label: 'All Tools', Icon: Zap },
+    { id: 'assess', label: 'Assessments & Scoring', Icon: ClipboardList },
+    { id: 'validate', label: 'Mapping & Validation', Icon: Map },
+    { id: 'simulate', label: 'Simulations & Drills', Icon: Timer },
+    { id: 'plan', label: 'Dashboards & Planning', Icon: LayoutDashboard },
 ];
 /* ─── TOOL DATA ─── */
 interface Tool {
@@ -49,7 +50,8 @@ const TOOLS: Tool[] = [
         category: 'validate',
         maturity: 'ga',
         journeyStep: 2,
-    },    {
+    },
+    {
         id: 'kde-checker',
         title: 'KDE Completeness Checker',
         description: 'Generate your customized Key Data Element checklist based on your FTL products and trading role.',
@@ -85,7 +87,8 @@ const TOOLS: Tool[] = [
         maturity: 'ga',
         featured: true,
         journeyStep: 6,
-    },    {
+    },
+    {
         id: 'drill-simulator',
         title: '24-Hour Drill Simulator',
         description: 'Scenario-based simulation to test if your processes survive a real FDA outbreak investigation.',
@@ -117,10 +120,11 @@ const TOOLS: Tool[] = [
         id: 'retailer-readiness',
         title: 'Retailer Readiness',
         description: 'Benchmark your traceability posture against major retailer requirements (Walmart, Kroger, Costco).',
-        icon: ShieldCheck,
+        icon: BarChart3,
         category: 'assess',
         maturity: 'ga',
-    },    {
+    },
+    {
         id: 'anomaly-simulator',
         title: 'Anomaly Simulator',
         description: 'Inject realistic traceability anomalies into sample data to test your detection and response workflows.',
@@ -157,6 +161,18 @@ const JOURNEY_STEPS = TOOLS
     .filter(t => t.journeyStep)
     .sort((a, b) => (a.journeyStep ?? 0) - (b.journeyStep ?? 0));
 
+function badgeClasses(maturity: 'ga' | 'pilot', featured?: boolean): string {
+    if (featured) return 'bg-[var(--re-brand)] text-white';
+    if (maturity === 'ga') return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20';
+    return 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20';
+}
+
+function badgeLabel(maturity: 'ga' | 'pilot', featured?: boolean): string {
+    if (featured) return 'Popular';
+    if (maturity === 'ga') return 'Live';
+    return 'Pilot';
+}
+
 /* ─── COMPONENT ─── */
 export function ToolsLandingClient() {
     const [activeCategory, setActiveCategory] = useState<Category>('all');
@@ -173,7 +189,7 @@ export function ToolsLandingClient() {
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-xs font-bold uppercase tracking-widest mb-6"
+                    className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-xs font-bold uppercase tracking-widest mb-6 border border-[var(--re-brand)]/20"
                 >
                     <Zap className="h-3 w-3" /> 14 Free Tools &middot; No Login Required
                 </motion.div>
@@ -205,13 +221,16 @@ export function ToolsLandingClient() {
                     className="flex flex-col sm:flex-row gap-3 justify-center"
                 >
                     <Link href="/tools/recall-readiness">
-                        <button className="px-6 py-3 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all shadow-lg hover:shadow-xl">
-                            Start with Readiness Assessment →
+                        <button className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all hover:-translate-y-0.5"
+                            style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                        >
+                            Start with Readiness Assessment
+                            <ArrowRight className="w-4 h-4" />
                         </button>
                     </Link>
                     <button
                         onClick={() => document.getElementById('tool-grid')?.scrollIntoView({ behavior: 'smooth' })}
-                        className="px-6 py-3 rounded-xl border border-[var(--re-border-default)] text-[var(--re-text-secondary)] font-semibold text-sm hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-all"
+                        className="px-6 py-3 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-secondary)] font-semibold text-sm hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-all"
                     >
                         Browse All Tools
                     </button>
@@ -224,12 +243,13 @@ export function ToolsLandingClient() {
                         <button
                             key={cat.id}
                             onClick={() => setActiveCategory(cat.id)}
-                            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
                                 activeCategory === cat.id
                                     ? 'bg-[var(--re-brand)] text-white shadow-md'
                                     : 'bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-muted)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)]'
                             }`}
                         >
+                            <cat.Icon className="w-3.5 h-3.5" />
                             {cat.label}
                         </button>
                     ))}
@@ -248,39 +268,45 @@ export function ToolsLandingClient() {
                     >
                         {filtered.map((tool) => (
                             <Link key={tool.id} href={tool.id === 'retailer-readiness' ? '/retailer-readiness' : `/tools/${tool.id}`}>
-                                <div className={`group relative h-full rounded-2xl border bg-[var(--re-surface-card)] p-6 transition-all hover:shadow-lg hover:border-[var(--re-brand)] ${
-                                    tool.featured
-                                        ? 'border-[var(--re-brand)] ring-1 ring-[var(--re-brand-muted)]'
-                                        : 'border-[var(--re-surface-border)]'
-                                }`}>
-                                    {/* Maturity badge */}
+                                <div
+                                    className={`group relative h-full rounded-2xl border bg-[var(--re-surface-card)] p-6 transition-all hover:-translate-y-1 ${
+                                        tool.featured
+                                            ? 'border-[var(--re-brand)]/40'
+                                            : 'border-[var(--re-surface-border)] hover:border-[var(--re-brand)]/30'
+                                    }`}
+                                    style={{
+                                        boxShadow: tool.featured
+                                            ? '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border), 0 0 20px var(--re-brand-muted)'
+                                            : '0 2px 12px rgba(0,0,0,0.06)',
+                                    }}
+                                >
+                                    {/* Header row: icon + badge */}
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="w-12 h-12 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center group-hover:bg-[var(--re-brand)] group-hover:text-white transition-all">
-                                            <tool.icon className="h-6 w-6 text-[var(--re-brand)] group-hover:text-white transition-colors" />
+                                        <div className="w-12 h-12 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-all duration-300">
+                                            <tool.icon className="h-6 w-6 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
                                         </div>
-                                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                                            tool.maturity === 'ga'
-                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                                : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                        }`}>
-                                            {tool.maturity === 'ga' ? 'Live' : 'Pilot'}
+                                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${badgeClasses(tool.maturity, tool.featured)}`}>
+                                            {badgeLabel(tool.maturity, tool.featured)}
                                         </span>
                                     </div>
                                     <h3 className="text-lg font-bold text-[var(--re-text-primary)] mb-2 group-hover:text-[var(--re-brand)] transition-colors">
                                         {tool.title}
                                     </h3>
-                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mb-4">
+                                    <p className="text-sm text-[var(--re-text-muted)] leading-relaxed mb-5">
                                         {tool.description}
                                     </p>
-                                    <div className="flex items-center text-sm font-semibold text-[var(--re-brand)] opacity-0 group-hover:opacity-100 transition-opacity">
-                                        Use this tool <ArrowRight className="h-4 w-4 ml-1" />
+                                    {/* CTA */}
+                                    <div className="mt-auto">
+                                        {tool.maturity === 'ga' ? (
+                                            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--re-brand)] group-hover:gap-2.5 transition-all">
+                                                Launch Tool <ArrowRight className="h-4 w-4" />
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-500">
+                                                Coming Soon
+                                            </span>
+                                        )}
                                     </div>
-
-                                    {tool.featured && (
-                                        <div className="absolute top-0 right-4 px-2 py-0.5 bg-[var(--re-brand)] text-white text-[9px] font-bold uppercase tracking-wider rounded-b-md">
-                                            Popular
-                                        </div>
-                                    )}
                                 </div>
                             </Link>
                         ))}
@@ -292,16 +318,22 @@ export function ToolsLandingClient() {
                 <button
                     onClick={() => setJourneyOpen(!journeyOpen)}
                     className="w-full flex items-center justify-between gap-4 rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 text-left hover:border-[var(--re-brand)] transition-all"
+                    style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
                 >
-                    <div>
-                        <h2 className="text-xl font-bold text-[var(--re-text-primary)]">
-                            New to FSMA 204? Follow the 8-step compliance journey
-                        </h2>
-                        <p className="text-sm text-[var(--re-text-muted)] mt-1">
-                            A logical path from scope assessment to full audit readiness.
-                        </p>
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center flex-shrink-0">
+                            <ListChecks className="w-5 h-5 text-[var(--re-brand)]" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-[var(--re-text-primary)]">
+                                New to FSMA 204? Follow the 8-step compliance journey
+                            </h2>
+                            <p className="text-sm text-[var(--re-text-muted)] mt-0.5">
+                                A logical path from scope assessment to full audit readiness.
+                            </p>
+                        </div>
                     </div>
-                    <span className={`text-[var(--re-text-disabled)] text-2xl transition-transform ${journeyOpen ? 'rotate-45' : ''}`}>
+                    <span className={`text-[var(--re-text-disabled)] text-2xl transition-transform flex-shrink-0 ${journeyOpen ? 'rotate-45' : ''}`}>
                         +
                     </span>
                 </button>
@@ -314,10 +346,13 @@ export function ToolsLandingClient() {
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.3 }}
                             className="overflow-hidden"
-                        >                            <div className="mt-4 space-y-3">
+                        >
+                            <div className="mt-4 space-y-3">
                                 {JOURNEY_STEPS.map((tool) => (
-                                    <Link key={tool.id} href={`/tools/${tool.id}`}>
-                                        <div className="flex items-center gap-4 p-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] hover:border-[var(--re-brand)] transition-all group">
+                                    <Link key={tool.id} href={tool.id === 'retailer-readiness' ? '/retailer-readiness' : `/tools/${tool.id}`}>
+                                        <div className="flex items-center gap-4 p-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] hover:border-[var(--re-brand)] transition-all group"
+                                            style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+                                        >
                                             <div className="w-9 h-9 rounded-full bg-[var(--re-brand)] text-white flex items-center justify-center text-sm font-bold shrink-0">
                                                 {tool.journeyStep}
                                             </div>
@@ -327,6 +362,9 @@ export function ToolsLandingClient() {
                                                 </h3>
                                                 <p className="text-xs text-[var(--re-text-muted)] truncate">{tool.description}</p>
                                             </div>
+                                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${badgeClasses(tool.maturity)}`}>
+                                                {badgeLabel(tool.maturity)}
+                                            </span>
                                             <ArrowRight className="h-4 w-4 text-[var(--re-text-disabled)] group-hover:text-[var(--re-brand)] shrink-0 transition-colors" />
                                         </div>
                                     </Link>
@@ -336,35 +374,43 @@ export function ToolsLandingClient() {
                     )}
                 </AnimatePresence>
             </section>
-            {/* ═══ FOOTER CTA ═══ */}
+            {/* ═══ ALPHA CTA ═══ */}
             <section className="relative z-[2] max-w-[860px] mx-auto px-6 pb-20 pt-8">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.97 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
-                    className="relative overflow-hidden rounded-3xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] text-center p-12"
+                    className="relative overflow-hidden rounded-3xl border border-[var(--re-brand)]/20 text-center p-12"
+                    style={{
+                        background: 'var(--re-brand-muted)',
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+                    }}
                 >
                     <div className="absolute top-0 right-0 w-64 h-64 bg-[var(--re-brand)] opacity-5 blur-[100px] -mr-32 -mt-32" />
                     <div className="relative z-10">
-                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--re-brand)] text-white shadow-xl mb-6">
+                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--re-brand)] text-white mb-6"
+                            style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                        >
                             <CheckCircle2 className="h-7 w-7" />
                         </div>
                         <h2 className="text-3xl md:text-4xl font-bold text-[var(--re-text-primary)] mb-4">
-                            Ready to Automate?
+                            Ready to automate?
                         </h2>
                         <p className="text-[var(--re-text-muted)] max-w-lg mx-auto mb-8 leading-relaxed">
-                            Move beyond free tools to a fully automated compliance platform.
-                            RegEngine manages your KDEs, monitors your CTEs, and keeps you audit-ready.
+                            Move beyond free tools to full automation. Alpha partners get white-glove onboarding, real-time monitoring, and direct founder access.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                            <Link href="/tools/recall-readiness">
-                                <button className="px-8 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold transition-all shadow-lg hover:shadow-xl">
-                                    Get Free Assessment
+                            <Link href="/alpha">
+                                <button className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold transition-all hover:-translate-y-0.5"
+                                    style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                                >
+                                    Join Alpha Program
+                                    <ArrowRight className="w-4 h-4" />
                                 </button>
                             </Link>
-                            <Link href="https://calendly.com/regengine/fsma-strategy-session">
-                                <button className="px-8 py-3.5 rounded-xl border-2 border-[var(--re-border-default)] text-[var(--re-text-secondary)] font-semibold hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-all">
-                                    Book Strategy Session
+                            <Link href="/tools/recall-readiness">
+                                <button className="px-8 py-3.5 rounded-xl border border-[var(--re-surface-border)] text-[var(--re-text-secondary)] font-semibold hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-all">
+                                    Get Free Assessment
                                 </button>
                             </Link>
                         </div>
