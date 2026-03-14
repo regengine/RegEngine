@@ -234,11 +234,11 @@ export default function PartnersPage() {
                     <CardContent>
                         <div className="grid md:grid-cols-3 gap-6">
                             <div className="text-center p-4 bg-white dark:bg-gray-800 rounded-lg">
-                                <p className="text-3xl font-bold text-green-600">$200-300</p>
+                                <p className="text-3xl font-bold text-green-600">$650-750</p>
                                 <p className="text-sm text-muted-foreground">Your wholesale cost per client/mo</p>
                             </div>
                             <div className="text-center p-4 bg-white dark:bg-gray-800 rounded-lg">
-                                <p className="text-3xl font-bold text-blue-600">$500-800</p>
+                                <p className="text-3xl font-bold text-blue-600">$1,299-2,499</p>
                                 <p className="text-sm text-muted-foreground">Suggested retail price</p>
                             </div>
                             <div className="text-center p-4 bg-white dark:bg-gray-800 rounded-lg">
@@ -248,8 +248,8 @@ export default function PartnersPage() {
                         </div>
                         <div className="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg">
                             <p className="text-center text-lg">
-                                <strong>Example:</strong> 15 clients × $300 margin = <span className="text-green-600 font-bold">$4,500/month MRR</span>
-                                <span className="text-muted-foreground ml-2">($54K/year additional revenue)</span>
+                                <strong>Example:</strong> 15 clients × $650 margin = <span className="text-green-600 font-bold">$9,750/month MRR</span>
+                                <span className="text-muted-foreground ml-2">($117K/year additional revenue)</span>
                             </p>
                         </div>
                     </CardContent>

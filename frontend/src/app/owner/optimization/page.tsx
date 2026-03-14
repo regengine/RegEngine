@@ -36,7 +36,7 @@ const mockPipeline = {
 };
 
 const mockPricingRecs = [
-    { plan: 'Starter', current: '$499', recommended: '$599', change: '+20%', confidence: '82%', impact: '+$8.4K MRR', rationale: 'Price anchoring drives Pro conversions' },
+    { plan: 'Growth', current: '$1,299', recommended: '$1,499', change: '+20%', confidence: '82%', impact: '+$8.4K MRR', rationale: 'Price anchoring drives Pro conversions' },
     { plan: 'Enterprise', current: '$4,999', recommended: '$5,499', change: '+10%', confidence: '75%', impact: '+$15K MRR', rationale: '94% retention, competitors avg $6,200' },
     { plan: 'FDA Export', current: '$299', recommended: '$399', change: '+33%', confidence: '88%', impact: '+$4.2K MRR', rationale: '98% attachment, no alternatives' },
 ];
@@ -46,7 +46,7 @@ const mockOpportunities = [
     { tenant: 'MedSecure Health', type: 'expansion', title: 'Multi-Dept Expansion', value: '$2,997', probability: '55%', status: 'in_progress', action: 'Multi-dept pricing review' },
     { tenant: 'GlobalFish', type: 'expansion', title: '15 Seat Expansion', value: '$1,500', probability: '100%', status: 'won', action: 'Deploy & onboard' },
     { tenant: 'FreshLeaf', type: 'cross_sell', title: 'FDA Export Module', value: '$399', probability: '85%', status: 'contacted', action: 'Share ROI calculator' },
-    { tenant: 'OldCo Logistics', type: 'win_back', title: 'Win-Back Offer', value: '$499', probability: '30%', status: 'identified', action: '3 months at 50% off' },
+    { tenant: 'OldCo Logistics', type: 'win_back', title: 'Win-Back Offer', value: '$1,299', probability: '30%', status: 'identified', action: '3 months at 50% off Growth' },
 ];
 
 const mockHealth = [

@@ -93,8 +93,8 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-3">
                                 <CreditCard className="h-5 w-5 text-[var(--re-brand)]" />
                                 <div>
-                                    <span className="font-medium">Professional Plan</span>
-                                    <span className="text-xs text-muted-foreground ml-2">$499/mo</span>
+                                    <span className="font-medium">Growth Plan</span>
+                                    <span className="text-xs text-muted-foreground ml-2">$1,299/mo</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 text-xs text-muted-foreground">

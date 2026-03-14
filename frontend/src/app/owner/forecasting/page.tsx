@@ -53,10 +53,10 @@ const mockChurn = [
 ];
 
 const mockCLV = [
-    { tenant: 'GlobalFish Imports', clv: '$479,952', plan: 'enterprise_plus', months: 24 },
+    { tenant: 'GlobalFish Imports', clv: '$479,952', plan: 'enterprise', months: 24 },
     { tenant: 'Acme Foods Inc.', clv: '$269,946', plan: 'enterprise', months: 18 },
-    { tenant: 'FreshLeaf Produce', clv: '$74,950', plan: 'professional', months: 10 },
-    { tenant: 'MedSecure Health', clv: '$59,960', plan: 'professional', months: 14 },
+    { tenant: 'FreshLeaf Produce', clv: '$74,950', plan: 'scale', months: 10 },
+    { tenant: 'MedSecure Health', clv: '$59,960', plan: 'scale', months: 14 },
 ];
 
 const mockRetention = [
@@ -70,7 +70,7 @@ const mockRetention = [
 const mockAnomalies = [
     { metric: 'Churn Rate', description: '2.1x higher than 6-month average', severity: 'critical', deviation: '+110%' },
     { metric: 'Expansion MRR', description: '35% above forecast — 3 enterprise upgrades', severity: 'info', deviation: '+34.9%' },
-    { metric: 'ARPU', description: 'Declining 8% MoM for Starter tier', severity: 'warning', deviation: '-8.1%' },
+    { metric: 'ARPU', description: 'Declining 8% MoM for Growth tier', severity: 'warning', deviation: '-8.1%' },
 ];
 
 const riskConfig: Record<string, { color: string; bg: string }> = {

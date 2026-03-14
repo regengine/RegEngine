@@ -8,10 +8,10 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance pricing. Plans from $999/mo. Free traceability tools included.',
+    description: 'FSMA 204 compliance pricing. Plans from $1,299/mo. Free traceability tools included.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance pricing. Plans from $999/mo. Free traceability tools included.',
+        description: 'FSMA 204 compliance pricing. Plans from $1,299/mo. Free traceability tools included.',
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
@@ -36,8 +36,8 @@ const PRICING_TIERS = [
         name: 'Growth',
         Icon: Zap,
         description: 'Under $50M annual revenue',
-        monthlyPrice: 999,
-        annualPrice: 832,
+        monthlyPrice: 1299,
+        annualPrice: 1079,
         highlighted: false,
         cta: 'Start Growth Plan',
         features: [
@@ -56,8 +56,8 @@ const PRICING_TIERS = [
         name: 'Scale',
         Icon: Rocket,
         description: '$50M\u2013$200M annual revenue',
-        monthlyPrice: 1999,
-        annualPrice: 1666,
+        monthlyPrice: 2499,
+        annualPrice: 2079,
         highlighted: true,
         cta: 'Start Scale Plan',
         features: [
@@ -91,7 +91,7 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$999/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
+    { feature: 'Starting Price', regengine: '$1,299/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
     { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6\u20138 weeks', repositrak: '<1 hour*', tracegains: '4\u20136 weeks' },
     { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },

@@ -77,7 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="p-3 border-t border-[var(--re-border-default)]">
                     <div className="px-3 py-2 rounded-lg bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)] border border-[color-mix(in_srgb,var(--re-brand)_15%,transparent)]">
                         <div className="text-[10px] text-muted-foreground">Plan</div>
-                        <div className="text-xs font-medium">Professional</div>
+                        <div className="text-xs font-medium">Growth</div>
                         <div className="text-[10px] text-muted-foreground mt-0.5">5 facilities · 50K events/mo</div>
                     </div>
                     <Link

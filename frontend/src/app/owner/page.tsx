@@ -40,10 +40,10 @@ const mockKPIs = {
 
 const mockTenants = [
     { id: '1', name: 'Acme Foods Inc.', plan: 'Enterprise', status: 'active', mrr: 12500, documents: 2340, lastActive: '2 hours ago' },
-    { id: '2', name: 'FreshLeaf Produce', plan: 'Professional', status: 'active', mrr: 4999, documents: 890, lastActive: '5 mins ago' },
+    { id: '2', name: 'FreshLeaf Produce', plan: 'Scale', status: 'active', mrr: 4999, documents: 890, lastActive: '5 mins ago' },
     { id: '3', name: 'Northstar Cold Chain', plan: 'Enterprise', status: 'active', mrr: 15000, documents: 4200, lastActive: '1 hour ago' },
-    { id: '4', name: 'Riverbend Packers', plan: 'Starter', status: 'trial', mrr: 0, documents: 45, lastActive: '3 days ago' },
-    { id: '5', name: 'Harvest Table Foods', plan: 'Professional', status: 'active', mrr: 4999, documents: 1200, lastActive: '12 mins ago' },
+    { id: '4', name: 'Riverbend Packers', plan: 'Growth', status: 'trial', mrr: 0, documents: 45, lastActive: '3 days ago' },
+    { id: '5', name: 'Harvest Table Foods', plan: 'Scale', status: 'active', mrr: 4999, documents: 1200, lastActive: '12 mins ago' },
 ];
 
 const mockAuditLog = [
