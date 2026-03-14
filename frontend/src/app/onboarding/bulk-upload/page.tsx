@@ -217,9 +217,10 @@ export default function BulkUploadPage() {
           className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 mb-6"
           style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
         >
-          <div className="flex items-center justify-between">
+          {/* Mobile: 2×2 grid. Desktop: horizontal row */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center sm:justify-between gap-3 sm:gap-0">
             {STEPS.map((step, i) => (
-              <div key={step.label} className="flex items-center flex-1">
+              <div key={step.label} className="flex items-center sm:flex-1">
                 <div className="flex flex-col items-center gap-1.5 flex-1">
                   <div
                     className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${
@@ -234,14 +235,14 @@ export default function BulkUploadPage() {
                       <step.Icon className="w-4 h-4" />
                     )}
                   </div>
-                  <span className={`text-[11px] font-medium text-center leading-tight ${
+                  <span className={`text-[11px] sm:text-xs font-medium text-center leading-tight ${
                     i <= activeStep ? 'text-[var(--re-brand)]' : 'text-[var(--re-text-disabled)]'
                   }`}>
                     {step.label}
                   </span>
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div className={`h-px flex-1 mx-2 mt-[-18px] ${
+                  <div className={`hidden sm:block h-px flex-1 mx-2 mt-[-18px] ${
                     i < activeStep ? 'bg-[var(--re-brand)]' : 'bg-[var(--re-surface-border)]'
                   }`} />
                 )}

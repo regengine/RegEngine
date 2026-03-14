@@ -185,7 +185,7 @@ export function ToolsLandingClient() {
     return (
         <div className="re-page min-h-screen">
             {/* ═══ HERO ═══ */}
-            <section className="relative z-[2] max-w-[1120px] mx-auto pt-20 pb-12 px-6 text-center">
+            <section className="relative z-[2] max-w-[1120px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-12 px-4 sm:px-6 text-center">
                 <motion.div
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -237,8 +237,8 @@ export function ToolsLandingClient() {
                 </motion.div>
             </section>
             {/* ═══ CATEGORY FILTER TABS ═══ */}
-            <section id="tool-grid" className="relative z-[2] max-w-[1120px] mx-auto px-6 pb-4 pt-8">
-                <div className="flex flex-wrap gap-2 justify-center">
+            <section id="tool-grid" className="relative z-[2] max-w-[1120px] mx-auto px-4 sm:px-6 pb-4 pt-8">
+                <div className="flex gap-2 justify-start sm:justify-center overflow-x-auto pb-2 sm:pb-0 sm:flex-wrap -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
                     {CATEGORIES.map(cat => (
                         <button
                             key={cat.id}
@@ -256,7 +256,7 @@ export function ToolsLandingClient() {
                 </div>
             </section>
             {/* ═══ CARD GRID ═══ */}
-            <section className="relative z-[2] max-w-[1120px] mx-auto px-6 py-8">
+            <section className="relative z-[2] max-w-[1120px] mx-auto px-4 sm:px-6 py-8">
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeCategory}
@@ -314,7 +314,7 @@ export function ToolsLandingClient() {
                 </AnimatePresence>
             </section>
             {/* ═══ RECOMMENDED JOURNEY (collapsible) ═══ */}
-            <section className="relative z-[2] max-w-[860px] mx-auto px-6 py-10">
+            <section className="relative z-[2] max-w-[860px] mx-auto px-4 sm:px-6 py-10">
                 <button
                     onClick={() => setJourneyOpen(!journeyOpen)}
                     className="w-full flex items-center justify-between gap-4 rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 text-left hover:border-[var(--re-brand)] transition-all"
@@ -375,7 +375,7 @@ export function ToolsLandingClient() {
                 </AnimatePresence>
             </section>
             {/* ═══ ALPHA CTA ═══ */}
-            <section className="relative z-[2] max-w-[860px] mx-auto px-6 pb-20 pt-8">
+            <section className="relative z-[2] max-w-[860px] mx-auto px-4 sm:px-6 pb-20 pt-8">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.97 }}
                     whileInView={{ opacity: 1, scale: 1 }}

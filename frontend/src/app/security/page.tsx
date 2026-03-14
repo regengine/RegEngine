@@ -79,11 +79,11 @@ export default function SecurityPage() {
     return (
         <div className="re-page">
             {/* Hero */}
-            <section className="relative z-[2] max-w-[800px] mx-auto pt-20 px-6 pb-16 text-center">
+            <section className="relative z-[2] max-w-[800px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-12 sm:pb-16 text-center">
                 <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
                     Security
                 </Badge>
-                <h1 className="text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
                     Don&apos;t trust us.<br />
                     <span className="text-re-brand">Verify us.</span>
                 </h1>
@@ -107,7 +107,7 @@ export default function SecurityPage() {
             </section>
 
             {/* Verified Security Pillars */}
-            <section className="relative z-[2] max-w-[900px] mx-auto px-6 pb-16">
+            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">What&apos;s verified today</h2>
                 <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                     Four pillars, each with concrete production evidence. No roadmap promises.
@@ -144,9 +144,9 @@ export default function SecurityPage() {
             </section>
 
             {/* Verifier Script Callout */}
-            <section className="relative z-[2] max-w-[900px] mx-auto px-6 pb-16">
+            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
                 <div
-                    className="rounded-2xl border-2 border-[var(--re-brand)]/20 p-8"
+                    className="rounded-2xl border-2 border-[var(--re-brand)]/20 p-5 sm:p-8"
                     style={{
                         background: 'var(--re-brand-muted)',
                         boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
