@@ -206,10 +206,7 @@ func main() {
                 >
                   Quick Start
                 </p>
-                <CodeBlock
-                  code={sdk.helloWorld}
-                  language={sdk.language}
-                />
+                <CodeBlock snippets={[{ language: sdk.language, label: sdk.language, code: sdk.helloWorld }]} />
               </div>
 
               {/* GitHub Link */}

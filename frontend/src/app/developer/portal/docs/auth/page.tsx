@@ -27,14 +27,9 @@ export default function AuthenticationPage() {
           All requests to the RegEngine API require the <code style={{ backgroundColor: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: '4px' }}>X-RegEngine-API-Key</code> header.
           This header contains your API key for authentication.
         </p>
-        <CodeBlock
-          language="curl"
-          code={`curl -X GET https://api.regengine.io/v1/events \\
-  -H "X-RegEngine-API-Key: rge_prod_abcd1234..."`}
-        />
-        <CodeBlock
-          language="python"
-          code={`import requests
+        <CodeBlock snippets={[{ language: 'curl', label: 'cURL', code: `curl -X GET https://api.regengine.io/v1/events \\
+  -H "X-RegEngine-API-Key: rge_prod_abcd1234..."` }]} />
+        <CodeBlock snippets={[{ language: 'python', label: 'Python', code: `import requests
 
 headers = {
     "X-RegEngine-API-Key": "rge_prod_abcd1234..."
@@ -42,10 +37,7 @@ headers = {
 response = requests.get(
     "https://api.regengine.io/v1/events",
     headers=headers
-)`}
-        />        <CodeBlock
-          language="javascript"
-          code={`const headers = {
+)` }]} />        <CodeBlock snippets={[{ language: 'javascript', label: 'Node.js', code: `const headers = {
   'X-RegEngine-API-Key': 'rge_prod_abcd1234...'
 };
 
@@ -54,8 +46,7 @@ fetch('https://api.regengine.io/v1/events', {
   headers: headers
 })
   .then(response => response.json())
-  .then(data => console.log(data));`}
-        />
+  .then(data => console.log(data));` }]} />
       </section>
 
       {/* Tenant ID Section */}
@@ -70,14 +61,11 @@ fetch('https://api.regengine.io/v1/events', {
           For multi-tenant API requests, include the <code style={{ backgroundColor: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: '4px' }}>X-Tenant-ID</code> header
           with your tenant UUID to scope requests to a specific tenant.
         </p>
-        <CodeBlock
-          language="curl"
-          code={`curl -X POST https://api.regengine.io/v1/ctes \\
+        <CodeBlock snippets={[{ language: 'curl', label: 'cURL', code: `curl -X POST https://api.regengine.io/v1/ctes \\
   -H "X-RegEngine-API-Key: rge_prod_abcd1234..." \\
   -H "X-Tenant-ID: 550e8400-e29b-41d4-a716-446655440000" \\
   -H "Content-Type: application/json" \\
-  -d '{"data": {...}'`}
-        />
+  -d '{"data": {...}'` }]} />
       </section>
 
       {/* Key Prefixes Section */}

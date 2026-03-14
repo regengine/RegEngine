@@ -209,10 +209,7 @@ if (verifyWebhook(payload, signature, WEBHOOK_SECRET)) {
                     </p>
                   </div>
                 </div>
-                <CodeBlock
-                  code={JSON.stringify(event.payload, null, 2)}
-                  language="json"
-                />
+                <CodeBlock snippets={[{ language: 'json', label: 'JSON', code: JSON.stringify(event.payload, null, 2) }]} />
               </div>
             ))}
           </div>
@@ -241,7 +238,7 @@ if (verifyWebhook(payload, signature, WEBHOOK_SECRET)) {
               >
                 Python
               </h3>
-              <CodeBlock code={pythonVerification} language="python" />
+              <CodeBlock snippets={[{ language: 'python', label: 'Python', code: pythonVerification }]} />
             </div>
 
             <div>
@@ -251,7 +248,7 @@ if (verifyWebhook(payload, signature, WEBHOOK_SECRET)) {
               >
                 Node.js
               </h3>
-              <CodeBlock code={nodeVerification} language="javascript" />
+              <CodeBlock snippets={[{ language: 'javascript', label: 'Node.js', code: nodeVerification }]} />
             </div>
           </div>
         </section>
@@ -320,10 +317,7 @@ if (verifyWebhook(payload, signature, WEBHOOK_SECRET)) {
                 >
                   Payload
                 </label>
-                <CodeBlock
-                  code={JSON.stringify(currentEvent?.payload, null, 2) || '{}'}
-                  language="json"
-                />
+                <CodeBlock snippets={[{ language: 'json', label: 'JSON', code: JSON.stringify(currentEvent?.payload, null, 2) || '{}' }]} />
               </div>
 
               <div className="flex items-center gap-3">
