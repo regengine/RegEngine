@@ -1,4 +1,11 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import {
+  ArrowRight, CheckCircle2, Code2, Database, Eye, FileCode, Globe,
+  Hash, KeyRound, Lock, LockKeyhole, Shield, ShieldCheck, Terminal,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
     title: 'Security | RegEngine',
@@ -11,186 +18,193 @@ export const metadata: Metadata = {
     },
 };
 
-const T = {
-    bg: "var(--re-surface-base)",
-    surface: "rgba(255,255,255,0.02)",
-    elevated: "rgba(255,255,255,0.04)",
-    border: "rgba(255,255,255,0.06)",
-    accent: "var(--re-brand)",
-    accentBg: "rgba(16,185,129,0.08)",
-    accentBorder: "rgba(16,185,129,0.2)",
-    textPrimary: "var(--re-text-primary)",
-    textBody: "var(--re-text-secondary)",
-    textMuted: "var(--re-text-muted)",
-    textDim: "var(--re-text-disabled)",
-    mono: "'JetBrains Mono', monospace",
-};
-
-function ShieldIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2L4 6V12C4 16.4 7.4 20.5 12 22C16.6 20.5 20 16.4 20 12V6L12 2Z" />
-            <path d="M8.5 12L11 14.5L16 9" strokeWidth="2" />
-        </svg>
-    );
-}
-function LockIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7C7 4.24 9.24 2 12 2C14.76 2 17 4.24 17 7V11" />
-        </svg>
-    );
-}
-function HashIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 9H20M4 15H20M10 3L8 21M16 3L14 21" />
-        </svg>
-    );
-}
-function EyeIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1 12S5 4 12 4 23 12 23 12 19 20 12 20 1 12 1 12Z" />
-            <circle cx="12" cy="12" r="3" />
-        </svg>
-    );
-}
-
 const securityFeatures = [
     {
-        icon: <LockIcon />,
+        Icon: Lock,
         title: "Row-Level Security (RLS)",
-        description: "Every database query is scoped to the authenticated tenant. Cross-tenant data access is structurally impossible \u2014 enforced at the PostgreSQL policy level, not the application layer.",
+        description: "Every database query is scoped to the authenticated tenant. Cross-tenant data access is structurally impossible — enforced at the PostgreSQL policy level, not the application layer.",
         evidence: "Tested: Tenant A cannot query Tenant B data (0 rows returned). Public access correctly blocked.",
         regulation: "Multi-tenant isolation",
     },
     {
-        icon: <HashIcon />,
+        Icon: Hash,
         title: "Cryptographic Fact Hashing",
         description: "Every extracted regulatory fact is hashed with SHA-256 using a deterministic composition: key|type|value|conditions|provenance. Any mutation produces a completely different hash.",
         evidence: "Verified: Re-running ingestion produces identical hashes. Independent verification script (verify_chain.py) confirms integrity.",
         regulation: "Tamper detection",
     },
     {
-        icon: <ShieldIcon />,
+        Icon: ShieldCheck,
         title: "Immutable Audit Trail",
         description: "Database triggers block all updates and deletes on compliance tables (extracted facts, rule evaluations, audit events). Corrections must create new versioned records with lineage links.",
         evidence: "Enforced via prevent_mutation trigger (V20). Append-only audit_logs enforced via prevent_audit_modification (V30). Version chain verified from V1 through V16.",
         regulation: "21 CFR Part 11 alignment",
     },
     {
-        icon: <EyeIcon />,
+        Icon: Eye,
         title: "Independent Verification",
-        description: "Our open-source verify_chain.py script lets anyone \u2014 auditors, customers, regulators \u2014 independently verify data integrity without database access. Zero trust required.",
+        description: "Our open-source verify_chain.py script lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Zero trust required.",
         evidence: "Output: 430 record hashes verified, 0 failed across 7 Critical Tracking Events (Dairy, Imported Seafood, Produce recall chains).",
         regulation: "Third-party auditability",
     },
 ];
 
 const securityControls = [
-    { item: "Data encryption at rest (AES-256)", timeline: "Current" },
-    { item: "TLS 1.3 in transit", timeline: "Current" },
-    { item: "Branch protection (required reviews, no force-push)", timeline: "Current" },
-    { item: "CI security scanning (SAST, secrets, deps, DAST)", timeline: "Current" },
-    { item: "Vulnerability Disclosure Policy + security.txt", timeline: "Current" },
-    { item: "Audit log export (tamper-evident)", timeline: "Current" },
-    { item: "Hardening gates: auth + tenant isolation in CI", timeline: "Current" },
-    { item: "Incident response plan (internal)", timeline: "Current" },
+    { item: "Data encryption at rest (AES-256)", Icon: LockKeyhole },
+    { item: "TLS 1.3 in transit", Icon: Globe },
+    { item: "Branch protection (required reviews, no force-push)", Icon: Code2 },
+    { item: "CI security scanning (SAST, secrets, deps, DAST)", Icon: Terminal },
+    { item: "Vulnerability Disclosure Policy + security.txt", Icon: FileCode },
+    { item: "Audit log export (tamper-evident)", Icon: Shield },
+    { item: "Hardening gates: auth + tenant isolation in CI", Icon: KeyRound },
+    { item: "Incident response plan (internal)", Icon: ShieldCheck },
 ];
 
 const diligenceArtifacts = [
-    { label: 'Trust Center', detail: 'Public product status, retention posture, and support model', href: '/trust' },
-    { label: 'Security details', detail: 'Implemented controls and verification-oriented security copy', href: '/security' },
-    { label: 'Additional artifacts', detail: 'Subprocessors, diligence materials, and extra security artifacts are available on request or under NDA where applicable', href: '/contact' },
+    { label: 'Trust Center', detail: 'Public product status, retention posture, and support model', href: '/trust', Icon: ShieldCheck },
+    { label: 'Security details', detail: 'Implemented controls and verification-oriented security copy', href: '/security', Icon: Lock },
+    { label: 'Additional artifacts', detail: 'Subprocessors, diligence materials, and extra security artifacts are available on request or under NDA', href: '/contact', Icon: FileCode },
 ];
 
 const infrastructure = [
-    { label: "Database", value: "PostgreSQL (Supabase)", detail: "Row-Level Security enforced" },
-    { label: "Hosting", value: "Cloud infrastructure", detail: "US data residency" },
-    { label: "Encryption at rest", value: "AES-256", detail: "All stored data" },
-    { label: "Encryption in transit", value: "TLS 1.3", detail: "All API traffic" },
-    { label: "Authentication", value: "JWT + API keys", detail: "Per-tenant scoping" },
-    { label: "Hashing", value: "SHA-256", detail: "Deterministic, auditable" },
+    { label: "Database", value: "PostgreSQL (Supabase)", detail: "Row-Level Security enforced", Icon: Database },
+    { label: "Hosting", value: "Cloud infrastructure", detail: "US data residency", Icon: Globe },
+    { label: "Encryption at rest", value: "AES-256", detail: "All stored data", Icon: LockKeyhole },
+    { label: "Encryption in transit", value: "TLS 1.3", detail: "All API traffic", Icon: Globe },
+    { label: "Authentication", value: "JWT + API keys", detail: "Per-tenant scoping", Icon: KeyRound },
+    { label: "Hashing", value: "SHA-256", detail: "Deterministic, auditable", Icon: Hash },
 ];
 
 export default function SecurityPage() {
     return (
         <div className="re-page">
             {/* Hero */}
-            <section className="relative z-[2] max-w-[720px] mx-auto pt-20 px-6 pb-[60px]">
-                <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
+            <section className="relative z-[2] max-w-[800px] mx-auto pt-20 px-6 pb-16 text-center">
+                <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
                     Security
-                </span>
-                <h1 style={{ fontSize: "36px", fontWeight: 700, color: T.textPrimary, margin: "16px 0 20px", lineHeight: 1.15 }}>
+                </Badge>
+                <h1 className="text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
                     Don&apos;t trust us.<br />
                     <span className="text-re-brand">Verify us.</span>
                 </h1>
-                <p style={{ fontSize: "16px", color: T.textMuted, lineHeight: 1.7, margin: 0 }}>
+                <p className="text-lg text-re-text-muted max-w-xl mx-auto leading-relaxed mb-8">
                     Security in compliance software shouldn&apos;t be a marketing claim &mdash; it should be independently auditable.
                     Here&apos;s exactly what we&apos;ve built and verified in production today.
                 </p>
+                <div className="flex gap-3 justify-center flex-wrap">
+                    <Link href="/alpha">
+                        <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                            Join Alpha Program
+                            <ArrowRight className="ml-2 w-4 h-4" />
+                        </Button>
+                    </Link>
+                    <Link href="/trust">
+                        <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                            View Trust Center
+                        </Button>
+                    </Link>
+                </div>
             </section>
 
-            {/* Verified Security */}
-            <section style={{ position: "relative", zIndex: 2, maxWidth: "720px", margin: "0 auto", padding: "0 24px 60px" }}>
-                <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 24px" }}>
-                    What&apos;s verified today
-                </h2>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    {securityFeatures.map((feature, i) => (
-                        <div
-                            key={i}
-                            style={{ padding: "24px", background: T.surface, border: `1px solid ${T.accentBorder}`, borderRadius: "12px" }}
+            {/* Verified Security Pillars */}
+            <section className="relative z-[2] max-w-[900px] mx-auto px-6 pb-16">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">What&apos;s verified today</h2>
+                <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
+                    Four pillars, each with concrete production evidence. No roadmap promises.
+                </p>
+                <div className="grid md:grid-cols-2 gap-5">
+                    {securityFeatures.map((feature) => (
+                        <article
+                            key={feature.title}
+                            className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 flex flex-col"
+                            style={{
+                                borderTop: '3px solid var(--re-brand)',
+                                boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
+                            }}
                         >
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
-                                <span className="text-re-brand">{feature.icon}</span>
-                                <h3 style={{ fontSize: "16px", fontWeight: 600, color: T.textPrimary, margin: 0, flex: 1 }}>
-                                    {feature.title}
-                                </h3>
-                                <span
-                                    style={{
-                                        fontSize: "10px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-                                        padding: "3px 10px", borderRadius: "10px",
-                                        color: T.accent, background: T.accentBg,
-                                    }}
-                                >
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
+                                    <feature.Icon className="w-5 h-5 text-[var(--re-brand)]" />
+                                </div>
+                                <h3 className="text-base font-semibold text-re-text-primary flex-1">{feature.title}</h3>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex-shrink-0">
                                     ✓ Verified
                                 </span>
                             </div>
-                            <p style={{ fontSize: "14px", color: T.textMuted, lineHeight: 1.6, margin: "0 0 12px" }}>
-                                {feature.description}
-                            </p>
-                            <div
-                                style={{
-                                    padding: "10px 14px", background: "rgba(0,0,0,0.2)", borderRadius: "6px",
-                                    fontSize: "12px", fontFamily: T.mono, color: T.textDim, lineHeight: 1.5,
-                                }}
-                            >
-                                <span className="text-re-brand">Evidence:</span> {feature.evidence}
+                            <p className="text-sm text-re-text-muted leading-relaxed mb-3">{feature.description}</p>
+                            <div className="mt-auto rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] p-3">
+                                <p className="text-xs font-mono text-re-text-disabled leading-relaxed">
+                                    <span className="text-[var(--re-brand)] font-semibold">Evidence:</span> {feature.evidence}
+                                </p>
                             </div>
-                        </div>
+                            <p className="text-[11px] text-re-text-disabled mt-2 font-mono">{feature.regulation}</p>
+                        </article>
                     ))}
                 </div>
             </section>
 
+            {/* Verifier Script Callout */}
+            <section className="relative z-[2] max-w-[900px] mx-auto px-6 pb-16">
+                <div
+                    className="rounded-2xl border-2 border-[var(--re-brand)]/20 p-8"
+                    style={{
+                        background: 'var(--re-brand-muted)',
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+                    }}
+                >
+                    <div className="flex flex-col md:flex-row items-start gap-6">
+                        <div className="w-14 h-14 rounded-xl bg-[var(--re-brand)]/10 border border-[var(--re-brand)]/20 flex items-center justify-center flex-shrink-0">
+                            <Terminal className="w-7 h-7 text-[var(--re-brand)]" />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="text-lg font-bold text-re-text-primary mb-2">Open-source verification script</h3>
+                            <p className="text-sm text-re-text-muted leading-relaxed mb-4">
+                                <code className="text-[var(--re-brand)] font-mono text-xs bg-[var(--re-surface-elevated)] px-1.5 py-0.5 rounded border border-[var(--re-surface-border)]">verify_chain.py</code> lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Download it, point it at an export package, and confirm every hash in the Merkle chain.
+                            </p>
+                            <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-4 mb-4 font-mono text-xs text-re-text-disabled overflow-x-auto"
+                                style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+                            >
+                                <p className="text-[var(--re-brand)]">$ python verify_chain.py --export dairy_recall_2024.json</p>
+                                <p className="mt-1">Verifying 430 record hashes...</p>
+                                <p className="text-emerald-500">✓ 430 verified, 0 failed</p>
+                                <p className="text-emerald-500">✓ Merkle root matches signed manifest</p>
+                                <p className="mt-1 text-re-text-disabled">7 CTEs verified: Dairy, Imported Seafood, Produce (3 recall chains)</p>
+                            </div>
+                            <div className="flex gap-3 flex-wrap">
+                                <Link href="/alpha">
+                                    <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-5 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all text-sm">
+                                        See Live Merkle Chain in Alpha
+                                        <ArrowRight className="ml-2 w-4 h-4" />
+                                    </Button>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* Infrastructure */}
-            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.01)" }}>
-                <div className="max-w-[720px] mx-auto py-[60px] px-6">
-                    <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 24px" }}>
-                        Infrastructure
-                    </h2>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                        {infrastructure.map((item, i) => (
-                            <div key={i} style={{ padding: "16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "8px" }}>
-                                <div style={{ fontSize: "11px", color: T.textDim, fontFamily: T.mono, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                    {item.label}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[900px] mx-auto py-16 px-6">
+                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Infrastructure</h2>
+                    <p className="text-sm text-re-text-muted text-center mb-10 max-w-md mx-auto">
+                        Enterprise-grade defaults from day one.
+                    </p>
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {infrastructure.map((item) => (
+                            <div
+                                key={item.label}
+                                className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5"
+                                style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+                            >
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="p-1.5 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
+                                        <item.Icon className="w-4 h-4 text-[var(--re-brand)]" />
+                                    </div>
+                                    <span className="text-[11px] font-mono uppercase tracking-wider text-re-text-disabled">{item.label}</span>
                                 </div>
-                                <div style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary, marginBottom: "2px" }}>
-                                    {item.value}
-                                </div>
-                                <div style={{ fontSize: "12px", color: T.textMuted }}>{item.detail}</div>
+                                <p className="text-sm font-semibold text-re-text-primary mb-0.5">{item.value}</p>
+                                <p className="text-xs text-re-text-muted">{item.detail}</p>
                             </div>
                         ))}
                     </div>
@@ -198,85 +212,99 @@ export default function SecurityPage() {
             </section>
 
             {/* Security Controls */}
-            <section className="relative z-[2] max-w-[720px] mx-auto py-[60px] px-6 pb-20">
-                <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 8px" }}>
-                    Security controls in production
-                </h2>
-                <p style={{ fontSize: "14px", color: T.textMuted, margin: "0 0 24px" }}>
+            <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Security controls in production</h2>
+                <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                     Controls below are implemented and running in the current platform.
                 </p>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {securityControls.map((item, i) => (
+                <div className="grid sm:grid-cols-2 gap-3">
+                    {securityControls.map((item) => (
                         <div
-                            key={i}
-                            style={{
-                                display: "flex", alignItems: "center", gap: "12px",
-                                padding: "12px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: "8px",
-                            }}
+                            key={item.item}
+                            className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 flex items-center gap-3"
+                            style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
                         >
-                            <span style={{ fontSize: "14px", fontWeight: 500, color: T.textBody, flex: 1 }}>{item.item}</span>
-                            <span style={{ fontSize: "12px", fontFamily: T.mono, color: T.textDim }}>{item.timeline}</span>
-                            <span
-                                style={{
-                                    fontSize: "10px", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase",
-                                    padding: "3px 10px", borderRadius: "10px", minWidth: "90px", textAlign: "center",
-                                    color: T.accent, background: T.accentBg, border: `1px solid ${T.accentBorder}`,
-                                }}
-                            >
-                                ✓ Implemented
+                            <div className="p-1.5 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex-shrink-0">
+                                <item.Icon className="w-4 h-4 text-[var(--re-brand)]" />
+                            </div>
+                            <span className="text-sm font-medium text-re-text-secondary flex-1">{item.item}</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex-shrink-0">
+                                ✓ Live
                             </span>
                         </div>
                     ))}
                 </div>
             </section>
 
-            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: "rgba(255,255,255,0.01)" }}>
-                <div className="max-w-[720px] mx-auto py-[60px] px-6">
-                    <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 8px" }}>
-                        Diligence artifacts
-                    </h2>
-                    <p style={{ fontSize: "14px", color: T.textMuted, margin: "0 0 24px" }}>
-                        Security copy is only part of the diligence surface. Product status, retention, support posture, and additional materials are surfaced separately to avoid overstating what is publicly available.
+            {/* Diligence Artifacts */}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[900px] mx-auto py-16 px-6">
+                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Diligence artifacts</h2>
+                    <p className="text-sm text-re-text-muted text-center mb-10 max-w-xl mx-auto">
+                        Security copy is only part of the diligence surface. Product status, retention, support posture, and additional materials are surfaced separately.
                     </p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div className="grid sm:grid-cols-3 gap-4">
                         {diligenceArtifacts.map((artifact) => (
-                            <a
+                            <Link
                                 key={artifact.label}
                                 href={artifact.href}
-                                style={{
-                                    display: "block",
-                                    padding: "16px",
-                                    borderRadius: "10px",
-                                    border: `1px solid ${T.border}`,
-                                    background: T.surface,
-                                    textDecoration: "none",
-                                }}
+                                className="group rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5 no-underline hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all"
+                                style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
                             >
-                                <div style={{ fontSize: "15px", fontWeight: 600, color: T.textPrimary }}>{artifact.label}</div>
-                                <div style={{ fontSize: "13px", color: T.textMuted, marginTop: "4px" }}>{artifact.detail}</div>
-                            </a>
+                                <div className="w-9 h-9 rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] flex items-center justify-center mb-3 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
+                                    <artifact.Icon className="w-4 h-4 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
+                                </div>
+                                <h3 className="text-sm font-semibold text-re-text-primary mb-1">{artifact.label}</h3>
+                                <p className="text-xs text-re-text-muted leading-relaxed">{artifact.detail}</p>
+                            </Link>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* CTA */}
-            <section style={{ position: "relative", zIndex: 2, borderTop: `1px solid ${T.border}`, background: T.accentBg }}>
-                <div style={{ maxWidth: "720px", margin: "0 auto", padding: "48px 24px", textAlign: "center" }}>
-                    <h2 style={{ fontSize: "22px", fontWeight: 700, color: T.textPrimary, margin: "0 0 8px" }}>
-                        Found a vulnerability?
-                    </h2>
-                    <p style={{ fontSize: "14px", color: T.textMuted, margin: "0 0 20px" }}>
+            {/* Alpha CTA */}
+            <section className="relative z-[2] max-w-[700px] mx-auto px-6 pb-8">
+                <div
+                    className="rounded-2xl border border-[var(--re-brand)]/20 p-8 text-center"
+                    style={{
+                        background: 'var(--re-brand-muted)',
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
+                    }}
+                >
+                    <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
+                        Alpha Program
+                    </Badge>
+                    <h3 className="text-xl font-bold text-re-text-primary mb-2">See the full audit trail live</h3>
+                    <p className="text-sm text-re-text-muted max-w-md mx-auto mb-5">
+                        Alpha partners get full access to the Merkle chain, audit logs, and verification tools inside their dashboard.
+                    </p>
+                    <div className="flex gap-3 justify-center flex-wrap">
+                        <Link href="/alpha">
+                            <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                                Join Alpha Program
+                                <ArrowRight className="ml-2 w-4 h-4" />
+                            </Button>
+                        </Link>
+                        <a href="mailto:security@regengine.co" className="no-underline">
+                            <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                                Request Security Packet
+                            </Button>
+                        </a>
+                    </div>
+                </div>
+            </section>
+
+            {/* Vulnerability Disclosure */}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[600px] mx-auto py-12 px-6 text-center">
+                    <h2 className="text-xl font-bold text-re-text-primary mb-2">Found a vulnerability?</h2>
+                    <p className="text-sm text-re-text-muted mb-6">
                         Responsible disclosure: security@regengine.co
                     </p>
-                    <a
-                        href="mailto:security@regengine.co"
-                        style={{
-                            display: "inline-flex", padding: "12px 24px", background: T.accent, color: T.bg,
-                            borderRadius: "8px", fontSize: "14px", fontWeight: 600, textDecoration: "none",
-                        }}
-                    >
-                        Report a Security Issue
+                    <a href="mailto:security@regengine.co" className="no-underline">
+                        <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                            Report a Security Issue
+                        </Button>
                     </a>
                 </div>
             </section>
