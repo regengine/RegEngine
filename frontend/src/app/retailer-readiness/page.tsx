@@ -410,7 +410,7 @@ export default function RetailerSuppliersPage() {
             {/* ─── HERO ─── */}
             <section ref={heroRef} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 1120, margin: '0 auto', padding: '80px 24px 40px',
+                maxWidth: 1120, margin: '0 auto', padding: 'clamp(3rem, 8vw, 80px) 16px clamp(2rem, 5vw, 40px)',
                 textAlign: 'center',
             }}>
                 {/* Glow */}
@@ -510,7 +510,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={timeline.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 900, margin: '0 auto', padding: '60px 24px 80px',
+                maxWidth: 900, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px clamp(3rem, 6vw, 80px)',
                 opacity: timeline.visible ? 1 : 0,
                 transform: timeline.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -626,7 +626,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={trace.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 900, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 900, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: trace.visible ? 1 : 0,
                 transform: trace.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -677,7 +677,7 @@ export default function RetailerSuppliersPage() {
 
                 <div ref={traceRef} style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
-                    padding: '32px 24px', overflow: 'hidden',
+                    padding: 'clamp(1rem, 3vw, 32px) clamp(0.75rem, 2vw, 24px)', overflow: 'hidden',
                     borderTop: `3px solid ${T.accent}`,
                     boxShadow: `0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px ${T.border}`,
                 }}>
@@ -829,7 +829,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={comparison.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 1000, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 1000, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: comparison.visible ? 1 : 0,
                 transform: comparison.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -915,7 +915,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={riskCalc.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 700, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 700, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: riskCalc.visible ? 1 : 0,
                 transform: riskCalc.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1044,7 +1044,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={pricing.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 1000, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 1000, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: pricing.visible ? 1 : 0,
                 transform: pricing.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1062,7 +1062,7 @@ export default function RetailerSuppliersPage() {
                 </div>
 
                 <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
                     gap: 16, alignItems: 'stretch',
                 }}>
                     {PRICING_TIERS.map((tier) => (
@@ -1127,7 +1127,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={founder.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 700, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 700, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: founder.visible ? 1 : 0,
                 transform: founder.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1186,7 +1186,7 @@ export default function RetailerSuppliersPage() {
                 position: 'relative', zIndex: 2,
                 background: `linear-gradient(180deg, ${T.surface}, ${T.bg})`,
                 borderTop: `1px solid ${T.border}`,
-                padding: '80px 24px',
+                padding: 'clamp(3rem, 8vw, 80px) 16px',
             }}>
                 <div style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
                     <div style={{
@@ -1291,7 +1291,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={competitorReveal.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 900, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 900, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: competitorReveal.visible ? 1 : 0,
                 transform: competitorReveal.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1308,9 +1308,10 @@ export default function RetailerSuppliersPage() {
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
                     overflow: 'hidden',
                 }}>
+                  <div style={{ overflowX: 'auto' }} className="scrollbar-none">
                     {/* Table header */}
                     <div className="competitor-row" style={{
-                        display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
+                        display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', minWidth: 520,
                         padding: '16px 20px', borderBottom: `1px solid ${T.border}`,
                         background: `${T.accent}08`,
                     }}>
@@ -1321,7 +1322,7 @@ export default function RetailerSuppliersPage() {
                     </div>
                     {COMPETITORS.map((row, i) => (
                         <div key={i} className="competitor-row" style={{
-                            display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
+                            display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', minWidth: 520,
                             padding: '14px 20px',
                             borderBottom: i < COMPETITORS.length - 1 ? `1px solid ${T.border}` : 'none',
                             background: i % 2 === 1 ? `${T.surfaceHover}` : 'transparent',
@@ -1332,6 +1333,7 @@ export default function RetailerSuppliersPage() {
                             <span style={{ fontSize: 13, color: T.textDim }}>{row.tracelink}</span>
                         </div>
                     ))}
+                  </div>
                 </div>
             </section>
 
@@ -1340,7 +1342,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={faqReveal.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 700, margin: '0 auto', padding: '60px 24px',
+                maxWidth: 700, margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 16px',
                 opacity: faqReveal.visible ? 1 : 0,
                 transform: faqReveal.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',

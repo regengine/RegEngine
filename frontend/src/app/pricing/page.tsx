@@ -112,7 +112,7 @@ export default function PricingPage() {
     return (
         <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
             {/* Hero */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '900px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
+            <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
                 <Badge style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.border}`, marginBottom: '20px' }}>
                     Transparent Pricing
                 </Badge>
@@ -132,7 +132,7 @@ export default function PricingPage() {
             </section>
 
             {/* Pricing Cards */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '1280px', margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
                     {PRICING_TIERS.map((tier) => {
                         const Icon = tier.Icon;
@@ -246,7 +246,7 @@ export default function PricingPage() {
             </section>
 
             {/* Competitor Comparison */}
-            <section style={{ position: 'relative', zIndex: 2, background: T.surface, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: '60px 24px' }}>
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: T.surface, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
                 <div className="max-w-[1000px] mx-auto">
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '12px' }}>
                         See How We Compare
@@ -289,7 +289,7 @@ export default function PricingPage() {
             </section>
 
             {/* FAQ */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '700px', margin: '0 auto', padding: '60px 24px' }}>
+            <section className="relative z-[2] max-w-[700px] mx-auto py-10 sm:py-[60px] px-4 sm:px-6">
                 <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '40px' }}>
                     Frequently Asked Questions
                 </h2>
@@ -307,7 +307,7 @@ export default function PricingPage() {
             </section>
 
             {/* CTA */}
-            <section style={{ position: 'relative', zIndex: 2, background: 'linear-gradient(135deg, var(--re-brand) 0%, #0ea5e9 100%)', padding: '60px 24px' }}>
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: 'linear-gradient(135deg, var(--re-brand) 0%, #0ea5e9 100%)' }}>
                 <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
                         Ready to Choose Your Plan?

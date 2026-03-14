@@ -60,7 +60,7 @@ export default function TrustCenterPage() {
     return (
         <div className="re-page">
             {/* ─── HEADER ─── */}
-            <section className="relative z-[2] max-w-[860px] mx-auto pt-20 px-6 pb-14">
+            <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10 sm:pb-14">
                 <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
                     Trust Center
                 </span>
@@ -91,7 +91,7 @@ export default function TrustCenterPage() {
             </section>
             {/* ─── SOURCE-OF-TRUTH POSITIONING (moved up) ─── */}
             <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="text-2xl font-bold text-re-text-primary mb-4">Source-of-truth positioning</h2>
                     <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                         RegEngine is a compliance evidence layer, not a system-of-record replacement. This distinction drives retention, audit ownership, and liability boundaries.
@@ -113,7 +113,7 @@ export default function TrustCenterPage() {
                 </div>
             </section>
             {/* ─── RETENTION + SUPPORT BOUNDARIES (moved up) ─── */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-3">What RegEngine actually does in your stack</h2>
                 <p className="text-sm text-re-text-muted max-w-[720px] mb-6">
                     RegEngine ingests upstream traceability data, normalizes it into FSMA workflows, attaches audit-integrity metadata,
@@ -143,7 +143,7 @@ export default function TrustCenterPage() {
             </section>
             {/* ─── ARTIFACTS ─── */}
             <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <div className="flex items-end justify-between gap-4 mb-5">
                         <div>
                             <h2 className="text-2xl font-bold text-re-text-primary">Artifacts and diligence materials</h2>
@@ -167,7 +167,7 @@ export default function TrustCenterPage() {
                 </div>
             </section>
             {/* ─── DATA PORTABILITY ─── */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-4">Data portability and exit rights</h2>
                 <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                     Export your data means more than downloading a CSV. RegEngine provides complete, integrity-verified exports that can reconstitute compliance records without vendor assistance.
@@ -212,7 +212,7 @@ export default function TrustCenterPage() {
             </section>
             {/* ─── UPSTREAM DATA QUALITY ─── */}
             <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="text-2xl font-bold text-re-text-primary mb-4">Upstream data quality controls</h2>
                     <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                         RegEngine validates incoming CTE/KDE records at ingestion time. Incomplete or non-compliant records are rejected or flagged before they enter the compliance evidence chain.
@@ -258,7 +258,7 @@ export default function TrustCenterPage() {
                 </div>
             </section>
             {/* ─── REGULATORY INTERPRETATION ─── */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-4">Regulatory interpretation tracking</h2>
                 <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                     FSMA 204 compliance logic embeds vendor interpretation of FDA guidance. RegEngine tracks and documents which guidance versions inform its validation rules, export formats, and compliance algorithms.
@@ -286,7 +286,7 @@ export default function TrustCenterPage() {
             </section>
             {/* ─── SUPPORT + ARCHIVE ─── */}
             <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                     <div className={`${card} p-5`}>
                         <h2 className="text-2xl font-bold text-re-text-primary mb-2">Support and escalation</h2>
@@ -334,7 +334,7 @@ export default function TrustCenterPage() {
                 </div>
             </section>
             {/* ─── CAPABILITY REGISTRY (collapsible for technical diligence) ─── */}
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <details className={`${card} overflow-hidden`}>
                     <summary className="cursor-pointer p-5 flex items-center justify-between gap-4 select-none">
                         <div>
