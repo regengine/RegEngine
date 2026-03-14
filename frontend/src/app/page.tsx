@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
@@ -18,24 +18,28 @@ const FREE_TOOLS = [
     desc: "Are your products on the FDA Food Traceability List? Find out in seconds.",
     href: "/tools/ftl-checker",
     tag: null,
+    icon: Leaf,
   },
   {
     title: "Retailer Readiness Assessment",
     desc: "Could you pass a Walmart supplier audit today? Scored automatically.",
     href: "/retailer-readiness",
     tag: "Popular",
+    icon: ShieldCheck,
   },
   {
     title: "FSMA 204 Compliance Guide",
     desc: "Plain-English guide to the food traceability rule. No jargon.",
     href: "/fsma-204",
     tag: null,
+    icon: BookOpen,
   },
   {
     title: "Cold-Chain Anomaly Simulator",
     desc: "Test your monitoring against real failure patterns.",
     href: "/tools/drill-simulator",
     tag: null,
+    icon: Thermometer,
   },
 ];
 
@@ -65,11 +69,11 @@ export default function RegEngineLanding() {
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/onboarding"
+                href="/alpha"
                 className="group relative inline-flex items-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Start Workspace</span>
+                <span className="relative">Join Alpha Program</span>
                 <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
               </Link>
               <Link
@@ -105,14 +109,21 @@ export default function RegEngineLanding() {
                 </p>
                 <div className="space-y-2.5">
                   {[
-                    { label: "CTEs found", value: "12 of 12", status: "good" },
-                    { label: "Coverage", value: "100%", status: "good" },
-                    { label: "Format", value: "EPCIS 2.0 + PDF", status: "good" },
-                    { label: "Cryptographic verification", value: "Passed", status: "good" },
+                    { label: "CTEs found", value: "12 of 12", badge: "Passed", badgeColor: "emerald" },
+                    { label: "Coverage", value: "100%", badge: "Complete", badgeColor: "emerald" },
+                    { label: "Format", value: "EPCIS 2.0 + PDF", badge: "Export Ready", badgeColor: "blue" },
+                    { label: "Cryptographic verification", value: "SHA-256", badge: "Verified", badgeColor: "emerald" },
                   ].map((row) => (
                     <div key={row.label} className="flex items-center justify-between">
                       <span className="text-[0.8rem] text-[var(--re-text-secondary)]">{row.label}</span>
-                      <span className="font-mono text-[0.8rem] font-medium text-[var(--re-brand-dark)]">{row.value}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[0.8rem] font-medium text-[var(--re-brand-dark)]">{row.value}</span>
+                        <span className={`text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full border ${
+                          row.badgeColor === "blue"
+                            ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                        }`}>{row.badge}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -126,7 +137,7 @@ export default function RegEngineLanding() {
               </span>
               <Link
                 href="/retailer-readiness"
-                className="group font-mono text-[0.72rem] font-medium bg-[var(--re-text-primary)] text-[var(--re-surface-base)] px-4 py-2 rounded-md transition-all duration-300 ease-out hover:opacity-90"
+                className="group font-mono text-[0.72rem] font-semibold bg-[var(--re-brand)] text-white px-4 py-2 rounded-md transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(16,185,129,0.25)]"
               >
                 Try it with your data <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5">→</span>
               </Link>
@@ -168,25 +179,27 @@ export default function RegEngineLanding() {
             <Link
               key={tool.title}
               href={tool.href}
-              className="group flex justify-between items-start bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 transition-all duration-300 hover:border-[var(--re-brand)] hover:shadow-re-md hover:-translate-y-0.5"
+              className="group flex items-start gap-4 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 shadow-sm transition-all duration-300 hover:border-[var(--re-brand)] hover:shadow-re-md hover:-translate-y-0.5"
             >
-              <div>
-                <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-1.5">
-                  {tool.title}
-                </h3>
+              <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
+                <tool.icon className="h-5 w-5 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)]">
+                    {tool.title}
+                  </h3>
+                  {tool.tag && (
+                    <span className="font-mono text-[0.6rem] font-medium text-[var(--re-brand)] bg-[var(--re-brand-muted)] px-2 py-0.5 rounded whitespace-nowrap">
+                      {tool.tag}
+                    </span>
+                  )}
+                </div>
                 <p className="text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
                   {tool.desc}
                 </p>
               </div>
-              {tool.tag ? (
-                <span className="font-mono text-[0.65rem] font-medium text-[var(--re-brand)] bg-[var(--re-brand-muted)] px-2.5 py-1 rounded whitespace-nowrap ml-4">
-                  {tool.tag}
-                </span>
-              ) : (
-                <span className="text-[1.2rem] text-[var(--re-text-muted)] ml-4 group-hover:translate-x-1 group-hover:text-[var(--re-brand)] transition-all duration-300">
-                  →
-                </span>
-              )}
+              <ArrowRight className="h-4 w-4 text-[var(--re-text-muted)] mt-1 flex-shrink-0 group-hover:translate-x-1 group-hover:text-[var(--re-brand)] transition-all duration-300" />
             </Link>
           ))}
         </div>
@@ -213,10 +226,10 @@ export default function RegEngineLanding() {
               <span className="relative">Free Readiness Assessment</span>
             </Link>
             <Link
-              href="/onboarding"
+              href="/alpha"
               className="inline-flex items-center gap-2 border border-[#444] text-white px-7 py-3.5 rounded-xl text-[0.95rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand-light)] hover:-translate-y-[2px]"
             >
-              Start Workspace
+              Join Alpha Program
             </Link>
           </div>
         </div>
