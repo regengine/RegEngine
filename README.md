@@ -1,165 +1,98 @@
 # RegEngine
 
-FSMA-first compliance infrastructure for food traceability, supplier onboarding, and FDA-ready record export.
+**FSMA 204 food traceability compliance for farms and food companies.**
 
-## What This Repo Is
+RegEngine helps food suppliers meet FDA Food Safety Modernization Act Section 204 requirements — from CTE ingestion to FDA-ready export — without six-figure enterprise contracts or months of onboarding.
 
-RegEngine is a monorepo with two primary code surfaces:
+**Live at [regengine.co](https://regengine.co)**
 
-- `services/` for FastAPI services and shared Python modules
-- `frontend/` for the Next.js App Router product UI
+## What RegEngine Does
 
-The checked-in product narrative is FSMA 204 first. The active implementation is centered on:
+- Ingest Critical Tracking Events (CTEs) via API, CSV, EDI, EPCIS, or IoT adapters
+- Validate Key Data Elements (KDEs) against 21 CFR Part 1, Subpart S
+- Score compliance readiness across your supply chain
+- Generate FDA-compliant sortable spreadsheets within the 24-hour response window
+- Trace lots forward and backward through a graph database
+- Run recall simulations and drill workflows
 
-- supplier onboarding and buyer-to-supplier flows
-- traceability event ingest via webhook, CSV, EDI, EPCIS, and IoT adapters
-- FSMA compliance scoring, traceability review, and FDA export workflows
-- graph-backed traceability, recall, and FSMA analysis endpoints
+## Pricing
 
-## Active Service Surface
+| Plan | Price | CTEs/month | Locations |
+|---|---|---|---|
+| **Growth** | $1,299/mo ($1,079 annual) | 10,000 | 3 |
+| **Scale** | $2,499/mo ($2,079 annual) | 100,000 | 10 |
+| **Enterprise** | Custom | Unlimited | Unlimited |
 
-These are the main service directories the current product depends on:
+Overage: $0.001/CTE beyond plan limits. All plans include a 14-day trial.
 
-| Service | Path | Default local port | Primary role |
-|---|---|---:|---|
-| Admin API | `services/admin` | 8400 | auth, tenants, onboarding, API keys, review/admin flows |
-| Ingestion Service | `services/ingestion` | 8000 | ingest pipelines, webhook persistence, FDA export, supplier/team/product APIs |
-| Compliance API | `services/compliance` | 8500 | FSMA checklist, validation, compliance endpoints |
-| Graph Service | `services/graph` | 8200 | traceability graph, recall, lineage, FSMA graph analysis |
-| NLP Service | `services/nlp` | 8100 | extraction and document processing |
-| Scheduler | `services/scheduler` | 8600 | scheduled jobs and feed polling |
-| Shared Modules | `services/shared` | n/a | shared bootstrap, middleware, schemas, auth, observability |
+## FSMA 204 Compliance Date
 
-Service bootstrapping is standardized around [`services/shared/paths.py`](/Users/sellers/RegEngine/services/shared/paths.py), especially `ensure_shared_importable()`.
+**July 20, 2028** — extended from the original January 2026 deadline per FDA enforcement discretion and Congressional action.
 
-## Frontend
+## Repo Structure
 
-The frontend lives in `frontend/` and uses:
-
-- Next.js 15
-- React 18
-- TypeScript
-- Tailwind CSS
-- Radix UI
-- Framer Motion
-- TanStack Query
-
-Key product areas in the current app include:
-
-- `/checkout`, `/pricing`, `/signup`, `/login`
-- `/dashboard`, `/compliance`, `/trace`, `/review`
-- `/onboarding` and `/onboarding/supplier-flow`
-- `/tools/*` FSMA tool surfaces
-- `/admin`, `/settings`, `/api-keys`
-
-Some frontend pages are fully wired to backend APIs, but the repo still contains demo-data surfaces and fallback/mock behavior in a few areas. The README should not be read as a claim that every UI path is fully live-backed.
-
-## FSMA Focus
-
-The current wedge is FSMA 204 food traceability:
-
-- Critical Tracking Events and Key Data Elements
-- Traceability Lot Code workflows
-- one-up/one-down traceability and recall readiness
-- FDA 24-hour record production and export
-
-Primary spec:
-
-- [`docs/specs/FSMA_204_MVP_SPEC.md`](/Users/sellers/RegEngine/docs/specs/FSMA_204_MVP_SPEC.md)
-
-Related setup and deployment docs:
-
-- [`docs/LOCAL_SETUP_GUIDE.md`](/Users/sellers/RegEngine/docs/LOCAL_SETUP_GUIDE.md)
-- [`docs/ENV_SETUP_CHECKLIST.md`](/Users/sellers/RegEngine/docs/ENV_SETUP_CHECKLIST.md)
-- [`docs/FSMA_RAILWAY_DEPLOYMENT.md`](/Users/sellers/RegEngine/docs/FSMA_RAILWAY_DEPLOYMENT.md)
-
-## Repo Layout
+Monorepo with two primary surfaces:
 
 ```text
 .
+├── frontend/          Next.js 15 App Router (deployed on Vercel)
 ├── services/
-│   ├── admin/
-│   ├── compliance/
-│   ├── graph/
-│   ├── ingestion/
-│   ├── nlp/
-│   ├── scheduler/
-│   └── shared/
-├── frontend/
-├── docs/
-├── scripts/
-├── kernel/
-├── migrations/
-└── tests/
+│   ├── admin/         Auth, tenants, onboarding, API keys
+│   ├── ingestion/     Ingest pipelines, webhook persistence, FDA export
+│   ├── compliance/    FSMA checklist, validation, compliance endpoints
+│   ├── graph/         Traceability graph, recall, lineage analysis
+│   ├── nlp/           Extraction and document processing
+│   ├── scheduler/     Scheduled jobs and feed polling
+│   └── shared/        Bootstrap, middleware, schemas, auth, observability
+├── docs/              Specs, setup guides, deployment runbooks
+├── scripts/           Dev and CI scripts
+└── migrations/        Database migrations
 ```
 
-There are additional legacy or experimental directories in the repo, but the paths above are the main surfaces to use for current product work.
+## Tech Stack
 
-## Local Setup
+**Frontend:** Next.js 15, React 18, TypeScript, Tailwind CSS, Radix UI, Framer Motion, TanStack Query
 
-Start with the detailed runbooks:
+**Backend:** FastAPI (Python), PostgreSQL, Neo4j (graph), Kafka, Supabase
 
-- [`docs/LOCAL_SETUP_GUIDE.md`](/Users/sellers/RegEngine/docs/LOCAL_SETUP_GUIDE.md)
-- [`docs/ENV_SETUP_CHECKLIST.md`](/Users/sellers/RegEngine/docs/ENV_SETUP_CHECKLIST.md)
+**Infrastructure:** Vercel (frontend), Railway (backend services)
 
-At a high level:
+## Quick Start
 
 ```bash
 git clone https://github.com/PetrefiedThunder/RegEngine.git
 cd RegEngine
+
+# Backend
 bash scripts/setup_dev.sh
-```
 
-The repo includes:
-
-- `docker-compose.yml`
-- `docker-compose.fsma.yml`
-- `scripts/start-fsma.sh`
-- `scripts/stop-fsma.sh`
-
-Frontend startup:
-
-```bash
+# Frontend
 cd frontend
 npm install
 npm run dev
 ```
 
-## Common Verification Commands
+See [`docs/LOCAL_SETUP_GUIDE.md`](docs/LOCAL_SETUP_GUIDE.md) and [`docs/ENV_SETUP_CHECKLIST.md`](docs/ENV_SETUP_CHECKLIST.md) for full setup.
 
-From repo root:
+## Key Specs
+
+- [FSMA 204 MVP Spec](docs/specs/FSMA_204_MVP_SPEC.md)
+- [Railway Deployment Guide](docs/FSMA_RAILWAY_DEPLOYMENT.md)
+
+## Verification
 
 ```bash
+# Backend tests
 python -m pytest tests -q
-python -m pytest services/<service>/tests -q
-bash scripts/test-all.sh --quick
+
+# Frontend
+cd frontend && npm run lint && npm run build
 ```
 
-From `frontend/`:
+## Current Status
 
-```bash
-npm install
-npm run lint
-npm run test:run
-npm run build
-```
+The repo has been refocused to FSMA 204 as the sole vertical. Some internal admin and owner dashboard surfaces still contain mock data. The public-facing product at regengine.co is live and actively deployed.
 
-## Deployment Posture
+---
 
-- Frontend is configured for Vercel deployment
-- Backend services are documented around Railway deployment
-
-The current backend deployment reference is:
-
-- [`docs/FSMA_RAILWAY_DEPLOYMENT.md`](/Users/sellers/RegEngine/docs/FSMA_RAILWAY_DEPLOYMENT.md)
-
-## API References
-
-- [`partner_api_spec.yaml`](/Users/sellers/RegEngine/partner_api_spec.yaml)
-- [`regengine-partner-gateway-openapi.yaml`](/Users/sellers/RegEngine/regengine-partner-gateway-openapi.yaml)
-
-## Current Caveats
-
-- The repo has been heavily refocused toward FSMA-first execution, but some internal, owner/admin, and legacy surfaces still exist.
-- Security/dependency posture is actively being tightened; see `.github/workflows/security.yml` and service-level requirements files.
-- Local verification can vary by service because some tests require Docker, external services, or environment variables.
+*Food traceability compliance for farms and food companies. Don't trust, verify.*
