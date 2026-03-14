@@ -2,24 +2,48 @@
 
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Check, Loader2 } from 'lucide-react';
+import { ArrowRight, Check, Loader2, AlertCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function OnboardingPage() {
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'success'>('idle');
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
 
   const canSubmit = email.includes('@') && company.trim().length > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit || status !== 'idle') return;
+    if (!canSubmit || status === 'submitting') return;
     setStatus('submitting');
+    setErrorMsg('');
 
-    // Simulate a short network delay — swap for real API call later
-    await new Promise((r) => setTimeout(r, 1200));
-    setStatus('success');
+    try {
+      const { error } = await supabase
+        .from('waitlist_leads')
+        .insert({
+          email: email.trim().toLowerCase(),
+          company: company.trim(),
+          source: 'onboarding',
+        });
+
+      if (error) {
+        // Duplicate email — still treat as success (they're already on the list)
+        if (error.code === '23505') {
+          setStatus('success');
+          return;
+        }
+        throw error;
+      }
+
+      setStatus('success');
+    } catch (err) {
+      console.error('Onboarding submission failed:', err);
+      setStatus('error');
+      setErrorMsg('Something went wrong. Please try again or email us directly at hello@regengine.co.');
+    }
   }
 
   /* ── Success state ── */
@@ -72,6 +96,13 @@ export default function OnboardingPage() {
         <p className="text-[0.95rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
           Tell us who you are and we&apos;ll set up your FSMA 204 compliance workspace.
         </p>
+
+        {status === 'error' && (
+          <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200 mb-5">
+            <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+            <p className="text-[0.875rem] text-red-700">{errorMsg}</p>
+          </div>
+        )}
 
         <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
           {/* Email */}
