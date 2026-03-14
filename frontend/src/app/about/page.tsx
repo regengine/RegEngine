@@ -32,7 +32,7 @@ const beliefs = [
   {
     Icon: ShieldCheck,
     title: 'Compliance data should be verifiable, not trusted.',
-    body: 'Every record is SHA-256 hashed. Run our open verification script — if the hashes don't match, don't trust us.',
+    body: "Every record is SHA-256 hashed. Run our open verification script — if the hashes don\u2019t match, don\u2019t trust us.",
   },
   {
     Icon: DollarSign,
