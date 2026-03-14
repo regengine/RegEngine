@@ -315,10 +315,11 @@ export default function RetailerSuppliersPage() {
                         <button
                             onClick={() => trackEvent('sticky_cta_click')}
                             style={{
-                                background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
-                                color: '#000', fontWeight: 600, padding: '10px 24px', fontSize: 14,
+                                background: T.accent, color: '#fff',
+                                fontWeight: 600, padding: '10px 24px', fontSize: 14,
                                 border: 'none', borderRadius: 8, cursor: 'pointer',
-                                boxShadow: `0 0 20px ${T.accentGlow}`,
+                                boxShadow: `0 4px 16px ${T.accent}40`,
+                                transition: 'all 0.2s',
                             }}
                         >
                             Get Free Assessment →
@@ -357,11 +358,12 @@ export default function RetailerSuppliersPage() {
                             <button
                                 onClick={() => { setShowExitIntent(false); trackEvent('exit_intent_cta_click'); }}
                                 style={{
-                                    background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
-                                    color: '#000', fontWeight: 600, padding: '14px 28px', fontSize: 15,
+                                    background: T.accent, color: '#fff',
+                                    fontWeight: 600, padding: '14px 28px', fontSize: 15,
                                     border: 'none', borderRadius: 10, cursor: 'pointer',
-                                    boxShadow: `0 0 30px ${T.accentGlow}`,
+                                    boxShadow: `0 4px 16px ${T.accent}40`,
                                     width: '100%', marginBottom: 12,
+                                    transition: 'all 0.2s',
                                 }}
                             >
                                 Yes, Assess My Readiness →
@@ -450,13 +452,15 @@ export default function RetailerSuppliersPage() {
 
                 {/* Countdown */}
                 <div style={{
-                    display: 'inline-flex', alignItems: 'baseline', gap: 8,
-                    background: T.surface, border: `1px solid ${T.border}`,
-                    borderRadius: 12, padding: '12px 24px', marginBottom: 32,
+                    display: 'inline-flex', alignItems: 'baseline', gap: 10,
+                    background: T.surface, border: `2px solid ${daysCount > 600 ? T.warningBorder : 'rgba(239,68,68,0.2)'}`,
+                    borderRadius: 14, padding: '16px 32px', marginBottom: 32,
+                    boxShadow: `0 0 30px ${daysCount > 600 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)'}`,
                 }}>
                     <span style={{
-                        fontSize: 32, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 40, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
                         color: daysCount > 600 ? T.warning : T.danger,
+                        letterSpacing: '-0.02em',
                     }}>
                         {daysCount.toLocaleString()}
                     </span>
@@ -465,18 +469,18 @@ export default function RetailerSuppliersPage() {
 
                 <div className="flex gap-3 justify-center flex-wrap">
                     <Link href="/tools/recall-readiness">
-                        <button style={{
-                            background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
-                            color: '#000', fontWeight: 600, padding: '14px 28px', fontSize: 15,
+                        <button className="re-cta-primary" style={{
+                            background: T.accent, color: '#fff', fontWeight: 600,
+                            padding: '14px 32px', fontSize: 15,
                             border: 'none', borderRadius: 10, cursor: 'pointer',
-                            boxShadow: `0 0 30px ${T.accentGlow}`,
+                            boxShadow: `0 4px 16px ${T.accent}40`,
                             transition: 'all 0.2s',
                         }}>
                             Get Free Assessment →
                         </button>
                     </Link>
                     <Link href="/ftl-checker">
-                        <button style={{
+                        <button className="re-cta-secondary" style={{
                             background: 'transparent', color: T.text,
                             border: `1px solid ${T.border}`, padding: '14px 28px', fontSize: 15,
                             borderRadius: 10, cursor: 'pointer', transition: 'all 0.2s',
@@ -528,9 +532,11 @@ export default function RetailerSuppliersPage() {
                 <div style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
                     padding: '40px 32px',
+                    borderTop: `3px solid ${T.accent}`,
+                    boxShadow: `0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px ${T.border}`,
                 }}>
                     {/* Timeline bar */}
-                    <div style={{ position: 'relative', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 4, marginBottom: 60, marginTop: 20 }}>
+                    <div style={{ position: 'relative', height: 4, background: T.border, borderRadius: 4, marginBottom: 60, marginTop: 20 }}>
                         {/* Progress fill */}
                         <div style={{
                             position: 'absolute', left: 0, top: 0, height: '100%', borderRadius: 4,
@@ -640,7 +646,7 @@ export default function RetailerSuppliersPage() {
 
                     {/* Direction toggle */}
                     <div style={{
-                        display: 'inline-flex', background: 'rgba(255,255,255,0.03)',
+                        display: 'inline-flex', background: T.surface,
                         border: `1px solid ${T.border}`, borderRadius: 10, padding: 3,
                     }}>
                         {(['forward', 'backward'] as const).map((dir) => (
@@ -672,6 +678,8 @@ export default function RetailerSuppliersPage() {
                 <div ref={traceRef} style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
                     padding: '32px 24px', overflow: 'hidden',
+                    borderTop: `3px solid ${T.accent}`,
+                    boxShadow: `0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px ${T.border}`,
                 }}>
                     {/* Terminal header */}
                     <div style={{
@@ -699,8 +707,8 @@ export default function RetailerSuppliersPage() {
                                     <div style={{
                                         display: 'flex', alignItems: 'center', gap: 16, padding: '14px 16px',
                                         borderRadius: 10,
-                                        background: current ? `${T.accent}08` : active ? 'rgba(255,255,255,0.01)' : 'transparent',
-                                        border: current ? `1px solid ${T.accent}25` : '1px solid transparent',
+                                        background: current ? `${T.accent}10` : active ? `${T.accent}04` : 'transparent',
+                                        border: current ? `1px solid ${T.accent}30` : '1px solid transparent',
                                         opacity: active ? 1 : 0.3,
                                         transform: active ? 'translateX(0)' : 'translateX(-8px)',
                                         transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -708,7 +716,7 @@ export default function RetailerSuppliersPage() {
                                         {/* Step indicator */}
                                         <div style={{
                                             width: 36, height: 36, borderRadius: 10,
-                                            background: active ? `${T.accent}15` : 'rgba(255,255,255,0.03)',
+                                            background: active ? `${T.accent}15` : T.surface,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             fontSize: 18, flexShrink: 0,
                                             border: current ? `1px solid ${T.accent}40` : '1px solid transparent',
@@ -754,7 +762,7 @@ export default function RetailerSuppliersPage() {
                                     {i < traceNodes.length - 1 && (
                                         <div style={{
                                             width: 2, height: 16, marginLeft: 33,
-                                            background: active ? `${T.accent}40` : 'rgba(255,255,255,0.04)',
+                                            background: active ? `${T.accent}40` : T.border,
                                             transition: 'background 0.5s',
                                         }} />
                                     )}
@@ -861,7 +869,7 @@ export default function RetailerSuppliersPage() {
                                 { label: 'FDA audit readiness', value: 'Hope for the best', bad: true },
                                 { label: 'Team workflow', value: 'Manual portal logins', bad: true },
                             ].map((item, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.border}` }}>
                                     <span className="text-sm text-re-text-muted">{item.label}</span>
                                     <span style={{ fontSize: 14, color: T.danger, fontWeight: 500 }}>{item.value}</span>
                                 </div>
@@ -927,6 +935,8 @@ export default function RetailerSuppliersPage() {
                 <div style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
                     padding: '32px 28px',
+                    borderTop: `3px solid ${T.accent}`,
+                    boxShadow: `0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px ${T.border}`,
                 }}>
                     {/* Revenue slider */}
                     <div style={{ marginBottom: 28 }}>
@@ -973,44 +983,53 @@ export default function RetailerSuppliersPage() {
                     }}>
                         <div style={{
                             background: T.dangerBg, border: `1px solid rgba(239,68,68,0.15)`,
-                            borderRadius: 12, padding: '20px 18px', textAlign: 'center',
+                            borderRadius: 12, padding: '24px 18px', textAlign: 'center',
                         }}>
-                            <p style={{ fontSize: 12, color: T.danger, marginBottom: 6, fontWeight: 500 }}>Annual Revenue at Risk</p>
+                            <p style={{ fontSize: 11, color: T.danger, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Annual Revenue at Risk</p>
                             <p style={{
-                                fontSize: 28, fontWeight: 700, color: T.danger,
+                                fontSize: 34, fontWeight: 700, color: T.danger,
                                 fontFamily: "'JetBrains Mono', monospace",
+                                letterSpacing: '-0.02em',
                             }}>
                                 ${(atRisk / 1_000_000).toFixed(1)}M
                             </p>
                         </div>
                         <div style={{
                             background: T.warningBg, border: `1px solid ${T.warningBorder}`,
-                            borderRadius: 12, padding: '20px 18px', textAlign: 'center',
+                            borderRadius: 12, padding: '24px 18px', textAlign: 'center',
                         }}>
-                            <p style={{ fontSize: 12, color: T.warning, marginBottom: 6, fontWeight: 500 }}>Monthly Risk</p>
+                            <p style={{ fontSize: 11, color: T.warning, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly Risk</p>
                             <p style={{
-                                fontSize: 28, fontWeight: 700, color: T.warning,
+                                fontSize: 34, fontWeight: 700, color: T.warning,
                                 fontFamily: "'JetBrains Mono', monospace",
+                                letterSpacing: '-0.02em',
                             }}>
                                 ${monthlyRisk >= 1_000_000 ? `${(monthlyRisk / 1_000_000).toFixed(1)}M` : `${Math.round(monthlyRisk / 1000)}K`}
                             </p>
                         </div>
                     </div>
 
-                    {/* Comparison callout */}
+                    {/* Comparison callout — highlighted savings */}
                     <div style={{
-                        background: `${T.accent}06`, border: `1px solid ${T.accent}15`,
-                        borderRadius: 10, padding: '14px 18px',
-                        display: 'flex', alignItems: 'center', gap: 12,
+                        background: `${T.accent}08`, border: `2px solid ${T.accent}25`,
+                        borderRadius: 12, padding: '18px 20px',
+                        display: 'flex', alignItems: 'center', gap: 14,
                     }}>
-                        <span style={{ fontSize: 18 }}>💡</span>
-                        <p style={{ fontSize: 13, color: T.text, lineHeight: 1.6 }}>
-                            RegEngine costs <strong className="text-re-brand">
-                                {annualRevenue <= 50 ? '$1,299' : annualRevenue <= 200 ? '$2,499' : 'a fraction'}/mo
-                            </strong> — that's <strong className="text-re-brand">
-                                {((monthlyRisk / (annualRevenue <= 50 ? 999 : annualRevenue <= 200 ? 1999 : 4999)) * 100).toFixed(0)}x less
-                            </strong> than what you risk losing every month.
-                        </p>
+                        <div style={{
+                            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                            background: `${T.accent}15`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 18,
+                        }}>💡</div>
+                        <div>
+                            <p style={{ fontSize: 14, color: T.heading, fontWeight: 600, marginBottom: 2 }}>
+                                RegEngine: {annualRevenue <= 50 ? '$1,299' : annualRevenue <= 200 ? '$2,499' : 'Custom'}/mo
+                            </p>
+                            <p style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
+                                That&apos;s <strong style={{ color: T.accent, fontSize: 15 }}>
+                                    {((monthlyRisk / (annualRevenue <= 50 ? 1299 : annualRevenue <= 200 ? 2499 : 4999))).toLocaleString(undefined, { maximumFractionDigits: 0 })}x less
+                                </strong> than what you risk losing every month.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1227,11 +1246,11 @@ export default function RetailerSuppliersPage() {
                             <button
                                 type="submit"
                                 style={{
-                                    background: `linear-gradient(135deg, ${T.accent}, ${T.accentHover})`,
-                                    color: '#000', fontWeight: 600, padding: '14px 24px',
+                                    background: T.accent, color: '#fff',
+                                    fontWeight: 600, padding: '14px 24px',
                                     width: '100%', border: 'none', borderRadius: 10,
                                     fontSize: 15, cursor: 'pointer',
-                                    boxShadow: `0 0 30px ${T.accentGlow}`,
+                                    boxShadow: `0 4px 16px ${T.accent}40`,
                                     transition: 'all 0.2s',
                                 }}
                             >
@@ -1293,18 +1312,19 @@ export default function RetailerSuppliersPage() {
                     <div className="competitor-row" style={{
                         display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
                         padding: '16px 20px', borderBottom: `1px solid ${T.border}`,
-                        background: T.surface,
+                        background: `${T.accent}08`,
                     }}>
-                        <span className="text-xs text-re-text-disabled font-medium">Feature</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: T.heading, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feature</span>
                         <span style={{ fontSize: 12, color: T.accent, fontWeight: 700 }}>RegEngine</span>
-                        <span className="text-xs text-re-text-disabled font-medium">FoodLogiQ</span>
-                        <span className="text-xs text-re-text-disabled font-medium">TraceLink</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>FoodLogiQ</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: T.textDim }}>TraceLink</span>
                     </div>
                     {COMPETITORS.map((row, i) => (
                         <div key={i} className="competitor-row" style={{
                             display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr',
                             padding: '14px 20px',
                             borderBottom: i < COMPETITORS.length - 1 ? `1px solid ${T.border}` : 'none',
+                            background: i % 2 === 1 ? `${T.surfaceHover}` : 'transparent',
                         }}>
                             <span style={{ fontSize: 13, color: T.text, fontWeight: 500 }}>{row.feature}</span>
                             <span style={{ fontSize: 13, color: T.accent, fontWeight: 600 }}>{row.regengine}</span>
@@ -1477,6 +1497,10 @@ export default function RetailerSuppliersPage() {
                 }
                 input::placeholder { color: ${T.textDim}; }
                 * { box-sizing: border-box; margin: 0; }
+
+                /* CTA hover lift */
+                .re-cta-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px ${T.accent}50 !important; }
+                .re-cta-secondary:hover { border-color: ${T.borderHover} !important; background: ${T.surface} !important; }
 
                 /* Mobile responsive */
                 @media (max-width: 768px) {
