@@ -1,7 +1,7 @@
 'use client';
 
 import { ShieldCheck, Key, AlertTriangle, Info } from 'lucide-react';
-import CodeBlock from '@/components/developer/CodeBlock';
+import { CodeBlock } from '@/components/developer/CodeBlock';
 
 export default function AuthenticationPage() {
   return (

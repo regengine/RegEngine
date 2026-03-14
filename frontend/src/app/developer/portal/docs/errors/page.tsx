@@ -2,7 +2,7 @@
 
 import { AlertCircle, Info } from 'lucide-react';
 import Badge from '@/components/ui/badge';
-import CodeBlock from '@/components/developer/CodeBlock';
+import { CodeBlock } from '@/components/developer/CodeBlock';
 
 export default function ErrorCodesPage() {
   return (

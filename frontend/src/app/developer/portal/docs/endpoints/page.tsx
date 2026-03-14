@@ -1,7 +1,7 @@
 'use client';
 
 import { Code2, Shield, AlertCircle, Zap } from 'lucide-react';
-import EndpointCard from '@/components/developer/EndpointCard';
+import { EndpointCard } from '@/components/developer/EndpointCard';
 import { CodeSnippet } from '@/components/developer/CodeBlock';
 
 export default function EndpointsPage() {
