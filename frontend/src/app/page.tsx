@@ -196,7 +196,7 @@ export default function RegEngineLanding() {
       <section className="bg-[var(--re-text-primary)] text-white py-20 px-6">
         <div className="max-w-[1100px] mx-auto text-center">
           <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
-            FSMA 204 Deadline: January 20, 2026
+            FSMA 204 Deadline: July 20, 2028
           </p>
           <h2 className="font-serif text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
             Ready to close the gap?

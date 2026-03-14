@@ -1,10 +1,21 @@
 /**
  * FSMA 204 Key Dates
  * Based on FDA Final Rule and Congressional enforcement directives
+ * Original deadline was January 20, 2026 — extended 30 months by FDA,
+ * codified by Congress in November 2025.
  */
-export const FSMA_204_COMPLIANCE_DATE = 'January 20, 2026';
+export const FSMA_204_ORIGINAL_DATE = 'January 20, 2026';
+export const FSMA_204_COMPLIANCE_DATE = 'July 20, 2028';
 export const FSMA_204_ENFORCEMENT_FLOOR = 'July 20, 2028';
+export const FSMA_204_DEADLINE_ISO = '2028-07-20';
 export const FSMA_204_CITATION = '21 CFR Part 1, Subpart S';
+
+/** Days remaining until the compliance deadline */
+export function daysUntilFSMA204(): number {
+    const now = new Date();
+    const deadline = new Date(FSMA_204_DEADLINE_ISO);
+    return Math.max(0, Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+}
 
 /**
  * FSMA 204 Food Traceability List (FTL)
