@@ -165,7 +165,7 @@ export default function TermsClient() {
     return (
         <div className="re-page">
             {/* ═══ HERO ═══ */}
-            <section className="relative z-[2] max-w-[960px] mx-auto pt-20 px-6 pb-10">
+            <section className="relative z-[2] max-w-[960px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10">
                 <span className="text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
                     Legal
                 </span>
@@ -180,7 +180,7 @@ export default function TermsClient() {
                 </p>
             </section>
             {/* ═══ TL;DR CALLOUT ═══ */}
-            <section className="relative z-[2] max-w-[960px] mx-auto px-6 pb-8">
+            <section className="relative z-[2] max-w-[960px] mx-auto px-4 sm:px-6 pb-8">
                 <div className="max-w-[700px]">
                     <div className="rounded-2xl border-2 border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] p-6">
                         <div className="flex items-center gap-2 mb-2">
@@ -198,7 +198,7 @@ export default function TermsClient() {
                 </div>
             </section>
             {/* ═══ MAIN CONTENT: TOC + SECTIONS ═══ */}
-            <section className="relative z-[2] max-w-[960px] mx-auto px-6 pb-20">
+            <section className="relative z-[2] max-w-[960px] mx-auto px-4 sm:px-6 pb-20">
                 <div className="flex gap-10">
                     {/* Sticky TOC — desktop only */}
                     <nav className="hidden lg:block w-[220px] shrink-0">
