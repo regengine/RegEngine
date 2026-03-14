@@ -81,8 +81,8 @@ export default function IntegrationHubPage() {
                                     </pre>
                                 </div>
 
-                                <Link href="/docs/api" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-accent-blue)] hover:underline">
-                                    View API Reference <ArrowRight className="w-4 h-4" />
+                                <Link href="/developer/register" className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-accent-blue)] hover:underline">
+                                    Get Developer Access <ArrowRight className="w-4 h-4" />
                                 </Link>
                             </div>
 
