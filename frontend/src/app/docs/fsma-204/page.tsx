@@ -105,7 +105,7 @@ export default function FSMA204GuidePage() {
                 </div>
             </div>
 
-            {/* Content */
+            {/* Content */}
             <div className="max-w-[900px] mx-auto py-12 px-6">
 
                 {/* What is FSMA 204? */}
