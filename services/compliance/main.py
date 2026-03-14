@@ -3,9 +3,17 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+# --- Standardized Bootstrap ---
 _SERVICE_DIR = Path(__file__).resolve().parent
+_SERVICES_DIR = _SERVICE_DIR.parent
 if str(_SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICE_DIR))
+if str(_SERVICES_DIR) not in sys.path:
+    sys.path.insert(0, str(_SERVICES_DIR))
+
+from shared.paths import ensure_shared_importable
+ensure_shared_importable()
+# ------------------------------
 
 from app.routes import router as fsma_router
 
