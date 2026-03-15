@@ -97,11 +97,12 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
     return (
         <button
             onClick={onToggle}
-            className={`relative w-11 h-6 rounded-full transition-all ${enabled ? 'bg-[var(--re-brand)]' : 'bg-[var(--re-surface-elevated)]'}`}
+            className={`relative w-11 h-6 rounded-full transition-all flex-shrink-0 ${enabled ? 'bg-[var(--re-brand)]' : 'bg-[var(--re-surface-elevated)]'}`}
+            style={{ minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: enabled ? 'flex-end' : 'flex-start', padding: '0 2px' }}
         >
             <motion.div
-                className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow"
-                animate={{ left: enabled ? 22 : 2 }}
+                className="w-5 h-5 rounded-full bg-white shadow"
+                layout
                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
             />
         </button>
@@ -169,17 +170,17 @@ export default function NotificationPrefsPage() {
         <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
             <div className="max-w-3xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <Settings className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Notification Preferences
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Configure how and when you receive compliance alerts
                         </p>
                     </div>
-                    <Button onClick={handleSave} disabled={saving || !prefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl">
+                    <Button onClick={handleSave} disabled={saving || !prefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
                         {saving ? <Spinner size="sm" /> : saved ? '✓ Saved' : 'Save Changes'}
                     </Button>
                 </div>
@@ -218,16 +219,16 @@ export default function NotificationPrefsPage() {
                                 </CardTitle>
                                 <CardDescription>Choose how alerts reach you</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-3">
+                            <CardContent className="space-y-2 sm:space-y-3">
                                 {prefs.channels.map((ch) => {
                                     const Icon = CHANNEL_ICONS[ch.channel] || Bell;
                                     return (
-                                        <div key={ch.channel} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)]">
-                                            <div className="flex items-center gap-3">
-                                                <Icon className="h-4 w-4 text-[var(--re-brand)]" />
-                                                <div>
+                                        <div key={ch.channel} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
+                                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                                <Icon className="h-4 w-4 text-[var(--re-brand)] flex-shrink-0" />
+                                                <div className="min-w-0">
                                                     <div className="text-sm font-medium capitalize">{ch.channel}</div>
-                                                    {ch.target && <div className="text-xs text-muted-foreground">{ch.target}</div>}
+                                                    {ch.target && <div className="text-[11px] sm:text-xs text-muted-foreground truncate">{ch.target}</div>}
                                                 </div>
                                             </div>
                                             <Toggle enabled={ch.enabled} onToggle={() => toggleChannel(ch.channel)} />
@@ -248,10 +249,10 @@ export default function NotificationPrefsPage() {
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {prefs.alert_preferences.map((alert) => (
-                                    <div key={alert.rule_id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)]">
-                                        <div>
-                                            <div className="text-sm font-medium">{alert.rule_name}</div>
-                                            <div className="flex gap-1 mt-1">
+                                    <div key={alert.rule_id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
+                                        <div className="min-w-0">
+                                            <div className="text-xs sm:text-sm font-medium truncate">{alert.rule_name}</div>
+                                            <div className="flex gap-1 mt-1 flex-wrap">
                                                 {alert.channels.map(ch => (
                                                     <Badge key={ch} variant="outline" className="text-[9px] py-0">{ch}</Badge>
                                                 ))}
@@ -272,13 +273,13 @@ export default function NotificationPrefsPage() {
                                     Schedule
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)]">
-                                    <div>
-                                        <div className="text-sm font-medium">Quiet Hours</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            Suppress non-critical alerts {prefs.quiet_hours.start_hour}:00 – {prefs.quiet_hours.end_hour}:00
-                                            {prefs.quiet_hours.override_critical && ' (critical alerts bypass)'}
+                            <CardContent className="space-y-3 sm:space-y-4">
+                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
+                                    <div className="min-w-0">
+                                        <div className="text-xs sm:text-sm font-medium">Quiet Hours</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground">
+                                            Suppress non-critical {prefs.quiet_hours.start_hour}:00 – {prefs.quiet_hours.end_hour}:00
+                                            {prefs.quiet_hours.override_critical && ' (critical bypass)'}
                                         </div>
                                     </div>
                                     <Toggle
@@ -287,18 +288,18 @@ export default function NotificationPrefsPage() {
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)]">
-                                    <div>
-                                        <div className="text-sm font-medium">Digest</div>
-                                        <div className="text-xs text-muted-foreground">
+                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
+                                    <div className="min-w-0">
+                                        <div className="text-xs sm:text-sm font-medium">Digest</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground">
                                             {prefs.digest_frequency} summary at {prefs.digest_time}
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                                         <select
                                             value={prefs.digest_frequency}
                                             onChange={e => setPrefs({ ...prefs, digest_frequency: e.target.value })}
-                                            className="text-xs rounded-lg border border-[var(--re-border-default)] bg-background px-2 py-1"
+                                            className="text-xs rounded-lg border border-[var(--re-border-default)] bg-background px-2 py-1.5 min-h-[44px]"
                                         >
                                             <option value="daily">Daily</option>
                                             <option value="weekly">Weekly</option>
@@ -321,11 +322,11 @@ export default function NotificationPrefsPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)]">
-                                    <div>
-                                        <div className="text-sm font-medium">Auto-escalate unacknowledged alerts</div>
-                                        <div className="text-xs text-muted-foreground mt-1">
-                                            If a critical alert isn&apos;t acknowledged within {prefs.escalation.escalate_after_minutes} minutes
+                                <div className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
+                                    <div className="min-w-0">
+                                        <div className="text-xs sm:text-sm font-medium">Auto-escalate unacknowledged alerts</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+                                            If critical alert not acknowledged within {prefs.escalation.escalate_after_minutes} min
                                             {prefs.escalation.escalate_to && `, escalate to ${prefs.escalation.escalate_to}`}
                                         </div>
                                     </div>
