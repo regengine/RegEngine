@@ -88,16 +88,16 @@ export default function ExportJobsPage() {
             <div className="max-w-5xl mx-auto space-y-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <Archive className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <Archive className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Archive & Export Jobs
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Configure recurring FDA, EPCIS, and audit bundles against the current customer-readiness API contract so statutory retention does not depend on a live subscription.
                         </p>
                     </div>
                     <Button
-                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]"
                         onClick={() => void handleSaveJob()}
                         disabled={status === 'saving' || status === 'loading'}
                     >
@@ -110,25 +110,25 @@ export default function ExportJobsPage() {
                     Preview interface: this page exercises the current frontend contract route for export jobs. Persistent backend scheduling and audit events are not wired yet.
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
                     <Card>
-                        <CardContent className="pt-6">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground">Active jobs</div>
-                            <div className="text-3xl font-bold mt-2">{activeJobs}</div>
+                        <CardContent className="pt-4 sm:pt-6">
+                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Active jobs</div>
+                            <div className="text-2xl sm:text-3xl font-bold mt-1.5 sm:mt-2">{activeJobs}</div>
                         </CardContent>
                     </Card>
                     <Card>
-                        <CardContent className="pt-6">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground">Archive posture</div>
-                            <div className="text-lg font-semibold mt-2">External archive required</div>
-                            <div className="text-sm text-muted-foreground mt-1">Use scheduled exports to maintain long-term retention outside the app.</div>
+                        <CardContent className="pt-4 sm:pt-6">
+                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Archive posture</div>
+                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">External archive required</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Use scheduled exports to maintain long-term retention outside the app.</div>
                         </CardContent>
                     </Card>
                     <Card>
-                        <CardContent className="pt-6">
-                            <div className="text-xs uppercase tracking-widest text-muted-foreground">Integrity model</div>
-                            <div className="text-lg font-semibold mt-2">Manifest hash per run</div>
-                            <div className="text-sm text-muted-foreground mt-1">Every bundle exposes tenant context, timestamps, and integrity metadata.</div>
+                        <CardContent className="pt-4 sm:pt-6">
+                            <div className="text-[11px] sm:text-xs uppercase tracking-widest text-muted-foreground">Integrity model</div>
+                            <div className="text-base sm:text-lg font-semibold mt-1.5 sm:mt-2">Manifest hash per run</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground mt-1">Every bundle exposes tenant context, timestamps, and integrity metadata.</div>
                         </CardContent>
                     </Card>
                 </div>
@@ -140,17 +140,17 @@ export default function ExportJobsPage() {
                             Default destinations are downloadable bundle and object-storage archive. This is the current customer-facing contract surface for retention readiness.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
+                    <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
                         <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Job name</label>
-                            <Input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl" />
+                            <Input value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl min-h-[44px]" />
                         </div>
                         <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Cadence</label>
                             <select
                                 value={cadence}
                                 onChange={(e) => setCadence(e.target.value as ArchiveExportJob['cadence'])}
-                                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm"
                             >
                                 <option value="Daily">Daily</option>
                                 <option value="Weekly">Weekly</option>
@@ -162,7 +162,7 @@ export default function ExportJobsPage() {
                             <select
                                 value={format}
                                 onChange={(e) => setFormat(e.target.value as ArchiveExportJob['format'])}
-                                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm"
                             >
                                 <option value="FDA Package">FDA Package</option>
                                 <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0</option>
@@ -174,7 +174,7 @@ export default function ExportJobsPage() {
                             <select
                                 value={destination}
                                 onChange={(e) => setDestination(e.target.value as ArchiveExportJob['destination'])}
-                                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm"
                             >
                                 <option value="Object storage archive">Object storage archive</option>
                                 <option value="Downloadable bundle">Downloadable bundle</option>
@@ -191,30 +191,30 @@ export default function ExportJobsPage() {
                     )}
                     {jobs.map((job) => (
                         <Card key={job.id}>
-                            <CardContent className="pt-6">
-                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                    <div>
-                                        <div className="flex items-center gap-3">
-                                            <h2 className="text-lg font-semibold">{job.name}</h2>
+                            <CardContent className="pt-4 sm:pt-6">
+                                <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                            <h2 className="text-base sm:text-lg font-semibold">{job.name}</h2>
                                             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
                                                 {job.status.replaceAll('_', ' ')}
                                             </span>
                                         </div>
-                                        <p className="text-sm text-muted-foreground mt-1">
+                                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                                             {job.format} · {job.cadence} · {job.destination}
                                         </p>
-                                        <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
+                                        <div className="mt-2 sm:mt-3 grid gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground sm:grid-cols-2">
                                             <div className="flex items-center gap-2">
-                                                <Clock className="h-4 w-4 text-[var(--re-brand)]" />
+                                                <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
                                                 Last run: {job.lastRun}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Download className="h-4 w-4 text-[var(--re-brand)]" />
+                                                <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
                                                 Next run: {job.nextRun}
                                             </div>
-                                            <div className="flex items-center gap-2 md:col-span-2">
-                                                <ShieldCheck className="h-4 w-4 text-[var(--re-brand)]" />
-                                                Manifest integrity: {job.manifestHash}
+                                            <div className="flex items-center gap-2 sm:col-span-2 break-all">
+                                                <ShieldCheck className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
+                                                Manifest: <span className="truncate">{job.manifestHash}</span>
                                             </div>
                                         </div>
                                     </div>

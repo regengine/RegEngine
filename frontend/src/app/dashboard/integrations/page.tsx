@@ -58,17 +58,17 @@ export default function DashboardIntegrationsPage() {
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <Link2 className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <Link2 className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Integrations & Mapping Review
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Track delivery mode, customer-visible status, and unresolved mapping or identity issues before data is treated as compliance-ready.
                         </p>
                     </div>
                     <Button
                         variant="outline"
-                        className="rounded-xl"
+                        className="rounded-xl min-h-[44px] w-full sm:w-auto active:scale-[0.97]"
                         onClick={() => window.location.reload()}
                     >
                         <RefreshCcw className="h-4 w-4 mr-1" />
@@ -80,7 +80,7 @@ export default function DashboardIntegrationsPage() {
                     Preview interface: capability metadata is shared across the public site, while the review queue below is loaded from the current frontend contract route rather than a persistent backend reconciliation service.
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+                <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">
                     <Card>
                         <CardHeader>
                             <CardTitle>Customer-visible capability registry</CardTitle>
@@ -94,13 +94,13 @@ export default function DashboardIntegrationsPage() {
                                     <h2 className="text-sm font-semibold mb-2">{category.title}</h2>
                                     <div className="space-y-2">
                                         {getCapabilitiesByCategory(category.id).map((item) => (
-                                            <div key={item.id} className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-3">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <span className="text-sm font-medium">{item.name}</span>
+                                            <div key={item.id} className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-3 min-h-[48px]">
+                                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                                    <span className="text-xs sm:text-sm font-medium">{item.name}</span>
                                                     <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{STATUS_LABELS[item.status]}</span>
-                                                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{DELIVERY_MODE_LABELS[item.delivery_mode]}</span>
+                                                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">{DELIVERY_MODE_LABELS[item.delivery_mode]}</span>
                                                 </div>
-                                                <p className="text-sm text-muted-foreground mt-2">{item.customer_copy}</p>
+                                                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 sm:mt-2">{item.customer_copy}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -137,17 +137,17 @@ export default function DashboardIntegrationsPage() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         {items.map((item) => (
-                            <div key={item.id} className="rounded-xl border border-[var(--re-border-default)] p-4">
+                            <div key={item.id} className="rounded-xl border border-[var(--re-border-default)] p-3 sm:p-4">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-semibold">{item.source}</span>
+                                    <span className="text-xs sm:text-sm font-semibold">{item.source}</span>
                                     <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{item.status.replaceAll('_', ' ')}</span>
                                 </div>
-                                <div className="mt-2 text-sm text-muted-foreground">
+                                <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted-foreground break-all">
                                     <strong className="text-foreground">{item.sourceField}</strong>
                                     {' → '}
                                     <span>{item.mappedField ?? 'Unmapped'}</span>
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-2">{item.detail}</p>
+                                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 sm:mt-2">{item.detail}</p>
                             </div>
                         ))}
                         {status === 'loading' && items.length === 0 && (
