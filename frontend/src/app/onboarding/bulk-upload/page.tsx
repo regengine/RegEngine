@@ -193,21 +193,21 @@ export default function BulkUploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)] py-10">
+    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)] py-6 sm:py-10">
       <div className="mx-auto max-w-4xl px-4">
         {/* Header */}
-        <div className="mb-6 flex items-start justify-between">
+        <div className="mb-5 sm:mb-6 flex flex-col sm:flex-row items-start sm:justify-between gap-3">
           <div>
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20 mb-3">
               <UploadCloud className="w-3 h-3" />
               Bulk Upload
             </span>
-            <h1 className="text-2xl font-bold text-[var(--re-text-primary)]">Supplier Bulk Upload</h1>
-            <p className="mt-1 text-sm text-[var(--re-text-muted)] max-w-xl">
+            <h1 className="text-xl sm:text-2xl font-bold text-[var(--re-text-primary)]">Supplier Bulk Upload</h1>
+            <p className="mt-1 text-xs sm:text-sm text-[var(--re-text-muted)] max-w-xl">
               Upload facilities, FTL scope, TLCs, and CTE events in one pass. Bulk writes use the same tenant-wide hash/Merkle path as manual entries.
             </p>
           </div>
-          <Link href="/onboarding" className="text-sm font-medium text-[var(--re-brand)] hover:opacity-80 flex items-center gap-1 mt-2">
+          <Link href="/onboarding" className="text-sm font-medium text-[var(--re-brand)] hover:opacity-80 flex items-center gap-1 min-h-[44px]">
             Back to Onboarding
           </Link>
         </div>
@@ -267,10 +267,10 @@ export default function BulkUploadPage() {
             <p className="text-sm text-[var(--re-text-muted)] max-w-md mx-auto mb-4">
               Alpha partners get instant validation, custom field mapping, and cryptographic integrity verification on every bulk import.
             </p>
-            <div className="flex gap-3 justify-center flex-wrap">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
                 href="/login?next=/onboarding/bulk-upload"
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[48px] active:scale-[0.98]"
                 style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
               >
                 Sign In
@@ -278,7 +278,7 @@ export default function BulkUploadPage() {
               </Link>
               <Link
                 href="/alpha"
-                className="inline-flex items-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[48px] active:scale-[0.98]"
               >
                 Join Alpha Program
               </Link>
@@ -288,7 +288,7 @@ export default function BulkUploadPage() {
 
         {/* Merkle integrity callout */}
         <div
-          className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 mb-6 flex items-start gap-4"
+          className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 mb-5 sm:mb-6 flex items-start gap-3 sm:gap-4"
           style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
         >
           <div className="w-10 h-10 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center flex-shrink-0">
@@ -303,21 +303,21 @@ export default function BulkUploadPage() {
         </div>
 
         {/* Template downloads */}
-        <div className="grid sm:grid-cols-2 gap-4 mb-6">
+        <div className="grid sm:grid-cols-2 gap-3 sm:gap-4 mb-5 sm:mb-6">
           <button
             onClick={() => onDownloadTemplate('csv')}
             disabled={isBusy || !isAuthenticated}
             type="button"
-            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 active:scale-[0.98] min-h-[48px]"
             style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-center sm:items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
                 <FileSpreadsheet className="w-5 h-5 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">CSV Template</h3>
-                <p className="text-xs text-[var(--re-text-muted)]">Lightweight, universal format for any spreadsheet tool</p>
+                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Lightweight, universal format</p>
               </div>
             </div>
           </button>
@@ -325,16 +325,16 @@ export default function BulkUploadPage() {
             onClick={() => onDownloadTemplate('xlsx')}
             disabled={isBusy || !isAuthenticated}
             type="button"
-            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            className="group rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 sm:p-5 text-left hover:border-[var(--re-brand)]/30 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 active:scale-[0.98] min-h-[48px]"
             style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-center sm:items-start gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
                 <ClipboardCheck className="w-5 h-5 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">XLSX Template</h3>
-                <p className="text-xs text-[var(--re-text-muted)]">Multi-sheet workbook with built-in validation rules</p>
+                <p className="text-[11px] sm:text-xs text-[var(--re-text-muted)]">Multi-sheet workbook with validation</p>
               </div>
             </div>
           </button>
@@ -359,12 +359,12 @@ export default function BulkUploadPage() {
           />
 
           {/* Action buttons */}
-          <div className="mt-5 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
             <button
               onClick={onParseAndValidate}
               disabled={!file || isBusy || !isAuthenticated}
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
               style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
             >
               {isBusy && !commitResult ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -375,7 +375,7 @@ export default function BulkUploadPage() {
               onClick={onCommit}
               disabled={!canCommit || isBusy || !isAuthenticated}
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
               style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
             >
               <CheckCircle2 className="w-4 h-4" />
@@ -386,7 +386,7 @@ export default function BulkUploadPage() {
               onClick={onRefreshStatus}
               disabled={!parseResult?.session_id || isBusy || !isAuthenticated}
               type="button"
-              className="inline-flex items-center gap-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-5 py-2.5 text-sm font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] px-5 py-2.5 text-sm font-medium text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all disabled:cursor-not-allowed disabled:opacity-50 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
             >
               Refresh Status
             </button>
