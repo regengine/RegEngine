@@ -175,26 +175,26 @@ export default function FSMAChecklist() {
                 </div>
 
                 {/* Score Bar */}
-                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 mb-8 flex items-center justify-between">
+                <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 sm:p-5 mb-8 flex items-center justify-between gap-4">
                     <div>
-                        <div className="text-sm text-[#64748b] mb-2 font-medium">
+                        <div className="text-xs sm:text-sm text-[#64748b] mb-2 font-medium">
                             Compliance Score
                         </div>
                         <div className="flex items-baseline gap-1">
                             <span
-                                className="text-4xl font-bold font-mono transition-colors duration-300"
+                                className="text-3xl sm:text-4xl font-bold font-mono transition-colors duration-300"
                                 style={{ color: scoreColor }}
                             >
                                 {checkedCount}
                             </span>
-                            <span className="text-lg text-[#475569] font-mono">/{total}</span>
+                            <span className="text-base sm:text-lg text-[#475569] font-mono">/{total}</span>
                         </div>
                     </div>
-                    <div className="flex gap-1 items-center">
+                    <div className="flex gap-1 items-center flex-wrap justify-end">
                         {checklistItems.map((item) => (
                             <div
                                 key={item.id}
-                                className="w-7 h-1.5 rounded-sm transition-all duration-300"
+                                className="w-5 sm:w-7 h-1.5 rounded-sm transition-all duration-300"
                                 style={{
                                     background: checked[item.id] ? scoreColor : "rgba(255,255,255,0.06)",
                                 }}
@@ -211,18 +211,19 @@ export default function FSMAChecklist() {
                             <button
                                 key={item.id}
                                 onClick={() => toggle(item.id)}
-                                className="flex items-start gap-4 p-[18px] rounded-lg cursor-pointer text-left w-full transition-all duration-200"
+                                className="flex items-start gap-3 sm:gap-4 p-3.5 sm:p-[18px] rounded-lg cursor-pointer text-left w-full transition-all duration-200"
                                 style={{
                                     background: isChecked ? "rgba(5, 150, 105, 0.06)" : "rgba(255,255,255,0.02)",
                                     border: `1px solid ${isChecked ? "rgba(5, 150, 105, 0.25)" : "rgba(255,255,255,0.06)"}`,
                                     opacity: animateIn ? 1 : 0,
                                     transform: animateIn ? "translateY(0)" : "translateY(8px)",
                                     transitionDelay: `${index * 50}ms`,
+                                    minHeight: 48,
                                 }}
                             >
                                 {/* Checkbox */}
                                 <div
-                                    className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-[1px] transition-all duration-200"
+                                    className="w-7 h-7 sm:w-6 sm:h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-[1px] transition-all duration-200"
                                     style={{
                                         border: isChecked ? "none" : "2px solid rgba(255,255,255,0.15)",
                                         background: isChecked ? "var(--re-brand-dark)" : "transparent",
@@ -232,9 +233,9 @@ export default function FSMAChecklist() {
                                 </div>
 
                                 {/* Content */}
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                     <div
-                                        className="text-[15px] font-semibold mb-1 transition-colors duration-200"
+                                        className="text-[14px] sm:text-[15px] font-semibold mb-1 transition-colors duration-200"
                                         style={{
                                             color: isChecked ? "var(--re-brand-dark)" : "var(--re-text-primary)",
                                             textDecoration: isChecked ? "line-through" : "none",
@@ -243,7 +244,7 @@ export default function FSMAChecklist() {
                                     >
                                         {item.title}
                                     </div>
-                                    <div className="text-sm text-[#64748b] leading-relaxed">
+                                    <div className="text-xs sm:text-sm text-[#64748b] leading-relaxed">
                                         {item.description}
                                     </div>
                                 </div>
@@ -254,7 +255,7 @@ export default function FSMAChecklist() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-[11px] font-mono text-[#60a5fa] whitespace-nowrap mt-[3px] hover:underline"
+                                    className="hidden sm:inline text-[11px] font-mono text-[#60a5fa] whitespace-nowrap mt-[3px] hover:underline"
                                 >
                                     {item.regulation}
                                 </a>
@@ -268,7 +269,7 @@ export default function FSMAChecklist() {
                     <button
                         onClick={() => setShowResults(true)}
                         disabled={checkedCount === 0}
-                        className="w-full p-4 rounded-lg text-[15px] font-semibold transition-all duration-300"
+                        className="w-full p-4 rounded-lg text-[15px] font-semibold transition-all duration-300 min-h-[48px]"
                         style={{
                             background: checkedCount === 0 ? "rgba(255,255,255,0.04)" : scoreColor,
                             color: checkedCount === 0 ? "var(--re-text-muted)" : "#fff",
@@ -394,7 +395,7 @@ export default function FSMAChecklist() {
                                             <button
                                                 onClick={handleSubmit}
                                                 disabled={!email || !company}
-                                                className="p-3.5 rounded-lg text-[15px] font-semibold transition-all duration-200"
+                                                className="p-3.5 rounded-lg text-[15px] font-semibold transition-all duration-200 min-h-[48px]"
                                                 style={{
                                                     background: email && company ? "var(--re-accent-blue)" : "rgba(255,255,255,0.04)",
                                                     color: email && company ? "#fff" : "var(--re-text-disabled)",

@@ -201,8 +201,11 @@ export default function RetailerSuppliersPage() {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Exit intent detection
+    // Exit intent detection — desktop only (no accidental triggers on touch scroll)
     useEffect(() => {
+        const isTouchDevice = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+        if (isTouchDevice) return;
+
         const handleMouseLeave = (e: MouseEvent) => {
             if (e.clientY < 10 && !exitShownRef.current && !submitted) {
                 exitShownRef.current = true;
@@ -292,34 +295,37 @@ export default function RetailerSuppliersPage() {
             <div style={{
                 position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9998,
                 background: 'var(--re-sticky-bg, rgba(6,9,15,0.92))', backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
                 borderTop: `1px solid ${T.border}`,
                 padding: 'clamp(10px, 2vw, 12px) clamp(12px, 4vw, 24px)',
+                paddingBottom: 'calc(clamp(10px, 2vw, 12px) + env(safe-area-inset-bottom, 0px))',
                 transform: showSticky ? 'translateY(0)' : 'translateY(100%)',
                 transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div style={{
                     maxWidth: 1120, margin: '0 auto',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    gap: 16, flexWrap: 'wrap',
+                    gap: 12, flexWrap: 'wrap',
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                         <span style={{
-                            fontSize: 24, fontWeight: 700, color: daysCount > 600 ? T.warning : T.danger,
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontSize: 'clamp(18px, 4vw, 24px)', fontWeight: 700, color: daysCount > 600 ? T.warning : T.danger,
+                            fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
                         }}>
                             {daysCount.toLocaleString()}
                         </span>
-                        <span className="text-[13px] text-re-text-muted">days until FDA deadline</span>
+                        <span className="text-[12px] sm:text-[13px] text-re-text-muted" style={{ lineHeight: 1.3 }}>days until FDA deadline</span>
                     </div>
                     <Link href="/tools/recall-readiness">
                         <button
                             onClick={() => trackEvent('sticky_cta_click')}
                             style={{
                                 background: T.accent, color: '#fff',
-                                fontWeight: 600, padding: '10px 24px', fontSize: 14,
+                                fontWeight: 600, padding: '10px 20px', fontSize: 14,
                                 border: 'none', borderRadius: 8, cursor: 'pointer',
                                 boxShadow: `0 4px 16px ${T.accent}40`,
                                 transition: 'all 0.2s',
+                                minHeight: 44, whiteSpace: 'nowrap',
                             }}
                         >
                             Get Free Assessment →
@@ -362,7 +368,7 @@ export default function RetailerSuppliersPage() {
                                     fontWeight: 600, padding: '14px 28px', fontSize: 15,
                                     border: 'none', borderRadius: 10, cursor: 'pointer',
                                     boxShadow: `0 4px 16px ${T.accent}40`,
-                                    width: '100%', marginBottom: 12,
+                                    width: '100%', marginBottom: 12, minHeight: 48,
                                     transition: 'all 0.2s',
                                 }}
                             >
@@ -374,7 +380,7 @@ export default function RetailerSuppliersPage() {
                             style={{
                                 background: 'transparent', border: 'none',
                                 color: T.textDim, fontSize: 13, cursor: 'pointer',
-                                padding: '8px 16px',
+                                padding: '12px 16px', minHeight: 48,
                             }}
                         >
                             No thanks, I&apos;ll risk it
@@ -401,8 +407,8 @@ export default function RetailerSuppliersPage() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
                 }}>
                     <span style={{ fontSize: 16 }}>⚠️</span>
-                    <span style={{ fontSize: 14, color: T.warning, fontWeight: 500 }}>
-                        Major retailers are evaluating suppliers <strong>now</strong>. Their internal deadlines are earlier than FDA's July 2028.
+                    <span style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: T.warning, fontWeight: 500, lineHeight: 1.4 }}>
+                        Major retailers are evaluating suppliers <strong>now</strong>. Their internal deadlines are earlier than FDA&apos;s July 2028.
                     </span>
                 </div>
             </div>
@@ -467,23 +473,25 @@ export default function RetailerSuppliersPage() {
                     <span className="text-sm text-re-text-muted">days until FDA's July 2028 deadline</span>
                 </div>
 
-                <div className="flex gap-3 justify-center flex-wrap">
-                    <Link href="/tools/recall-readiness">
+                <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                    <Link href="/tools/recall-readiness" className="w-full sm:w-auto">
                         <button className="re-cta-primary" style={{
                             background: T.accent, color: '#fff', fontWeight: 600,
                             padding: '14px 32px', fontSize: 15,
                             border: 'none', borderRadius: 10, cursor: 'pointer',
                             boxShadow: `0 4px 16px ${T.accent}40`,
                             transition: 'all 0.2s',
+                            minHeight: 48, width: '100%',
                         }}>
                             Get Free Assessment →
                         </button>
                     </Link>
-                    <Link href="/ftl-checker">
+                    <Link href="/ftl-checker" className="w-full sm:w-auto">
                         <button className="re-cta-secondary" style={{
                             background: 'transparent', color: T.text,
                             border: `1px solid ${T.border}`, padding: '14px 28px', fontSize: 15,
                             borderRadius: 10, cursor: 'pointer', transition: 'all 0.2s',
+                            minHeight: 48, width: '100%',
                         }}>
                             Try FTL Checker Free
                         </button>
@@ -662,11 +670,11 @@ export default function RetailerSuppliersPage() {
                                     }
                                 }}
                                 style={{
-                                    padding: '8px 20px', fontSize: 13, fontWeight: 600,
+                                    padding: '10px 20px', fontSize: 13, fontWeight: 600,
                                     border: 'none', borderRadius: 8, cursor: 'pointer',
                                     background: traceDirection === dir ? `${T.accent}15` : 'transparent',
                                     color: traceDirection === dir ? T.accent : T.textDim,
-                                    transition: 'all 0.2s',
+                                    transition: 'all 0.2s', minHeight: 44,
                                 }}
                             >
                                 {dir === 'forward' ? '🌱 → 🏪  Forward' : '🚨 → 🎯  Backward'}
@@ -705,7 +713,7 @@ export default function RetailerSuppliersPage() {
                             return (
                                 <div key={node.label}>
                                     <div style={{
-                                        display: 'flex', alignItems: 'center', gap: 16, padding: '14px 16px',
+                                        display: 'flex', alignItems: 'center', gap: 'clamp(10px, 2vw, 16px)', padding: 'clamp(10px, 2vw, 14px) clamp(10px, 2vw, 16px)',
                                         borderRadius: 10,
                                         background: current ? `${T.accent}10` : active ? `${T.accent}04` : 'transparent',
                                         border: current ? `1px solid ${T.accent}30` : '1px solid transparent',
@@ -715,10 +723,10 @@ export default function RetailerSuppliersPage() {
                                     }}>
                                         {/* Step indicator */}
                                         <div style={{
-                                            width: 36, height: 36, borderRadius: 10,
+                                            width: 44, height: 44, borderRadius: 12,
                                             background: active ? `${T.accent}15` : T.surface,
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontSize: 18, flexShrink: 0,
+                                            fontSize: 20, flexShrink: 0,
                                             border: current ? `1px solid ${T.accent}40` : '1px solid transparent',
                                             boxShadow: current ? `0 0 16px ${T.accent}20` : 'none',
                                         }}>
@@ -738,7 +746,7 @@ export default function RetailerSuppliersPage() {
                                         </div>
 
                                         {/* KDE */}
-                                        <div style={{
+                                        <div className="hidden sm:block" style={{
                                             fontFamily: "'JetBrains Mono', monospace",
                                             fontSize: 11, color: active ? T.accent : T.textDim,
                                             opacity: active ? 1 : 0,
@@ -761,7 +769,7 @@ export default function RetailerSuppliersPage() {
                                     {/* Connector line */}
                                     {i < traceNodes.length - 1 && (
                                         <div style={{
-                                            width: 2, height: 16, marginLeft: 33,
+                                            width: 2, height: 12, marginLeft: 37,
                                             background: active ? `${T.accent}40` : T.border,
                                             transition: 'background 0.5s',
                                         }} />
@@ -811,10 +819,10 @@ export default function RetailerSuppliersPage() {
                             setTimeout(() => startTrace(), 100);
                         }}
                         style={{
-                            display: 'block', margin: '20px auto 0', padding: '8px 20px',
+                            display: 'block', margin: '20px auto 0', padding: '12px 24px',
                             background: 'transparent', border: `1px solid ${T.border}`,
-                            borderRadius: 8, color: T.textMuted, fontSize: 13, cursor: 'pointer',
-                            transition: 'all 0.2s',
+                            borderRadius: 10, color: T.textMuted, fontSize: 14, cursor: 'pointer',
+                            transition: 'all 0.2s', minHeight: 48,
                         }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = T.borderHover; e.currentTarget.style.color = T.text; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textMuted; }}
@@ -850,7 +858,7 @@ export default function RetailerSuppliersPage() {
                     {/* BEFORE */}
                     <div style={{
                         background: T.dangerBg, border: `1px solid rgba(239,68,68,0.12)`,
-                        borderRadius: 16, padding: '28px 24px',
+                        borderRadius: 16, padding: 'clamp(20px, 4vw, 28px) clamp(16px, 3vw, 24px)',
                     }}>
                         <div style={{
                             display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -869,9 +877,9 @@ export default function RetailerSuppliersPage() {
                                 { label: 'FDA audit readiness', value: 'Hope for the best', bad: true },
                                 { label: 'Team workflow', value: 'Manual portal logins', bad: true },
                             ].map((item, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.border}` }}>
-                                    <span className="text-sm text-re-text-muted">{item.label}</span>
-                                    <span style={{ fontSize: 14, color: T.danger, fontWeight: 500 }}>{item.value}</span>
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.border}`, gap: 8 }}>
+                                    <span className="text-xs sm:text-sm text-re-text-muted" style={{ flexShrink: 0 }}>{item.label}</span>
+                                    <span style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: T.danger, fontWeight: 500, textAlign: 'right' }}>{item.value}</span>
                                 </div>
                             ))}
                         </div>
@@ -880,7 +888,7 @@ export default function RetailerSuppliersPage() {
                     {/* AFTER */}
                     <div style={{
                         background: `${T.accent}05`, border: `1px solid ${T.accent}18`,
-                        borderRadius: 16, padding: '28px 24px',
+                        borderRadius: 16, padding: 'clamp(20px, 4vw, 28px) clamp(16px, 3vw, 24px)',
                         boxShadow: `0 0 40px ${T.accent}08`,
                     }}>
                         <div style={{
@@ -900,9 +908,9 @@ export default function RetailerSuppliersPage() {
                                 { label: 'FDA audit readiness', value: 'Click. Export. Done.' },
                                 { label: 'Team workflow', value: 'Zero portal logins' },
                             ].map((item, i) => (
-                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.accent}08` }}>
-                                    <span className="text-sm text-re-text-muted">{item.label}</span>
-                                    <span style={{ fontSize: 14, color: T.accent, fontWeight: 600 }}>{item.value}</span>
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 12, borderBottom: `1px solid ${T.accent}08`, gap: 8 }}>
+                                    <span className="text-xs sm:text-sm text-re-text-muted" style={{ flexShrink: 0 }}>{item.label}</span>
+                                    <span style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: T.accent, fontWeight: 600, textAlign: 'right' }}>{item.value}</span>
                                 </div>
                             ))}
                         </div>
@@ -978,12 +986,12 @@ export default function RetailerSuppliersPage() {
 
                     {/* Results */}
                     <div style={{
-                        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
+                        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12,
                         marginBottom: 20,
                     }}>
                         <div style={{
                             background: T.dangerBg, border: `1px solid rgba(239,68,68,0.15)`,
-                            borderRadius: 12, padding: '24px 18px', textAlign: 'center',
+                            borderRadius: 12, padding: 'clamp(16px, 3vw, 24px) clamp(12px, 2vw, 18px)', textAlign: 'center',
                         }}>
                             <p style={{ fontSize: 11, color: T.danger, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Annual Revenue at Risk</p>
                             <p style={{
@@ -996,7 +1004,7 @@ export default function RetailerSuppliersPage() {
                         </div>
                         <div style={{
                             background: T.warningBg, border: `1px solid ${T.warningBorder}`,
-                            borderRadius: 12, padding: '24px 18px', textAlign: 'center',
+                            borderRadius: 12, padding: 'clamp(16px, 3vw, 24px) clamp(12px, 2vw, 18px)', textAlign: 'center',
                         }}>
                             <p style={{ fontSize: 11, color: T.warning, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly Risk</p>
                             <p style={{
@@ -1012,8 +1020,8 @@ export default function RetailerSuppliersPage() {
                     {/* Comparison callout — highlighted savings */}
                     <div style={{
                         background: `${T.accent}08`, border: `2px solid ${T.accent}25`,
-                        borderRadius: 12, padding: '18px 20px',
-                        display: 'flex', alignItems: 'center', gap: 14,
+                        borderRadius: 12, padding: 'clamp(14px, 3vw, 18px) clamp(14px, 3vw, 20px)',
+                        display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
                     }}>
                         <div style={{
                             width: 40, height: 40, borderRadius: 10, flexShrink: 0,
@@ -1092,7 +1100,7 @@ export default function RetailerSuppliersPage() {
                                 }}>
                                     {tier.revenue} Revenue
                                 </p>
-                                <p style={{ fontSize: 36, fontWeight: 700, color: T.heading, marginBottom: 24 }}>
+                                <p style={{ fontSize: 'clamp(28px, 5vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 24 }}>
                                     {tier.price}
                                     {tier.period && <span style={{ fontSize: 14, fontWeight: 400, color: T.textMuted }}>{tier.period}</span>}
                                 </p>
@@ -1106,12 +1114,12 @@ export default function RetailerSuppliersPage() {
                                 </div>
                                 <Link href="#assessment">
                                     <button style={{
-                                        width: '100%', marginTop: 24, padding: '12px',
+                                        width: '100%', marginTop: 24, padding: '14px 12px',
                                         background: tier.highlighted ? `linear-gradient(135deg, ${T.accent}, ${T.accentHover})` : 'transparent',
                                         color: tier.highlighted ? '#000' : T.text,
                                         border: tier.highlighted ? 'none' : `1px solid ${T.border}`,
                                         borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                        transition: 'all 0.2s',
+                                        transition: 'all 0.2s', minHeight: 48,
                                     }}>
                                         {tier.price === 'Custom' ? 'Contact Us' : 'Get Started'}
                                     </button>
@@ -1251,7 +1259,7 @@ export default function RetailerSuppliersPage() {
                                     width: '100%', border: 'none', borderRadius: 10,
                                     fontSize: 15, cursor: 'pointer',
                                     boxShadow: `0 4px 16px ${T.accent}40`,
-                                    transition: 'all 0.2s',
+                                    transition: 'all 0.2s', minHeight: 48,
                                 }}
                             >
                                 Get Free Assessment →
@@ -1366,9 +1374,9 @@ export default function RetailerSuppliersPage() {
                                 onClick={() => { setOpenFaq(openFaq === i ? null : i); trackEvent('faq_click', { question: faq.q }); }}
                                 style={{
                                     width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                    padding: '16px 20px', background: 'transparent', border: 'none',
+                                    padding: 'clamp(14px, 3vw, 16px) clamp(14px, 3vw, 20px)', background: 'transparent', border: 'none',
                                     color: T.heading, fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                                    textAlign: 'left', gap: 12,
+                                    textAlign: 'left', gap: 12, minHeight: 48,
                                 }}
                             >
                                 <span>{faq.q}</span>
@@ -1440,7 +1448,7 @@ export default function RetailerSuppliersPage() {
                     <p style={{ fontSize: 12, color: T.textDim, marginBottom: 20, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                         Built for Suppliers to Major Retailers
                     </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 32 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 'clamp(16px, 4vw, 32px)' }}>
                         {[
                             { icon: '📋', label: 'FSMA 204 Compliant' },
                             { icon: '🛡️', label: '23 FDA Categories' },
@@ -1474,28 +1482,33 @@ export default function RetailerSuppliersPage() {
                 input[type="range"] {
                     -webkit-appearance: none;
                     width: 100%;
-                    height: 6px;
-                    border-radius: 3px;
+                    height: 8px;
+                    border-radius: 4px;
                     background: var(--re-surface-border);
                     outline: none;
+                    touch-action: manipulation;
                 }
                 input[type="range"]::-webkit-slider-thumb {
                     -webkit-appearance: none;
-                    width: 20px;
-                    height: 20px;
+                    width: 28px;
+                    height: 28px;
                     border-radius: 50%;
                     background: ${T.accent};
                     cursor: pointer;
                     border: 3px solid ${T.bg};
                     box-shadow: 0 0 10px ${T.accent}40;
+                    touch-action: manipulation;
                 }
                 input[type="range"]::-moz-range-thumb {
-                    width: 20px;
-                    height: 20px;
+                    width: 28px;
+                    height: 28px;
                     border-radius: 50%;
                     background: ${T.accent};
                     cursor: pointer;
                     border: 3px solid ${T.bg};
+                }
+                input[type="range"] {
+                    touch-action: manipulation;
                 }
                 input::placeholder { color: ${T.textDim}; }
                 * { box-sizing: border-box; margin: 0; }
