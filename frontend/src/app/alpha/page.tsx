@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
     Shield, Zap, Users, Star, TrendingUp, FileCheck, Clock,
+    Target, Flame, Wrench, CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import AlphaSignupForm from './AlphaSignupForm';
@@ -94,6 +95,116 @@ export default function AlphaPage() {
                     ))}
                 </div>
             </section>
+            {/* ═══ WHAT WE LOOK FOR — 3-Criteria Framework ═══ */}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)]">
+                <div style={{ maxWidth: '900px', margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) 24px' }}>
+                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-3">
+                        What we look for in design partners
+                    </h2>
+                    <p className="text-sm text-[var(--re-text-muted)] text-center max-w-[560px] mx-auto mb-10">
+                        We evaluate every application on three criteria to ensure deep, productive partnerships {'\u2014'} not just signups.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        {/* Representativeness */}
+                        <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4">
+                                <Target className="w-5 h-5 text-blue-500" />
+                            </div>
+                            <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">
+                                Representativeness
+                            </h3>
+                            <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-3">
+                                Does your operation mirror our ideal customer? We prioritize partners whose size, food categories, and supply-chain complexity represent the broader market.
+                            </p>
+                            <div className="space-y-1.5">
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>FTL-covered products (leafy greens, seafood, dairy, etc.)</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Multi-supplier or multi-facility operations</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Retailer relationships requiring compliance proof</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Urgency */}
+                        <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center mb-4">
+                                <Flame className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">
+                                Urgency
+                            </h3>
+                            <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-3">
+                                Is FSMA 204 compliance a real, pressing problem {'\u2014'} not a someday-maybe? We want partners who feel the deadline pressure and have already tried solving it.
+                            </p>
+                            <div className="space-y-1.5">
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Actively preparing for FSMA 204 or retailer audits</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Tried spreadsheets, manual logs, or other tools</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Budget or exec buy-in for compliance tooling</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Capacity */}
+                        <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4">
+                                <Wrench className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <h3 className="text-[15px] font-semibold text-[var(--re-text-primary)] mb-2">
+                                Capacity
+                            </h3>
+                            <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed mb-3">
+                                Can you actually implement and test? We need a named internal champion with time to provide feedback and access to systems for integration testing.
+                            </p>
+                            <div className="space-y-1.5">
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Dedicated point person (2{'\u2013'}4 hours/week)</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Access to ERP, WMS, or data export for integration</span>
+                                </div>
+                                <div className="flex items-start gap-2 text-[12px] text-[var(--re-text-secondary)]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                    <span>Willingness to test on mobile devices in the field</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Cohort Details Callout */}
+                    <div className="mt-8 rounded-2xl border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+                        <div className="flex items-center gap-3 shrink-0">
+                            <div className="w-10 h-10 rounded-xl bg-[var(--re-brand)] flex items-center justify-center">
+                                <Users className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <div className="text-[15px] font-semibold text-[var(--re-text-primary)]">5{'\u2013'}10 partners per cohort</div>
+                                <div className="text-[12px] text-[var(--re-text-muted)]">3{'\u2013'}6 month engagement</div>
+                            </div>
+                        </div>
+                        <div className="text-[13px] text-[var(--re-text-secondary)] leading-relaxed">
+                            Each cohort includes bi-weekly feedback calls, early access to new modules, and direct input on the product roadmap. We defer pricing conversations until month 3{'\u2013'}4 {'\u2014'} this is research first, sales second.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* ═══ TIMELINE with styled nodes + connecting line ═══ */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
                 <div style={{ maxWidth: '600px', margin: '0 auto', padding: '60px 24px' }}>
