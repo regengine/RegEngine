@@ -243,7 +243,7 @@ export function ToolsLandingClient() {
                         <button
                             key={cat.id}
                             onClick={() => setActiveCategory(cat.id)}
-                            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                            className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
                                 activeCategory === cat.id
                                     ? 'bg-[var(--re-brand)] text-white shadow-md'
                                     : 'bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-muted)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)]'
@@ -380,7 +380,7 @@ export function ToolsLandingClient() {
                     initial={{ opacity: 0, scale: 0.97 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
-                    className="relative overflow-hidden rounded-3xl border border-[var(--re-brand)]/20 text-center p-12"
+                    className="relative overflow-hidden rounded-3xl border border-[var(--re-brand)]/20 text-center p-6 sm:p-12"
                     style={{
                         background: 'var(--re-brand-muted)',
                         boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
