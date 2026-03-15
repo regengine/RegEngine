@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+// Required for static export (output: 'export') compatibility
+export const dynamic = 'force-static';
 
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
