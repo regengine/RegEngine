@@ -49,15 +49,15 @@ export default function OnboardingPage() {
   /* ── Success state ── */
   if (status === 'success') {
     return (
-      <main className="min-h-[80vh] flex items-center justify-center px-6">
+      <main className="min-h-[80vh] flex items-center justify-center px-4 sm:px-6">
         <div className="max-w-[440px] w-full text-center animate-[fadeUp_0.5s_ease-out]">
           <div className="mx-auto mb-6 h-14 w-14 rounded-full bg-[var(--re-brand)] flex items-center justify-center shadow-[0_0_30px_rgba(16,185,129,0.3)]">
             <Check className="h-7 w-7 text-white" strokeWidth={2.5} />
           </div>
-          <h1 className="font-serif text-[1.75rem] font-bold text-[var(--re-text-primary)] tracking-tight mb-3">
+          <h1 className="font-serif text-[clamp(1.5rem,4vw,1.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight mb-3">
             You&apos;re on the list.
           </h1>
-          <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
+          <p className="text-[0.9rem] sm:text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
             We&apos;ll reach out to <strong className="text-[var(--re-text-primary)]">{email}</strong> with
             next steps for setting up <strong className="text-[var(--re-text-primary)]">{company}</strong>&apos;s
             workspace. Usually within 24 hours.
@@ -65,14 +65,14 @@ export default function OnboardingPage() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/retailer-readiness"
-              className="group inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.9rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_6px_24px_rgba(16,185,129,0.25)]"
+              className="group inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.9rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_6px_24px_rgba(16,185,129,0.25)] min-h-[48px] active:scale-[0.98]"
             >
               Run Free Assessment
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             <Link
               href="/"
-              className="inline-flex items-center justify-center border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-xl text-[0.9rem] font-medium transition-all duration-300 hover:border-[var(--re-text-muted)]"
+              className="inline-flex items-center justify-center border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-xl text-[0.9rem] font-medium transition-all duration-300 hover:border-[var(--re-text-muted)] min-h-[48px] active:scale-[0.98]"
             >
               Back to Home
             </Link>
@@ -84,7 +84,7 @@ export default function OnboardingPage() {
 
   /* ── Form state ── */
   return (
-    <main className="min-h-[80vh] flex items-center justify-center px-6">
+    <main className="min-h-[80vh] flex items-center justify-center px-4 sm:px-6">
       <div className="max-w-[440px] w-full animate-[fadeUp_0.4s_ease-out]">
 
         <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-3">
@@ -141,7 +141,7 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={!canSubmit || status === 'submitting'}
-            className="group relative w-full inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none overflow-hidden"
+            className="group relative w-full inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none overflow-hidden min-h-[48px]"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:group-enabled:translate-x-[200%] transition-transform duration-700 ease-in-out" />
             {status === 'submitting' ? (
