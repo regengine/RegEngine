@@ -81,8 +81,9 @@ async def login(
     db: Session = Depends(get_session),
     session_store: RedisSessionStore = Depends(get_session_store)
 ):
-    # 1. Verify User
-    stmt = select(UserModel).where(UserModel.email == payload.email)
+    # 1. Verify User (normalize email to lowercase for case-insensitive match)
+    normalized_login_email = payload.email.strip().lower()
+    stmt = select(UserModel).where(UserModel.email == normalized_login_email)
     user = db.execute(stmt).scalar_one_or_none()
     
     if not user or not verify_password(payload.password, user.password_hash):
