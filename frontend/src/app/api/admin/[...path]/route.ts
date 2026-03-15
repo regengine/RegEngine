@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-export const dynamic = 'force-dynamic';
+// force-static for CI static export; force-dynamic on Vercel production
+export const dynamic = process.env.REGENGINE_DEPLOY_MODE === 'static' ? 'force-static' : 'force-dynamic' as any;
+export const generateStaticParams = process.env.REGENGINE_DEPLOY_MODE === 'static' ? async () => [{ path: ['health'] }] : undefined;
 
 export async function GET(
   request: NextRequest,

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
+// force-static for CI static export; force-dynamic on Vercel production
+export const dynamic = process.env.REGENGINE_DEPLOY_MODE === 'static' ? 'force-static' : 'force-dynamic' as any;
+export const generateStaticParams = process.env.REGENGINE_DEPLOY_MODE === 'static' ? async () => [{ path: ['health'] }] : undefined;
 
 const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 const GRAPH_SERVICE_URL = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
