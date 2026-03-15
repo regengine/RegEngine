@@ -217,7 +217,7 @@ export default function DashboardPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="space-y-8"
+                    className="space-y-6 sm:space-y-8"
                 >
                     {/* Welcome Header */}
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -261,67 +261,67 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Quick Stats - Now tenant-specific */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                         <Card>
-                            <CardContent className="pt-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                                        <FileCheck className="h-5 w-5 text-blue-500" />
+                            <CardContent className="pt-4 sm:pt-6 pb-4">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex-shrink-0">
+                                        <FileCheck className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                                     </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">
+                                    <div className="min-w-0">
+                                        <p className="text-xl sm:text-2xl font-bold truncate">
                                             {metrics.documentsIngested > 0
                                                 ? metrics.documentsIngested.toLocaleString()
                                                 : '—'}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">Documents Ingested</p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Documents Ingested</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
                         <Card>
-                            <CardContent className="pt-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                                        <Shield className="h-5 w-5 text-emerald-500" />
+                            <CardContent className="pt-4 sm:pt-6 pb-4">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex-shrink-0">
+                                        <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-500" />
                                     </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">
+                                    <div className="min-w-0">
+                                        <p className="text-xl sm:text-2xl font-bold truncate">
                                             {metrics.complianceScore > 0
                                                 ? `${metrics.complianceScore}%`
                                                 : '—'}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">Compliance Score</p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Compliance Score</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
                         <Card>
-                            <CardContent className="pt-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            <CardContent className="pt-4 sm:pt-6 pb-4">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex-shrink-0">
+                                        <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
                                     </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">{metrics.openAlerts}</p>
-                                        <p className="text-xs text-muted-foreground">Open Alerts</p>
+                                    <div className="min-w-0">
+                                        <p className="text-xl sm:text-2xl font-bold">{metrics.openAlerts}</p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Open Alerts</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
                         <Card>
-                            <CardContent className="pt-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                                        <Clock className="h-5 w-5 text-purple-500" />
+                            <CardContent className="pt-4 sm:pt-6 pb-4">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex-shrink-0">
+                                        <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
                                     </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">
+                                    <div className="min-w-0">
+                                        <p className="text-xl sm:text-2xl font-bold truncate">
                                             {metrics.pendingReviews > 0
                                                 ? metrics.pendingReviews
                                                 : '—'}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">Pending Reviews</p>
+                                        <p className="text-[11px] sm:text-xs text-muted-foreground">Pending Reviews</p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -331,7 +331,7 @@ export default function DashboardPage() {
                     {/* Quick Actions - Now tenant-type specific */}
                     <div>
                         <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                             {quickActions.map((action, index) => (
                                 <motion.div
                                     key={action.href}
@@ -340,21 +340,21 @@ export default function DashboardPage() {
                                     transition={{ delay: index * 0.05 }}
                                 >
                                     <Link href={action.href}>
-                                        <Card className="h-full hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group">
-                                            <CardContent className="pt-6">
-                                                <div className="flex items-start gap-4">
-                                                    <div className={`p-3 rounded-lg ${action.bg}`}>
-                                                        <action.icon className={`h-6 w-6 ${action.color}`} />
+                                        <Card className="h-full hover:border-primary/50 hover:shadow-md active:scale-[0.98] transition-all cursor-pointer group">
+                                            <CardContent className="pt-4 sm:pt-6 pb-4 min-h-[48px]">
+                                                <div className="flex items-center gap-3 sm:gap-4">
+                                                    <div className={`p-2.5 sm:p-3 rounded-lg ${action.bg} flex-shrink-0`}>
+                                                        <action.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${action.color}`} />
                                                     </div>
-                                                    <div className="flex-1">
-                                                        <h3 className="font-semibold group-hover:text-primary transition-colors">
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary transition-colors">
                                                             {action.title}
                                                         </h3>
-                                                        <p className="text-sm text-muted-foreground mt-1">
+                                                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 truncate">
                                                             {action.description}
                                                         </p>
                                                     </div>
-                                                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                                                    <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all flex-shrink-0" />
                                                 </div>
                                             </CardContent>
                                         </Card>
@@ -369,20 +369,20 @@ export default function DashboardPage() {
                     {/* FSMA 204 Deadline Banner */}
                     <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-emerald-800">
                         <CardContent className="pt-6">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                                        <BarChart3 className="h-6 w-6 text-emerald-600" />
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                    <div className="p-2.5 sm:p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex-shrink-0">
+                                        <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600" />
                                     </div>
                                     <div>
-                                        <h3 className="font-semibold">FSMA 204 Compliance</h3>
-                                        <p className="text-sm text-muted-foreground">
+                                        <h3 className="font-semibold text-sm sm:text-base">FSMA 204 Compliance</h3>
+                                        <p className="text-xs sm:text-sm text-muted-foreground">
                                             FDA deadline: July 2028 • Start tracking your readiness
                                         </p>
                                     </div>
                                 </div>
-                                <Link href="/fsma">
-                                    <Button variant="outline">
+                                <Link href="/fsma" className="w-full sm:w-auto">
+                                    <Button variant="outline" className="min-h-[48px] w-full sm:w-auto active:scale-[0.98] transition-transform">
                                         View FSMA Dashboard
                                         <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
