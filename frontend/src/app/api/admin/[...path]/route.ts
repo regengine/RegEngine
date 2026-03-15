@@ -3,12 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-// force-static + generateStaticParams satisfies output:export (CI).
-// On Vercel production the route runs as a serverless function per request.
-// revalidate=0 prevents response caching.
-export const dynamic = 'force-static';
-export const revalidate = 0;
-export const generateStaticParams = async () => [{ path: ['health'] }];
+// force-dynamic ensures this proxy runs as a serverless function on every request,
+// forwarding auth headers correctly. CI no longer uses static export.
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
