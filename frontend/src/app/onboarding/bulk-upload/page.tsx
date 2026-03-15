@@ -265,7 +265,7 @@ export default function BulkUploadPage() {
             </div>
             <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-2">Sign in to start uploading</h3>
             <p className="text-sm text-[var(--re-text-muted)] max-w-md mx-auto mb-4">
-              Alpha partners get instant validation, custom field mapping, and cryptographic integrity verification on every bulk import.
+              Founding Design Partners get instant validation, custom field mapping, and cryptographic integrity verification on every bulk import.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
@@ -280,7 +280,7 @@ export default function BulkUploadPage() {
                 href="/alpha"
                 className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[48px] active:scale-[0.98]"
               >
-                Join Alpha Program
+                Become a Founding Design Partner
               </Link>
             </div>
           </div>

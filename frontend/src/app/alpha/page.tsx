@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 const ALPHA_PERKS = [
     { Icon: Zap, title: 'Priority API Access', description: "Be the first to integrate with RegEngine's traceability API and shape the developer experience." },
-    { Icon: TrendingUp, title: 'Locked-In Pricing', description: 'Alpha partners lock in founding-member pricing for the duration of their account.' },
+    { Icon: TrendingUp, title: 'Founding Pricing — Locked In', description: 'Founding Design Partners lock in their pricing for the life of their account. No surprise increases.' },
     { Icon: Users, title: 'Direct Founder Access', description: 'Weekly office hours with the founding team. Your feedback helps inform product direction.' },
     { Icon: FileCheck, title: 'White-Glove Onboarding', description: 'Dedicated onboarding support to map your supply chain and configure your compliance profile.' },
     { Icon: Shield, title: 'Compliance Head Start', description: 'Get FSMA 204 compliant before the July 2028 deadline while your competitors scramble.' },
