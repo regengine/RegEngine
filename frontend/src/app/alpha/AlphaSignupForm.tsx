@@ -50,22 +50,39 @@ export default function AlphaSignupForm() {
 
     if (submitted) {
         return (
-            <div className="text-center py-10">
-                <CheckCircle2 className="w-12 h-12 text-[var(--re-brand)] mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-[var(--re-text-primary)] mb-2">
+            <div className="text-center py-8 sm:py-10">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[var(--re-brand)]/10 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10 text-[var(--re-brand)]" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-[var(--re-text-primary)] mb-2">
                     Application received
                 </h3>
-                <p className="text-sm text-[var(--re-text-muted)]">
-                    We&apos;ll review your application and reach out within 48 hours.
+                <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[340px] mx-auto">
+                    We&apos;ll review your application and reach out within 48 hours to schedule a fit-check call.
                 </p>
+                <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4 text-left space-y-3">
+                    <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)]">What happens next</p>
+                    <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-[var(--re-brand)]/10 text-[var(--re-brand)] text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <p className="text-[13px] text-[var(--re-text-secondary)]">We review your application against our 3-criteria framework (typically within 24 hrs)</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-[var(--re-brand)]/10 text-[var(--re-brand)] text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <p className="text-[13px] text-[var(--re-text-secondary)]">If it&apos;s a fit, we schedule a 30-min call to scope your integration</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <span className="w-5 h-5 rounded-full bg-[var(--re-brand)]/10 text-[var(--re-brand)] text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                        <p className="text-[13px] text-[var(--re-text-secondary)]">You get access to the platform with founding pricing locked in for life</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
-    const inputClass = "w-full px-4 py-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] text-sm placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:border-[var(--re-brand)] transition-colors";
+    const inputClass = "w-full px-4 py-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] text-[var(--re-text-primary)] text-sm placeholder:text-[var(--re-text-disabled)] focus:outline-none focus:border-[var(--re-brand)] focus:ring-1 focus:ring-[var(--re-brand)]/20 transition-colors min-h-[44px]";
     const selectClass = `${inputClass} appearance-none cursor-pointer`;
     const labelClass = "text-[13px] font-medium text-[var(--re-text-secondary)] block mb-1.5";
-    const sectionLabel = "text-[11px] font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mt-3 mb-2";
+    const sectionLabel = "text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mt-4 mb-2";
 
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -185,13 +202,13 @@ export default function AlphaSignupForm() {
             <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-2 px-6 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mt-2 px-6 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-h-[48px]"
             >
-                {isSubmitting ? 'Submitting...' : 'Apply for Design Partner Access'}
+                {isSubmitting ? 'Submitting...' : 'Apply to Become a Founding Design Partner'}
                 {!isSubmitting && <ArrowRight className="w-4 h-4" />}
             </button>
             <p className="text-[11px] text-[var(--re-text-disabled)] text-center">
-                We review applications within 48 hours. Only fields marked * are required.
+                We review every application within 48 hours. Only fields marked * are required.
             </p>
         </form>
     );
