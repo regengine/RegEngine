@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// force-static + generateStaticParams satisfies output:export (CI).
-// On Vercel production the route runs as a serverless function per request.
-// revalidate=0 prevents response caching.
-export const dynamic = 'force-static';
-export const revalidate = 0;
-export const generateStaticParams = async () => [{ path: ['health'] }];
+// force-dynamic ensures this proxy runs as a serverless function on every request.
+// CI no longer uses static export.
+export const dynamic = 'force-dynamic';
 
 const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 const GRAPH_SERVICE_URL = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
