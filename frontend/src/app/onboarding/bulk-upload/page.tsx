@@ -19,11 +19,66 @@ import type {
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const STEPS = [
-  { label: 'Download Template', Icon: Download },
   { label: 'Upload File', Icon: UploadCloud },
-  { label: 'Parse + Validate', Icon: Search },
+  { label: 'Preview', Icon: Search },
+  { label: 'Validate', Icon: ClipboardCheck },
   { label: 'Commit', Icon: CheckCircle2 },
 ];
+
+/* ── Client-side CSV preview (no auth required) ── */
+interface CsvPreview {
+  totalRows: number;
+  columns: string[];
+  sampleRows: string[][];
+  eventTypeCounts: Record<string, number>;
+  productNames: string[];
+  lotNumbers: string[];
+}
+
+function parseCSVLocally(text: string): CsvPreview {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return { totalRows: 0, columns: [], sampleRows: [], eventTypeCounts: {}, productNames: [], lotNumbers: [] };
+
+  const columns = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const dataLines = lines.slice(1);
+
+  const eventTypeIdx = columns.findIndex(c => c.toLowerCase() === 'event_type');
+  const productIdx = columns.findIndex(c => c.toLowerCase() === 'product_name');
+  const lotIdx = columns.findIndex(c => c.toLowerCase() === 'lot_number');
+
+  const eventTypeCounts: Record<string, number> = {};
+  const productSet = new Set<string>();
+  const lotSet = new Set<string>();
+
+  const sampleRows: string[][] = [];
+
+  for (let i = 0; i < dataLines.length; i++) {
+    const cells = dataLines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    if (i < 5) sampleRows.push(cells);
+
+    if (eventTypeIdx >= 0 && cells[eventTypeIdx]) {
+      const et = cells[eventTypeIdx];
+      eventTypeCounts[et] = (eventTypeCounts[et] || 0) + 1;
+    }
+    if (productIdx >= 0 && cells[productIdx]) productSet.add(cells[productIdx]);
+    if (lotIdx >= 0 && cells[lotIdx]) lotSet.add(cells[lotIdx]);
+  }
+
+  const EVENT_TYPE_MAP: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transformation', C: 'Creation', D: 'Depletion', P: 'Packing', H: 'Holding' };
+  const mappedCounts: Record<string, number> = {};
+  for (const [k, v] of Object.entries(eventTypeCounts)) {
+    mappedCounts[EVENT_TYPE_MAP[k] || k] = v;
+  }
+
+  return {
+    totalRows: dataLines.length,
+    columns,
+    sampleRows,
+    eventTypeCounts: mappedCounts,
+    productNames: Array.from(productSet).slice(0, 10),
+    lotNumbers: Array.from(lotSet).slice(0, 10),
+  };
+}
 
 function getErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === 'object') {
@@ -64,18 +119,21 @@ function getErrorMessage(err: unknown, fallback: string): string {
 
 function getActiveStep(
   file: File | null,
+  csvPreview: CsvPreview | null,
   parseResult: SupplierBulkUploadParseResponse | null,
   commitResult: SupplierBulkUploadCommitResponse | null,
 ): number {
   if (commitResult) return 3;
   if (parseResult) return 2;
-  if (file) return 1;
+  if (csvPreview) return 1;
+  if (file) return 0;
   return 0;
 }
 
 export default function BulkUploadPage() {
   const { isAuthenticated } = useAuth();
   const [file, setFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<SupplierBulkUploadParseResponse | null>(null);
@@ -84,20 +142,38 @@ export default function BulkUploadPage() {
   const [statusResult, setStatusResult] = useState<SupplierBulkUploadStatusResponse | null>(null);
 
   const canCommit = useMemo(() => Boolean(validateResult?.preview?.can_commit), [validateResult]);
-  const activeStep = getActiveStep(file, parseResult, commitResult);
+  const activeStep = getActiveStep(file, csvPreview, parseResult, commitResult);
 
   const onFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
-    setFile(event.target.files?.[0] || null);
+    const selected = event.target.files?.[0] || null;
+    setFile(selected);
+    setCsvPreview(null);
     setParseResult(null);
     setValidateResult(null);
     setCommitResult(null);
     setStatusResult(null);
     setError(null);
+
+    // Client-side preview (works without auth)
+    if (selected && (selected.name.endsWith('.csv') || selected.type === 'text/csv')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result;
+        if (typeof text === 'string') {
+          try {
+            setCsvPreview(parseCSVLocally(text));
+          } catch {
+            setError('Could not preview this CSV. Try uploading again.');
+          }
+        }
+      };
+      reader.readAsText(selected);
+    }
   };
 
   const onParseAndValidate = async () => {
     if (!isAuthenticated) {
-      setError('Not authenticated. Sign in and try again.');
+      setError('Sign in or become a Founding Design Partner to run full server-side validation.');
       return;
     }
     if (!file) {
@@ -251,38 +327,16 @@ export default function BulkUploadPage() {
           </div>
         </div>
 
-        {/* Signed-out teaser */}
+        {/* Signed-out hint banner */}
         {!isAuthenticated && (
-          <div
-            className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 mb-6 text-center"
-            style={{
-              borderTop: '3px solid var(--re-brand)',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
-            }}
-          >
-            <div className="w-12 h-12 rounded-xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center mx-auto mb-4">
-              <ShieldCheck className="w-6 h-6 text-[var(--re-brand)]" />
+          <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] p-3 sm:p-4 mb-5 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5 shrink-0">
+              <ShieldCheck className="w-5 h-5 text-[var(--re-brand)]" />
+              <span className="text-sm font-semibold text-[var(--re-text-primary)]">Free preview mode</span>
             </div>
-            <h3 className="text-lg font-semibold text-[var(--re-text-primary)] mb-2">Sign in to start uploading</h3>
-            <p className="text-sm text-[var(--re-text-muted)] max-w-md mx-auto mb-4">
-              Founding Design Partners get instant validation, custom field mapping, and cryptographic integrity verification on every bulk import.
+            <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
+              Upload a CSV to preview your data instantly — no account required. Sign in to run full FSMA 204 validation, field mapping, and cryptographic commit.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
-                href="/login?next=/onboarding/bulk-upload"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[48px] active:scale-[0.98]"
-                style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
-              >
-                Sign In
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-              <Link
-                href="/alpha"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[48px] active:scale-[0.98]"
-              >
-                Become a Founding Design Partner
-              </Link>
-            </div>
           </div>
         )}
 
@@ -362,7 +416,7 @@ export default function BulkUploadPage() {
           <div className="mt-5 flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
             <button
               onClick={onParseAndValidate}
-              disabled={!file || isBusy || !isAuthenticated}
+              disabled={!file || isBusy}
               type="button"
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 min-h-[48px] active:scale-[0.98] w-full sm:w-auto"
               style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
@@ -391,6 +445,120 @@ export default function BulkUploadPage() {
               Refresh Status
             </button>
           </div>
+
+          {/* Client-side CSV preview (no auth required) */}
+          {csvPreview && !parseResult && (
+            <div className="mt-5 rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 p-4 sm:p-5"
+              style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 className="w-4 h-4 text-[var(--re-brand)]" />
+                <p className="font-semibold text-sm text-[var(--re-text-primary)]">
+                  Preview: {csvPreview.totalRows} records detected
+                </p>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{csvPreview.totalRows}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Total Records</p>
+                </div>
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{csvPreview.columns.length}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Columns</p>
+                </div>
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{csvPreview.productNames.length}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Products</p>
+                </div>
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{csvPreview.lotNumbers.length}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Lot Numbers</p>
+                </div>
+              </div>
+
+              {/* CTE event type breakdown */}
+              {Object.keys(csvPreview.eventTypeCounts).length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-2">
+                    CTE Event Types Detected
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(csvPreview.eventTypeCounts).map(([type, count]) => (
+                      <span key={type} className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-secondary)]">
+                        {type}
+                        <span className="font-bold text-[var(--re-brand)]">{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sample data table */}
+              {csvPreview.sampleRows.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-2">
+                    Sample Data (first {csvPreview.sampleRows.length} rows)
+                  </p>
+                  <div className="overflow-x-auto rounded-lg border border-[var(--re-surface-border)]">
+                    <table className="w-full text-[11px] sm:text-xs">
+                      <thead>
+                        <tr className="bg-[var(--re-surface-elevated)]">
+                          {csvPreview.columns.slice(0, 6).map(col => (
+                            <th key={col} className="px-2 py-1.5 text-left font-semibold text-[var(--re-text-muted)] whitespace-nowrap">{col}</th>
+                          ))}
+                          {csvPreview.columns.length > 6 && (
+                            <th className="px-2 py-1.5 text-left font-semibold text-[var(--re-text-disabled)]">+{csvPreview.columns.length - 6} more</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvPreview.sampleRows.map((row, i) => (
+                          <tr key={i} className="border-t border-[var(--re-surface-border)]">
+                            {row.slice(0, 6).map((cell, j) => (
+                              <td key={j} className="px-2 py-1.5 text-[var(--re-text-secondary)] whitespace-nowrap truncate max-w-[120px]">{cell}</td>
+                            ))}
+                            {csvPreview.columns.length > 6 && (
+                              <td className="px-2 py-1.5 text-[var(--re-text-disabled)]">…</td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Auth gate CTA */}
+              {!isAuthenticated && (
+                <div className="rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-surface-card)] p-4 text-center">
+                  <p className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                    Your data looks ready for FSMA 204 validation
+                  </p>
+                  <p className="text-xs text-[var(--re-text-muted)] mb-3 max-w-sm mx-auto">
+                    Sign in to run server-side validation, map fields to FSMA CTEs, and commit with cryptographic integrity verification.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <Link
+                      href="/login?next=/onboarding/bulk-upload"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px] active:scale-[0.98]"
+                      style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                    >
+                      Sign In to Validate
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                    <Link
+                      href="/alpha"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px] active:scale-[0.98]"
+                    >
+                      Become a Founding Design Partner
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error */}
           {error && (
