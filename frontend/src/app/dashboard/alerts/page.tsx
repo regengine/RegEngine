@@ -120,24 +120,24 @@ export default function AlertsDashboardPage() {
     const unackCount = alerts.filter(a => !a.acknowledged).length;
 
     return (
-        <div className="min-h-screen bg-background py-10 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-5xl mx-auto space-y-6">
+        <div className="min-h-screen bg-background py-6 sm:py-10 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-5xl mx-auto space-y-5 sm:space-y-6">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <Bell className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Alerts & Notifications
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             {unackCount} unacknowledged alert{unackCount !== 1 ? 's' : ''}
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl" onClick={loadAlerts} disabled={loading}>
-                            <RefreshCw className={`h-3 w-3 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={loadAlerts} disabled={loading}>
+                            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
                         </Button>
-                        <Badge variant="outline" className="text-xs py-1.5">
+                        <Badge variant="outline" className="text-xs py-1.5 min-h-[44px] flex items-center">
                             <Activity className="h-3 w-3 mr-1" /> Live
                         </Badge>
                     </div>
@@ -174,7 +174,7 @@ export default function AlertsDashboardPage() {
                 {isLoggedIn && !loading && alerts.length > 0 && (
                     <>
                         {/* Summary Cards */}
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
                             {[
                                 { label: 'Critical', count: criticalCount, color: '#ef4444', f: 'critical' as const },
                                 { label: 'Warnings', count: warningCount, color: '#f59e0b', f: 'warning' as const },
@@ -183,26 +183,26 @@ export default function AlertsDashboardPage() {
                                 <button
                                     key={item.label}
                                     onClick={() => setFilter(filter === item.f ? 'all' : item.f)}
-                                    className={`p-4 rounded-xl border transition-all text-left ${
+                                    className={`p-3 sm:p-4 rounded-xl border transition-all text-left min-h-[48px] active:scale-[0.97] ${
                                         filter === item.f
                                             ? 'border-[var(--re-brand)] bg-[color-mix(in_srgb,var(--re-brand)_5%,transparent)]'
                                             : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] hover:border-[var(--re-brand)]'
                                     }`}
                                 >
-                                    <div className="text-2xl font-bold" style={{ color: item.color }}>{item.count}</div>
-                                    <div className="text-xs text-muted-foreground">{item.label}</div>
+                                    <div className="text-xl sm:text-2xl font-bold" style={{ color: item.color }}>{item.count}</div>
+                                    <div className="text-[11px] sm:text-xs text-muted-foreground">{item.label}</div>
                                 </button>
                             ))}
                         </div>
 
                         {/* Filter Bar */}
-                        <div className="flex items-center gap-2">
-                            <Filter className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar">
+                            <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             {(['all', 'critical', 'warning', 'info'] as const).map((f) => (
                                 <button
                                     key={f}
                                     onClick={() => setFilter(f)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                    className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] ${
                                         filter === f
                                             ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
                                             : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
@@ -226,19 +226,19 @@ export default function AlertsDashboardPage() {
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, height: 0 }}
-                                            className={`relative rounded-xl border p-4 transition-all ${alert.acknowledged ? 'opacity-50' : ''}`}
+                                            className={`relative rounded-xl border p-3 sm:p-4 transition-all ${alert.acknowledged ? 'opacity-50' : ''}`}
                                             style={{
                                                 borderColor: alert.acknowledged ? 'var(--re-border-default)' : config.border,
                                                 background: alert.acknowledged ? 'transparent' : config.bg,
                                             }}
                                         >
-                                            <div className="flex items-start gap-3">
-                                                <div className="mt-0.5" style={{ color: config.color }}>
+                                            <div className="flex items-start gap-2 sm:gap-3">
+                                                <div className="mt-0.5 flex-shrink-0" style={{ color: config.color }}>
                                                     <Icon className="h-5 w-5" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                        <span className="text-sm font-medium">{alert.title}</span>
+                                                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                                                        <span className="text-xs sm:text-sm font-medium">{alert.title}</span>
                                                         <Badge
                                                             className="text-[9px] px-1.5 py-0"
                                                             style={{ background: config.bg, color: config.color, border: `1px solid ${config.border}` }}
@@ -251,16 +251,28 @@ export default function AlertsDashboardPage() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <p className="text-xs text-muted-foreground">{alert.message}</p>
-                                                    <span className="text-[10px] text-muted-foreground/60 mt-1 block">
-                                                        {formatTimeAgo(alert.triggered_at)}
-                                                    </span>
+                                                    <p className="text-[11px] sm:text-xs text-muted-foreground line-clamp-2">{alert.message}</p>
+                                                    <div className="flex items-center justify-between mt-1.5 sm:mt-1 gap-2">
+                                                        <span className="text-[10px] text-muted-foreground/60">
+                                                            {formatTimeAgo(alert.triggered_at)}
+                                                        </span>
+                                                        {!alert.acknowledged && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="rounded-xl text-xs flex-shrink-0 min-h-[44px] sm:hidden active:scale-[0.97]"
+                                                                onClick={() => handleAcknowledge(alert.id)}
+                                                            >
+                                                                Acknowledge
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 {!alert.acknowledged && (
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        className="rounded-xl text-xs flex-shrink-0"
+                                                        className="rounded-xl text-xs flex-shrink-0 min-h-[44px] hidden sm:flex active:scale-[0.97]"
                                                         onClick={() => handleAcknowledge(alert.id)}
                                                     >
                                                         Acknowledge
