@@ -47,8 +47,9 @@ jobs:
           npm ci
 
       - name: Build production bundle
-
-
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
         run: |
           cd frontend
           npm run build
