@@ -3,9 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-// force-static for CI static export; force-dynamic on Vercel production
-export const dynamic = process.env.REGENGINE_DEPLOY_MODE === 'static' ? 'force-static' : 'force-dynamic' as any;
-export const generateStaticParams = process.env.REGENGINE_DEPLOY_MODE === 'static' ? async () => [{ path: ['health'] }] : undefined;
+// force-static + generateStaticParams satisfies output:export (CI).
+// On Vercel production the route runs as a serverless function per request.
+// revalidate=0 prevents response caching.
+export const dynamic = 'force-static';
+export const revalidate = 0;
+export const generateStaticParams = async () => [{ path: ['health'] }];
 
 export async function GET(
   request: NextRequest,
