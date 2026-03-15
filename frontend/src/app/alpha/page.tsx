@@ -8,11 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import AlphaSignupForm from './AlphaSignupForm';
 
 export const metadata: Metadata = {
-    title: 'Design Partner Program | RegEngine',
-    description: "Join RegEngine's design partner cohort for custom integrations, guided rollout, and customer-specific FSMA implementation support.",
+    title: 'Founding Design Partner Program | RegEngine',
+    description: "Become a Founding Design Partner. Custom integrations, white-glove onboarding, locked-in pricing, and direct founder access for FSMA 204 compliance.",
     openGraph: {
-        title: 'Design Partner Program | RegEngine',
-        description: "Join RegEngine's design partner cohort for custom integrations, guided rollout, and customer-specific FSMA implementation support.",
+        title: 'Founding Design Partner Program | RegEngine',
+        description: "Become a Founding Design Partner. Custom integrations, white-glove onboarding, locked-in pricing, and direct founder access for FSMA 204 compliance.",
         url: 'https://www.regengine.co/alpha',
         type: 'website',
     },
@@ -35,7 +35,7 @@ export default function AlphaPage() {
     return (
         <div className="re-page" style={{ minHeight: '100vh' }}>
             {/* ═══ HERO with subtle background visual ═══ */}
-            <section className="relative z-[2] overflow-hidden" style={{ maxWidth: '800px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
+            <section className="relative z-[2] overflow-hidden" style={{ maxWidth: '800px', margin: '0 auto', padding: 'clamp(3.5rem, 8vw, 80px) clamp(1rem, 4vw, 24px) clamp(2.5rem, 6vw, 60px)', textAlign: 'center' }}>
                 {/* Faint supply-chain grid background */}
                 <div className="absolute inset-0 pointer-events-none opacity-[0.04]" style={{
                     backgroundImage: `
@@ -52,7 +52,7 @@ export default function AlphaPage() {
                 />
                 <div className="relative z-10">
                     <Badge className="bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20 mb-5 text-xs font-bold uppercase tracking-widest">
-                        Design Partner Cohort
+                        Founding Design Partner Program
                     </Badge>
                     <h1 className="text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] mb-4">
                         Shape the future of<br />
@@ -65,14 +65,14 @@ export default function AlphaPage() {
                         Built for teams who want to be FSMA 204 ready before anyone asks.
                     </p>
                     <a href="#apply">
-                        <button className="px-8 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
-                            Apply for Design Partner Access →
+                        <button className="px-8 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 min-h-[48px] active:scale-[0.97]">
+                            Apply to Become a Founding Design Partner →
                         </button>
                     </a>
                 </div>
             </section>
             {/* ═══ PERKS GRID with shadows + hover ═══ */}
-            <section className="relative z-[2]" style={{ maxWidth: '900px', margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="relative z-[2]" style={{ maxWidth: '900px', margin: '0 auto', padding: '0 clamp(1rem, 4vw, 24px) clamp(2.5rem, 6vw, 60px)' }}>
                 <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-8">
                     What design partners get
                 </h2>
@@ -207,7 +207,7 @@ export default function AlphaPage() {
 
             {/* ═══ TIMELINE with styled nodes + connecting line ═══ */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]">
-                <div style={{ maxWidth: '600px', margin: '0 auto', padding: '60px 24px' }}>
+                <div style={{ maxWidth: '600px', margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) clamp(1rem, 4vw, 24px)' }}>
                     <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-8">
                         Program timeline
                     </h2>
@@ -247,12 +247,12 @@ export default function AlphaPage() {
                 </div>
             </section>
             {/* ═══ SIGNUP FORM with solid CTA ═══ */}
-            <section id="apply" className="relative z-[2]" style={{ maxWidth: '480px', margin: '0 auto', padding: '60px 24px 80px' }}>
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] text-center mb-2">
-                    Apply for design partner access
+            <section id="apply" className="relative z-[2]" style={{ maxWidth: '480px', margin: '0 auto', padding: 'clamp(2.5rem, 6vw, 60px) clamp(1rem, 4vw, 24px) clamp(3rem, 8vw, 80px)' }}>
+                <h2 className="text-xl sm:text-2xl font-bold text-[var(--re-text-primary)] text-center mb-2">
+                    Apply to become a Founding Design Partner
                 </h2>
                 <p className="text-sm text-[var(--re-text-muted)] text-center mb-8">
-                    We review applications within 48 hours. This path is for guided rollout and custom-scoped integrations.
+                    We review applications within 48 hours. Founding partners get locked-in pricing, white-glove onboarding, and direct founder access.
                 </p>
                 <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 shadow-sm">
                     <AlphaSignupForm />
