@@ -137,21 +137,21 @@ export default function ProductCatalogPage() {
         <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <Package className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <Package className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Product Catalog
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             FTL-covered products in your traceability program
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl" onClick={loadProducts} disabled={loading}>
-                            <RefreshCw className={`h-3 w-3 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={loadProducts} disabled={loading}>
+                            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
-                        <Button onClick={() => setShowAdd(!showAdd)} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl">
+                        <Button onClick={() => setShowAdd(!showAdd)} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]">
                             <Plus className="h-4 w-4 mr-1" /> Add Product
                         </Button>
                     </div>
@@ -183,7 +183,7 @@ export default function ProductCatalogPage() {
                 {isLoggedIn && products.length > 0 && (
                     <>
                         {/* Stats */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                             {[
                                 { label: 'Total Products', value: products.length, icon: Package },
                                 { label: 'FTL Covered', value: totalFtl, icon: ShieldCheck },
@@ -191,12 +191,12 @@ export default function ProductCatalogPage() {
                                 { label: 'Total CTEs', value: totalCtes, icon: Activity },
                             ].map((stat) => (
                                 <Card key={stat.label} className="border-[var(--re-border-default)]">
-                                    <CardContent className="py-4">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <stat.icon className="h-4 w-4 text-[var(--re-brand)]" />
-                                            <span className="text-xs text-muted-foreground">{stat.label}</span>
+                                    <CardContent className="py-3 sm:py-4">
+                                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                                            <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
+                                            <span className="text-[11px] sm:text-xs text-muted-foreground truncate">{stat.label}</span>
                                         </div>
-                                        <div className="text-2xl font-bold">{stat.value}</div>
+                                        <div className="text-xl sm:text-2xl font-bold">{stat.value}</div>
                                     </CardContent>
                                 </Card>
                             ))}
@@ -207,13 +207,13 @@ export default function ProductCatalogPage() {
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
                                 <Card className="border-[var(--re-brand)]">
                                     <CardContent className="py-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                            <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Product name" className="rounded-xl" />
-                                            <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="flex h-10 rounded-xl border border-input bg-background px-3 text-sm">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+                                            <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Product name" className="rounded-xl min-h-[44px]" />
+                                            <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="flex h-10 min-h-[44px] rounded-xl border border-input bg-background px-3 text-sm">
                                                 {FTL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                                             </select>
-                                            <Input value={newSku} onChange={e => setNewSku(e.target.value)} placeholder="SKU (optional)" className="rounded-xl" />
-                                            <Button onClick={handleAdd} disabled={adding} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl">
+                                            <Input value={newSku} onChange={e => setNewSku(e.target.value)} placeholder="SKU (optional)" className="rounded-xl min-h-[44px]" />
+                                            <Button onClick={handleAdd} disabled={adding} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] active:scale-[0.97]">
                                                 {adding ? <Spinner size="sm" /> : <><Plus className="h-4 w-4 mr-1" /> Add</>}
                                             </Button>
                                         </div>
@@ -223,10 +223,10 @@ export default function ProductCatalogPage() {
                         )}
 
                         {/* Category Filter */}
-                        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1 -mx-1 px-1">
+                        <div className="flex gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none no-scrollbar pb-1 -mx-1 px-1">
                             <button
                                 onClick={() => setFilterCategory('all')}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] ${
                                     filterCategory === 'all'
                                         ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
                                         : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
@@ -240,7 +240,7 @@ export default function ProductCatalogPage() {
                                     <button
                                         key={cat}
                                         onClick={() => setFilterCategory(filterCategory === cat ? 'all' : cat)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                        className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] ${
                                             filterCategory === cat
                                                 ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
                                                 : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
@@ -257,20 +257,20 @@ export default function ProductCatalogPage() {
                             {filtered.map((product, i) => (
                                 <motion.div key={product.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                                     <Card className="border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all">
-                                        <CardContent className="py-4">
-                                            <div className="flex items-center justify-between flex-wrap gap-3">
+                                        <CardContent className="py-3 sm:py-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <Leaf className="h-4 w-4 text-[var(--re-brand)]" />
-                                                        <span className="font-medium">{product.name}</span>
+                                                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                                                        <Leaf className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
+                                                        <span className="font-medium text-sm sm:text-base">{product.name}</span>
                                                         {product.ftl_covered && (
                                                             <Badge className="text-[9px] px-1.5 py-0 bg-emerald-500/10 text-emerald-500">
                                                                 <ShieldCheck className="h-2.5 w-2.5 mr-0.5" /> FTL
                                                             </Badge>
                                                         )}
-                                                        <Badge variant="outline" className="text-[9px] py-0">{product.category}</Badge>
+                                                        <Badge variant="outline" className="text-[9px] py-0 hidden sm:inline-flex">{product.category}</Badge>
                                                     </div>
-                                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                    <div className="flex items-center gap-3 sm:gap-4 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
                                                         {product.sku && <span className="flex items-center gap-1"><Barcode className="h-3 w-3" /> {product.sku}</span>}
                                                         <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {product.suppliers.length} supplier{product.suppliers.length !== 1 ? 's' : ''}</span>
                                                         <span className="flex items-center gap-1"><Activity className="h-3 w-3" /> {product.cte_count} CTEs</span>
@@ -278,9 +278,12 @@ export default function ProductCatalogPage() {
                                                 </div>
                                                 {product.suppliers.length > 0 && (
                                                     <div className="flex gap-1 flex-wrap">
-                                                        {product.suppliers.map(s => (
+                                                        {product.suppliers.slice(0, 3).map(s => (
                                                             <Badge key={s} variant="outline" className="text-[9px] py-0">{s}</Badge>
                                                         ))}
+                                                        {product.suppliers.length > 3 && (
+                                                            <Badge variant="outline" className="text-[9px] py-0">+{product.suppliers.length - 3}</Badge>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
