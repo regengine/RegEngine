@@ -62,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${isActive
+                                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-all min-h-[44px] ${isActive
                                         ? 'bg-[color-mix(in_srgb,var(--re-brand)_12%,transparent)] text-[var(--re-brand)] font-medium'
                                         : 'text-muted-foreground hover:bg-[var(--re-surface-elevated)] hover:text-foreground'
                                     }`}
@@ -90,21 +90,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </aside>
 
             {/* Mobile top nav */}
-            <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur border-b border-[var(--re-border-default)]">
-                <nav aria-label="Dashboard quick navigation" className="flex items-center gap-2 px-4 py-2 overflow-x-auto no-scrollbar">
-                    {NAV_ITEMS.slice(0, 6).map((item) => {
+            <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-[var(--re-border-default)]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
+                <nav aria-label="Dashboard quick navigation" className="flex items-center gap-2 px-3 py-1.5 overflow-x-auto no-scrollbar">
+                    {NAV_ITEMS.slice(0, 8).map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border transition-all ${isActive
+                                className={`flex items-center gap-1.5 px-3 min-h-[44px] rounded-full text-xs font-medium whitespace-nowrap border transition-all active:scale-[0.96] ${isActive
                                         ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
                                         : 'border-[var(--re-border-default)]'
                                     }`}
                             >
-                                <Icon className="h-3 w-3" />
+                                <Icon className="h-3.5 w-3.5" />
                                 {item.label}
                             </Link>
                         );
@@ -113,7 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Main content */}
-            <main className="flex-1 md:pt-0 pt-14 overflow-y-auto">
+            <main className="flex-1 md:pt-0 pt-[60px] overflow-y-auto">
                 <DashboardBreadcrumb />
                 {children}
             </main>

@@ -38,19 +38,19 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
     };
 
     return (
-        <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
-            <div className="flex items-center gap-3">
-                {getIcon()}
-                <div>
-                    <p className="font-medium capitalize">{name}</p>
+        <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50 min-h-[48px] gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="flex-shrink-0">{getIcon()}</div>
+                <div className="min-w-0">
+                    <p className="font-medium capitalize text-sm sm:text-base truncate">{name}</p>
                     {status !== 'healthy' && details?.error != null && (
-                        <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                        <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
                             {String(details.error)}
                         </p>
                     )}
                 </div>
             </div>
-            <Badge variant={getBadgeVariant()} className="capitalize">
+            <Badge variant={getBadgeVariant()} className="capitalize flex-shrink-0 text-[11px] sm:text-xs">
                 {status}
             </Badge>
         </div>
