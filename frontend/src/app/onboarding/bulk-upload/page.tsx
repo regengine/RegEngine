@@ -743,10 +743,10 @@ export default function BulkUploadPage() {
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                     <Link
-                      href="/alpha"
+                      href="/login?next=/onboarding/bulk-upload"
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px] active:scale-[0.98]"
                     >
-                      Become a Founding Design Partner
+                      Create an Account
                     </Link>
                   </div>
                 </div>
@@ -934,10 +934,10 @@ export default function BulkUploadPage() {
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                     <Link
-                      href="/alpha"
+                      href="/login?next=/onboarding/bulk-upload"
                       className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px] active:scale-[0.98]"
                     >
-                      Become a Founding Design Partner
+                      Create an Account
                     </Link>
                   </div>
                 </div>
