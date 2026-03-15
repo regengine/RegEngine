@@ -2,8 +2,9 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { DashboardBreadcrumb } from '@/components/dashboard/breadcrumb';
+import { useAuth } from '@/lib/auth-context';
 import {
     BarChart3,
     Archive,
@@ -18,6 +19,7 @@ import {
     UserCog,
     Activity,
     ChevronRight,
+    LogOut,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -37,6 +39,8 @@ const NAV_ITEMS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
+    const { clearCredentials } = useAuth();
 
     return (
         <div className="flex min-h-screen">
@@ -86,6 +90,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     >
                         Re-run onboarding
                     </Link>
+                    <button
+                        onClick={() => { clearCredentials(); router.push('/login'); }}
+                        className="flex items-center justify-center gap-1.5 mt-2 w-full px-3 py-2 rounded-lg text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                        <LogOut className="h-3.5 w-3.5" />
+                        Sign Out
+                    </button>
                 </div>
             </aside>
 
