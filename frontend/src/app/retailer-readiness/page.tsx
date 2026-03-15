@@ -293,7 +293,7 @@ export default function RetailerSuppliersPage() {
                 position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9998,
                 background: 'var(--re-sticky-bg, rgba(6,9,15,0.92))', backdropFilter: 'blur(12px)',
                 borderTop: `1px solid ${T.border}`,
-                padding: '12px 24px',
+                padding: 'clamp(10px, 2vw, 12px) clamp(12px, 4vw, 24px)',
                 transform: showSticky ? 'translateY(0)' : 'translateY(100%)',
                 transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
@@ -340,7 +340,7 @@ export default function RetailerSuppliersPage() {
                         onClick={e => e.stopPropagation()}
                         style={{
                             background: T.bg, border: `1px solid ${T.border}`,
-                            borderRadius: 20, padding: '40px 36px',
+                            borderRadius: 20, padding: 'clamp(24px, 5vw, 40px) clamp(20px, 4vw, 36px)',
                             maxWidth: 460, width: '100%', textAlign: 'center',
                             boxShadow: `0 0 60px ${T.accent}15`,
                             animation: 'exit-popup-in 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -393,7 +393,7 @@ export default function RetailerSuppliersPage() {
             <div style={{
                 background: `linear-gradient(90deg, ${T.dangerBg}, ${T.warningBg}, ${T.dangerBg})`,
                 borderBottom: `1px solid ${T.warningBorder}`,
-                padding: '10px 24px',
+                padding: '10px clamp(12px, 4vw, 24px)',
                 position: 'relative', zIndex: 10,
             }}>
                 <div style={{
@@ -454,11 +454,11 @@ export default function RetailerSuppliersPage() {
                 <div style={{
                     display: 'inline-flex', alignItems: 'baseline', gap: 10,
                     background: T.surface, border: `2px solid ${daysCount > 600 ? T.warningBorder : 'rgba(239,68,68,0.2)'}`,
-                    borderRadius: 14, padding: '16px 32px', marginBottom: 32,
+                    borderRadius: 14, padding: 'clamp(12px, 3vw, 16px) clamp(16px, 5vw, 32px)', marginBottom: 32,
                     boxShadow: `0 0 30px ${daysCount > 600 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)'}`,
                 }}>
                     <span style={{
-                        fontSize: 40, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
+                        fontSize: 'clamp(1.75rem, 5vw, 40px)', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
                         color: daysCount > 600 ? T.warning : T.danger,
                         letterSpacing: '-0.02em',
                     }}>
@@ -531,7 +531,7 @@ export default function RetailerSuppliersPage() {
                 {/* Timeline visualization */}
                 <div style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
-                    padding: '40px 32px',
+                    padding: 'clamp(1.5rem, 5vw, 40px) clamp(1rem, 4vw, 32px)',
                     borderTop: `3px solid ${T.accent}`,
                     boxShadow: `0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px ${T.border}`,
                 }}>
@@ -844,7 +844,7 @@ export default function RetailerSuppliersPage() {
                 </div>
 
                 <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))',
                     gap: 20,
                 }}>
                     {/* BEFORE */}
@@ -934,7 +934,7 @@ export default function RetailerSuppliersPage() {
 
                 <div style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
-                    padding: '32px 28px',
+                    padding: 'clamp(1.5rem, 4vw, 32px) clamp(1rem, 3vw, 28px)',
                     borderTop: `3px solid ${T.accent}`,
                     boxShadow: `0 4px 24px rgba(0,0,0,0.12), 0 0 0 1px ${T.border}`,
                 }}>
@@ -987,7 +987,7 @@ export default function RetailerSuppliersPage() {
                         }}>
                             <p style={{ fontSize: 11, color: T.danger, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Annual Revenue at Risk</p>
                             <p style={{
-                                fontSize: 34, fontWeight: 700, color: T.danger,
+                                fontSize: 'clamp(1.5rem, 5vw, 34px)', fontWeight: 700, color: T.danger,
                                 fontFamily: "'JetBrains Mono', monospace",
                                 letterSpacing: '-0.02em',
                             }}>
@@ -1000,7 +1000,7 @@ export default function RetailerSuppliersPage() {
                         }}>
                             <p style={{ fontSize: 11, color: T.warning, marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly Risk</p>
                             <p style={{
-                                fontSize: 34, fontWeight: 700, color: T.warning,
+                                fontSize: 'clamp(1.5rem, 5vw, 34px)', fontWeight: 700, color: T.warning,
                                 fontFamily: "'JetBrains Mono', monospace",
                                 letterSpacing: '-0.02em',
                             }}>
@@ -1134,8 +1134,8 @@ export default function RetailerSuppliersPage() {
             }}>
                 <div style={{
                     background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16,
-                    padding: '36px 32px',
-                    display: 'flex', gap: 24, alignItems: 'flex-start',
+                    padding: 'clamp(1.5rem, 5vw, 36px) clamp(1rem, 4vw, 32px)',
+                    display: 'flex', gap: 'clamp(16px, 3vw, 24px)', alignItems: 'flex-start',
                     flexWrap: 'wrap',
                 }}>
                     {/* Avatar */}
@@ -1400,7 +1400,7 @@ export default function RetailerSuppliersPage() {
                ═══════════════════════════════════════════════════════════ */}
             <section ref={integrationsReveal.ref} style={{
                 position: 'relative', zIndex: 2,
-                maxWidth: 800, margin: '0 auto', padding: '40px 24px 60px',
+                maxWidth: 800, margin: '0 auto', padding: 'clamp(2rem, 5vw, 40px) clamp(1rem, 4vw, 24px) clamp(2.5rem, 6vw, 60px)',
                 opacity: integrationsReveal.visible ? 1 : 0,
                 transform: integrationsReveal.visible ? 'translateY(0)' : 'translateY(30px)',
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -1435,7 +1435,7 @@ export default function RetailerSuppliersPage() {
             </section>
 
             {/* ─── TRUST BADGES ─── */}
-            <section style={{ position: 'relative', zIndex: 2, padding: '48px 24px' }}>
+            <section style={{ position: 'relative', zIndex: 2, padding: 'clamp(2rem, 6vw, 48px) clamp(1rem, 4vw, 24px)' }}>
                 <div style={{ maxWidth: 900, margin: '0 auto', textAlign: 'center' }}>
                     <p style={{ fontSize: 12, color: T.textDim, marginBottom: 20, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                         Built for Suppliers to Major Retailers
