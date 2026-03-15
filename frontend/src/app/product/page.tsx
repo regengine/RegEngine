@@ -62,7 +62,7 @@ export default function ProductPage() {
                 <div className="flex gap-3 justify-center flex-wrap">
                     <Link href="/alpha">
                         <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                            Join Alpha Program
+                            Become a Founding Design Partner
                             <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
@@ -232,7 +232,7 @@ export default function ProductPage() {
                     }}
                 >
                     <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
-                        Alpha Program
+                        Founding Design Partner Program
                     </Badge>
                     <h3 className="text-xl font-bold text-re-text-primary mb-2">Shape the product with us</h3>
                     <p className="text-sm text-re-text-muted max-w-md mx-auto mb-5">
@@ -240,7 +240,7 @@ export default function ProductPage() {
                     </p>
                     <Link href="/alpha">
                         <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                            Join Alpha Program
+                            Become a Founding Design Partner
                             <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
@@ -252,12 +252,12 @@ export default function ProductPage() {
                 <div className="max-w-[600px] mx-auto py-12 px-6 text-center">
                     <h2 className="text-2xl font-bold text-re-text-primary mb-2">Ready to explore the workflow?</h2>
                     <p className="text-sm text-re-text-muted mb-6">
-                        Start with the free tools or join the alpha for full platform access.
+                        Start with the free tools or become a founding partner for full platform access.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/alpha">
                             <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                                Join Alpha Program
+                                Become a Founding Design Partner
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>

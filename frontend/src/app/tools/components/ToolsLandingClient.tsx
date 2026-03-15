@@ -404,7 +404,7 @@ export function ToolsLandingClient() {
                                 <button className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold transition-all hover:-translate-y-0.5"
                                     style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
                                 >
-                                    Join Alpha Program
+                                    Become a Founding Design Partner
                                     <ArrowRight className="w-4 h-4" />
                                 </button>
                             </Link>

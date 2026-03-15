@@ -94,7 +94,7 @@ export default function SecurityPage() {
                 <div className="flex gap-3 justify-center flex-wrap">
                     <Link href="/alpha">
                         <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                            Join Alpha Program
+                            Become a Founding Design Partner
                             <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
@@ -173,7 +173,7 @@ export default function SecurityPage() {
                             <div className="flex gap-3 flex-wrap">
                                 <Link href="/alpha">
                                     <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-5 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all text-sm">
-                                        See Live Merkle Chain in Alpha
+                                        See Live Merkle Chain
                                         <ArrowRight className="ml-2 w-4 h-4" />
                                     </Button>
                                 </Link>
@@ -272,16 +272,16 @@ export default function SecurityPage() {
                     }}
                 >
                     <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
-                        Alpha Program
+                        Founding Design Partner Program
                     </Badge>
                     <h3 className="text-xl font-bold text-re-text-primary mb-2">See the full audit trail live</h3>
                     <p className="text-sm text-re-text-muted max-w-md mx-auto mb-5">
-                        Alpha partners get full access to the Merkle chain, audit logs, and verification tools inside their dashboard.
+                        Founding Design Partners get full access to the Merkle chain, audit logs, and verification tools inside their dashboard.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/alpha">
                             <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                                Join Alpha Program
+                                Become a Founding Design Partner
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>

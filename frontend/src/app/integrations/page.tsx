@@ -278,13 +278,13 @@ export default function IntegrationsPage() {
             {/* Alpha callout */}
             <section className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
                 <div className="rounded-2xl border-2 border-[var(--re-brand)]/20 bg-[var(--re-brand)]/5 p-6 sm:p-8 text-center">
-                    <p className="text-sm font-medium text-[var(--re-brand)] mb-2">Most alpha partners start here</p>
+                    <p className="text-sm font-medium text-[var(--re-brand)] mb-2">Most Founding Design Partners start here</p>
                     <p className="text-muted-foreground text-sm mb-5 max-w-lg mx-auto">
                         Week 1: CSV/SFTP import with mapping review. Week 2–4: native API pilot scoped to your stack. No multi-year contract, no rip-and-replace.
                     </p>
                     <Link href="/alpha">
                         <Button className="bg-[var(--re-brand)] text-white font-semibold px-6 h-11 rounded-xl shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5">
-                            Apply for Alpha Program
+                            Become a Founding Design Partner
                             <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     </Link>

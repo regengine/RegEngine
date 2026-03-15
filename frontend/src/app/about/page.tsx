@@ -187,13 +187,13 @@ export default function AboutPage() {
             Built by a founder who&apos;s been in your shoes
           </h2>
           <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">
-            Join the Alpha Program for direct access to the team that ships real
+            Become a Founding Design Partner for direct access to the team that ships real
             FSMA 204 infrastructure — no sales team, no gatekeepers.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
             <Link href="/alpha">
               <button className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--re-brand)] text-white text-[15px] font-semibold shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
-                Join Alpha Program <ArrowRight className="h-4 w-4" />
+                Become a Founding Design Partner <ArrowRight className="h-4 w-4" />
               </button>
             </Link>
             <a href="mailto:chris@regengine.co">
