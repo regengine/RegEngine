@@ -25,6 +25,178 @@ const STEPS = [
   { label: 'Commit', Icon: CheckCircle2 },
 ];
 
+/* ── FSMA 204 client-side validation (no auth required) ── */
+
+const VALID_EVENT_TYPES = new Set(['R', 'S', 'T', 'C', 'D', 'P', 'H']);
+const EVENT_TYPE_LABELS: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transformation', C: 'Creation', D: 'Depletion', P: 'Packing', H: 'Holding' };
+
+const REQUIRED_COLUMNS = [
+  'event_type', 'product_name', 'lot_number',
+];
+const RECOMMENDED_COLUMNS = [
+  'event_datetime', 'product_code', 'quantity', 'unit',
+  'origin_facility_code', 'origin_facility_name',
+  'destination_facility_code', 'destination_facility_name',
+];
+
+interface ValidationIssue {
+  severity: 'error' | 'warning';
+  row?: number;
+  column?: string;
+  message: string;
+}
+
+interface ClientValidationResult {
+  totalRows: number;
+  columnsFound: string[];
+  requiredColumnsPresent: string[];
+  requiredColumnsMissing: string[];
+  recommendedColumnsPresent: string[];
+  recommendedColumnsMissing: string[];
+  eventTypeCounts: Record<string, number>;
+  invalidEventTypes: { row: number; value: string }[];
+  issues: ValidationIssue[];
+  completenessScore: number; // 0-100
+  canProceed: boolean; // true if no errors (warnings ok)
+  productNames: string[];
+  lotNumbers: string[];
+  facilityNames: string[];
+  dateRange: { earliest: string | null; latest: string | null };
+}
+
+function validateCSVLocally(text: string): ClientValidationResult {
+  const lines = text.trim().split('\n');
+  const result: ClientValidationResult = {
+    totalRows: 0, columnsFound: [], requiredColumnsPresent: [], requiredColumnsMissing: [],
+    recommendedColumnsPresent: [], recommendedColumnsMissing: [], eventTypeCounts: {},
+    invalidEventTypes: [], issues: [], completenessScore: 0, canProceed: true,
+    productNames: [], lotNumbers: [], facilityNames: [], dateRange: { earliest: null, latest: null },
+  };
+
+  if (lines.length < 2) {
+    result.issues.push({ severity: 'error', message: 'File contains no data rows.' });
+    result.canProceed = false;
+    return result;
+  }
+
+  const columns = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+  result.columnsFound = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const dataLines = lines.slice(1).filter(l => l.trim().length > 0);
+  result.totalRows = dataLines.length;
+
+  // Column presence checks
+  for (const req of REQUIRED_COLUMNS) {
+    if (columns.includes(req)) { result.requiredColumnsPresent.push(req); }
+    else { result.requiredColumnsMissing.push(req); result.issues.push({ severity: 'error', column: req, message: `Required FSMA 204 column "${req}" is missing.` }); }
+  }
+  for (const rec of RECOMMENDED_COLUMNS) {
+    if (columns.includes(rec)) { result.recommendedColumnsPresent.push(rec); }
+    else { result.recommendedColumnsMissing.push(rec); result.issues.push({ severity: 'warning', column: rec, message: `Recommended column "${rec}" not found. Data may be incomplete for full FSMA 204 compliance.` }); }
+  }
+
+  // Index lookups
+  const idx = (name: string) => columns.indexOf(name);
+  const eventTypeIdx = idx('event_type');
+  const productNameIdx = idx('product_name');
+  const productCodeIdx = idx('product_code');
+  const lotIdx = idx('lot_number');
+  const datetimeIdx = idx('event_datetime');
+  const origFacIdx = idx('origin_facility_name');
+  const destFacIdx = idx('destination_facility_name');
+  const qtyIdx = idx('quantity');
+
+  const productSet = new Set<string>();
+  const lotSet = new Set<string>();
+  const facSet = new Set<string>();
+  const dates: string[] = [];
+  let emptyRequiredCells = 0;
+  let totalRequiredCells = 0;
+
+  for (let i = 0; i < dataLines.length; i++) {
+    const cells = dataLines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const rowNum = i + 2; // 1-indexed, header is row 1
+
+    // Event type validation
+    if (eventTypeIdx >= 0) {
+      const et = cells[eventTypeIdx]?.trim();
+      totalRequiredCells++;
+      if (!et) {
+        emptyRequiredCells++;
+        if (i < 20) result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: 'Empty event_type.' });
+      } else if (!VALID_EVENT_TYPES.has(et.toUpperCase())) {
+        result.invalidEventTypes.push({ row: rowNum, value: et });
+        if (result.invalidEventTypes.length <= 10) {
+          result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: `Invalid event type "${et}". Expected: R, S, T, C, D, P, H.` });
+        }
+      } else {
+        const label = EVENT_TYPE_LABELS[et.toUpperCase()] || et;
+        result.eventTypeCounts[label] = (result.eventTypeCounts[label] || 0) + 1;
+      }
+    }
+
+    // Product name
+    if (productNameIdx >= 0) {
+      totalRequiredCells++;
+      const val = cells[productNameIdx]?.trim();
+      if (!val) { emptyRequiredCells++; }
+      else { productSet.add(val); }
+    }
+
+    // Lot number
+    if (lotIdx >= 0) {
+      totalRequiredCells++;
+      const val = cells[lotIdx]?.trim();
+      if (!val) { emptyRequiredCells++; }
+      else { lotSet.add(val); }
+    }
+
+    // Datetime
+    if (datetimeIdx >= 0) {
+      const val = cells[datetimeIdx]?.trim();
+      if (val) dates.push(val);
+    }
+
+    // Facilities
+    if (origFacIdx >= 0) { const v = cells[origFacIdx]?.trim(); if (v) facSet.add(v); }
+    if (destFacIdx >= 0) { const v = cells[destFacIdx]?.trim(); if (v) facSet.add(v); }
+
+    // Quantity should be numeric
+    if (qtyIdx >= 0) {
+      const val = cells[qtyIdx]?.trim();
+      if (val && isNaN(Number(val))) {
+        if (i < 10) result.issues.push({ severity: 'warning', row: rowNum, column: 'quantity', message: `Non-numeric quantity "${val}".` });
+      }
+    }
+  }
+
+  // Summary stats
+  result.productNames = Array.from(productSet).slice(0, 15);
+  result.lotNumbers = Array.from(lotSet).slice(0, 15);
+  result.facilityNames = Array.from(facSet).slice(0, 15);
+
+  if (dates.length > 0) {
+    dates.sort();
+    result.dateRange = { earliest: dates[0], latest: dates[dates.length - 1] };
+  }
+
+  // Truncation notices
+  if (result.invalidEventTypes.length > 10) {
+    result.issues.push({ severity: 'error', message: `${result.invalidEventTypes.length - 10} additional invalid event_type rows not shown.` });
+  }
+
+  // Completeness score
+  const colScore = (result.requiredColumnsPresent.length / Math.max(REQUIRED_COLUMNS.length, 1)) * 40;
+  const recColScore = (result.recommendedColumnsPresent.length / Math.max(RECOMMENDED_COLUMNS.length, 1)) * 20;
+  const cellScore = totalRequiredCells > 0 ? ((totalRequiredCells - emptyRequiredCells) / totalRequiredCells) * 30 : 30;
+  const eventScore = result.invalidEventTypes.length === 0 ? 10 : Math.max(0, 10 - result.invalidEventTypes.length);
+  result.completenessScore = Math.round(colScore + recColScore + cellScore + eventScore);
+
+  // Can proceed if no errors
+  result.canProceed = !result.issues.some(i => i.severity === 'error');
+
+  return result;
+}
+
 /* ── Client-side CSV preview (no auth required) ── */
 interface CsvPreview {
   totalRows: number;
@@ -120,11 +292,12 @@ function getErrorMessage(err: unknown, fallback: string): string {
 function getActiveStep(
   file: File | null,
   csvPreview: CsvPreview | null,
+  clientValidation: ClientValidationResult | null,
   parseResult: SupplierBulkUploadParseResponse | null,
   commitResult: SupplierBulkUploadCommitResponse | null,
 ): number {
   if (commitResult) return 3;
-  if (parseResult) return 2;
+  if (parseResult || clientValidation) return 2;
   if (csvPreview) return 1;
   if (file) return 0;
   return 0;
@@ -133,7 +306,9 @@ function getActiveStep(
 export default function BulkUploadPage() {
   const { isAuthenticated } = useAuth();
   const [file, setFile] = useState<File | null>(null);
+  const [csvText, setCsvText] = useState<string | null>(null);
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null);
+  const [clientValidation, setClientValidation] = useState<ClientValidationResult | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [parseResult, setParseResult] = useState<SupplierBulkUploadParseResponse | null>(null);
@@ -142,12 +317,14 @@ export default function BulkUploadPage() {
   const [statusResult, setStatusResult] = useState<SupplierBulkUploadStatusResponse | null>(null);
 
   const canCommit = useMemo(() => Boolean(validateResult?.preview?.can_commit), [validateResult]);
-  const activeStep = getActiveStep(file, csvPreview, parseResult, commitResult);
+  const activeStep = getActiveStep(file, csvPreview, clientValidation, parseResult, commitResult);
 
   const onFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] || null;
     setFile(selected);
+    setCsvText(null);
     setCsvPreview(null);
+    setClientValidation(null);
     setParseResult(null);
     setValidateResult(null);
     setCommitResult(null);
@@ -161,6 +338,7 @@ export default function BulkUploadPage() {
         const text = e.target?.result;
         if (typeof text === 'string') {
           try {
+            setCsvText(text);
             setCsvPreview(parseCSVLocally(text));
           } catch {
             setError('Could not preview this CSV. Try uploading again.');
@@ -172,10 +350,6 @@ export default function BulkUploadPage() {
   };
 
   const onParseAndValidate = async () => {
-    if (!isAuthenticated) {
-      setError('Sign in or become a Founding Design Partner to run full server-side validation.');
-      return;
-    }
     if (!file) {
       setError('Choose a file before uploading.');
       return;
@@ -184,13 +358,33 @@ export default function BulkUploadPage() {
       setError('Uploaded file exceeds max size of 10 MB.');
       return;
     }
+
     setIsBusy(true);
     setError(null);
+    setClientValidation(null);
     setParseResult(null);
     setValidateResult(null);
     setCommitResult(null);
     setStatusResult(null);
 
+    // If not authenticated, run client-side FSMA 204 validation
+    if (!isAuthenticated) {
+      try {
+        if (!csvText) {
+          setError('Could not read file contents for validation. Try re-uploading.');
+          return;
+        }
+        const validation = validateCSVLocally(csvText);
+        setClientValidation(validation);
+      } catch {
+        setError('Validation failed. Please check your file format and try again.');
+      } finally {
+        setIsBusy(false);
+      }
+      return;
+    }
+
+    // Authenticated: full server-side validation
     try {
       const parsed = await apiClient.parseSupplierBulkUpload(file);
       setParseResult(parsed);
@@ -335,7 +529,7 @@ export default function BulkUploadPage() {
               <span className="text-sm font-semibold text-[var(--re-text-primary)]">Free preview mode</span>
             </div>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Upload a CSV to preview your data instantly — no account required. Sign in to run full FSMA 204 validation, field mapping, and cryptographic commit.
+              Upload a CSV to preview and validate your data against FSMA 204 requirements — no account required. Sign in to commit with cryptographic integrity and generate audit-ready records.
             </p>
           </div>
         )}
@@ -546,6 +740,197 @@ export default function BulkUploadPage() {
                       style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
                     >
                       Sign In to Validate
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                    <Link
+                      href="/alpha"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg border border-[var(--re-surface-border)] px-5 py-2.5 text-sm font-semibold text-[var(--re-text-secondary)] hover:border-[var(--re-brand)]/30 transition-all no-underline min-h-[44px] active:scale-[0.98]"
+                    >
+                      Become a Founding Design Partner
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Client-side validation results (no auth required) */}
+          {clientValidation && !parseResult && (
+            <div className="mt-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4 sm:p-5"
+              style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+            >
+              {/* Header with completeness score */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <ClipboardCheck className="w-5 h-5 text-[var(--re-brand)]" />
+                  <p className="font-semibold text-sm text-[var(--re-text-primary)]">
+                    FSMA 204 Validation Report
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-24 rounded-full bg-[var(--re-surface-border)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        clientValidation.completenessScore >= 80 ? 'bg-emerald-500' :
+                        clientValidation.completenessScore >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${clientValidation.completenessScore}%` }}
+                    />
+                  </div>
+                  <span className={`text-sm font-bold ${
+                    clientValidation.completenessScore >= 80 ? 'text-emerald-500' :
+                    clientValidation.completenessScore >= 50 ? 'text-amber-500' : 'text-red-500'
+                  }`}>
+                    {clientValidation.completenessScore}%
+                  </span>
+                  <span className="text-[11px] text-[var(--re-text-muted)]">compliance score</span>
+                </div>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{clientValidation.totalRows}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Records</p>
+                </div>
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{clientValidation.productNames.length}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Products</p>
+                </div>
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{clientValidation.lotNumbers.length}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Lot Numbers</p>
+                </div>
+                <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-2.5 text-center">
+                  <p className="text-lg font-bold text-[var(--re-brand)]">{clientValidation.facilityNames.length}</p>
+                  <p className="text-[11px] text-[var(--re-text-muted)]">Facilities</p>
+                </div>
+              </div>
+
+              {/* CTE event type breakdown */}
+              {Object.keys(clientValidation.eventTypeCounts).length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-2">
+                    CTE Event Types
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(clientValidation.eventTypeCounts).map(([type, count]) => (
+                      <span key={type} className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] text-[var(--re-text-secondary)]">
+                        {type}
+                        <span className="font-bold text-[var(--re-brand)]">{count}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Date range */}
+              {clientValidation.dateRange.earliest && (
+                <div className="mb-4">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-1">
+                    Date Range
+                  </p>
+                  <p className="text-xs text-[var(--re-text-secondary)]">
+                    {clientValidation.dateRange.earliest} → {clientValidation.dateRange.latest}
+                  </p>
+                </div>
+              )}
+
+              {/* Column mapping status */}
+              <div className="mb-4">
+                <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-2">
+                  FSMA 204 Column Mapping
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* Required columns */}
+                  {clientValidation.requiredColumnsPresent.map(col => (
+                    <div key={col} className="flex items-center gap-2 text-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span className="text-[var(--re-text-secondary)]">{col}</span>
+                      <span className="text-[10px] text-emerald-500 font-medium">required</span>
+                    </div>
+                  ))}
+                  {clientValidation.requiredColumnsMissing.map(col => (
+                    <div key={col} className="flex items-center gap-2 text-xs">
+                      <span className="w-3.5 h-3.5 rounded-full bg-red-500/10 text-red-500 text-[10px] font-bold flex items-center justify-center shrink-0">!</span>
+                      <span className="text-red-400">{col}</span>
+                      <span className="text-[10px] text-red-400 font-medium">missing</span>
+                    </div>
+                  ))}
+                  {clientValidation.recommendedColumnsPresent.map(col => (
+                    <div key={col} className="flex items-center gap-2 text-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[var(--re-brand)] shrink-0" />
+                      <span className="text-[var(--re-text-secondary)]">{col}</span>
+                    </div>
+                  ))}
+                  {clientValidation.recommendedColumnsMissing.map(col => (
+                    <div key={col} className="flex items-center gap-2 text-xs">
+                      <span className="w-3.5 h-3.5 rounded-full bg-amber-500/10 text-amber-500 text-[10px] font-bold flex items-center justify-center shrink-0">~</span>
+                      <span className="text-amber-400">{col}</span>
+                      <span className="text-[10px] text-amber-400 font-medium">recommended</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Validation issues */}
+              {clientValidation.issues.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-2">
+                    Issues ({clientValidation.issues.filter(i => i.severity === 'error').length} errors, {clientValidation.issues.filter(i => i.severity === 'warning').length} warnings)
+                  </p>
+                  <div className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-2">
+                    {clientValidation.issues.slice(0, 25).map((issue, idx) => (
+                      <div key={idx} className={`flex items-start gap-2 text-[11px] sm:text-xs px-2 py-1 rounded ${
+                        issue.severity === 'error' ? 'text-red-400' : 'text-amber-400'
+                      }`}>
+                        <span className="shrink-0 mt-0.5">{issue.severity === 'error' ? '✗' : '⚠'}</span>
+                        <span>
+                          {issue.row && <span className="font-mono opacity-60">Row {issue.row} </span>}
+                          {issue.column && <span className="font-mono opacity-60">[{issue.column}] </span>}
+                          {issue.message}
+                        </span>
+                      </div>
+                    ))}
+                    {clientValidation.issues.length > 25 && (
+                      <p className="text-[11px] text-[var(--re-text-disabled)] px-2 py-1">
+                        +{clientValidation.issues.length - 25} more issues not shown
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Overall status */}
+              <div className={`rounded-lg p-3 text-sm font-semibold flex items-center gap-2 ${
+                clientValidation.canProceed
+                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                  : 'bg-red-500/10 text-red-500 border border-red-500/20'
+              }`}>
+                {clientValidation.canProceed ? <CheckCircle2 className="w-4 h-4" /> : <span>!</span>}
+                {clientValidation.canProceed
+                  ? 'Data passes FSMA 204 structure checks. Ready for server-side commit.'
+                  : 'Fix the errors above before proceeding to commit.'}
+              </div>
+
+              {/* CTA to sign in for full commit */}
+              {!isAuthenticated && (
+                <div className="mt-4 rounded-lg border border-[var(--re-brand)]/20 bg-[var(--re-surface-card)] p-4 text-center">
+                  <p className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                    {clientValidation.canProceed
+                      ? 'Your data passed validation — sign in to commit with cryptographic proof'
+                      : 'Fix the issues above, then sign in to commit'}
+                  </p>
+                  <p className="text-xs text-[var(--re-text-muted)] mb-3 max-w-sm mx-auto">
+                    Server-side commit adds SHA-256 hashing, Merkle tree integrity, and generates audit-ready records for FDA inspection.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <Link
+                      href="/login?next=/onboarding/bulk-upload"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--re-brand)] px-5 py-2.5 text-sm font-semibold text-white hover:-translate-y-0.5 transition-all no-underline min-h-[44px] active:scale-[0.98]"
+                      style={{ boxShadow: '0 4px 16px var(--re-brand-muted)' }}
+                    >
+                      Sign In to Commit
                       <ArrowRight className="w-4 h-4" />
                     </Link>
                     <Link
