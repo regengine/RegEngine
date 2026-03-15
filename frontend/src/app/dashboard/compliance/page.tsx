@@ -56,7 +56,7 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
     const color = score >= 80 ? 'var(--re-brand)' : score >= 60 ? '#f59e0b' : '#ef4444';
 
     return (
-        <div className="relative w-48 h-48 mx-auto">
+        <div className="relative w-36 h-36 sm:w-48 sm:h-48 mx-auto">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
                 <circle cx="100" cy="100" r="80" stroke="var(--re-border-default)" strokeWidth="12" fill="none" />
                 <motion.circle
@@ -73,7 +73,7 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <motion.div
-                    className="text-4xl font-bold"
+                    className="text-3xl sm:text-4xl font-bold"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5 }}
@@ -210,7 +210,7 @@ export default function ComplianceDashboardPage() {
                 {score && !loading && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
                         {/* Score + Breakdown */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                             <Card className="border-[var(--re-border-default)]">
                                 <CardHeader>
                                     <CardTitle className="text-base">Overall Readiness</CardTitle>
@@ -249,7 +249,7 @@ export default function ComplianceDashboardPage() {
                         </div>
 
                         {/* Quick Actions + Next Steps */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                             <Card className="border-[var(--re-border-default)]">
                                 <CardHeader>
                                     <CardTitle className="text-base flex items-center gap-2">
@@ -257,25 +257,25 @@ export default function ComplianceDashboardPage() {
                                         Quick Actions
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="grid grid-cols-2 gap-3">
+                                <CardContent className="grid grid-cols-2 gap-2 sm:gap-3">
                                     <Link href="/tools/drill-simulator">
-                                        <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 rounded-xl">
-                                            <Timer className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs">Run Mock Drill</span>
+                                        <Button variant="outline" className="w-full h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl active:scale-[0.97]">
+                                            <Timer className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
+                                            <span className="text-[11px] sm:text-xs">Run Mock Drill</span>
                                         </Button>
                                     </Link>
-                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto py-4 flex flex-col gap-2 rounded-xl">
-                                        <Download className="h-5 w-5 text-[var(--re-brand)]" />
-                                        <span className="text-xs">FDA Report</span>
+                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl">
+                                        <Download className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
+                                        <span className="text-[11px] sm:text-xs">FDA Report</span>
                                     </Button>
-                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto py-4 flex flex-col gap-2 rounded-xl">
-                                        <FileText className="h-5 w-5 text-[var(--re-brand)]" />
-                                        <span className="text-xs">EPCIS Export</span>
+                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl">
+                                        <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
+                                        <span className="text-[11px] sm:text-xs">EPCIS Export</span>
                                     </Button>
                                     <Link href="/tools/data-import">
-                                        <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-2 rounded-xl">
-                                            <Printer className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs">Import Data</span>
+                                        <Button variant="outline" className="w-full h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl active:scale-[0.97]">
+                                            <Printer className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
+                                            <span className="text-[11px] sm:text-xs">Import Data</span>
                                         </Button>
                                     </Link>
                                 </CardContent>
@@ -292,16 +292,16 @@ export default function ComplianceDashboardPage() {
                                     <CardContent>
                                         <ul className="space-y-3">
                                             {score.next_actions.map((action, i) => (
-                                                <li key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                                <li key={i} className="flex items-start gap-2 sm:gap-3 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] min-h-[48px]">
                                                     <Badge
                                                         variant={action.priority === 'HIGH' ? 'default' : 'secondary'}
-                                                        className={`text-[9px] uppercase tracking-widest rounded-full mt-0.5 ${action.priority === 'HIGH' ? 'bg-red-600' : ''}`}
+                                                        className={`text-[9px] uppercase tracking-widest rounded-full mt-0.5 flex-shrink-0 ${action.priority === 'HIGH' ? 'bg-red-600' : ''}`}
                                                     >
                                                         {action.priority}
                                                     </Badge>
-                                                    <div className="flex-1">
-                                                        <div className="text-sm font-medium">{action.action}</div>
-                                                        <div className="text-xs text-muted-foreground">{action.impact}</div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs sm:text-sm font-medium">{action.action}</div>
+                                                        <div className="text-[11px] sm:text-xs text-muted-foreground">{action.impact}</div>
                                                     </div>
                                                 </li>
                                             ))}
@@ -320,29 +320,29 @@ export default function ComplianceDashboardPage() {
                                         Traceability Summary
                                     </CardTitle>
                                     <Link href="/tools/data-import">
-                                        <Button variant="ghost" size="sm" className="text-xs">
+                                        <Button variant="ghost" size="sm" className="text-xs min-h-[44px] active:scale-[0.97]">
                                             Import More <ArrowRight className="ml-1 h-3 w-3" />
                                         </Button>
                                     </Link>
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-2xl font-bold">{score.events_analyzed}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">Events Analyzed</div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+                                    <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
+                                        <div className="text-xl sm:text-2xl font-bold">{score.events_analyzed}</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Events Analyzed</div>
                                     </div>
-                                    <div className="p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-2xl font-bold">{score.grade}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">Current Grade</div>
+                                    <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
+                                        <div className="text-xl sm:text-2xl font-bold">{score.grade}</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Current Grade</div>
                                     </div>
-                                    <div className="p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-2xl font-bold">{breakdownKeys.length}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">Score Dimensions</div>
+                                    <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
+                                        <div className="text-xl sm:text-2xl font-bold">{breakdownKeys.length}</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Score Dimensions</div>
                                     </div>
-                                    <div className="p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-2xl font-bold">{score.next_actions.length}</div>
-                                        <div className="text-xs text-muted-foreground mt-1">Action Items</div>
+                                    <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
+                                        <div className="text-xl sm:text-2xl font-bold">{score.next_actions.length}</div>
+                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Action Items</div>
                                     </div>
                                 </div>
                             </CardContent>

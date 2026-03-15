@@ -129,19 +129,19 @@ export default function AuditLogPage() {
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <ScrollText className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <ScrollText className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Audit Log
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Immutable record of all system events · SHA-256 verified
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl" onClick={loadLog} disabled={loading}>
+                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]" onClick={loadLog} disabled={loading}>
                             <RefreshCw className={`h-3 w-3 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
                         </Button>
-                        <Badge variant="outline" className="text-xs py-1.5">
+                        <Badge variant="outline" className="text-xs py-1.5 hidden sm:inline-flex">
                             <ShieldCheck className="h-3 w-3 mr-1 text-[var(--re-brand)]" /> Tamper-proof
                         </Badge>
                     </div>
@@ -174,8 +174,8 @@ export default function AuditLogPage() {
                 {isLoggedIn && entries.length > 0 && (
                     <>
                         {/* Filter Bar */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <Filter className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1">
+                            <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                             {[
                                 { id: 'all' as const, label: 'All' },
                                 { id: 'cte_recorded' as const, label: 'CTEs' },
@@ -188,7 +188,7 @@ export default function AuditLogPage() {
                                 <button
                                     key={f.id}
                                     onClick={() => setFilter(f.id)}
-                                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                    className={`px-3 py-2 sm:py-1.5 rounded-full text-xs font-medium border transition-all whitespace-nowrap min-h-[44px] active:scale-[0.96] flex-shrink-0 ${
                                         filter === f.id
                                             ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
                                             : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
@@ -210,31 +210,31 @@ export default function AuditLogPage() {
                                         initial={{ opacity: 0, y: 8 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: i * 0.03 }}
-                                        className="flex items-center gap-3 p-3 rounded-xl border border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all"
+                                        className="flex items-start sm:items-center gap-2 sm:gap-3 p-3 rounded-xl border border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all min-h-[48px]"
                                     >
-                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-0"
                                             style={{ background: `${config.color}10` }}>
-                                            <Icon className="h-4 w-4" style={{ color: config.color }} />
+                                            <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: config.color }} />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm font-medium">{entry.action}</span>
-                                                <Badge className="text-[9px] px-1.5 py-0"
+                                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                                <span className="text-xs sm:text-sm font-medium truncate">{entry.action}</span>
+                                                <Badge className="text-[9px] px-1.5 py-0 flex-shrink-0"
                                                     style={{ background: `${config.color}10`, color: config.color }}>
                                                     {config.label}
                                                 </Badge>
                                             </div>
-                                            <div className="text-xs text-muted-foreground flex items-center gap-3 mt-0.5">
-                                                <span>{entry.actor}</span>
-                                                <span>→ {entry.resource}</span>
+                                            <div className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1.5 sm:gap-3 mt-0.5 truncate">
+                                                <span className="truncate">{entry.actor}</span>
+                                                <span className="truncate hidden sm:inline">→ {entry.resource}</span>
                                             </div>
                                         </div>
                                         <div className="text-right flex-shrink-0">
-                                            <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <div className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1">
                                                 <Clock className="h-3 w-3" /> {formatTimeAgo(entry.timestamp)}
                                             </div>
                                             {entry.hash && (
-                                                <div className="text-[9px] font-mono text-muted-foreground/50 mt-0.5">
+                                                <div className="text-[9px] font-mono text-muted-foreground/50 mt-0.5 hidden sm:block">
                                                     {entry.hash.slice(0, 10)}...
                                                 </div>
                                             )}
@@ -247,15 +247,15 @@ export default function AuditLogPage() {
                         {/* Pagination */}
                         {totalPages > 1 && (
                             <div className="flex items-center justify-between pt-2">
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-[11px] sm:text-xs text-muted-foreground">
                                     Page {page} of {totalPages} ({total} entries)
                                 </span>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" size="sm" className="rounded-xl" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                                        <ChevronLeft className="h-3 w-3" />
+                                    <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] min-w-[44px] active:scale-[0.97]" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                                        <ChevronLeft className="h-4 w-4" />
                                     </Button>
-                                    <Button variant="outline" size="sm" className="rounded-xl" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                                        <ChevronRight className="h-3 w-3" />
+                                    <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] min-w-[44px] active:scale-[0.97]" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                                        <ChevronRight className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
