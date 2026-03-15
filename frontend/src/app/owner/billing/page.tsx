@@ -240,7 +240,7 @@ function FunnelVisualization({ stages }: { stages: typeof mockFunnel.stages }) {
                 const widthPct = Math.max(15, (stage.count / maxCount) * 100);
                 return (
                     <div key={stage.name} className="flex items-center gap-3">
-                        <div className="w-28 text-xs text-white/60 text-right shrink-0">{stage.name}</div>
+                        <div className="w-20 sm:w-28 text-[10px] sm:text-xs text-white/60 text-right shrink-0">{stage.name}</div>
                         <div className="flex-1 relative h-7">
                             <motion.div
                                 initial={{ width: 0 }}
@@ -274,15 +274,15 @@ export default function RevenueDashboard() {
     };
 
     return (
-        <div className="p-8 max-w-[1600px] mx-auto">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between mb-8"
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
             >
                 <div>
-                    <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20">
                             <BarChart3 className="h-7 w-7 text-amber-400" />
                         </div>
@@ -339,7 +339,7 @@ export default function RevenueDashboard() {
             </motion.div>
 
             {/* KPI Cards — Row 1 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
                 <MetricCard
                     title="MRR" value={mockOverview.mrr.mrr_display}
                     icon={DollarSign} trend="up" trendValue="+12.5%"
@@ -372,7 +372,7 @@ export default function RevenueDashboard() {
             </div>
 
             {/* MRR Chart + Forecasts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -395,7 +395,7 @@ export default function RevenueDashboard() {
                         </CardHeader>
                         <CardContent className="p-6">
                             <MRRSparkline data={mockMRRHistory} />
-                            <div className="grid grid-cols-6 gap-2 mt-4">
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-4">
                                 {mockMRRHistory.slice(-6).map((m) => (
                                     <div key={m.month_label} className="text-center">
                                         <p className="text-[10px] text-white/40">{m.month_label}</p>
@@ -447,7 +447,7 @@ export default function RevenueDashboard() {
             </div>
 
             {/* Funnel + Cohorts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
                 {/* Conversion Funnel */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
                     <Card className="bg-white/5 backdrop-blur-xl border-white/10">
@@ -495,7 +495,7 @@ export default function RevenueDashboard() {
             </div>
 
             {/* Credits ROI + Overage Alerts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 {/* Credit Program Performance */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
                     <Card className="bg-white/5 backdrop-blur-xl border-white/10">

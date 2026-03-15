@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 export default function NotificationsSettingsPage() {
     return (
         <>            <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-                <div className="max-w-4xl mx-auto px-4 py-12">
+                <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
                     {/* Breadcrumb */}
                     <Link href="/settings" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-6">
                         <ArrowLeft className="h-4 w-4 mr-1" />
@@ -19,7 +19,7 @@ export default function NotificationsSettingsPage() {
 
                     {/* Page Header */}
                     <div className="mb-8">
-                        <h1 className="text-4xl font-bold mb-2">Notification Preferences</h1>
+                        <h1 className="text-3xl sm:text-4xl font-bold mb-2">Notification Preferences</h1>
                         <p className="text-muted-foreground">
                             Control how you receive updates and alerts
                         </p>

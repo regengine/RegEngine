@@ -157,14 +157,14 @@ if (verifyWebhook(payload, signature, WEBHOOK_SECRET)) {
 }`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-12">
           <div className="flex items-center gap-3 mb-4">
             <Webhook className="w-8 h-8" style={{ color: 'var(--re-brand)' }} />
             <h1
-              className="text-4xl font-bold"
+              className="text-3xl sm:text-4xl font-bold"
               style={{ color: 'var(--re-text-primary)' }}
             >
               Webhooks

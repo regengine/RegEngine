@@ -5,9 +5,16 @@ import { MarketingFooter } from '@/components/layout/marketing-footer'
 import { Analytics } from '@vercel/analytics/react'
 import { PWAElements } from '@/components/mobile/PWAElements'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: 'cover',
+}
 
 export const metadata: Metadata = {
   title: 'RegEngine — API-First Regulatory Compliance',

@@ -90,7 +90,7 @@ export function MarketingFooter() {
                     ))}
                 </div>
             </div>
-            <div className="max-w-[1100px] mx-auto px-6 py-5 border-t border-[rgba(255,255,255,0.1)] flex flex-wrap justify-between items-center gap-4">
+            <div className="max-w-[1100px] mx-auto px-6 py-5 border-t border-[rgba(255,255,255,0.08)] flex flex-wrap justify-between items-center gap-4">
                 <span className="text-[0.72rem] text-[#555]">
                     &copy; 2026 RegEngine Inc. All rights reserved.
                 </span>

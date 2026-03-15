@@ -12,15 +12,16 @@ export type MarketingToolLink = {
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
     { label: "Product", href: "/product" },
-    { label: "FSMA 204 Guide", href: "/fsma-204" },
+    { label: "Retailer Readiness", href: "/retailer-readiness" },
     { label: "Pricing", href: "/pricing" },
-    { label: "Developers", href: "/docs/fsma-204" },
+    { label: "FSMA 204 Guide", href: "/fsma-204" },
 ];
 
 export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
+    { emoji: "🛡️", label: "Recall Readiness", desc: "Assess your recall response capability", href: "/tools/recall-readiness" },
+    { emoji: "📊", label: "ROI Calculator", desc: "Calculate your compliance cost savings", href: "/tools/roi-calculator" },
     { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
-    { emoji: "📊", label: "Cold Chain Monitor", desc: "Cold-chain anomaly detection sandbox", href: "/tools/fsma-unified" },
 ];
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
@@ -36,5 +37,5 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "Trust Center", href: "/trust" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    { label: "Design Partner Program", href: "/design-partner" },
+    { label: "Alpha Program", href: "/alpha" },
 ];

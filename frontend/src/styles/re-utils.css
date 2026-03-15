@@ -52,7 +52,7 @@
     background: var(--re-surface-card);
     border: 1px solid var(--re-surface-border);
     border-radius: 16px;
-    padding: 32px 28px;
+    padding: 20px 16px;
     box-shadow: var(--re-shadow-sm);
 }
 
@@ -60,17 +60,23 @@
     background: var(--re-surface-card);
     border: 1px solid var(--re-surface-border);
     border-radius: 16px;
-    padding: 32px 28px;
+    padding: 20px 16px;
 }
 
 .re-card-lp {
     background: var(--re-surface-card);
     border: 1px solid var(--re-surface-border);
-    border-radius: 3rem;
-    padding: 48px;
+    border-radius: 1.5rem;
+    padding: 24px;
     box-shadow: var(--re-shadow-lg);
     position: relative;
     overflow: hidden;
+}
+
+@media (min-width: 640px) {
+    .re-card { padding: 32px 28px; }
+    .re-card-elevated { padding: 32px 28px; }
+    .re-card-lp { padding: 48px; border-radius: 3rem; }
 }
 
 /* ─── Typography Helpers ─── */
@@ -268,4 +274,61 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
+}
+
+/* ─── Mobile-Responsive Buttons ─── */
+@media (hover: none) and (pointer: coarse) {
+    .re-btn-primary,
+    .re-btn-secondary {
+        min-height: 48px;
+        padding: 14px 24px;
+    }
+
+    .re-cta-primary,
+    .re-cta-secondary {
+        min-height: 48px;
+    }
+
+    .re-cta-primary:active,
+    .re-cta-secondary:active {
+        transform: scale(0.98);
+    }
+}
+
+/* ─── Mobile Page Content ─── */
+@media (max-width: 640px) {
+    .re-page-content {
+        padding: 0 16px 40px;
+    }
+
+    .re-page-narrow {
+        padding: 32px 16px;
+    }
+
+    .re-heading-xl {
+        font-size: 1.75rem;
+    }
+
+    .re-heading-lg {
+        font-size: 1.25rem;
+    }
+
+    .re-heading-md {
+        font-size: 1.1rem;
+    }
+
+    .re-heading-sm {
+        font-size: 1.1rem;
+    }
+
+    .re-code-block {
+        padding: 12px 14px;
+        font-size: 12px;
+    }
+
+    .re-table th,
+    .re-table td {
+        padding: 10px 12px;
+        font-size: 12px;
+    }
 }

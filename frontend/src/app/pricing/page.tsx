@@ -19,15 +19,15 @@ export const metadata: Metadata = {
 
 const T = {
     bg: 'var(--re-surface-base)',
-    surface: 'rgba(255,255,255,0.02)',
-    border: 'rgba(255,255,255,0.06)',
-    borderSubtle: 'rgba(255,255,255,0.03)',
+    surface: 'var(--re-surface-card)',
+    border: 'var(--re-surface-border)',
+    borderSubtle: 'var(--re-surface-border)',
     text: 'var(--re-text-secondary)',
     textMuted: 'var(--re-text-muted)',
     textDim: 'var(--re-text-disabled)',
     heading: 'var(--re-text-primary)',
     accent: 'var(--re-brand)',
-    accentBg: 'rgba(16,185,129,0.1)',
+    accentBg: 'var(--re-brand-muted)',
 };
 
 const PRICING_TIERS = [
@@ -112,8 +112,8 @@ export default function PricingPage() {
     return (
         <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
             {/* Hero */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '900px', margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
-                <Badge style={{ background: T.accentBg, color: T.accent, border: '1px solid rgba(16,185,129,0.2)', marginBottom: '20px' }}>
+            <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
+                <Badge style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.border}`, marginBottom: '20px' }}>
                     Transparent Pricing
                 </Badge>
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
@@ -132,7 +132,7 @@ export default function PricingPage() {
             </section>
 
             {/* Pricing Cards */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '1280px', margin: '0 auto', padding: '0 24px 60px' }}>
+            <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
                     {PRICING_TIERS.map((tier) => {
                         const Icon = tier.Icon;
@@ -141,18 +141,22 @@ export default function PricingPage() {
                                 key={tier.id}
                                 style={{
                                     background: T.surface,
-                                    border: tier.highlighted ? '2px solid rgba(16,185,129,0.3)' : `1px solid ${T.border}`,
-                                    borderRadius: '12px', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                                    border: tier.highlighted ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
+                                    borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                                    boxShadow: tier.highlighted
+                                        ? `0 8px 32px rgba(16,185,129,0.12), 0 0 0 1px ${T.border}`
+                                        : `0 2px 12px rgba(0,0,0,0.06)`,
+                                    transition: 'all 0.3s',
                                 }}
                             >
                                 {tier.highlighted && (
-                                    <div style={{ background: T.accent, color: '#000', textAlign: 'center', padding: '6px', fontSize: '12px', fontWeight: 600 }}>
+                                    <div style={{ background: T.accent, color: '#fff', textAlign: 'center', padding: '8px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.03em' }}>
                                         Most Popular
                                     </div>
                                 )}
                                 <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                                     <div className="flex items-center gap-2.5 mb-2">
-                                        <div style={{ background: tier.highlighted ? T.accentBg : T.surface, border: `1px solid ${tier.highlighted ? 'rgba(16,185,129,0.2)' : T.border}`, borderRadius: '8px', padding: '8px' }}>
+                                        <div style={{ background: tier.highlighted ? T.accentBg : 'var(--re-surface-elevated)', border: `1px solid ${T.border}`, borderRadius: '10px', padding: '8px' }}>
                                             <Icon style={{ width: 18, height: 18, color: tier.highlighted ? T.accent : T.textMuted }} />
                                         </div>
                                         <span style={{ fontSize: '18px', fontWeight: 600, color: T.heading }}>{tier.name}</span>
@@ -184,17 +188,21 @@ export default function PricingPage() {
                                         ))}
                                     </div>
 
-                                    <Link href={tier.id === 'enterprise' ? '/contact' : `/checkout?plan=${tier.id}&billing=annual`}>
+                                    <Link href={tier.id === 'enterprise' ? '/alpha' : `/checkout?plan=${tier.id}&billing=annual`}>
                                         <Button
                                             style={{
                                                 width: '100%', marginTop: '24px',
-                                                background: tier.highlighted ? T.accent : 'transparent',
-                                                color: tier.highlighted ? '#000' : T.text,
+                                                background: tier.highlighted ? T.accent : 'var(--re-surface-elevated)',
+                                                color: tier.highlighted ? '#fff' : T.heading,
                                                 border: tier.highlighted ? 'none' : `1px solid ${T.border}`,
                                                 fontWeight: 600,
+                                                borderRadius: '10px',
+                                                padding: '12px 20px',
+                                                boxShadow: tier.highlighted ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
+                                                transition: 'all 0.2s',
                                             }}
                                         >
-                                            {tier.cta}
+                                            {tier.id === 'enterprise' ? 'Join Alpha Program' : tier.cta}
                                             <ArrowRight className="ml-2 w-4 h-4" />
                                         </Button>
                                     </Link>
@@ -212,10 +220,33 @@ export default function PricingPage() {
                     <Link href="/trust" style={{ color: T.accent, textDecoration: 'underline' }}>Trust Center</Link>
                     {' '}for retention posture, support windows, and integration delivery modes before production rollout.
                 </p>
+
+                {/* Alpha callout */}
+                <div style={{
+                    maxWidth: '640px', margin: '40px auto 0',
+                    borderRadius: '16px', border: `2px solid var(--re-brand-muted)`,
+                    background: T.accentBg, padding: '24px 28px', textAlign: 'center',
+                }}>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: T.accent, marginBottom: '6px' }}>
+                        Not ready for a full plan?
+                    </p>
+                    <p style={{ fontSize: '13px', color: T.textMuted, lineHeight: 1.6, marginBottom: '16px', maxWidth: '440px', margin: '0 auto 16px' }}>
+                        Join Alpha for custom integration scoping, white-glove onboarding, and direct founder support — no multi-year contract.
+                    </p>
+                    <Link href="/alpha">
+                        <Button style={{
+                            background: T.accent, color: '#fff', fontWeight: 600,
+                            borderRadius: '10px', padding: '10px 24px',
+                            boxShadow: '0 2px 12px rgba(16,185,129,0.2)',
+                        }}>
+                            Join Alpha Program <ArrowRight className="ml-2 w-4 h-4" />
+                        </Button>
+                    </Link>
+                </div>
             </section>
 
             {/* Competitor Comparison */}
-            <section style={{ position: 'relative', zIndex: 2, background: T.surface, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, padding: '60px 24px' }}>
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: T.surface, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
                 <div className="max-w-[1000px] mx-auto">
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '12px' }}>
                         See How We Compare
@@ -223,23 +254,23 @@ export default function PricingPage() {
                     <p style={{ textAlign: 'center', color: T.textMuted, marginBottom: '40px', maxWidth: '500px', margin: '0 auto 40px' }}>
                         The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
                     </p>
-                    <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: '12px', overflow: 'hidden' }}>
+                    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                         <div style={{ overflowX: 'auto' }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead>
                                     <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                                        <th style={{ textAlign: 'left', padding: '16px', fontSize: '13px', color: T.textMuted, fontWeight: 500 }}>Feature</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', background: T.accentBg }}>
+                                        <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', color: T.heading, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feature</th>
+                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', background: T.accentBg }}>
                                             <span style={{ color: T.accent, fontWeight: 700 }}>RegEngine</span>
                                         </th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', color: T.textDim }}>FoodLogiQ</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', color: T.textDim }}>ReposiTrak</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '13px', color: T.textDim }}>TraceGains</th>
+                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: T.textDim, fontWeight: 600 }}>FoodLogiQ</th>
+                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: T.textDim, fontWeight: 600 }}>ReposiTrak</th>
+                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: T.textDim, fontWeight: 600 }}>TraceGains</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {COMPETITOR_COMPARISON.map((row, i) => (
-                                        <tr key={i} style={{ borderBottom: `1px solid ${T.borderSubtle}` }}>
+                                        <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 1 ? 'var(--re-surface-elevated)' : 'transparent' }}>
                                             <td style={{ padding: '14px 16px', fontSize: '13px', color: T.text, fontWeight: 500 }}>{row.feature}</td>
                                             <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', background: T.accentBg, color: T.accent, fontWeight: 600 }}>{row.regengine}</td>
                                             <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.foodlogiq}</td>
@@ -258,7 +289,7 @@ export default function PricingPage() {
             </section>
 
             {/* FAQ */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: '700px', margin: '0 auto', padding: '60px 24px' }}>
+            <section className="relative z-[2] max-w-[700px] mx-auto py-10 sm:py-[60px] px-4 sm:px-6">
                 <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '40px' }}>
                     Frequently Asked Questions
                 </h2>
@@ -276,7 +307,7 @@ export default function PricingPage() {
             </section>
 
             {/* CTA */}
-            <section style={{ position: 'relative', zIndex: 2, background: 'linear-gradient(135deg, var(--re-brand) 0%, #0ea5e9 100%)', padding: '60px 24px' }}>
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: 'linear-gradient(135deg, var(--re-brand) 0%, #0ea5e9 100%)' }}>
                 <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
                         Ready to Choose Your Plan?

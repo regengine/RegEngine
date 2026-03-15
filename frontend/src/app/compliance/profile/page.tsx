@@ -193,13 +193,13 @@ export default function ProductProfilePage() {
                     animate={{ opacity: 1, y: 0 }}
                 >
                     {/* Page Header */}
-                    <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+                        <div className="flex items-start sm:items-center gap-4">
                             <div className="p-3 rounded-lg bg-purple-100 dark:bg-purple-900">
                                 <Settings className="h-8 w-8 text-purple-600 dark:text-purple-400" />
                             </div>
                             <div>
-                                <h1 className="text-4xl font-bold">Product Profile</h1>
+                                <h1 className="text-3xl sm:text-4xl font-bold">Product Profile</h1>
                                 <p className="text-muted-foreground mt-1">
                                     Configure what products and regions you handle for alert matching
                                 </p>

@@ -120,24 +120,24 @@ export default function RecallReportPage() {
     const overallGrade = overallScore >= 90 ? 'A' : overallScore >= 80 ? 'B' : overallScore >= 70 ? 'C' : overallScore >= 60 ? 'D' : 'F';
 
     return (
-        <div className="min-h-screen bg-background py-10 px-4">
+        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
-                            <FileText className="h-6 w-6 text-[var(--re-brand)]" />
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Recall Readiness Report
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             FSMA 204 Traceability Preparedness Assessment
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl">
+                        <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]">
                             <Download className="h-3 w-3 mr-1" /> Export PDF
                         </Button>
-                        <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl">
+                        <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl min-h-[44px] active:scale-[0.97]">
                             <Printer className="h-3 w-3 mr-1" /> Print
                         </Button>
                     </div>
@@ -151,24 +151,24 @@ export default function RecallReportPage() {
                 {/* Overall Score Card */}
                 <Card className="border-[var(--re-border-default)] overflow-hidden">
                     <div className="h-1 bg-gradient-to-r from-[var(--re-brand)] to-blue-500" />
-                    <CardContent className="py-8">
-                        <div className="flex items-center justify-between">
+                    <CardContent className="py-5 sm:py-8">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                             <div>
-                                <div className="text-sm text-muted-foreground mb-1">Overall Readiness Score</div>
-                                <div className="flex items-baseline gap-3">
-                                    <span className="text-5xl font-bold" style={{ color: gradeColor(overallGrade) }}>
+                                <div className="text-xs sm:text-sm text-muted-foreground mb-1">Overall Readiness Score</div>
+                                <div className="flex items-baseline gap-2 sm:gap-3 flex-wrap">
+                                    <span className="text-3xl sm:text-5xl font-bold" style={{ color: gradeColor(overallGrade) }}>
                                         {overallScore}
                                     </span>
-                                    <span className="text-2xl text-muted-foreground">/100</span>
-                                    <Badge className="text-lg px-3 py-1" style={{ background: gradeColor(overallGrade), color: '#fff' }}>
+                                    <span className="text-lg sm:text-2xl text-muted-foreground">/100</span>
+                                    <Badge className="text-sm sm:text-lg px-2.5 sm:px-3 py-0.5 sm:py-1" style={{ background: gradeColor(overallGrade), color: '#fff' }}>
                                         {overallGrade}
                                     </Badge>
                                 </div>
-                                <div className="text-sm text-muted-foreground mt-2">
+                                <div className="text-xs sm:text-sm text-muted-foreground mt-2">
                                     Estimated response time: <strong>4.2 hours</strong> (target: &lt; 24 hours ✅)
                                 </div>
                             </div>
-                            <div className="text-right text-xs text-muted-foreground">
+                            <div className="text-left sm:text-right text-[11px] sm:text-xs text-muted-foreground">
                                 <div>Generated: {new Date().toLocaleDateString()}</div>
                                 <div>21 CFR 1.1455 Assessment</div>
                             </div>
@@ -177,21 +177,21 @@ export default function RecallReportPage() {
                 </Card>
 
                 {/* Dimension Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {DIMENSIONS.map((dim) => {
                         const Icon = dim.icon;
                         const isExpanded = expanded === dim.id;
                         return (
                             <motion.div key={dim.id} layout>
                                 <Card
-                                    className={`cursor-pointer border transition-all ${isExpanded ? 'border-[var(--re-brand)] col-span-2' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'}`}
+                                    className={`cursor-pointer border transition-all active:scale-[0.98] ${isExpanded ? 'border-[var(--re-brand)] col-span-2' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'}`}
                                     onClick={() => setExpanded(isExpanded ? null : dim.id)}
                                 >
-                                    <CardContent className="py-4">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-2">
-                                                <Icon className="h-4 w-4" style={{ color: dim.color }} />
-                                                <span className="text-sm font-medium">{dim.name}</span>
+                                    <CardContent className="py-3 sm:py-4">
+                                        <div className="flex items-center justify-between mb-2 min-h-[44px]">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <Icon className="h-4 w-4 flex-shrink-0" style={{ color: dim.color }} />
+                                                <span className="text-xs sm:text-sm font-medium truncate">{dim.name}</span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-lg font-bold" style={{ color: dim.color }}>{dim.score}</span>
@@ -251,15 +251,15 @@ export default function RecallReportPage() {
                     <CardContent>
                         <div className="space-y-2">
                             {ACTION_ITEMS.map((item, i) => (
-                                <div key={i} className="flex items-center gap-3 p-3 rounded-xl border border-[var(--re-border-default)]">
-                                    <Badge className={`text-[9px] px-2 ${item.priority === 'HIGH' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                                <div key={i} className="flex items-center gap-2 sm:gap-3 p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px]">
+                                    <Badge className={`text-[9px] px-2 flex-shrink-0 ${item.priority === 'HIGH' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
                                             item.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                                                 'bg-blue-500/10 text-blue-500 border-blue-500/20'
                                         }`}>
                                         {item.priority}
                                     </Badge>
-                                    <div className="flex-1">
-                                        <div className="text-sm">{item.action}</div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-xs sm:text-sm">{item.action}</div>
                                         <div className="text-[10px] text-muted-foreground">{item.impact} · {item.effort} effort</div>
                                     </div>
                                 </div>

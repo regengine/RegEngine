@@ -154,12 +154,12 @@ export default function LabelsPage() {
       <PageContainer>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           {/* Page Header */}
-          <div className="flex items-center gap-4 mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
             <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
               <QrCode className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold">Traceability Label Generator</h1>
+              <h1 className="text-3xl sm:text-4xl font-bold">Traceability Label Generator</h1>
               <p className="text-muted-foreground mt-1">
                 Generate FSMA 204 compliant labels with QR codes and ZPL for thermal printing
               </p>

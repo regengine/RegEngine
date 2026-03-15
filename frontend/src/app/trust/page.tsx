@@ -23,7 +23,6 @@ export const metadata: Metadata = {
         type: 'website',
     },
 };
-
 const STATUS_SUMMARY = [
     {
         label: 'GA',
@@ -50,183 +49,131 @@ const STATUS_SUMMARY = [
         detail: 'Requires customer-specific mapping, implementation, or support before production use.',
     },
 ];
+/* Card style helper — uses CSS variables for light+dark mode */
+const card = 'rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-sm';
+const cardInner = 'rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-4';
+const sectionAlt = 'border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)]';
 
 export default function TrustCenterPage() {
     const capabilityCount = CAPABILITY_REGISTRY.length;
 
     return (
         <div className="re-page">
-            <section className="relative z-[2] max-w-[860px] mx-auto pt-20 px-6 pb-14">
+            {/* ─── HEADER ─── */}
+            <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10 sm:pb-14">
                 <span className="text-[11px] font-mono font-medium text-re-text-disabled tracking-widest uppercase">
                     Trust Center
                 </span>
                 <h1 className="text-4xl font-bold text-re-text-primary mt-4 mb-4 leading-tight">
-                    Customer diligence, without the guesswork
+                    We built this page so you never have to guess what you&apos;re buying
                 </h1>
                 <p className="text-base text-re-text-muted leading-relaxed max-w-[720px]">
-                    RegEngine is a traceability evidence layer, not a magical system-of-record replacement.
-                    This page explains product status, delivery modes, retention expectations, support posture,
-                    and which diligence materials are public versus provided on request.
-                </p>
-                <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    Product status, data ownership, retention terms, and diligence materials — all in one place.
+                    RegEngine is a compliance evidence layer, not a system-of-record replacement.
+                    Everything here is kept current so buyers and acquirers can do diligence without scheduling a call.
+                </p>                <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                    <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Capability Registry</div>
                         <div className="mt-2 text-2xl font-bold text-re-text-primary">{capabilityCount}</div>
                         <div className="text-sm text-re-text-muted mt-1">Customer-visible entries rendered from one shared status model</div>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Retention Posture</div>
                         <div className="mt-2 text-2xl font-bold text-re-text-primary">90 days</div>
                         <div className="text-sm text-re-text-muted mt-1">Post-cancellation window before deletion unless customers export or archive externally</div>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-xs uppercase tracking-widest text-re-text-disabled">Data Residency</div>
                         <div className="mt-2 text-2xl font-bold text-re-text-primary">US</div>
                         <div className="text-sm text-re-text-muted mt-1">Default hosting posture is US-based infrastructure for current deployments</div>
                     </div>
                 </div>
             </section>
-
-            <section className="relative z-[2] max-w-[980px] mx-auto px-6 pb-14">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-4">Status model</h2>
-                <div className="grid gap-3 md:grid-cols-2">
-                    {STATUS_SUMMARY.map((item) => (
-                        <div key={item.label} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                            <div className="text-sm font-semibold text-re-text-primary">{item.label}</div>
-                            <p className="text-sm text-re-text-muted mt-1 leading-relaxed">{item.detail}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] bg-white/[0.01]">
-                <div className="max-w-[980px] mx-auto py-14 px-6">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-3">What RegEngine actually does in your stack</h2>
-                    <p className="text-sm text-re-text-muted max-w-[720px] mb-6">
-                        RegEngine ingests upstream traceability data, normalizes it into FSMA workflows, attaches audit-integrity metadata,
-                        and prepares regulator- or retailer-ready exports. It still depends on upstream data quality, stable identities,
-                        and review of missing or conflicting KDEs.
-                    </p>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                            <h3 className="text-sm font-semibold text-re-text-primary">Operational realities</h3>
-                            <ul className="mt-3 space-y-2 text-sm text-re-text-muted">
-                                <li>Source-system fields must be mapped into FSMA CTE and KDE structures.</li>
-                                <li>Lot codes, GLNs, product IDs, and facility identities have to be normalized.</li>
-                                <li>Missing KDEs and conflicting facility matches still require human review.</li>
-                                <li>Cryptographic hashing proves integrity after ingest, not truth of upstream data entry.</li>
-                            </ul>
-                        </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                            <h3 className="text-sm font-semibold text-re-text-primary">Retention and support boundaries</h3>
-                            <ul className="mt-3 space-y-2 text-sm text-re-text-muted">
-                                <li>Customers should schedule recurring exports and maintain off-platform archives from day one.</li>
-                                <li>Public support windows are not a substitute for recall-readiness operations.</li>
-                                <li>Enterprise escalation and SLA terms are contractual, not implied by public pricing copy.</li>
-                                <li>Security and diligence materials are a mix of public pages and request/NDA workflows.</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
-                <div className="flex items-end justify-between gap-4 mb-5">
-                    <div>
-                        <h2 className="text-2xl font-bold text-re-text-primary">Artifacts and diligence materials</h2>
-                        <p className="text-sm text-re-text-muted mt-1">Public pages are linked directly. Request and NDA items route through contact.</p>
-                    </div>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                    {TRUST_ARTIFACTS.map((artifact) => (
-                        <div key={artifact.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="text-sm font-semibold text-re-text-primary">{artifact.title}</div>
-                                <span className="text-[10px] uppercase tracking-widest text-re-text-disabled">{artifact.access}</span>
-                            </div>
-                            <p className="text-sm text-re-text-muted mt-2 leading-relaxed">{artifact.summary}</p>
-                            <Link href={artifact.href} className="inline-block mt-3 text-sm text-re-brand hover:opacity-90">
-                                Open →
-                            </Link>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] bg-white/[0.01]">
-                <div className="max-w-[980px] mx-auto py-14 px-6">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-4">Integration classification</h2>
-                    <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
-                        Each integration is classified by both delivery mode and integration type. Integration type uses the procurement diligence taxonomy: Native Bidirectional, API-Based Custom, File-Based Import, or One-Way Export Adapter.
-                    </p>
-
-                    <div className="grid gap-3 md:grid-cols-2 mb-8">
-                        {(Object.keys(INTEGRATION_TYPE_LABELS) as IntegrationType[]).map((type) => (
-                            <div key={type} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                                <div className="text-sm font-semibold text-re-text-primary">{INTEGRATION_TYPE_LABELS[type]}</div>
-                                <p className="text-sm text-re-text-muted mt-1">{INTEGRATION_TYPE_DESCRIPTIONS[type]}</p>
-                                <p className="text-xs text-re-text-disabled mt-2">Verify: {INTEGRATION_TYPE_VERIFY[type]}</p>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="overflow-x-auto rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                        <table className="w-full border-collapse">
-                            <thead>
-                                <tr className="border-b border-white/[0.06] text-left text-xs uppercase tracking-widest text-re-text-disabled">
-                                    <th className="p-3">Capability</th>
-                                    <th className="p-3">Status</th>
-                                    <th className="p-3">Integration type</th>
-                                    <th className="p-3">Delivery mode</th>
-                                    <th className="p-3">Customer meaning</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {CAPABILITY_REGISTRY.map((item) => (
-                                    <tr key={item.id} className="border-b border-white/[0.04] align-top">
-                                        <td className="p-3 text-sm font-medium text-re-text-primary">{item.name}</td>
-                                        <td className="p-3 text-sm text-re-text-muted">{STATUS_LABELS[item.status]}</td>
-                                        <td className="p-3 text-sm text-re-text-muted">{INTEGRATION_TYPE_LABELS[item.integration_type]}</td>
-                                        <td className="p-3 text-sm text-re-text-muted">{DELIVERY_MODE_LABELS[item.delivery_mode]}</td>
-                                        <td className="p-3 text-sm text-re-text-muted">{item.customer_copy}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] bg-white/[0.01]">
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+            {/* ─── SOURCE-OF-TRUTH POSITIONING (moved up) ─── */}
+            <section className={`relative z-[2] ${sectionAlt}`}>
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="text-2xl font-bold text-re-text-primary mb-4">Source-of-truth positioning</h2>
                     <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                         RegEngine is a compliance evidence layer, not a system-of-record replacement. This distinction drives retention, audit ownership, and liability boundaries.
                     </p>
                     <div className="grid gap-3 md:grid-cols-3">
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Evidence layer (current posture)</div>
                             <p className="text-sm text-re-text-muted mt-2">You own the data and compliance posture. RegEngine documents, normalizes, and exports it. Audit response liability remains with the customer.</p>
                         </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Not a system of record</div>
                             <p className="text-sm text-re-text-muted mt-2">RegEngine does not replace your ERP, WMS, or operational food safety system. Source data quality is inherited from upstream systems.</p>
                         </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Full data portability</div>
                             <p className="text-sm text-re-text-muted mt-2">All CTE events, KDE fields, lot records, and supplier relationships are exportable in EPCIS 2.0 JSON-LD, FDA sortable spreadsheet, or CSV.</p>
                         </div>
                     </div>
                 </div>
             </section>
-
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
+            {/* ─── RETENTION + SUPPORT BOUNDARIES (moved up) ─── */}
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3">What RegEngine actually does in your stack</h2>
+                <p className="text-sm text-re-text-muted max-w-[720px] mb-6">
+                    RegEngine ingests upstream traceability data, normalizes it into FSMA workflows, attaches audit-integrity metadata,
+                    and prepares regulator- or retailer-ready exports. It still depends on upstream data quality, stable identities,
+                    and review of missing or conflicting KDEs.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                    <div className={`${card} p-5`}>
+                        <h3 className="text-sm font-semibold text-re-text-primary">Operational realities</h3>
+                        <ul className="mt-3 space-y-2 text-sm text-re-text-muted">
+                            <li>Source-system fields must be mapped into FSMA CTE and KDE structures.</li>
+                            <li>Lot codes, GLNs, product IDs, and facility identities have to be normalized.</li>
+                            <li>Missing KDEs and conflicting facility matches still require human review.</li>
+                            <li>Cryptographic hashing proves integrity after ingest, not truth of upstream data entry.</li>
+                        </ul>
+                    </div>
+                    <div className={`${card} p-5`}>
+                        <h3 className="text-sm font-semibold text-re-text-primary">Retention and support boundaries</h3>
+                        <ul className="mt-3 space-y-2 text-sm text-re-text-muted">
+                            <li>Customers should schedule recurring exports and maintain off-platform archives from day one.</li>
+                            <li>Public support windows are not a substitute for recall-readiness operations.</li>
+                            <li>Enterprise escalation and SLA terms are contractual, not implied by public pricing copy.</li>
+                            <li>Security and diligence materials are a mix of public pages and request/NDA workflows.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+            {/* ─── ARTIFACTS ─── */}
+            <section className={`relative z-[2] ${sectionAlt}`}>
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
+                    <div className="flex items-end justify-between gap-4 mb-5">
+                        <div>
+                            <h2 className="text-2xl font-bold text-re-text-primary">Artifacts and diligence materials</h2>
+                            <p className="text-sm text-re-text-muted mt-1">Public pages are linked directly. Request and NDA items route through contact.</p>
+                        </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                        {TRUST_ARTIFACTS.map((artifact) => (
+                            <div key={artifact.id} className={`${card} p-4`}>
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="text-sm font-semibold text-re-text-primary">{artifact.title}</div>
+                                    <span className="text-[10px] uppercase tracking-widest text-re-text-disabled">{artifact.access}</span>
+                                </div>
+                                <p className="text-sm text-re-text-muted mt-2 leading-relaxed">{artifact.summary}</p>
+                                <Link href={artifact.href} className="inline-block mt-3 text-sm text-re-brand hover:opacity-90">
+                                    Open →
+                                </Link>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+            {/* ─── DATA PORTABILITY ─── */}
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-4">Data portability and exit rights</h2>
                 <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                     Export your data means more than downloading a CSV. RegEngine provides complete, integrity-verified exports that can reconstitute compliance records without vendor assistance.
                 </p>
                 <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Export formats</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>GS1 EPCIS 2.0 JSON-LD (industry standard)</li>
@@ -235,7 +182,7 @@ export default function TrustCenterPage() {
                             <li>Audit evidence bundle with manifest hashing</li>
                         </ul>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Integrity and chain of custody</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>SHA-256 hash chain verification on all CTE records</li>
@@ -243,8 +190,7 @@ export default function TrustCenterPage() {
                             <li>Export history log with verification endpoint</li>
                             <li>Records are self-describing and re-importable</li>
                         </ul>
-                    </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    </div>                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Automated export scheduling</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>Daily, weekly, or monthly export cadence</li>
@@ -253,7 +199,7 @@ export default function TrustCenterPage() {
                             <li>Failed export runs flagged for re-processing</li>
                         </ul>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Retention and deletion</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>90-day post-cancellation retention window</li>
@@ -264,15 +210,15 @@ export default function TrustCenterPage() {
                     </div>
                 </div>
             </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] bg-white/[0.01]">
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+            {/* ─── UPSTREAM DATA QUALITY ─── */}
+            <section className={`relative z-[2] ${sectionAlt}`}>
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <h2 className="text-2xl font-bold text-re-text-primary mb-4">Upstream data quality controls</h2>
                     <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                         RegEngine validates incoming CTE/KDE records at ingestion time. Incomplete or non-compliant records are rejected or flagged before they enter the compliance evidence chain.
                     </p>
                     <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Ingestion validation</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                                 <li>Per-CTE-type required KDE validation (7 CTE types)</li>
@@ -282,7 +228,7 @@ export default function TrustCenterPage() {
                                 <li>Location requirement validation per CTE</li>
                             </ul>
                         </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Rejection and flagging</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                                 <li>Missing required KDEs trigger event rejection with detailed error messages</li>
@@ -290,8 +236,7 @@ export default function TrustCenterPage() {
                                 <li>Batch deduplication prevents duplicate CTE submissions</li>
                                 <li>Rejected events returned with status and actionable error detail</li>
                             </ul>
-                        </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        </div>                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Supplier data quality scoring</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                                 <li>Per-supplier KDE completeness rate tracking</li>
@@ -300,7 +245,7 @@ export default function TrustCenterPage() {
                                 <li>Volume anomaly detection for unusual submission patterns</li>
                             </ul>
                         </div>
-                        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <div className={`${card} p-4`}>
                             <div className="text-sm font-semibold text-re-text-primary">Compliance readiness scoring</div>
                             <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                                 <li>Six-dimensional score: chain integrity, KDE completeness, CTE coverage, obligation coverage, product coverage, export readiness</li>
@@ -312,14 +257,14 @@ export default function TrustCenterPage() {
                     </div>
                 </div>
             </section>
-
-            <section className="relative z-[2] max-w-[980px] mx-auto py-14 px-6">
+            {/* ─── REGULATORY INTERPRETATION ─── */}
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-4">Regulatory interpretation tracking</h2>
                 <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
                     FSMA 204 compliance logic embeds vendor interpretation of FDA guidance. RegEngine tracks and documents which guidance versions inform its validation rules, export formats, and compliance algorithms.
                 </p>
                 <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Current regulatory basis</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>FDA Final Rule: Requirements for Additional Traceability Records (21 CFR Part 1, Subpart S)</li>
@@ -328,7 +273,7 @@ export default function TrustCenterPage() {
                             <li>FDA Guidance: Key Data Elements — March 2024 draft</li>
                         </ul>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className={`${card} p-4`}>
                         <div className="text-sm font-semibold text-re-text-primary">Update mechanism</div>
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>Validation rules versioned with FDA guidance reference</li>
@@ -339,18 +284,18 @@ export default function TrustCenterPage() {
                     </div>
                 </div>
             </section>
-
-            <section className="relative z-[2] border-t border-white/[0.06] bg-white/[0.01]">
-                <div className="max-w-[980px] mx-auto py-14 px-6">
+            {/* ─── SUPPORT + ARCHIVE ─── */}
+            <section className={`relative z-[2] ${sectionAlt}`}>
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                    <div className={`${card} p-5`}>
                         <h2 className="text-2xl font-bold text-re-text-primary mb-2">Support and escalation</h2>
                         <p className="text-sm text-re-text-muted mb-4">
                             Support posture depends on plan tier. Customers should not rely on ad hoc vendor intervention to satisfy statutory retention or a live recall response.
                         </p>
                         <div className="space-y-3">
                             {SUPPORT_CHANNELS.map((channel) => (
-                                <div key={channel.tier} className="rounded-lg border border-white/[0.06] bg-black/10 p-4">
+                                <div key={channel.tier} className={cardInner}>
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="text-sm font-semibold text-re-text-primary">{channel.tier}</div>
                                         <div className="text-xs text-re-text-disabled">{channel.responseWindow}</div>
@@ -361,14 +306,13 @@ export default function TrustCenterPage() {
                             ))}
                         </div>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                    <div className={`${card} p-5`}>
                         <h2 className="text-2xl font-bold text-re-text-primary mb-2">Archive posture</h2>
                         <p className="text-sm text-re-text-muted mb-4">
                             The current product interface shows the export-job contract pattern: scheduled bundle configuration, manifest hashing, and external archive destinations. Persistent backend scheduling is separate follow-on work.
-                        </p>
-                        <div className="space-y-3">
+                        </p>                        <div className="space-y-3">
                             {ARCHIVE_EXPORT_JOBS.map((job) => (
-                                <div key={job.id} className="rounded-lg border border-white/[0.06] bg-black/10 p-4">
+                                <div key={job.id} className={cardInner}>
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="text-sm font-semibold text-re-text-primary">{job.name}</div>
                                         <div className="text-[10px] uppercase tracking-widest text-re-text-disabled">{job.status.replaceAll('_', ' ')}</div>
@@ -388,6 +332,69 @@ export default function TrustCenterPage() {
                     </div>
                     </div>
                 </div>
+            </section>
+            {/* ─── CAPABILITY REGISTRY (collapsible for technical diligence) ─── */}
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
+                <details className={`${card} overflow-hidden`}>
+                    <summary className="cursor-pointer p-5 flex items-center justify-between gap-4 select-none">
+                        <div>
+                            <h2 className="text-2xl font-bold text-re-text-primary inline">Full Capability Registry</h2>
+                            <span className="text-sm text-re-text-muted ml-2">(for technical diligence)</span>
+                        </div>
+                        <span className="text-re-text-disabled text-sm shrink-0">Click to expand</span>
+                    </summary>
+                    <div className="px-5 pb-5">
+                        {/* Status model */}
+                        <h3 className="text-lg font-bold text-re-text-primary mb-3">Status model</h3>
+                        <div className="grid gap-3 md:grid-cols-2 mb-8">
+                            {STATUS_SUMMARY.map((item) => (
+                                <div key={item.label} className={`${card} p-4`}>
+                                    <div className="text-sm font-semibold text-re-text-primary">{item.label}</div>
+                                    <p className="text-sm text-re-text-muted mt-1 leading-relaxed">{item.detail}</p>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Integration classification */}
+                        <h3 className="text-lg font-bold text-re-text-primary mb-3">Integration classification</h3>
+                        <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
+                            Each integration is classified by both delivery mode and integration type. Integration type uses the procurement diligence taxonomy: Native Bidirectional, API-Based Custom, File-Based Import, or One-Way Export Adapter.
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-2 mb-8">
+                            {(Object.keys(INTEGRATION_TYPE_LABELS) as IntegrationType[]).map((type) => (
+                                <div key={type} className={`${card} p-4`}>
+                                    <div className="text-sm font-semibold text-re-text-primary">{INTEGRATION_TYPE_LABELS[type]}</div>
+                                    <p className="text-sm text-re-text-muted mt-1">{INTEGRATION_TYPE_DESCRIPTIONS[type]}</p>
+                                    <p className="text-xs text-re-text-disabled mt-2">Verify: {INTEGRATION_TYPE_VERIFY[type]}</p>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Full capability table */}
+                        <div className={`overflow-x-auto ${card}`}>
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="border-b border-[var(--re-surface-border)] text-left text-xs uppercase tracking-widest text-re-text-disabled">
+                                        <th className="p-3">Capability</th>
+                                        <th className="p-3">Status</th>
+                                        <th className="p-3">Integration type</th>
+                                        <th className="p-3">Delivery mode</th>
+                                        <th className="p-3">Customer meaning</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {CAPABILITY_REGISTRY.map((item) => (
+                                        <tr key={item.id} className="border-b border-[var(--re-border-subtle)] align-top">
+                                            <td className="p-3 text-sm font-medium text-re-text-primary">{item.name}</td>
+                                            <td className="p-3 text-sm text-re-text-muted">{STATUS_LABELS[item.status]}</td>
+                                            <td className="p-3 text-sm text-re-text-muted">{INTEGRATION_TYPE_LABELS[item.integration_type]}</td>
+                                            <td className="p-3 text-sm text-re-text-muted">{DELIVERY_MODE_LABELS[item.delivery_mode]}</td>
+                                            <td className="p-3 text-sm text-re-text-muted">{item.customer_copy}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </details>
             </section>
         </div>
     );

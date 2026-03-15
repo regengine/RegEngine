@@ -148,9 +148,9 @@ export default function APIPlayground() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--re-bg-primary)', color: 'var(--re-text-primary)' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(1.5rem, 5vw, 40px) clamp(1rem, 4vw, 32px)' }}>
         {/* Header */}
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: 'clamp(1rem, 4vw, 32px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <Terminal size={28} style={{ color: 'var(--re-brand)' }} />
             <h1 style={{ fontSize: '28px', fontWeight: '600', margin: 0 }}>API Playground</h1>

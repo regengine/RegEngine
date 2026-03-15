@@ -153,10 +153,10 @@ export default function UserSettingsPage() {
     }
 
     return (
-        <div className="container mx-auto py-8 max-w-5xl space-y-8">
-            <div className="flex justify-between items-center">
+        <div className="container mx-auto py-6 sm:py-8 px-4 sm:px-6 max-w-5xl space-y-6 sm:space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Team Management</h1>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Team Management</h1>
                     <p className="text-muted-foreground">Manage users, roles, and invitations.</p>
                 </div>
                 <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
@@ -221,7 +221,7 @@ export default function UserSettingsPage() {
                             <CardTitle>Active Members</CardTitle>
                             <CardDescription>Users with access to this tenant.</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -276,7 +276,7 @@ export default function UserSettingsPage() {
                             <CardTitle>Pending Invitations</CardTitle>
                             <CardDescription>Invitations sent but not yet accepted.</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow>

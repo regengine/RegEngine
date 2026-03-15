@@ -200,16 +200,16 @@ export default function SupplierDashboardPage() {
 
     /* ---------- Render -------------------------------------------- */
     return (
-        <div className="min-h-screen bg-background py-10 px-4">
+        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
             <div className="max-w-5xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold flex items-center gap-3">
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-3">
                             <Users className="h-6 w-6 text-[var(--re-brand)]" />
                             Supplier Management
                         </h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Track facilities, compliance & traceability across your supply chain
                         </p>
                     </div>
@@ -217,15 +217,15 @@ export default function SupplierDashboardPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl"
+                            className="rounded-xl min-h-[44px]"
                             onClick={() => loadData()}
                             disabled={loading}
                         >
-                            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+                            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
                         </Button>
                         <Button
                             onClick={() => setShowAddForm(!showAddForm)}
-                            className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                            className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]"
                             disabled={!isLoggedIn}
                         >
                             <Plus className="h-4 w-4 mr-1" /> Add Facility
@@ -241,7 +241,7 @@ export default function SupplierDashboardPage() {
                 )}
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                     {[
                         { label: 'Facilities', value: totalFacilities, icon: Users },
                         { label: 'Compliant', value: compliantCount, icon: CheckCircle2 },
@@ -249,12 +249,12 @@ export default function SupplierDashboardPage() {
                         { label: 'Compliance Rate', value: `${complianceRate}%`, icon: Activity },
                     ].map((stat) => (
                         <Card key={stat.label} className="border-[var(--re-border-default)]">
-                            <CardContent className="py-4">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <stat.icon className="h-4 w-4 text-[var(--re-brand)]" />
-                                    <span className="text-xs text-muted-foreground">{stat.label}</span>
+                            <CardContent className="py-3 sm:py-4">
+                                <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                                    <stat.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-[var(--re-brand)] flex-shrink-0" />
+                                    <span className="text-[11px] sm:text-xs text-muted-foreground truncate">{stat.label}</span>
                                 </div>
-                                <div className="text-2xl font-bold">{loading ? '—' : stat.value}</div>
+                                <div className="text-xl sm:text-2xl font-bold">{loading ? '—' : stat.value}</div>
                             </CardContent>
                         </Card>
                     ))}
@@ -265,41 +265,41 @@ export default function SupplierDashboardPage() {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
                         <Card className="border-[var(--re-brand)]">
                             <CardContent className="py-4">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                                     <Input
                                         value={newName}
                                         onChange={e => setNewName(e.target.value)}
                                         placeholder="Facility name"
-                                        className="rounded-xl"
+                                        className="rounded-xl min-h-[44px]"
                                     />
                                     <Input
                                         value={newStreet}
                                         onChange={e => setNewStreet(e.target.value)}
                                         placeholder="Street address"
-                                        className="rounded-xl"
+                                        className="rounded-xl min-h-[44px]"
                                     />
                                     <Input
                                         value={newCity}
                                         onChange={e => setNewCity(e.target.value)}
                                         placeholder="City"
-                                        className="rounded-xl"
+                                        className="rounded-xl min-h-[44px]"
                                     />
                                     <Input
                                         value={newState}
                                         onChange={e => setNewState(e.target.value)}
                                         placeholder="State"
-                                        className="rounded-xl"
+                                        className="rounded-xl min-h-[44px]"
                                     />
                                     <Input
                                         value={newPostalCode}
                                         onChange={e => setNewPostalCode(e.target.value)}
                                         placeholder="Postal code"
-                                        className="rounded-xl"
+                                        className="rounded-xl min-h-[44px]"
                                     />
                                     <Button
                                         onClick={handleAdd}
                                         disabled={adding || !newName.trim() || !newStreet.trim()}
-                                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                                        className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] active:scale-[0.97]"
                                     >
                                         {adding ? <Spinner size="sm" /> : <><Plus className="h-4 w-4 mr-1" /> Create</>}
                                     </Button>
@@ -327,7 +327,7 @@ export default function SupplierDashboardPage() {
                             </p>
                             <Button
                                 onClick={() => setShowAddForm(true)}
-                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl"
+                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] active:scale-[0.97]"
                             >
                                 <Plus className="h-4 w-4 mr-1" /> Add Facility
                             </Button>
@@ -350,11 +350,11 @@ export default function SupplierDashboardPage() {
                                     transition={{ delay: i * 0.05 }}
                                 >
                                     <Card className="border-[var(--re-border-default)] hover:border-[var(--re-brand)] transition-all">
-                                        <CardContent className="py-4">
-                                            <div className="flex items-center justify-between flex-wrap gap-3">
+                                        <CardContent className="py-3 sm:py-4">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
                                                 <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-medium">{facility.name}</span>
+                                                    <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                                                        <span className="font-medium text-sm sm:text-base">{facility.name}</span>
                                                         <Badge
                                                             className="text-[9px] px-1.5 py-0"
                                                             style={{ background: comp.bg, color: comp.color }}
@@ -373,9 +373,9 @@ export default function SupplierDashboardPage() {
                                                             </Badge>
                                                         )}
                                                     </div>
-                                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                                    <div className="flex items-center gap-2 sm:gap-4 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
                                                         <span className="flex items-center gap-1">
-                                                            <Mail className="h-3 w-3" />
+                                                            <Mail className="h-3 w-3 flex-shrink-0" />
                                                             {facility.city}, {facility.state} {facility.postal_code}
                                                         </span>
                                                         <span>{facility.tlcCount} TLC{facility.tlcCount !== 1 ? 's' : ''}</span>
@@ -386,7 +386,7 @@ export default function SupplierDashboardPage() {
                                                         )}
                                                     </div>
                                                     {facility.roles && facility.roles.length > 0 && (
-                                                        <div className="flex gap-1 mt-2">
+                                                        <div className="flex gap-1 mt-1.5 sm:mt-2 flex-wrap">
                                                             {facility.roles.map((role) => (
                                                                 <Badge key={role} variant="outline" className="text-[9px] py-0">
                                                                     {role}
@@ -398,10 +398,10 @@ export default function SupplierDashboardPage() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    className="rounded-xl flex-shrink-0"
+                                                    className="rounded-xl flex-shrink-0 min-h-[44px] active:scale-[0.97] w-full sm:w-auto"
                                                     onClick={() => handleFDAExport('xlsx', facility.id)}
                                                 >
-                                                    <Download className="h-3 w-3 mr-1" />
+                                                    <Download className="h-3.5 w-3.5 mr-1" />
                                                     FDA Export
                                                 </Button>
                                             </div>
@@ -415,22 +415,22 @@ export default function SupplierDashboardPage() {
 
                 {/* Bulk FDA Export */}
                 {!loading && facilities.length > 0 && (
-                    <div className="flex justify-end gap-2 pt-2">
+                    <div className="flex flex-col sm:flex-row justify-end gap-2 pt-2">
                         <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl"
+                            className="rounded-xl min-h-[44px] active:scale-[0.97]"
                             onClick={() => handleFDAExport('xlsx')}
                         >
-                            <Download className="h-3 w-3 mr-1" /> Export All (XLSX)
+                            <Download className="h-3.5 w-3.5 mr-1" /> Export All (XLSX)
                         </Button>
                         <Button
                             variant="outline"
                             size="sm"
-                            className="rounded-xl"
+                            className="rounded-xl min-h-[44px] active:scale-[0.97]"
                             onClick={() => handleFDAExport('csv')}
                         >
-                            <Download className="h-3 w-3 mr-1" /> Export All (CSV)
+                            <Download className="h-3.5 w-3.5 mr-1" /> Export All (CSV)
                         </Button>
                     </div>
                 )}
