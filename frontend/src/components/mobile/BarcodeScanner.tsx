@@ -13,8 +13,12 @@ interface BarcodeScannerProps {
 
 export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     const [isScanning, setIsScanning] = useState(false);
+    const [continuous, setContinuous] = useState(false);
+    const [scanCount, setScanCount] = useState(0);
+    const [lastCode, setLastCode] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const scannerRef = useRef<Html5Qrcode | null>(null);
+    const cooldownRef = useRef(false);
     const scannerRegionId = 'html5qr-code-full-region';
 
     useEffect(() => {
@@ -62,15 +66,30 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
                     aspectRatio: 1.0
                 },
                 (decodedText) => {
-                    // Success callback
+                    // Dedupe: skip if same code scanned within cooldown
+                    if (cooldownRef.current) return;
+                    if (decodedText === lastCode) return;
+
                     // Haptic feedback
                     if (navigator.vibrate) navigator.vibrate(200);
-
-                    setIsScanning(false);
-                    if (scannerRef.current) {
-                        scannerRef.current.stop().catch(console.error);
-                    }
+                    setLastCode(decodedText);
+                    setScanCount((c) => c + 1);
                     onScan(decodedText);
+
+                    if (!continuous) {
+                        // Single-scan mode: stop after first read
+                        setIsScanning(false);
+                        if (scannerRef.current) {
+                            scannerRef.current.stop().catch(console.error);
+                        }
+                    } else {
+                        // Continuous mode: cooldown to prevent rapid duplicate reads
+                        cooldownRef.current = true;
+                        setTimeout(() => {
+                            cooldownRef.current = false;
+                            setLastCode(null);
+                        }, 1500);
+                    }
                 },
                 (errorMessage) => {
                     // Error callback (called frequently when no code found)
@@ -119,22 +138,35 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
                 </Alert>
             )}
 
+            {/* Continuous mode toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                    type="checkbox"
+                    checked={continuous}
+                    onChange={(e) => setContinuous(e.target.checked)}
+                    className="rounded border-input h-4 w-4 accent-primary"
+                />
+                <span className="text-xs font-medium text-muted-foreground">
+                    Continuous scan {continuous && scanCount > 0 && `(${scanCount} scanned)`}
+                </span>
+            </label>
+
             <div className="flex gap-2">
                 {!isScanning ? (
-                    <Button onClick={startScanning} size="lg" className="w-full">
+                    <Button onClick={() => { setScanCount(0); setLastCode(null); startScanning(); }} size="lg" className="w-full">
                         <Camera className="mr-2 h-4 w-4" />
-                        Scan Barcode
+                        {continuous ? 'Start Batch Scan' : 'Scan Barcode'}
                     </Button>
                 ) : (
                     <Button onClick={stopScanning} variant="destructive" size="lg" className="w-full">
-                        Stop Scanning
+                        {continuous ? `Stop (${scanCount} scanned)` : 'Stop Scanning'}
                     </Button>
                 )}
             </div>
 
             <p className="text-xs text-muted-foreground text-center max-w-xs">
                 Supports QR (GS1 Digital Link), GS1-128, DataMatrix, EAN-13, and UPC-A.
-                Ensure good lighting and hold steady.
+                {continuous ? ' Keep scanning — each new code is captured automatically.' : ' Ensure good lighting and hold steady.'}
             </p>
         </div>
     );
