@@ -152,6 +152,10 @@ app.include_router(epcis_ingestion_router)
 from app.qr_decoder import router as qr_decoder_router
 app.include_router(qr_decoder_router)
 
+# Computer Vision — Label Analysis
+from app.label_vision import router as label_vision_router
+app.include_router(label_vision_router)
+
 # B2B Exchange API (EPCIS shipping package handoff)
 from app.exchange_api import router as exchange_router
 app.include_router(exchange_router)
