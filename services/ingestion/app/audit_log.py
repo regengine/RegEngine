@@ -301,15 +301,18 @@ async def get_audit_log(
     category: str | None = None,
     _: None = Depends(_verify_api_key),
 ) -> AuditLogResponse:
-    db_session = _get_db_session()
+    entries: list[AuditEntry] = []
     try:
-        entries: list[AuditEntry] = []
-        entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=200))
-        entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
-        entries.extend(_query_exports(db_session, tenant_id, limit=100))
-        entries.extend(_query_alert_events(db_session, tenant_id, limit=100))
-    finally:
-        db_session.close()
+        db_session = _get_db_session()
+        try:
+            entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=200))
+            entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
+            entries.extend(_query_exports(db_session, tenant_id, limit=100))
+            entries.extend(_query_alert_events(db_session, tenant_id, limit=100))
+        finally:
+            db_session.close()
+    except Exception as exc:
+        logger.warning("audit_log_db_unavailable", error=str(exc), tenant_id=tenant_id)
 
     dedup: dict[str, AuditEntry] = {}
     for entry in entries:
