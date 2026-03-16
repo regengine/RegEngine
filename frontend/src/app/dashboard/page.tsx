@@ -366,6 +366,28 @@ export default function DashboardPage() {
 
 
 
+                    {/* Daily Heartbeat CTA */}
+                    <Link href="/dashboard/heartbeat">
+                        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800 hover:shadow-md transition-shadow cursor-pointer group">
+                            <CardContent className="pt-6">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                                    <div className="flex items-center gap-3 sm:gap-4">
+                                        <div className="p-2.5 sm:p-3 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex-shrink-0">
+                                            <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-sm sm:text-base group-hover:text-blue-600 transition-colors">Daily Compliance Heartbeat</h3>
+                                            <p className="text-xs sm:text-sm text-muted-foreground">
+                                                Score, alerts, chain status &amp; next actions — your morning check
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </Link>
+
                     {/* FSMA 204 Deadline Banner */}
                     <Card className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 border-emerald-200 dark:border-emerald-800">
                         <CardContent className="pt-6">
