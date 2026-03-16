@@ -7,7 +7,7 @@ import {
     Leaf, ClipboardList, Truck, Timer, FlaskConical,
     CheckCircle2, ShieldCheck, TrendingUp, LayoutDashboard,
     FileText, Upload, Network, AlertTriangle, Zap, ArrowRight,
-    Map, ListChecks, BarChart3,
+    Map, ListChecks, BarChart3, ScanLine,
 } from 'lucide-react';
 
 /* ─── CATEGORY DEFINITIONS ─── */
@@ -156,6 +156,15 @@ const TOOLS: Tool[] = [
         category: 'plan',
         maturity: 'pilot',
     },
+    {
+        id: 'label-scanner',
+        title: 'Label Scanner',
+        description: 'Point your camera at a food label or barcode. AI extracts product name, lot code, GTIN, expiry, and maps it to FSMA 204 KDEs instantly.',
+        icon: ScanLine,
+        category: 'validate',
+        maturity: 'ga',
+        featured: true,
+    },
 ];
 const JOURNEY_STEPS = TOOLS
     .filter(t => t.journeyStep)
@@ -191,7 +200,7 @@ export function ToolsLandingClient() {
                     animate={{ opacity: 1, y: 0 }}
                     className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-xs font-bold uppercase tracking-widest mb-6 border border-[var(--re-brand)]/20"
                 >
-                    <Zap className="h-3 w-3" /> 14 Free Tools &middot; No Login Required
+                    <Zap className="h-3 w-3" /> 15 Free Tools &middot; No Login Required
                 </motion.div>
                 <motion.h1
                     initial={{ opacity: 0, y: 16 }}
