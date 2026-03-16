@@ -202,6 +202,51 @@ def _detect_row_cte_type(row: dict, fallback: Optional[str]) -> Optional[str]:
     return fallback
 
 
+# Map CTE type → the specific date KDE the validator expects
+_CTE_DATE_KDE: dict[str, str] = {
+    "harvesting": "harvest_date",
+    "cooling": "cooling_date",
+    "initial_packing": "packing_date",
+    "shipping": "ship_date",
+    "receiving": "receive_date",
+    "transformation": "transformation_date",
+    "first_land_based_receiving": "landing_date",
+}
+
+
+def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optional[str], date_val: str) -> None:
+    """Auto-inject CTE-specific required KDEs from generic CSV columns."""
+    # Inject the CTE-specific date field
+    date_kde = _CTE_DATE_KDE.get(row_cte)
+    if date_kde and date_kde not in kdes:
+        # Use just the date portion (YYYY-MM-DD)
+        kdes[date_kde] = date_val[:10] if date_val else ""
+
+    # Inject location KDEs that the validator requires
+    if row_cte == "shipping":
+        if "ship_from_location" not in kdes and loc_name:
+            kdes["ship_from_location"] = loc_name
+        if "ship_to_location" not in kdes:
+            kdes["ship_to_location"] = row.get("ship_to_location") or row.get("destination") or "See receiver"
+    elif row_cte in ("receiving", "first_land_based_receiving"):
+        if "receiving_location" not in kdes and loc_name:
+            kdes["receiving_location"] = loc_name
+
+    # Inject standard fields the validator checks in KDEs
+    for kde_key, row_keys in [
+        ("traceability_lot_code", ["traceability_lot_code", "tlc", "lot_code"]),
+        ("product_description", ["product_description", "product", "description"]),
+        ("quantity", ["quantity", "qty"]),
+        ("unit_of_measure", ["unit_of_measure", "uom"]),
+        ("location_name", ["location_name", "facility_name", "location"]),
+    ]:
+        if kde_key not in kdes:
+            for rk in row_keys:
+                if row.get(rk):
+                    kdes[kde_key] = row[rk]
+                    break
+
+
 @router.post(
     "/ingest/csv",
     response_model=IngestResponse,
