@@ -251,7 +251,7 @@ async def get_alerts(
         finally:
             db_session.close()
     except Exception as exc:
-        logger.warning("alerts_db_unavailable", error=str(exc), tenant_id=tenant_id)
+        logger.warning("alerts_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
 
     if severity:
         alerts = [alert for alert in alerts if alert.severity == severity]
