@@ -79,9 +79,9 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function AlertsDashboardPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = Boolean(apiKey);
+    const isLoggedIn = isAuthenticated;
 
     const [filter, setFilter] = useState<SeverityFilter>('all');
     const [alerts, setAlerts] = useState<Alert[]>([]);

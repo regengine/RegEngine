@@ -119,9 +119,9 @@ const BREAKDOWN_LABELS: Record<string, string> = {
 /* ── Page ── */
 
 export default function ComplianceDashboardPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = Boolean(apiKey);
+    const isLoggedIn = isAuthenticated;
 
     const [score, setScore] = useState<ComplianceScore | null>(null);
     const [loading, setLoading] = useState(false);

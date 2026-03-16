@@ -91,9 +91,9 @@ async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise
 }
 
 export default function AuditLogPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = Boolean(apiKey);
+    const isLoggedIn = isAuthenticated;
 
     const [filter, setFilter] = useState<EventFilter>('all');
     const [entries, setEntries] = useState<AuditEntry[]>([]);

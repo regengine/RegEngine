@@ -58,8 +58,8 @@ function complianceLabel(score: number | null): { color: string; bg: string; lab
 /* ------------------------------------------------------------------ */
 
 export default function SupplierDashboardPage() {
-    const { apiKey } = useAuth();
-    const isLoggedIn = Boolean(apiKey);
+    const { isAuthenticated } = useAuth();
+    const isLoggedIn = isAuthenticated;
 
     const [facilities, setFacilities] = useState<FacilityRow[]>([]);
     const [loading, setLoading] = useState(true);
