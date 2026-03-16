@@ -441,6 +441,261 @@ class CTEPersistence:
         )
 
     # ------------------------------------------------------------------
+    # Batch Write Path (optimized for CSV/bulk ingestion)
+    # ------------------------------------------------------------------
+
+    def store_events_batch(
+        self,
+        tenant_id: str,
+        events: List[Dict[str, Any]],
+        source: str = "csv",
+    ) -> List[StoreResult]:
+        """
+        Persist multiple CTE events in optimized batches.
+
+        Instead of N round-trips per event, this method:
+        1. Batch-checks idempotency with a single SELECT ... IN (...)
+        2. Computes all hashes in Python (sequential chain, no DB needed)
+        3. Batch-INSERTs events, KDEs, and chain entries
+
+        The caller is responsible for committing the session.
+
+        Returns:
+            List of StoreResult, one per input event.
+        """
+        if not events:
+            return []
+
+        # --- Step 1: Pre-compute idempotency keys ---
+        prepared = []
+        for evt in events:
+            event_id = str(uuid4())
+            kdes = evt.get("kdes") or {}
+            idemp_key = compute_idempotency_key(
+                evt["event_type"], evt["traceability_lot_code"],
+                evt["event_timestamp"], source, kdes,
+                location_gln=evt.get("location_gln"),
+                location_name=evt.get("location_name"),
+            )
+            prepared.append({
+                "event_id": event_id,
+                "idemp_key": idemp_key,
+                "evt": evt,
+                "kdes": kdes,
+            })
+
+        # --- Step 2: Batch idempotency check ---
+        all_keys = [p["idemp_key"] for p in prepared]
+        existing_map: Dict[str, Tuple[str, str, str]] = {}
+        # SQLAlchemy doesn't support WHERE IN with named params for lists easily,
+        # so chunk into groups of 100
+        for chunk_start in range(0, len(all_keys), 100):
+            chunk = all_keys[chunk_start:chunk_start + 100]
+            placeholders = ", ".join(f":k{i}" for i in range(len(chunk)))
+            params = {f"k{i}": k for i, k in enumerate(chunk)}
+            params["tid"] = tenant_id
+            rows = self.session.execute(
+                text(f"""
+                    SELECT idempotency_key, id, sha256_hash, chain_hash
+                    FROM fsma.cte_events
+                    WHERE tenant_id = :tid AND idempotency_key IN ({placeholders})
+                """),
+                params,
+            ).fetchall()
+            for row in rows:
+                existing_map[row[0]] = (str(row[1]), row[2], row[3])
+
+        # --- Step 3: Get chain head once ---
+        chain_head = self.session.execute(
+            text("""
+                SELECT chain_hash, sequence_num
+                FROM fsma.hash_chain
+                WHERE tenant_id = :tid
+                ORDER BY sequence_num DESC
+                LIMIT 1
+                FOR UPDATE
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+
+        previous_chain_hash = chain_head[0] if chain_head else None
+        next_sequence = (chain_head[1] + 1) if chain_head else 1
+
+        # --- Step 4: Compute all hashes in memory, prepare batch inserts ---
+        event_rows = []
+        kde_rows = []
+        chain_rows = []
+        results: List[StoreResult] = []
+
+        for p in prepared:
+            # Skip idempotent
+            if p["idemp_key"] in existing_map:
+                eid, sha, ch = existing_map[p["idemp_key"]]
+                results.append(StoreResult(
+                    success=True, event_id=eid, sha256_hash=sha,
+                    chain_hash=ch, idempotent=True, errors=[], kde_completeness=1.0, alerts=[],
+                ))
+                continue
+
+            evt = p["evt"]
+            event_id = p["event_id"]
+            kdes = p["kdes"]
+
+            sha256_hash = compute_event_hash(
+                event_id, evt["event_type"], evt["traceability_lot_code"],
+                evt.get("product_description", ""), evt.get("quantity", 0),
+                evt.get("unit_of_measure", ""), evt.get("location_gln"),
+                evt.get("location_name"), evt["event_timestamp"], kdes,
+            )
+
+            chain_hash = compute_chain_hash(sha256_hash, previous_chain_hash)
+
+            event_rows.append({
+                "id": event_id,
+                "tenant_id": tenant_id,
+                "event_type": evt["event_type"],
+                "tlc": evt["traceability_lot_code"],
+                "product_description": evt.get("product_description", ""),
+                "quantity": evt.get("quantity", 0),
+                "unit_of_measure": evt.get("unit_of_measure", ""),
+                "location_gln": evt.get("location_gln"),
+                "location_name": evt.get("location_name"),
+                "event_timestamp": evt["event_timestamp"],
+                "source": source,
+                "source_event_id": evt.get("source_event_id"),
+                "idempotency_key": p["idemp_key"],
+                "sha256_hash": sha256_hash,
+                "chain_hash": chain_hash,
+                "epcis_event_type": evt.get("epcis_event_type"),
+                "epcis_action": evt.get("epcis_action"),
+                "epcis_biz_step": evt.get("epcis_biz_step"),
+                "validation_status": "valid",
+            })
+
+            for kde_key, kde_value in kdes.items():
+                if kde_value is not None:
+                    kde_rows.append({
+                        "tenant_id": tenant_id,
+                        "cte_event_id": event_id,
+                        "kde_key": kde_key,
+                        "kde_value": str(kde_value),
+                        "is_required": False,
+                    })
+
+            chain_rows.append({
+                "tenant_id": tenant_id,
+                "cte_event_id": event_id,
+                "sequence_num": next_sequence,
+                "event_hash": sha256_hash,
+                "previous_chain_hash": previous_chain_hash,
+                "chain_hash": chain_hash,
+            })
+
+            results.append(StoreResult(
+                success=True, event_id=event_id, sha256_hash=sha256_hash,
+                chain_hash=chain_hash, idempotent=False, errors=[], kde_completeness=1.0, alerts=[],
+            ))
+
+            # Advance chain state for next event
+            previous_chain_hash = chain_hash
+            next_sequence += 1
+
+        # --- Step 5: Batch INSERT ---
+        if event_rows:
+            # Chunk inserts to avoid parameter limits (Postgres max ~32K params)
+            for chunk_start in range(0, len(event_rows), 50):
+                chunk = event_rows[chunk_start:chunk_start + 50]
+                values_clauses = []
+                params: Dict[str, Any] = {}
+                for i, row in enumerate(chunk):
+                    values_clauses.append(
+                        f"(:id_{i}, :tid_{i}, :et_{i}, :tlc_{i}, :pd_{i}, :qty_{i}, :uom_{i}, "
+                        f":gln_{i}, :ln_{i}, :ts_{i}, :src_{i}, :seid_{i}, :ik_{i}, "
+                        f":sha_{i}, :ch_{i}, :eet_{i}, :ea_{i}, :ebs_{i}, :vs_{i})"
+                    )
+                    params.update({
+                        f"id_{i}": row["id"], f"tid_{i}": row["tenant_id"],
+                        f"et_{i}": row["event_type"], f"tlc_{i}": row["tlc"],
+                        f"pd_{i}": row["product_description"], f"qty_{i}": row["quantity"],
+                        f"uom_{i}": row["unit_of_measure"], f"gln_{i}": row["location_gln"],
+                        f"ln_{i}": row["location_name"], f"ts_{i}": row["event_timestamp"],
+                        f"src_{i}": row["source"], f"seid_{i}": row["source_event_id"],
+                        f"ik_{i}": row["idempotency_key"], f"sha_{i}": row["sha256_hash"],
+                        f"ch_{i}": row["chain_hash"], f"eet_{i}": row["epcis_event_type"],
+                        f"ea_{i}": row["epcis_action"], f"ebs_{i}": row["epcis_biz_step"],
+                        f"vs_{i}": row["validation_status"],
+                    })
+                sql = f"""
+                    INSERT INTO fsma.cte_events (
+                        id, tenant_id, event_type, traceability_lot_code,
+                        product_description, quantity, unit_of_measure,
+                        location_gln, location_name, event_timestamp,
+                        source, source_event_id, idempotency_key,
+                        sha256_hash, chain_hash,
+                        epcis_event_type, epcis_action, epcis_biz_step,
+                        validation_status
+                    ) VALUES {', '.join(values_clauses)}
+                """
+                self.session.execute(text(sql), params)
+
+        if kde_rows:
+            for chunk_start in range(0, len(kde_rows), 200):
+                chunk = kde_rows[chunk_start:chunk_start + 200]
+                values_clauses = []
+                params = {}
+                for i, row in enumerate(chunk):
+                    values_clauses.append(
+                        f"(:tid_{i}, :eid_{i}, :kk_{i}, :kv_{i}, :ir_{i})"
+                    )
+                    params.update({
+                        f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
+                        f"kk_{i}": row["kde_key"], f"kv_{i}": row["kde_value"],
+                        f"ir_{i}": row["is_required"],
+                    })
+                sql = f"""
+                    INSERT INTO fsma.cte_kdes (
+                        tenant_id, cte_event_id, kde_key, kde_value, is_required
+                    ) VALUES {', '.join(values_clauses)}
+                    ON CONFLICT (cte_event_id, kde_key) DO NOTHING
+                """
+                self.session.execute(text(sql), params)
+
+        if chain_rows:
+            for chunk_start in range(0, len(chain_rows), 100):
+                chunk = chain_rows[chunk_start:chunk_start + 100]
+                values_clauses = []
+                params = {}
+                for i, row in enumerate(chunk):
+                    values_clauses.append(
+                        f"(:tid_{i}, :eid_{i}, :seq_{i}, :eh_{i}, :pch_{i}, :ch_{i})"
+                    )
+                    params.update({
+                        f"tid_{i}": row["tenant_id"], f"eid_{i}": row["cte_event_id"],
+                        f"seq_{i}": row["sequence_num"], f"eh_{i}": row["event_hash"],
+                        f"pch_{i}": row["previous_chain_hash"], f"ch_{i}": row["chain_hash"],
+                    })
+                sql = f"""
+                    INSERT INTO fsma.hash_chain (
+                        tenant_id, cte_event_id, sequence_num,
+                        event_hash, previous_chain_hash, chain_hash
+                    ) VALUES {', '.join(values_clauses)}
+                """
+                self.session.execute(text(sql), params)
+
+        logger.info(
+            "batch_events_persisted",
+            extra={
+                "tenant_id": tenant_id,
+                "total": len(events),
+                "new": len(event_rows),
+                "idempotent": len(events) - len(event_rows),
+                "kdes": len(kde_rows),
+            },
+        )
+
+        return results
+
+    # ------------------------------------------------------------------
     # Read Path — FDA Export Queries
     # ------------------------------------------------------------------
 
