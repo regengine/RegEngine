@@ -174,18 +174,14 @@ async function proxyRequest(
 function getIngestionTargets(): string[] {
   const candidates: string[] = [];
   const publicIngestionUrl = process.env.NEXT_PUBLIC_INGESTION_URL;
-  const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   const internalIngestionUrl = process.env.INGESTION_SERVICE_URL;
 
   if (publicIngestionUrl) {
     candidates.push(publicIngestionUrl);
   }
 
-  // NEXT_PUBLIC_API_BASE_URL points directly at the Railway backend which
-  // serves ingestion routes at the root (no /ingestion prefix).
-  if (publicApiBase) {
-    candidates.push(stripTrailingSlash(publicApiBase));
-  }
+  // NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT used here.
+  // It points at the admin service, which doesn't serve ingestion routes.
 
   const runningOnVercel = Boolean(
     process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV,
