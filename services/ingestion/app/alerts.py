@@ -111,7 +111,7 @@ def _get_db_session():
 
         db = SessionLocal()
     except Exception as exc:
-        logger.error("alerts_db_session_init_failed", error=str(exc))
+        logger.error("alerts_db_session_init_failed error=%s", str(exc))
         raise HTTPException(status_code=503, detail="Database unavailable")
     return db
 
