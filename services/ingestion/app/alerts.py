@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from app.tenant_validation import validate_tenant_id
 
 logger = logging.getLogger("alerts")
 
@@ -243,6 +244,7 @@ async def get_alerts(
     acknowledged: Optional[bool] = None,
     _: None = Depends(_verify_api_key),
 ) -> AlertsResponse:
+    validate_tenant_id(tenant_id)
     alerts: list[Alert] = []
     try:
         db_session = _get_db_session()

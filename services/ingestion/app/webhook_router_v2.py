@@ -22,6 +22,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.config import get_settings
+from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
 from app.webhook_models import (
@@ -89,6 +90,15 @@ def _get_persistence(db_session=None):
 # Auth
 # ---------------------------------------------------------------------------
 
+def _is_production() -> bool:
+    """Detect production by DATABASE_URL (Supabase pooler) or ENV=production."""
+    import os
+    if os.getenv("ENV", "").lower() == "production":
+        return True
+    db_url = os.getenv("DATABASE_URL", "")
+    return "pooler.supabase.com" in db_url or "railway" in db_url
+
+
 def _verify_api_key(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> None:
@@ -102,6 +112,10 @@ def _verify_api_key(
             configured_api_key.encode("utf-8"),
         ):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    elif _is_production():
+        # Production without API_KEY configured — reject all requests
+        # until an operator sets the API_KEY env var.
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +442,7 @@ async def ingest_events(
     if not tenant_id:
         logger.error("Webhook rejected: no tenant_id resolved")
         raise HTTPException(status_code=400, detail="Tenant context required")
+    validate_tenant_id(tenant_id)
 
     # Rate limiting (tenant-scoped)
     _check_rate_limit(tenant_id)
@@ -603,6 +618,7 @@ async def verify_chain(
     tenant_id: str,
 ):
     """Verify the integrity of the tenant's hash chain."""
+    validate_tenant_id(tenant_id)
     db_session = None
     try:
         from shared.database import SessionLocal

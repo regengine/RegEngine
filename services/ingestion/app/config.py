@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     api_key: Optional[str] = Field(default=None, alias="API_KEY")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
+    env: str = Field(default="development", alias="ENV")
     allowed_origins: str = Field(
         default="http://localhost:3000,https://regengine.co,https://www.regengine.co",
         alias="ALLOWED_ORIGINS",

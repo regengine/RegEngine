@@ -41,11 +41,20 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("ingestion_service_shutdown")
 
+import os as _os
+_is_prod = (
+    _os.getenv("ENV", "").lower() == "production"
+    or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
+)
+
 app = FastAPI(
     title="Ingestion Service",
     description="Regulatory document ingestion and processing",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 allowed_origins = [

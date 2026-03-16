@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.webhook_compat import _verify_api_key
+from app.tenant_validation import validate_tenant_id
 
 logger = logging.getLogger("compliance-score")
 
@@ -546,6 +547,7 @@ async def get_compliance_score(
     _: None = Depends(_verify_api_key),
 ) -> ComplianceScoreResponse:
     """Compute and return compliance score for a tenant."""
+    validate_tenant_id(tenant_id)
 
     db_session = None
     try:
