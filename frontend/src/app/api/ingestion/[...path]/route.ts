@@ -166,15 +166,11 @@ async function proxyRequest(
 function getIngestionTargets(): string[] {
   const candidates: string[] = [];
   const publicIngestionUrl = process.env.NEXT_PUBLIC_INGESTION_URL;
-  const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   const internalIngestionUrl = process.env.INGESTION_SERVICE_URL;
 
+  // Prefer the dedicated ingestion URL first (most reliable).
   if (publicIngestionUrl) {
     candidates.push(publicIngestionUrl);
-  }
-
-  if (publicApiBase) {
-    candidates.push(`${stripTrailingSlash(publicApiBase)}/ingestion`);
   }
 
   const runningOnVercel = Boolean(
@@ -183,6 +179,9 @@ function getIngestionTargets(): string[] {
   if (internalIngestionUrl && (!runningOnVercel || isPublicHost(internalIngestionUrl))) {
     candidates.push(internalIngestionUrl);
   }
+
+  // NOTE: We intentionally do NOT use NEXT_PUBLIC_API_BASE_URL here because
+  // that URL points to the admin gateway which does not route /ingestion paths.
 
   if (candidates.length === 0) {
     candidates.push(DEFAULT_INGESTION_URL);
