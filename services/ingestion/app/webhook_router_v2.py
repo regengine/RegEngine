@@ -542,6 +542,18 @@ async def ingest_events(
                     # Post-ingest graph sync (non-blocking)
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
 
+                    # Auto-learn product catalog from confirmed scans
+                    try:
+                        from app.product_catalog import learn_from_event
+                        learn_from_event(
+                            tenant_id=tenant_id,
+                            product_description=event.product_description,
+                            gtin=event.kdes.get("gtin") if event.kdes else None,
+                            kdes=event.kdes,
+                        )
+                    except Exception as learn_err:
+                        logger.debug("catalog_learn_skipped: %s", str(learn_err))
+
             except Exception as e:
                 logger.error(
                     "batch_persistence_failed",
@@ -574,6 +586,16 @@ async def ingest_events(
                         ))
                         accepted += 1
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
+                        try:
+                            from app.product_catalog import learn_from_event
+                            learn_from_event(
+                                tenant_id=tenant_id,
+                                product_description=event.product_description,
+                                gtin=event.kdes.get("gtin") if event.kdes else None,
+                                kdes=event.kdes,
+                            )
+                        except Exception:
+                            pass
                     except Exception as inner_e:
                         logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
                         results.append(EventResult(
@@ -619,6 +641,74 @@ async def ingest_events(
 # ---------------------------------------------------------------------------
 # Chain Verification Endpoint
 # ---------------------------------------------------------------------------
+
+@router.get(
+    "/chain/verify",
+    summary="Verify hash chain integrity",
+    description=(
+        "Walk the tenant's entire hash chain from genesis to head, "
+        "recomputing each link and checking for tampering."
+    ),
+)
+async def get_recent_events(
+    tenant_id: str,
+    limit: int = 10,
+):
+    """
+    Get most recent CTE events for a tenant — powers the scan history
+    dashboard widget.
+    """
+    validate_tenant_id(tenant_id)
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text as _text
+        db_session = SessionLocal()
+        rows = db_session.execute(
+            _text("""
+                SELECT id, event_type, traceability_lot_code, product_description,
+                       quantity, unit_of_measure, location_name, source, ingested_at
+                FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                ORDER BY ingested_at DESC
+                LIMIT :lim
+            """),
+            {"tid": tenant_id, "lim": min(limit, 50)},
+        ).fetchall()
+        events = [
+            {
+                "event_id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_description": r[3],
+                "quantity": float(r[4]) if r[4] else 0,
+                "unit_of_measure": r[5],
+                "location_name": r[6],
+                "source": r[7],
+                "ingested_at": r[8].isoformat() if r[8] else None,
+            }
+            for r in rows
+        ]
+        return {"tenant_id": tenant_id, "events": events, "total": len(events)}
+    except Exception as e:
+        logger.warning("recent_events_query_failed: %s", str(e))
+        return {"tenant_id": tenant_id, "events": [], "total": 0}
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.get(
+    "/recent",
+    summary="Get recent CTE events",
+    description="Returns the most recently ingested traceability events for the scan history widget.",
+)
+async def recent_events_endpoint(
+    tenant_id: str,
+    limit: int = 10,
+):
+    return await get_recent_events(tenant_id, limit)
+
 
 @router.get(
     "/chain/verify",

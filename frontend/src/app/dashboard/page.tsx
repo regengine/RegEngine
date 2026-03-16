@@ -15,6 +15,7 @@ import { getTenantDashboard, type TenantDashboard } from '@/lib/mock-dashboard-d
 import { useSystemStatus, useSystemMetrics } from '@/hooks/use-api';
 import { SystemHealthWidget } from '@/components/dashboard/system-health-widget';
 import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
+import { ScanHistoryWidget } from '@/components/dashboard/scan-history-widget';
 import {
     Shield,
     Upload,
@@ -255,8 +256,9 @@ export default function DashboardPage() {
                         <div className="lg:col-span-2">
                             <MetricsOverviewWidget />
                         </div>
-                        <div>
+                        <div className="space-y-6">
                             <SystemHealthWidget />
+                            <ScanHistoryWidget />
                         </div>
                     </div>
 
