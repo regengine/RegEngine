@@ -143,40 +143,54 @@ export function DataImportClient() {
             setSampleSteps((prev) => [...prev, { label, ok, detail }]);
         };
 
-        let posted = 0;
-        for (let i = 0; i < SAMPLE_EVENTS.length; i++) {
-            const evt = SAMPLE_EVENTS[i];
-            try {
-                await apiClient.logTraceabilityEvent(evt as any);
-                posted++;
+        // Map sample events to webhook format
+        const CTE_MAP: Record<string, string> = {
+            CREATION: 'harvesting', RECEIVING: 'receiving',
+            INITIAL_PACKING: 'initial_packing', SHIPPING: 'shipping',
+        };
+
+        const webhookEvents = SAMPLE_EVENTS.map((evt) => ({
+            cte_type: CTE_MAP[evt.event_type] || evt.event_type.toLowerCase(),
+            traceability_lot_code: evt.tlc,
+            product_description: evt.product_description,
+            quantity: evt.quantity || 0,
+            unit_of_measure: evt.uom || 'cases',
+            location_name: evt.location_identifier,
+            timestamp: `${evt.event_date}T00:00:00Z`,
+            kdes: { gtin: evt.gtin },
+        }));
+
+        try {
+            const effectiveKey = apiKey || process.env.NEXT_PUBLIC_API_KEY || '';
+            const result = await apiClient.ingestWebhookEvents(
+                effectiveKey,
+                webhookEvents,
+                'sample_dataset',
+                'default',
+            );
+
+            // Show individual step results
+            for (const evt of SAMPLE_EVENTS) {
                 addStep(
                     `${evt.event_type} — ${evt.location_identifier.split(',')[0]}`,
                     true,
-                    `TLC ${evt.tlc} · ${evt.event_date}${evt.quantity ? ` · ${evt.quantity} ${evt.uom}` : ''}`
-                );
-            } catch (err: any) {
-                const msg = err?.response?.data?.detail || err?.message || 'failed';
-                addStep(
-                    `${evt.event_type} — ${evt.location_identifier.split(',')[0]}`,
-                    false,
-                    msg
+                    `TLC ${evt.tlc} · ${evt.event_date}${evt.quantity ? ` · ${evt.quantity} ${evt.uom}` : ''}`,
                 );
             }
-        }
 
-        // Compliance validation check
-        try {
-            const result = await apiClient.validateConfig({
-                config: { tlc: 'TLC1001', cte_type: 'CREATION', event_date: '2026-03-10', location: 'Salinas, CA', lot_size_unit: 'cases', supplier_reference: 'HARVESTLOG-9912', product_description: 'Romaine Lettuce' },
-                strict: false,
-            });
-            addStep('Compliance validation (TLC1001)', result.valid, `${result.errors.length} errors · ${result.warnings.length} warnings`);
-        } catch {
-            addStep('Compliance validation (TLC1001)', false, 'compliance service unreachable');
-        }
+            addStep(
+                `Batch ingest complete`,
+                result.accepted > 0,
+                `${result.accepted}/${result.total} events persisted to database`,
+            );
 
-        setSampleState(posted > 0 ? 'done' : 'error');
-    }, []);
+            setSampleState(result.accepted > 0 ? 'done' : 'error');
+        } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || 'Webhook ingest failed';
+            addStep('Batch ingest', false, msg);
+            setSampleState('error');
+        }
+    }, [apiKey]);
 
     const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
         { id: 'csv', label: 'CSV Upload', icon: FileSpreadsheet },
