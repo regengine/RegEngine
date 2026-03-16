@@ -3,16 +3,29 @@
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export interface AssessmentFormData {
+  // Required — gate fields
   name: string;
   email: string;
   company: string;
   role: string;
-  facilityCount: string;
+  // Enrichment — optional second step
+  facilityCount?: string;
   phone?: string;
+  annualRevenue?: string;
+  currentSystem?: string;
+  biggestRetailer?: string;
+  complianceDeadline?: string;
+  recentFdaInspection?: string;
+  productCategories?: string;
+  // Tool context — captured passively
   quizScore?: number;
   quizGrade?: string;
   quizAnswers?: Record<string, any>;
-  source?: string;
+  source?: string;  toolInputs?: Record<string, any>;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  referrer?: string;
 }
 
 export interface AssessmentResult {
@@ -39,7 +52,6 @@ export async function submitAssessment(
     const twentyFourHoursAgo = new Date(
       Date.now() - 24 * 60 * 60 * 1000
     ).toISOString();
-
     const { data: existing } = await supabase
       .from('assessment_submissions')
       .select('id')
@@ -48,11 +60,23 @@ export async function submitAssessment(
       .limit(1);
 
     if (existing && existing.length > 0) {
-      return {
-        success: true, // Don't reveal duplicate to user
-      };
-    }
+      // Update enrichment fields if this is a returning lead adding more info
+      await supabase
+        .from('assessment_submissions')
+        .update({
+          facility_count: data.facilityCount || undefined,
+          phone: data.phone?.trim() || undefined,
+          annual_revenue: data.annualRevenue || undefined,
+          current_system: data.currentSystem || undefined,
+          biggest_retailer: data.biggestRetailer || undefined,
+          compliance_deadline: data.complianceDeadline || undefined,
+          recent_fda_inspection: data.recentFdaInspection || undefined,
+          product_categories: data.productCategories || undefined,
+        })
+        .eq('id', existing[0].id);
 
+      return { success: true };
+    }
     const { error } = await supabase
       .from('assessment_submissions')
       .insert({
@@ -62,10 +86,21 @@ export async function submitAssessment(
         role: data.role || null,
         facility_count: data.facilityCount || null,
         phone: data.phone?.trim() || null,
+        annual_revenue: data.annualRevenue || null,
+        current_system: data.currentSystem || null,
+        biggest_retailer: data.biggestRetailer || null,
+        compliance_deadline: data.complianceDeadline || null,
+        recent_fda_inspection: data.recentFdaInspection || null,
+        product_categories: data.productCategories || null,
         quiz_score: data.quizScore ?? null,
         quiz_grade: data.quizGrade ?? null,
         quiz_answers: data.quizAnswers ?? null,
-        source: data.source || 'recall-readiness',
+        tool_inputs: data.toolInputs ?? null,
+        source: data.source || 'unknown',
+        utm_source: data.utmSource || null,
+        utm_medium: data.utmMedium || null,
+        utm_campaign: data.utmCampaign || null,
+        referrer: data.referrer || null,
       });
 
     if (error) {
