@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from app.tenant_validation import validate_tenant_id
 
 logger = logging.getLogger("audit-log")
 
@@ -301,6 +302,7 @@ async def get_audit_log(
     category: str | None = None,
     _: None = Depends(_verify_api_key),
 ) -> AuditLogResponse:
+    validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
     try:
         db_session = _get_db_session()

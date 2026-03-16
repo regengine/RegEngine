@@ -624,6 +624,14 @@ def health() -> dict[str, str]:
 
 @router.get("/metrics")
 def metrics() -> PlainTextResponse:
+    import os as _os
+    _prod = (
+        _os.getenv("ENV", "").lower() == "production"
+        or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
+    )
+    if _prod:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Metrics disabled in production")
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
