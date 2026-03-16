@@ -31,18 +31,24 @@ import {
 
 // ── Types ──
 
+interface BreakdownItem {
+    score: number;
+    detail: string;
+}
+
 interface ComplianceData {
     overall_score: number;
     grade: string;
     breakdown: {
-        chain_integrity: number;
-        export_readiness: number;
-        product_coverage: number;
-        kde_completeness: number;
-        cte_completeness: number;
+        chain_integrity: BreakdownItem;
+        export_readiness: BreakdownItem;
+        product_coverage: BreakdownItem;
+        kde_completeness: BreakdownItem;
+        cte_completeness: BreakdownItem;
+        obligation_coverage?: BreakdownItem;
     };
     events_analyzed: number;
-    last_chain_hash: string;
+    last_chain_hash: string | null;
     next_actions: Array<{ priority: string; action: string; impact: string }>;
 }
 
@@ -326,11 +332,11 @@ export default function HeartbeatPage() {
                             <CardContent className="space-y-3">
                                 {compliance ? (
                                     <>
-                                        <BreakdownBar label="Chain Integrity" value={compliance.breakdown.chain_integrity} />
-                                        <BreakdownBar label="KDE Completeness" value={compliance.breakdown.kde_completeness} />
-                                        <BreakdownBar label="CTE Completeness" value={compliance.breakdown.cte_completeness} />
-                                        <BreakdownBar label="Export Readiness" value={compliance.breakdown.export_readiness} />
-                                        <BreakdownBar label="Product Coverage" value={compliance.breakdown.product_coverage} />
+                                        <BreakdownBar label="Chain Integrity" value={compliance.breakdown.chain_integrity?.score ?? 0} />
+                                        <BreakdownBar label="KDE Completeness" value={compliance.breakdown.kde_completeness?.score ?? 0} />
+                                        <BreakdownBar label="CTE Completeness" value={compliance.breakdown.cte_completeness?.score ?? 0} />
+                                        <BreakdownBar label="Export Readiness" value={compliance.breakdown.export_readiness?.score ?? 0} />
+                                        <BreakdownBar label="Product Coverage" value={compliance.breakdown.product_coverage?.score ?? 0} />
                                     </>
                                 ) : (
                                     <div className="space-y-3">
@@ -357,7 +363,7 @@ export default function HeartbeatPage() {
                                 {/* Chain Integrity */}
                                 <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                                     <div className="flex items-center gap-2">
-                                        {compliance && compliance.breakdown.chain_integrity >= 80 ? (
+                                        {compliance && (compliance.breakdown.chain_integrity?.score ?? 0) >= 80 ? (
                                             <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                                         ) : (
                                             <XCircle className="h-5 w-5 text-amber-500" />
@@ -365,11 +371,11 @@ export default function HeartbeatPage() {
                                         <span className="text-sm font-medium">Hash Chain</span>
                                     </div>
                                     <Badge variant="outline" className={
-                                        compliance && compliance.breakdown.chain_integrity >= 80
+                                        compliance && (compliance.breakdown.chain_integrity?.score ?? 0) >= 80
                                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                                             : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                                     }>
-                                        {compliance ? `${compliance.breakdown.chain_integrity}%` : '—'}
+                                        {compliance ? `${compliance.breakdown.chain_integrity?.score ?? 0}%` : '—'}
                                     </Badge>
                                 </div>
 
