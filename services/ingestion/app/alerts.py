@@ -243,11 +243,15 @@ async def get_alerts(
     acknowledged: Optional[bool] = None,
     _: None = Depends(_verify_api_key),
 ) -> AlertsResponse:
-    db_session = _get_db_session()
+    alerts: list[Alert] = []
     try:
-        alerts = _fetch_alerts_from_db(db_session, tenant_id)
-    finally:
-        db_session.close()
+        db_session = _get_db_session()
+        try:
+            alerts = _fetch_alerts_from_db(db_session, tenant_id)
+        finally:
+            db_session.close()
+    except Exception as exc:
+        logger.warning("alerts_db_unavailable", error=str(exc), tenant_id=tenant_id)
 
     if severity:
         alerts = [alert for alert in alerts if alert.severity == severity]
