@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { getServiceURL } from '@/lib/api-config';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
+import { useAuth } from '@/lib/auth-context';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
@@ -78,8 +79,12 @@ export default function LabelScannerPage() {
     const [result, setResult] = useState<LabelResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [showRawText, setShowRawText] = useState(false);
+    const [editedFields, setEditedFields] = useState<Record<string, string>>({});
+    const [ingesting, setIngesting] = useState(false);
+    const [ingested, setIngested] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
+    const { apiKey, tenantId } = useAuth();
     const handleFile = useCallback((file: File) => {
         if (!file.type.startsWith('image/')) {
             setError('Please upload an image file (JPEG, PNG, etc.)');
@@ -140,7 +145,76 @@ export default function LabelScannerPage() {
         setResult(null);
         setError(null);
         setShowRawText(false);
+        setEditedFields({});
+        setIngested(false);
     }, []);
+
+    /** Get the current value of a field — edited version takes priority */
+    const getFieldValue = useCallback((key: string): string => {
+        if (editedFields[key] !== undefined) return editedFields[key];
+        if (!result) return '';
+        const val = result[key as keyof LabelResult];
+        if (typeof val === 'string') return val;
+        if (val === null || val === undefined) return '';
+        return String(val);
+    }, [editedFields, result]);
+
+    const updateField = useCallback((key: string, value: string) => {
+        setEditedFields((prev) => ({ ...prev, [key]: value }));
+        setIngested(false);
+    }, []);
+
+    /** Push corrected data into the trace pipeline */
+    const confirmAndIngest = useCallback(async () => {
+        if (!result) return;
+        setIngesting(true);
+        setError(null);
+        try {
+            const lotCode = getFieldValue('lot_code') || getFieldValue('gtin') || `LABEL-${Date.now()}`;
+            const payload = {
+                source: 'label_scanner_free_tool',
+                tenant_id: tenantId || undefined,
+                events: [{
+                    cte_type: 'receiving',
+                    traceability_lot_code: lotCode,
+                    product_description: getFieldValue('product_name') || 'Label scan',
+                    quantity: 1,
+                    unit_of_measure: 'cases',
+                    timestamp: new Date().toISOString(),
+                    location_name: 'Label Scanner Tool',
+                    kdes: {
+                        gtin: getFieldValue('gtin') || undefined,
+                        lot_code: getFieldValue('lot_code') || undefined,
+                        serial_number: getFieldValue('serial_number') || undefined,
+                        expiry_date: getFieldValue('expiry_date') || undefined,
+                        pack_date: getFieldValue('pack_date') || undefined,
+                        net_weight: getFieldValue('net_weight') || undefined,
+                        facility_name: getFieldValue('facility_name') || undefined,
+                        country_of_origin: getFieldValue('country_of_origin') || undefined,
+                        brand: getFieldValue('brand') || undefined,
+                    },
+                }],
+            };
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (apiKey) headers['X-RegEngine-API-Key'] = apiKey;
+            if (tenantId) headers['X-Tenant-ID'] = tenantId;
+
+            const res = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(body.detail || `Ingest failed (${res.status})`);
+            }
+            setIngested(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ingest failed — are you logged in?');
+        } finally {
+            setIngesting(false);
+        }
+    }, [result, getFieldValue, apiKey, tenantId]);
 
     // Auto-analyze when image is loaded
     useEffect(() => {
@@ -318,19 +392,54 @@ export default function LabelScannerPage() {
                                         </span>
                                     </div>
 
-                                    {/* Extracted fields */}
+                                    {/* Editable extracted fields */}
                                     <div className="space-y-2">
-                                        <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">Extracted Fields</h3>
+                                        <h3 className="text-sm font-semibold text-[var(--re-text-primary)]">Extracted Fields <span className="text-xs font-normal text-[var(--re-text-muted)]">— click to edit</span></h3>
                                         {DEMO_FIELDS.map(({ key, label }) => {
-                                            const value = result[key];
-                                            if (!value || typeof value !== 'string') return null;
+                                            const value = getFieldValue(key);
+                                            if (!value && !editedFields[key]) return null;
                                             return (
-                                                <div key={key} className="flex items-start justify-between gap-3 py-1.5 border-b border-[var(--re-surface-border)] last:border-0">
+                                                <div key={key} className="flex items-center gap-3 py-1 border-b border-[var(--re-surface-border)] last:border-0">
                                                     <span className="text-xs text-[var(--re-text-muted)] uppercase tracking-wider min-w-[100px]">{label}</span>
-                                                    <span className="text-sm text-[var(--re-text-primary)] font-medium text-right">{value}</span>
+                                                    <input
+                                                        type="text"
+                                                        value={value}
+                                                        onChange={(e) => updateField(key, e.target.value)}
+                                                        className="flex-1 text-sm text-[var(--re-text-primary)] font-medium text-right bg-transparent border-none outline-none focus:ring-1 focus:ring-[var(--re-brand)] rounded px-1 py-0.5 transition-shadow"
+                                                    />
+                                                    {editedFields[key] !== undefined && (
+                                                        <span className="text-[10px] text-[var(--re-brand)] font-bold">EDITED</span>
+                                                    )}
                                                 </div>
                                             );
                                         })}
+                                    </div>
+
+                                    {/* Confirm & Ingest */}
+                                    <div className="pt-2">
+                                        {ingested ? (
+                                            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                                <Check className="h-4 w-4 text-emerald-400" />
+                                                <span className="text-sm font-medium text-emerald-400">Ingested into trace pipeline</span>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={confirmAndIngest}
+                                                disabled={ingesting}
+                                                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--re-brand)] text-white text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+                                            >
+                                                {ingesting ? (
+                                                    <><Loader2 className="h-4 w-4 animate-spin" /> Ingesting...</>
+                                                ) : (
+                                                    <><ArrowRight className="h-4 w-4" /> Confirm &amp; Ingest</>
+                                                )}
+                                            </button>
+                                        )}
+                                        {!apiKey && !ingested && (
+                                            <p className="text-xs text-[var(--re-text-muted)] text-center mt-2">
+                                                <Link href="/login" className="text-[var(--re-brand)] hover:underline">Log in</Link> to ingest into your workspace
+                                            </p>
+                                        )}
                                     </div>
                                     {/* Allergens */}
                                     {result.allergens.length > 0 && (

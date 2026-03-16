@@ -1,17 +1,17 @@
 
 import { useEffect, useState } from 'react';
-import { db, markScanSynced, markPhotoSynced, getPendingUploads } from '@/lib/db';
-import { useIngestURL, useIngestFile } from '@/hooks/use-api';
+import { markScanSynced, markPhotoSynced, getPendingUploads } from '@/lib/db';
+import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
+import { getServiceURL } from '@/lib/api-config';
 
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
-    const { apiKey } = useAuth();
+    const { apiKey, tenantId } = useAuth();
     const { toast } = useToast();
 
-    const ingestUrlMutation = useIngestURL();
     const ingestFileMutation = useIngestFile();
 
     const sync = async () => {
@@ -31,16 +31,48 @@ export function useSync() {
                 description: `Uploading ${scans.length} scans and ${photos.length} photos.`,
             });
 
-            // Sync Scans
+            // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
-                    // Treating scan content as a URL source for now, or we could add a new endpoint
-                    // For MVP, we log it via the ingestURL endpoint with a special flag/system
-                    await ingestUrlMutation.mutateAsync({
-                        apiKey,
-                        url: `scan://${scan.content}`, // Pseudo-protocol to log scan
-                        sourceSystem: "mobile_scanner_pwa"
-                    });
+                    if (scan.payload) {
+                        // Structured payload saved by FieldCaptureClient — replay directly
+                        const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-RegEngine-API-Key': apiKey,
+                                ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                            },
+                            body: scan.payload,
+                        });
+                        if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+                    } else {
+                        // Legacy record with only raw barcode string — build minimal event
+                        const payload = {
+                            source: 'mobile_scanner_pwa_offline',
+                            tenant_id: tenantId || undefined,
+                            events: [{
+                                cte_type: scan.cteType || 'receiving',
+                                traceability_lot_code: scan.content,
+                                product_description: `Offline scan ${scan.content}`,
+                                quantity: 1,
+                                unit_of_measure: 'cases',
+                                timestamp: new Date(scan.timestamp).toISOString(),
+                                location_name: 'Field Capture Mobile (Offline)',
+                                kdes: { raw_scan: scan.content },
+                            }],
+                        };
+                        const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-RegEngine-API-Key': apiKey,
+                                ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                            },
+                            body: JSON.stringify(payload),
+                        });
+                        if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
+                    }
                     if (scan.id) await markScanSynced(scan.id);
                 } catch (e) {
                     console.error("Failed to sync scan", scan, e);

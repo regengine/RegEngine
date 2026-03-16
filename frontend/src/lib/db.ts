@@ -3,6 +3,9 @@ import Dexie, { Table } from 'dexie';
 export interface ScanRecord {
     id?: number;
     content: string;
+    /** Structured payload for offline replay — mirrors the webhook ingest body */
+    payload?: string; // JSON-serialized ingest event
+    cteType?: string;
     timestamp: number;
     synced: number; // 0 = false, 1 = true
 }
@@ -29,9 +32,11 @@ export class MobileDatabase extends Dexie {
 
 export const db = new MobileDatabase();
 
-export async function saveScan(content: string) {
+export async function saveScan(content: string, payload?: Record<string, unknown>, cteType?: string) {
     await db.scans.add({
         content,
+        payload: payload ? JSON.stringify(payload) : undefined,
+        cteType,
         timestamp: Date.now(),
         synced: 0
     });

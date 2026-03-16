@@ -16,6 +16,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getServiceURL } from '@/lib/api-config';
 import { savePhoto, saveScan } from '@/lib/db';
 import { parseGS1 } from '@/lib/gs1-parser';
+import { Keyboard } from 'lucide-react';
 
 type CaptureCTEType = 'shipping' | 'receiving' | 'transformation';
 
@@ -70,6 +71,9 @@ export function FieldCaptureClient() {
     const [capturedImages, setCapturedImages] = useState<string[]>([]);
     const [lastParsedScan, setLastParsedScan] = useState<ParsedScanState | null>(null);
     const [catalogByGtin, setCatalogByGtin] = useState<Record<string, string>>({});
+    const [showManualEntry, setShowManualEntry] = useState(false);
+    const [manualGtin, setManualGtin] = useState('');
+    const [manualLot, setManualLot] = useState('');
 
     const { apiKey, tenantId } = useAuth();
     const { toast } = useToast();
@@ -179,8 +183,38 @@ export function FieldCaptureClient() {
         const timestamp = new Date().toLocaleTimeString();
         setScannedData((prev) => [`[${timestamp}] ${cteLabel}: ${rawScan}`, ...prev]);
 
+        // Build the ingest payload so we can replay it offline
+        const traceabilityLotCode =
+            parsedState.traceabilityLotCode ||
+            parsedState.serial ||
+            parsedState.gtin ||
+            `SCAN-${Date.now()}`;
+
+        const offlinePayload = {
+            source: 'mobile_scanner_pwa',
+            tenant_id: tenantId || undefined,
+            events: [
+                {
+                    cte_type: parsedState.cteType,
+                    traceability_lot_code: traceabilityLotCode,
+                    product_description: parsedState.productDescription,
+                    quantity: 1,
+                    unit_of_measure: 'cases',
+                    timestamp: new Date().toISOString(),
+                    location_name: 'Field Capture Mobile',
+                    kdes: {
+                        gtin: parsedState.gtin,
+                        serial: parsedState.serial,
+                        expiry_date: parsedState.expiryDate,
+                        pack_date: parsedState.packDate,
+                        raw_scan: parsedState.raw,
+                    },
+                },
+            ],
+        };
+
         if (!isOnline) {
-            await saveScan(rawScan);
+            await saveScan(rawScan, offlinePayload, parsedState.cteType);
             toast({
                 title: 'Saved Offline',
                 description: 'Scan saved locally. Will sync when online.',
@@ -189,9 +223,10 @@ export function FieldCaptureClient() {
         }
 
         if (!apiKey) {
+            await saveScan(rawScan, offlinePayload, parsedState.cteType);
             toast({
                 title: 'API Key Missing',
-                description: 'Set your API key to upload scan events.',
+                description: 'Scan saved locally. Set your API key to sync.',
                 variant: 'destructive',
             });
             return;
@@ -204,7 +239,7 @@ export function FieldCaptureClient() {
                 description: parsedState.traceabilityLotCode || parsedState.gtin || parsedState.raw,
             });
         } catch {
-            await saveScan(rawScan);
+            await saveScan(rawScan, offlinePayload, parsedState.cteType);
             toast({
                 title: 'Upload Failed - Saved Offline',
                 description: 'Connection error. Scan saved locally.',
@@ -228,29 +263,71 @@ export function FieldCaptureClient() {
             return;
         }
 
-        if (!apiKey) {
-            await savePhoto(blob);
-            toast({
-                title: 'API Key Missing',
-                description: 'Photo saved locally for later sync.',
-            });
-            return;
-        }
+        // Send through label vision endpoint for AI extraction
+        const filename = `mobile_capture_${Date.now()}.jpg`;
+        const file = new File([blob], filename, { type: 'image/jpeg' });
 
         try {
-            const filename = `mobile_capture_${Date.now()}.jpg`;
-            const file = new File([blob], filename, { type: 'image/jpeg' });
+            const formData = new FormData();
+            formData.append('file', file);
 
-            await ingestFileMutation.mutateAsync({
-                apiKey,
-                file,
-                sourceSystem: 'mobile_capture_pwa',
+            toast({ title: 'Analyzing Label...', description: 'Running computer vision extraction.' });
+
+            const visionRes = await fetch(`${getServiceURL('ingestion')}/api/v1/vision/analyze-label`, {
+                method: 'POST',
+                body: formData,
             });
 
-            toast({
-                title: 'Upload Complete',
-                description: 'Image successfully sent for analysis.',
-            });
+            if (visionRes.ok) {
+                const visionData = await visionRes.json();
+                const productName = visionData.product_name || 'Photo capture';
+                const lotCode = visionData.lot_code || visionData.gtin || `PHOTO-${Date.now()}`;
+
+                // Auto-ingest the extracted data if authenticated
+                if (apiKey) {
+                    const payload = {
+                        source: 'mobile_capture_pwa_vision',
+                        tenant_id: tenantId || undefined,
+                        events: [{
+                            cte_type: selectedCTEType,
+                            traceability_lot_code: lotCode,
+                            product_description: productName,
+                            quantity: 1,
+                            unit_of_measure: 'cases',
+                            timestamp: new Date().toISOString(),
+                            location_name: 'Field Capture Mobile (Photo)',
+                            kdes: {
+                                gtin: visionData.gtin || undefined,
+                                lot_code: visionData.lot_code || undefined,
+                                expiry_date: visionData.expiry_date || undefined,
+                                pack_date: visionData.pack_date || undefined,
+                                brand: visionData.brand || undefined,
+                                facility_name: visionData.facility_name || undefined,
+                            },
+                        }],
+                    };
+                    await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-RegEngine-API-Key': apiKey,
+                            ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
+                        },
+                        body: JSON.stringify(payload),
+                    });
+                }
+
+                toast({
+                    title: 'Label Analyzed & Ingested',
+                    description: `${productName} — ${visionData.fsma_kdes?.length || 0} KDEs extracted`,
+                });
+            } else {
+                // Vision failed — fall back to raw file upload
+                if (apiKey) {
+                    await ingestFileMutation.mutateAsync({ apiKey, file, sourceSystem: 'mobile_capture_pwa' });
+                }
+                toast({ title: 'Photo Uploaded', description: 'Vision analysis unavailable — raw image stored.' });
+            }
         } catch {
             await savePhoto(blob);
             toast({
@@ -334,6 +411,49 @@ export function FieldCaptureClient() {
                             </CardHeader>
                             <CardContent>
                                 <BarcodeScanner onScan={handleScan} />
+
+                                {/* Manual entry fallback */}
+                                <div className="mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowManualEntry(!showManualEntry)}
+                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                                    >
+                                        <Keyboard className="h-3 w-3" />
+                                        {showManualEntry ? 'Hide manual entry' : 'Camera not working? Enter manually'}
+                                    </button>
+                                    {showManualEntry && (
+                                        <div className="mt-2 space-y-2 p-3 rounded-md border bg-muted/30">
+                                            <input
+                                                type="text"
+                                                placeholder="GTIN (e.g. 00012345678905)"
+                                                value={manualGtin}
+                                                onChange={(e) => setManualGtin(e.target.value)}
+                                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                            />
+                                            <input
+                                                type="text"
+                                                placeholder="Lot / Batch Code"
+                                                value={manualLot}
+                                                onChange={(e) => setManualLot(e.target.value)}
+                                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                                            />
+                                            <Button
+                                                size="sm"
+                                                className="w-full"
+                                                disabled={!manualGtin && !manualLot}
+                                                onClick={() => {
+                                                    const raw = manualGtin || manualLot;
+                                                    handleScan(raw);
+                                                    setManualGtin('');
+                                                    setManualLot('');
+                                                }}
+                                            >
+                                                Submit Manual Entry
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {lastParsedScan && (
                                     <div className="mt-4 rounded-md border p-3 text-xs space-y-1">
