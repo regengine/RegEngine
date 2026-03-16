@@ -318,9 +318,18 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "facility_name": str(
-            row.get("facility_name") or row.get("location_name") or ""
+            row.get("facility_name")
+            or row.get("location_name")
+            or row.get("origin_facility_name")
+            or row.get("destination_facility_name")
+            or ""
         ).strip(),
-        "tlc_code": str(row.get("tlc_code") or "").strip(),
+        "tlc_code": str(
+            row.get("tlc_code")
+            or row.get("traceability_lot_code")
+            or row.get("lot_number")
+            or ""
+        ).strip(),
         "cte_type": str(cte_type).strip(),
         "event_time": str(event_time).strip() if event_time else None,
         "kde_data": kde_data,
@@ -378,6 +387,9 @@ def _classify_row(
         return
 
     if row.get("cte_type") or row.get("event_type"):
+        parsed["events"].append(_extract_event_row(row))
+        return
+    if row.get("lot_number") or row.get("traceability_lot_code"):
         parsed["events"].append(_extract_event_row(row))
         return
     if row.get("category_id"):
