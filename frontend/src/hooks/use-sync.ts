@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { markScanSynced, markPhotoSynced, getPendingUploads } from '@/lib/db';
+import { markScanSynced, markPhotoSynced, getPendingUploads, cleanupSyncedRecords } from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
@@ -99,6 +99,13 @@ export function useSync() {
                 description: "All offline data has been uploaded.",
                 variant: "default"
             });
+
+            // Cleanup old synced records to prevent IndexedDB bloat
+            try {
+                await cleanupSyncedRecords();
+            } catch {
+                // cleanup is best-effort
+            }
 
         } catch (err) {
             console.error("Sync error", err);

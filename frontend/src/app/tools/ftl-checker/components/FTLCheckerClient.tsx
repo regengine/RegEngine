@@ -36,6 +36,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
 import { generateBrandedPDF } from '@/lib/pdf-report';
+import { LeadGate } from '@/components/lead-gate/LeadGate';
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN TOKENS (Unified Dark Theme)
@@ -916,6 +917,20 @@ export function FTLCheckerClient() {
                     {/* Step 3: Results */}
                     {currentStep === 'results' && (
                         <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                            <LeadGate
+                                source="ftl-checker"
+                                headline="Unlock Your Full FTL Coverage Report"
+                                subheadline="See detailed category-by-category results, exemption analysis, and compliance action items."
+                                ctaText="Get Full Report"
+                                toolContext={{ toolInputs: { coveredCount: results.coveredCount, totalSelected: results.totalSelected, coveragePercent } }}
+                                teaser={
+                                    <div style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', textAlign: 'center' }}>
+                                        <p style={{ fontSize: '16px', fontWeight: 600, color: T.textPrimary }}>FSMA 204 Coverage</p>
+                                        <p style={{ fontSize: '48px', fontWeight: 700, color: coveragePercent > 0 ? T.warning : T.accent, margin: '8px 0' }}>{coveragePercent}%</p>
+                                        <p style={{ fontSize: '14px', color: T.textMuted }}>{results.coveredCount} of {results.totalSelected} selected categories on the FTL</p>
+                                    </div>
+                                }
+                            >
                             <div className="ftl-results-layout" style={{ display: 'grid', gap: '24px', gridTemplateColumns: '1fr 340px' }}>
                                 {/* Main Result Card */}
                                 <div className="ftl-section-card" style={{ padding: '32px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px' }}>
@@ -1160,6 +1175,7 @@ export function FTLCheckerClient() {
                                     This tool is for informational purposes only and does not constitute legal advice. Consult the full regulatory text and your legal counsel for compliance decisions. Last verified against eCFR: February 2026.
                                 </p>
                             </div>
+                            </LeadGate>
                         </motion.div>
                     )}
                 </AnimatePresence>

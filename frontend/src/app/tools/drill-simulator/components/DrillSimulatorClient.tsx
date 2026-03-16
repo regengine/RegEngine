@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
+import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -321,6 +322,22 @@ export function DrillSimulatorClient() {
 
                 {phase === 'graded' && grade && (
                     <motion.div key="graded" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
+                        <LeadGate
+                            source="drill-simulator"
+                            headline="Get Your Full Drill Report"
+                            subheadline="Unlock detailed feedback, gap analysis, and a printable audit-ready drill report for your records."
+                            ctaText="Unlock Full Report"
+                            toolContext={{ toolInputs: { score: grade.score, grade: grade.grade, scenario: selectedScenario } }}
+                            teaser={
+                                <div className="text-center space-y-3 pb-4">
+                                    <div className={`text-5xl font-bold ${grade.score >= 70 ? 'text-emerald-500' : 'text-red-500'}`}>{grade.grade}</div>
+                                    <div className="text-sm text-muted-foreground">{grade.score}/100</div>
+                                    <Badge className={grade.score >= 70 ? 'bg-emerald-600' : 'bg-red-600'}>
+                                        {grade.score >= 70 ? 'PASSED' : 'FAILED'}
+                                    </Badge>
+                                </div>
+                            }
+                        >
                         <Card className={`border-2 ${grade.score >= 70 ? 'border-emerald-500/30' : 'border-red-500/30'}`}>
                             <CardContent className="py-10">
                                 <div className="flex flex-col items-center text-center gap-4">
@@ -397,6 +414,7 @@ export function DrillSimulatorClient() {
                         <Button onClick={() => setPhase('ready')} variant="outline" className="rounded-xl">
                             Run Another Drill
                         </Button>
+                        </LeadGate>
                     </motion.div>
                 )}
             </AnimatePresence>
