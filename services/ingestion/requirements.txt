@@ -37,6 +37,7 @@ tenacity~=8.2.0
 
 # Database (for auth and framework)
 psycopg[binary]>=3.2.4
+psycopg2-binary>=2.9.9
 sqlalchemy~=2.0.0
 
 # Date parsing
