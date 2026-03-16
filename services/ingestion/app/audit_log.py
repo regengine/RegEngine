@@ -312,7 +312,7 @@ async def get_audit_log(
         finally:
             db_session.close()
     except Exception as exc:
-        logger.warning("audit_log_db_unavailable", error=str(exc), tenant_id=tenant_id)
+        logger.warning("audit_log_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
 
     dedup: dict[str, AuditEntry] = {}
     for entry in entries:
