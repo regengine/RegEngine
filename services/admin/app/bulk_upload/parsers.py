@@ -322,6 +322,13 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
             or row.get("location_name")
             or row.get("origin_facility_name")
             or row.get("destination_facility_name")
+            or row.get("name")
+            or row.get("business_name")
+            or row.get("site_name")
+            or row.get("sender_name")
+            or row.get("receiver_name")
+            or row.get("source")
+            or row.get("destination")
             or ""
         ).strip(),
         "tlc_code": str(
