@@ -282,6 +282,9 @@ async def ingest_csv(
                 if key and val and key not in skip_fields:
                     kdes[key] = val
 
+            # Auto-inject CTE-specific required KDEs from generic CSV columns
+            _inject_required_kdes(kdes, row_cte, row, loc_name, date_field)
+
             event = IngestEvent(
                 cte_type=WebhookCTEType(row_cte),
                 traceability_lot_code=row.get("traceability_lot_code") or row.get("tlc") or row.get("lot_code") or "",
