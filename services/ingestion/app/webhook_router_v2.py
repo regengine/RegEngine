@@ -470,6 +470,8 @@ async def ingest_events(
         )
 
     try:
+        # --- Phase 1: Validate all events, collect valid ones for batch persist ---
+        valid_events: list = []  # (event, alerts) tuples
         for event in payload.events:
             # Batch deduplication — skip identical events in same request
             dedup_key = f"{event.cte_type.value}|{event.traceability_lot_code}|{event.timestamp}|{event.location_gln or event.location_name or ''}"
@@ -499,76 +501,88 @@ async def ingest_events(
 
             # Generate alerts
             alerts = _generate_alerts(event)
+            valid_events.append((event, alerts))
 
-            # --- Persistent path (production) --- DB is guaranteed available
+        # --- Phase 2: Batch persist all valid events ---
+        if valid_events:
+            batch_dicts = []
+            event_objs = []
+            for event, alerts in valid_events:
+                batch_dicts.append({
+                    "event_type": event.cte_type.value,
+                    "traceability_lot_code": event.traceability_lot_code,
+                    "product_description": event.product_description,
+                    "quantity": event.quantity,
+                    "unit_of_measure": event.unit_of_measure,
+                    "event_timestamp": event.timestamp,
+                    "location_gln": event.location_gln,
+                    "location_name": event.location_name,
+                    "kdes": event.kdes,
+                })
+                event_objs.append(event)
+
             try:
-                store_result = persistence.store_event(
+                store_results = persistence.store_events_batch(
                     tenant_id=tenant_id,
-                    event_type=event.cte_type.value,
-                    traceability_lot_code=event.traceability_lot_code,
-                    product_description=event.product_description,
-                    quantity=event.quantity,
-                    unit_of_measure=event.unit_of_measure,
-                    event_timestamp=event.timestamp,
+                    events=batch_dicts,
                     source=payload.source,
-                    location_gln=event.location_gln,
-                    location_name=event.location_name,
-                    kdes=event.kdes,
-                    alerts=alerts,
                 )
 
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="accepted",
-                    event_id=store_result.event_id,
-                    sha256_hash=store_result.sha256_hash,
-                    chain_hash=store_result.chain_hash,
-                ))
-                accepted += 1
+                for store_result, event in zip(store_results, event_objs):
+                    results.append(EventResult(
+                        traceability_lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        status="accepted",
+                        event_id=store_result.event_id,
+                        sha256_hash=store_result.sha256_hash,
+                        chain_hash=store_result.chain_hash,
+                    ))
+                    accepted += 1
 
-                # Post-ingest obligation check
-                obl_alerts = _check_obligations(
-                    db_session, event, store_result.event_id, tenant_id,
-                )
-                if obl_alerts:
-                    logger.info(
-                        "obligation_gaps_detected",
-                        extra={
-                            "event_id": store_result.event_id,
-                            "gap_count": len(obl_alerts),
-                            "tenant_id": tenant_id,
-                        },
-                    )
-
-                # Async graph sync
-                _publish_graph_sync(store_result.event_id, event, tenant_id)
-
-                logger.info(
-                    "event_ingested_persistent",
-                    extra={
-                        "event_id": store_result.event_id,
-                        "cte_type": event.cte_type.value,
-                        "tlc": event.traceability_lot_code,
-                        "source": payload.source,
-                        "tenant_id": tenant_id,
-                        "idempotent": store_result.idempotent,
-                        "sha256": store_result.sha256_hash[:16],
-                    },
-                )
+                    # Post-ingest graph sync (non-blocking)
+                    _publish_graph_sync(store_result.event_id, event, tenant_id)
 
             except Exception as e:
                 logger.error(
-                    "persistence_failed",
-                    extra={"error": str(e), "tlc": event.traceability_lot_code},
+                    "batch_persistence_failed",
+                    extra={"error": str(e), "batch_size": len(valid_events)},
                 )
-                results.append(EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="rejected",
-                    errors=[f"Storage error: {str(e)}"],
-                ))
-                rejected += 1
+                # Fall back to per-event persistence
+                for event, alerts in valid_events:
+                    try:
+                        store_result = persistence.store_event(
+                            tenant_id=tenant_id,
+                            event_type=event.cte_type.value,
+                            traceability_lot_code=event.traceability_lot_code,
+                            product_description=event.product_description,
+                            quantity=event.quantity,
+                            unit_of_measure=event.unit_of_measure,
+                            event_timestamp=event.timestamp,
+                            source=payload.source,
+                            location_gln=event.location_gln,
+                            location_name=event.location_name,
+                            kdes=event.kdes,
+                            alerts=alerts,
+                        )
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="accepted",
+                            event_id=store_result.event_id,
+                            sha256_hash=store_result.sha256_hash,
+                            chain_hash=store_result.chain_hash,
+                        ))
+                        accepted += 1
+                        _publish_graph_sync(store_result.event_id, event, tenant_id)
+                    except Exception as inner_e:
+                        logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
+                        results.append(EventResult(
+                            traceability_lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            status="rejected",
+                            errors=[f"Storage error: {str(inner_e)}"],
+                        ))
+                        rejected += 1
 
         if accepted > 0:
             emit_funnel_event(
