@@ -45,6 +45,11 @@ export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'a
         return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
     }
 
+    // On web (non-Capacitor), prefer same-origin proxy to avoid CORS and domain drift.
+    if (service === 'ingestion' && !isCapacitorClient) {
+        return '/api/ingestion';
+    }
+
     // Client-side / Static Export
     if (gatewayUrl) {
         // If a gateway is provided (e.g. Nginx proxy), use it for non-admin services
