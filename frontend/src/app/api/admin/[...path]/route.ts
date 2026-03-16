@@ -26,8 +26,7 @@ export async function POST(
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
+) {  const { path } = await params;
   return proxyRequest(request, path, 'PUT');
 }
 
@@ -55,8 +54,7 @@ export async function OPTIONS(
   return proxyRequest(request, path, 'OPTIONS');
 }
 
-async function proxyRequest(
-  request: NextRequest,
+async function proxyRequest(  request: NextRequest,
   pathParts: string[],
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS',
 ) {
@@ -85,14 +83,22 @@ async function proxyRequest(
       'authorization',
       'x-api-key',
       'x-admin-key',
-      'x-regengine-api-key',
-      'x-tenant-id',
+      'x-regengine-api-key',      'x-tenant-id',
     ];
     for (const key of passthroughHeaders) {
       const value = request.headers.get(key);
       if (value) {
         headers.set(key, value);
       }
+    }
+
+    // Inject server-side API key if client didn't provide one
+    if (!headers.has('x-regengine-api-key')) {
+      const serverApiKey =
+        process.env.REGENGINE_API_KEY ||
+        process.env.NEXT_PUBLIC_API_KEY ||
+        're_live_fsma204_key';
+      headers.set('x-regengine-api-key', serverApiKey);
     }
 
     const fetchOptions: RequestInit = {
@@ -106,8 +112,7 @@ async function proxyRequest(
       if (bodyBuffer.byteLength > 0) {
         requestBody = bodyBuffer;
         fetchOptions.body = requestBody;
-      }
-    }
+      }    }
 
     const attemptErrors: string[] = [];
 
@@ -135,7 +140,6 @@ async function proxyRequest(
             outgoingHeaders.set(headerName, headerValue);
           }
         }
-
         return new NextResponse(response.body, {
           status: response.status,
           headers: outgoingHeaders,
@@ -164,8 +168,7 @@ async function proxyRequest(
 }
 
 function getAdminTargets(): string[] {
-  const candidates: string[] = [];
-  const publicAdminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
+  const candidates: string[] = [];  const publicAdminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
   const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   const internalAdminUrl = process.env.ADMIN_SERVICE_URL;
 
@@ -223,8 +226,7 @@ function isPublicAdminHost(urlValue: string): boolean {
       return false;
     }
 
-    if (hostname.startsWith('192.168.')) {
-      return false;
+    if (hostname.startsWith('192.168.')) {      return false;
     }
 
     const secondOctet = Number(hostname.split('.')[1]);

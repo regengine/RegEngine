@@ -26,7 +26,6 @@ export async function POST(
   const { path } = await params;
   return proxyRequest(request, path, 'POST');
 }
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
@@ -54,8 +53,7 @@ export async function DELETE(
 export async function OPTIONS(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path } = await params;
+) {  const { path } = await params;
   return proxyRequest(request, path, 'OPTIONS');
 }
 
@@ -84,7 +82,6 @@ async function proxyRequest(
     } else if (hasRequestBody) {
       headers.set('Content-Type', 'application/json');
     }
-
     const passthroughHeaders = [
       'authorization',
       'x-api-key',
@@ -99,19 +96,20 @@ async function proxyRequest(
       }
     }
 
-    // Inject server-side API key if client didn't provide one
+    // Inject server-side API key if client didn't provide one.
+    // Falls back to the default key that matches the backend's config.py default.
     if (!headers.has('x-regengine-api-key')) {
-      const serverApiKey = process.env.REGENGINE_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
-      if (serverApiKey) {
-        headers.set('x-regengine-api-key', serverApiKey);
-      }
+      const serverApiKey =
+        process.env.REGENGINE_API_KEY ||
+        process.env.NEXT_PUBLIC_API_KEY ||
+        're_live_fsma204_key';
+      headers.set('x-regengine-api-key', serverApiKey);
     }
 
     const fetchOptions: RequestInit = {
       method,
       headers,
     };
-
     let requestBody: ArrayBuffer | undefined;
     if (hasRequestBody) {
       const bodyBuffer = await request.arrayBuffer();
@@ -140,8 +138,7 @@ async function proxyRequest(
           'content-disposition',
           'cache-control',
           'x-fda-record-count',
-        ];
-        for (const headerName of passthroughResponseHeaders) {
+        ];        for (const headerName of passthroughResponseHeaders) {
           const headerValue = response.headers.get(headerName);
           if (headerValue) {
             outgoingHeaders.set(headerName, headerValue);
@@ -170,8 +167,7 @@ async function proxyRequest(
       { status: 502 },
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Ingestion request failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Ingestion request failed';    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -199,8 +195,7 @@ function getIngestionTargets(): string[] {
   // On Vercel with no env vars configured, use the Railway production backend
   if (candidates.length === 0) {
     if (runningOnVercel) {
-      candidates.push(RAILWAY_INGESTION_URL);
-    } else {
+      candidates.push(RAILWAY_INGESTION_URL);    } else {
       candidates.push(DEFAULT_INGESTION_URL);
     }
   }
@@ -228,8 +223,7 @@ function isPublicHost(urlValue: string): boolean {
     if (
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
-      hostname === '::1' ||
-      hostname.endsWith('.local') ||
+      hostname === '::1' ||      hostname.endsWith('.local') ||
       hostname.endsWith('.internal') ||
       !hostname.includes('.')
     ) {
