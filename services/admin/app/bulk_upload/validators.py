@@ -42,10 +42,10 @@ def normalize_cte_type(value: str) -> str:
 
 class BulkFacilityRow(BaseModel):
     name: str = Field(min_length=2)
-    street: str = Field(min_length=2)
-    city: str = Field(min_length=2)
-    state: str = Field(min_length=2)
-    postal_code: str = Field(min_length=2)
+    street: str = Field(default="")
+    city: str = Field(default="")
+    state: str = Field(default="")
+    postal_code: str = Field(default="")
     fda_registration_number: str | None = None
     roles: list[str] = Field(default_factory=list)
 
