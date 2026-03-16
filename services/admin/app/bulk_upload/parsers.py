@@ -57,6 +57,34 @@ def _normalize_key(value: str) -> str:
     return normalized.strip("_")
 
 
+# Canonical column alias map — all known variants collapse to internal names
+# at ingestion so downstream code only references canonical keys.
+COLUMN_ALIASES: dict[str, str] = {
+    # facility_name
+    "location_name": "facility_name",
+    "origin_facility_name": "facility_name",
+    "destination_facility_name": "facility_name",
+    "business_name": "facility_name",
+    "site_name": "facility_name",
+    "sender_name": "facility_name",
+    "receiver_name": "facility_name",
+    "source": "facility_name",
+    "destination": "facility_name",
+    # tlc_code
+    "traceability_lot_code": "tlc_code",
+    "lot_number": "tlc_code",
+    "lot_code": "tlc_code",
+    "tlc": "tlc_code",
+    # cte_type
+    "event_type": "cte_type",
+    # event_time
+    "event_datetime": "event_time",
+    "event_date": "event_time",
+    "cte_date": "event_time",
+    "timestamp": "event_time",
+}
+
+
 def _clean_multiline_text(value: Any) -> str:
     if value is None:
         return ""
@@ -251,7 +279,13 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     for key, value in row.items():
         if key is None:
             continue
-        normalized[_normalize_key(str(key))] = value
+        canonical = _normalize_key(str(key))
+        canonical = COLUMN_ALIASES.get(canonical, canonical)
+        # First writer wins — don't overwrite a populated canonical key
+        # with a later alias that may be empty.
+        if canonical in normalized and normalized[canonical]:
+            continue
+        normalized[canonical] = value
     return normalized
 
 
@@ -292,8 +326,8 @@ def _parse_list_field(value: Any) -> list[str]:
 
 
 def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
-    cte_type = row.get("cte_type") or row.get("event_type") or ""
-    event_time = row.get("event_time") or row.get("timestamp")
+    cte_type = row.get("cte_type") or ""
+    event_time = row.get("event_time")
     kde_data = _parse_json_field(row.get("kde_data"))
 
     passthrough_keys = {
@@ -317,26 +351,8 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
         kde_data[key] = value
 
     return {
-        "facility_name": str(
-            row.get("facility_name")
-            or row.get("location_name")
-            or row.get("origin_facility_name")
-            or row.get("destination_facility_name")
-            or row.get("name")
-            or row.get("business_name")
-            or row.get("site_name")
-            or row.get("sender_name")
-            or row.get("receiver_name")
-            or row.get("source")
-            or row.get("destination")
-            or ""
-        ).strip(),
-        "tlc_code": str(
-            row.get("tlc_code")
-            or row.get("traceability_lot_code")
-            or row.get("lot_number")
-            or ""
-        ).strip(),
+        "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+        "tlc_code": str(row.get("tlc_code") or "").strip(),
         "cte_type": str(cte_type).strip(),
         "event_time": str(event_time).strip() if event_time else None,
         "kde_data": kde_data,
@@ -393,10 +409,10 @@ def _classify_row(
         parsed["events"].append(_extract_event_row(row))
         return
 
-    if row.get("cte_type") or row.get("event_type"):
+    if row.get("cte_type"):
         parsed["events"].append(_extract_event_row(row))
         return
-    if row.get("lot_number") or row.get("traceability_lot_code"):
+    if row.get("tlc_code"):
         parsed["events"].append(_extract_event_row(row))
         return
     if row.get("category_id"):
