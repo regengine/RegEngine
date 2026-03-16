@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Production Railway backend — used as fallback when no env var is configured
+const RAILWAY_INGESTION_URL = 'https://believable-respect-production-2fb3.up.railway.app';
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-export const dynamic = 'force-static';
+// force-dynamic ensures the proxy runs as a serverless function on every request,
+// forwarding auth headers and query params to the ingestion backend.
+// For static export builds (CI), the proxyRequest function returns 503 early.
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-export const generateStaticParams = async () => [{ path: ['health'] }];
 
 export async function GET(
   request: NextRequest,
@@ -95,6 +99,14 @@ async function proxyRequest(
       }
     }
 
+    // Inject server-side API key if client didn't provide one
+    if (!headers.has('x-regengine-api-key')) {
+      const serverApiKey = process.env.REGENGINE_API_KEY || process.env.NEXT_PUBLIC_API_KEY;
+      if (serverApiKey) {
+        headers.set('x-regengine-api-key', serverApiKey);
+      }
+    }
+
     const fetchOptions: RequestInit = {
       method,
       headers,
@@ -166,11 +178,15 @@ async function proxyRequest(
 function getIngestionTargets(): string[] {
   const candidates: string[] = [];
   const publicIngestionUrl = process.env.NEXT_PUBLIC_INGESTION_URL;
+  const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   const internalIngestionUrl = process.env.INGESTION_SERVICE_URL;
 
-  // Prefer the dedicated ingestion URL first (most reliable).
   if (publicIngestionUrl) {
     candidates.push(publicIngestionUrl);
+  }
+
+  if (publicApiBase) {
+    candidates.push(`${stripTrailingSlash(publicApiBase)}/ingestion`);
   }
 
   const runningOnVercel = Boolean(
@@ -180,11 +196,13 @@ function getIngestionTargets(): string[] {
     candidates.push(internalIngestionUrl);
   }
 
-  // NOTE: We intentionally do NOT use NEXT_PUBLIC_API_BASE_URL here because
-  // that URL points to the admin gateway which does not route /ingestion paths.
-
+  // On Vercel with no env vars configured, use the Railway production backend
   if (candidates.length === 0) {
-    candidates.push(DEFAULT_INGESTION_URL);
+    if (runningOnVercel) {
+      candidates.push(RAILWAY_INGESTION_URL);
+    } else {
+      candidates.push(DEFAULT_INGESTION_URL);
+    }
   }
 
   return Array.from(new Set(candidates.map((candidate) => stripTrailingSlash(candidate))));
@@ -218,8 +236,13 @@ function isPublicHost(urlValue: string): boolean {
       return false;
     }
 
-    if (hostname.startsWith('10.')) return false;
-    if (hostname.startsWith('192.168.')) return false;
+    if (hostname.startsWith('10.')) {
+      return false;
+    }
+
+    if (hostname.startsWith('192.168.')) {
+      return false;
+    }
 
     const secondOctet = Number(hostname.split('.')[1]);
     if (hostname.startsWith('172.') && secondOctet >= 16 && secondOctet <= 31) {

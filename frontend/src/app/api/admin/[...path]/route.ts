@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-// force-dynamic ensures this proxy runs as a serverless function on every request,
-// forwarding auth headers correctly. CI no longer uses static export.
+// force-dynamic ensures the proxy runs as a serverless function on every request.
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   request: NextRequest,

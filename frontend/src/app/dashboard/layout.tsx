@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
+    { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
     { label: 'Recall Report', href: '/dashboard/recall-report', icon: ShieldCheck },
