@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
+import { LeadGate } from '@/components/lead-gate/LeadGate';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -204,6 +205,19 @@ export function DataImportClient() {
             subtitle="Get your traceability data into RegEngine — upload CSV, import IoT logs, or connect via API."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
+            <LeadGate
+                source="data-import"
+                headline="Unlock the Data Import Hub"
+                subheadline="Upload CSV files, import IoT temperature logs, and connect via API to start building your traceability records."
+                ctaText="Access Import Tools"
+                teaser={
+                    <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-8 text-center">
+                        <div className="text-4xl mb-3">📤</div>
+                        <p className="text-lg font-semibold text-[var(--re-text-primary)]">Three Ways to Import</p>
+                        <p className="text-sm text-[var(--re-text-muted)] mt-2">CSV Upload with templates for every CTE type, IoT Sensitech TempTale import, and a full REST webhook API.</p>
+                    </div>
+                }
+            >
             {/* Tab Navigation */}
             <div className="flex gap-2 mb-8">
                 {tabs.map((tab) => (
@@ -614,6 +628,7 @@ export function DataImportClient() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            </LeadGate>
         </FreeToolPageShell>
     );
 }

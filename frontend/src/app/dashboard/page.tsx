@@ -192,20 +192,23 @@ export default function DashboardPage() {
 
     // Use real metrics from backend when available, fall back to mock data
     const metrics = useMemo(() => {
-        if (systemMetrics) {
-            return {
-                documentsIngested: systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0,
-                complianceScore: systemMetrics.compliance_score ?? dashboardData?.metrics.complianceScore ?? 0,
-                openAlerts: systemMetrics.open_alerts ?? dashboardData?.metrics.openAlerts ?? 0,
-                pendingReviews: dashboardData?.metrics.pendingReviews ?? 0,
-            };
-        }
-        return dashboardData?.metrics ?? {
+        const mock = dashboardData?.metrics ?? {
             documentsIngested: 0,
             complianceScore: 0,
             openAlerts: 0,
             pendingReviews: 0,
         };
+        if (systemMetrics) {
+            const realDocs = systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0;
+            return {
+                documentsIngested: realDocs > 0 ? realDocs : mock.documentsIngested,
+                complianceScore: (systemMetrics.compliance_score ?? 0) > 0
+                    ? systemMetrics.compliance_score! : mock.complianceScore,
+                openAlerts: systemMetrics.open_alerts ?? mock.openAlerts,
+                pendingReviews: mock.pendingReviews,
+            };
+        }
+        return mock;
     }, [systemMetrics, dashboardData]);
 
     if (!isHydrated || !user) {

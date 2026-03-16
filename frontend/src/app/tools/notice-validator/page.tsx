@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardPaste, FileWarning, Info, RotateCcw, Shield, XCircle } from 'lucide-react';
+import { LeadGate } from '@/components/lead-gate/LeadGate';
 
 interface Requirement {
     id: string;
@@ -174,7 +175,27 @@ export default function NoticeValidatorPage() {
 
                     <div className="space-y-4">
                         {results ? (
-                            <>
+                            <LeadGate
+                                source="notice-validator"
+                                headline="Unlock Your Full Validation Report"
+                                subheadline="See every requirement check with pass/fail details and FSMA 204 citations."
+                                ctaText="Get Full Report"
+                                toolContext={{ quizGrade: results.grade, quizScore: results.score }}
+                                teaser={
+                                    <div className={`rounded-2xl border p-6 ${gradeColor(results.grade)}`}>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium">Coverage grade</p>
+                                                <p className="mt-1 text-4xl font-bold">{results.grade}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-sm font-medium">Match score</p>
+                                                <p className="mt-1 text-2xl font-bold">{results.score}%</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            >
                                 <div className={`rounded-2xl border p-6 ${gradeColor(results.grade)}`}>
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -204,7 +225,7 @@ export default function NoticeValidatorPage() {
                                         </div>
                                     </article>
                                 ))}
-                            </>
+                            </LeadGate>
                         ) : (
                             <>
                                 <div className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6">

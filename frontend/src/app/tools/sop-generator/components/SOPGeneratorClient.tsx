@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
+import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -257,37 +258,45 @@ ${retailers.length > 0 ? `## Retailer Requirements\n${retailers.map(r => `- ${r}
 
                 {phase === 'preview' && (
                     <motion.div key="preview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                                <h2 className="text-lg font-bold">Plan Generated</h2>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button variant="outline" size="sm" className="rounded-xl">
-                                    <Download className="h-3 w-3 mr-1" /> Download Full PDF
-                                </Button>
-                                <Button variant="outline" size="sm" className="rounded-xl">
-                                    <Printer className="h-3 w-3 mr-1" /> Print
-                                </Button>
-                            </div>
+                        <div className="flex items-center gap-3">
+                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            <h2 className="text-lg font-bold">Plan Generated</h2>
                         </div>
 
-                        <Card className="border-[var(--re-border-default)]">
-                            <CardContent className="py-6">
-                                <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed text-foreground">
-                                    {generatedDoc}
-                                </pre>
-                            </CardContent>
-                        </Card>
-
-                        <div className="flex gap-3">
-                            <Button onClick={() => setPhase('form')} variant="outline" className="rounded-xl">
-                                ← Edit & Regenerate
-                            </Button>
-                            <Badge variant="outline" className="text-[9px] uppercase tracking-widest py-1.5">
-                                Full document: POST /api/v1/sop/generate
-                            </Badge>
-                        </div>
+                        <LeadGate
+                            source="sop-generator"
+                            headline="Download Your Traceability Plan"
+                            subheadline="Get the full FSMA 204 SOP document customized for your operation — ready to print, share with auditors, or submit to retailers."
+                            ctaText="Unlock Full Plan"
+                            toolContext={{ toolInputs: formData }}
+                            teaser={
+                                <div className="space-y-2 pb-4">
+                                    <p className="text-sm text-[var(--re-text-muted)]">Your plan has been generated with custom CTE procedures.</p>
+                                    <pre className="whitespace-pre-wrap text-xs font-mono text-[var(--re-text-muted)] max-h-[120px] overflow-hidden">{generatedDoc?.slice(0, 400)}...</pre>
+                                </div>
+                            }
+                        >
+                            <div className="space-y-4">
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" className="rounded-xl">
+                                        <Download className="h-3 w-3 mr-1" /> Download Full PDF
+                                    </Button>
+                                    <Button variant="outline" size="sm" className="rounded-xl">
+                                        <Printer className="h-3 w-3 mr-1" /> Print
+                                    </Button>
+                                </div>
+                                <Card className="border-[var(--re-border-default)]">
+                                    <CardContent className="py-6">
+                                        <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed text-foreground">
+                                            {generatedDoc}
+                                        </pre>
+                                    </CardContent>
+                                </Card>
+                                <Button onClick={() => setPhase('form')} variant="outline" className="rounded-xl">
+                                    ← Edit & Regenerate
+                                </Button>
+                            </div>
+                        </LeadGate>
                     </motion.div>
                 )}
             </AnimatePresence>

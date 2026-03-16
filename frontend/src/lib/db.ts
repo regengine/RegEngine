@@ -63,3 +63,23 @@ export async function markScanSynced(id: number) {
 export async function markPhotoSynced(id: number) {
     await db.photos.update(id, { synced: 1 });
 }
+
+/**
+ * Remove synced records older than `maxAgeMs` (default 7 days).
+ * Prevents IndexedDB from growing indefinitely on mobile devices.
+ */
+export async function cleanupSyncedRecords(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000) {
+    const cutoff = Date.now() - maxAgeMs;
+    const deletedScans = await db.scans
+        .where('synced').equals(1)
+        .filter((s) => s.timestamp < cutoff)
+        .delete();
+    const deletedPhotos = await db.photos
+        .where('synced').equals(1)
+        .filter((p) => p.timestamp < cutoff)
+        .delete();
+    if (deletedScans > 0 || deletedPhotos > 0) {
+        console.log(`[DB Cleanup] Removed ${deletedScans} scans, ${deletedPhotos} photos older than 7d`);
+    }
+    return { deletedScans, deletedPhotos };
+}
