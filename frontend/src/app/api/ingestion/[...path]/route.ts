@@ -181,8 +181,10 @@ function getIngestionTargets(): string[] {
     candidates.push(publicIngestionUrl);
   }
 
+  // NEXT_PUBLIC_API_BASE_URL points directly at the Railway backend which
+  // serves ingestion routes at the root (no /ingestion prefix).
   if (publicApiBase) {
-    candidates.push(`${stripTrailingSlash(publicApiBase)}/ingestion`);
+    candidates.push(stripTrailingSlash(publicApiBase));
   }
 
   const runningOnVercel = Boolean(
