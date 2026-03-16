@@ -26,6 +26,12 @@ CTE_ALIAS_MAP = {
     "ship": "shipping",
     "transform": "transforming",
     "cool": "cooling",
+    # Distribution / processing aliases
+    "distribute": "shipping",
+    "distribution": "shipping",
+    "di": "shipping",
+    "process": "transforming",
+    "processing": "transforming",
 }
 
 
