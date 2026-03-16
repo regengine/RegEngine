@@ -8,14 +8,22 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import contextmanager, asynccontextmanager
-from prometheus_client import Gauge
+from prometheus_client import Gauge, CollectorRegistry, REGISTRY
 
 logger = structlog.get_logger("shared.database")
 
-# Prometheus Metrics
-db_circuit_breaker_state = Gauge("db_circuit_breaker_state", "0=closed, 1=open, 2=half_open")
-db_pool_checkedout = Gauge("db_pool_checkedout", "Active connections")
-db_pool_overflow = Gauge("db_pool_overflow", "Overflow connections")
+# Prometheus Metrics — guard against duplicate registration on re-import
+def _safe_gauge(name: str, description: str) -> Gauge:
+    """Return existing Gauge if already registered, else create a new one."""
+    try:
+        return Gauge(name, description)
+    except ValueError:
+        # Already registered — return the existing collector
+        return REGISTRY._names_to_collectors.get(name, Gauge(name, description, registry=None))
+
+db_circuit_breaker_state = _safe_gauge("db_circuit_breaker_state", "0=closed, 1=open, 2=half_open")
+db_pool_checkedout = _safe_gauge("db_pool_checkedout", "Active connections")
+db_pool_overflow = _safe_gauge("db_pool_overflow", "Overflow connections")
 
 # Resilience Parameters
 BULKHEAD_LIMIT = int(os.getenv("DB_BULKHEAD_LIMIT", "20"))
