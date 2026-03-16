@@ -235,14 +235,18 @@ class APIClient {
   }
 
 
-  async ingestFile(apiKey: string, file: File, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
+  async ingestFile(apiKey: string, file: File, sourceSystem: string = 'generic', cteType?: string): Promise<IngestURLResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('source_system', sourceSystem);
+    formData.append('source', sourceSystem);
+    // cte_type is optional — the backend auto-detects from a cte_type/event_type column
+    if (cteType) {
+      formData.append('cte_type', cteType);
+    }
 
     const baseUrl = getServiceURL('ingestion');
     const response = await axios.post<IngestURLResponse>(
-      `${baseUrl}/v1/ingest/file`,
+      `${baseUrl}/api/v1/ingest/csv`,
       formData,
       {
         headers: {
@@ -371,6 +375,41 @@ class APIClient {
 
   async logTraceabilityEvent(request: TraceabilityEventRequest): Promise<TraceabilityEventResponse> {
     const { data } = await this.graphClient.post('/api/v1/fsma/traceability/event', request);
+    return data;
+  }
+
+  /**
+   * Ingest CTE events via the webhook endpoint — persists to fsma.cte_events + hash chain.
+   * Use this for sample data loading and programmatic event ingestion.
+   */
+  async ingestWebhookEvents(
+    apiKey: string,
+    events: Array<{
+      cte_type: string;
+      traceability_lot_code: string;
+      product_description: string;
+      quantity: number;
+      unit_of_measure: string;
+      location_name?: string;
+      location_gln?: string;
+      timestamp: string;
+      kdes?: Record<string, unknown>;
+    }>,
+    source: string = 'sample_data',
+    tenantId: string = 'default',
+  ): Promise<{ total: number; accepted: number; rejected: number }> {
+    const baseUrl = getServiceURL('ingestion');
+    const { data } = await axios.post(
+      `${baseUrl}/api/v1/webhooks/ingest`,
+      { source, tenant_id: tenantId, events },
+      {
+        headers: {
+          'X-RegEngine-API-Key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        timeout: 120000,
+      },
+    );
     return data;
   }
 
