@@ -248,12 +248,16 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         result["open_obligation_alerts"] = 0
 
     # 5) FTL product coverage
-    ftl_row = db_session.execute(
-        text("""
-            SELECT COUNT(DISTINCT category) FROM food_traceability_list
-        """),
-    ).fetchone()
-    result["ftl_category_count"] = ftl_row[0] if ftl_row else 0
+    try:
+        ftl_row = db_session.execute(
+            text("""
+                SELECT COUNT(DISTINCT category) FROM food_traceability_list
+            """),
+        ).fetchone()
+        result["ftl_category_count"] = ftl_row[0] if ftl_row else 0
+    except Exception:
+        db_session.rollback()
+        result["ftl_category_count"] = 0
 
     # 6) Chain integrity — full cryptographic verification (last 50 entries)
     try:
