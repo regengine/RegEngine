@@ -13,6 +13,7 @@ import {
     Users,
     Package,
     Scan,
+    Truck,
     ScrollText,
     ShieldCheck,
     Link2,
@@ -56,6 +57,7 @@ const NAV_SECTIONS: NavSection[] = [
         title: 'Data',
         items: [
             { label: 'Field Capture', href: '/dashboard/scan', icon: Scan },
+            { label: 'Receiving Dock', href: '/dashboard/receiving', icon: Truck },
             { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
             { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
             { label: 'Products', href: '/dashboard/products', icon: Package },

@@ -109,6 +109,91 @@ def _generate_sample_products(tenant_id: str) -> list[Product]:
 _catalog_store: dict[str, list[Product]] = {}
 
 
+def learn_from_event(
+    tenant_id: str,
+    product_description: str,
+    gtin: str | None = None,
+    kdes: dict | None = None,
+) -> Product | None:
+    """
+    Auto-learn: upsert a product into the catalog from an ingested CTE event.
+
+    If a product with the same GTIN already exists, update its CTE count and
+    last_cte timestamp. Otherwise create a new entry. This makes the scanner
+    smarter with every confirmed scan — second time you scan a GTIN it pre-fills
+    everything instantly, zero AI cost.
+    """
+    if not product_description and not gtin:
+        return None
+
+    if tenant_id not in _catalog_store:
+        _catalog_store[tenant_id] = _generate_sample_products(tenant_id)
+
+    now = datetime.now(timezone.utc)
+    catalog = _catalog_store[tenant_id]
+
+    # Check if product already exists by GTIN
+    if gtin:
+        for product in catalog:
+            if product.gtin == gtin:
+                product.cte_count += 1
+                product.last_cte = now.isoformat()
+                # Enrich if we have new info
+                if kdes:
+                    if kdes.get("facility_name") and kdes["facility_name"] not in product.facilities:
+                        product.facilities.append(kdes["facility_name"])
+                logger.info("product_catalog_updated gtin=%s cte_count=%d", gtin, product.cte_count)
+                return product
+
+    # Check by exact name match
+    for product in catalog:
+        if product.name.lower() == product_description.lower():
+            product.cte_count += 1
+            product.last_cte = now.isoformat()
+            if gtin and not product.gtin:
+                product.gtin = gtin
+            return product
+
+    # Create new product
+    new_product = Product(
+        id=f"{tenant_id}-prod-{len(catalog) + 1:03d}",
+        name=product_description,
+        category="",  # Will be categorized later or manually
+        ftl_covered=False,
+        sku="",
+        gtin=gtin or "",
+        description=product_description,
+        suppliers=[],
+        facilities=[kdes["facility_name"]] if kdes and kdes.get("facility_name") else [],
+        cte_count=1,
+        last_cte=now.isoformat(),
+        created_at=now.isoformat(),
+    )
+    catalog.append(new_product)
+    logger.info("product_catalog_learned name=%s gtin=%s", product_description, gtin)
+    return new_product
+
+
+@router.get(
+    "/{tenant_id}/lookup",
+    summary="Lookup product by GTIN",
+)
+async def lookup_by_gtin(
+    tenant_id: str,
+    gtin: str,
+    _: None = Depends(_verify_api_key),
+):
+    """Fast lookup for scanner auto-fill — returns product if GTIN known."""
+    if tenant_id not in _catalog_store:
+        _catalog_store[tenant_id] = _generate_sample_products(tenant_id)
+
+    for product in _catalog_store[tenant_id]:
+        if product.gtin == gtin:
+            return {"found": True, "product": product.model_dump()}
+
+    return {"found": False, "product": None}
+
+
 @router.get(
     "/{tenant_id}",
     response_model=ProductCatalogResponse,
