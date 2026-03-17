@@ -8,10 +8,10 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance pricing. Plans from $1,299/mo. Free traceability tools included.',
+    description: 'FSMA 204 compliance plans from $999/mo. Founding Design Partners get 50% off year one.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance pricing. Plans from $1,299/mo. Free traceability tools included.',
+        description: 'FSMA 204 compliance plans from $999/mo. Founding Design Partners get 50% off year one.',
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
@@ -32,66 +32,73 @@ const T = {
 
 const PRICING_TIERS = [
     {
-        id: 'growth',
-        name: 'Growth',
+        id: 'base',
+        name: 'Base',
         Icon: Zap,
-        description: 'Under $50M annual revenue',
-        monthlyPrice: 1299,
-        annualPrice: 1079,
+        description: '1 facility, getting started',
+        gaMonthly: 999,
+        gaAnnual: 849,
+        partnerMonthly: 499,
+        partnerAnnual: 425,
         highlighted: false,
-        cta: 'Start Growth Plan',
+        cta: 'Start Base Plan',
         features: [
-            'Up to 10,000 CTEs/month',
-            'Up to 3 locations',
+            '1 facility',
+            'Up to 500 CTEs/month',
             'FSMA 204 traceability workspace',
             'Supplier onboarding + FTL scoping',
             'CSV upload + API ingestion',
             'Compliance scoring + FDA-ready export',
-            'Recall simulation + drill workflows',
+            'Recall drill workflows',
             'Email support',
         ],
     },
     {
-        id: 'scale',
-        name: 'Scale',
+        id: 'standard',
+        name: 'Standard',
         Icon: Rocket,
-        description: '$50M\u2013$200M annual revenue',
-        monthlyPrice: 2499,
-        annualPrice: 2079,
+        description: '2\u20133 facilities, scaling up',
+        gaMonthly: 1299,
+        gaAnnual: 1099,
+        partnerMonthly: 649,
+        partnerAnnual: 549,
         highlighted: true,
-        cta: 'Start Scale Plan',
+        cta: 'Start Standard Plan',
         features: [
-            'Up to 100,000 CTEs/month',
-            'Up to 10 locations',
-            'Everything in Growth',
+            '2\u20133 facilities',
+            'Unlimited CTEs',
+            'Everything in Base',
             'Multi-facility operations',
-            'Priority onboarding support',
             'Retailer-specific readiness benchmarks',
-            'Priority support',
+            'FDA-ready export + EPCIS 2.0',
+            'Priority email support',
         ],
     },
     {
-        id: 'enterprise',
-        name: 'Enterprise',
+        id: 'premium',
+        name: 'Premium',
         Icon: Crown,
-        description: 'Over $200M annual revenue',
-        monthlyPrice: null,
-        annualPrice: null,
+        description: '4+ facilities, full coverage',
+        gaMonthly: 1499,
+        gaAnnual: 1275,
+        partnerMonthly: 749,
+        partnerAnnual: 639,
         highlighted: false,
-        cta: 'Talk to us',
+        cta: 'Start Premium Plan',
         features: [
-            'Unlimited CTEs + locations',
-            'Everything in Scale',
-            'Dedicated implementation plan',
-            'Custom SLA + security review support',
-            'Advanced integration and data architecture',
-            'Executive sponsor + quarterly strategic reviews',
+            '4+ facilities',
+            'Unlimited CTEs',
+            'Everything in Standard',
+            'Priority onboarding support',
+            'Custom integration scoping',
+            'Dedicated Slack channel',
+            'Quarterly compliance reviews',
         ],
     },
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$1,299/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
+    { feature: 'Starting Price', regengine: '$999/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
     { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6\u20138 weeks', repositrak: '<1 hour*', tracegains: '4\u20136 weeks' },
     { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
@@ -100,12 +107,12 @@ const COMPETITOR_COMPARISON = [
 ];
 
 const FAQ = [
-    { q: 'How do you decide between Growth and Scale?', a: 'Pricing is mapped to annual revenue bands: Growth is for teams under $50M, Scale is for $50M\u2013$200M, and Enterprise is custom above that.' },
+    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2\u20133 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
+    { q: 'What do Founding Design Partners get?', a: 'Design Partners pay 50% off GA pricing for their entire first year. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Pricing locks in at your partner rate for the full 12 months.' },
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we\u2019ll prorate. Downgrade at the end of your billing cycle." },
-    { q: 'Do you offer pilot engagements?', a: 'Yes. All Founding Design Partners go through a structured onboarding with direct founder support, custom integration scoping, and a clear path to production readiness.' },
-    { q: 'Do you offer annual contracts?', a: 'Yes. Annual contracts are available for all plans.' },
-    { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system work should be evaluated by delivery mode: native API, webhook, CSV/SFTP import, export-only, or custom-scoped implementation.' },
-    { q: 'How does the Founding Design Partner program work?', a: 'All current plans are available through the Founding Design Partner program. Partners get locked-in pricing, white-glove onboarding, custom integration scoping, and direct founder support. Self-serve general availability is planned for later in 2026.' },
+    { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
+    { q: 'What happens after my Design Partner year ends?', a: 'You transition to standard GA pricing. We\u2019ll give you 60 days notice and a smooth transition. Many partners also qualify for annual contract discounts at renewal.' },
+    { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
 ];
 
 export default function PricingPage() {
@@ -114,20 +121,17 @@ export default function PricingPage() {
             {/* Hero */}
             <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
                 <Badge style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.border}`, marginBottom: '20px' }}>
-                    Founding Design Partner Pricing
+                    Founding Design Partners — 50% Off Year One
                 </Badge>
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
                     FSMA 204 Compliance,<br />
-                    <span className="text-re-brand">Priced by Revenue Tier</span>
+                    <span className="text-re-brand">Priced for Mid-Market</span>
                 </h1>
-                <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '560px', margin: '0 auto 16px', lineHeight: 1.6 }}>
-                    These rates are reserved for approved Design Partners participating in the RegEngine Alpha. Self-serve general availability is planned for later in 2026.
+                <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 16px', lineHeight: 1.6 }}>
+                    Three plans sized by facility count. Founding Design Partners lock in 50% off for their entire first year — white-glove onboarding and direct founder support included.
                 </p>
                 <p style={{ fontSize: '14px', color: T.textDim }}>
-                    Annual pricing shown below (save ~17%). Monthly billing also available.
-                </p>
-                <p style={{ fontSize: '13px', color: T.textDim, marginTop: '12px' }}>
-                    We are onboarding a limited number of Design Partners ahead of the July 2028 FSMA 204 compliance deadline.
+                    Annual billing saves ~15%. Monthly billing also available.
                 </p>
             </section>
 
@@ -162,24 +166,22 @@ export default function PricingPage() {
                                         <span style={{ fontSize: '18px', fontWeight: 600, color: T.heading }}>{tier.name}</span>
                                     </div>
                                     <p style={{ fontSize: '13px', color: T.textDim, marginBottom: '12px' }}>{tier.description}</p>
-                                    <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, background: 'rgba(59,130,246,0.08)', color: '#3b82f6', padding: '3px 8px', borderRadius: '6px', marginBottom: '16px' }}>
-                                        Alpha Partner Pricing
+                                    <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, background: 'rgba(16,185,129,0.1)', color: T.accent, padding: '3px 8px', borderRadius: '6px', marginBottom: '16px' }}>
+                                        50% Off — Design Partner Year 1
                                     </span>
 
                                     <div style={{ marginBottom: '20px' }}>
-                                        {tier.annualPrice !== null ? (
-                                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                                                <span style={{ fontSize: '36px', fontWeight: 700, color: T.heading }}>${tier.annualPrice}</span>
-                                                <span style={{ color: T.textMuted, fontSize: '14px' }}>/mo</span>
-                                            </div>
-                                        ) : (
-                                            <span style={{ fontSize: '28px', fontWeight: 700, color: T.heading }}>Custom</span>
-                                        )}
-                                        {tier.monthlyPrice !== null && (
-                                            <p style={{ fontSize: '12px', color: T.textDim, marginTop: '4px' }}>
-                                                ${tier.monthlyPrice}/mo billed monthly
-                                            </p>
-                                        )}
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                                            <span style={{ fontSize: '36px', fontWeight: 700, color: T.heading }}>${tier.partnerAnnual}</span>
+                                            <span style={{ color: T.textMuted, fontSize: '14px' }}>/mo</span>
+                                        </div>
+                                        <p style={{ fontSize: '12px', color: T.textDim, marginTop: '4px' }}>
+                                            <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>${tier.gaAnnual}/mo</span>
+                                            {' '}GA price · billed annually
+                                        </p>
+                                        <p style={{ fontSize: '11px', color: T.textDim, marginTop: '2px' }}>
+                                            ${tier.partnerMonthly}/mo if billed monthly
+                                        </p>
                                     </div>
 
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
@@ -205,7 +207,7 @@ export default function PricingPage() {
                                                 transition: 'all 0.2s',
                                             }}
                                         >
-                                            {tier.id === 'enterprise' ? 'Talk to Us' : 'Apply for Alpha Program'}
+                                            {tier.cta}
                                             <ArrowRight className="ml-2 w-4 h-4" />
                                         </Button>
                                     </Link>
@@ -215,40 +217,35 @@ export default function PricingPage() {
                     })}
                 </div>
                 <p style={{ textAlign: 'center', fontSize: '12px', color: T.textDim, marginTop: '20px' }}>
-                    All plans include a standard CTE volume. Additional Critical Tracking Events billed at $0.001/CTE.{' '}
+                    Base plan includes 500 CTEs/month. Standard and Premium are unlimited. Need more on Base? Add CTEs at $0.002 each.{' '}
                     <Link href="/terms" style={{ color: T.accent, textDecoration: 'underline' }}>See Terms</Link> for full details.
-                </p>
-                <p style={{ textAlign: 'center', fontSize: '12px', color: T.textDim, marginTop: '10px' }}>
-                    Review the{' '}
-                    <Link href="/trust" style={{ color: T.accent, textDecoration: 'underline' }}>Trust Center</Link>
-                    {' '}for retention posture, support windows, and integration delivery modes before production rollout.
                 </p>
 
                 {/* Founding Design Partner callout */}
                 <div style={{
-                    maxWidth: '640px', margin: '40px auto 0',
+                    maxWidth: '680px', margin: '40px auto 0',
                     borderRadius: '16px', border: `2px solid var(--re-brand-muted)`,
-                    background: T.accentBg, padding: '24px 28px', textAlign: 'center',
+                    background: T.accentBg, padding: '28px 32px', textAlign: 'center',
                 }}>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: T.accent, marginBottom: '6px' }}>
+                    <p style={{ fontSize: '16px', fontWeight: 700, color: T.accent, marginBottom: '8px' }}>
                         Founding Design Partner Program
                     </p>
-                    <p style={{ fontSize: '13px', color: T.textMuted, lineHeight: 1.6, marginBottom: '16px', maxWidth: '440px', margin: '0 auto 16px' }}>
-                        Founding partners get custom integration scoping, white-glove onboarding, and direct founder support — with pricing locked in for the life of your account.
+                    <p style={{ fontSize: '14px', color: T.textMuted, lineHeight: 1.7, marginBottom: '8px', maxWidth: '520px', margin: '0 auto 8px' }}>
+                        50% off GA pricing for your entire first year. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
                     </p>
-                    <Link href="/alpha">
+                    <p style={{ fontSize: '13px', color: T.textDim, lineHeight: 1.6, marginBottom: '20px', maxWidth: '480px', margin: '0 auto 20px' }}>
+                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. After year one, you transition to standard GA pricing with 60 days notice.
+                    </p>
+                    <Link href="/onboarding">
                         <Button style={{
                             background: T.accent, color: '#fff', fontWeight: 600,
-                            borderRadius: '10px', padding: '10px 24px',
-                            boxShadow: '0 2px 12px rgba(16,185,129,0.2)',
+                            borderRadius: '10px', padding: '12px 28px',
+                            boxShadow: '0 4px 16px rgba(16,185,129,0.25)',
                         }}>
-                            Apply for Alpha Program — Lock In Founding Pricing <ArrowRight className="ml-2 w-4 h-4" />
+                            Apply as Founding Design Partner <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
                 </div>
-                <p style={{ textAlign: 'center', fontSize: '11px', color: T.textDim, marginTop: '16px' }}>
-                    Pricing shown is reserved for approved Alpha partners. Final rates are confirmed upon acceptance into the program.
-                </p>
             </section>
 
             {/* Competitor Comparison */}
@@ -261,7 +258,7 @@ export default function PricingPage() {
                         The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
                     </p>
                     <p style={{ textAlign: 'center', fontSize: '14px', color: T.textDim, maxWidth: '520px', margin: '0 auto 40px', lineHeight: 1.6 }}>
-                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $1,299/mo.
+                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $999/mo.
                     </p>
                     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                         <div style={{ overflowX: 'auto' }}>
@@ -319,15 +316,15 @@ export default function PricingPage() {
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: 'linear-gradient(135deg, var(--re-brand) 0%, #0ea5e9 100%)' }}>
                 <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
                     <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
-                        Ready to Become a Founding Design Partner?
+                        Lock In 50% Off Before GA Launch
                     </h2>
                     <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)', marginBottom: '32px' }}>
-                        Apply now to lock in founding pricing and get white-glove onboarding before the FSMA 204 deadline.
+                        Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
-                        <Link href="/contact">
+                        <Link href="/onboarding">
                             <Button style={{ background: '#fff', color: T.accent, fontWeight: 600, padding: '14px 24px' }}>
-                                Talk to Us <ArrowRight className="ml-2 w-4 h-4" />
+                                Apply Now <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
                         <Link href="/trust">
