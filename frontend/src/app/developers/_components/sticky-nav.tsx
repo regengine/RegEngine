@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { T, NAV_SECTIONS } from '../_data';
+import { useEnv } from './env-context';
 
 export function StickyNav() {
     const [activeSection, setActiveSection] = useState('quickstart');
-    const [env, setEnv] = useState<'production' | 'sandbox'>('production');
-    const baseUrl = env === 'production' ? 'https://api.regengine.co' : 'https://sandbox.regengine.co';
+    const { env, setEnv, baseUrl } = useEnv();
 
     /* Intersection observer for active state */
     useEffect(() => {
