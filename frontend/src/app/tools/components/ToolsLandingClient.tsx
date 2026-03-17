@@ -7,7 +7,8 @@ import {
     Leaf, ClipboardList, Truck, Timer, FlaskConical,
     CheckCircle2, ShieldCheck, TrendingUp, LayoutDashboard,
     FileText, Upload, Network, AlertTriangle, Zap, ArrowRight,
-    Map, ListChecks, BarChart3, ScanLine,
+    Map, ListChecks, BarChart3, ScanLine, ScanBarcode,
+    MessageSquareText, FileOutput,
 } from 'lucide-react';
 
 /* ─── CATEGORY DEFINITIONS ─── */
@@ -162,6 +163,33 @@ const TOOLS: Tool[] = [
         description: 'Point your camera at a food label or barcode. AI extracts product name, lot code, GTIN, expiry, and maps it to FSMA 204 KDEs instantly.',
         icon: ScanLine,
         category: 'validate',
+        maturity: 'ga',
+        featured: true,
+    },
+    {
+        id: 'scan',
+        title: 'GS1 Barcode Scanner',
+        description: 'Scan a GS1 barcode with your camera. Auto-fill CTE fields and ingest in one tap. Supports GS1-128, Digital Link, and DataMatrix.',
+        icon: ScanBarcode,
+        category: 'validate',
+        maturity: 'ga',
+        featured: true,
+    },
+    {
+        id: 'ask',
+        title: 'Traceability Query Engine',
+        description: 'Ask questions about your supply chain in plain English. Get traced results with evidence and confidence scores.',
+        icon: MessageSquareText,
+        category: 'plan',
+        maturity: 'ga',
+        featured: true,
+    },
+    {
+        id: 'export',
+        title: 'FDA Export Package Generator',
+        description: 'Generate a verifiable 21 CFR 1.1455 compliance package with SHA-256 chain verification in one click.',
+        icon: FileOutput,
+        category: 'plan',
         maturity: 'ga',
         featured: true,
     },
