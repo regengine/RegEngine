@@ -135,10 +135,7 @@ def generate_zpl_code(
 # ============================================================================
 
 
-@router.get("/health")
-def health_check():
-    """Preserved: Monitoring endpoint."""
-    return {"status": "healthy", "service": "label-inception", "version": "1.3.0"}
+
 
 
 @router.post("/batch/init", response_model=LabelBatchInitResponse)

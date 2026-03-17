@@ -34,10 +34,7 @@ logger = structlog.get_logger("fsma-metrics")
 # ============================================================================
 
 
-@router.get("/health")
-def fsma_health():
-    """FSMA module health check with metrics summary."""
-    return get_health_status()
+
 
 
 @router.get("/metrics")

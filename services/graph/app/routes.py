@@ -39,29 +39,7 @@ v1_router.include_router(compliance_router, prefix="/fsma/compliance", tags=["fs
 router.include_router(v1_router)
 
 
-@router.get("/health")
-async def health():
-    """Health check endpoint with Neo4j verification."""
-    client = None
-    try:
-        client = Neo4jClient(database=Neo4jClient.get_global_database_name())
-        async with client.session() as session:
-            await session.run("RETURN 1")
-        return {"status": "healthy", "neo4j": "available"}
-    except Exception as exc:
-        logger.error("graph_health_neo4j_unavailable", error=str(exc))
-        raise HTTPException(
-            status_code=503, detail="Neo4j unavailable or unreachable"
-        ) from exc
-    finally:
-        if client is not None:
-            await client.close()
 
-
-@router.get("/ready")
-async def readiness():
-    """Readiness probe for k8s orchestration."""
-    return {"status": "ready", "service": "graph-api"}
 
 
 @router.get("/metrics")

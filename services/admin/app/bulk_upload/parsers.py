@@ -318,9 +318,18 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "facility_name": str(
-            row.get("facility_name") or row.get("location_name") or ""
+            row.get("facility_name")
+            or row.get("location_name")
+            or row.get("origin_facility_name")
+            or row.get("destination_facility_name")
+            or ""
         ).strip(),
-        "tlc_code": str(row.get("tlc_code") or "").strip(),
+        "tlc_code": str(
+            row.get("tlc_code")
+            or row.get("traceability_lot_code")
+            or row.get("lot_number")
+            or ""
+        ).strip(),
         "cte_type": str(cte_type).strip(),
         "event_time": str(event_time).strip() if event_time else None,
         "kde_data": kde_data,
@@ -378,6 +387,9 @@ def _classify_row(
         return
 
     if row.get("cte_type") or row.get("event_type"):
+        parsed["events"].append(_extract_event_row(row))
+        return
+    if row.get("lot_number") or row.get("traceability_lot_code"):
         parsed["events"].append(_extract_event_row(row))
         return
     if row.get("category_id"):
@@ -664,4 +676,83 @@ async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
     else:  # pragma: no cover
         raise HTTPException(status_code=400, detail="Unsupported file format")
 
+    _auto_scaffold_facilities(parsed, warnings)
+
     return parsed
+
+
+def _auto_scaffold_facilities(
+    parsed: dict[str, Any], warnings: list[str]
+) -> None:
+    """Auto-create facility records from event/tlc/ftl_scope rows.
+
+    When a CSV contains event rows referencing facilities that have no
+    explicit facility record, this function synthesises minimal facility
+    entries from the data available in the event rows (city, state, etc.
+    are captured in kde_data by the column-alias normaliser).
+    """
+    existing_names: set[str] = set()
+    for facility in parsed.get("facilities") or []:
+        name = str(facility.get("name") or "").strip().lower()
+        if name:
+            existing_names.add(name)
+
+    # Collect unique facility names referenced by other sections and the
+    # best available metadata for each.
+    facility_meta: dict[str, dict[str, str]] = {}
+
+    for section in ("events", "tlcs", "ftl_scopes"):
+        for row in parsed.get(section) or []:
+            raw_name = str(row.get("facility_name") or "").strip()
+            if not raw_name:
+                continue
+            key = raw_name.lower()
+            if key in existing_names:
+                continue
+            if key in facility_meta:
+                continue
+
+            # Pull city/state from kde_data where the parser stashed
+            # non-passthrough columns like origin_city, origin_state.
+            kde = row.get("kde_data") or {}
+            city = str(
+                kde.get("origin_city")
+                or kde.get("city")
+                or kde.get("destination_city")
+                or kde.get("location_city")
+                or ""
+            ).strip()
+            state = str(
+                kde.get("origin_state")
+                or kde.get("state")
+                or kde.get("destination_state")
+                or kde.get("location_state")
+                or ""
+            ).strip()
+
+            facility_meta[key] = {
+                "name": raw_name,
+                "city": city,
+                "state": state,
+            }
+
+    if not facility_meta:
+        return
+
+    for meta in facility_meta.values():
+        parsed["facilities"].append(
+            {
+                "name": meta["name"],
+                "street": "",
+                "city": meta["city"],
+                "state": meta["state"],
+                "postal_code": "",
+                "fda_registration_number": "",
+                "roles": [],
+            }
+        )
+
+    warnings.append(
+        f"Auto-created {len(facility_meta)} facility record(s) from event data: "
+        + ", ".join(m["name"] for m in facility_meta.values())
+    )

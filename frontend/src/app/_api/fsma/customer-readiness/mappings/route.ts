@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { MAPPING_REVIEW_ITEMS } from '@/lib/customer-readiness';
 
+// Required for static export (output: 'export') compatibility
+export const dynamic = 'force-static';
+
 export async function GET() {
     return NextResponse.json({
         items: MAPPING_REVIEW_ITEMS,

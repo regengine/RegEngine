@@ -80,4 +80,24 @@ async def root():
 from shared.health import HealthCheck, install_health_router
 
 health = HealthCheck(service_name="graph-service")
+
+def check_neo4j():
+    from app.neo4j_utils import Neo4jClient
+    import asyncio
+    async def _async_check():
+        client = None
+        try:
+            client = Neo4jClient(database=Neo4jClient.get_global_database_name())
+            async with client.session() as session:
+                await session.run("RETURN 1")
+            return {"status": "healthy"}
+        except Exception as exc:
+            return {"status": "unhealthy", "error": str(exc)}
+        finally:
+            if client is not None:
+                await client.close()
+    return asyncio.run(_async_check()) if not asyncio.get_event_loop().is_running() else _async_check()
+
+health.add_dependency("neo4j", check_neo4j)
+
 install_health_router(app, service_name="graph-service", health_check=health)

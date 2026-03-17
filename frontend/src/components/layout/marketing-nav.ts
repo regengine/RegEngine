@@ -38,4 +38,6 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
     { label: "Alpha Program", href: "/alpha" },
+    { label: "Log In", href: "/login" },
+    { label: "Sign Up", href: "/signup" },
 ];

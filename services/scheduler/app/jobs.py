@@ -42,7 +42,7 @@ def schedule_startup_jobs():
 # ---------------------------------------------------------------------------
 
 _INGESTION_INTERNAL_URL = os.getenv(
-    "INGESTION_SERVICE_URL", "http://ingestion:8301"
+    "INGESTION_SERVICE_URL", "http://ingestion-service:8000"
 )
 _INGESTION_API_KEY = os.getenv("REGENGINE_INTERNAL_SECRET", "")
 

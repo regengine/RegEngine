@@ -36,7 +36,7 @@ class SystemMetricsResponse(BaseModel):
 
 def _get_service_urls() -> Dict[str, str]:
     """Build service health-check URLs from env vars or fallback to Docker names."""
-    ingestion = os.getenv("INGESTION_SERVICE_URL", "http://ingestion-api:8002")
+    ingestion = os.getenv("INGESTION_SERVICE_URL", "http://ingestion-service:8000")
     compliance = os.getenv("COMPLIANCE_SERVICE_URL", "http://compliance-api:8500")
     urls = {
         "ingestion": f"{ingestion.rstrip('/')}/health",
@@ -45,11 +45,11 @@ def _get_service_urls() -> Dict[str, str]:
     # Graph service is optional — only check if explicitly configured
     graph = os.getenv("GRAPH_SERVICE_URL")
     if graph:
-        urls["graph"] = f"{graph.rstrip('/')}/v1/labels/health"
+        urls["graph"] = f"{graph.rstrip('/')}/health"
     return urls
 
 def _get_ingestion_base() -> str:
-    return os.getenv("INGESTION_SERVICE_URL", "http://ingestion-api:8002").rstrip("/")
+    return os.getenv("INGESTION_SERVICE_URL", "http://ingestion-service:8000").rstrip("/")
 
 @router.get("/status", response_model=SystemStatusResponse)
 async def get_system_status(current_user: UserModel = Depends(get_current_user)):

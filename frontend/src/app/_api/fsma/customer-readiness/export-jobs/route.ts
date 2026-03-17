@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { ARCHIVE_EXPORT_JOBS } from '@/lib/customer-readiness';
 
+// Required for static export (output: 'export') compatibility
+export const dynamic = 'force-static';
+
 export async function GET() {
     return NextResponse.json({
         jobs: ARCHIVE_EXPORT_JOBS,

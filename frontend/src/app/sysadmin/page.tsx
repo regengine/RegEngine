@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity } from "lucide-react"
+import { AlertCircle, CheckCircle, RefreshCw, Server, Users, FileText, Activity, LogOut } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ interface SystemMetrics {
 }
 
 export default function SysAdminDashboard() {
-    const { user, accessToken, isHydrated } = useAuth()
+    const { user, accessToken, isHydrated, clearCredentials } = useAuth()
     const router = useRouter()
     const [status, setStatus] = useState<SystemStatus | null>(null)
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
@@ -88,10 +88,16 @@ export default function SysAdminDashboard() {
                     <h1 className="text-3xl font-bold tracking-tight">System Administration</h1>
                     <p className="text-muted-foreground">Real-time system health and operational metrics</p>
                 </div>
-                <Button onClick={fetchData} disabled={loading}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                    Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button onClick={fetchData} disabled={loading}>
+                        <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                        Refresh
+                    </Button>
+                    <Button variant="outline" onClick={() => { clearCredentials(); router.push("/login"); }}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Sign Out
+                    </Button>
+                </div>
             </div>
 
             {error && (

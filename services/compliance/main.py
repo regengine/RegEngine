@@ -27,10 +27,8 @@ app = FastAPI(
     ),
 )
 
-
-@app.get("/health")
-async def health_check() -> dict:
-    return {"status": "healthy", "service": "compliance-api"}
+from shared.health import install_health_router
+install_health_router(app, "compliance-api")
 
 
 @app.get("/")

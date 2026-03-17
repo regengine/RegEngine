@@ -14,6 +14,14 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from shared.auth import APIKey, require_api_key
+
+
+def _is_production_env() -> bool:
+    """Detect production by DATABASE_URL (Supabase pooler) or ENV=production."""
+    if os.getenv("ENV", "").lower() == "production":
+        return True
+    db_url = os.getenv("DATABASE_URL", "")
+    return "pooler.supabase.com" in db_url or "railway" in db_url
 from shared.api_key_store import APIKeyResponse
 from shared.permissions import has_permission
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
@@ -203,7 +211,10 @@ async def get_ingestion_principal(
             raise exc
 
     # Local-dev/test default when API_KEY is not configured.
+    _prod = _is_production_env()
     if not x_regengine_api_key:
+        if _prod:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
         return IngestionPrincipal(
             key_id="dev-open",
             scopes=["*"],
@@ -223,6 +234,8 @@ async def get_ingestion_principal(
         principal = _lookup_scoped_key_from_db(x_regengine_api_key)
         if principal:
             return principal
+        if _prod:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
         return IngestionPrincipal(
             key_id="dev-open",
             scopes=["*"],

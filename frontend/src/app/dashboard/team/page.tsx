@@ -76,9 +76,9 @@ async function apiInviteMember(tenantId: string, name: string, email: string, ro
 }
 
 export default function TeamPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = Boolean(apiKey);
+    const isLoggedIn = isAuthenticated;
 
     const [team, setTeam] = useState<TeamMember[]>([]);
     const [activeCount, setActiveCount] = useState(0);

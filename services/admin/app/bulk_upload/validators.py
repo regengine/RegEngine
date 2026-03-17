@@ -11,6 +11,27 @@ from app.supplier_cte_service import _next_merkle_hash, _sha256_json
 CTE_ALIAS_MAP = {
     "transformation": "transforming",
     "first_land_based_receiving": "first_receiver",
+    # Single-letter FSMA 204 event type codes
+    "r": "receiving",
+    "s": "shipping",
+    "t": "transforming",
+    "c": "cooling",
+    "p": "initial_packing",
+    "h": "harvesting",
+    # Common full-word aliases
+    "harvest": "harvesting",
+    "packing": "initial_packing",
+    "pack": "initial_packing",
+    "receive": "receiving",
+    "ship": "shipping",
+    "transform": "transforming",
+    "cool": "cooling",
+    # Industry-variant event type names
+    "distribute": "shipping",
+    "distribution": "shipping",
+    "di": "shipping",
+    "process": "transforming",
+    "processing": "transforming",
 }
 
 
@@ -21,10 +42,10 @@ def normalize_cte_type(value: str) -> str:
 
 class BulkFacilityRow(BaseModel):
     name: str = Field(min_length=2)
-    street: str = Field(min_length=2)
-    city: str = Field(min_length=2)
-    state: str = Field(min_length=2)
-    postal_code: str = Field(min_length=2)
+    street: str = Field(default="")
+    city: str = Field(default="")
+    state: str = Field(default="")
+    postal_code: str = Field(default="")
     fda_registration_number: str | None = None
     roles: list[str] = Field(default_factory=list)
 

@@ -45,9 +45,7 @@ class TraceabilityQueryResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-@router.get("/health")
-def health():
-    return {"status": "ok"}
+
 
 
 @router.get("/metrics")

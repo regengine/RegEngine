@@ -102,6 +102,9 @@ services:
       DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
       # PCOS payroll database (shares regengine_admin schema)
       ENTERTAINMENT_DATABASE_URL: ${ENTERTAINMENT_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
+      # Service discovery for health checks (must use Docker-internal hostnames + ports)
+      INGESTION_SERVICE_URL: http://ingestion-service:8000
+      COMPLIANCE_SERVICE_URL: http://compliance-api:8500
     deploy:
       resources:
         limits:
@@ -110,6 +113,13 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
+    depends_on:
+      ingestion-service:
+        condition: service_healthy
+      compliance-api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8400/health" ]
       interval: 10s
@@ -130,6 +140,11 @@ services:
       DATABASE_URL: postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin
       # CORS origins for frontend access (comma-separated)
       CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     volumes:
       - ./services/ingestion/app:/app/app
       - ./services/ingestion/main.py:/app/main.py

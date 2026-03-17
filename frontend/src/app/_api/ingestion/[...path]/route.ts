@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DEFAULT_ADMIN_URL = 'http://localhost:8400';
+// Production Railway backend — used as fallback when no env var is configured
+const RAILWAY_INGESTION_URL = 'https://believable-respect-production-2fb3.up.railway.app';
+const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
-export const dynamic = 'force-static';
-export const generateStaticParams = async () => {
-  return [{ path: ['static_proxy'] }];
-};
+// force-dynamic ensures the proxy runs as a serverless function on every request,
+// forwarding auth headers and query params to the ingestion backend.
+// For static export builds (CI), the proxyRequest function returns 503 early.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   request: NextRequest,
@@ -64,14 +67,14 @@ async function proxyRequest(
   try {
     if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
       return NextResponse.json(
-        { error: 'Admin API proxy unavailable during static build', static_mode: true },
+        { error: 'Ingestion API proxy unavailable during static build', static_mode: true },
         { status: 503 },
       );
     }
 
     const path = pathParts.join('/');
     const queryString = new URL(request.url).search;
-    const targetBases = getAdminTargets();
+    const targetBases = getIngestionTargets();
 
     const headers = new Headers();
     const hasRequestBody = !['GET', 'OPTIONS'].includes(method);
@@ -94,6 +97,16 @@ async function proxyRequest(
       if (value) {
         headers.set(key, value);
       }
+    }
+
+    // Inject server-side API key if client didn't provide one.
+    // Falls back to the default key that matches the backend's config.py default.
+    if (!headers.has('x-regengine-api-key')) {
+      const serverApiKey =
+        process.env.REGENGINE_API_KEY ||
+        process.env.NEXT_PUBLIC_API_KEY ||
+        're_live_fsma204_key';
+      headers.set('x-regengine-api-key', serverApiKey);
     }
 
     const fetchOptions: RequestInit = {
@@ -142,7 +155,7 @@ async function proxyRequest(
           headers: outgoingHeaders,
         });
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Admin request failed';
+        const message = error instanceof Error ? error.message : 'Ingestion request failed';
         attemptErrors.push(`target=${targetBase} error=${message}`);
 
         if (hasRequestBody && requestBody) {
@@ -153,40 +166,43 @@ async function proxyRequest(
 
     return NextResponse.json(
       {
-        error: 'Unable to reach admin service',
+        error: 'Unable to reach ingestion service',
         details: attemptErrors,
       },
       { status: 502 },
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Admin request failed';
+    const message = error instanceof Error ? error.message : 'Ingestion request failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-function getAdminTargets(): string[] {
+function getIngestionTargets(): string[] {
   const candidates: string[] = [];
-  const publicAdminUrl = process.env.NEXT_PUBLIC_ADMIN_URL;
-  const publicApiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  const internalAdminUrl = process.env.ADMIN_SERVICE_URL;
+  const publicIngestionUrl = process.env.NEXT_PUBLIC_INGESTION_URL;
+  const internalIngestionUrl = process.env.INGESTION_SERVICE_URL;
 
-  if (publicAdminUrl) {
-    candidates.push(publicAdminUrl);
+  if (publicIngestionUrl) {
+    candidates.push(publicIngestionUrl);
   }
 
-  if (publicApiBase) {
-    candidates.push(`${stripTrailingSlash(publicApiBase)}/admin`);
-  }
+  // NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT used here.
+  // It points at the admin service, which doesn't serve ingestion routes.
 
   const runningOnVercel = Boolean(
     process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV,
   );
-  if (internalAdminUrl && (!runningOnVercel || isPublicAdminHost(internalAdminUrl))) {
-    candidates.push(internalAdminUrl);
+  if (internalIngestionUrl && (!runningOnVercel || isPublicHost(internalIngestionUrl))) {
+    candidates.push(internalIngestionUrl);
   }
 
+  // On Vercel with no env vars configured, use the Railway production backend
   if (candidates.length === 0) {
-    candidates.push(DEFAULT_ADMIN_URL);
+    if (runningOnVercel) {
+      candidates.push(RAILWAY_INGESTION_URL);
+    } else {
+      candidates.push(DEFAULT_INGESTION_URL);
+    }
   }
 
   return Array.from(new Set(candidates.map((candidate) => stripTrailingSlash(candidate))));
@@ -201,7 +217,7 @@ function shouldRetryResponse(response: Response): boolean {
   return vercelErrorHeader.includes(VERCEL_PRIVATE_DNS_ERROR);
 }
 
-function isPublicAdminHost(urlValue: string): boolean {
+function isPublicHost(urlValue: string): boolean {
   try {
     const parsed = new URL(urlValue);
     if (!['http:', 'https:'].includes(parsed.protocol)) {

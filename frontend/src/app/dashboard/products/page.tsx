@@ -80,9 +80,9 @@ async function apiAddProduct(tenantId: string, name: string, category: string, s
 }
 
 export default function ProductCatalogPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = Boolean(apiKey);
+    const isLoggedIn = isAuthenticated;
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<string[]>([]);

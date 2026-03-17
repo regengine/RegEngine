@@ -48,6 +48,7 @@ from app.metrics import metrics
 from app.models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
 from app.notifications import WebhookNotifier
 from app.scrapers import (
+    BaseScraper,
     FDAImportAlertsScraper,
     FDARecallsScraper,
     FDAWarningLettersScraper,
@@ -500,6 +501,8 @@ class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/health":
             self._handle_health()
+        elif self.path == "/ready":
+            self._handle_ready()
         elif self.path == "/metrics":
             self._handle_metrics()
         elif self.path == "/status":
@@ -508,12 +511,33 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def _get_health_check_result(self) -> dict:
+        import asyncio
+        from shared.health import HealthCheck
+        hc = HealthCheck("scheduler")
+        # Add basic dependencies if applicable
+        return asyncio.run(hc.check())
+
     def _handle_health(self) -> None:
         """Return health status."""
+        import json
+        res = self._get_health_check_result()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(b'{"status":"healthy","service":"scheduler"}')
+        self.wfile.write(json.dumps(res).encode())
+
+    def _handle_ready(self) -> None:
+        """Return readiness status."""
+        import json
+        res = self._get_health_check_result()
+        if res.get("status") == "healthy":
+            self.send_response(200)
+        else:
+            self.send_response(503)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(res).encode())
 
     def _handle_metrics(self) -> None:
         """Return Prometheus metrics."""
@@ -527,19 +551,24 @@ class HealthHandler(BaseHTTPRequestHandler):
         """Return detailed status."""
         import json
 
-        status = {
-            "service": "scheduler",
-            "status": "running",
-            "circuit_breakers": circuit_registry.get_all_status(),
-            "last_scrapes": {
+        svc = self.scheduler_service
+        last_scrapes = {}
+        if svc is not None and hasattr(svc, "last_results"):
+            last_scrapes = {
                 st.value: {
                     "success": r.success,
                     "count": r.items_found,
                     "scraped_at": r.scraped_at.isoformat(),
                     "error": r.error_message if not r.success else None
                 }
-                for st, r in self.scheduler_service.last_results.items()
-            } if self.scheduler_service else {}
+                for st, r in svc.last_results.items()
+            }
+
+        status = {
+            "service": "scheduler",
+            "status": "running",
+            "circuit_breakers": circuit_registry.get_all_status(),
+            "last_scrapes": last_scrapes
         }
 
         self.send_response(200)

@@ -597,33 +597,19 @@ async def ingest_all_regulations(
     }
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    """Health-check endpoint."""
-    settings = get_settings()
-    kafka_status = "unavailable"
-    try:
-        if AdminClient is None:
-            raise RuntimeError("confluent_kafka is not installed")
-        admin_client = AdminClient(
-            {
-                "bootstrap.servers": settings.kafka_bootstrap_servers,
-                "client.id": "ingestion-healthcheck",
-            }
-        )
-        admin_client.list_topics(timeout=5)
-        kafka_status = "available"
-    except Exception as exc:
-        logger.warning("ingestion_health_kafka_unavailable", error=str(exc))
-    return {
-        "status": "healthy",
-        "service": "ingestion-service",
-        "kafka": kafka_status,
-    }
+
 
 
 @router.get("/metrics")
 def metrics() -> PlainTextResponse:
+    import os as _os
+    _prod = (
+        _os.getenv("ENV", "").lower() == "production"
+        or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
+    )
+    if _prod:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Metrics disabled in production")
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
@@ -635,7 +621,7 @@ def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
-@router.post("/scrape/{adaptor}")
+@router.post("/v1/scrape/{adaptor}")
 def scrape_registry(
     adaptor: str,
     api_key: APIKey = Depends(require_api_key),

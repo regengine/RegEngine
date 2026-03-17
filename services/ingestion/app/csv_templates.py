@@ -164,28 +164,119 @@ async def list_templates():
     }
 
 
+# Aliases for auto-detecting CTE type from a column value
+_CTE_TYPE_ALIASES: dict[str, str] = {
+    "harvesting": "harvesting", "harvest": "harvesting", "creation": "harvesting",
+    "h": "harvesting",
+    "cooling": "cooling", "cold_storage": "cooling", "c": "cooling",
+    "initial_packing": "initial_packing", "packing": "initial_packing",
+    "ip": "initial_packing", "p": "initial_packing",
+    "shipping": "shipping", "ship": "shipping", "distribute": "shipping",
+    "s": "shipping",
+    "receiving": "receiving", "receive": "receiving", "receipt": "receiving",
+    "r": "receiving",
+    "transformation": "transformation", "transform": "transformation",
+    "transforming": "transformation", "process": "transformation",
+    "t": "transformation",
+    "first_land_based_receiving": "first_land_based_receiving",
+    "flbr": "first_land_based_receiving",
+}
+
+# Date column names per CTE type, used for timestamp detection
+_DATE_FIELDS = [
+    "event_date", "date", "timestamp",
+    "harvest_date", "cooling_date", "packing_date",
+    "ship_date", "receive_date", "transformation_date",
+]
+
+# Columns that might hold the CTE type in a mixed-type CSV
+_CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
+
+
+def _detect_row_cte_type(row: dict, fallback: Optional[str]) -> Optional[str]:
+    """Detect the CTE type from a row, checking known columns then falling back."""
+    for col in _CTE_TYPE_COLUMNS:
+        raw = (row.get(col) or "").strip().lower().replace(" ", "_")
+        if raw and raw in _CTE_TYPE_ALIASES:
+            return _CTE_TYPE_ALIASES[raw]
+    return fallback
+
+
+# Map CTE type → the specific date KDE the validator expects
+_CTE_DATE_KDE: dict[str, str] = {
+    "harvesting": "harvest_date",
+    "cooling": "cooling_date",
+    "initial_packing": "packing_date",
+    "shipping": "ship_date",
+    "receiving": "receive_date",
+    "transformation": "transformation_date",
+    "first_land_based_receiving": "landing_date",
+}
+
+
+def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optional[str], date_val: str) -> None:
+    """Auto-inject CTE-specific required KDEs from generic CSV columns."""
+    # Inject the CTE-specific date field
+    date_kde = _CTE_DATE_KDE.get(row_cte)
+    if date_kde and date_kde not in kdes:
+        # Use just the date portion (YYYY-MM-DD)
+        kdes[date_kde] = date_val[:10] if date_val else ""
+
+    # Inject location KDEs that the validator requires
+    if row_cte == "shipping":
+        if "ship_from_location" not in kdes and loc_name:
+            kdes["ship_from_location"] = loc_name
+        if "ship_to_location" not in kdes:
+            kdes["ship_to_location"] = row.get("ship_to_location") or row.get("destination") or "See receiver"
+    elif row_cte in ("receiving", "first_land_based_receiving"):
+        if "receiving_location" not in kdes and loc_name:
+            kdes["receiving_location"] = loc_name
+
+    # Inject standard fields the validator checks in KDEs
+    for kde_key, row_keys in [
+        ("traceability_lot_code", ["traceability_lot_code", "tlc", "lot_code"]),
+        ("product_description", ["product_description", "product", "description"]),
+        ("quantity", ["quantity", "qty"]),
+        ("unit_of_measure", ["unit_of_measure", "uom"]),
+        ("location_name", ["location_name", "facility_name", "location"]),
+    ]:
+        if kde_key not in kdes:
+            for rk in row_keys:
+                if row.get(rk):
+                    kdes[kde_key] = row[rk]
+                    break
+
+
 @router.post(
     "/ingest/csv",
     response_model=IngestResponse,
     summary="Upload and ingest a CSV file",
-    description="Parse a CSV file, validate rows against CTE requirements, and ingest valid events.",
+    description=(
+        "Parse a CSV file, validate rows, and persist CTE events to the database. "
+        "Supports single-type files (pass cte_type) or mixed-type files with a "
+        "cte_type/event_type column per row."
+    ),
 )
 async def ingest_csv(
     file: UploadFile = File(..., description="CSV file to ingest"),
-    cte_type: str = Form(..., description="CTE type for all rows in this file"),
+    cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
     source: str = Form("csv_upload", description="Source identifier"),
-    tenant_id: Optional[str] = Form(None, description="Tenant ID"),
+    tenant_id: Optional[str] = Form(None, description="Tenant ID (default: 'default')"),
     _: None = Depends(_verify_api_key),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ):
-    """Ingest a CSV file of CTE events."""
-    cte_type = cte_type.lower()
-    if cte_type not in CTE_COLUMNS:
-        valid = ", ".join(CTE_COLUMNS.keys())
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown CTE type '{cte_type}'. Valid types: {valid}"
-        )
+    """Ingest a CSV file of CTE events (single-type or mixed-type)."""
+
+    # Normalize the fallback cte_type if provided
+    fallback_cte = None
+    if cte_type:
+        fallback_cte = _CTE_TYPE_ALIASES.get(cte_type.strip().lower().replace(" ", "_"))
+        if not fallback_cte:
+            valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
+            raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
+
+    if not tenant_id:
+        tenant_id = "default"
 
     # Read and parse CSV
     content = await file.read()
@@ -196,16 +287,27 @@ async def ingest_csv(
     parse_errors: list[str] = []
 
     for row_num, row in enumerate(reader, start=2):  # Row 1 is header
-        # Skip description/comment rows
+        # Normalize keys: strip whitespace, lowercase
+        row = {(k or "").strip().lower().replace(" ", "_"): (v or "").strip() for k, v in row.items()}
+
+        # Skip comment/description rows
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
             continue
+        # Skip fully empty rows
+        if not any(row.values()):
+            continue
 
         try:
-            # Map date field names to timestamp
+            # Detect CTE type for this row
+            row_cte = _detect_row_cte_type(row, fallback_cte)
+            if not row_cte:
+                parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
+                continue
+
+            # Find date/timestamp
             date_field = None
-            for field_name in ["harvest_date", "cooling_date", "packing_date",
-                             "ship_date", "receive_date", "transformation_date"]:
+            for field_name in _DATE_FIELDS:
                 if field_name in row and row[field_name]:
                     date_field = row[field_name]
                     break
@@ -214,23 +316,45 @@ async def ingest_csv(
                 parse_errors.append(f"Row {row_num}: No date field found")
                 continue
 
-            # Build KDEs from remaining columns
+            # Normalize timestamp — append T00:00:00Z if just a date
+            ts = date_field
+            if "T" not in ts and len(ts) <= 10:
+                ts = f"{ts}T00:00:00Z"
+
+            # Resolve location columns (various naming conventions)
+            loc_gln = (
+                row.get("location_gln") or row.get("ship_from_gln")
+                or row.get("receiving_gln") or row.get("gln") or None
+            )
+            loc_name = (
+                row.get("location_name") or row.get("ship_from_location")
+                or row.get("receiving_location") or row.get("location_identifier")
+                or row.get("facility_name") or row.get("location") or None
+            )
+
+            # Build KDEs from all remaining columns
             kdes = {}
-            skip_fields = {"traceability_lot_code", "product_description",
-                         "quantity", "unit_of_measure", "location_gln", "location_name"}
+            skip_fields = {
+                "traceability_lot_code", "product_description",
+                "quantity", "unit_of_measure", "location_gln", "location_name",
+                "cte_type", "event_type", "type", "cte",
+            }
             for key, val in row.items():
                 if key and val and key not in skip_fields:
                     kdes[key] = val
 
+            # Auto-inject CTE-specific required KDEs from generic CSV columns
+            _inject_required_kdes(kdes, row_cte, row, loc_name, date_field)
+
             event = IngestEvent(
-                cte_type=WebhookCTEType(cte_type),
-                traceability_lot_code=row.get("traceability_lot_code", ""),
-                product_description=row.get("product_description", ""),
-                quantity=float(row.get("quantity", 0)),
-                unit_of_measure=row.get("unit_of_measure", "units"),
-                location_gln=row.get("location_gln") or row.get("ship_from_gln"),
-                location_name=row.get("location_name") or row.get("ship_from_location"),
-                timestamp=f"{date_field}T00:00:00Z",
+                cte_type=WebhookCTEType(row_cte),
+                traceability_lot_code=row.get("traceability_lot_code") or row.get("tlc") or row.get("lot_code") or "",
+                product_description=row.get("product_description") or row.get("product") or row.get("description") or "",
+                quantity=float(row.get("quantity") or row.get("qty") or 0),
+                unit_of_measure=row.get("unit_of_measure") or row.get("uom") or "units",
+                location_gln=loc_gln,
+                location_name=loc_name,
+                timestamp=ts,
                 kdes=kdes,
             )
             events.append(event)
@@ -244,24 +368,31 @@ async def ingest_csv(
             detail={"message": "No valid rows found", "errors": parse_errors}
         )
 
-    # Reuse webhook ingestion pipeline
+    if not events:
+        raise HTTPException(status_code=400, detail="CSV contained no data rows")
+
+    # Reuse webhook ingestion pipeline — writes to fsma.cte_events + hash chain
     payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
     response = await ingest_events(
         payload,
         x_regengine_api_key=x_regengine_api_key,
     )
 
-    # Add parse errors to the first rejected event if any
+    # Append parse errors as rejected entries
     if parse_errors:
+        from app.webhook_models import EventResult
         for err in parse_errors:
-            from app.webhook_models import EventResult
             response.events.append(EventResult(
                 traceability_lot_code="",
-                cte_type=cte_type,
+                cte_type=fallback_cte or "unknown",
                 status="rejected",
                 errors=[err],
             ))
             response.rejected += 1
             response.total += 1
 
+    logger.info(
+        "csv_ingest_complete: total=%d accepted=%d rejected=%d",
+        response.total, response.accepted, response.rejected,
+    )
     return response

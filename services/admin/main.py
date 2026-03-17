@@ -165,6 +165,63 @@ app.include_router(v1_router)
 app.include_router(overlay_router)
 app.include_router(compliance_router)
 
+from shared.health import HealthCheck, install_health_router
+
+health = HealthCheck(service_name="admin-api")
+
+# PostgreSQL check
+admin_db_url = os.getenv("DATABASE_URL") or os.getenv("ADMIN_DATABASE_URL")
+if admin_db_url:
+    async def check_postgres():
+        try:
+            import psycopg
+            conn_info = admin_db_url
+            for prefix in ["postgresql+psycopg://", "postgresql+asyncpg://", "postgresql+psycopg2://"]:
+                if conn_info.startswith(prefix):
+                    conn_info = conn_info.replace(prefix, "postgresql://")
+                    break
+            async with await psycopg.AsyncConnection.connect(conn_info) as conn:
+                await conn.execute("SELECT 1")
+            return {"status": "healthy"}
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+    health.add_dependency("postgresql", check_postgres)
+
+# Neo4j check
+neo4j_uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL")
+neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+neo4j_password = os.getenv("NEO4J_PASSWORD")
+if neo4j_uri:
+    async def check_neo4j():
+        import asyncio
+        try:
+            if not neo4j_password:
+                return {"status": "unhealthy", "error": "NEO4J_PASSWORD is not set"}
+            from neo4j import GraphDatabase
+            def _probe():
+                with GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as driver:
+                    driver.verify_connectivity()
+            await asyncio.to_thread(_probe)
+            return {"status": "healthy"}
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+    health.add_dependency("neo4j", check_neo4j)
+
+# Redis check
+redis_url = os.getenv("REDIS_URL")
+if redis_url:
+    async def check_redis():
+        try:
+            import redis.asyncio as redis
+            r = redis.from_url(redis_url)
+            await r.ping()
+            return {"status": "healthy"}
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+    health.add_dependency("redis", check_redis)
+
+install_health_router(app, service_name="admin-api", health_check=health)
+
 from app.system_routes import router as system_router
 app.include_router(system_router, prefix="/v1")
 

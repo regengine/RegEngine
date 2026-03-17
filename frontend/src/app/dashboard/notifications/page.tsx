@@ -110,9 +110,9 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 }
 
 export default function NotificationPrefsPage() {
-    const { apiKey } = useAuth();
+    const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = Boolean(apiKey);
+    const isLoggedIn = isAuthenticated;
 
     const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
     const [loading, setLoading] = useState(false);

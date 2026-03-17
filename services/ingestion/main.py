@@ -41,11 +41,20 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("ingestion_service_shutdown")
 
+import os as _os
+_is_prod = (
+    _os.getenv("ENV", "").lower() == "production"
+    or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
+)
+
 app = FastAPI(
     title="Ingestion Service",
     description="Regulatory document ingestion and processing",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 allowed_origins = [
@@ -143,6 +152,10 @@ app.include_router(epcis_ingestion_router)
 from app.qr_decoder import router as qr_decoder_router
 app.include_router(qr_decoder_router)
 
+# Computer Vision — Label Analysis
+from app.label_vision import router as label_vision_router
+app.include_router(label_vision_router)
+
 # B2B Exchange API (EPCIS shipping package handoff)
 from app.exchange_api import router as exchange_router
 app.include_router(exchange_router)
@@ -199,6 +212,24 @@ app.include_router(integration_router)
 from shared.health import HealthCheck, install_health_router
 
 health = HealthCheck(service_name="ingestion-service")
+
+# Add Kafka dependency
+def check_kafka():
+    from confluent_kafka.admin import AdminClient
+    try:
+        admin_client = AdminClient(
+            {
+                "bootstrap.servers": settings.kafka_bootstrap_servers,
+                "client.id": "ingestion-healthcheck",
+            }
+        )
+        admin_client.list_topics(timeout=5)
+        return {"status": "healthy"}
+    except Exception as exc:
+        return {"status": "unhealthy", "error": str(exc)}
+
+health.add_dependency("kafka", check_kafka)
+
 install_health_router(app, service_name="ingestion-service", health_check=health)
 
 @app.get("/")
