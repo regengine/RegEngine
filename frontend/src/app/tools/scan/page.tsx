@@ -203,9 +203,9 @@ export default function ScanPage() {
                       : styles.badgeWarning
                   }`}
                 >
-                  {parsed.sourceFormat === 'gs1-ai'
+                  {parsed.sourceFormat === 'gs1_ai'
                     ? 'GS1-AI'
-                    : parsed.sourceFormat === 'gs1-digital-link'
+                    : parsed.sourceFormat === 'digital_link'
                       ? 'GS1 Digital Link'
                       : 'Unknown Format'}
                 </span>
