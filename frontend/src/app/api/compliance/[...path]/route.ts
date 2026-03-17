@@ -5,10 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
 
-export const dynamic = 'force-static';
-export const generateStaticParams = async () => {
-    return [{ path: ['static_proxy'] }];
-};
+export const dynamic = 'force-dynamic';
 
 export async function GET(
     request: NextRequest,
