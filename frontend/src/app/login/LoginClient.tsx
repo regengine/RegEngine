@@ -179,19 +179,19 @@ export default function LoginPage() {
                         </p>
 
                         <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-black/20 p-3">
+                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3">
                                 <div className="mb-1 inline-flex items-center gap-2 text-xs font-semibold text-[var(--re-text-primary)]">
                                     <CalendarClock className="h-3.5 w-3.5 text-[var(--re-brand)]" />
                                     Deadline Focus
                                 </div>
                                 <p className="text-xs text-[var(--re-text-muted)]">FSMA 204 deadline: July 20, 2028</p>
                             </div>
-                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-black/20 p-3">
+                            <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-3">
                                 <div className="mb-1 inline-flex items-center gap-2 text-xs font-semibold text-[var(--re-text-primary)]">
                                     <GitBranch className="h-3.5 w-3.5 text-[var(--re-brand)]" />
                                     Verifiable by Design
                                 </div>
-                                <p className="text-xs text-[var(--re-text-muted)]"><code>verify_chain.py</code> - do not trust, verify.</p>
+                                <p className="text-xs text-[var(--re-text-muted)]">Every record is cryptographically signed and auditable.</p>
                             </div>
                         </div>
 

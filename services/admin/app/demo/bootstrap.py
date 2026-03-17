@@ -33,12 +33,12 @@ class DemoBootstrapper:
         logger.info(f"Provisioning Demo Tenant: {self.tenant_id} for vertical: {self.vertical}")
         
         # In production, this would trigger SQL migrations or API calls
+        # TODO: Generate real JWT via Supabase auth when provisioning is wired
         return {
             "tenant_id": self.tenant_id,
             "status": "PROVISIONED",
             "vertical": self.vertical,
             "expires_at": datetime.now(timezone.utc).isoformat(), # +24h in real logic
-            "access_token": "demo-jwt-secret-placeholder"
         }
 
     def cleanup(self):
