@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,15 +10,20 @@ import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { Spinner } from '@/components/ui/spinner';
 import {
     Shield,
+    ShieldAlert,
+    ShieldX,
     ArrowRight,
     Download,
     FileText,
-    Printer,
     Timer,
     Activity,
     TrendingUp,
     Zap,
     AlertTriangle,
+    CheckCircle2,
+    Upload,
+    Info,
+    RefreshCw,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -48,17 +53,66 @@ interface ComplianceScore {
     last_chain_hash: string | null;
 }
 
+/* ── Helpers ── */
+
+function scoreColor(score: number) {
+    if (score >= 80) return 'var(--re-brand)';
+    if (score >= 60) return '#f59e0b';
+    return '#ef4444';
+}
+
+function statusLevel(score: number): 'compliant' | 'at-risk' | 'critical' {
+    if (score >= 80) return 'compliant';
+    if (score >= 60) return 'at-risk';
+    return 'critical';
+}
+
+const STATUS_CONFIG = {
+    'compliant': {
+        icon: Shield,
+        label: 'FSMA 204 Compliant',
+        desc: 'Your traceability program meets current FDA requirements.',
+        bg: 'bg-emerald-500/10 border-emerald-500/30',
+        text: 'text-emerald-400',
+    },
+    'at-risk': {
+        icon: ShieldAlert,
+        label: 'At Risk — Action Needed',
+        desc: 'Gaps in your traceability data could cause issues during an FDA inspection.',
+        bg: 'bg-amber-500/10 border-amber-500/30',
+        text: 'text-amber-400',
+    },
+    'critical': {
+        icon: ShieldX,
+        label: 'Critical — Not Compliant',
+        desc: 'Significant gaps exist. Prioritize the actions below before your next audit.',
+        bg: 'bg-red-500/10 border-red-500/30',
+        text: 'text-red-400',
+    },
+};
+
+/* ── Dimension metadata ── */
+
+const DIMENSION_META: Record<string, { label: string; weight: number; icon: string }> = {
+    chain_integrity:     { label: 'Chain Integrity',     weight: 25, icon: '🔗' },
+    kde_completeness:    { label: 'KDE Completeness',    weight: 20, icon: '📋' },
+    cte_completeness:    { label: 'CTE Completeness',    weight: 20, icon: '📦' },
+    obligation_coverage: { label: 'Obligation Coverage',  weight: 15, icon: '⚖️' },
+    product_coverage:    { label: 'Product Coverage',     weight: 10, icon: '🏷️' },
+    export_readiness:    { label: 'Export Readiness',     weight: 10, icon: '📤' },
+};
+
 /* ── Pure UI Components ── */
 
 function ScoreGauge({ score, grade }: { score: number; grade: string }) {
     const circumference = 2 * Math.PI * 80;
     const offset = circumference - (score / 100) * circumference;
-    const color = score >= 80 ? 'var(--re-brand)' : score >= 60 ? '#f59e0b' : '#ef4444';
+    const color = scoreColor(score);
 
     return (
-        <div className="relative w-36 h-36 sm:w-48 sm:h-48 mx-auto">
+        <div className="relative w-40 h-40 sm:w-52 sm:h-52 mx-auto">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                <circle cx="100" cy="100" r="80" stroke="var(--re-border-default)" strokeWidth="12" fill="none" />
+                <circle cx="100" cy="100" r="80" stroke="var(--re-border-default)" strokeWidth="10" fill="none" opacity="0.3" />
                 <motion.circle
                     cx="100" cy="100" r="80"
                     stroke={color}
@@ -73,48 +127,64 @@ function ScoreGauge({ score, grade }: { score: number; grade: string }) {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <motion.div
-                    className="text-3xl sm:text-4xl font-bold"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.5 }}
+                    className="text-4xl sm:text-5xl font-bold tabular-nums"
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.5, type: 'spring' }}
                     style={{ color }}
                 >
                     {score}
                 </motion.div>
-                <div className="text-sm text-muted-foreground">Grade: {grade}</div>
+                <motion.div
+                    className="text-xs font-semibold tracking-wider uppercase mt-1"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.8 }}
+                    style={{ color }}
+                >
+                    Grade {grade}
+                </motion.div>
             </div>
         </div>
     );
 }
 
-function ScoreBar({ label, score }: { label: string; score: number }) {
-    const color = score >= 80 ? 'var(--re-brand)' : score >= 60 ? '#f59e0b' : '#ef4444';
+function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownItem }) {
+    const meta = DIMENSION_META[dimKey] || { label: dimKey.replace(/_/g, ' '), weight: 0, icon: '📊' };
+    const color = scoreColor(item.score);
+    const isLow = item.score < 60;
+
     return (
-        <div className="space-y-1.5">
-            <div className="flex justify-between text-xs">
-                <span className="font-medium">{label}</span>
-                <span style={{ color }}>{score}%</span>
+        <motion.div
+            className={`p-3 sm:p-4 rounded-xl border transition-colors ${isLow ? 'border-red-500/30 bg-red-500/[0.03]' : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]'}`}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4 }}
+        >
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm">{meta.icon}</span>
+                    <span className="text-sm font-medium">{meta.label}</span>
+                    <span className="text-[10px] text-muted-foreground bg-[var(--re-surface-card)] px-1.5 py-0.5 rounded-full">{meta.weight}%</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    {isLow && <AlertTriangle className="h-3.5 w-3.5 text-red-400" />}
+                    <span className="text-sm font-bold tabular-nums" style={{ color }}>{item.score}</span>
+                </div>
             </div>
-            <div className="h-2 rounded-full bg-[var(--re-surface-elevated)] overflow-hidden">
+            <div className="h-2 rounded-full bg-[var(--re-surface-card)] overflow-hidden">
                 <motion.div
                     className="h-full rounded-full"
                     style={{ backgroundColor: color }}
                     initial={{ width: 0 }}
-                    animate={{ width: `${score}%` }}
+                    animate={{ width: `${item.score}%` }}
                     transition={{ duration: 1, ease: 'easeOut', delay: 0.3 }}
                 />
             </div>
-        </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">{item.detail}</p>
+        </motion.div>
     );
 }
-
-const BREAKDOWN_LABELS: Record<string, string> = {
-    chain_integrity: 'Chain Integrity',
-    export_readiness: 'Export Readiness',
-    product_coverage: 'Product Coverage',
-    kde_completeness: 'KDE Completeness',
-    cte_completeness: 'CTE Completeness',
-};
 
 /* ── Page ── */
 
@@ -126,32 +196,43 @@ export default function ComplianceDashboardPage() {
     const [score, setScore] = useState<ComplianceScore | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
-    useEffect(() => {
+    const fetchScore = React.useCallback(() => {
         if (!isLoggedIn || !tenantId) return;
-
-        let cancelled = false;
         setLoading(true);
         setError(null);
-
         fetchComplianceScore(tenantId)
             .then((data) => {
-                if (!cancelled) setScore(data as ComplianceScore);
+                setScore(data as ComplianceScore);
+                setLastFetched(new Date());
             })
             .catch((err) => {
-                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load compliance score');
+                setError(err instanceof Error ? err.message : 'Failed to load compliance score');
             })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
-            });
-
-        return () => { cancelled = true; };
+            .finally(() => setLoading(false));
     }, [isLoggedIn, tenantId]);
 
-    // Ordered breakdown keys (highest weight first)
-    const breakdownKeys = score
-        ? Object.keys(score.breakdown).sort((a, b) => score.breakdown[b].score - score.breakdown[a].score)
-        : [];
+    useEffect(() => { fetchScore(); }, [fetchScore]);
+
+    // Ordered breakdown keys by weight (highest first)
+    const breakdownKeys = useMemo(() => {
+        if (!score) return [];
+        return Object.keys(score.breakdown).sort((a, b) => {
+            const wa = DIMENSION_META[a]?.weight ?? 0;
+            const wb = DIMENSION_META[b]?.weight ?? 0;
+            return wb - wa;
+        });
+    }, [score]);
+
+    // Count dimensions below threshold
+    const criticalDims = useMemo(() => {
+        if (!score) return 0;
+        return Object.values(score.breakdown).filter(d => d.score < 60).length;
+    }, [score]);
+
+    const status = score ? statusLevel(score.overall_score) : null;
+    const statusCfg = status ? STATUS_CONFIG[status] : null;
 
     return (
         <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
@@ -161,21 +242,33 @@ export default function ComplianceDashboardPage() {
                     { label: 'Compliance' },
                 ]} />
 
+                {/* Header */}
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
                             Compliance Dashboard
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Real-time FSMA 204 compliance score and audit readiness
+                            Real-time FSMA 204 readiness score and audit preparedness
                         </p>
                     </div>
-                    {score && score.overall_score >= 80 && (
-                        <Badge className="bg-[var(--re-brand)] rounded-xl py-1 px-3 w-fit">
-                            <Shield className="mr-2 h-4 w-4 inline" />
-                            FSMA 204 Compliant
-                        </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {lastFetched && (
+                            <span className="text-[10px] text-muted-foreground">
+                                Updated {lastFetched.toLocaleTimeString()}
+                            </span>
+                        )}
+                        {score && (
+                            <Button
+                                variant="ghost" size="sm"
+                                onClick={fetchScore}
+                                disabled={loading}
+                                className="h-8 w-8 p-0"
+                            >
+                                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Auth gate */}
@@ -188,19 +281,23 @@ export default function ComplianceDashboardPage() {
                 )}
 
                 {/* Loading */}
-                {loading && (
-                    <div className="flex justify-center py-16">
+                {loading && !score && (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
                         <Spinner size="lg" />
+                        <p className="text-sm text-muted-foreground">Analyzing your traceability data...</p>
                     </div>
                 )}
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-orange-300 dark:border-orange-700">
+                    <Card className="border-red-500/30 bg-red-500/[0.03]">
                         <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-orange-600 dark:text-orange-400">
+                            <div className="flex items-center gap-3 text-red-400">
                                 <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                <p className="text-sm">{error}</p>
+                                <div>
+                                    <p className="text-sm font-medium">Failed to load compliance data</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -209,40 +306,64 @@ export default function ComplianceDashboardPage() {
                 {/* Score Content */}
                 {score && !loading && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-                        {/* Score + Breakdown */}
+
+                        {/* Status Banner */}
+                        {statusCfg && (
+                            <motion.div
+                                className={`flex items-center gap-3 p-4 rounded-xl border ${statusCfg.bg}`}
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                            >
+                                <statusCfg.icon className={`h-6 w-6 flex-shrink-0 ${statusCfg.text}`} />
+                                <div className="flex-1 min-w-0">
+                                    <div className={`text-sm font-bold ${statusCfg.text}`}>{statusCfg.label}</div>
+                                    <div className="text-xs text-muted-foreground mt-0.5">{statusCfg.desc}</div>
+                                </div>
+                                {criticalDims > 0 && (
+                                    <Badge variant="secondary" className="text-[10px] bg-red-500/10 text-red-400 border-red-500/20">
+                                        {criticalDims} gap{criticalDims !== 1 ? 's' : ''}
+                                    </Badge>
+                                )}
+                            </motion.div>
+                        )}
+
+                        {/* Score Gauge + Summary */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                             <Card className="border-[var(--re-border-default)]">
-                                <CardHeader>
+                                <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Overall Readiness</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <ScoreGauge score={score.overall_score} grade={score.grade} />
-                                    <div className="text-center text-xs text-muted-foreground mt-4">
-                                        {score.events_analyzed} events analyzed
+                                    <div className="text-center mt-4 space-y-1">
+                                        <p className="text-xs text-muted-foreground">
+                                            Based on <span className="font-semibold text-foreground">{score.events_analyzed.toLocaleString()}</span> traceability events
+                                        </p>
                                         {score.last_chain_hash && (
-                                            <span className="block font-mono text-[10px] mt-1 truncate">
-                                                Chain: {score.last_chain_hash}
-                                            </span>
+                                            <p className="font-mono text-[10px] text-muted-foreground truncate px-4">
+                                                Chain: {score.last_chain_hash.slice(0, 16)}...
+                                            </p>
                                         )}
                                     </div>
                                 </CardContent>
                             </Card>
 
+                            {/* Score Breakdown */}
                             <Card className="border-[var(--re-border-default)] lg:col-span-2">
-                                <CardHeader>
-                                    <CardTitle className="text-base">Score Breakdown</CardTitle>
+                                <CardHeader className="pb-2">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-base">Score Breakdown</CardTitle>
+                                        <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                            <Info className="h-3 w-3" /> Weights shown as %
+                                        </span>
+                                    </div>
                                 </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {breakdownKeys.map((key) => (
-                                        <div key={key}>
-                                            <ScoreBar
-                                                label={BREAKDOWN_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                                                score={score.breakdown[key].score}
-                                            />
-                                            <p className="text-[10px] text-muted-foreground mt-0.5 ml-0.5">
-                                                {score.breakdown[key].detail}
-                                            </p>
-                                        </div>
+                                <CardContent className="space-y-2.5">
+                                    {breakdownKeys.map((key, i) => (
+                                        <motion.div key={key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 * i }}>
+                                            <DimensionRow dimKey={key} item={score.breakdown[key]} />
+                                        </motion.div>
                                     ))}
                                 </CardContent>
                             </Card>
@@ -251,7 +372,7 @@ export default function ComplianceDashboardPage() {
                         {/* Quick Actions + Next Steps */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                             <Card className="border-[var(--re-border-default)]">
-                                <CardHeader>
+                                <CardHeader className="pb-2">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <Zap className="h-4 w-4 text-[var(--re-brand)]" />
                                         Quick Actions
@@ -259,51 +380,78 @@ export default function ComplianceDashboardPage() {
                                 </CardHeader>
                                 <CardContent className="grid grid-cols-2 gap-2 sm:gap-3">
                                     <Link href="/tools/drill-simulator">
-                                        <Button variant="outline" className="w-full h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl active:scale-[0.97]">
-                                            <Timer className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
-                                            <span className="text-[11px] sm:text-xs">Run Mock Drill</span>
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                            <Timer className="h-5 w-5 text-[var(--re-brand)]" />
+                                            <span className="text-xs font-medium">Mock Drill</span>
+                                            <span className="text-[9px] text-muted-foreground">24-hr simulation</span>
                                         </Button>
                                     </Link>
-                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl">
-                                        <Download className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
-                                        <span className="text-[11px] sm:text-xs">FDA Report</span>
-                                    </Button>
-                                    <Button disabled title="Coming Soon" variant="outline" className="h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl">
-                                        <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
-                                        <span className="text-[11px] sm:text-xs">EPCIS Export</span>
-                                    </Button>
                                     <Link href="/tools/data-import">
-                                        <Button variant="outline" className="w-full h-auto min-h-[48px] py-3 sm:py-4 flex flex-col gap-1.5 sm:gap-2 rounded-xl active:scale-[0.97]">
-                                            <Printer className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--re-brand)]" />
-                                            <span className="text-[11px] sm:text-xs">Import Data</span>
+                                        <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl active:scale-[0.97] hover:border-[var(--re-brand)] transition-colors">
+                                            <Upload className="h-5 w-5 text-[var(--re-brand)]" />
+                                            <span className="text-xs font-medium">Import Data</span>
+                                            <span className="text-[9px] text-muted-foreground">CSV / spreadsheet</span>
                                         </Button>
                                     </Link>
+                                    <Button variant="outline" className="h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl opacity-60 cursor-not-allowed" disabled title="Coming in v1.1">
+                                        <Download className="h-5 w-5 text-[var(--re-brand)]" />
+                                        <span className="text-xs font-medium">FDA Report</span>
+                                        <span className="text-[9px] text-muted-foreground">24-hr response</span>
+                                    </Button>
+                                    <Button variant="outline" className="h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl opacity-60 cursor-not-allowed" disabled title="Coming in v1.1">
+                                        <FileText className="h-5 w-5 text-[var(--re-brand)]" />
+                                        <span className="text-xs font-medium">EPCIS Export</span>
+                                        <span className="text-[9px] text-muted-foreground">GS1 2.0 format</span>
+                                    </Button>
                                 </CardContent>
                             </Card>
 
+                            {/* Next Actions */}
                             {score.next_actions.length > 0 && (
                                 <Card className="border-[var(--re-border-default)]">
-                                    <CardHeader>
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <TrendingUp className="h-4 w-4 text-[var(--re-brand)]" />
-                                            Improve Your Score
-                                        </CardTitle>
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <CardTitle className="text-base flex items-center gap-2">
+                                                <TrendingUp className="h-4 w-4 text-[var(--re-brand)]" />
+                                                Improve Your Score
+                                            </CardTitle>
+                                            <Badge variant="secondary" className="text-[10px]">
+                                                {score.next_actions.length} item{score.next_actions.length !== 1 ? 's' : ''}
+                                            </Badge>
+                                        </div>
                                     </CardHeader>
                                     <CardContent>
-                                        <ul className="space-y-3">
+                                        <ul className="space-y-2">
                                             {score.next_actions.map((action, i) => (
-                                                <li key={i} className="flex items-start gap-2 sm:gap-3 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] min-h-[48px]">
+                                                <motion.li
+                                                    key={i}
+                                                    className="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]"
+                                                    initial={{ opacity: 0, x: 10 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    transition={{ delay: 0.1 * i }}
+                                                >
+                                                    {action.priority === 'HIGH' ? (
+                                                        <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                                                    ) : action.priority === 'MEDIUM' ? (
+                                                        <Info className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                                    ) : (
+                                                        <CheckCircle2 className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                    )}
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs sm:text-sm font-medium leading-snug">{action.action}</div>
+                                                        <div className="text-[11px] text-muted-foreground mt-0.5">{action.impact}</div>
+                                                    </div>
                                                     <Badge
-                                                        variant={action.priority === 'HIGH' ? 'default' : 'secondary'}
-                                                        className={`text-[9px] uppercase tracking-widest rounded-full mt-0.5 flex-shrink-0 ${action.priority === 'HIGH' ? 'bg-red-600' : ''}`}
+                                                        variant="secondary"
+                                                        className={`text-[9px] uppercase tracking-widest rounded-full flex-shrink-0 ${
+                                                            action.priority === 'HIGH' ? 'bg-red-500/10 text-red-400' :
+                                                            action.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' :
+                                                            'bg-muted text-muted-foreground'
+                                                        }`}
                                                     >
                                                         {action.priority}
                                                     </Badge>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-xs sm:text-sm font-medium">{action.action}</div>
-                                                        <div className="text-[11px] sm:text-xs text-muted-foreground">{action.impact}</div>
-                                                    </div>
-                                                </li>
+                                                </motion.li>
                                             ))}
                                         </ul>
                                     </CardContent>
@@ -311,16 +459,16 @@ export default function ComplianceDashboardPage() {
                             )}
                         </div>
 
-                        {/* Events Summary */}
+                        {/* Traceability Summary */}
                         <Card className="border-[var(--re-border-default)]">
-                            <CardHeader>
+                            <CardHeader className="pb-2">
                                 <div className="flex items-center justify-between">
                                     <CardTitle className="text-base flex items-center gap-2">
                                         <Activity className="h-4 w-4 text-[var(--re-brand)]" />
                                         Traceability Summary
                                     </CardTitle>
                                     <Link href="/tools/data-import">
-                                        <Button variant="ghost" size="sm" className="text-xs min-h-[44px] active:scale-[0.97]">
+                                        <Button variant="ghost" size="sm" className="text-xs h-8 active:scale-[0.97]">
                                             Import More <ArrowRight className="ml-1 h-3 w-3" />
                                         </Button>
                                     </Link>
@@ -329,24 +477,42 @@ export default function ComplianceDashboardPage() {
                             <CardContent>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
                                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-xl sm:text-2xl font-bold">{score.events_analyzed}</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Events Analyzed</div>
+                                        <div className="text-2xl sm:text-3xl font-bold tabular-nums">{score.events_analyzed.toLocaleString()}</div>
+                                        <div className="text-[11px] text-muted-foreground mt-1">Events Tracked</div>
                                     </div>
                                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-xl sm:text-2xl font-bold">{score.grade}</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Current Grade</div>
+                                        <div className="text-2xl sm:text-3xl font-bold" style={{ color: scoreColor(score.overall_score) }}>{score.grade}</div>
+                                        <div className="text-[11px] text-muted-foreground mt-1">Current Grade</div>
                                     </div>
                                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-xl sm:text-2xl font-bold">{breakdownKeys.length}</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Score Dimensions</div>
+                                        <div className="text-2xl sm:text-3xl font-bold tabular-nums">{breakdownKeys.length}</div>
+                                        <div className="text-[11px] text-muted-foreground mt-1">Dimensions</div>
                                     </div>
                                     <div className="p-3 sm:p-4 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
-                                        <div className="text-xl sm:text-2xl font-bold">{score.next_actions.length}</div>
-                                        <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">Action Items</div>
+                                        <div className="text-2xl sm:text-3xl font-bold tabular-nums">{score.next_actions.filter(a => a.priority === 'HIGH').length}</div>
+                                        <div className="text-[11px] text-muted-foreground mt-1">High Priority</div>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* What This Means */}
+                        <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
+                            <CardContent className="py-4">
+                                <div className="flex items-start gap-3">
+                                    <Info className="h-4 w-4 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
+                                    <div className="text-xs text-muted-foreground leading-relaxed">
+                                        <span className="font-medium text-foreground">What this score means: </span>
+                                        {score.overall_score >= 80
+                                            ? 'Your facility is well-prepared for an FDA inspection under FSMA 204. Continue maintaining your traceability records and running periodic mock drills.'
+                                            : score.overall_score >= 60
+                                            ? 'Your traceability program has a foundation but gaps remain. An FDA inspector could flag missing KDEs or incomplete CTE chains. Address the high-priority actions above.'
+                                            : 'Significant compliance gaps exist. If the FDA initiated a 204 records request today, your facility would likely be unable to respond within the required 24 hours. Immediate action is recommended.'}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
                     </motion.div>
                 )}
             </div>
