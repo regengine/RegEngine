@@ -215,6 +215,13 @@ export default function ComplianceDashboardPage() {
 
     useEffect(() => { fetchScore(); }, [fetchScore]);
 
+    // Auto-refresh every 60s
+    useEffect(() => {
+        if (!isLoggedIn || !tenantId) return;
+        const interval = setInterval(fetchScore, 60_000);
+        return () => clearInterval(interval);
+    }, [isLoggedIn, tenantId, fetchScore]);
+
     // Ordered breakdown keys by weight (highest first)
     const breakdownKeys = useMemo(() => {
         if (!score) return [];
@@ -229,6 +236,16 @@ export default function ComplianceDashboardPage() {
     const criticalDims = useMemo(() => {
         if (!score) return 0;
         return Object.values(score.breakdown).filter(d => d.score < 60).length;
+    }, [score]);
+
+    // Lowest-scoring dimension for CTA
+    const lowestDim = useMemo(() => {
+        if (!score) return null;
+        let lowest: { key: string; score: number } | null = null;
+        for (const [key, item] of Object.entries(score.breakdown)) {
+            if (!lowest || item.score < lowest.score) lowest = { key, score: item.score };
+        }
+        return lowest ? { key: lowest.key, label: DIMENSION_META[lowest.key]?.label ?? lowest.key.replace(/_/g, ' ') } : null;
     }, [score]);
 
     const status = score ? statusLevel(score.overall_score) : null;
@@ -513,8 +530,56 @@ export default function ComplianceDashboardPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Low-score CTA */}
+                        {score.overall_score < 70 && lowestDim && (
+                            <motion.div
+                                className="flex items-center gap-4 p-4 sm:p-5 rounded-xl border border-amber-500/30 bg-amber-500/[0.05]"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.6 }}
+                            >
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium">Your biggest gap is <span className="text-amber-400">{lowestDim.label}</span>.</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Scan labels or import data to improve this dimension.</p>
+                                </div>
+                                <Link href="/dashboard/scan">
+                                    <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white text-xs whitespace-nowrap">
+                                        Ingest Data <ArrowRight className="ml-1 h-3 w-3" />
+                                    </Button>
+                                </Link>
+                            </motion.div>
+                        )}
+
                     </motion.div>
                 )}
+
+                {/* Empty state — no score and not loading */}
+                {!score && !loading && !error && isLoggedIn && (
+                    <motion.div
+                        className="flex flex-col items-center justify-center py-16 text-center"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                    >
+                        <Shield className="h-12 w-12 text-muted-foreground/40 mb-4" />
+                        <h2 className="text-lg font-semibold">Welcome to Compliance Status</h2>
+                        <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                            Start tracking your FSMA 204 readiness by importing traceability data or scanning product labels.
+                        </p>
+                        <div className="flex gap-3 mt-6">
+                            <Link href="/tools/data-import">
+                                <Button variant="outline" size="sm">
+                                    <Upload className="mr-1.5 h-3.5 w-3.5" /> Import Data
+                                </Button>
+                            </Link>
+                            <Link href="/dashboard/scan">
+                                <Button size="sm" className="bg-[var(--re-brand)] hover:bg-[var(--re-brand)]/90 text-white">
+                                    <Activity className="mr-1.5 h-3.5 w-3.5" /> Scan Labels
+                                </Button>
+                            </Link>
+                        </div>
+                    </motion.div>
+                )}
+
             </div>
         </div>
     );
