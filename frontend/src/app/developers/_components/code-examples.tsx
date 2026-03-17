@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ChevronDown, Keyboard } from 'lucide-react';
 import { T } from '../_data';
 import { CopyButton } from './copy-button';
+import { useEnv } from './env-context';
 
 /* ── Syntax highlighting (zero-dep) ── */
 function highlightSyntax(code: string, lang: 'curl' | 'python' | 'node'): React.ReactNode[] {
@@ -88,7 +89,13 @@ function highlightJSON(json: string): React.ReactNode[] {
 function CodeBlock({ examples, response }: { examples: { curl: string; python: string; node: string }; response: string }) {
     const [lang, setLang] = useState<'curl' | 'python' | 'node'>('curl');
     const [showResponse, setShowResponse] = useState(false);
+    const { baseUrl, apiKey } = useEnv();
     const labels: Record<string, string> = { curl: 'cURL', python: 'Python', node: 'Node.js' };
+
+    /* Swap URLs and keys based on env toggle */
+    const swapEnv = (code: string) =>
+        code.replace(/https:\/\/api\.regengine\.co/g, baseUrl)
+            .replace(/rge_live_abc123/g, apiKey);
     return (
         <div style={{ animation: 're-fade-in .3s ease-out' }}>
             <div style={{ position: 'relative', borderRadius: '10px 10px 0 0', overflow: 'hidden', border: `1px solid ${T.border}`, borderBottom: 'none' }}>
@@ -106,9 +113,9 @@ function CodeBlock({ examples, response }: { examples: { curl: string; python: s
                     <span style={{ padding: '9px 14px', fontSize: 11, color: 'rgba(255,255,255,0.18)', fontFamily: T.mono }}>request</span>
                 </div>
                 <div style={{ position: 'relative' }}>
-                    <CopyButton text={examples[lang]} />
+                    <CopyButton text={swapEnv(examples[lang])} />
                     <pre style={{ background: 'rgba(0,0,0,0.4)', padding: '18px 18px 18px 22px', overflow: 'auto', fontSize: 12, lineHeight: 1.75, fontFamily: T.mono, color: T.textMuted, margin: 0, maxHeight: 340 }}>
-                        <code>{highlightSyntax(examples[lang], lang)}</code>
+                        <code>{highlightSyntax(swapEnv(examples[lang]), lang)}</code>
                     </pre>
                 </div>
             </div>

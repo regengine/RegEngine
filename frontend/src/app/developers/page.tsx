@@ -9,6 +9,7 @@ import { T, QUICKSTART, PLATFORM_STATS, ENDPOINT_GROUPS, SDK_ITEMS, ERROR_EXAMPL
 import { StickyNav } from './_components/sticky-nav';
 import { CodeExamples } from './_components/code-examples';
 import { CopyButton } from './_components/copy-button';
+import { DevProviders } from './_components/dev-providers';
 import './developers.css';
 
 /* Icon lookup for data-driven rendering */
@@ -18,6 +19,7 @@ const ICONS: Record<string, React.ComponentType<{ style?: React.CSSProperties }>
 
 export default function DevelopersPage() {
     return (
+        <DevProviders>
         <div className="re-page re-grid-bg" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
 
             {/* ═══ HERO (server-rendered for SEO) ═══ */}
@@ -299,5 +301,6 @@ export default function DevelopersPage() {
             </section>
 
         </div>
+        </DevProviders>
     );
 }
