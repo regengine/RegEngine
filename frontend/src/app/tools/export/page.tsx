@@ -59,7 +59,7 @@ async function sha256(data: string): Promise<string> {
 
 async function generatePackage(records: typeof SAMPLE_RECORDS): Promise<GeneratedPackage> {
   // Sort records by TLC and date for consistent ordering
-  const sortedRecords = [...records].sort((a, b) => {
+  const sortedRecords = [...records].sort((a: typeof SAMPLE_RECORDS[0], b: typeof SAMPLE_RECORDS[0]) => {
     if (a.tlc !== b.tlc) return a.tlc.localeCompare(b.tlc);
     return new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
   });
@@ -159,12 +159,12 @@ async function generatePackage(records: typeof SAMPLE_RECORDS): Promise<Generate
 }
 
 export default function ExportPage() {
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationStep, setGenerationStep] = useState<string | null>(null);
   const [generatedPackage, setGeneratedPackage] = useState<GeneratedPackage | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerateDemo = useCallback(async () => {
+  const handleGenerateDemo = useCallback(async (): Promise<void> => {
     setIsGenerating(true);
     setGenerationStep(null);
 
@@ -188,7 +188,7 @@ export default function ExportPage() {
   }, []);
 
   const handleFileUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
+    async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
       const file = event.target.files?.[0];
       if (!file) return;
 
@@ -239,7 +239,7 @@ export default function ExportPage() {
     []
   );
 
-  const downloadPackage = useCallback(() => {
+  const downloadPackage = useCallback((): void => {
     if (!generatedPackage) return;
 
     const zip = new Blob(

@@ -72,7 +72,7 @@ export function DrillSimulatorClient() {
 
     const [dragActive, setDragActive] = useState(false);
     const [currentStage, setCurrentStage] = useState(0);
-    const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
+    const [expandedFinding, setExpandedFinding] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Timer for SLA countdown
@@ -280,7 +280,7 @@ STATUS: ${
         setCurrentStage(0);
     };
 
-    const renderPhase = () => {
+    const renderPhase = (): React.ReactNode => {
         switch (state.phase) {
             case 'scenario':
                 return renderScenario();
@@ -295,7 +295,7 @@ STATUS: ${
         }
     };
 
-    const renderScenario = () => (
+    const renderScenario = (): React.ReactNode => (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -372,7 +372,7 @@ STATUS: ${
         </motion.div>
     );
 
-    const renderUpload = () => (
+    const renderUpload = (): React.ReactNode => (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -486,7 +486,7 @@ STATUS: ${
         </motion.div>
     );
 
-    const renderAnalyzing = () => (
+    const renderAnalyzing = (): React.ReactNode => (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -544,7 +544,7 @@ STATUS: ${
         </motion.div>
     );
 
-    const renderResults = () => {
+    const renderResults = (): React.ReactNode => {
         if (!state.validationResult) return null;
 
         const result = state.validationResult;
@@ -552,7 +552,7 @@ STATUS: ${
             ? Math.round((state.uploadTime - (state.drillStartTime || 0)) / 1000)
             : 0;
 
-        const teaser = (
+        const teaser: React.ReactNode = (
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -639,7 +639,7 @@ STATUS: ${
             </motion.div>
         );
 
-        const fullResults = (
+        const fullResults: React.ReactNode = (
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -765,9 +765,9 @@ STATUS: ${
                                                         className="text-sm font-medium cursor-pointer flex justify-between items-center"
                                                         onClick={() =>
                                                             setExpandedFinding(
-                                                                expandedFinding === String(idx)
+                                                                expandedFinding === idx
                                                                     ? null
-                                                                    : String(idx)
+                                                                    : idx
                                                             )
                                                         }
                                                     >
@@ -775,13 +775,13 @@ STATUS: ${
                                                         <ChevronDown
                                                             size={16}
                                                             className={`transition-transform ${
-                                                                expandedFinding === String(idx)
+                                                                expandedFinding === idx
                                                                     ? 'rotate-180'
                                                                     : ''
                                                             }`}
                                                         />
                                                     </div>
-                                                    {expandedFinding === String(idx) && (
+                                                    {expandedFinding === idx && (
                                                         <div className="mt-2 pt-2 border-t space-y-1 text-xs">
                                                             <p>
                                                                 <span
@@ -1002,7 +1002,7 @@ STATUS: ${
     );
 }
 
-function ScoreCircle({ score }: { score: number }) {
+function ScoreCircle({ score }: { score: number }): React.ReactNode {
     const radius = 60;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference * (1 - score / 100);

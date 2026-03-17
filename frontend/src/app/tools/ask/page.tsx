@@ -51,9 +51,9 @@ const intentColors: Record<string, { bg: string; text: string; badge: string }> 
 
 // Query parser logic
 function parseQuery(query: string): QueryResult {
-  const lowerQuery = query.toLowerCase();
-  let intent = 'events_search';
-  let confidence = 0;
+  const lowerQuery: string = query.toLowerCase();
+  let intent: string = 'events_search';
+  let confidence: number = 0;
   const filters: Record<string, string> = {};
 
   // Intent detection
@@ -113,7 +113,7 @@ function parseQuery(query: string): QueryResult {
 }
 
 // Generate realistic demo results
-function generateResults(intent: string, filters: Record<string, string>): any[] {
+function generateResults(intent: string, filters: Record<string, string>): unknown[] {
   switch (intent) {
     case 'trace_forward': {
       const nodes: TraceNode[] = [
@@ -271,7 +271,7 @@ function generateResults(intent: string, filters: Record<string, string>): any[]
 }
 
 // Generate API endpoint info
-function generateEndpoints(intent: string, filters: Record<string, string>) {
+function generateEndpoints(intent: string, filters: Record<string, string>): Array<{ path: string; params: Record<string, string>; resultType: string }> {
   const baseEndpoints: { path: string; params: Record<string, string>; resultType: string }[] = [
     {
       path: '/api/graph/query',
@@ -310,11 +310,11 @@ const examples = [
 ];
 
 export default function AskPage() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState<string>('');
   const [result, setResult] = useState<QueryResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const handleQuery = (q?: string) => {
+  const handleQuery = (q?: string): void => {
     const finalQuery = q || query;
     if (!finalQuery.trim()) return;
 
@@ -325,7 +325,7 @@ export default function AskPage() {
     }, 600);
   };
 
-  const handleExampleClick = (example: string) => {
+  const handleExampleClick = (example: string): void => {
     setQuery(example);
   };
 
