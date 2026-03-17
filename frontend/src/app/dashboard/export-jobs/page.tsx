@@ -38,8 +38,10 @@ export default function ExportJobsPage() {
                     setStatus('idle');
                 }
             } catch {
+                // Preview route not wired yet — degrade gracefully to empty state
                 if (!cancelled) {
-                    setStatus('error');
+                    setJobs([]);
+                    setStatus('idle');
                 }
             }
         }
@@ -185,8 +187,8 @@ export default function ExportJobsPage() {
 
                 <div className="space-y-4">
                     {status === 'error' && (
-                        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-                            The export-job preview route did not respond. The page contract is present, but the interface data could not be loaded.
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                            Could not create the export job. Please check your inputs and try again.
                         </div>
                     )}
                     {jobs.map((job) => (
@@ -228,6 +230,15 @@ export default function ExportJobsPage() {
                     {status === 'loading' && jobs.length === 0 && (
                         <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
                             Loading export job preview data...
+                        </div>
+                    )}
+                    {status !== 'loading' && jobs.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-8 text-center">
+                            <Archive className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+                            <p className="text-sm font-medium mb-1">No export jobs yet</p>
+                            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                                Configure a recurring export above and click &ldquo;Save Export Job&rdquo; to schedule your first archive. Jobs will appear here.
+                            </p>
                         </div>
                     )}
                 </div>

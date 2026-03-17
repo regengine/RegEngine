@@ -32,8 +32,10 @@ export default function RecallDrillsPage() {
                     setStatus('idle');
                 }
             } catch {
+                // Preview route not wired yet — degrade gracefully to empty state
                 if (!cancelled) {
-                    setStatus('error');
+                    setRuns([]);
+                    setStatus('idle');
                 }
             }
         }
@@ -186,9 +188,18 @@ export default function RecallDrillsPage() {
                                 Loading drill preview data...
                             </div>
                         )}
-                        {status === 'error' && (
-                            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
-                                The recall-drill contract route did not respond. Existing public recall posture should not be read as completed backend execution.
+                        {status !== 'loading' && runs.length === 0 && (
+                            <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-8 text-center">
+                                <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+                                <p className="text-sm font-medium mb-1">No drills yet</p>
+                                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                                    Configure a scenario above and click &ldquo;Start drill&rdquo; to run your first mock recall. Results will appear here.
+                                </p>
+                            </div>
+                        )}
+                        {status === 'error' && runs.length > 0 && (
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                                Could not start the drill. Please check your inputs and try again.
                             </div>
                         )}
                     </CardContent>
