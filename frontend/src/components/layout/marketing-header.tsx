@@ -146,7 +146,7 @@ export function MarketingHeader() {
                         justifyContent: "space-between",
                     }}
                 >
-                    <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none" }}>
+                    <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none", marginRight: "24px", flexShrink: 0 }}>
                         <RegEngineWordmark size="md" />
                     </Link>
 

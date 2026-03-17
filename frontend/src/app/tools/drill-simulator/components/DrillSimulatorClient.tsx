@@ -164,7 +164,7 @@ export function DrillSimulatorClient() {
 
     return (
         <FreeToolPageShell
-            title="Mock Audit Drill"
+            title="FDA Recall Drill"
             subtitle="Simulate an FDA traceability records request. Test your 24-hour response readiness under realistic conditions."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
@@ -182,15 +182,15 @@ export function DrillSimulatorClient() {
                                             : 'border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] hover:border-[var(--re-brand)]'
                                         }`}
                                 >
-                                    <div className="text-sm font-bold mb-2">{s.title}</div>
-                                    <div className="text-xs text-muted-foreground mb-3">{s.description}</div>
+                                    <div className="text-sm font-bold mb-2 text-[var(--re-text-primary)]">{s.title}</div>
+                                    <div className="text-xs text-[var(--re-text-secondary)] mb-3">{s.description}</div>
                                     <Badge variant="outline" className="text-[8px] uppercase tracking-widest">{s.citation}</Badge>
                                 </button>
                             ))}
                         </div>
                         <Button
                             onClick={handleStartDrill}
-                            className="w-full md:w-auto bg-red-600 hover:bg-red-700 text-white h-12 px-8 rounded-xl text-base font-bold"
+                            className="w-full md:w-auto bg-[var(--re-brand)] hover:brightness-110 text-white h-12 px-8 rounded-xl text-base font-bold"
                         >
                             <Play className="mr-2 h-5 w-5" />
                             Start Drill — 24 Hour Timer Begins

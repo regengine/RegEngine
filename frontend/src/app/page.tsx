@@ -35,8 +35,8 @@ const FREE_TOOLS = [
     icon: BookOpen,
   },
   {
-    title: "Cold-Chain Anomaly Simulator",
-    desc: "Test your monitoring against real failure patterns.",
+    title: "FDA Recall Drill",
+    desc: "Simulate an FDA records request and test your 24-hour response.",
     href: "/tools/drill-simulator",
     tag: null,
     icon: Thermometer,
@@ -148,7 +148,7 @@ export default function RegEngineLanding() {
 
       {/* ── EVIDENCE STRIP ── */}
       <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-between gap-4 sm:gap-6">
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-2 lg:grid-cols-4 items-center gap-4 sm:gap-6">
           {EVIDENCE.map((e) => (
             <div key={e.label} className="flex items-baseline gap-2">
               <span className="font-serif text-[clamp(1.25rem,3vw,1.75rem)] font-bold text-[var(--re-brand-dark)] tracking-tight">
