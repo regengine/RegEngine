@@ -245,7 +245,7 @@ export default function SupplierDashboardPage() {
                     {[
                         { label: 'Facilities', value: totalFacilities, icon: Users },
                         { label: 'Compliant', value: compliantCount, icon: CheckCircle2 },
-                        { label: 'TLCs Tracked', value: totalTLCs, icon: Package },
+                        { label: 'Locations Tracked', value: totalTLCs, icon: Package },
                         { label: 'Compliance Rate', value: `${complianceRate}%`, icon: Activity },
                     ].map((stat) => (
                         <Card key={stat.label} className="border-[var(--re-border-default)]">
@@ -378,7 +378,7 @@ export default function SupplierDashboardPage() {
                                                             <Mail className="h-3 w-3 flex-shrink-0" />
                                                             {facility.city}, {facility.state} {facility.postal_code}
                                                         </span>
-                                                        <span>{facility.tlcCount} TLC{facility.tlcCount !== 1 ? 's' : ''}</span>
+                                                        <span>{facility.tlcCount} location{facility.tlcCount !== 1 ? 's' : ''}</span>
                                                         {facility.lastEvent && (
                                                             <span className="flex items-center gap-1">
                                                                 <Clock className="h-3 w-3" /> {relativeTime(facility.lastEvent)}

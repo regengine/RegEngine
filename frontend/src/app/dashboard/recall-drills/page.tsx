@@ -96,8 +96,8 @@ export default function RecallDrillsPage() {
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                    Preview interface: the workflow below exercises the current frontend drill route. Full backend execution, artifact persistence, and audit events are still separate follow-on work.
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4 text-sm text-muted-foreground">
+                    Alpha release — Run practice drills to test your recall readiness. Full automation and audit artifacts activate once your account is connected.
                 </div>
 
                 <Card>

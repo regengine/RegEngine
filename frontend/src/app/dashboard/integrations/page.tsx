@@ -76,8 +76,8 @@ export default function DashboardIntegrationsPage() {
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                    Preview interface: capability metadata is shared across the public site, while the review queue below is loaded from the current frontend contract route rather than a persistent backend reconciliation service.
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4 text-sm text-muted-foreground">
+                    Alpha release — Browse available integrations and queue connection requests. Live data sync activates during onboarding.
                 </div>
 
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">

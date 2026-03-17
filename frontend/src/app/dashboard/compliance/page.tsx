@@ -53,6 +53,19 @@ interface ComplianceScore {
     last_chain_hash: string | null;
 }
 
+/* ── Action → Route map ── */
+function actionRoute(action: string): string | null {
+    const a = action.toLowerCase();
+    if (a.includes('receiv') || a.includes('inbound') || a.includes('ingest')) return '/dashboard/receiving';
+    if (a.includes('supplier') || a.includes('facility') || a.includes('trading partner')) return '/dashboard/suppliers';
+    if (a.includes('scan') || a.includes('barcode') || a.includes('label') || a.includes('capture')) return '/dashboard/scan';
+    if (a.includes('recall') || a.includes('drill') || a.includes('mock')) return '/dashboard/recall-drills';
+    if (a.includes('export') || a.includes('report') || a.includes('fda')) return '/dashboard/export-jobs';
+    if (a.includes('setting') || a.includes('api') || a.includes('key') || a.includes('integrat')) return '/dashboard/settings';
+    if (a.includes('event') || a.includes('record') || a.includes('data field')) return '/dashboard/receiving';
+    return null;
+}
+
 /* ── Helpers ── */
 
 function scoreColor(score: number) {
@@ -95,8 +108,8 @@ const STATUS_CONFIG = {
 
 const DIMENSION_META: Record<string, { label: string; weight: number; icon: string }> = {
     chain_integrity:     { label: 'Chain Integrity',     weight: 25, icon: '🔗' },
-    kde_completeness:    { label: 'KDE Completeness',    weight: 20, icon: '📋' },
-    cte_completeness:    { label: 'CTE Completeness',    weight: 20, icon: '📦' },
+    kde_completeness:    { label: 'Data Fields Filled (KDE)',    weight: 20, icon: '📋' },
+    cte_completeness:    { label: 'Events Recorded (CTE)',    weight: 20, icon: '📦' },
     obligation_coverage: { label: 'Obligation Coverage',  weight: 15, icon: '⚖️' },
     product_coverage:    { label: 'Product Coverage',     weight: 10, icon: '🏷️' },
     export_readiness:    { label: 'Export Readiness',     weight: 10, icon: '📤' },
@@ -439,37 +452,53 @@ export default function ComplianceDashboardPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <ul className="space-y-2">
-                                            {score.next_actions.map((action, i) => (
-                                                <motion.li
-                                                    key={i}
-                                                    className="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]"
-                                                    initial={{ opacity: 0, x: 10 }}
-                                                    animate={{ opacity: 1, x: 0 }}
-                                                    transition={{ delay: 0.1 * i }}
-                                                >
-                                                    {action.priority === 'HIGH' ? (
-                                                        <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                                                    ) : action.priority === 'MEDIUM' ? (
-                                                        <Info className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                                                    ) : (
-                                                        <CheckCircle2 className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                                    )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-xs sm:text-sm font-medium leading-snug">{action.action}</div>
-                                                        <div className="text-[11px] text-muted-foreground mt-0.5">{action.impact}</div>
-                                                    </div>
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className={`text-[9px] uppercase tracking-widest rounded-full flex-shrink-0 ${
-                                                            action.priority === 'HIGH' ? 'bg-red-500/10 text-red-400' :
-                                                            action.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' :
-                                                            'bg-muted text-muted-foreground'
-                                                        }`}
+                                            {score.next_actions.map((action, i) => {
+                                                const route = actionRoute(action.action);
+                                                const inner = (
+                                                    <>
+                                                        {action.priority === 'HIGH' ? (
+                                                            <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                                                        ) : action.priority === 'MEDIUM' ? (
+                                                            <Info className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                                        ) : (
+                                                            <CheckCircle2 className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-xs sm:text-sm font-medium leading-snug">{action.action}</div>
+                                                            <div className="text-[11px] text-muted-foreground mt-0.5">{action.impact}</div>
+                                                        </div>
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className={`text-[9px] uppercase tracking-widest rounded-full flex-shrink-0 ${
+                                                                action.priority === 'HIGH' ? 'bg-red-500/10 text-red-400' :
+                                                                action.priority === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' :
+                                                                'bg-muted text-muted-foreground'
+                                                            }`}
+                                                        >
+                                                            {action.priority}
+                                                        </Badge>
+                                                        {route && <ArrowRight className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />}
+                                                    </>
+                                                );
+                                                return (
+                                                    <motion.li
+                                                        key={i}
+                                                        initial={{ opacity: 0, x: 10 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        transition={{ delay: 0.1 * i }}
                                                     >
-                                                        {action.priority}
-                                                    </Badge>
-                                                </motion.li>
-                                            ))}
+                                                        {route ? (
+                                                            <Link href={route} className="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] hover:border-[var(--re-brand)] hover:bg-[var(--re-surface-card)] transition-colors cursor-pointer">
+                                                                {inner}
+                                                            </Link>
+                                                        ) : (
+                                                            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                                                {inner}
+                                                            </div>
+                                                        )}
+                                                    </motion.li>
+                                                );
+                                            })}
                                         </ul>
                                     </CardContent>
                                 </Card>
@@ -523,7 +552,7 @@ export default function ComplianceDashboardPage() {
                                         {score.overall_score >= 80
                                             ? 'Your facility is well-prepared for an FDA inspection under FSMA 204. Continue maintaining your traceability records and running periodic mock drills.'
                                             : score.overall_score >= 60
-                                            ? 'Your traceability program has a foundation but gaps remain. An FDA inspector could flag missing KDEs or incomplete CTE chains. Address the high-priority actions above.'
+                                            ? 'Your traceability program has a foundation but gaps remain. An FDA inspector could flag missing data fields or incomplete event records. Address the high-priority actions above.'
                                             : 'Significant compliance gaps exist. If the FDA initiated a 204 records request today, your facility would likely be unable to respond within the required 24 hours. Immediate action is recommended.'}
                                     </div>
                                 </div>

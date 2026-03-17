@@ -336,7 +336,7 @@ export default function ReceivingDockPage() {
                                 <div className="mb-4 p-3 rounded-lg border bg-muted/30 space-y-2">
                                     <div className="grid grid-cols-2 gap-2">
                                         <input
-                                            type="text" placeholder="GTIN"
+                                            type="text" placeholder="Barcode / GTIN"
                                             value={manualGtin}
                                             onChange={e => { setManualGtin(e.target.value); if (e.target.value.length >= 8) lookupGtin(e.target.value); }}
                                             className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm font-mono"
@@ -389,7 +389,7 @@ export default function ReceivingDockPage() {
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-sm font-medium truncate">{item.productName}</div>
                                                 <div className="text-xs text-muted-foreground font-mono">
-                                                    {item.gtin && `GTIN: ${item.gtin}`}
+                                                    {item.gtin && `Barcode: ${item.gtin}`}
                                                     {item.gtin && item.lotCode && ' · '}
                                                     {item.lotCode && `Lot: ${item.lotCode}`}
                                                 </div>
@@ -453,29 +453,89 @@ export default function ReceivingDockPage() {
             )}
 
             {/* ─── Completed Session ─── */}
-            {session && session.status === 'completed' && (
-                <Card className="border-emerald-200 dark:border-emerald-800">
-                    <CardContent className="pt-6 text-center space-y-4">
-                        <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
-                        <div>
-                            <h2 className="text-xl font-bold">Receiving Complete</h2>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                {session.supplier} — {session.poNumber}
-                            </p>
-                        </div>
-                        <div className="flex justify-center gap-3">
-                            <Button onClick={() => { setSession(null); setSupplier(''); setPoNumber(''); }}>
-                                <Plus className="mr-2 h-4 w-4" /> New Session
-                            </Button>
-                            <Link href="/dashboard/audit-log">
-                                <Button variant="outline">
-                                    <ClipboardList className="mr-2 h-4 w-4" /> View Audit Log
+            {session && session.status === 'completed' && (() => {
+                const allItems = [
+                    ...session.expectedItems.filter(i => i.status === 'scanned'),
+                    ...session.unexpectedScans,
+                ];
+                const ts = new Date().toLocaleString();
+                return (
+                    <Card className="border-emerald-200 dark:border-emerald-800 print:border print:shadow-none" id="receipt">
+                        <CardContent className="pt-6 space-y-5">
+                            {/* Header */}
+                            <div className="text-center space-y-2">
+                                <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto" />
+                                <h2 className="text-xl font-bold">Receiving Complete</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    {session.supplier} — PO {session.poNumber}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{ts}</p>
+                            </div>
+
+                            {/* Summary stats */}
+                            <div className="grid grid-cols-3 gap-3 text-center">
+                                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                                    <div className="text-2xl font-bold text-emerald-600">{allItems.length}</div>
+                                    <div className="text-[11px] text-muted-foreground">Items Ingested</div>
+                                </div>
+                                <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                    <div className="text-2xl font-bold">{session.expectedItems.filter(i => i.status === 'scanned').length}</div>
+                                    <div className="text-[11px] text-muted-foreground">Expected Verified</div>
+                                </div>
+                                <div className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)]">
+                                    <div className="text-2xl font-bold">{session.unexpectedScans.length}</div>
+                                    <div className="text-[11px] text-muted-foreground">Unexpected Added</div>
+                                </div>
+                            </div>
+
+                            {/* Item detail table */}
+                            {allItems.length > 0 && (
+                                <div className="rounded-xl border border-[var(--re-border-default)] overflow-hidden">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="bg-[var(--re-surface-elevated)] text-left">
+                                                <th className="p-2.5 font-medium">Product</th>
+                                                <th className="p-2.5 font-medium">Barcode</th>
+                                                <th className="p-2.5 font-medium">Lot</th>
+                                                <th className="p-2.5 font-medium text-right">Qty</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {allItems.map((item, i) => (
+                                                <tr key={i} className="border-t border-[var(--re-border-default)]">
+                                                    <td className="p-2.5">{item.productName || '—'}</td>
+                                                    <td className="p-2.5 font-mono text-[11px]">{item.gtin || '—'}</td>
+                                                    <td className="p-2.5">{item.lotCode || '—'}</td>
+                                                    <td className="p-2.5 text-right">{item.quantity}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="flex flex-wrap justify-center gap-3 print:hidden">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => window.print()}
+                                    className="min-h-[48px] rounded-xl"
+                                >
+                                    <ClipboardList className="mr-2 h-4 w-4" /> Print Receipt
                                 </Button>
-                            </Link>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                                <Button onClick={() => { setSession(null); setSupplier(''); setPoNumber(''); }} className="min-h-[48px] rounded-xl">
+                                    <Plus className="mr-2 h-4 w-4" /> New Session
+                                </Button>
+                                <Link href="/dashboard/audit-log">
+                                    <Button variant="outline" className="min-h-[48px] rounded-xl">
+                                        View Audit Log
+                                    </Button>
+                                </Link>
+                            </div>
+                        </CardContent>
+                    </Card>
+                );
+            })()}
         </div>
     );
 }

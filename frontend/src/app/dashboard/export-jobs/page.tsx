@@ -108,8 +108,8 @@ export default function ExportJobsPage() {
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                    Preview interface: this page exercises the current frontend contract route for export jobs. Persistent backend scheduling and audit events are not wired yet.
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4 text-sm text-muted-foreground">
+                    Alpha release — Export scheduling and audit trail will activate when your account is connected. You can explore the full workflow now.
                 </div>
 
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">

@@ -94,7 +94,7 @@ export default function ScanPage() {
                         <div>
                             <h2 className="text-lg font-semibold text-[var(--re-text-primary)]">Open Scanner</h2>
                             <p className="text-sm text-[var(--re-text-muted)] mt-1">
-                                Scan GS1 barcodes or capture evidence photos. Works offline.
+                                Scan barcodes or capture evidence photos. Works offline.
                             </p>
                         </div>
                         <Link
@@ -157,12 +157,12 @@ export default function ScanPage() {
                                 },
                                 {
                                     step: '2',
-                                    title: 'Select CTE type & scan item',
-                                    detail: 'Choose Shipping, Receiving, or Transformation. Point camera at GS1 barcode — GTIN, lot, expiry, and serial are extracted automatically.',
+                                    title: 'Select event type & scan item',
+                                    detail: 'Choose what you\'re doing: Receiving, Shipping, or Transforming. Point your camera at the barcode — product number, lot code, expiry, and serial are extracted automatically.',
                                 },                                {
                                     step: '3',
                                     title: 'Event ingests into pipeline',
-                                    detail: 'Scanned data flows into your compliance pipeline as a CTE event. If offline, it queues locally and syncs when connection returns.',
+                                    detail: 'Scanned data flows into your compliance pipeline as a traceability event. If offline, it queues locally and syncs when connection returns.',
                                 },
                                 {
                                     step: '4',
@@ -216,7 +216,7 @@ export default function ScanPage() {
                     ))}
                 </div>
                 <p className="text-xs text-[var(--re-text-disabled)] mt-3">
-                    GS1 barcodes are parsed automatically — GTIN, lot code, serial, expiry, and pack date are extracted and mapped to FSMA 204 KDEs.
+                    Barcodes are parsed automatically — product number, lot code, serial, expiry, and pack date are extracted and mapped to the required data fields.
                 </p>
             </div>
         </div>

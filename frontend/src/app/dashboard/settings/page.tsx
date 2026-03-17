@@ -87,10 +87,10 @@ export default function SettingsPage() {
                         {saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
                     </Button>
                 </div>
-                {/* Demo banner */}
-                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                {/* Alpha program notice */}
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 flex items-center gap-2 text-blue-800 dark:text-blue-200 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Demo Data — Connect your backend to see live settings. All changes are simulated.</span>
+                    <span>Founding Partner Alpha — Settings will sync with your live environment once onboarding is complete.</span>
                 </div>
 
                 {/* Plan Card */}
@@ -187,7 +187,7 @@ export default function SettingsPage() {
                                     <Key className="h-4 w-4 text-[var(--re-brand)]" />
                                     API Keys
                                 </CardTitle>
-                                <CardDescription>Manage API access credentials. Keys are scoped per-tenant with RBAC.</CardDescription>
+                                <CardDescription>Manage API access credentials. Keys are scoped per-tenant with role-based access control.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {API_KEYS.map((key) => (
@@ -262,11 +262,11 @@ export default function SettingsPage() {
                                     <Database className="h-4 w-4 text-[var(--re-brand)]" />
                                     Data Retention
                                 </CardTitle>
-                                <CardDescription>FSMA 204 requires minimum 2-year CTE retention. RegEngine exceeds all requirements.</CardDescription>
+                                <CardDescription>FSMA 204 requires minimum 2-year event record retention. RegEngine exceeds all requirements.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {[
-                                    { label: 'CTE Records', value: '3 years (1,095 days)', note: 'FSMA requires \u2265 2 years', icon: Shield, status: 'compliant' },
+                                    { label: 'Event Records', value: '3 years (1,095 days)', note: 'FSMA requires \u2265 2 years', icon: Shield, status: 'compliant' },
                                     { label: 'Audit Log', value: '7 years (2,555 days)', note: 'Industry best practice', icon: Lock, status: 'compliant' },
                                     { label: 'Chain Hashes', value: 'Indefinite', note: 'SHA-256 integrity proofs kept permanently', icon: Shield, status: 'compliant' },
                                     { label: 'Export History', value: '1 year (365 days)', note: 'Download history and FDA packages', icon: Clock, status: 'compliant' },
@@ -295,7 +295,7 @@ export default function SettingsPage() {
                                     <div>
                                         <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                            Your CTE records are retained 50% longer than the FSMA 204 minimum, and audit logs are kept for 7 years to cover any FDA investigation window. Chain integrity hashes are stored indefinitely, meaning you can prove data authenticity for any historical event at any time.
+                                            Your event records are retained 50% longer than the FSMA 204 minimum, and audit logs are kept for 7 years to cover any FDA investigation window. Chain integrity hashes are stored indefinitely, meaning you can prove data authenticity for any historical record at any time.
                                         </p>
                                     </div>
                                 </div>
@@ -326,7 +326,7 @@ export default function SettingsPage() {
                                     <Plug className="h-4 w-4 text-[var(--re-brand)]" />
                                     Integrations
                                 </CardTitle>
-                                <CardDescription>Connect third-party systems for automated CTE ingestion and data sync</CardDescription>
+                                <CardDescription>Connect third-party systems for automated event ingestion and data sync</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2">
                                 {INTEGRATIONS.map((int) => {
@@ -371,7 +371,7 @@ export default function SettingsPage() {
                                     <div>
                                         <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                            Connected integrations automatically ingest CTEs from your existing systems — no manual data entry. Each connected source feeds into your compliance score in real-time. The EPCIS 2.0 Gateway ensures interoperability with any GS1-compliant trading partner.
+                                            Connected integrations automatically ingest traceability events from your existing systems — no manual data entry. Each connected source feeds into your compliance score in real-time. The EPCIS 2.0 Gateway ensures interoperability with any industry-standard trading partner.
                                         </p>
                                     </div>
                                 </div>
