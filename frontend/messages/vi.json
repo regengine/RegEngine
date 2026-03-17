@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "title": "RegEngine — Nền tảng tuân thủ quy định hướng API",
+    "description": "Nền tảng tuân thủ FSMA 204. Tiếp nhận, xác minh và xuất các bản ghi khả truy xuất với bằng chứng mã hóa."
+  },
+  "nav": {
+    "product": "Sản phẩm",
+    "pricing": "Bảng giá",
+    "developers": "Nhà phát triển",
+    "tools": "Công cụ miễn phí",
+    "login": "Đăng nhập",
+    "getStarted": "Bắt đầu ngay",
+    "language": "Ngôn ngữ"
+  },
+  "hero": {
+    "badge": "Tuân thủ FSMA 204",
+    "title": "FDA cho bạn 24 giờ.",
+    "titleEmphasis": "Bảng tính của bạn sẽ không đủ.",
+    "subtitle": "RegEngine kết nối các nhà cung cấp, lô hàng và sự kiện khả truy xuất của bạn thành một bản ghi có thể kiểm toán — vì vậy khi FDA hoặc Walmart hỏi, bạn phản hồi trong vòng vài phút.",
+    "ctaPrimary": "Trở thành Đối tác thiết kế sáng lập",
+    "ctaSecondary": "Đánh giá sẵn sàng miễn phí"
+  },
+  "auditCard": {
+    "header": "SẮP TỚI: YÊU CẦU KIỂM TOÁN NHÀ CUNG CẤP",
+    "body": "Cung cấp chuỗi quyền nuôi dưỡng hoàn chỉnh cho Lô xà lách Romaine R-2026-0312 từ trang trại đến trung tâm phân phối. Hạn chót vào cuối giờ làm việc thứ Sáu.",
+    "responseLabel": "Phản hồi của RegEngine — 3 phút sau",
+    "ctesFound": "Tìm thấy CTE",
+    "coverage": "Phạm vi bao phủ",
+    "format": "Định dạng",
+    "cryptoVerification": "Xác minh mã hóa",
+    "passed": "Vượt qua",
+    "complete": "Hoàn chỉnh",
+    "exportReady": "Sẵn sàng xuất",
+    "verified": "Đã xác minh",
+    "footerReady": "Sẵn sàng xuất để gửi"
+  },
+  "evidence": {
+    "categories": "Danh mục thực phẩm FDA được ánh xạ",
+    "apiCall": "Gọi API để xuất sẵn sàng FDA",
+    "recallWindow": "Cửa sổ thu hồi — bao phủ hoàn toàn",
+    "nativeFormat": "Định dạng gốc, không chuyển đổi"
+  },
+  "freeTools": {
+    "badge": "Công cụ miễn phí — không cần đăng ký",
+    "title": "Kiểm tra rủi ro của bạn trước khi cam kết.",
+    "subtitle": "Sử dụng những cái này ngay bây giờ. Nâng cấp khi bạn sẵn sàng.",
+    "ftlChecker": "Trình kiểm tra bao phủ FTL",
+    "ftlDesc": "Các sản phẩm của bạn có nằm trên Danh sách khả truy xuất thực phẩm FDA không? Tìm hiểu trong vài giây.",
+    "retailerReadiness": "Đánh giá sẵn sàng cho nhà bán lẻ",
+    "retailerDesc": "Bạn có thể vượt qua kiểm toán nhà cung cấp Walmart ngày hôm nay không? Được chấm điểm tự động.",
+    "popular": "Phổ biến",
+    "complianceGuide": "Hướng dẫn tuân thủ FSMA 204",
+    "guideDesc": "Hướng dẫn bằng tiếng Anh đơn giản về quy tắc khả truy xuất thực phẩm. Không có thuật ngữ chuyên môn.",
+    "coldChain": "Trình mô phỏng bất thường chuỗi lạnh",
+    "coldChainDesc": "Kiểm tra giám sát của bạn dựa trên các mô hình lỗi thực tế."
+  },
+  "cta": {
+    "badge": "Hạn chót FSMA 204: 20 tháng 7, 2028",
+    "title": "Sẵn sàng đóng khoảng cách?",
+    "subtitle": "Bắt đầu bằng một đánh giá miễn phí. Xem chính xác tình hình của bạn trước khi hạn chót đến.",
+    "primary": "Đánh giá sẵn sàng miễn phí",
+    "secondary": "Trở thành Đối tác thiết kế sáng lập"
+  },
+  "footer": {
+    "product": "Sản phẩm",
+    "company": "Công ty",
+    "resources": "Tài nguyên",
+    "legal": "Pháp lý",
+    "copyright": "© {year} RegEngine Inc. Tất cả các quyền được bảo lưu."
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "meta": {
+    "title": "RegEngine — Conformité réglementaire API-First",
+    "description": "Plateforme de conformité FSMA 204. Ingérez, vérifiez et exportez des dossiers de traçabilité avec preuve cryptographique."
+  },
+  "nav": {
+    "product": "Produit",
+    "pricing": "Tarification",
+    "developers": "Développeurs",
+    "tools": "Outils Gratuits",
+    "login": "Se Connecter",
+    "getStarted": "Commencer",
+    "language": "Langue"
+  },
+  "hero": {
+    "badge": "Conformité FSMA 204",
+    "title": "La FDA vous donne 24 heures.",
+    "titleEmphasis": "Vos feuilles de calcul ne suffiront pas.",
+    "subtitle": "RegEngine connecte vos fournisseurs, lots et événements de traçabilité dans un seul dossier auditable — pour répondre à la FDA ou à Walmart en quelques minutes.",
+    "ctaPrimary": "Devenir un Partenaire de Conception Fondateur",
+    "ctaSecondary": "Évaluation de Préparation Gratuite"
+  },
+  "auditCard": {
+    "header": "ENTRANT : DEMANDE D'AUDIT FOURNISSEUR",
+    "body": "Fournir la chaîne de traçabilité complète pour la Laitue Romaine Lot R-2026-0312 de la ferme au centre de distribution. À remettre avant la fin de la journée vendredi.",
+    "responseLabel": "Réponse RegEngine — 3 minutes plus tard",
+    "ctesFound": "CTEs trouvés",
+    "coverage": "Couverture",
+    "format": "Format",
+    "cryptoVerification": "Vérification cryptographique",
+    "passed": "Approuvé",
+    "complete": "Complète",
+    "exportReady": "Prêt pour Export",
+    "verified": "Vérifié",
+    "footerReady": "Prêt à envoyer"
+  },
+  "evidence": {
+    "categories": "Catégories alimentaires FDA cartographiées",
+    "apiCall": "Appel API pour export prêt pour la FDA",
+    "recallWindow": "Fenêtre de rappel — entièrement couverte",
+    "nativeFormat": "Format natif, sans conversion"
+  }  ,
+  "freeTools": {
+    "badge": "Outils gratuits — aucune inscription",
+    "title": "Vérifiez votre exposition avant de vous engager.",
+    "subtitle": "Utilisez-les maintenant. Upgrade quand vous êtes prêt.",
+    "ftlChecker": "Vérificateur de Couverture FTL",
+    "ftlDesc": "Vos produits sont-ils sur la Liste FDA de Traçabilité Alimentaire ? Découvrez-le en quelques secondes.",
+    "retailerReadiness": "Évaluation de Préparation Détaillant",
+    "retailerDesc": "Pourriez-vous réussir un audit fournisseur Walmart aujourd'hui ? Évaluation automatique.",
+    "popular": "Populaire",
+    "complianceGuide": "Guide de Conformité FSMA 204",
+    "guideDesc": "Guide en langage clair de la règle de traçabilité alimentaire. Aucun jargon.",
+    "coldChain": "Simulateur d'Anomalie Chaîne du Froid",
+    "coldChainDesc": "Testez votre surveillance contre les modèles de défaillance réels."
+  },
+  "cta": {
+    "badge": "Délai FSMA 204 : 20 juillet 2028",
+    "title": "Prêt à combler l'écart ?",
+    "subtitle": "Commencez par une évaluation gratuite. Voyez exactement où vous en êtes avant que la date limite n'arrive.",
+    "primary": "Évaluation de Préparation Gratuite",
+    "secondary": "Devenir un Partenaire de Conception Fondateur"
+  },
+  "footer": {
+    "product": "Produit",
+    "company": "Entreprise",
+    "resources": "Ressources",
+    "legal": "Mentions Légales",
+    "copyright": "© {year} RegEngine Inc. Tous droits réservés."
+  }
+}
