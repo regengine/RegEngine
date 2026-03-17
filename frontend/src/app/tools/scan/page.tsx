@@ -18,20 +18,20 @@ const Html5Qrcode = dynamic(
 
 export default function ScanPage() {
   const [parsed, setParsed] = useState<GS1ParsedData | null>(null);
-  const [rawBarcode, setRawBarcode] = useState('');
-  const [manualInput, setManualInput] = useState('');
+  const [rawBarcode, setRawBarcode] = useState<string>('');
+  const [manualInput, setManualInput] = useState<string>('');
   const [scanHistory, setScanHistory] = useState<string[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [eventType, setEventType] = useState('Receiving');
-  const [quantity, setQuantity] = useState('');
-  const [uom, setUom] = useState('cases');
-  const [locationGLN, setLocationGLN] = useState('');
+  const [eventType, setEventType] = useState<string>('Receiving');
+  const [quantity, setQuantity] = useState<string>('');
+  const [uom, setUom] = useState<string>('cases');
+  const [locationGLN, setLocationGLN] = useState<string>('');
 
   const scannerRef = useRef<HTMLDivElement>(null);
   const qrCodeRef = useRef<any>(null);
 
-  const handleParse = (barcode: string) => {
+  const handleParse = (barcode: string): void => {
     if (!barcode.trim()) return;
 
     const result = parseGS1(barcode);
@@ -46,7 +46,7 @@ export default function ScanPage() {
     });
   };
 
-  const startCamera = async () => {
+  const startCamera = async (): Promise<void> => {
     if (!scannerRef.current) return;
 
     try {
@@ -58,7 +58,7 @@ export default function ScanPage() {
       await html5qrcode.start(
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
+        (decodedText: string) => {
           handleParse(decodedText);
         },
         () => {}
@@ -73,7 +73,7 @@ export default function ScanPage() {
     }
   };
 
-  const stopCamera = async () => {
+  const stopCamera = async (): Promise<void> => {
     if (qrCodeRef.current) {
       try {
         await qrCodeRef.current.stop();
@@ -94,7 +94,7 @@ export default function ScanPage() {
 
   const isCompatible = parsed ? isFSMACompatible(parsed) : false;
 
-  const formatDate = (dateStr?: string) => {
+  const formatDate = (dateStr?: string): string => {
     if (!dateStr) return 'Not provided';
     try {
       const date = new Date(dateStr);
