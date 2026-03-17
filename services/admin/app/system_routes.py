@@ -34,10 +34,22 @@ class SystemMetricsResponse(BaseModel):
     chain_valid: Optional[bool] = None
     open_alerts: Optional[int] = None
 
+def _detect_default(docker_name: str, railway_url: str) -> str:
+    """Use Railway URL when running on Railway, Docker hostname otherwise."""
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+        return railway_url
+    return docker_name
+
 def _get_service_urls() -> Dict[str, str]:
-    """Build service health-check URLs from env vars or fallback to Docker names."""
-    ingestion = os.getenv("INGESTION_SERVICE_URL", "http://ingestion-api:8002")
-    compliance = os.getenv("COMPLIANCE_SERVICE_URL", "http://compliance-api:8500")
+    """Build service health-check URLs from env vars or fallback to Docker/Railway defaults."""
+    ingestion = os.getenv(
+        "INGESTION_SERVICE_URL",
+        _detect_default("http://ingestion-api:8002", "https://believable-respect-production-2fb3.up.railway.app"),
+    )
+    compliance = os.getenv(
+        "COMPLIANCE_SERVICE_URL",
+        _detect_default("http://compliance-api:8500", "https://intelligent-essence-production.up.railway.app"),
+    )
     urls = {
         "ingestion": f"{ingestion.rstrip('/')}/health",
         "compliance": f"{compliance.rstrip('/')}/health",
@@ -49,7 +61,10 @@ def _get_service_urls() -> Dict[str, str]:
     return urls
 
 def _get_ingestion_base() -> str:
-    return os.getenv("INGESTION_SERVICE_URL", "http://ingestion-api:8002").rstrip("/")
+    return os.getenv(
+        "INGESTION_SERVICE_URL",
+        _detect_default("http://ingestion-api:8002", "https://believable-respect-production-2fb3.up.railway.app"),
+    ).rstrip("/")
 
 @router.get("/status", response_model=SystemStatusResponse)
 async def get_system_status(current_user: UserModel = Depends(get_current_user)):
