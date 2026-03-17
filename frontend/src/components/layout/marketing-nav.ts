@@ -27,7 +27,7 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     ...MARKETING_PRIMARY_NAV,
     { label: "Integrations", href: "/integrations" },
-    { label: "Get Started", href: "/get-started" },
+    { label: "Get Started", href: "/onboarding" },
 ];
 
 export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
@@ -37,7 +37,7 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "Trust Center", href: "/trust" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    { label: "Alpha Program", href: "/alpha" },
+    { label: "Founding Design Partners", href: "/alpha" },
     { label: "Log In", href: "/login" },
     { label: "Sign Up", href: "/signup" },
 ];
