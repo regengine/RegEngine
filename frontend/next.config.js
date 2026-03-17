@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 // Last deployed: 2026-02-13
 const { withSentryConfig } = require("@sentry/nextjs");
+const createNextIntlPlugin = require('next-intl/plugin');
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
 const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost';
@@ -73,4 +75,4 @@ const sentryWebpackPluginOptions = {
     hideSourceMaps: true,
 };
 
-module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
+module.exports = withSentryConfig(withNextIntl(nextConfig), sentryWebpackPluginOptions);

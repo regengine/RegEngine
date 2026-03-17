@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { MARKETING_FREE_TOOLS, MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { LanguageSwitcher } from '@/components/layout/language-switcher';
 
 export function MarketingHeader() {
     const pathname = usePathname();
@@ -291,6 +292,7 @@ export function MarketingHeader() {
                             </div>
                         </div>
 
+                        <LanguageSwitcher />
                         <ThemeToggle />
 
                         {/* Auth-aware buttons */}
@@ -564,6 +566,12 @@ export function MarketingHeader() {
 
                 {/* Divider */}
                 <div style={{ height: "1px", background: "var(--re-mobile-border)", margin: "4px 20px" }} />
+
+                {/* Language */}
+                <div style={{ padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "13px", color: "var(--re-text-muted)", fontWeight: 500 }}>Language</span>
+                    <LanguageSwitcher />
+                </div>
 
                 {/* Theme Toggle */}
                 <div style={{ padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
