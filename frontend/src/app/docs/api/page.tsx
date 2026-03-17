@@ -20,8 +20,20 @@ import { Badge } from '@/components/ui/badge';
 
 import { PageContainer } from '@/components/layout/page-container';
 
+interface Endpoint {
+    method: string;
+    path: string;
+    description: string;
+    auth: boolean;
+    response: string;
+    headers?: string[];
+    params?: string[];
+    params_table?: { name: string; type: string; required: boolean; desc: string }[];
+    body?: string;
+}
+
 // API Endpoint Documentation
-const API_SERVICES = [
+const API_SERVICES: { name: string; port: number; baseUrl: string; icon: React.ComponentType<{ className?: string }>; description: string; endpoints: Endpoint[] }[] = [
     {
         name: 'Ingestion API',
         port: 8000,
@@ -140,11 +152,47 @@ const API_SERVICES = [
             {
                 method: 'POST',
                 path: '/ingest',
-                description: 'Ingest one or more FSMA CTE events',
+                description: 'Ingest one or more FSMA CTE events. Each event is SHA-256 chain-hashed and linked to the tenant audit trail.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                body: '{ "source": "erp", "events": [{ "cte_type": "receiving", "traceability_lot_code": "00012345678901-LOT-2026-001", "product_description": "Romaine Lettuce", "quantity": 500, "unit_of_measure": "cases", "location_name": "Distribution Center #4", "timestamp": "2026-02-05T14:23:00Z", "kdes": { "receive_date": "2026-02-05", "receiving_location": "Distribution Center #4" } }] }',
-                response: '{ "accepted": 1, "rejected": 0, "total": 1, "events": [{ "event_id": "uuid", "status": "accepted", "sha256_hash": "..." }] }',
+                params_table: [
+                    { name: 'source', type: 'string', required: false, desc: 'Source system identifier (e.g. "erp", "wms")' },
+                    { name: 'events', type: 'CTE[]', required: true, desc: 'Array of Critical Tracking Events' },
+                    { name: 'events[].cte_type', type: 'enum', required: true, desc: '"receiving" | "shipping" | "transforming" | "creating"' },
+                    { name: 'events[].traceability_lot_code', type: 'string', required: true, desc: 'TLC per FSMA 204 (e.g. GTIN + lot)' },
+                    { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name' },
+                    { name: 'events[].quantity', type: 'number', required: true, desc: 'Quantity received/shipped' },
+                    { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets"' },
+                    { name: 'events[].location_name', type: 'string', required: true, desc: 'Facility name or GLN' },
+                    { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event timestamp with timezone' },
+                    { name: 'events[].kdes', type: 'object', required: false, desc: 'Key Data Elements (supplier_lot, po_number, carrier, etc.)' },
+                ],
+                body: JSON.stringify({
+                    source: "erp",
+                    events: [{
+                        cte_type: "receiving",
+                        traceability_lot_code: "00012345678901-LOT-2026-001",
+                        product_description: "Romaine Lettuce",
+                        quantity: 500,
+                        unit_of_measure: "cases",
+                        location_name: "Distribution Center #4",
+                        timestamp: "2026-02-05T14:23:00Z",
+                        kdes: {
+                            receive_date: "2026-02-05",
+                            receiving_location: "Distribution Center #4"
+                        }
+                    }]
+                }, null, 2),
+                response: JSON.stringify({
+                    accepted: 1,
+                    rejected: 0,
+                    total: 1,
+                    events: [{
+                        event_id: "evt_9f8e7d6c5b4a",
+                        status: "accepted",
+                        sha256_hash: "sha256:a1b2c3d4e5f6..."
+                    }]
+                }, null, 2),
             },
             {
                 method: 'GET',
@@ -166,11 +214,21 @@ const API_SERVICES = [
             {
                 method: 'GET',
                 path: '/trace/forward/{tlc}',
-                description: 'Trace forward from lot to downstream customers and products',
+                description: 'Trace forward from lot to downstream customers and products. Returns the full supply chain graph from this lot outward.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
                 params: ['max_depth=10', 'enforce_time_arrow=true'],
-                response: '{ "lot_id": "TLC123", "facilities": [...], "events": [...], "hop_count": 5 }',
+                params_table: [
+                    { name: 'tlc', type: 'string', required: true, desc: 'Traceability Lot Code (path parameter)' },
+                    { name: 'max_depth', type: 'number', required: false, desc: 'Max hops to trace (default: 10, max: 50)' },
+                    { name: 'enforce_time_arrow', type: 'boolean', required: false, desc: 'Only follow edges forward in time (default: true)' },
+                ],
+                response: JSON.stringify({
+                    lot_id: "TLC123",
+                    facilities: ["Distribution Center #4", "Retail Store #12"],
+                    events: [{ cte: "shipping", timestamp: "2026-02-06T08:00:00Z" }],
+                    hop_count: 5
+                }, null, 2),
             },
             {
                 method: 'GET',
@@ -209,10 +267,20 @@ const API_SERVICES = [
             {
                 method: 'GET',
                 path: '/recall/readiness',
-                description: 'Get recall readiness score and recommendations',
+                description: 'Get recall readiness score (0-100) with actionable recommendations for improving recall response time.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                response: '{ "readiness_score": 85, "recommendations": [...], "last_drill": "..." }',
+                response: JSON.stringify({
+                    readiness_score: 85,
+                    grade: "B+",
+                    recommendations: [
+                        { priority: "high", action: "Run quarterly recall drill", impact: "+5 points" },
+                        { priority: "medium", action: "Add GLN to 3 facilities", impact: "+3 points" }
+                    ],
+                    last_drill: "2026-02-01T10:00:00Z",
+                    avg_response_hours: 6.2,
+                    sla_target_hours: 24
+                }, null, 2),
             },
         ],
     },
@@ -234,7 +302,7 @@ function CopyButton({ text }: { text: string }) {
     );
 }
 
-function EndpointCard({ endpoint }: { endpoint: typeof API_SERVICES[0]['endpoints'][0] }) {
+function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
     const [expanded, setExpanded] = useState(false);
 
     const methodColors: Record<string, string> = {
@@ -292,6 +360,34 @@ function EndpointCard({ endpoint }: { endpoint: typeof API_SERVICES[0]['endpoint
                                         {p}
                                     </Badge>
                                 ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {endpoint.params_table && (
+                        <div>
+                            <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Parameters</h4>
+                            <div className="border rounded-lg overflow-hidden">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="bg-muted/50 border-b">
+                                            <th className="text-left p-2 font-semibold">Name</th>
+                                            <th className="text-left p-2 font-semibold">Type</th>
+                                            <th className="text-left p-2 font-semibold">Required</th>
+                                            <th className="text-left p-2 font-semibold">Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {endpoint.params_table.map((p) => (
+                                            <tr key={p.name} className="border-b last:border-b-0">
+                                                <td className="p-2 font-mono text-blue-600 dark:text-blue-400">{p.name}</td>
+                                                <td className="p-2 font-mono text-muted-foreground">{p.type}</td>
+                                                <td className="p-2">{p.required ? <Badge variant="destructive" className="text-[10px] px-1.5 py-0">required</Badge> : <span className="text-muted-foreground">optional</span>}</td>
+                                                <td className="p-2 text-muted-foreground">{p.desc}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     )}
