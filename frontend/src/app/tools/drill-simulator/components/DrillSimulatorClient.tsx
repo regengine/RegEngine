@@ -765,7 +765,7 @@ STATUS: ${
                                                         className="text-sm font-medium cursor-pointer flex justify-between items-center"
                                                         onClick={() =>
                                                             setExpandedFinding(
-                                                                expandedFinding === idx
+                                                                expandedFinding === String(idx)
                                                                     ? null
                                                                     : String(idx)
                                                             )
