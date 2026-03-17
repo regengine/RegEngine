@@ -1,20 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
 import type { GS1ParsedData } from '@/lib/gs1-parser';
 import styles from './scan.module.css';
-
-const Html5Qrcode = dynamic(
-  async () => {
-    const module = await import('html5-qrcode');
-    return { default: module.Html5Qrcode };
-  },
-  { ssr: false }
-);
 
 export default function ScanPage() {
   const [parsed, setParsed] = useState<GS1ParsedData | null>(null);
@@ -51,6 +42,7 @@ export default function ScanPage() {
 
     try {
       setCameraError(null);
+      const { Html5Qrcode } = await import('html5-qrcode');
       const html5qrcode = new Html5Qrcode('scanner-container');
 
       qrCodeRef.current = html5qrcode;
