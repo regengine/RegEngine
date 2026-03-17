@@ -10,8 +10,8 @@ const footerLinks = {
         { label: 'Ingest Documents', href: '/ingest' },
         { label: 'FTL Coverage Checker', href: '/ftl-checker', badge: 'Free' },
         { label: 'Pricing', href: '/pricing' },
-        { label: 'Mock Recall Demo', href: '/demo/mock-recall' },
-        { label: 'Supply Chain Explorer', href: '/demo/supply-chains', badge: 'New' },
+        { label: 'Mock Recall Drill', href: '/tools/drill-simulator' },
+        { label: 'Supply Chain Graph', href: '/tools/knowledge-graph', badge: 'New' },
         { label: 'FSMA 204 Dashboard', href: '/fsma' },
     ],
     solutions: [
