@@ -149,10 +149,10 @@ export default function RecallReportPage() {
                     </div>
                 </div>
 
-                {/* Demo banner */}
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/[0.06] border border-amber-500/20 text-amber-300 text-xs">
+                {/* Alpha notice */}
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 text-blue-300 text-xs">
                     <Info className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span>Demo Data — Simulated investigation scenario. Connect your backend for live recall response.</span>
+                    <span>Sample Scenario — Explore a realistic recall investigation. Your live data populates automatically after onboarding.</span>
                 </div>
 
                 {/* Risk Summary Banner */}

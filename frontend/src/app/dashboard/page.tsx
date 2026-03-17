@@ -74,7 +74,7 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
             },
             {
                 title: 'Product Catalog',
-                description: 'FTL product management',
+                description: 'Product catalog management',
                 icon: FileCheck,
                 href: '/dashboard/products',
                 color: 'text-purple-500',

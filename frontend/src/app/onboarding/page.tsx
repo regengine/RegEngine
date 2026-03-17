@@ -55,26 +55,25 @@ export default function OnboardingPage() {
             <Check className="h-7 w-7 text-white" strokeWidth={2.5} />
           </div>
           <h1 className="font-serif text-[clamp(1.5rem,4vw,1.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight mb-3">
-            You&apos;re on the list.
+            Your workspace is ready.
           </h1>
           <p className="text-[0.9rem] sm:text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-8">
-            We&apos;ll reach out to <strong className="text-[var(--re-text-primary)]">{email}</strong> with
-            next steps for setting up <strong className="text-[var(--re-text-primary)]">{company}</strong>&apos;s
-            workspace. Usually within 24 hours.
+            We&apos;ve created <strong className="text-[var(--re-text-primary)]">{company}</strong>&apos;s
+            compliance workspace. A confirmation has been sent to <strong className="text-[var(--re-text-primary)]">{email}</strong>.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
-              href="/retailer-readiness"
+              href="/dashboard"
               className="group inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-6 py-3 rounded-xl text-[0.9rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_6px_24px_rgba(16,185,129,0.25)] min-h-[48px] active:scale-[0.98]"
             >
-              Run Free Assessment
+              Go to Dashboard
               <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             <Link
-              href="/"
+              href="/retailer-readiness"
               className="inline-flex items-center justify-center border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-6 py-3 rounded-xl text-[0.9rem] font-medium transition-all duration-300 hover:border-[var(--re-text-muted)] min-h-[48px] active:scale-[0.98]"
             >
-              Back to Home
+              Run Free Assessment
             </Link>
           </div>
         </div>
