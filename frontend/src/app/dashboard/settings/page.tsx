@@ -2,29 +2,47 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import {
-    AlertTriangle,
-    Settings,
-    Building2,
-    Key,
-    Database,
-    Plug,
-    Save,
-    CheckCircle2,
-    Copy,
-    Eye,
-    EyeOff,
-    CreditCard,
-    BarChart3,
+    AlertTriangle, Settings, Building2, Key, Database, Plug,
+    Save, CheckCircle2, Copy, Eye, EyeOff, CreditCard, BarChart3,
+    Shield, RefreshCw, Clock, ExternalLink, ChevronRight,
+    Zap, Globe, ArrowRight, Lock,
 } from 'lucide-react';
+
+/* ── Integrations Data (expanded) ── */
+const INTEGRATIONS = [
+    { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'connected', desc: 'Cold-chain temperature monitoring' },
+    { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'disconnected', desc: 'Real-time shipment visibility' },
+    { id: 'sap', name: 'SAP S/4HANA', category: 'ERP', status: 'disconnected', desc: 'Enterprise resource planning' },
+    { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'disconnected', desc: 'Cloud ERP and financials' },
+    { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'pending', desc: 'Global Data Synchronization' },
+    { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'disconnected', desc: 'Retailer data exchange' },
+    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'connected', desc: 'GS1 event format bridge' },
+    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'connected', desc: 'Push events to your endpoints' },
+];
+const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
+    connected: { color: '#10b981', bg: 'rgba(16,185,129,0.1)', label: 'Connected' },
+    pending: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Pending' },
+    disconnected: { color: '#6b7280', bg: 'rgba(107,114,128,0.1)', label: 'Available' },
+};
+
+const TABS = [
+    { id: 'profile' as const, label: 'Company', icon: Building2 },
+    { id: 'api' as const, label: 'API Keys', icon: Key },
+    { id: 'retention' as const, label: 'Data Retention', icon: Database },
+    { id: 'integrations' as const, label: 'Integrations', icon: Plug },
+];
 
 export default function SettingsPage() {
     const [saved, setSaved] = useState(false);
     const [showKey, setShowKey] = useState(false);
+    const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
 
     const [profile, setProfile] = useState({
@@ -36,53 +54,43 @@ export default function SettingsPage() {
         address: '123 Commerce Way, Salinas, CA 93901',
         fei_number: '',
     });
-
-    const handleSave = () => {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+    const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+    const handleCopy = (text: string, id: string) => {
+        navigator.clipboard.writeText(text);
+        setCopiedKey(id);
+        setTimeout(() => setCopiedKey(null), 2000);
     };
 
-    const TABS = [
-        { id: 'profile' as const, label: 'Company', icon: Building2 },
-        { id: 'api' as const, label: 'API Keys', icon: Key },
-        { id: 'retention' as const, label: 'Data Retention', icon: Database },
-        { id: 'integrations' as const, label: 'Integrations', icon: Plug },
+    const API_KEYS = [
+        { id: 'prod', name: 'Production API Key', prefix: 'rge_prod_', full: 'rge_prod_a1b2c3d4e5f6g7h8', status: 'active', created: 'Jan 15, 2026', lastUsed: '2 min ago' },
+        { id: 'dev', name: 'Development Key', prefix: 'rge_dev_', full: 'rge_dev_x9y8z7w6v5u4t3s2', status: 'active', created: 'Feb 3, 2026', lastUsed: '1 hour ago' },
     ];
-
-    const INTEGRATIONS = [
-        { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'connected' },
-        { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'disconnected' },
-        { id: 'sap', name: 'SAP S/4HANA', category: 'ERP', status: 'disconnected' },
-        { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'disconnected' },
-        { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'pending' },
-        { id: 'kroger', name: 'Kroger 84.51°', category: 'Retailer', status: 'disconnected' },
-    ];
-
-    const STATUS_COLOR: Record<string, string> = {
-        connected: '#10b981',
-        pending: '#f59e0b',
-        disconnected: '#6b7280',
-    };
 
     return (
-        <div className="min-h-screen bg-background py-8 sm:py-10 px-4 sm:px-6">
-            <div className="max-w-4xl mx-auto space-y-6">
+        <div className="min-h-screen bg-background p-4 md:p-8 pt-4">
+            <div className="mx-auto max-w-4xl space-y-6">
+                <Breadcrumbs items={[
+                    { label: 'Dashboard', href: '/dashboard' },
+                    { label: 'Settings' },
+                ]} />
+
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+                        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight flex items-center gap-2 sm:gap-3">
                             <Settings className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
                             Account Settings
                         </h1>
+                        <p className="mt-1 text-sm text-muted-foreground">Manage your organization, API keys, and integrations</p>
                     </div>
                     <Button onClick={handleSave} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
                         {saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
                     </Button>
                 </div>
-
-                <div className="mb-6 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
+                {/* Demo banner */}
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-sm">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Demo Data — This page shows simulated data. Connect your backend to see live metrics.</span>
+                    <span>Demo Data — Connect your backend to see live settings. All changes are simulated.</span>
                 </div>
 
                 {/* Plan Card */}
@@ -94,55 +102,61 @@ export default function SettingsPage() {
                                 <CreditCard className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
                                 <div>
                                     <span className="font-medium text-sm">Growth Plan</span>
-                                    <span className="text-xs text-muted-foreground ml-2">$1,299/mo</span>
+                                    <span className="text-xs text-muted-foreground ml-2">$1,079/mo</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground flex-wrap">
-                                <div className="flex items-center gap-1">
-                                    <BarChart3 className="h-3 w-3" /> 2/5 facilities
-                                </div>
+                                <div className="flex items-center gap-1"><BarChart3 className="h-3 w-3" /> 2/5 facilities</div>
                                 <div>12,847/50K events</div>
-                                <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl text-xs min-h-[44px]">Manage Plan</Button>
+                                <Link href="/pricing">
+                                    <Button variant="outline" size="sm" className="rounded-xl text-xs min-h-[44px]">
+                                        Manage Plan <ExternalLink className="h-3 w-3 ml-1" />
+                                    </Button>
+                                </Link>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
-
                 {/* Tabs */}
                 <div className="flex gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-1">
                     {TABS.map((tab) => {
                         const Icon = tab.icon;
                         return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all whitespace-nowrap min-h-[44px] active:scale-[0.96] flex-shrink-0 ${activeTab === tab.id
-                                        ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]'
-                                        : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'
-                                    }`}
-                            >
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all whitespace-nowrap min-h-[44px] active:scale-[0.96] flex-shrink-0 ${activeTab === tab.id ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'}`}>
                                 <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {tab.label}
+                                {tab.id === 'integrations' && (
+                                    <span className="ml-1 text-[10px] bg-white/20 px-1.5 rounded-full">{INTEGRATIONS.filter(i => i.status === 'connected').length}</span>
+                                )}
                             </button>
                         );
                     })}
                 </div>
 
-                {/* Tab Content */}
+                {/* ── Company Profile Tab ── */}
                 {activeTab === 'profile' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <Card className="border-[var(--re-border-default)]">
                             <CardHeader>
                                 <CardTitle className="text-base">Company Profile</CardTitle>
-                                <CardDescription>Your organization details for compliance records</CardDescription>
+                                <CardDescription>Organization details used in compliance records and FDA exports</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3 sm:space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                                    {[
+                                        { label: 'Company Name', key: 'company_name' as const, placeholder: '' },
+                                        { label: 'Primary Contact', key: 'primary_contact' as const, placeholder: '' },
+                                        { label: 'Email', key: 'contact_email' as const, placeholder: '' },
+                                        { label: 'Phone', key: 'phone' as const, placeholder: '' },
+                                    ].map((field) => (
+                                        <div key={field.key}>
+                                            <label className="text-xs font-medium text-muted-foreground mb-1 block">{field.label}</label>                                            <Input value={profile[field.key]} onChange={e => setProfile({ ...profile, [field.key]: e.target.value })} placeholder={field.placeholder} className="rounded-xl min-h-[44px]" />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                     <div>
-                                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Company Name</label>
-                                        <Input value={profile.company_name} onChange={e => setProfile({ ...profile, company_name: e.target.value })} className="rounded-xl min-h-[44px]" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Type</label>
+                                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Company Type</label>
                                         <select value={profile.company_type} onChange={e => setProfile({ ...profile, company_type: e.target.value })} className="flex min-h-[44px] w-full rounded-xl border border-input bg-background px-3 text-sm">
                                             <option value="grower">Grower</option>
                                             <option value="manufacturer">Manufacturer</option>
@@ -152,20 +166,8 @@ export default function SettingsPage() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Primary Contact</label>
-                                        <Input value={profile.primary_contact} onChange={e => setProfile({ ...profile, primary_contact: e.target.value })} className="rounded-xl min-h-[44px]" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
-                                        <Input value={profile.contact_email} onChange={e => setProfile({ ...profile, contact_email: e.target.value })} className="rounded-xl min-h-[44px]" />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone</label>
-                                        <Input value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} className="rounded-xl min-h-[44px]" />
-                                    </div>
-                                    <div>
                                         <label className="text-xs font-medium text-muted-foreground mb-1 block">FDA FEI Number</label>
-                                        <Input value={profile.fei_number} onChange={e => setProfile({ ...profile, fei_number: e.target.value })} placeholder="Optional" className="rounded-xl min-h-[44px]" />
+                                        <Input value={profile.fei_number} onChange={e => setProfile({ ...profile, fei_number: e.target.value })} placeholder="Optional — used in FDA exports" className="rounded-xl min-h-[44px]" />
                                     </div>
                                 </div>
                                 <div>
@@ -176,94 +178,215 @@ export default function SettingsPage() {
                         </Card>
                     </motion.div>
                 )}
-
+                {/* ── API Keys Tab ── */}
                 {activeTab === 'api' && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                         <Card className="border-[var(--re-border-default)]">
                             <CardHeader>
-                                <CardTitle className="text-base">API Keys</CardTitle>
-                                <CardDescription>Manage your API access credentials</CardDescription>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Key className="h-4 w-4 text-[var(--re-brand)]" />
+                                    API Keys
+                                </CardTitle>
+                                <CardDescription>Manage API access credentials. Keys are scoped per-tenant with RBAC.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {[
-                                    { name: 'Production API Key', prefix: 'rge_prod_****', status: 'active' },
-                                    { name: 'Development Key', prefix: 'rge_dev_****', status: 'active' },
-                                ].map((key) => (
-                                    <div key={key.name} className="flex items-start sm:items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                        <div className="min-w-0">
-                                            <div className="text-xs sm:text-sm font-medium">{key.name}</div>
-                                            <div className="font-mono text-[11px] sm:text-xs text-muted-foreground flex items-center gap-2 mt-0.5 truncate">
-                                                {showKey ? 'rge_prod_a1b2c3d4e5f6' : key.prefix}
-                                                <button onClick={() => setShowKey(!showKey)} className="min-w-[24px] min-h-[24px] flex items-center justify-center">
-                                                    {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                                </button>
-                                                <button disabled title="Coming Soon" className="min-w-[24px] min-h-[24px] flex items-center justify-center"><Copy className="h-3.5 w-3.5" /></button>
+                                {API_KEYS.map((key) => (
+                                    <div key={key.id} className="p-3 sm:p-4 rounded-xl border border-[var(--re-border-default)] space-y-2">
+                                        <div className="flex items-start sm:items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="text-xs sm:text-sm font-medium flex items-center gap-2">
+                                                    {key.name}
+                                                    <Badge className="text-[9px] bg-emerald-500/10 text-emerald-500">{key.status}</Badge>
+                                                </div>
+                                                <div className="font-mono text-[11px] sm:text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                                                    <span className="truncate">{showKey ? key.full : `${key.prefix}${'*'.repeat(16)}`}</span>
+                                                    <button onClick={() => setShowKey(!showKey)} className="min-w-[24px] min-h-[24px] flex items-center justify-center hover:text-[var(--re-brand)] transition-colors">
+                                                        {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                                    </button>
+                                                    <button onClick={() => handleCopy(key.full, key.id)} className="min-w-[24px] min-h-[24px] flex items-center justify-center hover:text-[var(--re-brand)] transition-colors">
+                                                        {copiedKey === key.id ? <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" /> : <Copy className="h-3.5 w-3.5" />}
+                                                    </button>
+                                                </div>
                                             </div>
+                                        </div>                                        <div className="flex items-center gap-4 text-[10px] sm:text-xs text-muted-foreground">
+                                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Created {key.created}</span>
+                                            <span className="flex items-center gap-1"><RefreshCw className="h-3 w-3" /> Last used {key.lastUsed}</span>
                                         </div>
-                                        <Badge className="text-[9px] bg-emerald-500/10 text-emerald-500 flex-shrink-0">{key.status}</Badge>
                                     </div>
                                 ))}
-                                <Button disabled title="Coming Soon" variant="outline" className="w-full rounded-xl min-h-[48px]">
-                                    <Key className="h-4 w-4 mr-1" /> Generate New Key
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" className="flex-1 rounded-xl min-h-[48px]">
+                                        <Key className="h-4 w-4 mr-1" /> Generate New Key
+                                    </Button>
+                                    <Link href="/developers" className="flex-1">
+                                        <Button variant="outline" className="w-full rounded-xl min-h-[48px]">
+                                            <ExternalLink className="h-4 w-4 mr-1" /> API Docs
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Usage summary */}
+                        <Card className="border-[var(--re-border-default)]">
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <BarChart3 className="h-4 w-4 text-[var(--re-brand)]" />
+                                    API Usage This Month
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+                                    {[
+                                        { label: 'Total Requests', value: '12,847' },
+                                        { label: 'Avg Latency', value: '142ms' },                                        { label: 'Error Rate', value: '0.02%' },
+                                        { label: 'Uptime', value: '99.98%' },
+                                    ].map((s) => (
+                                        <div key={s.label} className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
+                                            <div className="text-lg sm:text-xl font-bold">{s.value}</div>
+                                            <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">{s.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             </CardContent>
                         </Card>
                     </motion.div>
                 )}
 
+                {/* ── Data Retention Tab ── */}
                 {activeTab === 'retention' && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                         <Card className="border-[var(--re-border-default)]">
                             <CardHeader>
-                                <CardTitle className="text-base">Data Retention</CardTitle>
-                                <CardDescription>FSMA 204 requires minimum 2-year CTE retention</CardDescription>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Database className="h-4 w-4 text-[var(--re-brand)]" />
+                                    Data Retention
+                                </CardTitle>
+                                <CardDescription>FSMA 204 requires minimum 2-year CTE retention. RegEngine exceeds all requirements.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {[
-                                    { label: 'CTE Records', value: '3 years (1,095 days)', note: 'FSMA requires ≥ 2 years' },
-                                    { label: 'Audit Log', value: '7 years (2,555 days)', note: 'Industry best practice' },
-                                    { label: 'Exports', value: '1 year (365 days)', note: 'Download history' },
-                                ].map((item) => (
-                                    <div key={item.label} className="flex items-start sm:items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                        <div className="min-w-0">
-                                            <div className="text-xs sm:text-sm font-medium">{item.label}</div>
-                                            <div className="text-[11px] sm:text-xs text-muted-foreground">{item.note}</div>
+                                    { label: 'CTE Records', value: '3 years (1,095 days)', note: 'FSMA requires \u2265 2 years', icon: Shield, status: 'compliant' },
+                                    { label: 'Audit Log', value: '7 years (2,555 days)', note: 'Industry best practice', icon: Lock, status: 'compliant' },
+                                    { label: 'Chain Hashes', value: 'Indefinite', note: 'SHA-256 integrity proofs kept permanently', icon: Shield, status: 'compliant' },
+                                    { label: 'Export History', value: '1 year (365 days)', note: 'Download history and FDA packages', icon: Clock, status: 'compliant' },
+                                ].map((item) => (                                    <div key={item.label} className="flex items-start sm:items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
+                                        <div className="min-w-0 flex items-start gap-3">
+                                            <item.icon className="h-4 w-4 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
+                                            <div>
+                                                <div className="text-xs sm:text-sm font-medium">{item.label}</div>
+                                                <div className="text-[11px] sm:text-xs text-muted-foreground">{item.note}</div>
+                                            </div>
                                         </div>
-                                        <span className="text-xs sm:text-sm font-medium text-[var(--re-brand)] flex-shrink-0 whitespace-nowrap">{item.value}</span>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <span className="text-xs sm:text-sm font-medium text-[var(--re-brand)]">{item.value}</span>
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                        </div>
                                     </div>
                                 ))}
+                            </CardContent>
+                        </Card>
+
+                        {/* What This Means */}
+                        <Card className="border-[var(--re-border-default)] mt-4">
+                            <CardContent className="py-4">
+                                <div className="flex items-start gap-3">
+                                    <Shield className="h-5 w-5 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
+                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                            Your CTE records are retained 50% longer than the FSMA 204 minimum, and audit logs are kept for 7 years to cover any FDA investigation window. Chain integrity hashes are stored indefinitely, meaning you can prove data authenticity for any historical event at any time.
+                                        </p>
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
                     </motion.div>
                 )}
-
+                {/* ── Integrations Tab ── */}
                 {activeTab === 'integrations' && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                        {/* Stats row */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                            {[
+                                { label: 'Connected', value: INTEGRATIONS.filter(i => i.status === 'connected').length, color: '#10b981' },
+                                { label: 'Pending', value: INTEGRATIONS.filter(i => i.status === 'pending').length, color: '#f59e0b' },
+                                { label: 'Available', value: INTEGRATIONS.filter(i => i.status === 'disconnected').length, color: '#6b7280' },
+                            ].map((s) => (
+                                <div key={s.label} className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
+                                    <div className="text-lg sm:text-xl font-bold" style={{ color: s.color }}>{s.value}</div>
+                                    <div className="text-[10px] sm:text-xs text-muted-foreground mt-1">{s.label}</div>
+                                </div>
+                            ))}
+                        </div>
+
                         <Card className="border-[var(--re-border-default)]">
                             <CardHeader>
-                                <CardTitle className="text-base">Integrations</CardTitle>
-                                <CardDescription>Connect third-party systems</CardDescription>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Plug className="h-4 w-4 text-[var(--re-brand)]" />
+                                    Integrations
+                                </CardTitle>
+                                <CardDescription>Connect third-party systems for automated CTE ingestion and data sync</CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-3">
-                                {INTEGRATIONS.map((int) => (
-                                    <div key={int.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
-                                        <div className="min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs sm:text-sm font-medium">{int.name}</span>
-                                                <Badge variant="outline" className="text-[9px] py-0">{int.category}</Badge>
+                            <CardContent className="space-y-2">
+                                {INTEGRATIONS.map((int) => {
+                                    const cfg = STATUS_CONFIG[int.status];
+                                    return (
+                                        <div key={int.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2 hover:border-[var(--re-brand)] transition-colors">                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs sm:text-sm font-medium">{int.name}</span>
+                                                    <Badge variant="outline" className="text-[9px] py-0">{int.category}</Badge>
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground mt-0.5">{int.desc}</div>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium" style={{ background: cfg.bg, color: cfg.color }}>
+                                                    <div className="w-2 h-2 rounded-full" style={{ background: cfg.color }} />
+                                                    {cfg.label}
+                                                </div>
+                                                {int.status === 'disconnected' && (
+                                                    <Button variant="outline" size="sm" className="rounded-xl text-xs min-h-[36px]">
+                                                        Connect <ChevronRight className="h-3 w-3 ml-0.5" />
+                                                    </Button>
+                                                )}
+                                                {int.status === 'connected' && (
+                                                    <Button variant="ghost" size="sm" className="rounded-xl text-xs min-h-[36px] text-muted-foreground">
+                                                        Configure
+                                                    </Button>
+                                                )}
+                                                {int.status === 'pending' && (
+                                                    <Badge className="text-[9px] bg-amber-500/10 text-amber-500">Setup in progress</Badge>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                            <div className="w-2 h-2 rounded-full" style={{ background: STATUS_COLOR[int.status] }} />
-                                            <span className="text-xs capitalize" style={{ color: STATUS_COLOR[int.status] }}>{int.status}</span>
-                                            {int.status === 'disconnected' && (
-                                                <Button disabled title="Coming Soon" variant="outline" size="sm" className="rounded-xl text-xs ml-2 min-h-[44px]">Connect</Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </CardContent>
                         </Card>
+                        {/* What This Means */}
+                        <Card className="border-[var(--re-border-default)]">
+                            <CardContent className="py-4">
+                                <div className="flex items-start gap-3">
+                                    <Zap className="h-5 w-5 text-[var(--re-brand)] mt-0.5 flex-shrink-0" />
+                                    <div>
+                                        <h4 className="text-sm font-semibold mb-1">What This Means for Your Business</h4>
+                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                            Connected integrations automatically ingest CTEs from your existing systems — no manual data entry. Each connected source feeds into your compliance score in real-time. The EPCIS 2.0 Gateway ensures interoperability with any GS1-compliant trading partner.
+                                        </p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Request integration CTA */}
+                        <div className="p-4 rounded-xl border border-dashed border-[var(--re-border-default)] text-center">
+                            <p className="text-sm text-muted-foreground mb-3">Don&apos;t see your system? We build custom integrations for design partners.</p>
+                            <Link href="/contact">
+                                <Button variant="outline" className="rounded-xl min-h-[44px]">
+                                    Request Integration <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                                </Button>
+                            </Link>
+                        </div>
                     </motion.div>
                 )}
             </div>
