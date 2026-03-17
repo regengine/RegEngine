@@ -468,6 +468,20 @@ export default function RecallReportPage() {
                     </CardContent>
                 </Card>
 
+                {/* No Active Recall — Empty State (shown when no investigation data) */}
+                {/* Uncomment when wired to live data:
+                {!investigation && (
+                    <motion.div className="flex flex-col items-center justify-center py-16 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <ShieldCheck className="h-12 w-12 text-emerald-400/40 mb-4" />
+                        <h2 className="text-lg font-semibold">No Active Recall</h2>
+                        <p className="text-sm text-muted-foreground mt-1 max-w-md">Your system is ready for a 24-hour FDA response. Run a mock drill to stay sharp.</p>
+                        <Link href="/tools/drill-simulator">
+                            <Button size="sm" className="mt-4"><Play className="mr-1.5 h-3.5 w-3.5" /> Simulate Recall Drill</Button>
+                        </Link>
+                    </motion.div>
+                )}
+                */}
+
                 {/* Regulatory Footer */}
                 <div className="text-center text-[10px] text-muted-foreground py-4 space-y-0.5">
                     <div>Per 21 CFR Part 1, Subpart S · 21 CFR 1.1455 (24-hour mandate) · FSMA Section 204</div>
