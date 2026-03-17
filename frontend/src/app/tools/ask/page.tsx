@@ -272,7 +272,7 @@ function generateResults(intent: string, filters: Record<string, string>): any[]
 
 // Generate API endpoint info
 function generateEndpoints(intent: string, filters: Record<string, string>) {
-  const baseEndpoints = [
+  const baseEndpoints: { path: string; params: Record<string, string>; resultType: string }[] = [
     {
       path: '/api/graph/query',
       params: { intent, ...filters },
