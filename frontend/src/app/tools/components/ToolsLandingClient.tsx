@@ -94,7 +94,7 @@ const TOOLS: Tool[] = [
         description: 'Scenario-based simulation to test if your processes survive a real FDA outbreak investigation.',
         icon: Timer,
         category: 'simulate',
-        maturity: 'pilot',
+        maturity: 'ga',
         journeyStep: 7,
     },
     {
@@ -130,7 +130,7 @@ const TOOLS: Tool[] = [
         description: 'Inject realistic traceability anomalies into sample data to test your detection and response workflows.',
         icon: AlertTriangle,
         category: 'simulate',
-        maturity: 'pilot',
+        maturity: 'ga',
     },
     {
         id: 'data-import',
@@ -138,7 +138,7 @@ const TOOLS: Tool[] = [
         description: 'Map and import your existing spreadsheet data into FSMA-ready CTE/KDE structures with guided validation.',
         icon: Upload,
         category: 'plan',
-        maturity: 'pilot',
+        maturity: 'ga',
     },
     {
         id: 'knowledge-graph',
@@ -146,7 +146,7 @@ const TOOLS: Tool[] = [
         description: 'Visualize your traceability network — suppliers, facilities, products, and their compliance relationships.',
         icon: Network,
         category: 'plan',
-        maturity: 'pilot',
+        maturity: 'ga',
     },
     {
         id: 'sop-generator',
@@ -154,7 +154,7 @@ const TOOLS: Tool[] = [
         description: 'Auto-generate Standard Operating Procedures for FSMA 204 record-keeping based on your facility profile.',
         icon: FileText,
         category: 'plan',
-        maturity: 'pilot',
+        maturity: 'ga',
     },
     {
         id: 'label-scanner',
