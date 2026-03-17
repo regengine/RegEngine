@@ -5,8 +5,6 @@ import { MarketingFooter } from '@/components/layout/marketing-footer'
 import { Analytics } from '@vercel/analytics/react'
 import { PWAElements } from '@/components/mobile/PWAElements'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
-import { NextIntlClientProvider } from 'next-intl'
-import { getLocale, getMessages } from 'next-intl/server'
 import type { Metadata, Viewport } from 'next'
 
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
@@ -34,16 +32,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const locale = await getLocale();
-  const messages = await getMessages();
-
   return (
-    <html lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
@@ -65,13 +60,11 @@ export default async function RootLayout({
           Skip to content
         </a>
         <Providers>
-          <NextIntlClientProvider messages={messages}>
-            <MarketingHeader />
-            <main id="main-content" aria-label="Page content" className="flex-grow">
-              {children}
-            </main>
-            <MarketingFooter />
-          </NextIntlClientProvider>
+          <MarketingHeader />
+          <main id="main-content" aria-label="Page content" className="flex-grow">
+            {children}
+          </main>
+          <MarketingFooter />
         </Providers>
         <AccessibilityWidget />
         <PWAElements />
