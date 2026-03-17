@@ -126,7 +126,10 @@ import {
     Timer,
     AlertTriangle,
     Network,
-    CheckCircle2
+    CheckCircle2,
+    ScanBarcode,
+    MessageSquareText,
+    FileOutput,
 } from 'lucide-react';
 
 export const FREE_TOOLS = [
@@ -199,5 +202,26 @@ export const FREE_TOOLS = [
         description: 'Get an A-F grade on your 24-hour records retrieval mandate.',
         icon: ShieldCheck,
         href: '/tools/recall-readiness'
+    },
+    {
+        id: 'scan',
+        title: 'GS1 Barcode Scanner',
+        description: 'Scan a GS1 barcode with your camera. Auto-fill CTE fields. Ingest in one tap.',
+        icon: ScanBarcode,
+        href: '/tools/scan'
+    },
+    {
+        id: 'ask',
+        title: 'Traceability Query Engine',
+        description: 'Ask questions about your supply chain in plain English. No SQL required.',
+        icon: MessageSquareText,
+        href: '/tools/ask'
+    },
+    {
+        id: 'export',
+        title: 'FDA Export Package Generator',
+        description: 'Generate a verifiable 21 CFR 1.1455 compliance package with SHA-256 chain verification.',
+        icon: FileOutput,
+        href: '/tools/export'
     }
 ];
