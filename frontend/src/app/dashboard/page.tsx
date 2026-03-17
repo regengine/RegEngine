@@ -190,26 +190,23 @@ export default function DashboardPage() {
         return getQuickActions((dashboardData.tenant.type as 'retailer' | 'supplier' | 'system') || 'retailer');
     }, [dashboardData]);
 
-    // Use real metrics from backend when available, fall back to mock data
+    // Use real metrics from backend when available, show honest zeros otherwise
     const metrics = useMemo(() => {
-        const mock = dashboardData?.metrics ?? {
+        if (systemMetrics) {
+            return {
+                documentsIngested: systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0,
+                complianceScore: systemMetrics.compliance_score ?? 0,
+                openAlerts: systemMetrics.open_alerts ?? 0,
+                pendingReviews: 0,
+            };
+        }
+        return {
             documentsIngested: 0,
             complianceScore: 0,
             openAlerts: 0,
             pendingReviews: 0,
         };
-        if (systemMetrics) {
-            const realDocs = systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0;
-            return {
-                documentsIngested: realDocs > 0 ? realDocs : mock.documentsIngested,
-                complianceScore: (systemMetrics.compliance_score ?? 0) > 0
-                    ? systemMetrics.compliance_score! : mock.complianceScore,
-                openAlerts: systemMetrics.open_alerts ?? mock.openAlerts,
-                pendingReviews: mock.pendingReviews,
-            };
-        }
-        return mock;
-    }, [systemMetrics, dashboardData]);
+    }, [systemMetrics]);
 
     if (!isHydrated || !user) {
         return null;

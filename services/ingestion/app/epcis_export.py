@@ -148,7 +148,8 @@ async def export_fda(
     """Export traceability data in FDA-compliant sortable spreadsheet format."""
     now = datetime.now(timezone.utc)
 
-    # CSV header + sample rows (in production, pulled from database)
+    # TODO: Replace with real tenant data query from Supabase
+    # Sample data returned until ingestion pipeline is wired
     csv_content = """CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash
 SHIPPING,TOM-0226-F3-001,Roma Tomatoes 12ct,200,cases,2026-02-26,14:30:00Z,Valley Fresh Farms Salinas CA,0614141000005,Metro Distribution Center LA,0614141000006,Cold Express Logistics,3.2,a3f8c1d2e4b5...
 RECEIVING,TOM-0226-F3-001,Roma Tomatoes 12ct,200,cases,2026-02-27,09:15:00Z,Valley Fresh Farms Salinas CA,0614141000005,Metro Distribution Center LA,0614141000006,,3.5,c5dae3d8e6f7...
@@ -165,6 +166,7 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
             "Content-Disposition": f'attachment; filename="regengine_fda_export_{request.tenant_id}_{now.strftime("%Y%m%d")}.csv"',
             "X-RegEngine-Events-Count": "6",
             "X-RegEngine-Format": "FDA_21CFR1.1455",
+            "X-RegEngine-Data-Source": "sample",
         },
     )
 

@@ -4,6 +4,7 @@ Partner Auth Logic (MVP Placeholder).
 Implements mTLS and OAuth2 validation for Big4 integrator suite.
 """
 import logging
+import os
 from typing import Dict, Any
 
 logger = logging.getLogger("partner-auth")
@@ -16,10 +17,14 @@ class PartnerAuthManager:
             "deloitte": {"id": "p-001", "role": "integrator"},
             "pwc": {"id": "p-002", "role": "audit-partner"}
         }
+        self._partner_secret = os.environ.get("PARTNER_AUTH_SECRET", "")
 
     def validate_request(self, partner_id: str, secret: str) -> bool:
         """Validates partner credentials/mTLS fingerprints."""
-        if partner_id in self.allowed_partners and secret == "partner-secret-placeholder":
+        if not self._partner_secret:
+            logger.error("PARTNER_AUTH_SECRET not configured — rejecting all partner requests")
+            return False
+        if partner_id in self.allowed_partners and secret == self._partner_secret:
             logger.info(f"Partner {partner_id} authenticated successfully.")
             return True
         logger.warning(f"Unauthorized access attempt from partner: {partner_id}")
