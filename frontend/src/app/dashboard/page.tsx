@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { getTenantDashboard, type TenantDashboard } from '@/lib/mock-dashboard-data';
+import { useOrganizations } from '@/hooks/use-organizations';
 import { useSystemStatus, useSystemMetrics } from '@/hooks/use-api';
 import { SystemHealthWidget } from '@/components/dashboard/system-health-widget';
 import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
@@ -177,18 +177,16 @@ export default function DashboardPage() {
         }
     }, [isHydrated, user, router]);
 
-    // Get tenant-specific dashboard data (mock for tenant context)
-    const dashboardData = useMemo<TenantDashboard | null>(() => {
-        return getTenantDashboard(tenantId);
-    }, [tenantId]);
+    // Get the current org from Supabase
+    const { organizations } = useOrganizations();
+    const currentOrg = organizations.find(o => o.id === tenantId);
 
     // Fetch real system metrics from backend
     const { data: systemMetrics } = useSystemMetrics();
 
     const quickActions = useMemo(() => {
-        if (!dashboardData) return getQuickActions('retailer');
-        return getQuickActions((dashboardData.tenant.type as 'retailer' | 'supplier' | 'system') || 'retailer');
-    }, [dashboardData]);
+        return getQuickActions('retailer');
+    }, []);
 
     // Use real metrics from backend when available, show honest zeros otherwise
     const metrics = useMemo(() => {
@@ -225,23 +223,18 @@ export default function DashboardPage() {
                         <div>
                             <div className="flex items-center gap-3">
                                 <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
-                                {dashboardData && (
-                                    <span className="text-2xl" title={dashboardData.industryLabel}>
-                                        {dashboardData.industryIcon}
-                                    </span>
-                                )}
                             </div>
                             <p className="text-muted-foreground mt-1">
-                                {dashboardData
-                                    ? `Welcome, ${dashboardData.tenant.name}. Here's your compliance overview.`
+                                {currentOrg
+                                    ? `Welcome, ${currentOrg.name}. Here's your compliance overview.`
                                     : 'Welcome to RegEngine. Here\'s your compliance overview.'
                                 }
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
-                            {dashboardData?.tierBadge && (
+                            {currentOrg?.plan && currentOrg.plan !== 'free' && (
                                 <Badge variant="secondary" className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 dark:from-amber-900/30 dark:to-orange-900/30 dark:text-amber-400">
-                                    {dashboardData.tierBadge}
+                                    {currentOrg.plan.charAt(0).toUpperCase() + currentOrg.plan.slice(1)}
                                 </Badge>
                             )}
                             <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
