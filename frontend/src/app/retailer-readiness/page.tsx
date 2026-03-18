@@ -56,23 +56,26 @@ function useScrollReveal(threshold = 0.15) {
    ───────────────────────────────────────────────────────────── */
 const PRICING_TIERS = [
     {
-        revenue: 'Under $50M',
-        price: '$1,299',
+        revenue: '1 facility',
+        price: '$425',
         period: '/mo',
-        features: ['Up to 10,000 CTEs/month', '3 locations', 'Email support', 'FDA 204 export'],
+        note: '$999/mo GA — 50% off year one',
+        features: ['Up to 500 CTEs/month', '1 facility', 'FSMA 204 traceability workspace', 'FDA-ready export'],
     },
     {
-        revenue: '$50M – $200M',
-        price: '$2,499',
+        revenue: '2–3 facilities',
+        price: '$549',
         period: '/mo',
-        features: ['Up to 100,000 CTEs/month', '10 locations', 'Priority support', 'Mock recall drills', 'Integration support'],
+        note: '$1,099/mo GA — 50% off year one',
+        features: ['Unlimited CTEs', '2–3 facilities', 'Everything in Base', 'Retailer-specific benchmarks', 'EPCIS 2.0 export'],
         highlighted: true,
     },
     {
-        revenue: 'Over $200M',
-        price: 'Custom',
-        period: '',
-        features: ['Unlimited CTEs', 'Unlimited locations', 'Dedicated support', 'On-premise option', 'Custom SLA'],
+        revenue: '4+ facilities',
+        price: '$639',
+        period: '/mo',
+        note: '$1,275/mo GA — 50% off year one',
+        features: ['Unlimited CTEs', '4+ facilities', 'Everything in Standard', 'Dedicated Slack channel', 'Quarterly compliance reviews'],
     },
 ];
 
@@ -100,7 +103,7 @@ const TRACE_NODES_BACKWARD = [
    ───────────────────────────────────────────────────────────── */
 const FAQ_ITEMS = [
     { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When a major retailer or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
-    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine\'s $1,299/mo Growth tier is built specifically for companies under $50M revenue.' },
+    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine starts at $425/mo for Founding Design Partners — built specifically for single-facility suppliers getting compliant.' },
     { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Major retailers\' internal deadlines are estimated at Q1 2027 — over a year before the FDA mandate. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during the next category review. By the time the FDA deadline hits, it\'s already too late.' },
     { q: 'How long does integration take?', a: 'Most suppliers are fully operational within 2–4 weeks. RegEngine is API-first, so there are no portal logins or manual data entry. If you have existing data in spreadsheets, we can bulk-import it during onboarding.' },
     { q: 'What if we don\'t sell FTL products?', a: 'Use our free FTL Checker tool to verify whether your products fall under the FDA\'s 23 Food Traceability List categories. Even if your primary products aren\'t on the list, many suppliers are surprised to find that secondary product lines (like pre-cut salads or certain cheeses) are covered.' },
@@ -110,7 +113,7 @@ const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 const COMPETITORS = [
-    { feature: 'Starting price', regengine: '$1,299/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
+    { feature: 'Starting price', regengine: '$425/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
     { feature: 'Setup time', regengine: '2–4 weeks', foodlogiq: '3–6 months', tracelink: '6–12 months' },
     { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Limited', tracelink: 'Portal-based' },
     { feature: 'FDA export format', regengine: '✓ One-click', foodlogiq: 'Manual config', tracelink: 'Custom build' },
@@ -1020,11 +1023,11 @@ export default function RetailerSuppliersPage() {
                         }}>💡</div>
                         <div>
                             <p style={{ fontSize: 14, color: T.heading, fontWeight: 600, marginBottom: 2 }}>
-                                RegEngine: {annualRevenue <= 50 ? '$1,299' : annualRevenue <= 200 ? '$2,499' : 'Custom'}/mo
+                                RegEngine: {annualRevenue <= 50 ? '$425' : annualRevenue <= 200 ? '$549' : '$639'}/mo (Design Partner)
                             </p>
                             <p style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
                                 That&apos;s <strong style={{ color: T.accent, fontSize: 15 }}>
-                                    {((monthlyRisk / (annualRevenue <= 50 ? 1299 : annualRevenue <= 200 ? 2499 : 4999))).toLocaleString(undefined, { maximumFractionDigits: 0 })}x less
+                                    {((monthlyRisk / (annualRevenue <= 50 ? 425 : annualRevenue <= 200 ? 549 : 639))).toLocaleString(undefined, { maximumFractionDigits: 0 })}x less
                                 </strong> than what you risk losing every month.
                             </p>
                         </div>
@@ -1088,7 +1091,7 @@ export default function RetailerSuppliersPage() {
                                     fontSize: 12, color: T.textDim, textTransform: 'uppercase',
                                     letterSpacing: '0.05em', marginBottom: 12, fontWeight: 500,
                                 }}>
-                                    {tier.revenue} Revenue
+                                    {tier.revenue}
                                 </p>
                                 <p style={{ fontSize: 'clamp(28px, 5vw, 36px)', fontWeight: 700, color: T.heading, marginBottom: 24 }}>
                                     {tier.price}
@@ -1529,8 +1532,8 @@ export default function RetailerSuppliersPage() {
                 }
             `}</style>
 
-            {/* Bottom spacer for sticky CTA */}
-            <div style={{ height: 60 }} />
+            {/* Bottom spacer for sticky CTA — ensures footer is visible below the fixed bar */}
+            <div style={{ height: 80 }} />
         </div>
     );
 }
