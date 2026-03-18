@@ -84,17 +84,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Supabase auth state listener — auto-refreshes expired tokens
+  // Supabase auth state listener — keeps token + user in sync
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | undefined;
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data } = supabase.auth.onAuthStateChange((event, session) => {
-        if (session?.access_token) {
+
+      // Hydrate from existing Supabase session on mount
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.access_token && session.user) {
+          const appUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+            status: 'active',
+            role_name: session.user.user_metadata?.role || 'member',
+          };
           setAccessTokenState(session.access_token);
+          setUserState(appUser);
           apiClient.setAccessToken(session.access_token);
+          apiClient.setUser(appUser);
+          if (session.user.user_metadata?.tenant_id) {
+            setTenantIdState(session.user.user_metadata.tenant_id);
+            apiClient.setCurrentTenant(session.user.user_metadata.tenant_id);
+          }
           if (typeof window !== 'undefined') {
             localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.access_token);
+            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
+            if (session.user.user_metadata?.tenant_id) {
+              localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.user.user_metadata.tenant_id);
+            }
+          }
+        }
+      });
+
+      // Listen for auth state changes (token refresh, sign out, etc.)
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.access_token && session.user) {
+          const appUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+            status: 'active',
+            role_name: session.user.user_metadata?.role || 'member',
+          };
+          setAccessTokenState(session.access_token);
+          setUserState(appUser);
+          apiClient.setAccessToken(session.access_token);
+          apiClient.setUser(appUser);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.access_token);
+            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
           }
         }
 
@@ -103,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserState(null);
           apiClient.setAccessToken(null);
           apiClient.setUser(null);
+          apiClient.setCurrentTenant(null);
           if (typeof window !== 'undefined') {
             Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
           }
