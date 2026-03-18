@@ -6,6 +6,9 @@ const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 // force-dynamic ensures the proxy runs as a serverless function on every request.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+// Allow bulk uploads and long-running admin operations up to 60s (Pro plan).
+// Hobby plan caps at 10s — upgrade to Pro if bulk uploads consistently time out.
+export const maxDuration = 60;
 
 export async function GET(
   request: NextRequest,
