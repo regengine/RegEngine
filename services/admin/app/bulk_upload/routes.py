@@ -40,6 +40,7 @@ class BulkUploadValidationError(BaseModel):
     section: str
     row: int
     message: str
+    severity: str = "error"  # "error" blocks commit, "warning" allows it
 
 
 class BulkUploadValidationPreview(BaseModel):
