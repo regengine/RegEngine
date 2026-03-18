@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,7 +82,19 @@ async function apiAddProduct(tenantId: string, name: string, category: string, s
 export default function ProductCatalogPage() {
     const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = isAuthenticated;
+
+    // Resolve effective auth from React state OR localStorage
+    const isLoggedIn = useMemo(() => {
+        if (isAuthenticated) return true;
+        if (typeof window === 'undefined') return false;
+        return !!localStorage.getItem('regengine_access_token') && !!localStorage.getItem('regengine_user');
+    }, [isAuthenticated]);
+
+    const effectiveTenantId = useMemo(() => {
+        if (tenantId) return tenantId;
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('regengine_tenant_id');
+    }, [tenantId]);
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
@@ -98,11 +110,11 @@ export default function ProductCatalogPage() {
     const [filterCategory, setFilterCategory] = useState<string>('all');
 
     const loadProducts = useCallback(async () => {
-        if (!isLoggedIn || !tenantId) return;
+        if (!isLoggedIn || !effectiveTenantId) return;
         setLoading(true);
         setError(null);
         try {
-            const data = await apiFetchProducts(tenantId);
+            const data = await apiFetchProducts(effectiveTenantId!);
             const fetchedProducts = data.products || [];
             if (fetchedProducts.length > 0) {
                 setProducts(fetchedProducts);
@@ -150,7 +162,7 @@ export default function ProductCatalogPage() {
         } finally {
             setLoading(false);
         }
-    }, [isLoggedIn, tenantId]);
+    }, [isLoggedIn, effectiveTenantId]);
 
     useEffect(() => { loadProducts(); }, [loadProducts]);
 
@@ -158,7 +170,7 @@ export default function ProductCatalogPage() {
         if (!newName) return;
         setAdding(true);
         try {
-            await apiAddProduct(tenantId, newName, newCategory, newSku);
+            await apiAddProduct(effectiveTenantId!, newName, newCategory, newSku);
             setNewName(''); setNewSku(''); setShowAdd(false);
             await loadProducts();
         } catch (err) {

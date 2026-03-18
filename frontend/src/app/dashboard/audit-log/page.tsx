@@ -113,7 +113,19 @@ async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise
 export default function AuditLogPage() {
     const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
-    const isLoggedIn = isAuthenticated;
+
+    // Resolve effective auth from React state OR localStorage
+    const isLoggedIn = useMemo(() => {
+        if (isAuthenticated) return true;
+        if (typeof window === 'undefined') return false;
+        return !!localStorage.getItem('regengine_access_token') && !!localStorage.getItem('regengine_user');
+    }, [isAuthenticated]);
+
+    const effectiveTenantId = useMemo(() => {
+        if (tenantId) return tenantId;
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('regengine_tenant_id');
+    }, [tenantId]);
 
     const [filter, setFilter] = useState<EventFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -127,11 +139,11 @@ export default function AuditLogPage() {
     const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
     const loadLog = useCallback(async () => {
-        if (!isLoggedIn || !tenantId) return;
+        if (!isLoggedIn || !effectiveTenantId) return;
         setLoading(true);
         setError(null);
         try {
-            const data = await fetchAuditLog(tenantId, page, pageSize);
+            const data = await fetchAuditLog(effectiveTenantId!, page, pageSize);
             const fetchedEntries = data.entries || [];
 
             if (fetchedEntries.length > 1 || page > 1) {
@@ -173,7 +185,7 @@ export default function AuditLogPage() {
         } finally {
             setLoading(false);
         }
-    }, [isLoggedIn, tenantId, page, pageSize]);
+    }, [isLoggedIn, effectiveTenantId, page, pageSize]);
 
     useEffect(() => { loadLog(); }, [loadLog]);
 
