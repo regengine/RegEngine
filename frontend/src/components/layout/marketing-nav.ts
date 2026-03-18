@@ -37,7 +37,7 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "Trust Center", href: "/trust" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    { label: "Founding Design Partners", href: "/alpha" },
+    { label: "Founding Design Partners", href: "/founding-design-partners" },
     { label: "Log In", href: "/login" },
     { label: "Sign Up", href: "/signup" },
 ];

@@ -108,8 +108,8 @@ export default function ExportJobsPage() {
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4 text-sm text-muted-foreground">
-                    Alpha release — Export scheduling and audit trail will activate when your account is connected. You can explore the full workflow now.
+                <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/[0.04] p-4 text-sm text-muted-foreground">
+                    Schedule automated FDA exports, EPCIS packages, and compliance reports. Configure cadence, format, and delivery destination below.
                 </div>
 
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
@@ -229,7 +229,7 @@ export default function ExportJobsPage() {
                     ))}
                     {status === 'loading' && jobs.length === 0 && (
                         <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                            Loading export job preview data...
+                            Loading export jobs...
                         </div>
                     )}
                     {status !== 'loading' && jobs.length === 0 && (
