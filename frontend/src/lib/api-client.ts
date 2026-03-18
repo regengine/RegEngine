@@ -148,6 +148,7 @@ class APIClient {
 
   constructor() {
     this.adminClient = this.createClient(getServiceURL('admin'));
+
     // For browser requests, use the Next.js API proxy
     // For server-side, use the backend service directly
     const ingestionBaseUrl = getServiceURL('ingestion');
@@ -702,6 +703,8 @@ class APIClient {
     return data;
   }
 
+  // Bulk upload — uses adminClient (Vercel Pro proxy with maxDuration=300s)
+
   async parseSupplierBulkUpload(file: File): Promise<SupplierBulkUploadParseResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -709,7 +712,7 @@ class APIClient {
       '/v1/supplier/bulk-upload/parse',
       formData,
       {
-        timeout: 180000,
+        timeout: 300000,
       },
     );
     return data;
@@ -721,7 +724,7 @@ class APIClient {
       null,
       {
         params: { session_id: sessionId },
-        timeout: 120000,
+        timeout: 300000,
       },
     );
     return data;
@@ -733,7 +736,7 @@ class APIClient {
       null,
       {
         params: { session_id: sessionId },
-        timeout: 180000,
+        timeout: 300000,
       },
     );
     return data;

@@ -167,7 +167,7 @@ export default function ProductPage() {
                         Free Tools
                     </Badge>
                     <h2 className="text-2xl font-bold text-re-text-primary mb-3">
-                        18 free compliance tools. No login required.
+                        Free compliance tools. No login required.
                     </h2>
                     <p className="text-sm text-re-text-muted max-w-md mx-auto">
                         Start checking your FSMA 204 readiness before you buy anything.

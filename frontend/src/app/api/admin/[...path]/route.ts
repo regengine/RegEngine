@@ -6,6 +6,9 @@ const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 // force-dynamic ensures the proxy runs as a serverless function on every request.
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+// Allow bulk uploads and long-running admin operations (Pro plan: up to 300s).
+// 10K-row commits with SHA-256 hashing + Merkle tree can take 2-3 minutes.
+export const maxDuration = 300;
 
 export async function GET(
   request: NextRequest,

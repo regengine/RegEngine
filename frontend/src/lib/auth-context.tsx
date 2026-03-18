@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '@/types/api';
 import { apiClient } from './api-client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 
 interface AuthContextType {
   user: User | null;
@@ -81,6 +82,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setIsHydrated(true);
     }
+  }, []);
+
+  // Supabase auth state listener — keeps token + user in sync
+  useEffect(() => {
+    let subscription: { unsubscribe: () => void } | undefined;
+    try {
+      const supabase = createSupabaseBrowserClient();
+
+      // Hydrate from Supabase session ONLY if no existing credentials
+      // (the custom /auth/login flow stores credentials in localStorage,
+      // which the first useEffect already loaded)
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.access_token && session.user && !localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)) {
+          const appUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+            status: 'active',
+            role_name: session.user.user_metadata?.role || 'member',
+          };
+          setAccessTokenState(session.access_token);
+          setUserState(appUser);
+          apiClient.setAccessToken(session.access_token);
+          apiClient.setUser(appUser);
+          if (session.user.user_metadata?.tenant_id) {
+            setTenantIdState(session.user.user_metadata.tenant_id);
+            apiClient.setCurrentTenant(session.user.user_metadata.tenant_id);
+          }
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.access_token);
+            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
+            if (session.user.user_metadata?.tenant_id) {
+              localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.user.user_metadata.tenant_id);
+            }
+          }
+        }
+      });
+
+      // Listen for auth state changes (token refresh, sign out, etc.)
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session?.access_token && session.user) {
+          const appUser: User = {
+            id: session.user.id,
+            email: session.user.email || '',
+            is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+            status: 'active',
+            role_name: session.user.user_metadata?.role || 'member',
+          };
+          setAccessTokenState(session.access_token);
+          setUserState(appUser);
+          apiClient.setAccessToken(session.access_token);
+          apiClient.setUser(appUser);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.access_token);
+            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
+          }
+        }
+
+        // Only clear on explicit sign-out — NOT on missing session.
+        // The custom /auth/login flow doesn't create Supabase sessions,
+        // so INITIAL_SESSION fires with session=null. We must not wipe
+        // the valid localStorage-hydrated credentials in that case.
+        if (event === 'SIGNED_OUT') {
+          setAccessTokenState(null);
+          setUserState(null);
+          apiClient.setAccessToken(null);
+          apiClient.setUser(null);
+          apiClient.setCurrentTenant(null);
+          if (typeof window !== 'undefined') {
+            Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+          }
+        }
+      });
+      subscription = data.subscription;
+    } catch {
+      // Supabase not configured — skip listener (dev/test environments)
+    }
+    return () => subscription?.unsubscribe();
   }, []);
 
   const setApiKey = useCallback((key: string | null) => {
@@ -188,7 +267,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCredentials,
         login,
         logout,
-        isAuthenticated: !!user && !!accessToken,
+        isAuthenticated: !!(user && accessToken) || (
+          typeof window !== 'undefined' &&
+          !!localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) &&
+          !!localStorage.getItem(STORAGE_KEYS.USER)
+        ),
       }}
     >
       {children}

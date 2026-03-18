@@ -171,15 +171,27 @@ export default function DashboardPage() {
     const { tenantId } = useTenant();
     const router = useRouter();
 
+    // Resolve effective auth from React state OR localStorage (memoized to avoid re-render loops)
+    const effectiveUser = useMemo(() => {
+        if (user) return user;
+        if (typeof window === 'undefined') return null;
+        try { return JSON.parse(localStorage.getItem('regengine_user') || 'null'); } catch { return null; }
+    }, [user]);
+    const effectiveTenantId = useMemo(() => {
+        if (tenantId) return tenantId;
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('regengine_tenant_id');
+    }, [tenantId]);
+
     useEffect(() => {
-        if (isHydrated && !user) {
+        if (isHydrated && !effectiveUser) {
             router.push(`/login?next=${encodeURIComponent('/dashboard')}`);
         }
-    }, [isHydrated, user, router]);
+    }, [isHydrated, effectiveUser, router]);
 
     // Get the current org from Supabase
     const { organizations } = useOrganizations();
-    const currentOrg = organizations.find(o => o.id === tenantId);
+    const currentOrg = organizations.find(o => o.id === (effectiveTenantId || tenantId));
 
     // Fetch real system metrics from backend
     const { data: systemMetrics } = useSystemMetrics();
@@ -206,7 +218,7 @@ export default function DashboardPage() {
         };
     }, [systemMetrics]);
 
-    if (!isHydrated || !user) {
+    if (!isHydrated || !effectiveUser) {
         return null;
     }
 
