@@ -335,20 +335,28 @@ def execute_bulk_commit(
                 _normalize_text(item.get("event_time")),
             ),
         )
-        for row in sorted_events:
-            facility = resolve_facility_by_name(str(row.get("facility_name") or ""))
-            event, lot = _persist_supplier_cte_event(
-                db,
-                tenant_id=tenant_id,
-                current_user=current_user,
-                facility=facility,
-                cte_type=str(row.get("cte_type") or ""),
-                tlc_code=str(row.get("tlc_code") or ""),
-                event_time=_parse_optional_datetime(row.get("event_time")),
-                kde_data=row.get("kde_data") or {},
-                obligation_ids=row.get("obligation_ids") or [],
-            )
-            emitted_event_rows.append((event, lot, facility))
+
+        # Process events in batches to avoid OOM and timeout on large uploads.
+        # Each batch is flushed to the DB but the full commit happens at the end.
+        BATCH_SIZE = 500
+        for batch_start in range(0, len(sorted_events), BATCH_SIZE):
+            batch = sorted_events[batch_start:batch_start + BATCH_SIZE]
+            for row in batch:
+                facility = resolve_facility_by_name(str(row.get("facility_name") or ""))
+                event, lot = _persist_supplier_cte_event(
+                    db,
+                    tenant_id=tenant_id,
+                    current_user=current_user,
+                    facility=facility,
+                    cte_type=str(row.get("cte_type") or ""),
+                    tlc_code=str(row.get("tlc_code") or ""),
+                    event_time=_parse_optional_datetime(row.get("event_time")),
+                    kde_data=row.get("kde_data") or {},
+                    obligation_ids=row.get("obligation_ids") or [],
+                )
+                emitted_event_rows.append((event, lot, facility))
+            # Flush batch to DB (writes to Postgres, keeps transaction open)
+            db.flush()
 
         db.commit()
 
@@ -386,7 +394,17 @@ def execute_bulk_commit(
             )
             sync_warnings.append(f"facility_scoping:{facility.id}")
 
-    for event, lot, facility in emitted_event_rows:
+    # Graph sync for events — cap at first 100 to avoid blocking the response.
+    # Remaining events will be synced by the background graph-sync worker.
+    MAX_SYNC_EVENTS = 100
+    events_to_sync = emitted_event_rows[:MAX_SYNC_EVENTS]
+    skipped_sync = len(emitted_event_rows) - len(events_to_sync)
+    if skipped_sync > 0:
+        sync_warnings.append(
+            f"graph_sync_deferred:{skipped_sync} events will be synced by background worker"
+        )
+
+    for event, lot, facility in events_to_sync:
         try:
             supplier_graph_sync.record_cte_event(
                 tenant_id=str(tenant_id),
