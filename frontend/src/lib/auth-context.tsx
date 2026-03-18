@@ -90,9 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const supabase = createSupabaseBrowserClient();
 
-      // Hydrate from existing Supabase session on mount
+      // Hydrate from Supabase session ONLY if no existing credentials
+      // (the custom /auth/login flow stores credentials in localStorage,
+      // which the first useEffect already loaded)
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.access_token && session.user) {
+        if (session?.access_token && session.user && !localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)) {
           const appUser: User = {
             id: session.user.id,
             email: session.user.email || '',
@@ -138,7 +140,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        if (event === 'SIGNED_OUT' || !session) {
+        // Only clear on explicit sign-out — NOT on missing session.
+        // The custom /auth/login flow doesn't create Supabase sessions,
+        // so INITIAL_SESSION fires with session=null. We must not wipe
+        // the valid localStorage-hydrated credentials in that case.
+        if (event === 'SIGNED_OUT') {
           setAccessTokenState(null);
           setUserState(null);
           apiClient.setAccessToken(null);
