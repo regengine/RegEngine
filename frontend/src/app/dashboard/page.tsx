@@ -171,11 +171,17 @@ export default function DashboardPage() {
     const { tenantId } = useTenant();
     const router = useRouter();
 
-    // Resolve effective auth from React state OR localStorage
-    const effectiveUser = user || (typeof window !== 'undefined' ? (() => {
+    // Resolve effective auth from React state OR localStorage (memoized to avoid re-render loops)
+    const effectiveUser = useMemo(() => {
+        if (user) return user;
+        if (typeof window === 'undefined') return null;
         try { return JSON.parse(localStorage.getItem('regengine_user') || 'null'); } catch { return null; }
-    })() : null);
-    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('regengine_tenant_id') : null);
+    }, [user]);
+    const effectiveTenantId = useMemo(() => {
+        if (tenantId) return tenantId;
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('regengine_tenant_id');
+    }, [tenantId]);
 
     useEffect(() => {
         if (isHydrated && !effectiveUser) {
