@@ -14,6 +14,7 @@ import {
     Package,
     Scan,
     Truck,
+    FileSpreadsheet,
     ScrollText,
     ShieldCheck,
     Link2,
@@ -56,6 +57,7 @@ const NAV_SECTIONS: NavSection[] = [
     {
         title: 'Data',
         items: [
+            { label: 'Data Import', href: '/onboarding/bulk-upload', icon: FileSpreadsheet },
             { label: 'Field Capture', href: '/dashboard/scan', icon: Scan },
             { label: 'Receiving Dock', href: '/dashboard/receiving', icon: Truck },
             { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
