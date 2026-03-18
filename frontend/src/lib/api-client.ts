@@ -73,6 +73,7 @@ export interface SystemMetricsResponse {
 
 class APIClient {
   private adminClient: AxiosInstance;
+  private bulkClient: AxiosInstance;  // Direct-to-backend, bypasses Vercel proxy (no 10s timeout)
   private ingestionClient: AxiosInstance;
   private complianceClient: AxiosInstance;
   private graphClient: AxiosInstance;
@@ -148,6 +149,15 @@ class APIClient {
 
   constructor() {
     this.adminClient = this.createClient(getServiceURL('admin'));
+
+    // Bulk upload client bypasses the Next.js API proxy to avoid Vercel's
+    // 10-second serverless function timeout. Uses NEXT_PUBLIC_ADMIN_URL
+    // (the direct backend URL) when available, falls back to the proxy.
+    const directAdminUrl =
+      (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_ADMIN_URL) ||
+      getServiceURL('admin');
+    this.bulkClient = this.createClient(directAdminUrl);
+
     // For browser requests, use the Next.js API proxy
     // For server-side, use the backend service directly
     const ingestionBaseUrl = getServiceURL('ingestion');
@@ -702,10 +712,13 @@ class APIClient {
     return data;
   }
 
+  // Bulk upload methods use bulkClient (direct-to-backend) to avoid
+  // Vercel's 10-second serverless proxy timeout on large file operations.
+
   async parseSupplierBulkUpload(file: File): Promise<SupplierBulkUploadParseResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    const { data } = await this.adminClient.post<SupplierBulkUploadParseResponse>(
+    const { data } = await this.bulkClient.post<SupplierBulkUploadParseResponse>(
       '/v1/supplier/bulk-upload/parse',
       formData,
       {
@@ -716,7 +729,7 @@ class APIClient {
   }
 
   async validateSupplierBulkUpload(sessionId: string): Promise<SupplierBulkUploadValidateResponse> {
-    const { data } = await this.adminClient.post<SupplierBulkUploadValidateResponse>(
+    const { data } = await this.bulkClient.post<SupplierBulkUploadValidateResponse>(
       '/v1/supplier/bulk-upload/validate',
       null,
       {
@@ -728,19 +741,19 @@ class APIClient {
   }
 
   async commitSupplierBulkUpload(sessionId: string): Promise<SupplierBulkUploadCommitResponse> {
-    const { data } = await this.adminClient.post<SupplierBulkUploadCommitResponse>(
+    const { data } = await this.bulkClient.post<SupplierBulkUploadCommitResponse>(
       '/v1/supplier/bulk-upload/commit',
       null,
       {
         params: { session_id: sessionId },
-        timeout: 180000,
+        timeout: 300000,  // 5 minutes for large commits (10K+ rows with hashing)
       },
     );
     return data;
   }
 
   async getSupplierBulkUploadStatus(sessionId: string): Promise<SupplierBulkUploadStatusResponse> {
-    const { data } = await this.adminClient.get<SupplierBulkUploadStatusResponse>(
+    const { data } = await this.bulkClient.get<SupplierBulkUploadStatusResponse>(
       `/v1/supplier/bulk-upload/status/${sessionId}`,
     );
     return data;
