@@ -19,7 +19,7 @@ RegEngine helps food suppliers meet FDA Food Safety Modernization Act Section 20
 
 ## Pricing
 
-Founding Design Partners lock in 50% off for their entire first year.
+Founding Design Partners lock in 50% off for the life of their account.
 
 | Plan | Partner Price | GA Price | Facilities |
 |---|---|---|---|
