@@ -5,7 +5,8 @@ import httpx
 import structlog
 import asyncio
 import os
-from sqlalchemy import text
+import uuid as uuid_module
+from sqlalchemy import text, select
 from app.dependencies import get_current_user, get_session
 from app.sqlalchemy_models import UserModel
 from sqlalchemy.orm import Session
@@ -154,15 +155,47 @@ async def get_system_metrics(
         elif chain_resp.status_code == 200:
             chain_data = chain_resp.json()
 
-    events = score_data.get("events_analyzed", 0)
+    ingestion_events = score_data.get("events_analyzed", 0)
+
+    # Also query the admin DB's supplier tables (bulk upload destination)
+    supplier_event_count = 0
+    supplier_facility_count = 0
+    supplier_chain_length = 0
+    try:
+        from app.sqlalchemy_models import SupplierCTEEventModel, SupplierFacilityModel
+        from sqlalchemy import func as sql_func
+
+        tenant_uuid = uuid_module.UUID(tenant)
+        supplier_event_count = db.execute(
+            select(sql_func.count()).select_from(SupplierCTEEventModel).where(
+                SupplierCTEEventModel.tenant_id == tenant_uuid,
+            )
+        ).scalar() or 0
+        supplier_facility_count = db.execute(
+            select(sql_func.count()).select_from(SupplierFacilityModel).where(
+                SupplierFacilityModel.tenant_id == tenant_uuid,
+            )
+        ).scalar() or 0
+        supplier_chain_length = db.execute(
+            select(sql_func.max(SupplierCTEEventModel.sequence_number)).where(
+                SupplierCTEEventModel.tenant_id == tenant_uuid,
+            )
+        ).scalar() or 0
+    except Exception as exc:
+        logger.warning("supplier_metrics_query_failed", error=str(exc))
+
+    # Use the higher of ingestion vs supplier counts (they're separate data paths)
+    total_events = max(ingestion_events, supplier_event_count)
+    chain_len = chain_data.get("chain_length") or supplier_chain_length
+
     return SystemMetricsResponse(
         total_tenants=1,
-        total_documents=events,
+        total_documents=total_events,
         active_jobs=0,
         compliance_score=score_data.get("overall_score"),
         compliance_grade=score_data.get("grade"),
-        events_ingested=events,
-        chain_length=chain_data.get("chain_length"),
+        events_ingested=total_events,
+        chain_length=chain_len,
         chain_valid=chain_data.get("chain_valid"),
         open_alerts=0,  # TODO: query alerts table
     )
