@@ -75,6 +75,8 @@ export default function SupplierDashboardPage() {
     const [adding, setAdding] = useState(false);
 
     /* ---------- Fetch all data ------------------------------------ */
+    // Phase 1: Load facility list fast (1 API call)
+    // Phase 2: Lazy-enrich with compliance data in background (batched, non-blocking)
     const loadData = useCallback(async () => {
         if (!isLoggedIn) {
             setFacilities([]);
@@ -87,48 +89,59 @@ export default function SupplierDashboardPage() {
         setError(null);
 
         try {
-            // 1. List facilities
+            // Phase 1: Show facilities immediately
             const rawFacilities = await apiClient.listSupplierFacilities();
+            const initial: FacilityRow[] = rawFacilities.map(f => ({
+                ...f,
+                complianceScore: null,
+                gapCount: 0,
+                tlcCount: 0,
+                lastEvent: null,
+            }));
+            setFacilities(initial);
+            setLoading(false);
 
-            // 2. For each facility, fetch compliance + gaps + TLCs in parallel
-            const enriched: FacilityRow[] = await Promise.all(
-                rawFacilities.map(async (f) => {
-                    let complianceScore: number | null = null;
-                    let gapCount = 0;
-                    let tlcCount = 0;
-                    let lastEvent: string | null = null;
+            // Phase 2: Enrich in batches of 5 (avoids 100+ simultaneous requests)
+            const BATCH_SIZE = 5;
+            for (let i = 0; i < rawFacilities.length; i += BATCH_SIZE) {
+                const batch = rawFacilities.slice(i, i + BATCH_SIZE);
+                const enriched = await Promise.all(
+                    batch.map(async (f) => {
+                        let complianceScore: number | null = null;
+                        let gapCount = 0;
+                        let tlcCount = 0;
+                        let lastEvent: string | null = null;
 
-                    try {
-                        const [score, gaps, tlcs] = await Promise.all([
-                            apiClient.getSupplierComplianceScore(f.id).catch(() => null),
-                            apiClient.getSupplierComplianceGaps(f.id).catch(() => null),
-                            apiClient.listSupplierTLCs(f.id).catch(() => []),
-                        ]);
+                        try {
+                            const [score, gaps, tlcs] = await Promise.all([
+                                apiClient.getSupplierComplianceScore(f.id).catch(() => null),
+                                apiClient.getSupplierComplianceGaps(f.id).catch(() => null),
+                                apiClient.listSupplierTLCs(f.id).catch(() => []),
+                            ]);
+                            if (score) complianceScore = score.score;
+                            if (gaps) gapCount = gaps.total;
+                            tlcCount = (tlcs || []).length;
+                            if (tlcs && tlcs.length > 0) {
+                                const sorted = [...tlcs].sort(
+                                    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                                );
+                                lastEvent = sorted[0].created_at;
+                            }
+                        } catch { /* swallow per-facility errors */ }
 
-                        if (score) complianceScore = score.score;
-                        if (gaps) gapCount = gaps.total;
-                        tlcCount = (tlcs || []).length;
+                        return { id: f.id, complianceScore, gapCount, tlcCount, lastEvent };
+                    })
+                );
 
-                        // Derive "last event" from most-recent TLC created_at
-                        if (tlcs && tlcs.length > 0) {
-                            const sorted = [...tlcs].sort(
-                                (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                            );
-                            lastEvent = sorted[0].created_at;
-                        }
-                    } catch {
-                        // Swallow per-facility errors — show what we have
-                    }
-
-                    return { ...f, complianceScore, gapCount, tlcCount, lastEvent };
-                })
-            );
-
-            setFacilities(enriched);
+                // Merge enrichment into existing state
+                setFacilities(prev => prev.map(f => {
+                    const update = enriched.find(e => e.id === f.id);
+                    return update ? { ...f, ...update } : f;
+                }));
+            }
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Failed to load supplier data';
             setError(message);
-        } finally {
             setLoading(false);
         }
     }, [isLoggedIn]);
