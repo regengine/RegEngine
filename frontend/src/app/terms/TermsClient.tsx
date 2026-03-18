@@ -52,7 +52,7 @@ Free tools may be modified, updated, or discontinued at any time.`,
 
 You can upgrade at any time (prorated). You can downgrade at the end of your current billing cycle. You can cancel at any time — no cancellation fees.
 
-If you exceed your CTE limit, we charge $0.001 per additional CTE. We will notify you by email before any overage charges are applied.
+If you exceed your CTE limit, we charge $0.002 per additional CTE. We will notify you by email before any overage charges are applied.
 
 Refunds are discretionary and evaluated on a case-by-case basis. Except as required by law, RegEngine Inc. does not guarantee refunds beyond the express terms stated in these Terms. If you're genuinely unhappy with the service within the first 30 days, contact us at support@regengine.co.`,
     },
