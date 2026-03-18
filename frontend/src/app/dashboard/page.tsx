@@ -171,19 +171,21 @@ export default function DashboardPage() {
     const { tenantId } = useTenant();
     const router = useRouter();
 
+    // Resolve effective auth from React state OR localStorage
+    const effectiveUser = user || (typeof window !== 'undefined' ? (() => {
+        try { return JSON.parse(localStorage.getItem('regengine_user') || 'null'); } catch { return null; }
+    })() : null);
+    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('regengine_tenant_id') : null);
+
     useEffect(() => {
-        // Only redirect if truly not logged in (check both React state AND localStorage)
-        const hasStoredAuth = typeof window !== 'undefined' &&
-            !!localStorage.getItem('regengine_access_token') &&
-            !!localStorage.getItem('regengine_user');
-        if (isHydrated && !user && !hasStoredAuth) {
+        if (isHydrated && !effectiveUser) {
             router.push(`/login?next=${encodeURIComponent('/dashboard')}`);
         }
-    }, [isHydrated, user, router]);
+    }, [isHydrated, effectiveUser, router]);
 
     // Get the current org from Supabase
     const { organizations } = useOrganizations();
-    const currentOrg = organizations.find(o => o.id === tenantId);
+    const currentOrg = organizations.find(o => o.id === (effectiveTenantId || tenantId));
 
     // Fetch real system metrics from backend
     const { data: systemMetrics } = useSystemMetrics();
@@ -210,11 +212,7 @@ export default function DashboardPage() {
         };
     }, [systemMetrics]);
 
-    // Allow rendering if user exists in React state OR localStorage
-    const hasStoredAuth = typeof window !== 'undefined' &&
-        !!localStorage.getItem('regengine_access_token') &&
-        !!localStorage.getItem('regengine_user');
-    if (!isHydrated || (!user && !hasStoredAuth)) {
+    if (!isHydrated || !effectiveUser) {
         return null;
     }
 

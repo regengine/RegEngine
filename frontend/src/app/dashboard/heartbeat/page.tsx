@@ -341,6 +341,12 @@ export default function HeartbeatPage() {
     const { tenantId } = useTenant();
     const router = useRouter();
 
+    // Resolve effective auth from React state OR localStorage (handles Supabase race condition)
+    const effectiveUser = user || (typeof window !== 'undefined' ? (() => {
+        try { return JSON.parse(localStorage.getItem('regengine_user') || 'null'); } catch { return null; }
+    })() : null);
+    const effectiveTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('regengine_tenant_id') : null);
+
     const [compliance, setCompliance] = useState<ComplianceData | null>(null);
     const [alerts, setAlerts] = useState<Alert[]>([]);
     const [loading, setLoading] = useState(true);
@@ -349,17 +355,13 @@ export default function HeartbeatPage() {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => {
-        // Only redirect if truly not logged in (check both React state AND localStorage)
-        const hasStoredAuth = typeof window !== 'undefined' &&
-            !!localStorage.getItem('regengine_access_token') &&
-            !!localStorage.getItem('regengine_user');
-        if (isHydrated && !user && !hasStoredAuth) {
+        if (isHydrated && !effectiveUser) {
             router.push(`/login?next=${encodeURIComponent('/dashboard/heartbeat')}`);
         }
-    }, [isHydrated, user, router]);
+    }, [isHydrated, effectiveUser, router]);
 
     const loadData = useCallback(async (isManualRefresh = false) => {
-        if (!tenantId) return;
+        if (!effectiveTenantId) return;
         if (isManualRefresh) {
             setIsRefreshing(true);
         } else {
@@ -368,8 +370,8 @@ export default function HeartbeatPage() {
         setError(null);
         try {
             const [scoreData, alertsData] = await Promise.allSettled([
-                fetchComplianceScore(tenantId),
-                fetchAlerts(tenantId, { acknowledged: false }),
+                fetchComplianceScore(effectiveTenantId),
+                fetchAlerts(effectiveTenantId, { acknowledged: false }),
             ]);
 
             if (scoreData.status === 'fulfilled') {
@@ -386,13 +388,13 @@ export default function HeartbeatPage() {
             setLoading(false);
             setIsRefreshing(false);
         }
-    }, [tenantId]);
+    }, [effectiveTenantId]);
 
     useEffect(() => {
-        if (tenantId) {
+        if (effectiveTenantId) {
             loadData();
         }
-    }, [tenantId, loadData]);
+    }, [effectiveTenantId, loadData]);
 
     // Auto-refresh every 60s
     useEffect(() => {
@@ -407,11 +409,7 @@ export default function HeartbeatPage() {
 
     const recentAlerts = useMemo(() => alerts.slice(0, 6), [alerts]);
 
-    // Allow rendering if user exists in React state OR localStorage
-    const hasStoredAuth = typeof window !== 'undefined' &&
-        !!localStorage.getItem('regengine_access_token') &&
-        !!localStorage.getItem('regengine_user');
-    if (!isHydrated || (!user && !hasStoredAuth)) return null;
+    if (!isHydrated || !effectiveUser) return null;
 
     const now = new Date();
     const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
