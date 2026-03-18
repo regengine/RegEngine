@@ -136,6 +136,8 @@ services:
       - ./services/shared:/app/shared
       - ./kernel:/app/kernel
       - ./plugins:/app/plugins
+      - ./services/ingestion/tests:/app/tests
+      - ./migrations:/migrations
 
   compliance-api:
     build:
@@ -153,7 +155,8 @@ services:
           cpus: '0.25'
           memory: 256M
     depends_on:
-      - admin-api
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8500/health" ]
       interval: 10s

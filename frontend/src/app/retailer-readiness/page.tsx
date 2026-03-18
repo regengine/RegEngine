@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import FSMAChecklist from '@/components/fsma-checklist';
+import { FSMA_204_DEADLINE_ISO, daysUntilFSMA204 } from '@/lib/fsma-tools-data';
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN TOKENS
@@ -163,8 +164,8 @@ export default function RetailerSuppliersPage() {
 
     const integrationsReveal = useScrollReveal();
 
-    // Animated counter
-    const [daysCount, setDaysCount] = useState(0);
+    // Countdown: use shared FSMA deadline so all pages stay in sync
+    const [daysCount, setDaysCount] = useState(daysUntilFSMA204);
     const heroRef = useRef<HTMLDivElement>(null);
 
     // Sticky CTA
@@ -218,19 +219,8 @@ export default function RetailerSuppliersPage() {
     }, [submitted, trackEvent]);
 
     useEffect(() => {
-        // Calculate days until July 20, 2028
-        const target = new Date('2028-07-20');
-        const now = new Date();
-        const days = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        // Animate count up
-        let current = 0;
-        const step = Math.ceil(days / 60);
-        const interval = setInterval(() => {
-            current += step;
-            if (current >= days) { current = days; clearInterval(interval); }
-            setDaysCount(current);
-        }, 20);
-        return () => clearInterval(interval);
+        // Refresh the count on mount (handles SSR → client hydration)
+        setDaysCount(daysUntilFSMA204());
     }, []);
 
     // Trace animation auto-play when visible

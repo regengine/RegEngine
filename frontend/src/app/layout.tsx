@@ -1,7 +1,7 @@
 import { Providers } from '@/lib/providers'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
-import { MarketingFooter } from '@/components/layout/marketing-footer'
+import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
 import { Analytics } from '@vercel/analytics/react'
 import { PWAElements } from '@/components/mobile/PWAElements'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
@@ -64,7 +64,7 @@ export default function RootLayout({
           <main id="main-content" aria-label="Page content" className="flex-grow">
             {children}
           </main>
-          <MarketingFooter />
+          <AuthAwareFooter />
         </Providers>
         <AccessibilityWidget />
         <PWAElements />
