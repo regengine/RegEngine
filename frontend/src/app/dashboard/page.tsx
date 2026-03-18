@@ -172,7 +172,11 @@ export default function DashboardPage() {
     const router = useRouter();
 
     useEffect(() => {
-        if (isHydrated && !user) {
+        // Only redirect if truly not logged in (check both React state AND localStorage)
+        const hasStoredAuth = typeof window !== 'undefined' &&
+            !!localStorage.getItem('regengine_access_token') &&
+            !!localStorage.getItem('regengine_user');
+        if (isHydrated && !user && !hasStoredAuth) {
             router.push(`/login?next=${encodeURIComponent('/dashboard')}`);
         }
     }, [isHydrated, user, router]);
@@ -206,7 +210,11 @@ export default function DashboardPage() {
         };
     }, [systemMetrics]);
 
-    if (!isHydrated || !user) {
+    // Allow rendering if user exists in React state OR localStorage
+    const hasStoredAuth = typeof window !== 'undefined' &&
+        !!localStorage.getItem('regengine_access_token') &&
+        !!localStorage.getItem('regengine_user');
+    if (!isHydrated || (!user && !hasStoredAuth)) {
         return null;
     }
 

@@ -349,7 +349,11 @@ export default function HeartbeatPage() {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => {
-        if (isHydrated && !user) {
+        // Only redirect if truly not logged in (check both React state AND localStorage)
+        const hasStoredAuth = typeof window !== 'undefined' &&
+            !!localStorage.getItem('regengine_access_token') &&
+            !!localStorage.getItem('regengine_user');
+        if (isHydrated && !user && !hasStoredAuth) {
             router.push(`/login?next=${encodeURIComponent('/dashboard/heartbeat')}`);
         }
     }, [isHydrated, user, router]);
@@ -403,7 +407,11 @@ export default function HeartbeatPage() {
 
     const recentAlerts = useMemo(() => alerts.slice(0, 6), [alerts]);
 
-    if (!isHydrated || !user) return null;
+    // Allow rendering if user exists in React state OR localStorage
+    const hasStoredAuth = typeof window !== 'undefined' &&
+        !!localStorage.getItem('regengine_access_token') &&
+        !!localStorage.getItem('regengine_user');
+    if (!isHydrated || (!user && !hasStoredAuth)) return null;
 
     const now = new Date();
     const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
