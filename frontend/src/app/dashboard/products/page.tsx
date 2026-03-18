@@ -103,9 +103,48 @@ export default function ProductCatalogPage() {
         setError(null);
         try {
             const data = await apiFetchProducts(tenantId);
-            setProducts(data.products || []);
-            setCategories(data.categories || []);
-            setTotalFtl(data.ftl_covered || 0);
+            const fetchedProducts = data.products || [];
+            if (fetchedProducts.length > 0) {
+                setProducts(fetchedProducts);
+                setCategories(data.categories || []);
+                setTotalFtl(data.ftl_covered || 0);
+            } else {
+                // Fallback: extract unique products from supplier TLCs (bulk upload data)
+                try {
+                    const { apiClient } = await import('@/lib/api-client');
+                    const tlcs = await apiClient.listSupplierTLCs();
+                    if (tlcs && tlcs.length > 0) {
+                        const productMap = new Map<string, Product>();
+                        for (const tlc of tlcs) {
+                            const name = tlc.product_description || tlc.tlc_code;
+                            if (!productMap.has(name)) {
+                                productMap.set(name, {
+                                    id: tlc.id || name,
+                                    name,
+                                    category: 'Uncategorized',
+                                    sku: tlc.tlc_code,
+                                    gtin: '',
+                                    description: tlc.product_description || '',
+                                    suppliers: [],
+                                    facilities: [],
+                                    cte_count: 1,
+                                    ftl_covered: false,
+                                    last_cte: null,
+                                    created_at: new Date().toISOString(),
+                                });
+                            } else {
+                                const existing = productMap.get(name)!;
+                                existing.cte_count += 1;
+                            }
+                        }
+                        setProducts(Array.from(productMap.values()));
+                        setCategories(['Uncategorized']);
+                        setTotalFtl(0);
+                    }
+                } catch {
+                    // Supplier fallback failed — show empty state
+                }
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load products');
         } finally {
