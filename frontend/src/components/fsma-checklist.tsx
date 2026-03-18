@@ -237,7 +237,7 @@ export default function FSMAChecklist() {
                                     <div
                                         className="text-[14px] sm:text-[15px] font-semibold mb-1 transition-colors duration-200"
                                         style={{
-                                            color: isChecked ? "var(--re-brand-dark)" : "var(--re-text-primary)",
+                                            color: isChecked ? "#059669" : "#f1f5f9",
                                             textDecoration: isChecked ? "line-through" : "none",
                                             textDecorationColor: "rgba(5,150,105,0.3)",
                                         }}
