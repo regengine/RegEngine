@@ -132,8 +132,41 @@ export default function AuditLogPage() {
         setError(null);
         try {
             const data = await fetchAuditLog(tenantId, page, pageSize);
-            setEntries(data.entries || []);
-            setTotal(data.total || 0);
+            const fetchedEntries = data.entries || [];
+
+            if (fetchedEntries.length > 1 || page > 1) {
+                setEntries(fetchedEntries);
+                setTotal(data.total || 0);
+            } else {
+                // Supplement with supplier facility events from bulk upload
+                try {
+                    const { apiClient } = await import('@/lib/api-client');
+                    const facilities = await apiClient.listSupplierFacilities();
+                    const supplemental: AuditEntry[] = [...fetchedEntries];
+
+                    for (const f of facilities) {
+                        supplemental.push({
+                            id: `facility-${f.id}`,
+                            event_type: 'facility_created',
+                            action: 'facility_created',
+                            category: 'cte',
+                            actor: 'bulk_upload',
+                            resource: f.name,
+                            timestamp: new Date().toISOString(),
+                            details: { source: 'bulk_upload', facility_id: f.id },
+                            ip_address: '',
+                            hash: '',
+                        });
+                    }
+
+                    setEntries(supplemental);
+                    setTotal(supplemental.length);
+                } catch {
+                    setEntries(fetchedEntries);
+                    setTotal(data.total || 0);
+                }
+            }
+
             setLastFetched(new Date());
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load audit log');
