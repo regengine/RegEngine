@@ -171,7 +171,7 @@ export default function SecurityPage() {
                                 <p className="mt-1 text-re-text-disabled">7 CTEs verified: Dairy, Imported Seafood, Produce (3 recall chains)</p>
                             </div>
                             <div className="flex gap-3 flex-wrap">
-                                <Link href="/alpha">
+                                <Link href="/verify">
                                     <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-5 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all text-sm">
                                         See Live Merkle Chain
                                         <ArrowRight className="ml-2 w-4 h-4" />
