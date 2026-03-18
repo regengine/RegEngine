@@ -152,9 +152,12 @@ export function MarketingHeader() {
 
                     {/* ═══ Desktop Nav ═══ */}
                     <div className="marketing-desktop-nav" style={{ display: "flex", alignItems: "center", gap: "28px" }}>
-                        {[
-                            ...MARKETING_PRIMARY_NAV,
-                        ].map((item) => (
+                        {(user ? [
+                            { label: 'Dashboard', href: '/dashboard' },
+                            { label: 'Compliance', href: '/dashboard/compliance' },
+                            { label: 'Suppliers', href: '/dashboard/suppliers' },
+                            { label: 'Products', href: '/dashboard/products' },
+                        ] : MARKETING_PRIMARY_NAV).map((item) => (
                             <Link
                                 key={item.label}
                                 href={item.href}
@@ -295,21 +298,49 @@ export function MarketingHeader() {
 
                         {/* Auth-aware buttons */}
                         {user ? (
-                            <Link
-                                href="/dashboard"
-                                style={{
-                                    fontSize: "13px",
-                                    fontWeight: 500,
-                                    color: "var(--re-text-muted)",
-                                    textDecoration: "none",
-                                    transition: "color 0.2s",
-                                    padding: "8px 0",
-                                }}
-                                onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
-                                onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
-                            >
-                                Dashboard
-                            </Link>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                                <Link
+                                    href="/dashboard"
+                                    style={{
+                                        fontSize: "13px",
+                                        fontWeight: 600,
+                                        color: "var(--re-surface-base)",
+                                        background: "var(--re-brand)",
+                                        padding: "7px 18px",
+                                        borderRadius: "6px",
+                                        textDecoration: "none",
+                                        transition: "all 0.2s",
+                                        boxShadow: "0 2px 8px var(--re-brand-muted)",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                                    </svg>
+                                    Dashboard
+                                </Link>
+                                <div
+                                    style={{
+                                        width: "32px",
+                                        height: "32px",
+                                        borderRadius: "50%",
+                                        background: "var(--re-brand)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        fontSize: "12px",
+                                        fontWeight: 700,
+                                        color: "var(--re-surface-base)",
+                                        cursor: "pointer",
+                                        textTransform: "uppercase",
+                                    }}
+                                    title={user.email || "Account"}
+                                >
+                                    {(user.email?.[0] || "U")}
+                                </div>
+                            </div>
                         ) : (
                             <>
                                 <Link
@@ -480,7 +511,15 @@ export function MarketingHeader() {
 
                 {/* Primary Nav Links */}
                 <div style={{ padding: "8px 12px" }}>
-                    {MARKETING_PRIMARY_NAV.map((item) => (
+                    {(user ? [
+                        { label: 'Dashboard', href: '/dashboard' },
+                        { label: 'Heartbeat', href: '/dashboard/heartbeat' },
+                        { label: 'Compliance', href: '/dashboard/compliance' },
+                        { label: 'Alerts', href: '/dashboard/alerts' },
+                        { label: 'Suppliers', href: '/dashboard/suppliers' },
+                        { label: 'Products', href: '/dashboard/products' },
+                        { label: 'Settings', href: '/dashboard/settings' },
+                    ] : MARKETING_PRIMARY_NAV).map((item) => (
                         <Link
                             key={item.label}
                             href={item.href}
@@ -584,27 +623,64 @@ export function MarketingHeader() {
                     paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
                 }}>
                     {user ? (
-                        <Link
-                            href="/dashboard"
-                            onClick={() => setMobileOpen(false)}
-                            style={{
+                        <>
+                            <div style={{
                                 display: "flex",
                                 alignItems: "center",
-                                justifyContent: "center",
-                                background: "var(--re-brand)",
-                                color: "#fff",
-                                fontWeight: 600,
-                                fontSize: "15px",
-                                padding: "14px 24px",
-                                borderRadius: "10px",
-                                textDecoration: "none",
-                                minHeight: "48px",
-                                WebkitTapHighlightColor: "transparent",
-                                transition: "all 0.2s",
-                            }}
-                        >
-                            Go to Dashboard
-                        </Link>
+                                gap: "12px",
+                                padding: "0 0 12px",
+                                borderBottom: "1px solid var(--re-mobile-border)",
+                                marginBottom: "12px",
+                            }}>
+                                <div style={{
+                                    width: "36px",
+                                    height: "36px",
+                                    borderRadius: "50%",
+                                    background: "var(--re-brand)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                    color: "#fff",
+                                    textTransform: "uppercase",
+                                    flexShrink: 0,
+                                }}>
+                                    {(user.email?.[0] || "U")}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--re-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                        {user.email || "Account"}
+                                    </div>
+                                    <div style={{ fontSize: "11px", color: "var(--re-text-muted)" }}>Logged in</div>
+                                </div>
+                            </div>
+                            <Link
+                                href="/dashboard"
+                                onClick={() => setMobileOpen(false)}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "8px",
+                                    background: "var(--re-brand)",
+                                    color: "#fff",
+                                    fontWeight: 600,
+                                    fontSize: "15px",
+                                    padding: "14px 24px",
+                                    borderRadius: "10px",
+                                    textDecoration: "none",
+                                    minHeight: "48px",
+                                    WebkitTapHighlightColor: "transparent",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+                                </svg>
+                                Go to Dashboard
+                            </Link>
+                        </>
                     ) : (
                         <>
                             <Link

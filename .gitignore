@@ -79,3 +79,24 @@ frontend/playwright-report/
 archive/
 public/sw.js
 public/sw.js.map
+
+# System generated audit files
+*AUDIT*.md
+*AUDIT*.csv
+*AUDIT*.txt
+STRESS_REDTEAM_REPORT.md
+stress_redteam_report.json
+SITE-FIX-PLAN.md
+UI-AUDIT-*.md
+FRONTEND_AUDIT_REPORT.txt
+.~lock.*
+
+# Generated docs (keep originals in Google Drive / Notion)
+RegEngine_Alpha_Partner_Agreement.docx
+RegEngine_Alpha_Scorecard.xlsx
+RegEngine_PRD_v1.0.docx
+RegEngine_UX_Walkthrough.pdf
+
+# Test artifacts
+stress_and_redteam.py
+test-write

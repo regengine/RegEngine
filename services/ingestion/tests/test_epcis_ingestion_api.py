@@ -51,7 +51,7 @@ VALID_EPCIS_EVENT = {
     ],
     "ilmd": {
         "cbvmda:lotNumber": "ROM-0042",
-        "fsma:traceabilityLotCode": "LOT-2026-ROM-0042",
+        "fsma:traceabilityLotCode": "00012345678901-ROM0042",
     },
 }
 
@@ -90,7 +90,7 @@ def test_validate_and_ingest_epcis_event(client: TestClient) -> None:
     )
     assert get_response.status_code == 200
     event_payload = get_response.json()
-    assert event_payload["normalized_cte"]["tlc"] == "LOT-2026-ROM-0042"
+    assert event_payload["normalized_cte"]["tlc"] == "00012345678901-ROM0042"
 
 
 def test_batch_ingest_with_mixed_validity(client: TestClient) -> None:
