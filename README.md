@@ -15,7 +15,7 @@ RegEngine helps food suppliers meet FDA Food Safety Modernization Act Section 20
 - Generate FDA-compliant sortable spreadsheets within the 24-hour response window
 - Trace lots forward and backward through a graph database
 - Run recall simulations and drill workflows
-- 18 free compliance tools (no login required)
+- Free compliance tools (no login required)
 
 ## Pricing
 

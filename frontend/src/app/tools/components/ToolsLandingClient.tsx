@@ -228,7 +228,7 @@ export function ToolsLandingClient() {
                     animate={{ opacity: 1, y: 0 }}
                     className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] text-xs font-bold uppercase tracking-widest mb-6 border border-[var(--re-brand)]/20"
                 >
-                    <Zap className="h-3 w-3" /> 15 Free Tools &middot; No Login Required
+                    <Zap className="h-3 w-3" /> Free Compliance Tools &middot; No Login Required
                 </motion.div>
                 <motion.h1
                     initial={{ opacity: 0, y: 16 }}

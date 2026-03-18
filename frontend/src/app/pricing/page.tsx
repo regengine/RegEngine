@@ -8,10 +8,10 @@ import { Badge } from '@/components/ui/badge';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance plans from $999/mo. Founding Design Partners get 50% off year one.',
+    description: 'FSMA 204 compliance from $425/mo. Founding Design Partners lock in 50% off for life.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance plans from $999/mo. Founding Design Partners get 50% off year one.',
+        description: 'FSMA 204 compliance from $425/mo. Founding Design Partners lock in 50% off for life.',
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
@@ -98,7 +98,7 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$999/mo', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
+    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
     { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6\u20138 weeks', repositrak: '<1 hour*', tracegains: '4\u20136 weeks' },
     { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
@@ -108,7 +108,7 @@ const COMPETITOR_COMPARISON = [
 
 const FAQ = [
     { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2\u20133 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
-    { q: 'What do Founding Design Partners get?', a: 'Design Partners pay 50% off GA pricing for their entire first year. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Pricing locks in at your partner rate for the full 12 months.' },
+    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Your partner rate never increases.' },
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we\u2019ll prorate. Downgrade at the end of your billing cycle." },
     { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
     { q: 'What happens after my Design Partner year ends?', a: 'You transition to standard GA pricing. We\u2019ll give you 60 days notice and a smooth transition. Many partners also qualify for annual contract discounts at renewal.' },
@@ -121,14 +121,14 @@ export default function PricingPage() {
             {/* Hero */}
             <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
                 <Badge style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.border}`, marginBottom: '20px' }}>
-                    Founding Design Partners — 50% Off Year One
+                    Founding Design Partners — 50% Off for Life
                 </Badge>
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
                     FSMA 204 Compliance,<br />
                     <span className="text-re-brand">Priced for Mid-Market</span>
                 </h1>
                 <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 16px', lineHeight: 1.6 }}>
-                    Three plans sized by facility count. Founding Design Partners lock in 50% off for their entire first year — white-glove onboarding and direct founder support included.
+                    Three plans sized by facility count. Founding Design Partners lock in 50% off for the life of their account — white-glove onboarding and direct founder support included.
                 </p>
                 <p style={{ fontSize: '14px', color: T.textDim }}>
                     Annual billing saves ~15%. Monthly billing also available.
@@ -167,7 +167,7 @@ export default function PricingPage() {
                                     </div>
                                     <p style={{ fontSize: '13px', color: T.textDim, marginBottom: '12px' }}>{tier.description}</p>
                                     <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, background: 'rgba(16,185,129,0.1)', color: T.accent, padding: '3px 8px', borderRadius: '6px', marginBottom: '16px' }}>
-                                        50% Off — Design Partner Year 1
+                                        50% Off — Founding Design Partner
                                     </span>
 
                                     <div style={{ marginBottom: '20px' }}>
@@ -231,10 +231,10 @@ export default function PricingPage() {
                         Founding Design Partner Program
                     </p>
                     <p style={{ fontSize: '14px', color: T.textMuted, lineHeight: 1.7, marginBottom: '8px', maxWidth: '520px', margin: '0 auto 8px' }}>
-                        50% off GA pricing for your entire first year. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
+                        50% off GA pricing for the life of your account. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
                     </p>
                     <p style={{ fontSize: '13px', color: T.textDim, lineHeight: 1.6, marginBottom: '20px', maxWidth: '480px', margin: '0 auto 20px' }}>
-                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. After year one, you transition to standard GA pricing with 60 days notice.
+                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
                     </p>
                     <Link href="/onboarding">
                         <Button style={{
@@ -258,7 +258,7 @@ export default function PricingPage() {
                         The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
                     </p>
                     <p style={{ textAlign: 'center', fontSize: '14px', color: T.textDim, maxWidth: '520px', margin: '0 auto 40px', lineHeight: 1.6 }}>
-                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $999/mo.
+                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo for Founding Design Partners.
                     </p>
                     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                         <div style={{ overflowX: 'auto' }}>
