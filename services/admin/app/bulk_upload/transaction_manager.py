@@ -152,7 +152,11 @@ def build_validation_preview(
         "tlcs_to_update": tlcs_to_update,
         "events_to_chain": len(events),
         "errors": preview_errors,
-        "can_commit": len(preview_errors) == 0,
+        # Allow commit when only warnings remain — hard errors still block
+        "can_commit": all(
+            e.get("severity") == "warning"
+            for e in preview_errors
+        ) if preview_errors else True,
     }
 
 
