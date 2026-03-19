@@ -22,6 +22,7 @@ import { useAuth } from '@/lib/auth-context';
 import { getServiceURL } from '@/lib/api-config';
 import { useToast } from '@/components/ui/use-toast';
 import { parseGS1 } from '@/lib/gs1-parser';
+import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ─── Types ─── */
 interface LineItem {
@@ -201,6 +202,7 @@ export default function ReceivingDockPage() {
             if (!res.ok) throw new Error('Ingest failed');
             const data = await res.json();
             setSession({ ...session, status: 'completed' });
+            notifyDashboardRefresh();
             toast({
                 title: 'Receiving Complete',
                 description: `${data.accepted} items ingested into trace pipeline`,

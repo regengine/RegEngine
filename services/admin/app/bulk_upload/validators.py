@@ -33,11 +33,12 @@ def _autofill_str(value: Any, *, field: str, row_hint: str = "", min_len: int = 
 CTE_ALIAS_MAP = {
     "transformation": "transforming",
     "first_land_based_receiving": "first_receiver",
-    # Single-letter FSMA 204 event type codes
+    # Single-letter FSMA 204 event type codes (match frontend bulk upload)
     "r": "receiving",
     "s": "shipping",
     "t": "transforming",
     "c": "cooling",
+    "d": "distribution",
     "p": "initial_packing",
     "h": "harvesting",
     # Common full-word aliases
@@ -48,6 +49,9 @@ CTE_ALIAS_MAP = {
     "ship": "shipping",
     "transform": "transforming",
     "cool": "cooling",
+    "creation": "initial_packing",
+    "depletion": "distribution",
+    "holding": "receiving",
     # Distribution / processing aliases
     "distribute": "shipping",
     "distribution": "shipping",
