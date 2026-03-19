@@ -17,15 +17,15 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'RegEngine — API-First Regulatory Compliance',
-  description: 'FSMA 204 compliance platform. Ingest, verify, and export traceability records with cryptographic proof.',
+  title: 'RegEngine — FSMA 204 Food Traceability Compliance',
+  description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
   },
   openGraph: {
-    title: 'RegEngine',
-    description: 'FSMA 204 compliance platform for food traceability, recall readiness, and FDA-ready exports.',
+    title: 'RegEngine — FSMA 204 Food Traceability Compliance',
+    description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
     siteName: 'RegEngine',
     url: 'https://regengine.co',
     type: 'website',
