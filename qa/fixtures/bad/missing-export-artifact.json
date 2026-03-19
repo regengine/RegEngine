@@ -1,0 +1,9 @@
+{
+  "name": "missing-export-artifact",
+  "description": "Chain verification JSON deleted. Must fail export validation.",
+  "must_fail": ["export-validate.js"],
+  "mutation": {
+    "file": "frontend/public/samples/sample_chain_verification.json",
+    "action": "delete"
+  }
+}

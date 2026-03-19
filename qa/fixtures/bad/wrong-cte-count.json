@@ -1,0 +1,10 @@
+{
+  "name": "wrong-cte-count",
+  "description": "FSMA guide says '6 Critical Tracking Events' instead of 7. Must fail regulatory copy check.",
+  "must_fail": ["fsma-lite-check.js"],
+  "mutation": {
+    "file": "frontend/src/app/fsma-204/page.tsx",
+    "find": "7 Critical Tracking Events",
+    "replace": "6 Critical Tracking Events"
+  }
+}
