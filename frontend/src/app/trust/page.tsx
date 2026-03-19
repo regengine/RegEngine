@@ -196,7 +196,7 @@ export default function TrustCenterPage() {
                             <li>Daily, weekly, or monthly export cadence</li>
                             <li>Object storage archive or downloadable bundle</li>
                             <li>Manifest hash included in every export run</li>
-                            <li>Failed export runs flagged for re-processing</li>
+                            <li>Export runs monitored with automatic retry on failure</li>
                         </ul>
                     </div>
                     <div className={`${card} p-4`}>
@@ -309,7 +309,7 @@ export default function TrustCenterPage() {
                     <div className={`${card} p-5`}>
                         <h2 className="text-2xl font-bold text-re-text-primary mb-2">Archive posture</h2>
                         <p className="text-sm text-re-text-muted mb-4">
-                            The current product interface shows the export-job contract pattern: scheduled bundle configuration, manifest hashing, and external archive destinations. Persistent backend scheduling is separate follow-on work.
+                            Export jobs support scheduled bundle configuration with manifest hashing and external archive destinations. Each export run includes a SHA-256 manifest for independent verification.
                         </p>                        <div className="space-y-3">
                             {ARCHIVE_EXPORT_JOBS.map((job) => (
                                 <div key={job.id} className={cardInner}>

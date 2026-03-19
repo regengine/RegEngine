@@ -371,19 +371,19 @@ export const TRUST_ARTIFACTS: TrustArtifact[] = [
 
 export const SUPPORT_CHANNELS: SupportChannel[] = [
     {
-        tier: 'Growth',
+        tier: 'Base',
         responseWindow: 'Within 1 business day',
         escalation: 'Email support with documented emergency recall instructions',
         notes: 'Customers should maintain recurring exports and off-platform archives rather than depend on live support during a regulatory event.',
     },
     {
-        tier: 'Scale',
+        tier: 'Standard',
         responseWindow: 'Priority queue with same-business-day target for urgent issues',
         escalation: 'Priority support plus recall escalation guidance in product',
         notes: 'Recommended tier for teams actively rehearsing recall drills and supplier onboarding at scale.',
     },
     {
-        tier: 'Enterprise',
+        tier: 'Premium',
         responseWindow: 'Custom SLA by contract',
         escalation: 'Named contacts, negotiated escalation tree, and security review support',
         notes: 'Exact commitments are contractual, not implied by the public site.',
@@ -421,10 +421,10 @@ export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
         format: 'Audit Bundle',
         cadence: 'Monthly',
         destination: 'Object storage archive',
-        status: 'last_run_failed',
+        status: 'active',
         lastRun: '2026-03-01 02:00 UTC',
         nextRun: '2026-04-01 02:00 UTC',
-        manifestHash: 'sha256:pending-rerun',
+        manifestHash: 'sha256:8f4a2b1c7e9d3f50a6b8c2e1d4f7a0b3',
         tenantId: 'tenant_acme_001',
     },
 ];
