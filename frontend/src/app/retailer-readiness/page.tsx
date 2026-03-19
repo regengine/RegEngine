@@ -104,8 +104,8 @@ const TRACE_NODES_BACKWARD = [
 const FAQ_ITEMS = [
     { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When a major retailer or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
     { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any of the 23 FDA Food Traceability List categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine starts at $425/mo for Founding Design Partners — built specifically for single-facility suppliers getting compliant.' },
-    { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Major retailers\' internal deadlines are estimated at Q1 2027 — over a year before the FDA mandate. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during the next category review. By the time the FDA deadline hits, it\'s already too late.' },
-    { q: 'How long does integration take?', a: 'Most suppliers are fully operational within 2–4 weeks. RegEngine is API-first, so there are no portal logins or manual data entry. If you have existing data in spreadsheets, we can bulk-import it during onboarding.' },
+    { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Retailers are already enforcing. Walmart required food and beverage suppliers to meet ASN and packaging requirements by August 1, 2025. Kroger required EDI 856 compliance by June 30, 2025. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during the next category review. By the time the FDA deadline hits, it\'s already too late.' },
+    { q: 'How long does integration take?', a: 'Most suppliers are operational within 2–4 weeks. Data flows in via API, CSV/XLSX bulk upload, or SFTP import. If you have existing data in spreadsheets, we bulk-import and auto-clean it during onboarding. ERP and retailer integrations are scoped per delivery mode — native API, webhook, CSV import, or custom mapping.' },
     { q: 'What if we don\'t sell FTL products?', a: 'Use our free FTL Checker tool to verify whether your products fall under the FDA\'s 23 Food Traceability List categories. Even if your primary products aren\'t on the list, many suppliers are surprised to find that secondary product lines (like pre-cut salads or certain cheeses) are covered.' },
 ];
 
@@ -574,8 +574,8 @@ export default function RetailerSuppliersPage() {
                                 position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
                                 textAlign: 'center', whiteSpace: 'nowrap',
                             }}>
-                                <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Retailer Internal</p>
-                                <p className="text-[11px] text-re-text-disabled">~Q1 2027 (est.)</p>
+                                <p style={{ fontSize: 13, fontWeight: 600, color: T.warning }}>Retailer Deadlines</p>
+                                <p className="text-[11px] text-re-text-disabled">Walmart Aug 2025 · Kroger Jun 2025</p>
                             </div>
                         </div>
 
