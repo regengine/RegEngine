@@ -22,6 +22,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ── Types matching ProductCatalogResponse ── */
 
@@ -165,6 +166,9 @@ export default function ProductCatalogPage() {
     }, [isLoggedIn, effectiveTenantId]);
 
     useEffect(() => { loadProducts(); }, [loadProducts]);
+
+    // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
+    useDashboardRefresh(loadProducts);
 
     const handleAdd = async () => {
         if (!newName) return;

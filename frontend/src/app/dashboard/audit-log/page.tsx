@@ -30,6 +30,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ── Types ── */
 
@@ -188,6 +189,9 @@ export default function AuditLogPage() {
     }, [isLoggedIn, effectiveTenantId, page, pageSize]);
 
     useEffect(() => { loadLog(); }, [loadLog]);
+
+    // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
+    useDashboardRefresh(loadLog);
 
     // Client-side filtering + search
     const filtered = useMemo(() => {
