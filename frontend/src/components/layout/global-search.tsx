@@ -23,6 +23,7 @@ const SEARCH_INDEX: SearchItem[] = [
     { title: 'FSMA 204 Guide', description: 'The FDA food traceability rule in plain English', href: '/fsma-204', category: 'docs', keywords: ['fsma', '204', 'fda', 'guide', 'rule', 'traceability', 'compliance', 'deadline'] },
     { title: 'Integrations', description: 'Connect your existing stack', href: '/integrations', category: 'page', keywords: ['integrations', 'api', 'connect', 'sap', 'oracle', 'quickbooks', 'webhook'] },
     { title: 'Sample Export Package', description: 'Download and inspect a real FDA export with EPCIS, CSV, and verification', href: '/sample-export', category: 'page', keywords: ['sample', 'export', 'download', 'fda', 'epcis', 'csv', 'package', 'proof', 'artifact'] },
+    { title: 'Walkthrough: CSV to Export', description: 'Complete workflow from messy data to audit-ready FDA package', href: '/walkthrough', category: 'page', keywords: ['walkthrough', 'workflow', 'csv', 'upload', 'ingest', 'validate', 'export', 'demo', 'how it works'] },
     { title: 'Security', description: 'Trust center, RLS, SHA-256 integrity', href: '/security', category: 'page', keywords: ['security', 'trust', 'rls', 'sha256', 'encryption', 'audit'] },
     { title: 'About', description: 'About RegEngine and the founder', href: '/about', category: 'page', keywords: ['about', 'founder', 'christopher', 'sellers', 'team'] },
     { title: 'Contact', description: 'Get in touch', href: '/contact', category: 'page', keywords: ['contact', 'email', 'support', 'help'] },
