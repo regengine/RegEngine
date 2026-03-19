@@ -9,6 +9,7 @@ import {
 
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 import type {
   SupplierBulkUploadCommitResponse,
   SupplierBulkUploadParseResponse,
@@ -28,7 +29,7 @@ const STEPS = [
 /* ── FSMA 204 client-side validation (no auth required) ── */
 
 const VALID_EVENT_TYPES = new Set(['R', 'S', 'T', 'C', 'D', 'P', 'H']);
-const EVENT_TYPE_LABELS: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transformation', C: 'Creation', D: 'Depletion', P: 'Packing', H: 'Holding' };
+const EVENT_TYPE_LABELS: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transforming', C: 'Cooling', D: 'Distribution', P: 'Initial Packing', H: 'Harvesting' };
 
 const REQUIRED_COLUMNS = [
   'event_type', 'product_name', 'lot_number',
@@ -236,7 +237,7 @@ function parseCSVLocally(text: string): CsvPreview {
     if (lotIdx >= 0 && cells[lotIdx]) lotSet.add(cells[lotIdx]);
   }
 
-  const EVENT_TYPE_MAP: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transformation', C: 'Creation', D: 'Depletion', P: 'Packing', H: 'Holding' };
+  const EVENT_TYPE_MAP: Record<string, string> = { R: 'Receiving', S: 'Shipping', T: 'Transforming', C: 'Cooling', D: 'Distribution', P: 'Initial Packing', H: 'Harvesting' };
   const mappedCounts: Record<string, number> = {};
   for (const [k, v] of Object.entries(eventTypeCounts)) {
     mappedCounts[EVENT_TYPE_MAP[k] || k] = v;
@@ -411,6 +412,7 @@ export default function BulkUploadPage() {
     try {
       const committed = await apiClient.commitSupplierBulkUpload(parseResult.session_id);
       setCommitResult(committed);
+      notifyDashboardRefresh();
       const status = await apiClient.getSupplierBulkUploadStatus(parseResult.session_id);
       setStatusResult(status);
     } catch (err: unknown) {
