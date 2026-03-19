@@ -1,0 +1,32 @@
+{
+  "manifest": {
+    "generated_at": "2026-03-19T05:30:08.008871Z",
+    "generator": "RegEngine v1.0",
+    "lot_code": "ROM-2026-0312",
+    "product": "Romaine Lettuce Hearts 12ct",
+    "files": [
+      {
+        "name": "sample_epcis_2.0.json",
+        "format": "GS1 EPCIS 2.0 JSON-LD",
+        "records": 12
+      },
+      {
+        "name": "sample_fda_export.csv",
+        "format": "FDA Sortable Spreadsheet",
+        "records": 12
+      },
+      {
+        "name": "sample_chain_verification.json",
+        "format": "Chain Verification Report",
+        "records": 12
+      }
+    ],
+    "integrity": {
+      "chain_length": 12,
+      "chain_valid": true,
+      "final_merkle_hash": "7e421cfbdb762a902951daa9964654f683c7e7c73bb31467740cc03dcea1ee00"
+    },
+    "retention_notice": "RegEngine recommends maintaining customer-controlled off-platform archives from week one. This export package is designed to be portable and independently verifiable.",
+    "manifest_sha256": "7fb010662c839f4d0b82f4c7d819c9fe92f32a8968cce965149b26018ad145cf"
+  }
+}
