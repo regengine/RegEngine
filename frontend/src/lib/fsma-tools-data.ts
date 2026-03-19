@@ -1,8 +1,8 @@
 /**
  * FSMA 204 Key Dates
  * Based on FDA Final Rule and Congressional enforcement directives
- * Original deadline was January 20, 2026 — extended 30 months by FDA,
- * codified by Congress in November 2025.
+ * Original compliance date was January 20, 2026. Congress directed
+ * FDA not to enforce before July 20, 2028.
  */
 export const FSMA_204_ORIGINAL_DATE = 'January 20, 2026';
 export const FSMA_204_COMPLIANCE_DATE = 'July 20, 2028';

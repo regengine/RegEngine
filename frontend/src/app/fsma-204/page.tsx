@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, CheckCircle, Clock, FileSpreadsheet, Shield, Upload, Users, AlertTriangle, Truck, Leaf } from "lucide-react";
+import { ArrowRight, CheckCircle, Clock, FileSpreadsheet, Shield, Upload, Users, AlertTriangle, Truck, Leaf, Anchor } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Compliance Guide — What Your Farm Needs to Know | RegEngine",
@@ -40,6 +40,12 @@ const CTES_PLAIN = [
     icon: FileSpreadsheet,
     who: "Packhouses",
     what: "Record what was packed, when, the lot code, and the quantity.",
+  },
+  {
+    name: "First Land-Based Receiving",
+    icon: Anchor,
+    who: "First US receiver of imported food",
+    what: "Record when imported food first arrives on US soil, the lot code, origin, and entry details.",
   },
   {
     name: "Shipping",
@@ -152,7 +158,7 @@ export default function FSMA204BusinessGuidePage() {
             The goal is simple: when a foodborne illness outbreak happens, the FDA needs to trace contaminated products from the farm to the store shelf within <strong className="text-[var(--re-text-primary)]">24 hours</strong>. Before this rule, that process took weeks.
           </p>
           <p>
-            The rule was finalized in 2022. The original compliance deadline was January 2026, but <strong className="text-[var(--re-text-primary)]">the FDA extended it to July 20, 2028</strong> to give the industry more time to prepare. The requirements themselves have not changed.
+            The rule was finalized in 2022. The original compliance date was January 20, 2026. <strong className="text-[var(--re-text-primary)]">Congress directed FDA not to enforce the rule before July 20, 2028.</strong> The requirements themselves have not changed.
           </p>
         </div>
 
@@ -163,7 +169,7 @@ export default function FSMA204BusinessGuidePage() {
             <div>
               <p className="font-medium text-[var(--re-text-primary)] mb-1">The deadline moved — the rule didn&apos;t.</p>
               <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-                FDA extended enforcement to July 2028, but retailers like Walmart, Kroger, and Costco are already requiring traceability data from suppliers. If you sell to a major retailer, your real deadline may be sooner than 2028.
+                Congress directed FDA not to enforce before July 2028, but retailers like Walmart, Kroger, and Costco are already requiring traceability data from suppliers. Walmart required ASN compliance by August 2025. Kroger required EDI 856 compliance by June 2025. If you sell to a major retailer, your real deadline has already passed.
               </p>
             </div>
           </div>
@@ -212,7 +218,7 @@ export default function FSMA204BusinessGuidePage() {
           What the FDA requires
         </p>
         <h2 className="font-serif text-[2rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
-          Six events you need to track.
+          Seven events you need to track.
         </h2>
         <p className="text-[1rem] text-[var(--re-text-secondary)] leading-relaxed mb-10 max-w-[600px]">
           FSMA 204 calls these &ldquo;Critical Tracking Events&rdquo; (CTEs). Each one has specific data points (called KDEs) you must record. Here&apos;s what they mean in practice:
@@ -238,7 +244,7 @@ export default function FSMA204BusinessGuidePage() {
         <div className="mt-8 p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] max-w-[680px]">
           <p className="font-medium text-[var(--re-text-primary)] mb-2">Which events apply to you?</p>
           <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
-            Most farms need to record <strong className="text-[var(--re-text-primary)]">harvesting, cooling, packing, and shipping</strong>. Distributors typically handle receiving and shipping. Processors handle receiving and transformation. You only record the events that happen at your facility.
+            Most farms need to record <strong className="text-[var(--re-text-primary)]">harvesting, cooling, packing, and shipping</strong>. Distributors typically handle receiving and shipping. Processors handle receiving and transformation. Importers must also record <strong className="text-[var(--re-text-primary)]">first land-based receiving</strong>. You only record the events that happen at your facility.
           </p>
         </div>
       </section>

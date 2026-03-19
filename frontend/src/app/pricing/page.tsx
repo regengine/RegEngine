@@ -98,8 +98,8 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: '$32,000+/yr', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
-    { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6\u20138 weeks', repositrak: '<1 hour*', tracegains: '4\u20136 weeks' },
+    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: 'Enterprise pricing', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
+    { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: 'Weeks (implementation)', repositrak: '<1 hour*', tracegains: 'Weeks (implementation)' },
     { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
     { feature: 'Self-Serve Signup', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },

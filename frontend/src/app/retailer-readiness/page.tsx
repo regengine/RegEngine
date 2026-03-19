@@ -1164,7 +1164,7 @@ export default function RetailerSuppliersPage() {
                         </p>
                         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                             {[
-                                { value: '20+', label: 'Years in federal compliance' },
+                                { value: '10+', label: 'Years across compliance & policy' },
                                 { value: '23', label: 'FDA categories covered' },
                                 { value: '< 24hr', label: 'Assessment turnaround' },
                             ].map((stat, i) => (

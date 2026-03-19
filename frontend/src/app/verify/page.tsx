@@ -706,9 +706,9 @@ export default function VerifyPage() {
                             lineHeight: 1.6,
                         }}
                     >
-                        Traditional compliance relies on SOC 2 attestations and auditor opinions.
-                        RegEngine gives you a SHA-256 hash you can verify yourself.
-                        No trust required.
+                        RegEngine adds cryptographic verification on top of standard compliance controls.
+                        SHA-256 hashing lets you verify record integrity independently —
+                        whether or not you require a SOC 2 report.
                     </p>
 
                     <div className="flex gap-3 justify-center flex-wrap">
