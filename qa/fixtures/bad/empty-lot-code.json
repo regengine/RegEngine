@@ -1,6 +1,8 @@
 {
   "name": "empty-lot-code",
   "description": "Row with empty traceability lot code. Must be rejected by validator as blocking error.",
+  "severity": "critical",
+  "expected_failure": "missing_lot_code",
   "must_fail": ["bad-data.js"],
   "test_row": {
     "lot_code": "",

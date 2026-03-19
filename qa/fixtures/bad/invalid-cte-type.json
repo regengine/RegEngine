@@ -1,6 +1,8 @@
 {
   "name": "invalid-cte-type",
   "description": "CTE type 'cooking' is not one of the 7 valid FSMA 204 CTEs. Must be rejected.",
+  "severity": "critical",
+  "expected_failure": "invalid_cte_type",
   "must_fail": ["bad-data.js"],
   "test_row": {
     "lot_code": "LOT-001",
