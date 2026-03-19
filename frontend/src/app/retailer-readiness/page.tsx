@@ -446,7 +446,7 @@ export default function RetailerSuppliersPage() {
                     maxWidth: 540, margin: '0 auto 16px', lineHeight: 1.7,
                 }}>
                     Meet major retailer traceability requirements before you lose your spot on the shelf.
-                    API-first. No portal logins. No spreadsheets.
+                    API and CSV ingest. FDA-ready export. No portal logins.
                 </p>
 
                 {/* Countdown */}

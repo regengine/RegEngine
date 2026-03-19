@@ -98,7 +98,7 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: '$32,000+/yr', repositrak: '$2,148/facility/yr', tracegains: 'Contact Sales' },
+    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: '$32,000+/yr', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
     { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: '6\u20138 weeks', repositrak: '<1 hour*', tracegains: '4\u20136 weeks' },
     { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
@@ -111,7 +111,7 @@ const FAQ = [
     { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Your partner rate never increases.' },
     { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we\u2019ll prorate. Downgrade at the end of your billing cycle." },
     { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
-    { q: 'What happens after my Design Partner year ends?', a: 'You transition to standard GA pricing. We\u2019ll give you 60 days notice and a smooth transition. Many partners also qualify for annual contract discounts at renewal.' },
+    { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
 ];
 
@@ -289,7 +289,7 @@ export default function PricingPage() {
                         </div>
                     </div>
                     <p style={{ fontSize: '11px', color: T.textDim, textAlign: 'center', marginTop: '16px' }}>
-                        * ReposiTrak pricing from publicly listed $179/facility/month. Competitor data from public sources as of Jan 2026.
+                        * ReposiTrak publicly lists supplier plans from $59/mo (basic) to $179/mo (unlimited). Competitor data from public sources as of Jan 2026.
                     </p>
                 </div>
             </section>

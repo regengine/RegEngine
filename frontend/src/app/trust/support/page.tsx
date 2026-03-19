@@ -54,7 +54,7 @@ const ESCALATION_PATH = [
         title: 'Priority queue',
         description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',        icon: Zap,
         color: 'bg-amber-500/15 text-amber-400',
-        availability: 'Business hours · Growth and Enterprise',
+        availability: 'Business hours · Standard and Premium',
     },
     {
         step: '4',
@@ -62,7 +62,7 @@ const ESCALATION_PATH = [
         description: 'Dedicated path for active FDA investigations or live recall events. Direct founder access for coordination on data exports, regulatory response packaging, and timeline management.',
         icon: Siren,
         color: 'bg-red-500/15 text-red-400',
-        availability: 'Extended hours · Enterprise (contractual)',
+        availability: 'Extended hours · Premium (contractual)',
     },
 ];
 

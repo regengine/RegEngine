@@ -135,7 +135,7 @@ export default function TrustCenterPage() {
                         <ul className="mt-3 space-y-2 text-sm text-re-text-muted">
                             <li>Customers should schedule recurring exports and maintain off-platform archives from day one.</li>
                             <li>Public support windows are not a substitute for recall-readiness operations.</li>
-                            <li>Enterprise escalation and SLA terms are contractual, not implied by public pricing copy.</li>
+                            <li>Premium escalation and SLA terms are contractual, not implied by public pricing copy.</li>
                             <li>Security and diligence materials are a mix of public pages and request/NDA workflows.</li>
                         </ul>
                     </div>
