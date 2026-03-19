@@ -1,6 +1,8 @@
 {
   "name": "wrong-cte-count",
   "description": "FSMA guide says '6 Critical Tracking Events' instead of 7. Must fail regulatory copy check.",
+  "severity": "critical",
+  "expected_failure": "regulatory_copy_regression",
   "must_fail": ["fsma-lite-check.js"],
   "mutation": {
     "file": "frontend/src/app/fsma-204/page.tsx",

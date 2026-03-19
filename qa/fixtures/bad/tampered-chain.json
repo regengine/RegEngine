@@ -1,6 +1,8 @@
 {
   "name": "tampered-merkle-chain",
   "description": "Event 3 merkle hash replaced with deadbeef. Must break chain verification at seq 3 and cascade to seq 4.",
+  "severity": "critical",
+  "expected_failure": "merkle_chain_broken",
   "must_fail": ["fsma-lite-check.js", "full-flow.js"],
   "mutation": {
     "file": "sample_epcis_2.0.json",
