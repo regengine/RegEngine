@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
     Download, FileText, FileCode, Shield, ExternalLink,
     CheckCircle2, Copy, Check, Archive, Lock, Eye,
+    Clock, AlertTriangle, Terminal, ArrowRight, Zap,
 } from 'lucide-react';
 
 const T = {
@@ -18,42 +19,16 @@ const T = {
     accent: 'var(--re-success)',
     accentDim: 'rgba(34,197,94,0.12)',
     brand: 'var(--re-brand)',
+    warning: 'var(--re-warning)',
+    warningDim: 'rgba(245,158,11,0.12)',
     mono: "'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
 };
 
 const ARTIFACTS = [
-    {
-        name: 'EPCIS 2.0 JSON-LD',
-        file: '/samples/sample_epcis_2.0.json',
-        icon: FileCode,
-        description: 'GS1 EPCIS 2.0 standard format. 12 traceability events with SHA-256 integrity metadata. Interoperable with any EPCIS-compatible trading partner.',
-        size: '9.8 KB',
-        records: 12,
-    },
-    {
-        name: 'FDA Sortable Spreadsheet',
-        file: '/samples/sample_fda_export.csv',
-        icon: FileText,
-        description: 'The format FDA expects during a 24-hour records request. Sortable by lot code, facility, event type, and date. Includes hash chain for tamper evidence.',
-        size: '3.8 KB',
-        records: 12,
-    },
-    {
-        name: 'Chain Verification Report',
-        file: '/samples/sample_chain_verification.json',
-        icon: Shield,
-        description: 'Independent verification of every record in the chain. Each event\'s SHA-256 hash is recomputed and compared. Chain integrity: VALID.',
-        size: '4.2 KB',
-        records: 12,
-    },
-    {
-        name: 'Export Manifest',
-        file: '/samples/sample_manifest.json',
-        icon: Archive,
-        description: 'Package metadata: file list, record counts, chain integrity status, final Merkle hash, and retention notice. The manifest itself is SHA-256 hashed.',
-        size: '1.0 KB',
-        records: 12,
-    },
+    { name: 'EPCIS 2.0 JSON-LD', file: '/samples/sample_epcis_2.0.json', icon: FileCode, who: 'Trading partners, interoperability systems', description: 'GS1 EPCIS 2.0 standard format. 12 traceability events with SHA-256 integrity metadata.', size: '9.8 KB', records: 12 },
+    { name: 'FDA Sortable Spreadsheet', file: '/samples/sample_fda_export.csv', icon: FileText, who: 'FDA during 24-hour records request', description: 'Sortable by lot code, facility, event type, and date. Includes hash chain for tamper evidence.', size: '3.8 KB', records: 12 },
+    { name: 'Chain Verification Report', file: '/samples/sample_chain_verification.json', icon: Shield, who: 'Internal audit, compliance verification', description: 'Independent verification of every record. Each SHA-256 hash recomputed and compared. Chain integrity: VALID.', size: '4.2 KB', records: 12 },
+    { name: 'Export Manifest', file: '/samples/sample_manifest.json', icon: Archive, who: 'Archive systems, retention workflows', description: 'File list, record counts, chain integrity status, final Merkle hash, and retention notice. Manifest itself is SHA-256 hashed.', size: '1.0 KB', records: 12 },
 ];
 
 const CHAIN_EVENTS = [
@@ -76,8 +51,7 @@ function CopyButton({ text }: { text: string }) {
     return (
         <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: copied ? T.accent : T.textDim, padding: 4 }}
-            title="Copy to clipboard"
-        >
+            title="Copy to clipboard">
             {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
     );
@@ -87,38 +61,61 @@ export default function SampleExportPage() {
     return (
         <div style={{ background: T.bg, minHeight: '100vh', color: T.text }}>
             {/* Hero */}
-            <section style={{ maxWidth: 960, margin: '0 auto', padding: '80px 24px 60px', textAlign: 'center' }}>
+            <section style={{ maxWidth: 960, margin: '0 auto', padding: '80px 24px 40px', textAlign: 'center' }}>
                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: T.accentDim, borderRadius: 20, fontSize: 13, color: T.accent, fontWeight: 500, marginBottom: 24 }}>
                     <Eye size={14} />
-                    Inspectable Proof — Not Marketing Copy
+                    Production Format — Inspectable Proof
                 </div>
 
                 <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, lineHeight: 1.1, margin: '0 0 16px' }}>
                     See What RegEngine Actually Produces
                 </h1>
 
-                <p style={{ fontSize: 18, color: T.textDim, maxWidth: 640, margin: '0 auto 32px', lineHeight: 1.6 }}>
-                    This is a real FDA export package generated from a sample traceability chain.
-                    12 events, 7 facilities, farm to store. Every record SHA-256 hashed and Merkle-chained.
-                    Download it. Inspect it. Verify it yourself.
+                <p style={{ fontSize: 16, color: T.textDim, maxWidth: 640, margin: '0 auto 12px', lineHeight: 1.6 }}>
+                    This is a real, production-format export package generated by RegEngine. All data is sanitized,
+                    but structure and formats are identical to live customer outputs.
+                </p>
+                <p style={{ fontSize: 14, color: T.textMuted, maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.5 }}>
+                    12 events · 7 facilities · Farm to store · Every record SHA-256 hashed and Merkle-chained
                 </p>
 
                 <div className="flex gap-3 justify-center flex-wrap">
-                    <a href="/samples/sample_epcis_2.0.json" download
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.accent, color: '#000', borderRadius: 8, fontSize: 15, fontWeight: 600, textDecoration: 'none' }}>
+                    <a href="/samples/sample_epcis_2.0.json" download style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.accent, color: '#000', borderRadius: 8, fontSize: 15, fontWeight: 600, textDecoration: 'none' }}>
                         <Download size={16} /> Download Full Package
                     </a>
-                    <a href="#chain" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.elevated, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, fontSize: 15, fontWeight: 500, textDecoration: 'none' }}>
-                        <Shield size={16} /> View Chain Below
+                    <a href="#verify-it" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.elevated, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, fontSize: 15, fontWeight: 500, textDecoration: 'none' }}>
+                        <Shield size={16} /> Verify It Yourself
                     </a>
+                </div>
+            </section>
+
+            {/* ─── FIX 1: Package Manifest View ─── */}
+            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 48px' }}>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', background: T.elevated, borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f' }} />
+                        <span style={{ marginLeft: 12, fontSize: 12, color: T.textMuted, fontFamily: T.mono }}>export-package/</span>
+                    </div>
+                    <pre style={{ margin: 0, padding: 20, fontFamily: T.mono, fontSize: 13, lineHeight: 1.8, color: 'var(--re-text-secondary)' }}>{
+`sample_export_package/
+├── sample_epcis_2.0.json        ← EPCIS 2.0 JSON-LD (trading partners)
+├── sample_fda_export.csv         ← FDA sortable spreadsheet (24-hour request)
+├── sample_chain_verification.json ← Hash chain verification report (audit)
+└── sample_manifest.json          ← Package manifest with SHA-256 (archive)`
+                    }</pre>
                 </div>
             </section>
 
             {/* Artifacts Grid */}
             <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
-                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 32 }}>
+                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
                     What&apos;s in the Package
                 </h2>
+                <p style={{ textAlign: 'center', color: T.textDim, fontSize: 14, marginBottom: 32 }}>
+                    Each file serves a different audience. Together they form a complete compliance evidence bundle.
+                </p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
                     {ARTIFACTS.map((a) => {
                         const Icon = a.icon;
@@ -133,6 +130,7 @@ export default function SampleExportPage() {
                                         <div style={{ fontSize: 11, color: T.textDim }}>{a.size} · {a.records} records</div>
                                     </div>
                                 </div>
+                                <p style={{ fontSize: 12, color: T.accent, fontWeight: 500, marginBottom: 6 }}>Used by: {a.who}</p>
                                 <p style={{ fontSize: 13, color: T.textDim, lineHeight: 1.5, marginBottom: 16 }}>{a.description}</p>
                                 <a href={a.file} download style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: T.accent, textDecoration: 'none' }}>
                                     <Download size={14} /> Download
@@ -143,27 +141,40 @@ export default function SampleExportPage() {
                 </div>
             </section>
 
+            {/* ─── FIX 2: When Exports Are Generated ─── */}
+            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 32 }}>When Exports Are Generated</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                    {[
+                        { icon: Zap, title: 'On Demand', desc: 'Click "Export" in the dashboard. Package generated in seconds.' },
+                        { icon: Clock, title: 'Scheduled Archives', desc: 'Daily, weekly, or monthly. Auto-delivered to object storage.' },
+                        { icon: AlertTriangle, title: 'FDA 24-Hour Request', desc: 'When the FDA calls, your export is ready before the call ends.' },
+                        { icon: ArrowRight, title: 'Retailer Submission', desc: 'Generate retailer-specific packages for Walmart, Kroger, Costco.' },
+                    ].map((item, i) => {
+                        const Icon = item.icon;
+                        return (
+                            <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, textAlign: 'center' }}>
+                                <Icon size={20} style={{ color: T.accent, marginBottom: 12 }} />
+                                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{item.title}</div>
+                                <div style={{ fontSize: 12, color: T.textDim, lineHeight: 1.5 }}>{item.desc}</div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
             {/* Live Chain Visualization */}
             <section id="chain" style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
-                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
-                    The Traceability Chain
-                </h2>
-                <p style={{ textAlign: 'center', color: T.textDim, fontSize: 15, marginBottom: 32, maxWidth: 560, margin: '0 auto 32px' }}>
+                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>The Traceability Chain</h2>
+                <p style={{ textAlign: 'center', color: T.textDim, fontSize: 14, marginBottom: 32, maxWidth: 560, margin: '0 auto 32px' }}>
                     Romaine Lettuce lot ROM-2026-0312. Each row is a Critical Tracking Event.
                     Each hash links to the previous — tamper with one, break all downstream.
                 </p>
 
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
-                    {/* Header */}
                     <div style={{ display: 'grid', gridTemplateColumns: '50px 1.2fr 1.5fr 1fr 1fr', padding: '12px 16px', background: T.elevated, borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em', minWidth: 640 }}>
-                        <span>#</span>
-                        <span>CTE Type</span>
-                        <span>Facility</span>
-                        <span>Location</span>
-                        <span>Merkle Hash</span>
+                        <span>#</span><span>CTE Type</span><span>Facility</span><span>Location</span><span>Merkle Hash</span>
                     </div>
-
-                    {/* Rows */}
                     {CHAIN_EVENTS.map((e, i) => (
                         <div key={i} style={{ display: 'grid', gridTemplateColumns: '50px 1.2fr 1.5fr 1fr 1fr', padding: '10px 16px', borderBottom: i < CHAIN_EVENTS.length - 1 ? `1px solid ${T.border}` : 'none', fontSize: 13, minWidth: 640, alignItems: 'center' }}>
                             <span style={{ color: T.accent, fontWeight: 700, fontFamily: T.mono, fontSize: 12 }}>{e.seq}</span>
@@ -176,17 +187,96 @@ export default function SampleExportPage() {
                             </div>
                         </div>
                     ))}
-
-                    {/* Chain summary */}
                     <div style={{ padding: '16px', background: T.accentDim, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Lock size={16} style={{ color: T.accent }} />
                             <span style={{ fontSize: 14, fontWeight: 600, color: T.accent }}>Chain Valid · 12/12 records verified</span>
                         </div>
-                        <span style={{ fontSize: 11, color: T.textDim, fontFamily: T.mono }}>
-                            Final: 7e421cfb...
-                        </span>
+                        <span style={{ fontSize: 11, color: T.textDim, fontFamily: T.mono }}>Final: 7e421cfb...</span>
                     </div>
+                </div>
+            </section>
+
+            {/* ─── FIX 3: Verification Walkthrough ─── */}
+            <section id="verify-it" style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>Verify It Yourself</h2>
+                <p style={{ textAlign: 'center', color: T.textDim, fontSize: 14, marginBottom: 32 }}>
+                    Three steps. No RegEngine account required. Works entirely offline.
+                </p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {[
+                        { step: '1', title: 'Download the export', code: 'curl -O https://regengine.co/samples/sample_chain_verification.json', result: null },
+                        { step: '2', title: 'Run the verification script', code: 'python verify_chain.py --file sample_chain_verification.json --offline', result: null },
+                        { step: '3', title: 'Confirm output', code: null, result: '✓ VALID: 12 passed, 0 failed\n✓ Chain integrity: INTACT\n✓ Final hash: 7e421cfbdb762a90...\n\nSUMMARY: All records verified. No tampering detected.' },
+                    ].map((s) => (
+                        <div key={s.step} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: '50%', background: T.accentDim, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+                                {s.step}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>{s.title}</div>
+                                {s.code && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: T.bg, borderRadius: 6, padding: '8px 12px', marginBottom: 4 }}>
+                                        <code style={{ fontFamily: T.mono, fontSize: 12, color: T.accent, flex: 1 }}>{s.code}</code>
+                                        <CopyButton text={s.code} />
+                                    </div>
+                                )}
+                                {s.result && (
+                                    <pre style={{ fontFamily: T.mono, fontSize: 12, color: T.accent, lineHeight: 1.6, background: T.bg, borderRadius: 6, padding: 12, margin: 0 }}>
+                                        {s.result}
+                                    </pre>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            {/* ─── FIX 4: What Happens When Data Is Incomplete ─── */}
+            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+                <h2 style={{ fontSize: 24, fontWeight: 600, textAlign: 'center', marginBottom: 32 }}>What Happens When Data Is Incomplete</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+                    {[
+                        { icon: AlertTriangle, color: T.warning, title: 'Missing KDEs', desc: 'Records with missing Key Data Elements are flagged with specific field-level warnings. They are included in the export but marked as incomplete.' },
+                        { icon: Shield, color: T.accent, title: 'Validation Failures', desc: 'Invalid event types, malformed lot codes, and duplicate records are caught during ingestion. Auto-cleaning fills safe defaults; truly invalid rows are excluded.' },
+                        { icon: FileText, color: T.textMuted, title: 'Partial Records', desc: 'If a chain has gaps (e.g., missing shipping event), the export notes the gap and the chain verification report flags the break point.' },
+                        { icon: Terminal, color: T.accent, title: 'Error Reporting', desc: 'Every export includes a validation summary: records included, records excluded, warnings generated, and auto-fill actions taken.' },
+                    ].map((item, i) => {
+                        const Icon = item.icon;
+                        return (
+                            <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
+                                <Icon size={20} style={{ color: item.color, marginBottom: 12 }} />
+                                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{item.title}</div>
+                                <div style={{ fontSize: 13, color: T.textDim, lineHeight: 1.5 }}>{item.desc}</div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* ─── FIX 5: Link to Ingestion → Export Flow ─── */}
+            <section style={{ maxWidth: 960, margin: '0 auto', padding: '0 24px 60px' }}>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 32, textAlign: 'center' }}>
+                    <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>How Data Gets Here</h3>
+                    <p style={{ fontSize: 14, color: T.textDim, marginBottom: 24, maxWidth: 480, margin: '0 auto 24px' }}>
+                        This export is the end of a pipeline that starts with your raw data.
+                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 24 }}>
+                        {['CSV / XLSX Upload', '→', 'Parse & Validate', '→', 'Auto-Clean', '→', 'SHA-256 Hash', '→', 'Merkle Chain', '→', 'Export'].map((step, i) => (
+                            <span key={i} style={{
+                                fontSize: step === '→' ? 16 : 12,
+                                color: step === '→' ? T.textDim : T.accent,
+                                fontWeight: step === '→' ? 400 : 600,
+                                background: step === '→' ? 'transparent' : T.accentDim,
+                                padding: step === '→' ? 0 : '4px 10px',
+                                borderRadius: 6,
+                            }}>{step}</span>
+                        ))}
+                    </div>
+                    <Link href="/onboarding/bulk-upload" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, color: T.accent, textDecoration: 'none' }}>
+                        Try the Bulk Upload → <ArrowRight size={14} />
+                    </Link>
                 </div>
             </section>
 
