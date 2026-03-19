@@ -16,6 +16,7 @@ import { WorkflowStepper } from '@/components/layout/workflow-stepper';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
 import { useIngestURL, useIngestFile } from '@/hooks/use-api';
+import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 import {
   Database,
   CheckCircle,
@@ -145,6 +146,7 @@ export default function IngestPage() {
         setJobId(returnedJobId);
         setJobStatus('queued');
         setStatusError(null);
+        notifyDashboardRefresh();
       }
     } catch (error) {
       console.error('Ingestion failed:', error);
