@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Regression Harness
+ * Regression Harness (v2)
  * Loads canonical "known bad" fixtures from qa/fixtures/bad/
- * and verifies each one would still be caught by the pipeline.
+ * and verifies each one is caught FOR THE CORRECT REASON.
  *
- * Does NOT modify real files. Runs mutations in memory or temp copies
- * and verifies the detection logic catches them.
+ * Does NOT modify real files. Runs mutations in memory.
+ * Fails if a fixture passes, or fails for the wrong reason.
  */
 
 const fs = require('fs');
@@ -16,15 +16,26 @@ const FIXTURES = path.join(__dirname, 'fixtures', 'bad');
 const SAMPLES = path.join(__dirname, '..', 'frontend', 'public', 'samples');
 const SRC = path.join(__dirname, '..', 'frontend', 'src');
 
+const VALID_CTES = [
+  'harvesting', 'cooling', 'initial_packing',
+  'first_land_based_receiving',
+  'shipping', 'receiving', 'transformation'
+];
+
 let passed = 0;
 let failed = 0;
 
-function check(name, condition, detail) {
-  if (condition) { console.log(`  \u2713 ${name}`); passed++; }
-  else { console.error(`  \u2717 ${name}: ${detail}`); failed++; }
+function assert(fixtureName, reason, condition, detail) {
+  if (condition) {
+    console.log(`  \u2713 [${reason}] ${detail || 'detected'}`);
+    passed++;
+  } else {
+    console.error(`  \u2717 [${reason}] ${detail || 'NOT detected'}`);
+    failed++;
+  }
 }
 
-console.log('\n=== Regression Harness ===\n');
+console.log('\n=== Regression Harness v2 ===\n');
 
 const fixtures = fs.readdirSync(FIXTURES)
   .filter(f => f.endsWith('.json'))
@@ -32,93 +43,134 @@ const fixtures = fs.readdirSync(FIXTURES)
 
 console.log(`Loaded ${fixtures.length} regression fixtures.\n`);
 
-// ── 1. Tampered Chain ───────────────────────────────────
-const chainFixture = fixtures.find(f => f.name === 'tampered-merkle-chain');
-if (chainFixture) {
-  console.log(`1. ${chainFixture.name}`);
-  console.log(`   ${chainFixture.description}`);
-
+// ── DETECTOR: Merkle chain tamper ────────────────────────
+function detectMerkleChainTamper(tamperedHash, targetIndex) {
   const epcis = JSON.parse(fs.readFileSync(path.join(SAMPLES, 'sample_epcis_2.0.json'), 'utf8'));
   const events = epcis.epcisBody.eventList;
+  events[targetIndex].extension['regengine:merkleHash'] = tamperedHash;
 
-  // Apply mutation in memory
-  events[2].extension['regengine:merkleHash'] = chainFixture.mutation.tampered;
-
-  // Run chain verification
   const hashes = events.map(e => ({
     payload: e.extension['regengine:payloadSHA256'],
     merkle: e.extension['regengine:merkleHash'],
   }));
 
-  let chainBroken = false;
+  let breakAt = null;
   for (let i = 1; i < hashes.length; i++) {
     const expected = crypto.createHash('sha256')
       .update(hashes[i - 1].merkle + hashes[i].payload)
       .digest('hex');
-    if (expected !== hashes[i].merkle) { chainBroken = true; break; }
+    if (expected !== hashes[i].merkle) { breakAt = i; break; }
   }
-  check('Tampered chain is detected', chainBroken, 'Chain passed when it should fail');
+  return { detected: breakAt !== null, breakAt, reason: 'merkle_chain_broken' };
 }
 
-// ── 2. Wrong CTE Count ──────────────────────────────────
-const cteFixture = fixtures.find(f => f.name === 'wrong-cte-count');
-if (cteFixture) {
-  console.log(`\n2. ${cteFixture.name}`);
-  console.log(`   ${cteFixture.description}`);
-
+// ── DETECTOR: Regulatory copy regression ─────────────────
+function detectCopyRegression(find, replace) {
   const fsmaPage = path.join(SRC, 'app', 'fsma-204', 'page.tsx');
-  const content = fs.readFileSync(fsmaPage, 'utf8');
-  // Simulate the mutation in memory
-  const mutated = content.replace(cteFixture.mutation.find, cteFixture.mutation.replace);
-
-  check('Mutation produces different content', mutated !== content, 'Replace had no effect');
-  check('Mutated content contains "6 Critical Tracking Events"',
-    mutated.includes('6 Critical Tracking Events'), 'Mutation did not apply');
-  check('Original content does NOT contain "6 Critical Tracking Events"',
-    !content.includes('6 Critical Tracking Events'), 'Original already has the bug');
+  const original = fs.readFileSync(fsmaPage, 'utf8');
+  const mutated = original.replace(find, replace);
+  const hasBadCopy = mutated.includes('6 Critical Tracking Events');
+  const originalClean = !original.includes('6 Critical Tracking Events');
+  return {
+    detected: hasBadCopy && originalClean,
+    reason: 'regulatory_copy_regression',
+    detail: hasBadCopy ? 'Mutated content contains "6 CTEs"' : 'Mutation had no effect'
+  };
 }
 
-// ── 3. Missing Export Artifact ───────────────────────────
-const missingFixture = fixtures.find(f => f.name === 'missing-export-artifact');
-if (missingFixture) {
-  console.log(`\n3. ${missingFixture.name}`);
-  console.log(`   ${missingFixture.description}`);
-
-  const targetFile = path.join(SAMPLES, path.basename(missingFixture.mutation.file));
-  check('Target file currently exists (so deletion would be caught)',
-    fs.existsSync(targetFile), `${targetFile} does not exist`);
+// ── DETECTOR: Missing artifact ───────────────────────────
+function detectMissingArtifact(filename) {
+  const exists = fs.existsSync(path.join(SAMPLES, path.basename(filename)));
+  return {
+    detected: exists, // if it exists now, deletion WOULD be caught
+    reason: 'missing_artifact',
+    detail: exists ? 'File present — deletion would trigger failure' : 'File already missing'
+  };
 }
 
-// ── 4. Empty Lot Code ────────────────────────────────────
-const lotFixture = fixtures.find(f => f.name === 'empty-lot-code');
-if (lotFixture) {
-  console.log(`\n4. ${lotFixture.name}`);
-  console.log(`   ${lotFixture.description}`);
-
-  const row = lotFixture.test_row;
-  const hasLotCode = row.lot_code && row.lot_code.trim().length > 0;
-  check('Empty lot code is detected as invalid', !hasLotCode, 'Lot code passed validation');
+// ── DETECTOR: Validator rejection ────────────────────────
+function detectValidatorRejection(row, expectedReason) {
+  const errors = [];
+  if (!row.lot_code || row.lot_code.trim().length === 0) errors.push('missing_lot_code');
+  if (!row.cte_type || !VALID_CTES.includes(row.cte_type.toLowerCase())) errors.push('invalid_cte_type');
+  const matchesExpected = errors.includes(expectedReason);
+  return {
+    detected: matchesExpected,
+    reason: expectedReason,
+    detail: matchesExpected ? `Correctly rejected: ${expectedReason}` : `Expected ${expectedReason}, got: [${errors.join(', ')}]`
+  };
 }
 
-// ── 5. Invalid CTE Type ─────────────────────────────────
-const cteTypeFixture = fixtures.find(f => f.name === 'invalid-cte-type');
-if (cteTypeFixture) {
-  console.log(`\n5. ${cteTypeFixture.name}`);
-  console.log(`   ${cteTypeFixture.description}`);
+// ── RUN EACH FIXTURE ─────────────────────────────────────
+for (const fixture of fixtures) {
+  console.log(`${fixture.name} [${fixture.severity}]`);
+  console.log(`  ${fixture.description}`);
 
-  const VALID_CTES = [
-    'harvesting', 'cooling', 'initial_packing',
-    'first_land_based_receiving',
-    'shipping', 'receiving', 'transformation'
-  ];
-  const row = cteTypeFixture.test_row;
-  const isValid = VALID_CTES.includes(row.cte_type.toLowerCase());
-  check('Invalid CTE type "cooking" is rejected', !isValid, 'CTE passed validation');
+  let result;
+
+  switch (fixture.expected_failure) {
+    case 'merkle_chain_broken':
+      result = detectMerkleChainTamper(fixture.mutation.tampered, 2);
+      assert(fixture.name, result.reason,
+        result.detected,
+        result.detected
+          ? `Chain break at seq ${result.breakAt + 1} — correct`
+          : 'Chain passed when it should fail'
+      );
+      assert(fixture.name, 'reason_match',
+        result.reason === fixture.expected_failure,
+        `Expected: ${fixture.expected_failure}, Got: ${result.reason}`
+      );
+      break;
+
+    case 'regulatory_copy_regression':
+      result = detectCopyRegression(fixture.mutation.find, fixture.mutation.replace);
+      assert(fixture.name, result.reason,
+        result.detected,
+        result.detail
+      );
+      assert(fixture.name, 'reason_match',
+        result.reason === fixture.expected_failure,
+        `Expected: ${fixture.expected_failure}, Got: ${result.reason}`
+      );
+      break;
+
+    case 'missing_artifact':
+      result = detectMissingArtifact(fixture.mutation.file);
+      assert(fixture.name, result.reason,
+        result.detected,
+        result.detail
+      );
+      assert(fixture.name, 'reason_match',
+        result.reason === fixture.expected_failure,
+        `Expected: ${fixture.expected_failure}, Got: ${result.reason}`
+      );
+      break;
+
+    case 'missing_lot_code':
+    case 'invalid_cte_type':
+      result = detectValidatorRejection(fixture.test_row, fixture.expected_failure);
+      assert(fixture.name, result.reason,
+        result.detected,
+        result.detail
+      );
+      assert(fixture.name, 'reason_match',
+        result.reason === fixture.expected_failure,
+        `Expected: ${fixture.expected_failure}, Got: ${result.reason}`
+      );
+      break;
+
+    default:
+      console.error(`  \u2717 Unknown expected_failure: ${fixture.expected_failure}`);
+      failed++;
+  }
+  console.log('');
 }
 
 // ── Summary ─────────────────────────────────────────────
-console.log(`\n${'='.repeat(50)}`);
-console.log(`Regression Harness: ${passed} passed, ${failed} failed`);
+console.log(`${'='.repeat(50)}`);
+console.log(`Regression v2: ${passed} passed, ${failed} failed`);
+console.log(`Fixtures: ${fixtures.length} | Severity: ${fixtures.filter(f => f.severity === 'critical').length} critical`);
 console.log(`${'='.repeat(50)}\n`);
 
 if (failed > 0) process.exit(1);

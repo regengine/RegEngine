@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * QA Summary Artifact Generator
- * Runs all QA scripts and produces a single JSON summary.
- * Output goes to stdout as JSON and optionally to a file.
+ * QA Summary Artifact Generator (v2)
+ * Runs all QA scripts and produces a structured JSON summary
+ * with per-category breakdown and per-script detail.
  */
 
 const { execSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 const SCRIPTS = [
@@ -36,34 +37,32 @@ for (const s of SCRIPTS) {
     exitCode = e.status || 1;
   }
 
-  // Parse counts from output
   const passMatch = output.match(/(\d+) passed/);
   const failMatch = output.match(/(\d+) failed/);
   const warnMatch = output.match(/(\d+) warning/);
 
-  const passed = passMatch ? parseInt(passMatch[1]) : 0;
-  const failed = failMatch ? parseInt(failMatch[1]) : 0;
-  const warnings = warnMatch ? parseInt(warnMatch[1]) : 0;
+  const p = passMatch ? parseInt(passMatch[1]) : 0;
+  const f = failMatch ? parseInt(failMatch[1]) : 0;
+  const w = warnMatch ? parseInt(warnMatch[1]) : 0;
 
-  results[s.name] = {
-    status: exitCode === 0 ? 'PASS' : 'FAIL',
-    passed,
-    failed,
-    warnings,
-    exitCode,
-  };
+  results[s.name] = { status: exitCode === 0 ? 'PASS' : 'FAIL', passed: p, failed: f, warnings: w, exitCode };
 
-  totalChecks += passed + failed;
-  totalFailures += failed;
-  totalWarnings += warnings;
+  // Category aggregation
+  if (!categories[s.category]) categories[s.category] = { total: 0, passed: 0, failed: 0, warnings: 0, status: 'PASS' };
+  categories[s.category].total += p + f;
+  categories[s.category].passed += p;
+  categories[s.category].failed += f;
+  categories[s.category].warnings += w;
+  if (exitCode !== 0) categories[s.category].status = 'FAIL';
+  else if (w > 0 && categories[s.category].status === 'PASS') categories[s.category].status = 'WARN';
 
-  if (!categories[s.category]) categories[s.category] = 'PASS';
-  if (exitCode !== 0) categories[s.category] = 'FAIL';
-  else if (warnings > 0 && categories[s.category] === 'PASS') categories[s.category] = 'WARN';
+  totalChecks += p + f;
+  totalFailures += f;
+  totalWarnings += w;
 }
 
 const summary = {
-  verdict: totalFailures === 0 ? 'PASS' : 'FAIL',
+  verdict: totalFailures === 0 ? (totalWarnings > 0 ? 'WARN' : 'PASS') : 'FAIL',
   timestamp: new Date().toISOString(),
   checks: totalChecks,
   failures: totalFailures,
@@ -72,12 +71,12 @@ const summary = {
   scripts: results,
 };
 
+// Output to stdout
 console.log(JSON.stringify(summary, null, 2));
 
-// Write to file if QA_SUMMARY_PATH is set
-if (process.env.QA_SUMMARY_PATH) {
-  require('fs').writeFileSync(process.env.QA_SUMMARY_PATH, JSON.stringify(summary, null, 2));
-  console.error(`Summary written to ${process.env.QA_SUMMARY_PATH}`);
-}
+// Write to file
+const outPath = process.env.QA_SUMMARY_PATH || path.join(__dirname, 'qa-summary.json');
+fs.writeFileSync(outPath, JSON.stringify(summary, null, 2));
+console.error(`\nSummary written to ${outPath}`);
 
 if (totalFailures > 0) process.exit(1);
