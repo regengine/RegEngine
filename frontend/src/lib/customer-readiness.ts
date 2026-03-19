@@ -80,7 +80,7 @@ export interface ArchiveExportJob {
     format: 'FDA Package' | 'GS1 EPCIS 2.0' | 'Audit Bundle';
     cadence: 'Daily' | 'Weekly' | 'Monthly';
     destination: 'Downloadable bundle' | 'Object storage archive';
-    status: 'active' | 'paused' | 'last_run_failed';
+    status: 'active' | 'paused';
     lastRun: string;
     nextRun: string;
     manifestHash: string;
@@ -108,7 +108,7 @@ export interface RecallDrillRun {
 }
 
 export interface SupportChannel {
-    tier: 'Growth' | 'Scale' | 'Enterprise';
+    tier: 'Base' | 'Standard' | 'Premium';
     responseWindow: string;
     escalation: string;
     notes: string;
