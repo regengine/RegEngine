@@ -13,16 +13,14 @@
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:harvesting",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000001"
-        },
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000001" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
           "fsma:quantity": 500,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "33a84188c4a05f1efcae859698aedd79442694da425f2798b5a26157102aa0d0",
-          "regengine:merkleHash": "33a84188c4a05f1efcae859698aedd79442694da425f2798b5a26157102aa0d0",
+          "regengine:payloadSHA256": "de23337e6ffd8a9fbdd6e973e4c342aa3a2589c1356b5ec65026e283127d183b",
+          "regengine:merkleHash": "de23337e6ffd8a9fbdd6e973e4c342aa3a2589c1356b5ec65026e283127d183b",
           "regengine:sequenceNumber": 1
         }
       },
@@ -32,16 +30,14 @@
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:cooling",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000002"
-        },
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000002" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 480,
+          "fsma:quantity": 500,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "0f7f2799170b2e03301632fbb75e692fbe65b62d87fab90a8700c155b6d73e66",
-          "regengine:merkleHash": "422be91a5aa606b81847f89ea641ad943e22d36403b6dc65a547d29e36f0ae70",
+          "regengine:payloadSHA256": "8409cca746e2caa7dde1eee70d147f516b77d2f3f45834f80d265da35e9973a9",
+          "regengine:merkleHash": "95203a7bb202eaa8f3b4255dd73857401d36616e3af41757b0255076974d3f89",
           "regengine:sequenceNumber": 2
         }
       },
@@ -51,16 +47,14 @@
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:initial_packing",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000003"
-        },
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000003" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 460,
+          "fsma:quantity": 480,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "fcad1d2c20a1d7490f3e9c21077b96929be11d86723933ce20b11786b44f5a95",
-          "regengine:merkleHash": "e2dc0650082225f4163f647f3e09b780de44c7ec715df09ea22b2c03adc6a5ad",
+          "regengine:payloadSHA256": "d12f7525fa2548c0b7e97441e0839caaa3a7599afa088b31d173d69bf318a618",
+          "regengine:merkleHash": "910eb11db7a915775b08b7c0340184e513f023e3fd46b2effeafd7eff055b97a",
           "regengine:sequenceNumber": 3
         }
       },
@@ -70,16 +64,14 @@
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000003"
-        },
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000003" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 440,
+          "fsma:quantity": 480,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "f881700e91591e8c54b6e443e3d20efd099f065bcf612d17603474397519de01",
-          "regengine:merkleHash": "90d16ae117f972a839c83f736ef94c8c7665ed837803c419fbd6581981d217f9",
+          "regengine:payloadSHA256": "86727ffc1c38bd1802f56e2b43c5bdd5130cddb8a68f29bced6af8375380285d",
+          "regengine:merkleHash": "ce4561b848c356ad73bc5ac45e4ffbfa148816e0733e79a8144dc6e3196ef8f8",
           "regengine:sequenceNumber": 4
         }
       },
@@ -89,16 +81,14 @@
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000004"
-        },
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000004" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 420,
+          "fsma:quantity": 460,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "2f208199feaaf495b3c8dbfd7e073ebf6033998e4a6addcd99f02b6fdbd78494",
-          "regengine:merkleHash": "82ff8ab3b46e057e0c79a156bf96e19927a091cb0389cf9d0fe45020c236490e",
+          "regengine:payloadSHA256": "2a77c388476de3f2e4b592a9d6aba04bfea3d279b6a8342db6a6acd9515cbc8e",
+          "regengine:merkleHash": "4aab599f4c15838a3ea347a469bf037ecb9e313dd3f8c0c99658759f9a225bec",
           "regengine:sequenceNumber": 5
         }
       },
@@ -108,17 +98,32 @@
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
         "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000004"
-        },
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000004" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 400,
+          "fsma:quantity": 460,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "c9b88053305de7d9b319bb68784cbf4a722b04895268c4fded1635ac3afc568e",
-          "regengine:merkleHash": "396d863a2dccb8880f3e52daeaa41dbe875a78e559143ebf5b6f7b18661d203b",
+          "regengine:payloadSHA256": "fad3e1ea14b8749bacc23c2ddd68395ac240878a29fe70b972e3aaee7e766d66",
+          "regengine:merkleHash": "79ef6f14b2c5cb02366596de5b1e8db05b3f18b34186a87c1f10179687105ce0",
           "regengine:sequenceNumber": 6
+        }
+      },
+      {
+        "type": "ObjectEvent",
+        "eventTime": "2026-03-02T06:00:00Z",
+        "eventTimeZoneOffset": "-08:00",
+        "action": "OBSERVE",
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000005" },
+        "extension": {
+          "fsma:traceabilityLotCode": "ROM-2026-0312",
+          "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
+          "fsma:quantity": 440,
+          "fsma:unitOfMeasure": "cases",
+          "regengine:payloadSHA256": "bd4f8b4579664c1753e60a5dc19770d93820638ad323404ae6acefc46c38e6e6",
+          "regengine:merkleHash": "fb15f5401a50bf7f76561154f0bd24a98c57e24e0c2d9b429cdad3deb9d3ad94",
+          "regengine:sequenceNumber": 7
         }
       },
       {
@@ -126,55 +131,32 @@
         "eventTime": "2026-03-02T08:00:00Z",
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000005"
-        },
+        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000005" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 380,
+          "fsma:quantity": 440,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "ca5e2b6930c3681bb992ea95078822e81e4ed445ae7014b85f52933b53ef1eee",
-          "regengine:merkleHash": "a4d625236d8d54eba63875fbd1a281e9b30e3040ba9f5f1dd4b8ca22e6f80d94",
-          "regengine:sequenceNumber": 7
-        }
-      },
-      {
-        "type": "ObjectEvent",
-        "eventTime": "2026-03-02T12:00:00Z",
-        "eventTimeZoneOffset": "-08:00",
-        "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:first_land_based_receiving",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000006"
-        },
-        "extension": {
-          "fsma:traceabilityLotCode": "ROM-2026-0312",
-          "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 360,
-          "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "2c4e3ed9b5b253a70156270c4f0983b91d3a5fab4709f7cfbd93392d932aaf44",
-          "regengine:merkleHash": "40a9ea7ab7dadf6f0c9bf26ccc003b72ff9638a0691199c80be324d41d5c17e4",
+          "regengine:payloadSHA256": "cbc92d3377df758d82fab198e118601c5b5bb650fc881f7959dca5744f823d66",
+          "regengine:merkleHash": "b54762dfc7629eed1f43462b9c45fbb30531ebae8952b9d8ad3b55811640847a",
           "regengine:sequenceNumber": 8
         }
       },
       {
         "type": "ObjectEvent",
-        "eventTime": "2026-03-02T16:00:00Z",
+        "eventTime": "2026-03-02T14:00:00Z",
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:transformation",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000007"
-        },
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000006" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 340,
+          "fsma:quantity": 420,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "f513b8caa3731001f9a02f1f4a6981dccca3414c99fa640e138bee0df4003d90",
-          "regengine:merkleHash": "38ac44b2cb3ec89fdf67b15826a73e5a5b185e01b05f408aab8eef748cf29db6",
+          "regengine:payloadSHA256": "04a23f1f705bb0e9d222075c8930cd37643da24e6756e0c37f30ade2060e7cd4",
+          "regengine:merkleHash": "9fa0cd7f955e748f8b9f9c3d94496dfd3ab05ebe52c8e36dcb704c36206ae402",
           "regengine:sequenceNumber": 9
         }
       },
@@ -183,55 +165,49 @@
         "eventTime": "2026-03-02T18:00:00Z",
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000007"
-        },
+        "bizStep": "urn:epcglobal:cbv:bizstep:transformation",
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000006" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 320,
+          "fsma:quantity": 400,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "1c3b0b986b71a4465f6aa5b03b6a47e5123fa607444b8a7775b967e3c624358f",
-          "regengine:merkleHash": "3f5286184cabc4095eb67e6593d68855e3a6406c28b0bc37e62f8f7e0d2b0534",
+          "regengine:payloadSHA256": "b638aa6a9c796b723bcf61fcdd8262d52c1c4c488cafe73ba526a87e8c624689",
+          "regengine:merkleHash": "0b933c9cf3a6fca61cfc2a48198c1499090abed1bbb3fbf02dc4d5400d636479",
           "regengine:sequenceNumber": 10
         }
       },
       {
         "type": "ObjectEvent",
-        "eventTime": "2026-03-03T02:00:00Z",
+        "eventTime": "2026-03-03T04:00:00Z",
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000008"
-        },
+        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000006" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 300,
+          "fsma:quantity": 400,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "387b93cd3414ea9faaa465f5eb5bfecb0d0c01c46f029bc93daaad57f151f30e",
-          "regengine:merkleHash": "0f17c55a2a417b629c803d8be368f6a29c55eade9dacc8b822102246ad6a1490",
+          "regengine:payloadSHA256": "7b60eff1ba9fc45d81622feb44311289232decb4f35cde0e0943ee226db0a908",
+          "regengine:merkleHash": "2c9d3b80223aa7a2e9069982ca6f0b014cf8a9a06b4452da45ab3bfa6d0efb72",
           "regengine:sequenceNumber": 11
         }
       },
       {
         "type": "ObjectEvent",
-        "eventTime": "2026-03-03T06:00:00Z",
+        "eventTime": "2026-03-03T08:00:00Z",
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-        "bizLocation": {
-          "id": "urn:epc:id:sgln:0614141000008"
-        },
+        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
+        "bizLocation": { "id": "urn:epc:id:sgln:0614141000007" },
         "extension": {
           "fsma:traceabilityLotCode": "ROM-2026-0312",
           "fsma:productDescription": "Romaine Lettuce Hearts 12ct",
-          "fsma:quantity": 280,
+          "fsma:quantity": 380,
           "fsma:unitOfMeasure": "cases",
-          "regengine:payloadSHA256": "337bff162063d1d741416bfd188c5b6046f5f3b75f41723e43042dd885448292",
-          "regengine:merkleHash": "7e421cfbdb762a902951daa9964654f683c7e7c73bb31467740cc03dcea1ee00",
+          "regengine:payloadSHA256": "a24e62d8b6a3667cf4006762d289048121c549f7770a5fa9282e793993df4495",
+          "regengine:merkleHash": "c16ea4a1aa3b0f127e42d72d4174306eb6474cc02de931fefe3693bd7c1f734d",
           "regengine:sequenceNumber": 12
         }
       }
@@ -239,8 +215,8 @@
   },
   "regengine:integrity": {
     "chainLength": 12,
-    "finalMerkleHash": "7e421cfbdb762a902951daa9964654f683c7e7c73bb31467740cc03dcea1ee00",
+    "finalMerkleHash": "c16ea4a1aa3b0f127e42d72d4174306eb6474cc02de931fefe3693bd7c1f734d",
     "algorithm": "SHA-256",
-    "generatedAt": "2026-03-19T05:30:08.005394Z"
+    "generatedAt": "2026-03-19T05:30:08.005388Z"
   }
 }

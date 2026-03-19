@@ -24,9 +24,9 @@
     "integrity": {
       "chain_length": 12,
       "chain_valid": true,
-      "final_merkle_hash": "7e421cfbdb762a902951daa9964654f683c7e7c73bb31467740cc03dcea1ee00"
+      "final_merkle_hash": "c16ea4a1aa3b0f127e42d72d4174306eb6474cc02de931fefe3693bd7c1f734d"
     },
     "retention_notice": "RegEngine recommends maintaining customer-controlled off-platform archives from week one. This export package is designed to be portable and independently verifiable.",
-    "manifest_sha256": "7fb010662c839f4d0b82f4c7d819c9fe92f32a8968cce965149b26018ad145cf"
+    "manifest_sha256": "96e6531b2c0146a43c9c6ac4e6e60f30604bbbab5be78ed554c2f25831876082"
   }
 }
