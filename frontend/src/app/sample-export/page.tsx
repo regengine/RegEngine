@@ -32,18 +32,18 @@ const ARTIFACTS = [
 ];
 
 const CHAIN_EVENTS = [
-    { seq: 1, cte: 'Harvesting', facility: 'Green Valley Farm', location: 'Salinas, CA', hash: 'a3b8d1b6e0f2c45d' },
-    { seq: 2, cte: 'Cooling', facility: 'Green Valley Cooler', location: 'Salinas, CA', hash: '4f7c2e1a9d8b3f65' },
-    { seq: 3, cte: 'Initial Packing', facility: 'Valley Fresh Packhouse', location: 'Salinas, CA', hash: '9e3d7c854b6a2f10' },
-    { seq: 4, cte: 'Shipping', facility: 'Valley Fresh Packhouse', location: 'Salinas, CA', hash: '72c4f8a1b3d9e567' },
-    { seq: 5, cte: 'Receiving', facility: 'Metro Distribution Center', location: 'Los Angeles, CA', hash: '5a1b9c3d7e4f8206' },
-    { seq: 6, cte: 'Shipping', facility: 'Metro Distribution Center', location: 'Los Angeles, CA', hash: 'b8e2f4a6c1d7930e' },
-    { seq: 7, cte: 'Receiving', facility: 'SuperMart Store #145', location: 'San Diego, CA', hash: '3c9a5d7f2b8e1604' },
-    { seq: 8, cte: 'First Receiver', facility: 'Pacific Import Terminal', location: 'Long Beach, CA', hash: 'e1f3b5d7a9c2840' },
-    { seq: 9, cte: 'Transformation', facility: 'Fresh Cut Processing', location: 'Fresno, CA', hash: '6d8f2a4c9e1b3750' },
-    { seq: 10, cte: 'Shipping', facility: 'Fresh Cut Processing', location: 'Fresno, CA', hash: '1b3d5f7a9c2e4860' },
-    { seq: 11, cte: 'Receiving', facility: 'Kroger DC #7218', location: 'Phoenix, AZ', hash: '8e0a2c4d6f1b3950' },
-    { seq: 12, cte: 'Shipping', facility: 'Kroger DC #7218', location: 'Phoenix, AZ', hash: '7e421cfbdb762a90' },
+    { seq: 1, cte: 'Harvesting', facility: 'Green Valley Farm', location: 'Salinas, CA', hash: 'de23337e6ffd8a9f' },
+    { seq: 2, cte: 'Cooling', facility: 'Valley Cooler Co-op', location: 'Salinas, CA', hash: '95203a7bb202eaa8' },
+    { seq: 3, cte: 'Initial Packing', facility: 'Valley Fresh Packhouse', location: 'Salinas, CA', hash: '910eb11db7a91577' },
+    { seq: 4, cte: 'Shipping', facility: 'Valley Fresh Packhouse', location: 'Salinas, CA', hash: 'ce4561b848c356ad' },
+    { seq: 5, cte: 'Receiving', facility: 'Metro Distribution Center', location: 'Los Angeles, CA', hash: '4aab599f4c15838a' },
+    { seq: 6, cte: 'Shipping', facility: 'Metro Distribution Center', location: 'Los Angeles, CA', hash: '79ef6f14b2c5cb02' },
+    { seq: 7, cte: 'Receiving', facility: 'FreshWay Cross-Dock', location: 'Riverside, CA', hash: 'fb15f5401a50bf7f' },
+    { seq: 8, cte: 'Shipping', facility: 'FreshWay Cross-Dock', location: 'Riverside, CA', hash: 'b54762dfc7629eed' },
+    { seq: 9, cte: 'Receiving', facility: 'Kroger DC #7218', location: 'Phoenix, AZ', hash: '9fa0cd7f955e748f' },
+    { seq: 10, cte: 'Transformation', facility: 'Kroger DC #7218', location: 'Phoenix, AZ', hash: '0b933c9cf3a6fca6' },
+    { seq: 11, cte: 'Shipping', facility: 'Kroger DC #7218', location: 'Phoenix, AZ', hash: '2c9d3b80223aa7a2' },
+    { seq: 12, cte: 'Receiving', facility: 'Kroger Store #3301', location: 'Scottsdale, AZ', hash: 'c16ea4a1aa3b0f12' },
 ];
 
 function CopyButton({ text }: { text: string }) {
@@ -76,12 +76,12 @@ export default function SampleExportPage() {
                     but structure and formats are identical to live customer outputs.
                 </p>
                 <p style={{ fontSize: 14, color: T.textMuted, maxWidth: 560, margin: '0 auto 32px', lineHeight: 1.5 }}>
-                    12 events · 7 facilities · Farm to store · Every record SHA-256 hashed and Merkle-chained
+                    12 events · 7 facilities · Salinas CA to Scottsdale AZ · Every record SHA-256 hashed and Merkle-chained
                 </p>
 
                 <div className="flex gap-3 justify-center flex-wrap">
-                    <a href="/samples/sample_epcis_2.0.json" download style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.accent, color: '#000', borderRadius: 8, fontSize: 15, fontWeight: 600, textDecoration: 'none' }}>
-                        <Download size={16} /> Download Full Package
+                    <a href="/samples/regengine_sample_export.zip" download style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.accent, color: '#000', borderRadius: 8, fontSize: 15, fontWeight: 600, textDecoration: 'none' }}>
+                        <Download size={16} /> Download Full Package (.zip)
                     </a>
                     <a href="#verify-it" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', background: T.elevated, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, fontSize: 15, fontWeight: 500, textDecoration: 'none' }}>
                         <Shield size={16} /> Verify It Yourself
@@ -192,7 +192,7 @@ export default function SampleExportPage() {
                             <Lock size={16} style={{ color: T.accent }} />
                             <span style={{ fontSize: 14, fontWeight: 600, color: T.accent }}>Chain Valid · 12/12 records verified</span>
                         </div>
-                        <span style={{ fontSize: 11, color: T.textDim, fontFamily: T.mono }}>Final: 7e421cfb...</span>
+                        <span style={{ fontSize: 11, color: T.textDim, fontFamily: T.mono }}>Final: c16ea4a1...</span>
                     </div>
                 </div>
             </section>
@@ -208,7 +208,7 @@ export default function SampleExportPage() {
                     {[
                         { step: '1', title: 'Download the export', code: 'curl -O https://regengine.co/samples/sample_chain_verification.json', result: null },
                         { step: '2', title: 'Run the verification script', code: 'python verify_chain.py --file sample_chain_verification.json --offline', result: null },
-                        { step: '3', title: 'Confirm output', code: null, result: '✓ VALID: 12 passed, 0 failed\n✓ Chain integrity: INTACT\n✓ Final hash: 7e421cfbdb762a90...\n\nSUMMARY: All records verified. No tampering detected.' },
+                        { step: '3', title: 'Confirm output', code: null, result: '✓ VALID: 12 passed, 0 failed\n✓ Chain integrity: INTACT\n✓ Final hash: c16ea4a1aa3b0f12...\n\nSUMMARY: All records verified. No tampering detected.' },
                     ].map((s) => (
                         <div key={s.step} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                             <div style={{ width: 32, height: 32, borderRadius: '50%', background: T.accentDim, color: T.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, flexShrink: 0 }}>

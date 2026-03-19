@@ -6,102 +6,102 @@
     "chain_length": 12,
     "chain_valid": true,
     "algorithm": "SHA-256",
-    "final_merkle_hash": "7e421cfbdb762a902951daa9964654f683c7e7c73bb31467740cc03dcea1ee00",
+    "final_merkle_hash": "c16ea4a1aa3b0f127e42d72d4174306eb6474cc02de931fefe3693bd7c1f734d",
     "records": [
       {
         "sequence": 1,
         "cte_type": "harvesting",
         "facility": "Green Valley Farm",
-        "payload_sha256": "33a84188c4a05f1efcae859698aedd79442694da425f2798b5a26157102aa0d0",
-        "merkle_hash": "33a84188c4a05f1efcae859698aedd79442694da425f2798b5a26157102aa0d0",
+        "payload_sha256": "de23337e6ffd8a9fbdd6e973e4c342aa3a2589c1356b5ec65026e283127d183b",
+        "merkle_hash": "de23337e6ffd8a9fbdd6e973e4c342aa3a2589c1356b5ec65026e283127d183b",
         "valid": true
       },
       {
         "sequence": 2,
         "cte_type": "cooling",
-        "facility": "Green Valley Cooler",
-        "payload_sha256": "0f7f2799170b2e03301632fbb75e692fbe65b62d87fab90a8700c155b6d73e66",
-        "merkle_hash": "422be91a5aa606b81847f89ea641ad943e22d36403b6dc65a547d29e36f0ae70",
+        "facility": "Valley Cooler Co-op",
+        "payload_sha256": "8409cca746e2caa7dde1eee70d147f516b77d2f3f45834f80d265da35e9973a9",
+        "merkle_hash": "95203a7bb202eaa8f3b4255dd73857401d36616e3af41757b0255076974d3f89",
         "valid": true
       },
       {
         "sequence": 3,
         "cte_type": "initial_packing",
         "facility": "Valley Fresh Packhouse",
-        "payload_sha256": "fcad1d2c20a1d7490f3e9c21077b96929be11d86723933ce20b11786b44f5a95",
-        "merkle_hash": "e2dc0650082225f4163f647f3e09b780de44c7ec715df09ea22b2c03adc6a5ad",
+        "payload_sha256": "d12f7525fa2548c0b7e97441e0839caaa3a7599afa088b31d173d69bf318a618",
+        "merkle_hash": "910eb11db7a915775b08b7c0340184e513f023e3fd46b2effeafd7eff055b97a",
         "valid": true
       },
       {
         "sequence": 4,
         "cte_type": "shipping",
         "facility": "Valley Fresh Packhouse",
-        "payload_sha256": "f881700e91591e8c54b6e443e3d20efd099f065bcf612d17603474397519de01",
-        "merkle_hash": "90d16ae117f972a839c83f736ef94c8c7665ed837803c419fbd6581981d217f9",
+        "payload_sha256": "86727ffc1c38bd1802f56e2b43c5bdd5130cddb8a68f29bced6af8375380285d",
+        "merkle_hash": "ce4561b848c356ad73bc5ac45e4ffbfa148816e0733e79a8144dc6e3196ef8f8",
         "valid": true
       },
       {
         "sequence": 5,
         "cte_type": "receiving",
         "facility": "Metro Distribution Center",
-        "payload_sha256": "2f208199feaaf495b3c8dbfd7e073ebf6033998e4a6addcd99f02b6fdbd78494",
-        "merkle_hash": "82ff8ab3b46e057e0c79a156bf96e19927a091cb0389cf9d0fe45020c236490e",
+        "payload_sha256": "2a77c388476de3f2e4b592a9d6aba04bfea3d279b6a8342db6a6acd9515cbc8e",
+        "merkle_hash": "4aab599f4c15838a3ea347a469bf037ecb9e313dd3f8c0c99658759f9a225bec",
         "valid": true
       },
       {
         "sequence": 6,
         "cte_type": "shipping",
         "facility": "Metro Distribution Center",
-        "payload_sha256": "c9b88053305de7d9b319bb68784cbf4a722b04895268c4fded1635ac3afc568e",
-        "merkle_hash": "396d863a2dccb8880f3e52daeaa41dbe875a78e559143ebf5b6f7b18661d203b",
+        "payload_sha256": "fad3e1ea14b8749bacc23c2ddd68395ac240878a29fe70b972e3aaee7e766d66",
+        "merkle_hash": "79ef6f14b2c5cb02366596de5b1e8db05b3f18b34186a87c1f10179687105ce0",
         "valid": true
       },
       {
         "sequence": 7,
         "cte_type": "receiving",
-        "facility": "SuperMart Store #145",
-        "payload_sha256": "ca5e2b6930c3681bb992ea95078822e81e4ed445ae7014b85f52933b53ef1eee",
-        "merkle_hash": "a4d625236d8d54eba63875fbd1a281e9b30e3040ba9f5f1dd4b8ca22e6f80d94",
+        "facility": "FreshWay Cross-Dock",
+        "payload_sha256": "bd4f8b4579664c1753e60a5dc19770d93820638ad323404ae6acefc46c38e6e6",
+        "merkle_hash": "fb15f5401a50bf7f76561154f0bd24a98c57e24e0c2d9b429cdad3deb9d3ad94",
         "valid": true
       },
       {
         "sequence": 8,
-        "cte_type": "first_land_based_receiving",
-        "facility": "Pacific Import Terminal",
-        "payload_sha256": "2c4e3ed9b5b253a70156270c4f0983b91d3a5fab4709f7cfbd93392d932aaf44",
-        "merkle_hash": "40a9ea7ab7dadf6f0c9bf26ccc003b72ff9638a0691199c80be324d41d5c17e4",
+        "cte_type": "shipping",
+        "facility": "FreshWay Cross-Dock",
+        "payload_sha256": "cbc92d3377df758d82fab198e118601c5b5bb650fc881f7959dca5744f823d66",
+        "merkle_hash": "b54762dfc7629eed1f43462b9c45fbb30531ebae8952b9d8ad3b55811640847a",
         "valid": true
       },
       {
         "sequence": 9,
-        "cte_type": "transformation",
-        "facility": "Fresh Cut Processing",
-        "payload_sha256": "f513b8caa3731001f9a02f1f4a6981dccca3414c99fa640e138bee0df4003d90",
-        "merkle_hash": "38ac44b2cb3ec89fdf67b15826a73e5a5b185e01b05f408aab8eef748cf29db6",
+        "cte_type": "receiving",
+        "facility": "Kroger DC #7218",
+        "payload_sha256": "04a23f1f705bb0e9d222075c8930cd37643da24e6756e0c37f30ade2060e7cd4",
+        "merkle_hash": "9fa0cd7f955e748f8b9f9c3d94496dfd3ab05ebe52c8e36dcb704c36206ae402",
         "valid": true
       },
       {
         "sequence": 10,
-        "cte_type": "shipping",
-        "facility": "Fresh Cut Processing",
-        "payload_sha256": "1c3b0b986b71a4465f6aa5b03b6a47e5123fa607444b8a7775b967e3c624358f",
-        "merkle_hash": "3f5286184cabc4095eb67e6593d68855e3a6406c28b0bc37e62f8f7e0d2b0534",
+        "cte_type": "transformation",
+        "facility": "Kroger DC #7218",
+        "payload_sha256": "b638aa6a9c796b723bcf61fcdd8262d52c1c4c488cafe73ba526a87e8c624689",
+        "merkle_hash": "0b933c9cf3a6fca61cfc2a48198c1499090abed1bbb3fbf02dc4d5400d636479",
         "valid": true
       },
       {
         "sequence": 11,
-        "cte_type": "receiving",
+        "cte_type": "shipping",
         "facility": "Kroger DC #7218",
-        "payload_sha256": "387b93cd3414ea9faaa465f5eb5bfecb0d0c01c46f029bc93daaad57f151f30e",
-        "merkle_hash": "0f17c55a2a417b629c803d8be368f6a29c55eade9dacc8b822102246ad6a1490",
+        "payload_sha256": "7b60eff1ba9fc45d81622feb44311289232decb4f35cde0e0943ee226db0a908",
+        "merkle_hash": "2c9d3b80223aa7a2e9069982ca6f0b014cf8a9a06b4452da45ab3bfa6d0efb72",
         "valid": true
       },
       {
         "sequence": 12,
-        "cte_type": "shipping",
-        "facility": "Kroger DC #7218",
-        "payload_sha256": "337bff162063d1d741416bfd188c5b6046f5f3b75f41723e43042dd885448292",
-        "merkle_hash": "7e421cfbdb762a902951daa9964654f683c7e7c73bb31467740cc03dcea1ee00",
+        "cte_type": "receiving",
+        "facility": "Kroger Store #3301",
+        "payload_sha256": "a24e62d8b6a3667cf4006762d289048121c549f7770a5fa9282e793993df4495",
+        "merkle_hash": "c16ea4a1aa3b0f127e42d72d4174306eb6474cc02de931fefe3693bd7c1f734d",
         "valid": true
       }
     ]
