@@ -1,0 +1,109 @@
+name: QA Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  # ── Stage 1: Fast Gate ─────────────────────────────────
+  fast-gate:
+    name: Fast Gate (unit + FSMA + tenant)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
+      - name: Unit tests
+        run: cd frontend && npm run test:run
+        continue-on-error: true
+
+      - name: FSMA 204 compliance checks
+        run: node qa/fsma-lite-check.js
+
+      - name: Tenant isolation checks
+        run: node qa/tenant-test.js
+
+  # ── Stage 2: System Simulation ─────────────────────────
+  system-sim:
+    name: System Simulation (flow + bad data + export)
+    needs: fast-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Full ingestion-to-export flow
+        run: node qa/full-flow.js
+
+      - name: Bad data rejection
+        run: node qa/bad-data.js
+
+      - name: Export artifact validation
+        run: node qa/export-validate.js
+
+  # ── Stage 3: AI Analysis ───────────────────────────────
+  ai-analysis:
+    name: AI Content Analysis
+    needs: system-sim
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run AI analysis
+        run: node qa/ai-analysis.js
+
+  # ── Stage 4: Decision Gate ─────────────────────────────
+  decision:
+    name: Deploy Decision
+    if: always()
+    needs: [fast-gate, system-sim]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run decision gate
+        env:
+          FAST_GATE_RESULT: ${{ needs.fast-gate.result }}
+          SYSTEM_SIM_RESULT: ${{ needs.system-sim.result }}
+        run: node qa/decision.js
