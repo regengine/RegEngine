@@ -64,7 +64,7 @@ const SEARCH_INDEX: SearchItem[] = [
     { title: 'Notifications', description: 'Notification preferences and channels', href: '/dashboard/notifications', category: 'dashboard', keywords: ['notifications', 'preferences', 'email', 'alerts'] },
 
     // FSMA compliance content
-    { title: 'Critical Tracking Events (CTEs)', description: '6 event types: harvesting, cooling, packing, shipping, receiving, transformation', href: '/fsma-204#ctes', category: 'compliance', keywords: ['cte', 'critical tracking event', 'harvesting', 'cooling', 'packing', 'shipping', 'receiving', 'transformation'] },
+    { title: 'Critical Tracking Events (CTEs)', description: '7 event types: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, transformation', href: '/fsma-204#ctes', category: 'compliance', keywords: ['cte', 'critical tracking event', 'harvesting', 'cooling', 'packing', 'first land-based receiving', 'shipping', 'receiving', 'transformation'] },
     { title: 'Key Data Elements (KDEs)', description: 'Required data fields for each CTE type', href: '/fsma-204#kdes', category: 'compliance', keywords: ['kde', 'key data element', 'fields', 'required', 'data points'] },
     { title: 'Food Traceability List (FTL)', description: '23 FDA food categories covered by FSMA 204', href: '/fsma-204#ftl', category: 'compliance', keywords: ['ftl', 'food traceability list', 'categories', 'leafy greens', 'seafood', 'cheese', 'eggs'] },
     { title: '24-Hour Response Rule', description: 'FDA can request records and you must respond within 24 hours', href: '/fsma-204#24-hour', category: 'compliance', keywords: ['24 hour', 'response', 'fda request', 'records', 'deadline'] },

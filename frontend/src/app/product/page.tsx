@@ -26,7 +26,7 @@ const PILLARS = [
 ];
 
 const FLOW_STEPS = [
-  { title: "Connect", description: "API, CSV, EDI 856, and supplier portal ingestion paths.", Icon: Layers },
+  { title: "Connect", description: "API, CSV/XLSX, and SFTP ingestion paths. EDI 856 inbound in guided pilot.", Icon: Layers },
   { title: "Scan & Capture", description: "QR decode, mobile field capture, and CTE auto-fill.", Icon: ClipboardCheck },
   { title: "Monitor", description: "Compliance scoring, smart alerts, and knowledge graph views.", Icon: Gauge },
   { title: "Export", description: "FDA package, recall simulation outputs, and retailer audit exports.", Icon: FileSearch },
@@ -41,7 +41,7 @@ const FREE_TOOLS = [
   { title: "Retailer Readiness", description: "Benchmark supplier readiness against retailer expectations.", href: "/retailer-readiness", Icon: BarChart3 },
 ];
 
-const INTEGRATION_HITS = ["Multi-tenant RLS", "RBAC enforcement", "Tenant rate limiting", "Webhook ingestion", "EPCIS 2.0 exchange", "EDI 856 inbound", "Stripe billing"];
+const INTEGRATION_HITS = ["Multi-tenant RLS", "RBAC enforcement", "Tenant rate limiting", "Webhook ingestion", "EPCIS 2.0 exchange", "EDI 856 (pilot)", "Stripe billing"];
 
 export default function ProductPage() {
     return (
