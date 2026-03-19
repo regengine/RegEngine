@@ -34,7 +34,18 @@ const jsonLd = {
 
 export default function UnifiedDashboardPage() {
     return (
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense fallback={
+            <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
+                <div className="max-w-2xl mx-auto text-center">
+                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Unified FSMA Dashboard</h1>
+                    <p className="text-sm text-[var(--re-text-muted)] max-w-lg mx-auto mb-4 leading-relaxed">A consolidated command center for FSMA 204 compliance. Combines anomaly detection, supply chain knowledge graphs, and compliance scoring into a single view. Monitor your traceability data integrity in real time.</p>
+                    <div className="flex gap-2 items-center justify-center text-xs text-[var(--re-text-disabled)]">
+                        <div className="w-3 h-3 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin" />
+                        Loading dashboard…
+                    </div>
+                </div>
+            </div>
+        }>
             <JSONLD data={jsonLd} />
             <UnifiedDashboardClient />
         </Suspense>

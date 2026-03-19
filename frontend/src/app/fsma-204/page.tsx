@@ -82,7 +82,7 @@ const STEPS = [
   {
     num: "3",
     title: "RegEngine maps your events",
-    desc: "We automatically organize your data into the 6 Critical Tracking Events the FDA requires. You see a simple dashboard showing what\u2019s covered and what\u2019s missing.",
+    desc: "We automatically organize your data into the 7 Critical Tracking Events the FDA requires — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You see a simple dashboard showing what\u2019s covered and what\u2019s missing.",
     cta: null,
   },
   {
