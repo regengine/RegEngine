@@ -24,6 +24,7 @@ import {
 
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 import type {
     SupplierFacility,
     SupplierComplianceScore,
@@ -147,6 +148,9 @@ export default function SupplierDashboardPage() {
     }, [isLoggedIn]);
 
     useEffect(() => { loadData(); }, [loadData]);
+
+    // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
+    useDashboardRefresh(loadData);
 
     /* ---------- Create facility ----------------------------------- */
     const handleAdd = async () => {
