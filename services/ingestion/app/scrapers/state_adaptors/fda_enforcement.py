@@ -1,7 +1,7 @@
 import logging
 import re
 import requests
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from urllib.parse import urljoin
 from typing import Iterable, Optional
 from datetime import datetime, timezone
