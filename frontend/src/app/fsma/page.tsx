@@ -356,8 +356,8 @@ export default function FSMADashboardPage() {
               {/* Active Recall Timer */}
               <RecallTimer
                 drill={activeDrill}
-                onCancel={() => { /* TODO */ }}
-                onComplete={() => { /* TODO */ }}
+                onCancel={() => { recallDrills.refetch(); }}
+                onComplete={() => { recallDrills.refetch(); }}
                 onStartDrill={() => handleStartDrill('FORWARD')}
               />
 
