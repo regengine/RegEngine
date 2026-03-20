@@ -7,10 +7,12 @@ DTD blocking, and entity expansion limits.
 
 import io
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
+from xml.etree.ElementTree import Element, ParseError
+
+import defusedxml.ElementTree as SafeET
 
 
 class XMLThreatType(str, Enum):
@@ -69,7 +71,7 @@ class XMLParseResultData:
     """Result of XML parsing."""
     
     status: XMLParseResult
-    root: Optional[ET.Element] = None
+    root: Optional[Element] = None
     threats: list = field(default_factory=list)
     error_message: Optional[str] = None
 
@@ -286,7 +288,7 @@ class SafeXMLParser:
         
         # Parse with safe parser
         try:
-            root = ET.fromstring(xml_content)
+            root = SafeET.fromstring(xml_content)
             
             # Validate structure
             if not self._validate_structure(root):
@@ -299,7 +301,7 @@ class SafeXMLParser:
                 status=XMLParseResult.SUCCESS,
                 root=root,
             )
-        except ET.ParseError as e:
+        except ParseError as e:
             return XMLParseResultData(
                 status=XMLParseResult.ERROR,
                 error_message=f"Parse error: {e}",
@@ -307,7 +309,7 @@ class SafeXMLParser:
     
     def _validate_structure(
         self,
-        element: ET.Element,
+        element: Element,
         depth: int = 0,
     ) -> bool:
         """Validate XML structure."""
@@ -392,7 +394,7 @@ class XMLSecurityService:
     def parse_or_none(
         self,
         xml_content: str,
-    ) -> Optional[ET.Element]:
+    ) -> Optional[Element]:
         """Parse XML and return root or None if unsafe."""
         result = self.parse(xml_content)
         return result.root if result.status == XMLParseResult.SUCCESS else None
