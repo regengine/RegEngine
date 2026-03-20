@@ -25,6 +25,8 @@ from sqlalchemy import text
 
 from app.authz import require_permission
 from app.format_extractors import is_edi_content
+from app.shared.tenant_resolution import resolve_tenant_id
+from app.shared.upload_limits import read_upload_with_limit, MAX_EDI_FILE_SIZE_BYTES
 from app.webhook_compat import ingest_events
 from app.webhook_models import (
     IngestEvent,
@@ -92,45 +94,7 @@ class EDIIngestResponse(BaseModel):
     ingestion_result: IngestResponse
 
 
-def _get_db_session():
-    from shared.database import SessionLocal
-
-    return SessionLocal()
-
-
-def _resolve_tenant_id(
-    explicit_tenant_id: Optional[str],
-    x_tenant_id: Optional[str],
-    x_regengine_api_key: Optional[str],
-) -> Optional[str]:
-    if explicit_tenant_id:
-        return explicit_tenant_id
-    if x_tenant_id:
-        return x_tenant_id
-    if not x_regengine_api_key:
-        return None
-
-    db = _get_db_session()
-    try:
-        row = db.execute(
-            text(
-                """
-                SELECT tenant_id
-                FROM api_keys
-                WHERE key_hash = encode(sha256(:raw::bytea), 'hex')
-                LIMIT 1
-                """
-            ),
-            {"raw": x_regengine_api_key},
-        ).fetchone()
-        if row and row[0]:
-            return str(row[0])
-    except Exception as exc:
-        logger.warning("edi_tenant_lookup_failed error=%s", str(exc))
-    finally:
-        db.close()
-
-    return None
+_resolve_tenant_id = resolve_tenant_id
 
 
 def _verify_partner_id(x_partner_id: Optional[str]) -> None:
@@ -996,7 +960,7 @@ async def ingest_edi_document(
 
     _verify_partner_id(x_partner_id)
 
-    raw_bytes = await file.read()
+    raw_bytes = await read_upload_with_limit(file, max_bytes=MAX_EDI_FILE_SIZE_BYTES, label="EDI file")
     if not raw_bytes:
         raise HTTPException(status_code=400, detail="Empty EDI payload")
 

@@ -97,7 +97,7 @@ from .scrapers.state_generic import StateRegistryScraper as GenericStateScraper
 from .scraper_job import run_state_scrape_job, run_generic_scrape_job
 
 logger = structlog.get_logger("ingestion")
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/regulatory", tags=["regulatory-pipeline"], include_in_schema=False)
 
 GENERIC_STATE_SCRAPER = GenericStateScraper()
 _PIPELINE = ScraperPipeline()
@@ -597,42 +597,7 @@ async def ingest_all_regulations(
     }
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    """Health-check endpoint."""
-    settings = get_settings()
-    kafka_status = "unavailable"
-    try:
-        if AdminClient is None:
-            raise RuntimeError("confluent_kafka is not installed")
-        admin_client = AdminClient(
-            {
-                "bootstrap.servers": settings.kafka_bootstrap_servers,
-                "client.id": "ingestion-healthcheck",
-            }
-        )
-        admin_client.list_topics(timeout=5)
-        kafka_status = "available"
-    except Exception as exc:
-        logger.warning("ingestion_health_kafka_unavailable", error=str(exc))
-    return {
-        "status": "healthy",
-        "service": "ingestion-service",
-        "kafka": kafka_status,
-    }
-
-
-@router.get("/metrics")
-def metrics() -> PlainTextResponse:
-    import os as _os
-    _prod = (
-        _os.getenv("ENV", "").lower() == "production"
-        or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
-    )
-    if _prod:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Metrics disabled in production")
-    return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+# NOTE: /health and /metrics endpoints moved to routes_health_metrics.py (Finding #8, Ingestion Debug Audit)
 
 
 def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
@@ -907,7 +872,7 @@ async def ingest_direct(
             vertical=payload.vertical or "unknown",
             source_type="direct",
             status=JobStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             config={"source_url": url_str}
         )
         try:
@@ -932,7 +897,7 @@ async def ingest_direct(
         
         if db_manager:
             job.status = JobStatus.COMPLETED
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             job.documents_processed = 1
             job.documents_succeeded = 1
             db_manager.update_job(job)
@@ -945,7 +910,7 @@ async def ingest_direct(
         if db_manager:
             job.status = JobStatus.FAILED
             job.error_message = str(exc)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
         logger.exception("ingestion_error", error=str(exc)); raise HTTPException(status_code=500, detail="Internal server error")
     finally:
@@ -980,7 +945,7 @@ async def ingest_file(
             vertical=vertical or "unknown",
             source_type="file_upload",
             status=JobStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             config={"filename": file.filename}
         )
         try:
@@ -1009,7 +974,7 @@ async def ingest_file(
         
         if db_manager:
             job.status = JobStatus.COMPLETED
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             job.documents_processed = 1
             job.documents_succeeded = 1
             db_manager.update_job(job)
@@ -1022,7 +987,7 @@ async def ingest_file(
         if db_manager:
             job.status = JobStatus.FAILED
             job.error_message = str(exc)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
         if isinstance(exc, HTTPException):
             raise
@@ -1063,7 +1028,7 @@ async def ingest_url(
             vertical=payload.vertical or "unknown",
             source_type="url",
             status=JobStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             config={"url": url_str}
         )
         try:
@@ -1091,7 +1056,7 @@ async def ingest_url(
         
         if db_manager:
             job.status = JobStatus.COMPLETED
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             job.documents_processed = 1
             job.documents_succeeded = 1
             db_manager.update_job(job)
@@ -1105,7 +1070,7 @@ async def ingest_url(
         if db_manager:
             job.status = JobStatus.FAILED
             job.error_message = str(exc.detail)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
         REQUEST_COUNTER.labels(endpoint=endpoint, status=str(exc.status_code)).inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
@@ -1116,7 +1081,7 @@ async def ingest_url(
         if db_manager:
             job.status = JobStatus.FAILED
             job.error_message = str(exc)
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
         logger.exception("ingest_unexpected_error", error=str(exc))
         REQUEST_COUNTER.labels(endpoint=endpoint, status="500").inc()
@@ -1149,7 +1114,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
             vertical=vertical,
             source_type=source_system,
             status=JobStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             config=kwargs
         )
         try:
@@ -1196,7 +1161,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
         if db_manager:
             # Update job status
             job.status = JobStatus.COMPLETED
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
             job.documents_processed = count
             job.documents_succeeded = success_count
             job.documents_failed = failed_count
@@ -1211,7 +1176,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                 vertical=vertical,
                 source_type=source_system,
                 status=JobStatus.FAILED,
-                completed_at=datetime.utcnow(),
+                completed_at=datetime.now(timezone.utc),
                 error_message=str(e),
                 documents_processed=count,
                 documents_succeeded=success_count,
@@ -1540,7 +1505,7 @@ async def verify_document(document_id: str, api_key: APIKey = Depends(require_ap
                 "text_sha256": doc["text_sha256"],
                 "text_sha512": doc["text_sha512"]
             },
-            "verified_at": datetime.utcnow().isoformat()
+            "verified_at": datetime.now(timezone.utc).isoformat()
         }
     finally:
         db_manager.close()
