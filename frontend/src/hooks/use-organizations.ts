@@ -3,12 +3,18 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Use a dedicated client that queries the fsma schema
-const fsmaClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-    { db: { schema: 'fsma' } }
-);
+// Use a dedicated client that queries the fsma schema.
+// Lazy-init to avoid "supabaseUrl is required" errors in test/CI environments.
+let _fsmaClient: ReturnType<typeof createClient> | null = null;
+function getFsmaClient() {
+    if (!_fsmaClient) {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        if (!url || !key) return null;
+        _fsmaClient = createClient(url, key, { db: { schema: 'fsma' } });
+    }
+    return _fsmaClient;
+}
 
 export type OrgType = 'retailer' | 'supplier' | 'manufacturer' | 'distributor' | 'grower' | 'importer';
 
@@ -45,7 +51,14 @@ export function useOrganizations(): UseOrganizationsResult {
 
         async function fetchOrgs() {
             try {
-                const { data, error: queryError } = await fsmaClient
+                const client = getFsmaClient();
+                if (!client) {
+                    // No Supabase credentials — degrade gracefully (CI/test)
+                    setOrganizations([]);
+                    setIsLoading(false);
+                    return;
+                }
+                const { data, error: queryError } = await client
                     .from('organizations')
                     .select('id, name, slug, plan, type, primary_contact, contact_email, phone, address, fei_number')
                     .order('name');
