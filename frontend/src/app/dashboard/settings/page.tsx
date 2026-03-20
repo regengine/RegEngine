@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,11 +8,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
+import { useOrganizations } from '@/hooks/use-organizations';
+import { useCurrentSubscription } from '@/hooks/use-billing';
 import {
     AlertTriangle, Settings, Building2, Key, Database, Plug,
     Save, CheckCircle2, Copy, Eye, EyeOff, CreditCard, BarChart3,
     Shield, RefreshCw, Clock, ExternalLink, ChevronRight,
-    Zap, Globe, ArrowRight, Lock,
+    Zap, Globe, ArrowRight, Lock, Loader2,
 } from 'lucide-react';
 
 /* ── Available Integrations Catalog ── */
@@ -46,20 +50,47 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
+    const { user } = useAuth();
+    const { tenantId } = useTenant();
+    const { organizations } = useOrganizations();
+    const currentOrg = organizations.find(o => o.id === tenantId);
+    const { data: subscriptionData, isLoading: subLoading } = useCurrentSubscription();
+
     const [saved, setSaved] = useState(false);
     const [showKey, setShowKey] = useState(false);
     const [copiedKey, setCopiedKey] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
 
     const [profile, setProfile] = useState({
-        company_name: 'Acme Food Distribution',
+        company_name: '',
         company_type: 'distributor',
-        primary_contact: 'Jordan Smith',
-        contact_email: 'jsmith@example.com',
-        phone: '+1 (555) 012-3456',
-        address: '123 Commerce Way, Salinas, CA 93901',
+        primary_contact: '',
+        contact_email: '',
+        phone: '',
+        address: '',
         fei_number: '',
     });
+
+    // Populate profile from org context / auth user when available
+    useEffect(() => {
+        const orgName = currentOrg?.name || '';
+        const contactEmail = user?.email || '';
+
+        if (orgName || contactEmail) {
+            setProfile(prev => ({
+                ...prev,
+                company_name: orgName || prev.company_name,
+                contact_email: contactEmail || prev.contact_email,
+            }));
+        }
+    }, [currentOrg, user]);
+
+    // Derive plan display from subscription data
+    const planName = subscriptionData?.subscription?.tier_id
+        ? subscriptionData.subscription.tier_id.charAt(0).toUpperCase() + subscriptionData.subscription.tier_id.slice(1) + ' Plan'
+        : 'No Plan Selected';
+    const billingCycle = subscriptionData?.subscription?.billing_cycle || '';
+
     const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
@@ -107,13 +138,21 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-3">
                                 <CreditCard className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
                                 <div>
-                                    <span className="font-medium text-sm">Growth Plan</span>
-                                    <span className="text-xs text-muted-foreground ml-2">$1,079/mo</span>
+                                    {subLoading ? (
+                                        <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <Loader2 className="h-3 w-3 animate-spin" /> Loading plan...
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span className="font-medium text-sm">{planName}</span>
+                                            {billingCycle && (
+                                                <span className="text-xs text-muted-foreground ml-2">({billingCycle})</span>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground flex-wrap">
-                                <div className="flex items-center gap-1"><BarChart3 className="h-3 w-3" /> 2/5 facilities</div>
-                                <div>12,847/50K events</div>
                                 <Link href="/pricing">
                                     <Button variant="outline" size="sm" className="rounded-xl text-xs min-h-[44px]">
                                         Manage Plan <ExternalLink className="h-3 w-3 ml-1" />
