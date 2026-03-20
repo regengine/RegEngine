@@ -1,36 +1,9 @@
 import { NextResponse } from 'next/server';
 
-// Required for static export
-export const dynamic = 'force-static';
-
-import fs from 'fs';
-import path from 'path';
+export const dynamic = 'force-dynamic';
 
 function getAdminKey(): string | null {
-    let adminKey = process.env.ADMIN_MASTER_KEY;
-
-    // Fallback: Try to read from root .env file (for local dev with docker-compose)
-    if (!adminKey) {
-        try {
-            const envPath = path.resolve(process.cwd(), '../.env');
-            if (fs.existsSync(envPath)) {
-                const envContent = fs.readFileSync(envPath, 'utf8');
-                const match = envContent.match(/ADMIN_MASTER_KEY=(.*)$/m);
-                if (match && match[1]) {
-                    adminKey = match[1].trim();
-                    // Remove potential quotes
-                    if ((adminKey.startsWith('"') && adminKey.endsWith('"')) ||
-                        (adminKey.startsWith("'") && adminKey.endsWith("'"))) {
-                        adminKey = adminKey.slice(1, -1);
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to read root .env file:', e);
-        }
-    }
-
-    return adminKey || null;
+    return process.env.ADMIN_MASTER_KEY || null;
 }
 
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';

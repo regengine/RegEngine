@@ -182,14 +182,9 @@ export async function middleware(request: NextRequest) {
         return await requireAppAuth(request);
     }
 
-    // Developer portal routes — full Supabase session check
-    if (pathname.startsWith('/developer')) {
-        return await updateSession(request);
-    }
-
-    // Gated dev routes — redirect to developer login
-    if (isGatedRoute(pathname)) {
-        return await updateSession(request);
+    // Developer portal routes — same dual auth as app routes
+    if (pathname.startsWith('/developer') || isGatedRoute(pathname)) {
+        return await requireAppAuth(request);
     }
 
     // Block non-FSMA verticals
