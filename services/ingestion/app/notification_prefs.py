@@ -8,13 +8,26 @@ delivery channels, quiet hours, and escalation rules.
 from __future__ import annotations
 
 import logging
+import json
+from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("notification-prefs")
+
+
+def _get_db():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["Notification Preferences"])
 
@@ -91,7 +104,56 @@ def _default_preferences(tenant_id: str) -> NotificationPreferences:
     )
 
 
+# In-memory fallback for when DB is unavailable
 _prefs_store: dict[str, NotificationPreferences] = {}
+
+
+def _db_get_preferences(tenant_id: str) -> Optional[NotificationPreferences]:
+    """Query notification preferences from database."""
+    db = _get_db()
+    if not db:
+        return None
+    try:
+        row = db.execute(
+            text("SELECT prefs_json FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid"),
+            {"tid": tenant_id}
+        ).fetchone()
+        if not row:
+            return None
+        prefs_data = json.loads(row[0]) if row[0] else {}
+        prefs_data["tenant_id"] = tenant_id
+        return NotificationPreferences(**prefs_data)
+    except Exception as exc:
+        logger.warning("db_read_failed error=%s", str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_save_preferences(tenant_id: str, prefs: NotificationPreferences) -> bool:
+    """Insert or update notification preferences in database."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        prefs_json = json.dumps(prefs.model_dump(exclude={"tenant_id"}))
+        db.execute(
+            text("""
+                INSERT INTO fsma.tenant_notification_prefs (tenant_id, prefs_json, created_at, updated_at)
+                VALUES (:tid, :json, now(), now())
+                ON CONFLICT (tenant_id) DO UPDATE SET prefs_json = :json, updated_at = now()
+            """),
+            {"tid": tenant_id, "json": prefs_json}
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_write_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
 
 
 @router.get(
@@ -104,6 +166,12 @@ async def get_preferences(
     _: None = Depends(_verify_api_key),
 ) -> NotificationPreferences:
     """Get notification preferences for a tenant."""
+    # Try DB first
+    prefs = _db_get_preferences(tenant_id)
+    if prefs:
+        return prefs
+    
+    # Fall back to memory or return defaults
     if tenant_id not in _prefs_store:
         _prefs_store[tenant_id] = _default_preferences(tenant_id)
     return _prefs_store[tenant_id]
@@ -121,7 +189,11 @@ async def update_preferences(
 ) -> NotificationPreferences:
     """Update notification preferences for a tenant."""
     prefs.tenant_id = tenant_id
-    _prefs_store[tenant_id] = prefs
+    
+    # Try DB first, fall back to memory
+    db_success = _db_save_preferences(tenant_id, prefs)
+    if not db_success:
+        _prefs_store[tenant_id] = prefs
 
     logger.info("preferences_updated", extra={"tenant_id": tenant_id})
 
@@ -139,13 +211,22 @@ async def toggle_channel(
     _: None = Depends(_verify_api_key),
 ):
     """Enable or disable a notification channel."""
-    if tenant_id not in _prefs_store:
-        _prefs_store[tenant_id] = _default_preferences(tenant_id)
-
-    prefs = _prefs_store[tenant_id]
+    # Get current preferences
+    prefs = _db_get_preferences(tenant_id)
+    if prefs is None:
+        if tenant_id not in _prefs_store:
+            _prefs_store[tenant_id] = _default_preferences(tenant_id)
+        prefs = _prefs_store[tenant_id]
+    
     for ch in prefs.channels:
         if ch.channel == channel:
             ch.enabled = enabled
+            
+            # Try DB first, fall back to memory
+            db_success = _db_save_preferences(tenant_id, prefs)
+            if not db_success:
+                _prefs_store[tenant_id] = prefs
+            
             return {"channel": channel, "enabled": enabled}
 
     return {"error": f"Channel '{channel}' not found"}
@@ -162,13 +243,22 @@ async def toggle_alert_rule(
     _: None = Depends(_verify_api_key),
 ):
     """Enable or disable an alert rule notification."""
-    if tenant_id not in _prefs_store:
-        _prefs_store[tenant_id] = _default_preferences(tenant_id)
-
-    prefs = _prefs_store[tenant_id]
+    # Get current preferences
+    prefs = _db_get_preferences(tenant_id)
+    if prefs is None:
+        if tenant_id not in _prefs_store:
+            _prefs_store[tenant_id] = _default_preferences(tenant_id)
+        prefs = _prefs_store[tenant_id]
+    
     for ap in prefs.alert_preferences:
         if ap.rule_id == rule_id:
             ap.enabled = enabled
+            
+            # Try DB first, fall back to memory
+            db_success = _db_save_preferences(tenant_id, prefs)
+            if not db_success:
+                _prefs_store[tenant_id] = prefs
+            
             return {"rule_id": rule_id, "enabled": enabled}
 
     return {"error": f"Rule '{rule_id}' not found"}

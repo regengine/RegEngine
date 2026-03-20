@@ -16,7 +16,7 @@ from .models import DiscoveryQueueItem, BulkDiscoveryRequest
 from kernel.discovery import discovery
 
 logger = structlog.get_logger("ingestion.discovery")
-router = APIRouter()
+router = APIRouter(include_in_schema=False)
 
 
 @router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])

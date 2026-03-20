@@ -10,13 +10,25 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import json
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("supplier-mgmt")
+
+
+def _get_db():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
 
 router = APIRouter(prefix="/api/v1/suppliers", tags=["Supplier Management"])
 
@@ -57,75 +69,84 @@ class CreateSupplierRequest(BaseModel):
     products: list[str] = Field(default_factory=list)
 
 
-# Sample supplier data — marked is_sample=True so the UI can show a banner
-def _generate_sample_suppliers(tenant_id: str) -> list[SupplierRecord]:
-    now = datetime.now(timezone.utc)
-    records = [
-        SupplierRecord(
-            id=f"{tenant_id}-sup-001",
-            name="Valley Fresh Farms",
-            contact_email="ops@valleyfresh.com",
-            portal_link_id="portal-vff-001",
-            portal_status="active",
-            submissions_count=12,
-            last_submission=(now - timedelta(hours=6)).isoformat(),
-            compliance_status="compliant",
-            products=["Romaine Lettuce", "Roma Tomatoes"],
-        ),
-        SupplierRecord(
-            id=f"{tenant_id}-sup-002",
-            name="Pacific Seafood Inc.",
-            contact_email="trace@pacseafood.com",
-            portal_link_id="portal-psi-002",
-            portal_status="active",
-            submissions_count=8,
-            last_submission=(now - timedelta(days=2)).isoformat(),
-            compliance_status="compliant",
-            products=["Atlantic Salmon Fillets", "Pacific Cod"],
-        ),
-        SupplierRecord(
-            id=f"{tenant_id}-sup-003",
-            name="Sunrise Produce Co.",
-            contact_email="quality@sunriseproduce.com",
-            portal_link_id="portal-spc-003",
-            portal_status="expired",
-            submissions_count=3,
-            last_submission=(now - timedelta(days=35)).isoformat(),
-            compliance_status="partial",
-            missing_kdes=["ship_from_gln", "carrier_name"],
-            products=["English Cucumbers"],
-        ),
-        SupplierRecord(
-            id=f"{tenant_id}-sup-004",
-            name="Green Valley Organics",
-            contact_email="farm@greenvalley.org",
-            portal_link_id=None,
-            portal_status="no_link",
-            submissions_count=0,
-            compliance_status="non_compliant",
-            missing_kdes=["all — no submissions received"],
-            products=["Mixed Salad Greens"],
-        ),
-        SupplierRecord(
-            id=f"{tenant_id}-sup-005",
-            name="Cold Express Logistics",
-            contact_email="dispatch@coldexpress.com",
-            portal_link_id="portal-cel-005",
-            portal_status="active",
-            submissions_count=22,
-            last_submission=(now - timedelta(hours=1)).isoformat(),
-            compliance_status="compliant",
-            products=["Third-party logistics (temperature monitoring)"],
-        ),
-    ]
-    for r in records:
-        r.is_sample = True
-    return records
-
-
-# TODO(V042): Replace with fsma.tenant_suppliers table queries.
-# Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
+# In-memory fallback for when DB is unavailable
 _suppliers_store: dict[str, list[SupplierRecord]] = {}
+
+
+def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
+    """Query suppliers from database."""
+    db = _get_db()
+    if not db:
+        return None
+    try:
+        rows = db.execute(
+            text("SELECT id, name, contact_email, portal_link_id, portal_status, submissions_count, last_submission, compliance_status, missing_kdes, products FROM fsma.tenant_suppliers WHERE tenant_id = :tid"),
+            {"tid": tenant_id}
+        ).fetchall()
+        suppliers = []
+        for row in rows:
+            suppliers.append(SupplierRecord(
+                id=row[0],
+                name=row[1],
+                contact_email=row[2],
+                portal_link_id=row[3],
+                portal_status=row[4],
+                submissions_count=row[5],
+                last_submission=row[6],
+                compliance_status=row[7],
+                missing_kdes=json.loads(row[8]) if row[8] else [],
+                products=json.loads(row[9]) if row[9] else [],
+                is_sample=False,
+            ))
+        return suppliers
+    except Exception as exc:
+        logger.warning("db_read_failed error=%s", str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
+    """Insert supplier into database."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        db.execute(
+            text("""
+                INSERT INTO fsma.tenant_suppliers 
+                (id, tenant_id, name, contact_email, portal_link_id, portal_status, submissions_count, 
+                 last_submission, compliance_status, missing_kdes, products, is_sample, created_at, updated_at)
+                VALUES (:id, :tid, :name, :email, :plink, :pstatus, :subcount, :lastsub, :comp, :kdes, :prods, false, now(), now())
+                ON CONFLICT (id) DO UPDATE SET 
+                    name = :name, contact_email = :email, portal_link_id = :plink, 
+                    portal_status = :pstatus, submissions_count = :subcount, 
+                    last_submission = :lastsub, compliance_status = :comp, 
+                    missing_kdes = :kdes, products = :prods, updated_at = now()
+            """),
+            {
+                "id": supplier.id,
+                "tid": tenant_id,
+                "name": supplier.name,
+                "email": supplier.contact_email,
+                "plink": supplier.portal_link_id,
+                "pstatus": supplier.portal_status,
+                "subcount": supplier.submissions_count,
+                "lastsub": supplier.last_submission,
+                "comp": supplier.compliance_status,
+                "kdes": json.dumps(supplier.missing_kdes),
+                "prods": json.dumps(supplier.products),
+            }
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_write_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
 
 
 @router.get(
@@ -138,10 +159,14 @@ async def get_supplier_dashboard(
     _: None = Depends(_verify_api_key),
 ) -> SupplierDashboard:
     """Get supplier dashboard with compliance overview."""
-    if tenant_id not in _suppliers_store:
-        _suppliers_store[tenant_id] = _generate_sample_suppliers(tenant_id)
-
-    suppliers = _suppliers_store[tenant_id]
+    # Try DB first
+    suppliers = _db_get_suppliers(tenant_id)
+    
+    # Fall back to memory if DB unavailable
+    if suppliers is None:
+        if tenant_id not in _suppliers_store:
+            _suppliers_store[tenant_id] = []
+        suppliers = _suppliers_store[tenant_id]
     active_links = sum(1 for s in suppliers if s.portal_status == "active")
     expired_links = sum(1 for s in suppliers if s.portal_status == "expired")
     total_subs = sum(s.submissions_count for s in suppliers)
@@ -168,11 +193,15 @@ async def add_supplier(
     _: None = Depends(_verify_api_key),
 ):
     """Add a new supplier to the management dashboard."""
-    if tenant_id not in _suppliers_store:
-        _suppliers_store[tenant_id] = _generate_sample_suppliers(tenant_id)
-
+    # Get current count from DB or memory
+    suppliers = _db_get_suppliers(tenant_id)
+    if suppliers is None:
+        if tenant_id not in _suppliers_store:
+            _suppliers_store[tenant_id] = []
+        suppliers = _suppliers_store[tenant_id]
+    
     new_supplier = SupplierRecord(
-        id=f"{tenant_id}-sup-{len(_suppliers_store[tenant_id]) + 1:03d}",
+        id=f"{tenant_id}-sup-{len(suppliers) + 1:03d}",
         name=request.name,
         contact_email=request.contact_email,
         portal_status="no_link",
@@ -180,7 +209,12 @@ async def add_supplier(
         products=request.products,
     )
 
-    _suppliers_store[tenant_id].append(new_supplier)
+    # Try DB first, fall back to memory
+    db_success = _db_add_supplier(tenant_id, new_supplier)
+    if not db_success:
+        if tenant_id not in _suppliers_store:
+            _suppliers_store[tenant_id] = []
+        _suppliers_store[tenant_id].append(new_supplier)
 
     return {"created": True, "supplier": new_supplier.model_dump()}
 
@@ -195,13 +229,25 @@ async def send_portal_link(
     _: None = Depends(_verify_api_key),
 ):
     """Generate and send a portal link to a supplier."""
-    if tenant_id not in _suppliers_store:
-        raise Exception("Tenant not found")
-
-    for supplier in _suppliers_store[tenant_id]:
+    # Try DB first
+    suppliers = _db_get_suppliers(tenant_id)
+    if suppliers is None:
+        suppliers = _suppliers_store.get(tenant_id, [])
+    
+    for supplier in suppliers:
         if supplier.id == supplier_id:
             supplier.portal_link_id = f"portal-{supplier_id[-3:]}-new"
             supplier.portal_status = "active"
+            
+            # Update in DB or memory
+            db_success = _db_add_supplier(tenant_id, supplier)
+            if not db_success:
+                if tenant_id in _suppliers_store:
+                    for mem_sup in _suppliers_store[tenant_id]:
+                        if mem_sup.id == supplier_id:
+                            mem_sup.portal_link_id = supplier.portal_link_id
+                            mem_sup.portal_status = supplier.portal_status
+            
             return {
                 "sent": True,
                 "supplier_id": supplier_id,
@@ -221,10 +267,12 @@ async def supplier_health(
     _: None = Depends(_verify_api_key),
 ):
     """Get supplier network health metrics."""
-    if tenant_id not in _suppliers_store:
-        _suppliers_store[tenant_id] = _generate_sample_suppliers(tenant_id)
-
-    suppliers = _suppliers_store[tenant_id]
+    # Try DB first
+    suppliers = _db_get_suppliers(tenant_id)
+    if suppliers is None:
+        if tenant_id not in _suppliers_store:
+            _suppliers_store[tenant_id] = []
+        suppliers = _suppliers_store[tenant_id]
     now = datetime.now(timezone.utc)
 
     active_30d = 0

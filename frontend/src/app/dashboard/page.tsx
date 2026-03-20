@@ -207,6 +207,7 @@ export default function DashboardPage() {
                 documentsIngested: systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0,
                 complianceScore: systemMetrics.compliance_score ?? 0,
                 openAlerts: systemMetrics.open_alerts ?? 0,
+                // TODO: Wire pendingReviews to /api/v1/compliance/pending-reviews endpoint
                 pendingReviews: 0,
             };
         }
@@ -214,6 +215,7 @@ export default function DashboardPage() {
             documentsIngested: 0,
             complianceScore: 0,
             openAlerts: 0,
+            // TODO: Wire pendingReviews to DB-backed endpoint
             pendingReviews: 0,
         };
     }, [systemMetrics]);
