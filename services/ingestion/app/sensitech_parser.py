@@ -29,6 +29,7 @@ from app.webhook_models import (
     WebhookCTEType,
     WebhookPayload,
 )
+from app.shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
 from app.webhook_compat import _verify_api_key, ingest_events
 
 logger = logging.getLogger("sensitech-parser")
@@ -187,7 +188,7 @@ async def import_sensitech(
         )
 
     # Parse CSV
-    content = (await file.read()).decode("utf-8-sig")
+    content = (await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Sensitech CSV")).decode("utf-8-sig")
     readings = _parse_sensitech_csv(content)
 
     if not readings:
