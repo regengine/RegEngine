@@ -38,8 +38,14 @@ class XMLParser(DocumentParser):
             Extracted text from all text nodes
         """
         try:
-            # Parse XML
-            root = etree.fromstring(content)
+            # Parse XML with XXE-safe settings
+            parser = etree.XMLParser(
+                resolve_entities=False,
+                no_network=True,
+                remove_blank_text=True,
+                recover=True,
+            )
+            root = etree.fromstring(content, parser=parser)
             
             # Extract all text content
             text_parts = []

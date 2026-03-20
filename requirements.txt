@@ -28,6 +28,7 @@ passlib[argon2]==1.7.4
 # Pinned to >=2.10.1 to resolve conflict with gotrue (Supabase dependency)
 PyJWT==2.12.0
 argon2-cffi==23.1.0
+defusedxml>=0.7.1
 
 # Cloud/DB
 boto3==1.34.0
