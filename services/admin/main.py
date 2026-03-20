@@ -133,7 +133,21 @@ For API support, consult the documentation at `/docs` (this page) or `/redoc`.
 
 # CORS configuration
 # In production, replace with specific origins
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080").split(",")
+# HIGH #6 (UI Debug Audit): CORS origins MUST be explicit in production.
+# Never use "*" with allow_credentials=True — it allows any site to make
+# credentialed requests. In production, set CORS_ORIGINS to exactly:
+#   https://regengine.co,https://www.regengine.co
+_raw_cors = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080")
+cors_origins = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
+# Block wildcard with credentials — a common misconfiguration
+if "*" in cors_origins:
+    import warnings
+    warnings.warn(
+        "CORS_ORIGINS contains '*' which is insecure with allow_credentials=True. "
+        "Falling back to localhost-only origins. Set explicit origins in production.",
+        stacklevel=2,
+    )
+    cors_origins = ["http://localhost:3000", "http://localhost:3001"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,

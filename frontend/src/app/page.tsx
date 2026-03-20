@@ -209,6 +209,10 @@ export default function RegEngineLanding() {
       <section className="bg-[var(--re-text-primary)] text-white py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-[1100px] mx-auto text-center">
           <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
+{/* MEDIUM #7: FSMA 204 enforcement date per FY2025 Consolidated Appropriations Act,
+                 Division A, §775 (Pub. L. 118-158, signed Mar 2025). Congress directed FDA
+                 not to enforce the Food Traceability Rule before this date. Verify quarterly
+                 in case of legislative changes. Last verified: 2026-03-19 */}
             FSMA 204 Deadline: July 20, 2028
           </p>
           <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">

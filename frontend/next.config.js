@@ -17,6 +17,7 @@ const nextConfig = {
     },
     async redirects() {
         return [
+            // Existing redirects
             {
                 source: '/ftl-checker',
                 destination: '/tools/ftl-checker',
@@ -35,6 +36,41 @@ const nextConfig = {
             {
                 source: '/architecture',
                 destination: '/security',
+                permanent: true,
+            },
+            // HIGH #5 — Consolidate duplicate routes (UI Debug Audit 2026-03-19)
+            // Canonical path for retailer readiness is /tools/retailer-readiness
+            {
+                source: '/retailer-readiness',
+                destination: '/tools/retailer-readiness',
+                permanent: true,
+            },
+            // Canonical path for settings is /dashboard/settings
+            {
+                source: '/settings',
+                destination: '/dashboard/settings',
+                permanent: true,
+            },
+            {
+                source: '/settings/:path*',
+                destination: '/dashboard/settings',
+                permanent: true,
+            },
+            // Canonical path for compliance is /dashboard/compliance
+            {
+                source: '/compliance',
+                destination: '/dashboard/compliance',
+                permanent: true,
+            },
+            {
+                source: '/compliance/:path*',
+                destination: '/dashboard/compliance',
+                permanent: true,
+            },
+            // Canonical path for integrations is /dashboard/integrations
+            {
+                source: '/integrations',
+                destination: '/dashboard/integrations',
                 permanent: true,
             },
         ];
