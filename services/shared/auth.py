@@ -209,14 +209,21 @@ async def require_api_key(
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    # Testing bypass: requires AUTH_TEST_BYPASS_TOKEN and AUTH_TEST_BYPASS_TENANT_ID
-    # to be set in the environment. No hardcoded keys — fail closed if env vars absent.
+    # Testing bypass: requires AUTH_TEST_BYPASS_TOKEN to be a non-empty env var
+    # AND REGENGINE_ENV to be explicitly set to "development" or "test".
+    # Fail closed: if either is missing or env is production, bypass is disabled.
     _test_bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
     _bypass_tenant_id = os.getenv("AUTH_TEST_BYPASS_TENANT_ID", "11111111-1111-1111-1111-111111111111")
-    _is_env_bypass = bool(_test_bypass_token and x_regengine_api_key == _test_bypass_token)
+    _allowed_envs = {"development", "test"}
+    _current_env = os.getenv("REGENGINE_ENV", "production").lower()
+    _is_env_bypass = bool(
+        _test_bypass_token
+        and _current_env in _allowed_envs
+        and x_regengine_api_key == _test_bypass_token
+    )
 
     if _is_env_bypass:
-        logger.info("test_bypass_auth_used", path=request.url.path)
+        logger.info("test_bypass_auth_used", path=request.url.path, env=_current_env)
         return APIKey(
             key_id="test",
             key_hash="",
