@@ -30,6 +30,14 @@ if str(_REPO_ROOT) not in sys.path:
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
+# Force-clear any pip-installed 'kernel' module that shadows repo kernel/
+if 'kernel' in sys.modules:
+    _cached = sys.modules['kernel']
+    _cached_file = str(getattr(_cached, '__file__', '') or '')
+    if 'site-packages' in _cached_file or not hasattr(_cached, '__path__'):
+        for _key in [k for k in sys.modules if k == 'kernel' or k.startswith('kernel.')]:
+            del sys.modules[_key]
+
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
