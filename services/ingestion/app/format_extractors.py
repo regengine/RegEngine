@@ -105,7 +105,7 @@ def extract_from_xml(
 
     try:
         # Parse XML
-        parser = etree.XMLParser(remove_blank_text=True, recover=True)
+        parser = etree.XMLParser(remove_blank_text=True, recover=True, resolve_entities=False, no_network=True)
         tree = etree.parse(io.BytesIO(raw_bytes), parser)
         root = tree.getroot()
         

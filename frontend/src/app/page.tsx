@@ -69,7 +69,7 @@ export default function RegEngineLanding() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                href="/alpha"
+                href="/pricing"
                 className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px]"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
@@ -136,7 +136,7 @@ export default function RegEngineLanding() {
                 Export ready to send
               </span>
               <Link
-                href="/alpha"
+                href="/pricing"
                 className="group font-mono text-[0.72rem] font-semibold bg-[var(--re-brand)] text-white px-4 py-2.5 rounded-md transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(16,185,129,0.25)] text-center min-h-[44px] flex items-center justify-center"
               >
                 Join Founding Cohort — 50% Off for Life <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 ml-1">→</span>
@@ -230,7 +230,7 @@ export default function RegEngineLanding() {
               <span className="relative">Free Readiness Assessment</span>
             </Link>
             <Link
-              href="/alpha"
+              href="/pricing"
               className="inline-flex items-center justify-center gap-2 border border-[var(--re-brand)]/40 text-[var(--re-brand-light)] px-7 py-3.5 rounded-xl text-[0.95rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-white hover:bg-[var(--re-brand)]/10 hover:-translate-y-[2px] min-h-[48px]"
             >
               Join the Founding Cohort — 50% Off for Life

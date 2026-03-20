@@ -39,6 +39,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  *   4. clearCredentials() clears both
  *   5. NEXT STEP: Migrate all apiClient.fetch() calls to use /api/proxy,
  *      then remove API_KEY, ADMIN_KEY, and ACCESS_TOKEN from localStorage entirely
+ *
+ * MIGRATION PHASE 2: Remove localStorage reads once all clients use cookie-based auth.
+ * Currently dual-writing to both localStorage and HTTP-only cookies for backward compatibility.
+ * All new code should use /api/proxy instead of direct API calls with localStorage keys.
  */
 const STORAGE_KEYS = {
   API_KEY: 'regengine_api_key',
@@ -51,9 +55,15 @@ const STORAGE_KEYS = {
 };
 
 /** Sync sensitive credentials to HTTP-only cookies via /api/session */
-function syncSessionCookies(apiKey?: string | null, adminKey?: string | null, tenantId?: string | null) {
+function syncSessionCookies(
+  accessToken?: string | null,
+  apiKey?: string | null,
+  adminKey?: string | null,
+  tenantId?: string | null,
+) {
   if (typeof window === 'undefined') return;
   const body: Record<string, string> = {};
+  if (accessToken) body.access_token = accessToken;
   if (apiKey) body.api_key = apiKey;
   if (adminKey) body.admin_key = adminKey;
   if (tenantId) body.tenant_id = tenantId;
@@ -93,10 +103,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedAccessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
 
+      // MIGRATION: Warn on localStorage reads for sensitive credentials
+      if (storedApiKey) {
+        console.warn("[DEPRECATED] Reading API key from localStorage. Migrate to cookie-based auth via /api/proxy.");
+        setApiKeyState(storedApiKey);
+      }
+      if (storedAdminKey) {
+        console.warn("[DEPRECATED] Reading admin key from localStorage. Migrate to cookie-based auth via /api/proxy.");
+        setAdminKeyState(storedAdminKey);
+      }
+
       // Use stored key or env var (no hardcoded fallback)
       const envKey = process.env.NEXT_PUBLIC_API_KEY || '';
-      setApiKeyState(storedApiKey || envKey);
-      setAdminKeyState(storedAdminKey || envKey);
+      if (!storedApiKey) setApiKeyState(envKey);
+      if (!storedAdminKey) setAdminKeyState(envKey);
       if (storedTenantId) setTenantIdState(storedTenantId);
       if (storedOnboarded === 'true') setIsOnboarded(true);
       if (storedDemoMode === 'true') setDemoModeState(true);
@@ -118,6 +138,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsHydrated(true);
     }
   }, []);
+
+  // MIGRATION PHASE 2: Gradual migration from localStorage to cookie-based auth
+  // Once cookies are established via /api/session, clear localStorage copies
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isHydrated) {
+      // Check if HTTP-only cookies are set by making a test request to /api/session
+      // If successful, clear the localStorage copies of sensitive credentials
+      const checkAndMigrate = async () => {
+        try {
+          const response = await fetch('/api/session', { method: 'GET', credentials: 'include' });
+          if (response.ok) {
+            const data = await response.json();
+            // If cookies exist, safe to remove localStorage copies
+            if (data.has_credentials) {
+              if (localStorage.getItem(STORAGE_KEYS.API_KEY)) {
+                console.info("[MIGRATION] HTTP-only cookies detected. Removing API_KEY from localStorage.");
+                localStorage.removeItem(STORAGE_KEYS.API_KEY);
+              }
+              if (localStorage.getItem(STORAGE_KEYS.ADMIN_KEY)) {
+                console.info("[MIGRATION] HTTP-only cookies detected. Removing ADMIN_KEY from localStorage.");
+                localStorage.removeItem(STORAGE_KEYS.ADMIN_KEY);
+              }
+            }
+          }
+        } catch (e) {
+          // /api/session endpoint may not exist yet or server error — skip migration
+        }
+      };
+      checkAndMigrate();
+    }
+  }, [isHydrated]);
 
   // Supabase auth state listener — keeps token + user in sync
   useEffect(() => {
@@ -202,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem(STORAGE_KEYS.API_KEY, key);
-        syncSessionCookies(key, null, null);
+        syncSessionCookies(null, key, null, null);
       } else {
         localStorage.removeItem(STORAGE_KEYS.API_KEY);
       }
@@ -214,7 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem(STORAGE_KEYS.ADMIN_KEY, key);
-        syncSessionCookies(null, key, null);
+        syncSessionCookies(null, null, key, null);
       } else {
         localStorage.removeItem(STORAGE_KEYS.ADMIN_KEY);
       }
@@ -260,8 +311,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
       if (tenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
     }
-    // Dual-write: also store in HTTP-only cookies for /api/proxy migration
-    syncSessionCookies(apiKey, adminKey, tenantId);
+    // Dual-write: store access_token + credentials in HTTP-only cookies
+    // access_token is critical — middleware checks this cookie for route protection
+    syncSessionCookies(token, apiKey, adminKey, tenantId);
   }, [apiKey, adminKey]);
 
   const clearCredentials = useCallback(() => {

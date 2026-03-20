@@ -88,6 +88,7 @@ xlrd~=2.0.0
 python-docx~=0.8.11
 
 # XML parsing (included with lxml above)
+defusedxml>=0.7.1
 # EDI parsing (custom, no external deps)
 
 # ============================================

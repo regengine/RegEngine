@@ -30,6 +30,14 @@ export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     { label: "Get Started", href: "/onboarding" },
 ];
 
+export const MARKETING_FOOTER_DEVELOPER_LINKS: MarketingNavLink[] = [
+    { label: "Developer Portal", href: "/developers" },
+    { label: "API Docs", href: "/docs/api" },
+    { label: "Quickstart", href: "/docs/quickstart" },
+    { label: "SDKs", href: "/docs/sdks" },
+    { label: "Changelog", href: "/docs/changelog" },
+];
+
 export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
@@ -37,7 +45,6 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "Trust Center", href: "/trust" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
-    { label: "Founding Design Partners", href: "/founding-design-partners" },
     { label: "Log In", href: "/login" },
     { label: "Sign Up", href: "/signup" },
 ];
