@@ -231,7 +231,7 @@ export default function RegEngineLanding() {
             </Link>
             <Link
               href="/alpha"
-              className="inline-flex items-center justify-center gap-2 border border-[#444] text-white px-7 py-3.5 rounded-xl text-[0.95rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand-light)] hover:-translate-y-[2px] min-h-[48px]"
+              className="inline-flex items-center justify-center gap-2 border border-[var(--re-brand)]/40 text-[var(--re-brand-light)] px-7 py-3.5 rounded-xl text-[0.95rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-white hover:bg-[var(--re-brand)]/10 hover:-translate-y-[2px] min-h-[48px]"
             >
               Join the Founding Cohort — 50% Off for Life
             </Link>
