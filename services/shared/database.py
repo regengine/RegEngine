@@ -4,7 +4,7 @@ import time
 import threading
 import asyncio
 import structlog
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from contextlib import contextmanager, asynccontextmanager
@@ -80,10 +80,10 @@ def retry_with_jitter(func, max_retries=3, base_delay=0.1):
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://regengine:regengine@postgres:5432/regengine")
 engine = create_engine(
     DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
     pool_pre_ping=True,
-    pool_recycle=3600
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
 )
 
 db_pool_checkedout.set_function(lambda: engine.pool.checkedout())
@@ -94,11 +94,22 @@ circuit_breaker = CircuitBreaker()
 
 @contextmanager
 def get_db():
-    """Sync session generator with bulkhead, circuit breaker, and retry logic."""
+    """Sync session generator with bulkhead, circuit breaker, and retry logic.
+
+    The circuit breaker wraps a lightweight health-check query so that
+    persistent DB failures trip the breaker.  The *session* itself is
+    yielded directly — callers execute queries on it as normal.
+    """
     with sync_bulkhead:
         db = SessionLocal()
         try:
-            yield retry_with_jitter(lambda: circuit_breaker.call(db))
+            # Validate the connection through the circuit breaker
+            retry_with_jitter(
+                lambda: circuit_breaker.call(
+                    lambda: db.execute(text("SELECT 1"))
+                )
+            )
+            yield db
         finally:
             db.close()
 
@@ -108,7 +119,11 @@ async def get_db_async():
     async with async_bulkhead:
         db = SessionLocal()
         try:
-            # Note: Underlying logic is still sync as SQLAlchemy engine here is sync
-            yield retry_with_jitter(lambda: circuit_breaker.call(db))
+            retry_with_jitter(
+                lambda: circuit_breaker.call(
+                    lambda: db.execute(text("SELECT 1"))
+                )
+            )
+            yield db
         finally:
             db.close()

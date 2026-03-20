@@ -282,12 +282,10 @@ class DatabaseAPIKeyStore:
         """Set tenant context for RLS if provided."""
         if tenant_id:
             self._validate_uuid(tenant_id)
-            # Use format_map because bind params don't work in SET
-            await session.execute(text(f"SET LOCAL app.tenant_id = '{tenant_id}'"))
-            
-            # Verify immediately
-            result = await session.execute(text("SELECT current_setting('app.tenant_id', true)"))
-            logger.info("context_set", tenant_id=tenant_id, verified=result.scalar())
+            await session.execute(
+                text("SET LOCAL app.tenant_id = :tid"),
+                {"tid": tenant_id},
+            )
 
     async def create_key(
         self,
