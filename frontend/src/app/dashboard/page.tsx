@@ -196,9 +196,16 @@ export default function DashboardPage() {
     // Fetch real system metrics from backend
     const { data: systemMetrics } = useSystemMetrics();
 
+    // Derive tenant type from org plan or default to 'retailer'
+    // Organization type is not in the schema yet, so use plan as a heuristic
+    const tenantType = useMemo((): 'retailer' | 'supplier' | 'system' => {
+        if (currentOrg?.plan === 'system' || currentOrg?.plan === 'admin') return 'system';
+        if (currentOrg?.plan === 'supplier') return 'supplier';
+        return 'retailer';
+    }, [currentOrg?.plan]);
     const quickActions = useMemo(() => {
-        return getQuickActions('retailer');
-    }, []);
+        return getQuickActions(tenantType);
+    }, [tenantType]);
 
     // Use real metrics from backend when available, show honest zeros otherwise
     const metrics = useMemo(() => {

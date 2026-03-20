@@ -10,11 +10,19 @@ const fsmaClient = createClient(
     { db: { schema: 'fsma' } }
 );
 
+export type OrgType = 'retailer' | 'supplier' | 'manufacturer' | 'distributor' | 'grower' | 'importer';
+
 export interface Organization {
     id: string;
     name: string;
     slug: string;
     plan: string;
+    type?: OrgType;
+    primary_contact?: string;
+    contact_email?: string;
+    phone?: string;
+    address?: string;
+    fei_number?: string;
 }
 
 interface UseOrganizationsResult {
@@ -39,7 +47,7 @@ export function useOrganizations(): UseOrganizationsResult {
             try {
                 const { data, error: queryError } = await fsmaClient
                     .from('organizations')
-                    .select('id, name, slug, plan')
+                    .select('id, name, slug, plan, type, primary_contact, contact_email, phone, address, fei_number')
                     .order('name');
 
                 if (cancelled) return;

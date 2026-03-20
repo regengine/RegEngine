@@ -32,13 +32,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { PlanCard, type PlanFeature } from '@/components/billing/PlanCard';
 import { CreditRedemption } from '@/components/billing/CreditRedemption';
-import { useCreateCheckout, type RedeemResult } from '@/hooks/use-billing';
+import { useCreateCheckout, usePricingTiers, type PricingTier, type RedeemResult } from '@/hooks/use-billing';
 
 // ── Constants ─────────────────────────────────────────────────────
 
 type WizardStep = 'plan' | 'payment' | 'activation';
 
-const PLANS = [
+const FALLBACK_PLANS = [
     {
         id: 'growth', name: 'Growth', description: 'Under $50M annual revenue',
         monthlyPrice: 1299, annualPrice: 1079, cteLimit: '10,000', highlighted: false,
@@ -106,7 +106,22 @@ export function CheckoutWizard() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const createCheckout = useCreateCheckout();
+    const { data: tiersData } = usePricingTiers();
     const billingParam = searchParams?.get('billing');
+
+    // Use dynamic pricing from API if available, otherwise fall back to hardcoded plans
+    const PLANS = tiersData?.tiers?.length
+        ? tiersData.tiers.map((t: PricingTier) => ({
+            id: t.id,
+            name: t.name,
+            description: t.description,
+            monthlyPrice: t.monthly_price,
+            annualPrice: t.annual_price,
+            cteLimit: t.cte_limit,
+            highlighted: t.highlighted,
+            features: t.features as PlanFeature[],
+        }))
+        : FALLBACK_PLANS;
 
     const [currentStep, setCurrentStep] = useState<WizardStep>('plan');
     const [selectedPlan, setSelectedPlan] = useState<string>(searchParams?.get('plan') || 'growth');
@@ -120,7 +135,7 @@ export function CheckoutWizard() {
         if (planParam && PLANS.find((p) => p.id === planParam)) {
             setSelectedPlan(planParam);
         }
-    }, [searchParams]);
+    }, [searchParams, PLANS]);
 
     useEffect(() => {
         if (billingParam === 'monthly') {
