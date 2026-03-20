@@ -30,7 +30,8 @@ def test_hash_and_merkle_functions_match_supplier_path():
     assert chain_hash == _next_merkle_hash(None, payload_hash)
 
 
-def test_validate_and_normalize_payload_rejects_unknown_cte_type():
+def test_validate_and_normalize_payload_autofills_unknown_cte_type():
+    """Unknown cte_type values are auto-filled to 'receiving' (not rejected)."""
     normalized, errors = validate_and_normalize_payload(
         {
             "facilities": [
@@ -68,6 +69,8 @@ def test_validate_and_normalize_payload_rejects_unknown_cte_type():
     )
 
     assert len(normalized["facilities"]) == 1
-    assert len(normalized["events"]) == 0
-    assert errors
-    assert "Unsupported cte_type" in errors[0]["message"]
+    # Event is kept (auto-filled to "receiving"), not rejected
+    assert len(normalized["events"]) == 1
+    assert normalized["events"][0]["cte_type"] == "receiving"
+    # Autofill warning is present
+    assert any("Auto-filled" in e["message"] and "cte_type" in e["message"] for e in errors)
