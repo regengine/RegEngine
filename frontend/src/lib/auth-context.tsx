@@ -27,6 +27,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * SECURITY NOTE (CRITICAL #2 — UI Debug Audit 2026-03-19):
+ *
+ * These localStorage keys are a security risk — any XSS vector can read them.
+ * Migration plan:
+ *   1. /api/session route now stores api_key + admin_key in HTTP-only cookies
+ *   2. /api/proxy route forwards requests using cookie credentials
+ *   3. login() and setApiKey()/setAdminKey() dual-write to both localStorage
+ *      AND the /api/session HTTP-only cookie endpoint
+ *   4. clearCredentials() clears both
+ *   5. NEXT STEP: Migrate all apiClient.fetch() calls to use /api/proxy,
+ *      then remove API_KEY, ADMIN_KEY, and ACCESS_TOKEN from localStorage entirely
+ */
 const STORAGE_KEYS = {
   API_KEY: 'regengine_api_key',
   ADMIN_KEY: 'regengine_admin_key',
@@ -36,6 +49,28 @@ const STORAGE_KEYS = {
   ACCESS_TOKEN: 'regengine_access_token',
   USER: 'regengine_user',
 };
+
+/** Sync sensitive credentials to HTTP-only cookies via /api/session */
+function syncSessionCookies(apiKey?: string | null, adminKey?: string | null, tenantId?: string | null) {
+  if (typeof window === 'undefined') return;
+  const body: Record<string, string> = {};
+  if (apiKey) body.api_key = apiKey;
+  if (adminKey) body.admin_key = adminKey;
+  if (tenantId) body.tenant_id = tenantId;
+  if (Object.keys(body).length > 0) {
+    fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => { /* best-effort — localStorage is the fallback */ });
+  }
+}
+
+/** Clear HTTP-only session cookies */
+function clearSessionCookies() {
+  if (typeof window === 'undefined') return;
+  fetch('/api/session', { method: 'DELETE' }).catch(() => {});
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
@@ -167,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem(STORAGE_KEYS.API_KEY, key);
+        syncSessionCookies(key, null, null);
       } else {
         localStorage.removeItem(STORAGE_KEYS.API_KEY);
       }
@@ -178,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem(STORAGE_KEYS.ADMIN_KEY, key);
+        syncSessionCookies(null, key, null);
       } else {
         localStorage.removeItem(STORAGE_KEYS.ADMIN_KEY);
       }
@@ -223,7 +260,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
       if (tenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
     }
-  }, []);
+    // Dual-write: also store in HTTP-only cookies for /api/proxy migration
+    syncSessionCookies(apiKey, adminKey, tenantId);
+  }, [apiKey, adminKey]);
 
   const clearCredentials = useCallback(() => {
     setApiKeyState(null);
@@ -242,6 +281,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
     }
+    // Also clear HTTP-only cookies
+    clearSessionCookies();
   }, []);
 
   const logout = useCallback(() => {
