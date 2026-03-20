@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 
+from app.shared.tenant_resolution import resolve_tenant_id
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("epcis-ingestion")
@@ -428,6 +429,8 @@ def _is_production() -> bool:
     return os.getenv("REGENGINE_ENV", "development").lower() in {"production", "prod"}
 
 
+# Safety: Allow in-memory fallback only outside production.
+# This prevents unintended data loss if DB unavailability is transient.
 def _allow_in_memory_fallback() -> bool:
     explicit = os.getenv("ALLOW_EPCIS_IN_MEMORY_FALLBACK")
     if explicit is not None:
@@ -441,40 +444,7 @@ def _get_db_session():
     return SessionLocal()
 
 
-def _resolve_tenant_id(
-    explicit_tenant_id: Optional[str],
-    x_tenant_id: Optional[str],
-    x_regengine_api_key: Optional[str],
-) -> Optional[str]:
-    if explicit_tenant_id:
-        return explicit_tenant_id
-    if x_tenant_id:
-        return x_tenant_id
-    if not x_regengine_api_key:
-        return None
-
-    try:
-        db = _get_db_session()
-        try:
-            row = db.execute(
-                text(
-                    """
-                    SELECT tenant_id
-                    FROM api_keys
-                    WHERE key_hash = encode(sha256(:raw::bytea), 'hex')
-                    LIMIT 1
-                    """
-                ),
-                {"raw": x_regengine_api_key},
-            ).fetchone()
-            if row and row[0]:
-                return str(row[0])
-        finally:
-            db.close()
-    except Exception as exc:
-        logger.warning("epcis_tenant_lookup_failed error=%s", str(exc))
-
-    return None
+_resolve_tenant_id = resolve_tenant_id
 
 
 def _extract_lot_data(ilmd: dict | None) -> tuple[str, str]:

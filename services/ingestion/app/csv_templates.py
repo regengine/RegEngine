@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Uploa
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
+from app.shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_BYTES
 from app.webhook_models import (
     IngestEvent,
     IngestResponse,
@@ -279,14 +280,18 @@ async def ingest_csv(
         tenant_id = "default"
 
     # Read and parse CSV
-    content = await file.read()
+    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
     text = content.decode("utf-8-sig")  # Handle BOM
     reader = csv.DictReader(io.StringIO(text))
 
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
+    MAX_CSV_ROWS = 500
 
     for row_num, row in enumerate(reader, start=2):
+        if row_num - 1 > MAX_CSV_ROWS:
+            parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
+            break
         row = {(k or "").strip().lower().replace(" ", "_"): (v or "").strip() for k, v in row.items()}
         first_val = next(iter(row.values()), "")
         if first_val and str(first_val).startswith("#"):
@@ -322,10 +327,17 @@ async def ingest_csv(
             kdes = {}
             skip_fields = {"traceability_lot_code", "product_description",
                 "quantity", "unit_of_measure", "location_gln", "location_name",
-                "cte_type", "event_type", "type", "cte"}
+                "cte_type", "event_type", "type", "cte", "input_lot_codes"}
             for key, val in row.items():
                 if key and val and key not in skip_fields:
                     kdes[key] = val
+
+            # Parse input_lot_codes (comma-separated) if present
+            input_lot_codes_raw = row.get("input_lot_codes")
+            if input_lot_codes_raw:
+                input_lot_codes = [code.strip() for code in input_lot_codes_raw.split(",") if code.strip()]
+                if input_lot_codes:
+                    kdes["input_lot_codes"] = input_lot_codes
 
             # Auto-inject CTE-specific required KDEs from generic CSV columns
             _inject_required_kdes(kdes, row_cte, row, loc_name, date_field)

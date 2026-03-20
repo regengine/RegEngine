@@ -95,118 +95,192 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
+# ---------------------------------------------------------------------------
+# Router Feature Flags — disable non-core routers via DISABLED_ROUTERS env var
+# Comma-separated list of router names to skip, e.g.: "billing,mock_audit,recall_simulations"
+# ---------------------------------------------------------------------------
+import os as _os
+_DISABLED_ROUTERS = {
+    r.strip().lower()
+    for r in _os.getenv("DISABLED_ROUTERS", "").split(",")
+    if r.strip()
+}
+
+
+def _router_enabled(name: str) -> bool:
+    """Check if a router should be mounted (not in DISABLED_ROUTERS)."""
+    return name.lower() not in _DISABLED_ROUTERS
+
+
 app.include_router(ingestion_router)
 
-# Decomposed sub-routers (extracted from routes.py god file)
-from app.routes_scraping import router as scraping_router
-app.include_router(scraping_router)
+# Health & Metrics (extracted from routes.py, Finding #8)
+from app.routes_health_metrics import router as health_metrics_router
+app.include_router(health_metrics_router)
 
-from app.routes_discovery import router as discovery_router
-app.include_router(discovery_router)
+
+# Decomposed sub-routers (extracted from routes.py god file)
+if _router_enabled("scraping"):
+    from app.routes_scraping import router as scraping_router
+    app.include_router(scraping_router)
+
+
+if _router_enabled("discovery"):
+    from app.routes_discovery import router as discovery_router
+    app.include_router(discovery_router)
 
 # Webhook Ingestion (V2: Postgres-backed CTE persistence)
 from app.webhook_router_v2 import router as webhook_router
 app.include_router(webhook_router)
 
 # FDA 24-Hour Export
-from app.fda_export_router import router as fda_export_router
-app.include_router(fda_export_router)
+if _router_enabled("fda_export"):
+    from app.fda_export_router import router as fda_export_router
+    app.include_router(fda_export_router)
+
 
 # CSV Templates & Import
-from app.csv_templates import router as csv_router
-app.include_router(csv_router)
+if _router_enabled("csv"):
+    from app.csv_templates import router as csv_router
+    app.include_router(csv_router)
+
 
 # IoT Import (Sensitech TempTale)
-from app.sensitech_parser import router as sensitech_router
-app.include_router(sensitech_router)
+if _router_enabled("sensitech"):
+    from app.sensitech_parser import router as sensitech_router
+    app.include_router(sensitech_router)
+
 
 # EDI 856 Inbound
-from app.edi_ingestion import router as edi_router
-app.include_router(edi_router)
+if _router_enabled("edi"):
+    from app.edi_ingestion import router as edi_router
+    app.include_router(edi_router)
+
 
 # Compliance Score
-from app.compliance_score import router as score_router
-app.include_router(score_router)
+if _router_enabled("score"):
+    from app.compliance_score import router as score_router
+    app.include_router(score_router)
+
 
 # Supplier Portal
-from app.supplier_portal import router as portal_router
-app.include_router(portal_router)
+if _router_enabled("portal"):
+    from app.supplier_portal import router as portal_router
+    app.include_router(portal_router)
+
 
 # Mock Audit Mode
-from app.mock_audit import router as audit_router
-app.include_router(audit_router)
+if _router_enabled("audit"):
+    from app.mock_audit import router as audit_router
+    app.include_router(audit_router)
+
 
 # SOP Generator
-from app.sop_generator import router as sop_router
-app.include_router(sop_router)
+if _router_enabled("sop"):
+    from app.sop_generator import router as sop_router
+    app.include_router(sop_router)
+
 
 # EPCIS & FDA Export
-from app.epcis_export import router as export_router
-app.include_router(export_router)
+if _router_enabled("export"):
+    from app.epcis_export import router as export_router
+    app.include_router(export_router)
+
 
 # EPCIS 2.0 Ingestion
-from app.epcis_ingestion import router as epcis_ingestion_router
-app.include_router(epcis_ingestion_router)
+if _router_enabled("epcis_ingestion"):
+    from app.epcis_ingestion import router as epcis_ingestion_router
+    app.include_router(epcis_ingestion_router)
+
 
 # QR / GS1 Decode
-from app.qr_decoder import router as qr_decoder_router
-app.include_router(qr_decoder_router)
+if _router_enabled("qr_decoder"):
+    from app.qr_decoder import router as qr_decoder_router
+    app.include_router(qr_decoder_router)
+
 
 # Computer Vision — Label Analysis
-from app.label_vision import router as label_vision_router
-app.include_router(label_vision_router)
+if _router_enabled("label_vision"):
+    from app.label_vision import router as label_vision_router
+    app.include_router(label_vision_router)
+
 
 # B2B Exchange API (EPCIS shipping package handoff)
-from app.exchange_api import router as exchange_router
-app.include_router(exchange_router)
+if _router_enabled("exchange"):
+    from app.exchange_api import router as exchange_router
+    app.include_router(exchange_router)
+
 
 # Stripe Billing
-from app.stripe_billing import router as billing_router
-app.include_router(billing_router)
+if _router_enabled("billing"):
+    from app.stripe_billing import router as billing_router
+    app.include_router(billing_router)
+
 
 # Alerts & Notifications
-from app.alerts import router as alerts_router
-app.include_router(alerts_router)
+if _router_enabled("alerts"):
+    from app.alerts import router as alerts_router
+    app.include_router(alerts_router)
+
 
 # Onboarding
-from app.onboarding import router as onboarding_router
-app.include_router(onboarding_router)
+if _router_enabled("onboarding"):
+    from app.onboarding import router as onboarding_router
+    app.include_router(onboarding_router)
+
 
 # Recall Readiness Report
-from app.recall_report import router as recall_router
-app.include_router(recall_router)
+if _router_enabled("recall"):
+    from app.recall_report import router as recall_router
+    app.include_router(recall_router)
+
 
 # Recall Simulations
-from app.recall_simulations import router as recall_simulations_router
-app.include_router(recall_simulations_router)
+if _router_enabled("recall_simulations"):
+    from app.recall_simulations import router as recall_simulations_router
+    app.include_router(recall_simulations_router)
+
 
 # Supplier Management
-from app.supplier_mgmt import router as supplier_mgmt_router
-app.include_router(supplier_mgmt_router)
+if _router_enabled("supplier_mgmt"):
+    from app.supplier_mgmt import router as supplier_mgmt_router
+    app.include_router(supplier_mgmt_router)
+
 
 # Audit Log
-from app.audit_log import router as audit_log_router
-app.include_router(audit_log_router)
+if _router_enabled("audit_log"):
+    from app.audit_log import router as audit_log_router
+    app.include_router(audit_log_router)
+
 
 # Product Catalog
-from app.product_catalog import router as product_catalog_router
-app.include_router(product_catalog_router)
+if _router_enabled("product_catalog"):
+    from app.product_catalog import router as product_catalog_router
+    app.include_router(product_catalog_router)
+
 
 # Notification Preferences
-from app.notification_prefs import router as notification_prefs_router
-app.include_router(notification_prefs_router)
+if _router_enabled("notification_prefs"):
+    from app.notification_prefs import router as notification_prefs_router
+    app.include_router(notification_prefs_router)
+
 
 # Team Management
-from app.team_mgmt import router as team_mgmt_router
-app.include_router(team_mgmt_router)
+if _router_enabled("team_mgmt"):
+    from app.team_mgmt import router as team_mgmt_router
+    app.include_router(team_mgmt_router)
+
 
 # Settings
-from app.settings import router as settings_router
-app.include_router(settings_router)
+if _router_enabled("settings"):
+    from app.settings import router as settings_router
+    app.include_router(settings_router)
+
 
 # Integration Connectors (SafetyCulture, CSV/SFTP, retailers, IoT)
-from app.integration_router import router as integration_router
-app.include_router(integration_router)
+if _router_enabled("integration"):
+    from app.integration_router import router as integration_router
+    app.include_router(integration_router)
 
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router
