@@ -81,10 +81,20 @@ const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { clearCredentials } = useAuth();
+    const { clearCredentials, demoMode } = useAuth();
 
     return (
-        <div className="flex min-h-screen">
+        <div className="flex flex-col min-h-screen">
+            {/* MEDIUM #11: Demo mode visual indicator */}
+            {demoMode && (
+                <div className="bg-amber-500/90 text-black text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-2 z-50">
+                    <span>⚠️ Demo Mode — Data shown is sample data.</span>
+                    <Link href="/dashboard/settings" className="underline hover:no-underline">
+                        Disable in Settings
+                    </Link>
+                </div>
+            )}
+            <div className="flex flex-1">
             {/* Sidebar */}
             <aside aria-label="Dashboard sidebar" className="hidden md:flex flex-col w-[232px] border-r border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] flex-shrink-0">
                 {/* Brand */}
@@ -101,7 +111,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
 
                 {/* Nav sections */}
-                <nav aria-label="Dashboard navigation" className="flex-1 py-3 overflow-y-auto">
+                {/* MEDIUM #12: Keyboard navigation — arrow keys traverse nav items */}
+                <nav
+                    aria-label="Dashboard navigation"
+                    className="flex-1 py-3 overflow-y-auto"
+                    role="navigation"
+                    onKeyDown={(e) => {
+                        if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+                        e.preventDefault();
+                        const links = Array.from(e.currentTarget.querySelectorAll<HTMLAnchorElement>('a[href]'));
+                        const current = links.findIndex(l => l === document.activeElement);
+                        let next = current;
+                        if (e.key === 'ArrowDown') next = Math.min(current + 1, links.length - 1);
+                        else if (e.key === 'ArrowUp') next = Math.max(current - 1, 0);
+                        else if (e.key === 'Home') next = 0;
+                        else if (e.key === 'End') next = links.length - 1;
+                        links[next]?.focus();
+                    }}
+                >
                     {NAV_SECTIONS.map((section, si) => (
                         <div key={si} className={si > 0 ? 'mt-4' : ''}>
                             {section.title && (
@@ -111,7 +138,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     </span>
                                 </div>
                             )}
-                            <div className="px-2.5 space-y-0.5">
+                            <div className="px-2.5 space-y-0.5" role="list">
                                 {section.items.map((item) => {
                                     const Icon = item.icon;
                                     const isActive = pathname === item.href;
@@ -119,6 +146,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                         <Link
                                             key={item.href}
                                             href={item.href}
+                                            role="listitem"
+                                            aria-current={isActive ? 'page' : undefined}
                                             className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all min-h-[36px] ${isActive
                                                     ? 'bg-[var(--re-brand)]/10 text-[var(--re-brand)] font-medium shadow-[inset_2px_0_0_var(--re-brand)]'
                                                     : 'text-[var(--re-text-muted)] hover:bg-white/[0.03] hover:text-foreground'
@@ -195,6 +224,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <DashboardBreadcrumb />
                 {children}
             </main>
+        </div>
         </div>
     );
 }

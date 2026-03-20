@@ -15,20 +15,26 @@ import {
     Zap, Globe, ArrowRight, Lock,
 } from 'lucide-react';
 
-/* ── Integrations Data (expanded) ── */
+/* ── Available Integrations Catalog ── */
+// MEDIUM #10 (UI Debug Audit): These are available integrations, NOT connection
+// statuses. Previous version showed hardcoded "connected"/"pending" statuses that
+// didn't reflect actual tenant configuration. Status is now "available" for all
+// until the backend supports real integration status tracking.
+// TODO: Fetch actual integration status from GET /api/v1/integrations/{tenant_id}
 const INTEGRATIONS = [
-    { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'connected', desc: 'Cold-chain temperature monitoring' },
-    { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'disconnected', desc: 'Real-time shipment visibility' },
-    { id: 'sap', name: 'SAP S/4HANA', category: 'ERP', status: 'disconnected', desc: 'Enterprise resource planning' },
-    { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'disconnected', desc: 'Cloud ERP and financials' },
-    { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'pending', desc: 'Global Data Synchronization' },
-    { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'disconnected', desc: 'Retailer data exchange' },
-    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'connected', desc: 'GS1 event format bridge' },
-    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'connected', desc: 'Push events to your endpoints' },
+    { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'available', desc: 'Cold-chain temperature monitoring' },
+    { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'available', desc: 'Real-time shipment visibility' },
+    { id: 'sap', name: 'SAP S/4HANA', category: 'ERP', status: 'available', desc: 'Enterprise resource planning' },
+    { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'available', desc: 'Cloud ERP and financials' },
+    { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'available', desc: 'Global Data Synchronization' },
+    { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'available', desc: 'Retailer data exchange' },
+    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'available', desc: 'GS1 event format bridge' },
+    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'available', desc: 'Push events to your endpoints' },
 ];
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
     connected: { color: '#10b981', bg: 'rgba(16,185,129,0.1)', label: 'Connected' },
-    pending: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Pending' },
+    pending: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Pending Setup' },
+    available: { color: '#6b7280', bg: 'rgba(107,114,128,0.1)', label: 'Available' },
     disconnected: { color: '#6b7280', bg: 'rgba(107,114,128,0.1)', label: 'Available' },
 };
 
