@@ -1,3 +1,4 @@
+import os
 import requests
 import time
 import json
@@ -6,9 +7,9 @@ import sys
 # Consolidate config
 INGEST_URL = "http://localhost:8002/v1/ingest"
 ADMIN_API_URL = "http://localhost:8400"
-TENANT_ID = "00000000-0000-0000-0000-000000000000"
-API_KEY = "admin"
-ADMIN_MASTER_KEY = "admin-master-key-dev"
+TENANT_ID = os.environ.get("REGENGINE_TENANT_ID", "00000000-0000-0000-0000-000000000000")
+API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
+ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "")
 
 # Unique Source for this Demo
 SOURCE_URL = "http://demo.fda.gov/fsma-204-update-scenario"
