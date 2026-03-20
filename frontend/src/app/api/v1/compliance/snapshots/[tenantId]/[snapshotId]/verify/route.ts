@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pg from 'pg';
-
-const { Client } = pg;
-
-// Required for static export
-export const dynamic = 'force-static';
-export const generateStaticParams = async () => {
-    return [{ tenantId: 'tenant_static', snapshotId: 'verify_static' }];
-};
+export const dynamic = 'force-dynamic';
 
 interface Props {
     params: Promise<{ tenantId: string; snapshotId: string }>;
