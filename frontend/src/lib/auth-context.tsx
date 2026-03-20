@@ -55,9 +55,15 @@ const STORAGE_KEYS = {
 };
 
 /** Sync sensitive credentials to HTTP-only cookies via /api/session */
-function syncSessionCookies(apiKey?: string | null, adminKey?: string | null, tenantId?: string | null) {
+function syncSessionCookies(
+  accessToken?: string | null,
+  apiKey?: string | null,
+  adminKey?: string | null,
+  tenantId?: string | null,
+) {
   if (typeof window === 'undefined') return;
   const body: Record<string, string> = {};
+  if (accessToken) body.access_token = accessToken;
   if (apiKey) body.api_key = apiKey;
   if (adminKey) body.admin_key = adminKey;
   if (tenantId) body.tenant_id = tenantId;
@@ -247,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem(STORAGE_KEYS.API_KEY, key);
-        syncSessionCookies(key, null, null);
+        syncSessionCookies(null, key, null, null);
       } else {
         localStorage.removeItem(STORAGE_KEYS.API_KEY);
       }
@@ -259,7 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (key) {
         localStorage.setItem(STORAGE_KEYS.ADMIN_KEY, key);
-        syncSessionCookies(null, key, null);
+        syncSessionCookies(null, null, key, null);
       } else {
         localStorage.removeItem(STORAGE_KEYS.ADMIN_KEY);
       }
@@ -305,8 +311,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
       if (tenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
     }
-    // Dual-write: also store in HTTP-only cookies for /api/proxy migration
-    syncSessionCookies(apiKey, adminKey, tenantId);
+    // Dual-write: store access_token + credentials in HTTP-only cookies
+    // access_token is critical — middleware checks this cookie for route protection
+    syncSessionCookies(token, apiKey, adminKey, tenantId);
   }, [apiKey, adminKey]);
 
   const clearCredentials = useCallback(() => {

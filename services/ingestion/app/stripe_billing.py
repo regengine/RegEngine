@@ -35,6 +35,8 @@ DEFAULT_PORTAL_RETURN_URL = "https://regengine.co/dashboard"
 PLAN_ALIASES = {
     "starter": "growth",
     "professional": "scale",
+    "base": "growth",
+    "standard": "scale",
 }
 
 
