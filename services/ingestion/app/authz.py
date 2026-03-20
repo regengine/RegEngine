@@ -245,13 +245,31 @@ async def get_ingestion_principal(
 
 
 def require_permission(required_permission: str):
-    """FastAPI dependency factory enforcing a required permission scope."""
+    """FastAPI dependency factory enforcing a required permission scope.
+
+    Also cross-checks the authenticated principal's tenant against any
+    tenant_id query parameter to prevent cross-tenant data access.
+    """
 
     async def _dependency(
         request: Request,
         principal: IngestionPrincipal = Depends(get_ingestion_principal),
     ) -> IngestionPrincipal:
         if has_permission(principal.scopes, required_permission):
+            # Cross-check: if the principal has a tenant_id AND the request
+            # specifies a different tenant_id, reject unless principal has wildcard scope.
+            requested_tenant = request.query_params.get("tenant_id")
+            if (
+                requested_tenant
+                and principal.tenant_id
+                and requested_tenant != principal.tenant_id
+                and "*" not in principal.scopes
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Tenant mismatch: your API key does not have access to this tenant.",
+                )
+
             tenant_id = _tenant_for_rate_limit(request, principal)
             window = _rate_limit_window_seconds()
             rpm = _rpm_for_permission(required_permission, principal)

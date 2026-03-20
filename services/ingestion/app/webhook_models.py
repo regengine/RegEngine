@@ -208,3 +208,21 @@ class IngestResponse(BaseModel):
     ingestion_timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+
+
+class RecentEventsResponse(BaseModel):
+    """Response from the /recent events endpoint."""
+
+    tenant_id: str
+    events: List[dict] = Field(default_factory=list)
+    total: int = 0
+
+
+class ChainVerifyResponse(BaseModel):
+    """Response from the /chain/verify endpoint."""
+
+    tenant_id: str
+    chain_valid: bool = False
+    chain_length: int = 0
+    errors: List[str] = Field(default_factory=list)
+    checked_at: Optional[str] = None

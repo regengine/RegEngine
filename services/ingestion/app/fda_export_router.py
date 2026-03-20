@@ -398,7 +398,7 @@ async def export_fda_spreadsheet(
         default="package",
         description="Export format: package (zip bundle) or csv",
     ),
-    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91", description="Tenant identifier"),
+    tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
 ):
     """Generate and return an FDA-compliant traceability export."""
@@ -507,7 +507,7 @@ async def export_fda_spreadsheet(
         raise
     except Exception as e:
         logger.error("fda_export_failed", extra={"error": str(e), "tlc": tlc})
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
@@ -526,7 +526,7 @@ async def export_all_events(
         default="csv",
         description="Export format: package (zip bundle) or csv",
     ),
-    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
+    tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
 ):
     """Export all events as FDA-format CSV."""
@@ -546,16 +546,19 @@ async def export_all_events(
             limit=10000,
         )
 
-        # For the full export, fetch KDEs for each event
+        # Batch-fetch by distinct TLCs to avoid O(N×M) query amplification
+        tlcs = list({evt["traceability_lot_code"] for evt in events})
         full_events = []
-        for evt in events:
-            full = persistence.query_events_by_tlc(
-                tenant_id=tenant_id,
-                tlc=evt["traceability_lot_code"],
-                start_date=start_date,
-                end_date=end_date,
-            )
-            full_events.extend(full)
+        for tlc_batch_start in range(0, len(tlcs), 50):
+            tlc_batch = tlcs[tlc_batch_start:tlc_batch_start + 50]
+            for tlc in tlc_batch:
+                full = persistence.query_events_by_tlc(
+                    tenant_id=tenant_id,
+                    tlc=tlc,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                full_events.extend(full)
 
         # Deduplicate by event ID
         seen = set()
@@ -631,7 +634,7 @@ async def export_all_events(
 
     except Exception as e:
         logger.error("fda_export_all_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
@@ -643,7 +646,7 @@ async def export_all_events(
     description="Returns the history of all FDA exports generated for this tenant.",
 )
 async def export_history(
-    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
+    tenant_id: str = Query(..., description="Tenant identifier"),
     limit: int = Query(50, ge=1, le=200),
     _auth=Depends(require_permission("fda.read")),
 ):
@@ -687,7 +690,7 @@ async def export_history(
 
     except Exception as e:
         logger.error("export_history_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"History query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="History query failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
@@ -704,7 +707,7 @@ async def export_history(
     ),
 )
 async def export_recall_filtered(
-    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91", description="Tenant identifier"),
+    tenant_id: str = Query(..., description="Tenant identifier"),
     product: Optional[str] = Query(None, description="Product description (partial match)"),
     location: Optional[str] = Query(None, description="Location name or GLN (partial match)"),
     tlc: Optional[str] = Query(None, description="Traceability Lot Code (exact or partial)"),
@@ -914,7 +917,7 @@ async def export_recall_filtered(
         raise
     except Exception as e:
         logger.error("fda_recall_export_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Recall export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Recall export failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
@@ -930,7 +933,7 @@ async def export_recall_filtered(
 )
 async def verify_export(
     export_id: str = Query(..., description="Export log ID to verify"),
-    tenant_id: str = Query("5946c58f-ddf9-4db0-9baa-acb11c6fce91"),
+    tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.verify")),
 ):
     """Verify that an export can be reproduced with the same hash."""
@@ -1030,7 +1033,7 @@ async def verify_export(
         raise
     except Exception as e:
         logger.error("export_verify_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Verification failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Verification failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
