@@ -201,6 +201,17 @@ async def get_system_metrics(
     if chain_valid is None and supplier_chain_length > 0:
         chain_valid = True  # Supplier events have Merkle chain by construction
 
+    # Query open alerts from the compliance_alerts table
+    open_alert_count = 0
+    try:
+        alert_row = db.execute(
+            text("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE tenant_id = :tid AND resolved_at IS NULL"),
+            {"tid": tenant},
+        ).fetchone()
+        open_alert_count = alert_row[0] if alert_row else 0
+    except Exception as exc:
+        logger.warning("metrics_alert_count_failed", error=str(exc))
+
     return SystemMetricsResponse(
         total_tenants=1,
         total_documents=total_events,
@@ -210,5 +221,5 @@ async def get_system_metrics(
         events_ingested=total_events,
         chain_length=chain_len,
         chain_valid=chain_valid,
-        open_alerts=0,  # TODO: query alerts table
+        open_alerts=open_alert_count,
     )
