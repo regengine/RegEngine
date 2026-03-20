@@ -21,6 +21,45 @@ from app.authz import require_permission
 
 logger = logging.getLogger("recall-simulations")
 
+
+def _query_tenant_recall_metrics(tenant_id: str) -> dict | None:
+    """Query real recall metrics from tenant's CTE data."""
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            cte_count = db.execute(text(
+                "SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"
+            ), {"tid": tenant_id}).scalar() or 0
+            
+            if cte_count == 0:
+                return None
+            
+            supplier_count = db.execute(text(
+                "SELECT COUNT(DISTINCT supplier_id) FROM fsma.cte_events WHERE tenant_id = :tid"
+            ), {"tid": tenant_id}).scalar() or 0
+            
+            tlc_count = db.execute(text(
+                "SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"
+            ), {"tid": tenant_id}).scalar() or 0
+            
+            has_export = db.execute(text(
+                "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"
+            ), {"tid": tenant_id}).scalar() or 0
+            
+            return {
+                "cte_count": cte_count,
+                "supplier_count": supplier_count,
+                "tlc_count": tlc_count,
+                "has_export": has_export > 0,
+            }
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("recall_metrics_query_failed error=%s", str(exc))
+        return None
+
 router = APIRouter(prefix="/api/v1/simulations", tags=["Recall Simulations"])
 
 
@@ -322,7 +361,7 @@ def _build_csv_export(simulation: dict, view: str) -> str:
 
 
 @router.get("/scenarios", summary="List available simulation scenarios")
-async def list_scenarios(_auth=Depends(require_permission("simulations.read"))):
+async def list_scenarios(_auth=Depends(require_permission("simulations.read")), tenant_id: str = None):
     scenarios = [
         {
             "id": item["id"],
@@ -332,13 +371,14 @@ async def list_scenarios(_auth=Depends(require_permission("simulations.read"))):
             "contaminant": item.get("contaminant"),
             "baseline_response_hours": item.get("baseline_response_hours"),
             "regengine_response_minutes": item.get("regengine_response_minutes"),
+            "is_illustrative": True,
         }
         for item in RECALL_SCENARIOS
     ]
     return {
         "scenarios": scenarios,
         "total": len(scenarios),
-        "demo_mode": True,
+        "is_illustrative": True,
         "demo_disclaimer": (
             "These are illustrative recall scenarios with synthetic metrics. "
             "They are not derived from your tenant's actual supply chain data. "
@@ -350,6 +390,7 @@ async def list_scenarios(_auth=Depends(require_permission("simulations.read"))):
 @router.post("/run", status_code=201, summary="Run recall simulation")
 async def run_recall_simulation(
     request: RunSimulationRequest,
+    tenant_id: str = None,
     _auth=Depends(require_permission("simulations.write")),
 ):
     scenario = _get_scenario_or_400(request.scenario_id)
@@ -357,23 +398,39 @@ async def run_recall_simulation(
     simulation_id = str(uuid4())
     created_at = datetime.now(timezone.utc).isoformat()
 
+    # Try to compute real metrics from tenant data
+    is_illustrative = True
+    real_metrics = None
+    if tenant_id:
+        tenant_data = _query_tenant_recall_metrics(tenant_id)
+        if tenant_data and tenant_data.get("cte_count", 0) > 0:
+            is_illustrative = False
+            real_metrics = {
+                "cte_events": tenant_data["cte_count"],
+                "suppliers": tenant_data["supplier_count"],
+                "tlcs": tenant_data["tlc_count"],
+                "export_ready": tenant_data["has_export"],
+            }
+
     simulation_record = {
         "id": simulation_id,
         "scenario_id": scenario["id"],
         "created_at": created_at,
         "metrics": metrics,
-        "demo_mode": True,
+        "is_illustrative": is_illustrative,
+        "tenant_metrics": real_metrics,
         "demo_disclaimer": (
             "Simulation uses synthetic scenarios — not derived from tenant data."
-        ),
+        ) if is_illustrative else None,
     }
     _simulation_store[simulation_id] = simulation_record
 
     logger.info(
-        "recall_simulation_ran simulation_id=%s scenario_id=%s time_reduction_percent=%s",
+        "recall_simulation_ran simulation_id=%s scenario_id=%s time_reduction_percent=%s is_illustrative=%s",
         simulation_id,
         request.scenario_id,
         metrics["time_reduction_percent"],
+        is_illustrative,
     )
 
     return simulation_record
