@@ -139,7 +139,7 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID"],
 )
 # app.add_middleware(CorrelationIdMiddleware)
 
