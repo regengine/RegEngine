@@ -26,9 +26,11 @@ from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
 from app.webhook_models import (
+    ChainVerifyResponse,
     EventResult,
     IngestEvent,
     IngestResponse,
+    RecentEventsResponse,
     REQUIRED_KDES_BY_CTE,
     WebhookPayload,
 )
@@ -373,8 +375,18 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
 # Neo4j Graph Sync
 # ---------------------------------------------------------------------------
 
+_graph_sync_failures = 0
+_graph_sync_successes = 0
+
+
+def get_graph_sync_stats() -> dict:
+    """Return graph sync health counters for the /health endpoint."""
+    return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
+
+
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync."""
+    global _graph_sync_failures, _graph_sync_successes
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return
@@ -401,7 +413,9 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
             },
         }
         client.rpush("neo4j-sync", json.dumps(message, default=str))
+        _graph_sync_successes += 1
     except Exception as exc:
+        _graph_sync_failures += 1
         logger.warning("graph_sync_publish_failed event_id=%s error=%s", event_id, str(exc))
 
 
@@ -411,6 +425,7 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 
 @router.post(
     "/ingest",
+    response_model=IngestResponse,
     summary="Ingest traceability events",
     description=(
         "Accept CTE events from external systems (IoT platforms, ERPs, manual entry). "
@@ -421,6 +436,8 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 async def ingest_events(
     payload: WebhookPayload,
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
+    _auth: None = Depends(_verify_api_key),
+    db_session=Depends(_get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
     # Resolve tenant: payload > API-key lookup
@@ -454,12 +471,14 @@ async def ingest_events(
     # Batch deduplication — detect identical events within the same payload
     seen_in_batch: set[str] = set()
 
-    # Get database session — hard fail if unavailable (no silent degradation)
-    db_session = None
+    # Get persistence layer from injected db_session (Depends(_get_db_session))
     persistence = None
+    if db_session is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable — cannot accept events. Retry after service recovery.",
+        )
     try:
-        from shared.database import SessionLocal
-        db_session = SessionLocal()
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
     except Exception as e:
@@ -625,7 +644,7 @@ async def ingest_events(
         if db_session:
             db_session.rollback()
         logger.error("ingest_batch_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ingestion failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
@@ -642,14 +661,6 @@ async def ingest_events(
 # Chain Verification Endpoint
 # ---------------------------------------------------------------------------
 
-@router.get(
-    "/chain/verify",
-    summary="Verify hash chain integrity",
-    description=(
-        "Walk the tenant's entire hash chain from genesis to head, "
-        "recomputing each link and checking for tampering."
-    ),
-)
 async def get_recent_events(
     tenant_id: str,
     limit: int = 10,
@@ -700,18 +711,21 @@ async def get_recent_events(
 
 @router.get(
     "/recent",
+    response_model=RecentEventsResponse,
     summary="Get recent CTE events",
     description="Returns the most recently ingested traceability events for the scan history widget.",
 )
 async def recent_events_endpoint(
     tenant_id: str,
     limit: int = 10,
+    _auth: None = Depends(_verify_api_key),
 ):
     return await get_recent_events(tenant_id, limit)
 
 
 @router.get(
     "/chain/verify",
+    response_model=ChainVerifyResponse,
     summary="Verify hash chain integrity",
     description=(
         "Walk the tenant's entire hash chain from genesis to head, "
@@ -720,6 +734,7 @@ async def recent_events_endpoint(
 )
 async def verify_chain(
     tenant_id: str,
+    _auth: None = Depends(_verify_api_key),
 ):
     """Verify the integrity of the tenant's hash chain."""
     validate_tenant_id(tenant_id)
@@ -741,7 +756,7 @@ async def verify_chain(
         }
     except Exception as e:
         logger.error("chain_verification_failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Chain verification failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Chain verification failed. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
