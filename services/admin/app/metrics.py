@@ -118,10 +118,10 @@ class HallucinationTracker:
         session = self._session_factory()
         try:
             if tenant_id:
-                # Use format_map for SET statements as they don't support parameter binding
-                # This is safe because tenant_id is validated as a UUID upstream
-                stmt = text(f"SET LOCAL app.tenant_id = '{tenant_id}'")
-                session.execute(stmt)
+                session.execute(
+                    text("SET LOCAL app.tenant_id = :tid"),
+                    {"tid": str(tenant_id)},
+                )
             yield session
             session.commit()
         except Exception:

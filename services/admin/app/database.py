@@ -28,7 +28,14 @@ def _create_engine():
     if database_url:
         sqlalchemy_url = _sqlalchemy_url(database_url)
         logger.info("admin_database_configured", url=database_url.split("@")[-1])
-        return create_engine(sqlalchemy_url, pool_pre_ping=True, future=True)
+        return create_engine(
+            sqlalchemy_url,
+            pool_pre_ping=True,
+            future=True,
+            pool_size=int(os.getenv("ADMIN_DB_POOL_SIZE", "10")),
+            max_overflow=int(os.getenv("ADMIN_DB_MAX_OVERFLOW", "20")),
+            pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+        )
 
     fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./admin.db")
     logger.warning(
@@ -49,14 +56,28 @@ def _create_entertainment_engine():
     if database_url:
         sqlalchemy_url = _sqlalchemy_url(database_url)
         logger.info("entertainment_database_configured", url=database_url.split("@")[-1])
-        return create_engine(sqlalchemy_url, pool_pre_ping=True, future=True)
-    
+        return create_engine(
+            sqlalchemy_url,
+            pool_pre_ping=True,
+            future=True,
+            pool_size=int(os.getenv("ENTERTAINMENT_DB_POOL_SIZE", "10")),
+            max_overflow=int(os.getenv("ENTERTAINMENT_DB_MAX_OVERFLOW", "20")),
+            pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+        )
+
     # Fallback: construct from ADMIN_DATABASE_URL by replacing database name
     admin_url = os.getenv("ADMIN_DATABASE_URL", "")
     if admin_url and "regengine_admin" in admin_url:
         entertainment_url = admin_url.replace("regengine_admin", "entertainment")
         logger.info("entertainment_database_derived_from_admin", url=entertainment_url.split("@")[-1])
-        return create_engine(_sqlalchemy_url(entertainment_url), pool_pre_ping=True, future=True)
+        return create_engine(
+            _sqlalchemy_url(entertainment_url),
+            pool_pre_ping=True,
+            future=True,
+            pool_size=int(os.getenv("ENTERTAINMENT_DB_POOL_SIZE", "10")),
+            max_overflow=int(os.getenv("ENTERTAINMENT_DB_MAX_OVERFLOW", "20")),
+            pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+        )
     
     logger.warning("entertainment_database_url_missing_pcos_operations_may_fail")
     # Return same engine as fallback (won't work  but prevents crash)
@@ -101,11 +122,14 @@ def init_db() -> None:
         conn.execute(text("DROP FUNCTION IF EXISTS get_tenant_context()"))
         conn.execute(text("""
             CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS $$
+            DECLARE
+              tid TEXT;
             BEGIN
-              RETURN COALESCE(
-                NULLIF(current_setting('app.tenant_id', true), '')::UUID,
-                '00000000-0000-0000-0000-000000000001'::UUID
-              );
+              tid := NULLIF(current_setting('app.tenant_id', true), '');
+              IF tid IS NULL THEN
+                RAISE EXCEPTION 'app.tenant_id not set — tenant context required for RLS';
+              END IF;
+              RETURN tid::UUID;
             END;
             $$ LANGUAGE plpgsql;
         """))
@@ -118,8 +142,8 @@ def init_db() -> None:
             $$ LANGUAGE plpgsql;
         """))
         conn.commit()
-    
-   # Create RLS helper functions in Entertainment DB  
+
+   # Create RLS helper functions in Entertainment DB
     with _entertainment_engine.connect() as conn:
         conn.execute(text("DROP FUNCTION IF EXISTS set_tenant_context(text)"))
         conn.execute(text("""
@@ -132,11 +156,14 @@ def init_db() -> None:
         conn.execute(text("DROP FUNCTION IF EXISTS get_tenant_context()"))
         conn.execute(text("""
             CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS $$
+            DECLARE
+              tid TEXT;
             BEGIN
-              RETURN COALESCE(
-                NULLIF(current_setting('app.tenant_id', true), '')::UUID,
-                '00000000-0000-0000-0000-000000000001'::UUID
-              );
+              tid := NULLIF(current_setting('app.tenant_id', true), '');
+              IF tid IS NULL THEN
+                RAISE EXCEPTION 'app.tenant_id not set — tenant context required for RLS';
+              END IF;
+              RETURN tid::UUID;
             END;
             $$ LANGUAGE plpgsql;
         """))
@@ -190,8 +217,8 @@ def get_tenant_session(
     try:
         if tenant_id:
             session.execute(
-                text("SET app.tenant_id = :tenant"),
-                {"tenant": tenant_id}
+                text("SET LOCAL app.tenant_id = :tenant"),
+                {"tenant": tenant_id},
             )
         yield session
     finally:
@@ -202,15 +229,15 @@ def get_pcos_tenant_session(
     tenant_id: str,
 ) -> Iterator[Session]:
     """Provide a tenant-aware SQLAlchemy session for PCOS operations (Entertainment DB).
-    
+
     Use this for PCOS routes that need tenant isolation (most PCOS operations).
     """
     session = EntertainmentSessionLocal()
     try:
         if tenant_id:
             session.execute(
-                text("SET app.tenant_id = :tenant"),
-                {"tenant": tenant_id}
+                text("SET LOCAL app.tenant_id = :tenant"),
+                {"tenant": tenant_id},
             )
         yield session
     finally:
