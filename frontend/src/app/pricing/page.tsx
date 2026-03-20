@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
@@ -193,24 +194,17 @@ export default function PricingPage() {
                                         ))}
                                     </div>
 
-                                    <Link href="/alpha">
-                                        <Button
-                                            style={{
-                                                width: '100%', marginTop: '24px',
-                                                background: tier.highlighted ? T.accent : 'var(--re-surface-elevated)',
-                                                color: tier.highlighted ? '#fff' : T.heading,
-                                                border: tier.highlighted ? 'none' : `1px solid ${T.border}`,
-                                                fontWeight: 600,
-                                                borderRadius: '10px',
-                                                padding: '12px 20px',
-                                                boxShadow: tier.highlighted ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
-                                                transition: 'all 0.2s',
-                                            }}
-                                        >
-                                            {tier.cta}
-                                            <ArrowRight className="ml-2 w-4 h-4" />
-                                        </Button>
-                                    </Link>
+                                    <PricingCheckoutButton
+                                        tierId={tier.id}
+                                        label={tier.cta}
+                                        highlighted={tier.highlighted}
+                                        style={{
+                                            background: tier.highlighted ? T.accent : 'var(--re-surface-elevated)',
+                                            color: tier.highlighted ? '#fff' : T.heading,
+                                            border: tier.highlighted ? 'none' : `1px solid ${T.border}`,
+                                            boxShadow: tier.highlighted ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
+                                        }}
+                                    />
                                 </div>
                             </div>
                         );
