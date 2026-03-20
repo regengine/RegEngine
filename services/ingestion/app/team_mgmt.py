@@ -10,13 +10,25 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import json
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("team")
+
+
+def _get_db():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
 
 router = APIRouter(prefix="/api/v1/team", tags=["Team Management"])
 
@@ -78,44 +90,77 @@ ROLE_PERMISSIONS = {
 }
 
 
-def _generate_sample_team(tenant_id: str) -> list[TeamMember]:
-    now = datetime.now(timezone.utc)
-    records = [
-        TeamMember(
-            id=f"{tenant_id}-user-001", name="Jordan Smith", email="jsmith@example.com",
-            role="owner", status="active", last_active=(now - timedelta(minutes=5)).isoformat(),
-            avatar_initials="JS",
-        ),
-        TeamMember(
-            id=f"{tenant_id}-user-002", name="Alex Chen", email="achen@example.com",
-            role="admin", status="active", last_active=(now - timedelta(hours=2)).isoformat(),
-            avatar_initials="AC",
-        ),
-        TeamMember(
-            id=f"{tenant_id}-user-003", name="Maria Garcia", email="mgarcia@example.com",
-            role="compliance_manager", status="active", last_active=(now - timedelta(days=1)).isoformat(),
-            avatar_initials="MG",
-        ),
-        TeamMember(
-            id=f"{tenant_id}-user-004", name="Taylor Williams", email="twill@example.com",
-            role="viewer", status="active", last_active=(now - timedelta(days=3)).isoformat(),
-            avatar_initials="TW",
-        ),
-        TeamMember(
-            id=f"{tenant_id}-user-005", name="Chris Lee", email="clee@example.com",
-            role="compliance_manager", status="invited",
-            invited_at=(now - timedelta(days=1)).isoformat(),
-            avatar_initials="CL",
-        ),
-    ]
-    for r in records:
-        r.is_sample = True
-    return records
-
-
-# TODO(V042): Replace with fsma.tenant_team_members table queries.
-# Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
+# In-memory fallback for when DB is unavailable
 _team_store: dict[str, list[TeamMember]] = {}
+
+
+def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
+    """Query team members from database."""
+    db = _get_db()
+    if not db:
+        return None
+    try:
+        rows = db.execute(
+            text("SELECT id, name, email, role, status, last_active, invited_at, avatar_initials FROM fsma.tenant_team_members WHERE tenant_id = :tid"),
+            {"tid": tenant_id}
+        ).fetchall()
+        members = []
+        for row in rows:
+            members.append(TeamMember(
+                id=row[0],
+                name=row[1],
+                email=row[2],
+                role=row[3],
+                status=row[4],
+                last_active=row[5],
+                invited_at=row[6],
+                avatar_initials=row[7],
+                is_sample=False,
+            ))
+        return members
+    except Exception as exc:
+        logger.warning("db_read_failed error=%s", str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
+    """Insert team member into database."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        db.execute(
+            text("""
+                INSERT INTO fsma.tenant_team_members 
+                (id, tenant_id, name, email, role, status, last_active, invited_at, avatar_initials, is_sample, created_at, updated_at)
+                VALUES (:id, :tid, :name, :email, :role, :status, :active, :invited, :initials, false, now(), now())
+                ON CONFLICT (id) DO UPDATE SET 
+                    name = :name, email = :email, role = :role, status = :status,
+                    last_active = :active, invited_at = :invited, avatar_initials = :initials, updated_at = now()
+            """),
+            {
+                "id": member.id,
+                "tid": tenant_id,
+                "name": member.name,
+                "email": member.email,
+                "role": member.role,
+                "status": member.status,
+                "active": member.last_active,
+                "invited": member.invited_at,
+                "initials": member.avatar_initials,
+            }
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_write_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
 
 
 @router.get(
@@ -128,10 +173,12 @@ async def get_team(
     _: None = Depends(_verify_api_key),
 ) -> TeamResponse:
     """Get team members for a tenant."""
-    if tenant_id not in _team_store:
-        _team_store[tenant_id] = _generate_sample_team(tenant_id)
-
-    members = _team_store[tenant_id]
+    # Try DB first
+    members = _db_get_team(tenant_id)
+    if members is None:
+        if tenant_id not in _team_store:
+            _team_store[tenant_id] = []
+        members = _team_store[tenant_id]
     active = sum(1 for m in members if m.status == "active")
     pending = sum(1 for m in members if m.status == "invited")
 
@@ -159,12 +206,16 @@ async def invite_member(
     _: None = Depends(_verify_api_key),
 ):
     """Invite a new team member."""
-    if tenant_id not in _team_store:
-        _team_store[tenant_id] = _generate_sample_team(tenant_id)
+    # Get current count from DB or memory
+    members = _db_get_team(tenant_id)
+    if members is None:
+        if tenant_id not in _team_store:
+            _team_store[tenant_id] = []
+        members = _team_store[tenant_id]
 
     now = datetime.now(timezone.utc)
     member = TeamMember(
-        id=f"{tenant_id}-user-{len(_team_store[tenant_id]) + 1:03d}",
+        id=f"{tenant_id}-user-{len(members) + 1:03d}",
         name=request.name,
         email=request.email,
         role=request.role,
@@ -173,7 +224,12 @@ async def invite_member(
         avatar_initials="".join(w[0].upper() for w in request.name.split()[:2]),
     )
 
-    _team_store[tenant_id].append(member)
+    # Try DB first, fall back to memory
+    db_success = _db_add_team_member(tenant_id, member)
+    if not db_success:
+        if tenant_id not in _team_store:
+            _team_store[tenant_id] = []
+        _team_store[tenant_id].append(member)
 
     return {"invited": True, "member": member.model_dump()}
 
@@ -189,12 +245,23 @@ async def update_role(
     _: None = Depends(_verify_api_key),
 ):
     """Update a team member's role."""
-    if tenant_id not in _team_store:
-        return {"error": "Tenant not found"}
-
-    for member in _team_store[tenant_id]:
+    # Try DB first
+    members = _db_get_team(tenant_id)
+    if members is None:
+        members = _team_store.get(tenant_id, [])
+    
+    for member in members:
         if member.id == member_id:
             member.role = role
+            
+            # Update in DB or memory
+            db_success = _db_add_team_member(tenant_id, member)
+            if not db_success:
+                if tenant_id in _team_store:
+                    for mem in _team_store[tenant_id]:
+                        if mem.id == member_id:
+                            mem.role = role
+            
             return {"updated": True, "member_id": member_id, "new_role": role}
 
     return {"error": "Member not found"}

@@ -21,6 +21,25 @@ from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("mock-audit")
 
+
+def _get_real_tlc(tenant_id: str) -> str | None:
+    """Pick a random real TLC from tenant's CTE events."""
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            row = db.execute(text(
+                "SELECT traceability_lot_code FROM fsma.cte_events "
+                "WHERE tenant_id = :tid AND traceability_lot_code IS NOT NULL "
+                "ORDER BY random() LIMIT 1"
+            ), {"tid": tenant_id}).fetchone()
+            return row[0] if row else None
+        finally:
+            db.close()
+    except Exception:
+        return None
+
 router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])
 
 # In-memory drill store
@@ -136,7 +155,16 @@ async def start_drill(
     """Start a mock audit drill."""
     # Pick scenario
     idx = request.scenario_index if request.scenario_index is not None else random.randint(0, len(FDA_SCENARIOS) - 1)
-    scenario = FDA_SCENARIOS[idx % len(FDA_SCENARIOS)]
+    scenario = FDA_SCENARIOS[idx % len(FDA_SCENARIOS)].copy()
+
+    # Try to use a real TLC from tenant's data
+    real_tlc = _get_real_tlc(request.tenant_id)
+    use_demo = real_tlc is None
+    if real_tlc:
+        scenario["target_tlc"] = real_tlc
+        scenario["demo_mode"] = False
+    else:
+        scenario["demo_mode"] = True
 
     drill_id = str(uuid4())[:12]
     now = datetime.now(timezone.utc)

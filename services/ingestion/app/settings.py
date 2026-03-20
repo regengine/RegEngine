@@ -8,15 +8,27 @@ data retention, and integrations configuration.
 from __future__ import annotations
 
 import logging
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("settings")
+
+
+def _get_db():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
 
 router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
 
@@ -90,7 +102,56 @@ def _default_settings(tenant_id: str) -> SettingsResponse:
     )
 
 
+# In-memory fallback for when DB is unavailable
 _settings_store: dict[str, SettingsResponse] = {}
+
+
+def _db_get_settings(tenant_id: str) -> Optional[SettingsResponse]:
+    """Query settings from database."""
+    db = _get_db()
+    if not db:
+        return None
+    try:
+        row = db.execute(
+            text("SELECT settings_json FROM fsma.tenant_settings WHERE tenant_id = :tid"),
+            {"tid": tenant_id}
+        ).fetchone()
+        if not row:
+            return None
+        settings_data = json.loads(row[0]) if row[0] else {}
+        settings_data["tenant_id"] = tenant_id
+        return SettingsResponse(**settings_data)
+    except Exception as exc:
+        logger.warning("db_read_failed error=%s", str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_save_settings(tenant_id: str, settings: SettingsResponse) -> bool:
+    """Insert or update settings in database."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        settings_json = json.dumps(settings.model_dump(exclude={"tenant_id"}))
+        db.execute(
+            text("""
+                INSERT INTO fsma.tenant_settings (tenant_id, settings_json, created_at, updated_at)
+                VALUES (:tid, :json, now(), now())
+                ON CONFLICT (tenant_id) DO UPDATE SET settings_json = :json, updated_at = now()
+            """),
+            {"tid": tenant_id, "json": settings_json}
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_write_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
 
 
 @router.get(
@@ -103,6 +164,12 @@ async def get_settings_endpoint(
     _: None = Depends(_verify_api_key),
 ) -> SettingsResponse:
     """Get all settings for a tenant."""
+    # Try DB first
+    settings = _db_get_settings(tenant_id)
+    if settings:
+        return settings
+    
+    # Fall back to memory or return defaults
     if tenant_id not in _settings_store:
         _settings_store[tenant_id] = _default_settings(tenant_id)
     return _settings_store[tenant_id]
@@ -118,10 +185,20 @@ async def update_profile(
     _: None = Depends(_verify_api_key),
 ):
     """Update company profile."""
-    if tenant_id not in _settings_store:
-        _settings_store[tenant_id] = _default_settings(tenant_id)
-
-    _settings_store[tenant_id].profile = profile
+    # Get current settings
+    settings = _db_get_settings(tenant_id)
+    if settings is None:
+        if tenant_id not in _settings_store:
+            _settings_store[tenant_id] = _default_settings(tenant_id)
+        settings = _settings_store[tenant_id]
+    
+    settings.profile = profile
+    
+    # Try DB first, fall back to memory
+    db_success = _db_save_settings(tenant_id, settings)
+    if not db_success:
+        _settings_store[tenant_id] = settings
+    
     return {"updated": True}
 
 
@@ -135,8 +212,18 @@ async def update_retention(
     _: None = Depends(_verify_api_key),
 ):
     """Update data retention settings."""
-    if tenant_id not in _settings_store:
-        _settings_store[tenant_id] = _default_settings(tenant_id)
-
-    _settings_store[tenant_id].data_retention = retention
+    # Get current settings
+    settings = _db_get_settings(tenant_id)
+    if settings is None:
+        if tenant_id not in _settings_store:
+            _settings_store[tenant_id] = _default_settings(tenant_id)
+        settings = _settings_store[tenant_id]
+    
+    settings.data_retention = retention
+    
+    # Try DB first, fall back to memory
+    db_success = _db_save_settings(tenant_id, settings)
+    if not db_success:
+        _settings_store[tenant_id] = settings
+    
     return {"updated": True}
