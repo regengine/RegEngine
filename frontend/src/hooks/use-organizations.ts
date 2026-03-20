@@ -5,13 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 
 // Use a dedicated client that queries the fsma schema.
 // Lazy-init to avoid "supabaseUrl is required" errors in test/CI environments.
-let _fsmaClient: ReturnType<typeof createClient> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _fsmaClient: any = null;
 function getFsmaClient() {
     if (!_fsmaClient) {
-        const url: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         if (!url || !key) return null;
-        _fsmaClient = createClient(url as string, key as string, { db: { schema: 'fsma' } });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        _fsmaClient = (createClient as any)(url, key, { db: { schema: 'fsma' } });
     }
     return _fsmaClient;
 }
