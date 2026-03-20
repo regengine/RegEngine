@@ -166,18 +166,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* Footer */}
                 <div className="p-3 border-t border-[var(--re-border-default)]">
-                    <div className="px-3 py-2.5 rounded-xl bg-[var(--re-brand)]/5 border border-[var(--re-brand)]/10">
+                    <Link href="/dashboard/settings" className="block px-3 py-2.5 rounded-xl bg-[var(--re-brand)]/5 border border-[var(--re-brand)]/10 hover:border-[var(--re-brand)]/30 transition-colors">
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Plan</div>
-                                <div className="text-xs font-semibold mt-0.5">Growth</div>
+                                <div className="text-xs font-semibold mt-0.5">Manage Plan</div>
                             </div>
                             <div className="w-6 h-6 rounded-md bg-[var(--re-brand)]/10 flex items-center justify-center">
                                 <Zap className="h-3 w-3 text-[var(--re-brand)]" />
                             </div>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-1">5 facilities · 50K events/mo</div>
-                    </div>
+                        <div className="text-[10px] text-muted-foreground mt-1">View billing &amp; usage</div>
+                    </Link>
                     <div className="flex items-center gap-2 mt-2">
                         <Link
                             href="/onboarding"

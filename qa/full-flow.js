@@ -30,8 +30,8 @@ console.log('1. CSV Ingestion');
 
 const csvPath = path.join(SAMPLES, 'sample_fda_export.csv');
 const csvContent = fs.readFileSync(csvPath, 'utf8');
-const lines = csvContent.trim().split('\n');
-const headers = lines[0].split(',');
+const lines = csvContent.trim().replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+const headers = lines[0].split(',').map(h => h.trim());
 const rows = lines.slice(1).map(line => {
   const values = [];
   let current = '';
