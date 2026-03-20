@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.authz import require_permission
+from app.shared.tenant_resolution import resolve_tenant_id
 
 logger = logging.getLogger("b2b-exchange")
 
@@ -57,45 +58,8 @@ def _allow_in_memory_fallback() -> bool:
     return not _is_production()
 
 
-def _get_db_session():
-    from shared.database import SessionLocal
-
-    return SessionLocal()
-
-
-def _resolve_tenant_id(
-    explicit_tenant_id: Optional[str],
-    x_tenant_id: Optional[str],
-    x_regengine_api_key: Optional[str],
-) -> Optional[str]:
-    if explicit_tenant_id:
-        return explicit_tenant_id
-    if x_tenant_id:
-        return x_tenant_id
-    if not x_regengine_api_key:
-        return None
-
-    db = _get_db_session()
-    try:
-        row = db.execute(
-            text(
-                """
-                SELECT tenant_id
-                FROM api_keys
-                WHERE key_hash = encode(sha256(:raw::bytea), 'hex')
-                LIMIT 1
-                """
-            ),
-            {"raw": x_regengine_api_key},
-        ).fetchone()
-        if row and row[0]:
-            return str(row[0])
-    except Exception as exc:
-        logger.warning("exchange_tenant_lookup_failed error=%s", str(exc))
-    finally:
-        db.close()
-
-    return None
+# Tenant resolution is now imported from app.shared.tenant_resolution
+_resolve_tenant_id = resolve_tenant_id
 
 
 def _ensure_exchange_table(db_session) -> None:

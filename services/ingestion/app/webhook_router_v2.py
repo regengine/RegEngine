@@ -21,6 +21,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
+from app.authz import require_permission, IngestionPrincipal
 from app.config import get_settings
 from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
@@ -435,12 +436,13 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
 )
 async def ingest_events(
     payload: WebhookPayload,
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _auth: None = Depends(_verify_api_key),
     db_session=Depends(_get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
-    # Resolve tenant: payload > API-key lookup
+    # Resolve tenant: payload > API-key lookup > RBAC principal
     tenant_id = payload.tenant_id
     if not tenant_id and x_regengine_api_key:
         try:
@@ -456,6 +458,9 @@ async def ingest_events(
             _db.close()
         except Exception:
             pass
+    # Fallback: use tenant from RBAC principal if available
+    if not tenant_id and principal.tenant_id:
+        tenant_id = principal.tenant_id
     if not tenant_id:
         logger.error("Webhook rejected: no tenant_id resolved")
         raise HTTPException(status_code=400, detail="Tenant context required")
