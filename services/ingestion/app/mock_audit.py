@@ -27,7 +27,9 @@ router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])
 _active_drills: dict[str, dict] = {}
 
 # Simulated FDA request scenarios
-FDA_SCENARIOS = [
+# NOTE: TLCs below are demo placeholders. In production, the start_drill endpoint
+# queries the tenant's actual CTE events to select a real TLC for the drill.
+_DEMO_FDA_SCENARIOS = [
     {
         "scenario": "Outbreak Investigation — Romaine Lettuce",
         "request_text": (
@@ -38,6 +40,7 @@ FDA_SCENARIOS = [
         "target_product": "Romaine Lettuce",
         "target_tlc": "ROM-0226-A1-001",
         "cfr_citation": "21 CFR 1.1455(a)",
+        "demo_mode": True,
     },
     {
         "scenario": "Routine Compliance Check — Fresh Tomatoes",
@@ -49,6 +52,7 @@ FDA_SCENARIOS = [
         "target_product": "Roma Tomatoes",
         "target_tlc": "TOM-0226-F3-001",
         "cfr_citation": "21 CFR 1.1455(a)",
+        "demo_mode": True,
     },
     {
         "scenario": "Retailer-Initiated Trace — Atlantic Salmon",
@@ -60,8 +64,12 @@ FDA_SCENARIOS = [
         "target_product": "Atlantic Salmon Fillets",
         "target_tlc": "SAL-0226-B1-007",
         "cfr_citation": "21 CFR 1.1455(a), 21 CFR 1.1325(c)",
+        "demo_mode": True,
     },
 ]
+
+# Alias for backward compat
+FDA_SCENARIOS = _DEMO_FDA_SCENARIOS
 
 
 class StartDrillRequest(BaseModel):
@@ -86,6 +94,10 @@ class DrillStatus(BaseModel):
     grade: Optional[str] = None
     score: Optional[int] = None
     feedback: list[str] = Field(default_factory=list)
+    demo_mode: bool = Field(
+        default=False,
+        description="True when drill uses demo TLCs instead of real tenant data.",
+    )
 
 
 class DrillResponse(BaseModel):
@@ -157,6 +169,7 @@ async def start_drill(
         time_remaining_seconds=remaining,
         time_remaining_display=f"{hours}h {minutes}m",
         status="active",
+        demo_mode=scenario.get("demo_mode", False),
     )
 
 
@@ -197,6 +210,7 @@ async def get_drill_status(drill_id: str) -> DrillStatus:
         status=status,
         grade=drill.get("grade"),
         score=drill.get("score"),
+        demo_mode=scenario.get("demo_mode", False),
     )
 
 

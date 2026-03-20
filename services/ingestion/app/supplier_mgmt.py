@@ -33,6 +33,10 @@ class SupplierRecord(BaseModel):
     compliance_status: str  # "compliant", "partial", "non_compliant", "unknown"
     missing_kdes: list[str] = Field(default_factory=list)
     products: list[str] = Field(default_factory=list)
+    is_sample: bool = Field(
+        default=False,
+        description="True for auto-generated sample data. Replace with real supplier records.",
+    )
 
 
 class SupplierDashboard(BaseModel):
@@ -53,10 +57,10 @@ class CreateSupplierRequest(BaseModel):
     products: list[str] = Field(default_factory=list)
 
 
-# Sample supplier data
+# Sample supplier data — marked is_sample=True so the UI can show a banner
 def _generate_sample_suppliers(tenant_id: str) -> list[SupplierRecord]:
     now = datetime.now(timezone.utc)
-    return [
+    records = [
         SupplierRecord(
             id=f"{tenant_id}-sup-001",
             name="Valley Fresh Farms",
@@ -114,8 +118,13 @@ def _generate_sample_suppliers(tenant_id: str) -> list[SupplierRecord]:
             products=["Third-party logistics (temperature monitoring)"],
         ),
     ]
+    for r in records:
+        r.is_sample = True
+    return records
 
 
+# TODO(V042): Replace with fsma.tenant_suppliers table queries.
+# Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
 _suppliers_store: dict[str, list[SupplierRecord]] = {}
 
 

@@ -43,30 +43,41 @@ REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
     WebhookCTEType.HARVESTING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "harvest_date", "location_name",
+        "reference_document",  # §1.1327(b)(5)
     ],
     WebhookCTEType.COOLING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "cooling_date", "location_name",
+        "reference_document",  # §1.1330(b)(6)
     ],
     WebhookCTEType.INITIAL_PACKING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "packing_date", "location_name",
+        "reference_document",  # §1.1335(c)(7)
+        "harvester_business_name",  # §1.1335(c)(8)
     ],
     WebhookCTEType.FIRST_LAND_BASED_RECEIVING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "landing_date", "receiving_location",
+        "reference_document",  # §1.1325(c)(7)
     ],
     WebhookCTEType.SHIPPING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "ship_date", "ship_from_location", "ship_to_location",
+        "reference_document",  # §1.1340(c)(6)
+        "tlc_source_reference",  # §1.1340(c)(7)
     ],
     WebhookCTEType.RECEIVING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "receive_date", "receiving_location",
+        "immediate_previous_source",  # §1.1345(c)(5)
+        "reference_document",  # §1.1345(c)(6)
+        "tlc_source_reference",  # §1.1345(c)(7)
     ],
     WebhookCTEType.TRANSFORMATION: [
         "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "transformation_date",
+        "unit_of_measure", "transformation_date", "location_name",
+        "reference_document",  # §1.1350(c)(6)
     ],
 }
 
@@ -86,6 +97,14 @@ class IngestEvent(BaseModel):
         default_factory=dict,
         description="Additional Key Data Elements (temperature, carrier, PO, field ID, etc.)"
     )
+    input_traceability_lot_codes: Optional[list[str]] = Field(
+        None,
+        description=(
+            "For transformation CTEs (21 CFR §1.1340): list of input TLCs that were "
+            "combined/transformed into the new traceability_lot_code. Required per "
+            "§1.1340(a)(4) to link each new TLC to all input TLCs."
+        ),
+    )
 
     @field_validator("timestamp")
     @classmethod
@@ -97,12 +116,8 @@ class IngestEvent(BaseModel):
             raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
 
         now = datetime.now(timezone.utc)
-        # Reject events more than 90 days old (stale data)
-        if dt < now - timedelta(days=90):
-            raise ValueError(
-                f"Event timestamp {v} is more than 90 days old. "
-                "Contact support if you need to backfill historical data."
-            )
+        # Allow historical events for FSMA 204 §1.1455(h) 2-year retention backfill.
+        # Events older than 90 days are accepted but flagged via _historical_warning.
         # Reject events more than 24 hours in the future (clock skew)
         if dt > now + timedelta(hours=24):
             raise ValueError(
@@ -119,9 +134,9 @@ class IngestEvent(BaseModel):
         clean = re.sub(r"\D", "", v)
         if len(clean) != 13:
             raise ValueError(f"GLN must be exactly 13 digits, got {len(clean)}")
-        # GS1 check digit validation
+        # GS1 check digit validation (positions from right: odd×3, even×1)
         total = sum(
-            int(d) * (3 if i % 2 else 1)
+            int(d) * (1 if i % 2 else 3)
             for i, d in enumerate(reversed(clean[:-1]))
         )
         expected = (10 - (total % 10)) % 10
