@@ -27,10 +27,13 @@ x-env-common:
   # Per-tenant rate limiting (Sprint 13)
   RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-100/minute}
   RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/2}
-  # Test API key bypass - allows 'admin' as a valid key for development
-  AUTH_TEST_BYPASS_TOKEN: ${AUTH_TEST_BYPASS_TOKEN:-admin}
+  # Test API key bypass — only set in local dev. Omit in production to disable bypass entirely.
+  AUTH_TEST_BYPASS_TOKEN: ${AUTH_TEST_BYPASS_TOKEN:-}
   AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
   ENABLE_OTEL: ${ENABLE_OTEL:-true}
+  # Runtime mode — defaults to "development" for docker-compose (local dev).
+  # In production deployments, set to "production" to disable auth bypass.
+  REGENGINE_ENV: ${REGENGINE_ENV:-development}
 
 services:
   gateway:
@@ -231,7 +234,6 @@ services:
       <<: *env_common
       # Override for async API key store (requires asyncpg driver)
       DATABASE_URL: postgresql+asyncpg://regengine:regengine@postgres:5432/regengine_admin
-      AUTH_TEST_BYPASS_TOKEN: dev-bypass-token
     deploy:
       resources:
         limits:

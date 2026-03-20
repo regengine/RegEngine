@@ -20,7 +20,7 @@ def mock_neo4j_client():
     """Mock Neo4j client at all route module locations."""
     with patch("services.graph.app.routers.fsma.traceability.Neo4jClient") as mock_trace, \
          patch("services.graph.app.routers.fsma.compliance.Neo4jClient") as mock_comp, \
-         patch("services.graph.app.routers.fsma.science.Neo4jClient") as mock_sci:
+         patch("services.graph.app.routers.fsma.science.Neo4jClient", create=True) as mock_sci:
         mock_instance = MagicMock()
         mock_instance.close = AsyncMock()
         for m in [mock_trace, mock_comp, mock_sci]:
