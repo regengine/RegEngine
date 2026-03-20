@@ -39,6 +39,10 @@ class Product(BaseModel):
     cte_count: int = 0
     last_cte: str | None = None
     created_at: str = ""
+    is_sample: bool = Field(
+        default=False,
+        description="True for auto-generated sample data. Replace with real product records.",
+    )
 
 
 class ProductCatalogResponse(BaseModel):
@@ -254,12 +258,14 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
 # In-memory fallback (dev / when DATABASE_URL is not set)
 # ---------------------------------------------------------------------------
 
+# TODO(V042): Replace with fsma.tenant_products table queries.
+# Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
 _catalog_store: dict[str, list[Product]] = {}
 
 
 def _generate_sample_products(tenant_id: str) -> list[Product]:
     now = datetime.now(timezone.utc)
-    return [
+    records = [
         Product(
             id=f"{tenant_id}-prod-001", name="Romaine Lettuce", category="Leafy Greens",
             ftl_covered=True, sku="ROM-001", gtin="00612345678901",
@@ -297,6 +303,9 @@ def _generate_sample_products(tenant_id: str) -> list[Product]:
             cte_count=5, last_cte=now.isoformat(), created_at=now.isoformat(),
         ),
     ]
+    for r in records:
+        r.is_sample = True
+    return records
 
 
 def _memory_learn(tenant_id: str, gtin: str, name: str, facility: str, now: str):

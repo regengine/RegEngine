@@ -47,6 +47,14 @@ class RecallReport(BaseModel):
     executive_summary: str
     action_items: list[dict]
     regulatory_citations: list[str]
+    demo_mode: bool = Field(
+        default=False,
+        description="True when scores are illustrative (not derived from tenant data).",
+    )
+    demo_disclaimer: str | None = Field(
+        default=None,
+        description="Disclaimer shown when report uses demo/sample data.",
+    )
 
 
 def _grade(score: int) -> str:
@@ -223,4 +231,11 @@ async def generate_report(
             "21 CFR 1.1325-1.1350 — CTE/KDE Requirements",
             "FSMA Section 204 — Food Traceability Rule",
         ],
+        demo_mode=True,
+        demo_disclaimer=(
+            "⚠ DEMO DATA: This report contains illustrative scores and findings "
+            "that are NOT derived from your tenant's actual traceability data. "
+            "Scores, findings, and recommendations are representative examples only. "
+            "Wire this endpoint to _query_scoring_data() for production use."
+        ),
     )
