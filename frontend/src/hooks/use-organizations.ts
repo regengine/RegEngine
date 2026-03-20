@@ -8,10 +8,10 @@ import { createClient } from '@supabase/supabase-js';
 let _fsmaClient: ReturnType<typeof createClient> | null = null;
 function getFsmaClient() {
     if (!_fsmaClient) {
-        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        const url: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const key: string | undefined = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         if (!url || !key) return null;
-        _fsmaClient = createClient(url, key, { db: { schema: 'fsma' } });
+        _fsmaClient = createClient(url as string, key as string, { db: { schema: 'fsma' } });
     }
     return _fsmaClient;
 }
