@@ -178,7 +178,7 @@ class CTEPersistence:
     Database-backed persistence for FSMA 204 CTE events.
 
     All methods expect a SQLAlchemy session that has already set
-    the tenant context via: SET LOCAL regengine.tenant_id = '<uuid>';
+    the tenant context via: SET LOCAL app.tenant_id = '<uuid>';
 
     The RLS policies on the fsma.* tables enforce tenant isolation
     automatically — this module never needs to filter by tenant_id
@@ -193,9 +193,15 @@ class CTEPersistence:
     # ------------------------------------------------------------------
 
     def set_tenant_context(self, tenant_id: str) -> None:
-        """Set the RLS tenant context for this session."""
+        """Set the RLS tenant context for this session.
+
+        Uses ``app.tenant_id`` — the single namespace read by
+        ``get_tenant_context()`` and all RLS policies.  Previously this
+        method set ``regengine.tenant_id`` which was **never** checked by
+        any RLS policy, silently bypassing tenant isolation.
+        """
         self.session.execute(
-            text("SET LOCAL regengine.tenant_id = :tid"),
+            text("SET LOCAL app.tenant_id = :tid"),
             {"tid": tenant_id},
         )
 
