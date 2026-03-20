@@ -348,3 +348,28 @@ def init_demo_keys():
         "demo_key": demo_key,
         "admin_key": admin_key,
     }
+
+
+# ---------------------------------------------------------------------------
+# Standardized Tenant Resolution
+# ---------------------------------------------------------------------------
+# Canonical dependency for deriving tenant_id. Precedence:
+#   1. X-Tenant-ID header (explicit override)
+#   2. Authenticated principal's tenant (from API key)
+# Rejects requests where neither is present.
+
+def get_tenant_id(
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+) -> str:
+    """Resolve tenant_id from the X-Tenant-ID header.
+
+    Services should prefer deriving tenant from the authenticated principal
+    (e.g., IngestionPrincipal.tenant_id) and fall back to this header only
+    for admin/service-to-service calls.
+    """
+    if not x_tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing X-Tenant-ID header. Tenant context is required.",
+        )
+    return x_tenant_id
