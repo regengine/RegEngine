@@ -5,12 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
 
-// Required for static export
-export const dynamic = 'force-static';
-export const generateStaticParams = async () => {
-    // Return a dummy path to satisfy Next.js static export requirement for catch-all
-    return [{ path: ['static_proxy'] }];
-};
+export const dynamic = 'force-dynamic';
 
 export async function GET(
     request: NextRequest,
