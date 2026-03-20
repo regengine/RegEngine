@@ -19,7 +19,14 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 # --- Standardized Bootstrap ---
 import sys
 from pathlib import Path
-_SERVICES_DIR = Path(__file__).resolve().parent.parent 
+_SERVICE_DIR = Path(__file__).resolve().parent        # services/graph/
+_SERVICES_DIR = _SERVICE_DIR.parent                   # services/
+_REPO_ROOT = _SERVICES_DIR.parent                     # repo root
+
+# Insert repo root FIRST so local kernel/ package takes precedence
+# over any pip-installed 'kernel' module
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
 
