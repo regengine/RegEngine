@@ -1,19 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 
-export default function SignupPage() {
+const PLAN_LABELS: Record<string, string> = {
+  base: 'Base',
+  standard: 'Standard',
+  premium: 'Premium',
+  growth: 'Growth',
+  scale: 'Scale',
+};
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
+
+  const checkoutSuccess = searchParams.get('checkout') === 'success';
+  const selectedPlan = searchParams.get('plan');
+  const planLabel = selectedPlan ? PLAN_LABELS[selectedPlan] || selectedPlan : null;
 
   const [tenantName, setTenantName] = useState('');
   const [email, setEmail] = useState('');
@@ -50,6 +63,33 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
       <div className="mx-auto max-w-md">
+        {/* Checkout success banner */}
+        {checkoutSuccess && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-300">
+                Payment confirmed
+              </p>
+              <p className="text-xs text-emerald-300/80">
+                {planLabel
+                  ? `Create your account to get started on the ${planLabel} plan.`
+                  : 'Create your account to get started.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Plan context banner (when coming from pricing, no Stripe) */}
+        {selectedPlan && !checkoutSuccess && (
+          <div className="mb-6 rounded-xl border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 px-4 py-3 text-center">
+            <p className="text-sm text-[var(--re-brand)]">
+              Selected plan: <span className="font-semibold">{planLabel}</span>
+              {' \u2014 '}you can start your subscription after creating your account.
+            </p>
+          </div>
+        )}
+
         <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-[var(--re-text-primary)]">Create Your Workspace</CardTitle>
@@ -136,5 +176,13 @@ export default function SignupPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }
