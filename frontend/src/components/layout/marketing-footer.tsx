@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
     MARKETING_FOOTER_COMPANY_LINKS,
+    MARKETING_FOOTER_DEVELOPER_LINKS,
     MARKETING_FOOTER_PRODUCT_LINKS,
     MARKETING_FREE_TOOLS,
 } from '@/components/layout/marketing-nav';
@@ -25,7 +26,7 @@ export function MarketingFooter() {
         <footer
             aria-label="Site footer"            className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-text-primary)] text-[var(--re-surface-base)]"
         >
-            <div className="max-w-[1100px] mx-auto px-6 pt-12 pb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr] gap-10">
+            <div className="max-w-[1100px] mx-auto px-6 pt-12 pb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10">
                 <div>
                     <Link href="/" className="flex items-center gap-2 mb-3 no-underline">
                         <span className="font-mono text-[0.85rem] text-[#aaa]">
@@ -73,6 +74,21 @@ export function MarketingFooter() {
                     >
                         View all tools →
                     </Link>
+                </div>
+
+                <div>
+                    <h4 className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[#555] mb-3">
+                        Developers
+                    </h4>
+                    {MARKETING_FOOTER_DEVELOPER_LINKS.map((link) => (
+                        <Link
+                            key={link.label}
+                            href={link.href}
+                            className="block text-[13px] text-[#999] no-underline mb-2.5 hover:text-white transition-colors"
+                        >
+                            {link.label}
+                        </Link>
+                    ))}
                 </div>
 
                 <div>
