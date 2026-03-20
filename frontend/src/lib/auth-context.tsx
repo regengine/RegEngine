@@ -20,7 +20,7 @@ interface AuthContextType {
   setDemoMode: (enabled: boolean) => void;
   completeOnboarding: () => void;
   clearCredentials: () => void;
-  login: (token: string, user: User, tenantId?: string) => void;
+  login: (token: string, user: User, tenantId?: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -54,13 +54,14 @@ const STORAGE_KEYS = {
   USER: 'regengine_user',
 };
 
-/** Sync sensitive credentials to HTTP-only cookies via /api/session */
-function syncSessionCookies(
+/** Sync sensitive credentials to HTTP-only cookies via /api/session.
+ *  Returns a promise so callers can await the cookie being set before navigating. */
+async function syncSessionCookies(
   accessToken?: string | null,
   apiKey?: string | null,
   adminKey?: string | null,
   tenantId?: string | null,
-) {
+): Promise<void> {
   if (typeof window === 'undefined') return;
   const body: Record<string, string> = {};
   if (accessToken) body.access_token = accessToken;
@@ -68,11 +69,15 @@ function syncSessionCookies(
   if (adminKey) body.admin_key = adminKey;
   if (tenantId) body.tenant_id = tenantId;
   if (Object.keys(body).length > 0) {
-    fetch('/api/session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).catch(() => { /* best-effort — localStorage is the fallback */ });
+    try {
+      await fetch('/api/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      /* best-effort — localStorage is the fallback */
+    }
   }
 }
 
@@ -297,7 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback((token: string, user: User, tenantId?: string) => {
+  const login = useCallback(async (token: string, user: User, tenantId?: string) => {
     setAccessTokenState(token);
     setUserState(user);
     if (tenantId) setTenantIdState(tenantId);
@@ -311,9 +316,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
       if (tenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
     }
-    // Dual-write: store access_token + credentials in HTTP-only cookies
-    // access_token is critical — middleware checks this cookie for route protection
-    syncSessionCookies(token, apiKey, adminKey, tenantId);
+    // Dual-write: store access_token + credentials in HTTP-only cookies.
+    // MUST await — middleware checks this cookie on the next navigation.
+    // Without await, router.push() races ahead and middleware sees no cookie.
+    await syncSessionCookies(token, apiKey, adminKey, tenantId);
   }, [apiKey, adminKey]);
 
   const clearCredentials = useCallback(() => {
