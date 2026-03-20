@@ -25,7 +25,7 @@ from kernel.discovery import discovery
 from plugins.fsma.sources import FSMA_SOURCES
 
 logger = structlog.get_logger("ingestion.scrapers")
-router = APIRouter()
+router = APIRouter(include_in_schema=False)
 
 _PIPELINE = ScraperPipeline()
 

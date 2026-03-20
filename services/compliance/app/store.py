@@ -1,3 +1,7 @@
+# NOTE: This file contains mixed FSMA 204 and fair-lending compliance store code.
+# Fair-lending specific sections are archived as of Sprint 4 Clean Architecture.
+# FSMA 204 code remains active. See services/compliance/_archive/fair-lending/ for historical context.
+
 from __future__ import annotations
 
 from dataclasses import dataclass

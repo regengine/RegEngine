@@ -13,20 +13,94 @@ in under 5 minutes. Tracks progress through steps:
 from __future__ import annotations
 
 import logging
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("onboarding")
 
+
+def _get_db():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
+
+
+def _seed_obligations_if_needed(tenant_id: str):
+    """Seed FSMA 204 obligations for new tenant (idempotent)."""
+    try:
+        from shared.database import SessionLocal
+        db = SessionLocal()
+        try:
+            db.execute(text("SELECT seed_obligations_for_tenant(:tid::uuid)"), {"tid": tenant_id})
+            db.commit()
+            logger.info("obligations_seeded tenant_id=%s", tenant_id)
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning("obligation_seeding_failed tenant_id=%s error=%s", tenant_id, str(exc))
+
 router = APIRouter(prefix="/api/v1/onboarding", tags=["Onboarding"])
 
-# In-memory onboarding state
+# In-memory onboarding state fallback
 _onboarding_store: dict[str, dict] = {}
+
+
+def _db_get_onboarding(tenant_id: str) -> Optional[dict]:
+    """Query onboarding progress from database."""
+    db = _get_db()
+    if not db:
+        return None
+    try:
+        row = db.execute(
+            text("SELECT progress_json FROM fsma.tenant_onboarding WHERE tenant_id = :tid"),
+            {"tid": tenant_id}
+        ).fetchone()
+        if not row:
+            return None
+        progress_data = json.loads(row[0]) if row[0] else {}
+        return progress_data
+    except Exception as exc:
+        logger.warning("db_read_failed error=%s", str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_save_onboarding(tenant_id: str, progress: dict) -> bool:
+    """Insert or update onboarding progress in database."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        progress_json = json.dumps(progress)
+        db.execute(
+            text("""
+                INSERT INTO fsma.tenant_onboarding (tenant_id, progress_json, created_at, updated_at)
+                VALUES (:tid, :json, now(), now())
+                ON CONFLICT (tenant_id) DO UPDATE SET progress_json = :json, updated_at = now()
+            """),
+            {"tid": tenant_id, "json": progress_json}
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_write_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
 
 ONBOARDING_STEPS = [
     {
@@ -129,12 +203,16 @@ async def get_progress(
     _: None = Depends(_verify_api_key),
 ) -> OnboardingProgress:
     """Get current onboarding progress for a tenant."""
-    state = _onboarding_store.get(tenant_id, {
-        "current_step": 1,
-        "completed_steps": [],
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "first_cte_at": None,
-    })
+    # Try DB first
+    state = _db_get_onboarding(tenant_id)
+    if state is None:
+        # Fall back to memory or default
+        state = _onboarding_store.get(tenant_id, {
+            "current_step": 1,
+            "completed_steps": [],
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "first_cte_at": None,
+        })
 
     completed_count = len(state["completed_steps"])
     total = len(ONBOARDING_STEPS)
@@ -172,18 +250,25 @@ async def complete_step(
     """Mark an onboarding step as complete."""
     now = datetime.now(timezone.utc)
 
-    if tenant_id not in _onboarding_store:
-        _onboarding_store[tenant_id] = {
-            "current_step": 1,
-            "completed_steps": [],
-            "started_at": now.isoformat(),
-            "first_cte_at": None,
-        }
-
-    state = _onboarding_store[tenant_id]
+    # Try DB first
+    state = _db_get_onboarding(tenant_id)
+    if state is None:
+        # Fall back to memory or create new
+        if tenant_id not in _onboarding_store:
+            _onboarding_store[tenant_id] = {
+                "current_step": 1,
+                "completed_steps": [],
+                "started_at": now.isoformat(),
+                "first_cte_at": None,
+            }
+        state = _onboarding_store[tenant_id]
 
     if step_id not in state["completed_steps"]:
         state["completed_steps"].append(step_id)
+
+    # Seed obligations on first step completion (idempotent)
+    if step_id == "company_profile":
+        _seed_obligations_if_needed(tenant_id)
 
     # Advance current step
     step_ids = [s["id"] for s in ONBOARDING_STEPS]
@@ -197,6 +282,11 @@ async def complete_step(
 
     completed_count = len(state["completed_steps"])
     is_complete = completed_count >= len(ONBOARDING_STEPS)
+
+    # Try DB first, fall back to memory
+    db_success = _db_save_onboarding(tenant_id, state)
+    if not db_success:
+        _onboarding_store[tenant_id] = state
 
     logger.info("onboarding_step_completed", extra={
         "tenant_id": tenant_id,
