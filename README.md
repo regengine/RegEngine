@@ -42,9 +42,11 @@ Monorepo with two primary surfaces:
 ├── frontend/              Next.js 15 App Router (Vercel)
 │   ├── src/app/           Pages and API routes
 │   │   ├── dashboard/     Authenticated dashboard (16 pages)
+│   │   ├── pricing/       Pricing + Stripe checkout flow
 │   │   ├── tools/         Free compliance tools
-│   │   └── api/admin/     Proxy to Railway admin API
-│   └── src/components/    UI components
+│   │   └── api/           Server-side proxies (admin, billing, session)
+│   ├── src/components/    UI components
+│   └── src/middleware.ts   Dual auth gate (RegEngine JWT + Supabase)
 ├── services/
 │   ├── admin/             Auth, tenants, bulk upload, supplier onboarding
 │   ├── ingestion/         Ingest pipelines, EPCIS, webhook, FDA export
@@ -60,9 +62,9 @@ Monorepo with two primary surfaces:
 
 ## Tech Stack
 
-**Frontend:** Next.js 15, React 18, TypeScript, Tailwind CSS, Radix UI, Framer Motion, TanStack Query, Supabase Auth
+**Frontend:** Next.js 15, React 18, TypeScript, Tailwind CSS, Radix UI, Framer Motion, TanStack Query, jose (JWT), Supabase Auth
 
-**Backend:** FastAPI (Python 3.11), PostgreSQL, Neo4j (graph), Kafka (Redpanda), Redis, Supabase
+**Backend:** FastAPI (Python 3.11), PostgreSQL, Neo4j (graph), Kafka (Redpanda), Redis, Stripe, defusedxml, Supabase
 
 **Infrastructure:** Vercel Pro (frontend), Railway Pro (backend services), Supabase (auth + database)
 
@@ -139,34 +141,51 @@ CSV/XLSX → Parse → Auto-clean messy fields → Validate against FSMA 204 rul
 
 ## Recent Changes (March 2026)
 
+### Auth & Billing (PR #175)
+- Dual-strategy middleware: checks RegEngine JWT (`re_access_token` cookie) first, falls back to Supabase session
+- Stripe checkout proxy at `/api/billing/checkout` — API key stays server-side
+- Pricing page CTAs wired to checkout flow with graceful signup fallback
+- `access_token` stored in HTTP-only cookie via `/api/session` for middleware verification
+- Signup page shows plan context + payment confirmation banners post-checkout
+
+### Security (PRs #173, #174)
+- XXE vulnerability fixed: replaced `xml.etree.ElementTree` with `defusedxml` across all XML parsers
+- `lxml` parsers hardened with `resolve_entities=False, no_network=True`
+- `defusedxml>=0.7.1` added to ingestion and scheduler service `requirements.txt` (fixed Railway crash)
+
+### Ingestion Hardening (PR #171 — 13 findings)
+- RBAC auth on webhook endpoint via `require_permission("webhooks.ingest")`
+- Chunked file uploads with size limits (10MB general, 5MB CSV/EDI) prevent OOM
+- Shared modules extracted: `tenant_resolution.py`, `upload_limits.py`, `routes_health_metrics.py`
+- `DISABLED_ROUTERS` env var for feature-flagging non-core routers
+- All `datetime.utcnow()` replaced with `datetime.now(timezone.utc)`
+
+### Comprehensive Audit (PR #172 — 18 findings, 5 sprints)
+- **Persistence:** 5 dashboard modules rewritten to DB-first pattern (suppliers, team, settings, notifications, onboarding)
+- **Accuracy:** Recall report, mock audit, and simulations query real tenant CTE data
+- **Security:** 5 dead security modules archived; internal routes hidden from OpenAPI spec
+- **Architecture:** 6 disabled page suites moved to `_disabled/`; entertainment artifacts archived
+- **Docs:** Migration README, production env checklist (28 required + 12 security vars), security scan results
+
 ### Site & UX
 - Auth-aware header/footer: logged-in users see Dashboard nav + avatar, visitors see marketing nav
-- Countdown timer fix: consistent 855 days (was randomizing on each load)
 - Pricing updated to Base/Standard/Premium facility-based tiers
-- Checklist label visibility fix (hardcoded dark bg with theme variable colors)
 - Retailer Readiness page: risk calculator, compliance checklist, integrations grid
 
 ### Dashboard
 - All pages render for authenticated users (fixed Supabase + custom auth race condition)
-- System Health shows "Healthy" (ConnectErrors reported as "unavailable" not "unhealthy")
-- Hash Chain shows "Valid" (falls back to supplier Merkle chain when ingestion unreachable)
-- Products page populates from supplier TLC data
-- Audit Log supplements with bulk upload facility events
 - Suppliers page loads in ~1s with progressive enrichment (was 30s+)
+- Products page populates from supplier TLC data
 
 ### Infrastructure
 - Docker dependency cycle fixed (admin-api ↔ compliance-api)
-- Missing env vars added (AUTH_SECRET_KEY, REGENGINE_INTERNAL_SECRET, SCHEDULER_API_KEY)
 - Vercel admin proxy maxDuration=300s (Pro plan)
 - Railway Railpack builder now installs openpyxl for XLSX uploads
-- Frontend .env.local with Supabase keys for production builds
 
 ### Backend
 - Bulk upload auto-cleans short/empty fields instead of hard-failing
 - Batch processing (500 rows/batch) prevents timeout on large commits
 - Graph sync capped at 100 events per commit response
-- System metrics query supplier tables (admin DB) as fallback
-- EPCIS test TLC format updated to GTIN-14 pattern
 
 ## Key Specs
 
