@@ -403,7 +403,7 @@ class CTEPersistence:
                     """),
                     {
                         "tenant_id": tenant_id,
-                        "org_id": "00000000-0000-0000-0000-000000000000",
+                        "org_id": tenant_id,  # scope alerts to tenant until org model exists
                         "event_id": event_id,
                         "severity": alert.get("severity", "warning"),
                         "alert_type": alert_type,
@@ -760,20 +760,31 @@ class CTEPersistence:
                 "source": row[11],
                 "validation_status": row[12],
                 "ingested_at": row[13].isoformat() if row[13] else None,
+                "kdes": {},
             }
-
-            # Fetch KDEs for this event
-            kdes = self.session.execute(
-                text("""
-                    SELECT kde_key, kde_value, is_required
-                    FROM fsma.cte_kdes
-                    WHERE cte_event_id = :eid AND tenant_id = :tid
-                """),
-                {"eid": str(row[0]), "tid": tenant_id},
-            ).fetchall()
-
-            event["kdes"] = {k[0]: k[1] for k in kdes}
             events.append(event)
+
+        # Bulk-fetch KDEs for all events in one query (avoids N+1)
+        if events:
+            event_ids = [e["id"] for e in events]
+            kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
+            for chunk_start in range(0, len(event_ids), 100):
+                chunk = event_ids[chunk_start:chunk_start + 100]
+                placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
+                kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
+                kde_params["tid"] = tenant_id
+                kde_rows = self.session.execute(
+                    text(f"""
+                        SELECT cte_event_id, kde_key, kde_value
+                        FROM fsma.cte_kdes
+                        WHERE tenant_id = :tid AND cte_event_id IN ({placeholders})
+                    """),
+                    kde_params,
+                ).fetchall()
+                for kr in kde_rows:
+                    kde_map[str(kr[0])][kr[1]] = kr[2]
+            for event in events:
+                event["kdes"] = kde_map.get(event["id"], {})
 
         return events
 
@@ -788,7 +799,11 @@ class CTEPersistence:
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
         Query CTE events with optional filters. Returns (events, total_count).
+
+        Sets RLS tenant context for consistency with class contract. The explicit
+        WHERE tenant_id clause is retained as defense-in-depth.
         """
+        self.set_tenant_context(tenant_id)
         params: Dict[str, Any] = {"tid": tenant_id, "lim": limit, "off": offset}
         where_clauses = ["tenant_id = :tid"]
 
@@ -986,18 +1001,8 @@ class CTEPersistence:
 
         events = []
         for row in rows:
-            event_id = str(row[0])
-            kdes = self.session.execute(
-                text("""
-                    SELECT kde_key, kde_value
-                    FROM fsma.cte_kdes
-                    WHERE cte_event_id = :eid AND tenant_id = :tid
-                """),
-                {"eid": event_id, "tid": tenant_id},
-            ).fetchall()
-
             events.append({
-                "id": event_id,
+                "id": str(row[0]),
                 "event_type": row[1],
                 "traceability_lot_code": row[2],
                 "product_description": row[3],
@@ -1008,7 +1013,29 @@ class CTEPersistence:
                 "event_timestamp": row[8].isoformat() if row[8] else None,
                 "source": row[9],
                 "sequence_num": row[10],
-                "kdes": {k[0]: k[1] for k in kdes},
+                "kdes": {},
             })
+
+        # Bulk-fetch KDEs for all events in one query (avoids N+1)
+        if events:
+            event_ids = [e["id"] for e in events]
+            kde_map: Dict[str, Dict[str, str]] = {eid: {} for eid in event_ids}
+            for chunk_start in range(0, len(event_ids), 100):
+                chunk = event_ids[chunk_start:chunk_start + 100]
+                placeholders = ", ".join(f":eid_{i}" for i in range(len(chunk)))
+                kde_params: Dict[str, Any] = {f"eid_{i}": eid for i, eid in enumerate(chunk)}
+                kde_params["tid"] = tenant_id
+                kde_rows = self.session.execute(
+                    text(f"""
+                        SELECT cte_event_id, kde_key, kde_value
+                        FROM fsma.cte_kdes
+                        WHERE tenant_id = :tid AND cte_event_id IN ({placeholders})
+                    """),
+                    kde_params,
+                ).fetchall()
+                for kr in kde_rows:
+                    kde_map[str(kr[0])][kr[1]] = kr[2]
+            for event in events:
+                event["kdes"] = kde_map.get(event["id"], {})
 
         return events
