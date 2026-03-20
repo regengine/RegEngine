@@ -118,8 +118,9 @@ export default function LoginPage() {
         try {
             const response = await apiClient.login(email, password);
 
-            // Update auth context
-            login(
+            // Update auth context — must await so the HTTP-only cookie is set
+            // before router.push triggers middleware that checks for it
+            await login(
                 response.access_token,
                 response.user,
                 response.tenant_id
