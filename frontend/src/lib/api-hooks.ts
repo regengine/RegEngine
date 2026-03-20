@@ -9,16 +9,9 @@ import { getServiceURL } from './api-config';
 const BASE = () => getServiceURL('ingestion');
 
 function getApiKey(): string {
-    if (typeof window === 'undefined') {
-        return process.env.NEXT_PUBLIC_API_KEY || '';
-    }
-
-    // Keep backward compatibility with both key names that exist in the codebase.
-    const stored =
-        localStorage.getItem('regengine_api_key') ||
-        localStorage.getItem('re-api-key');
-
-    return stored || process.env.NEXT_PUBLIC_API_KEY || '';
+    // API key is provided via environment variable only.
+    // Never store API keys in localStorage (XSS-accessible).
+    return process.env.NEXT_PUBLIC_API_KEY || '';
 }
 
 /** Shared fetch helper with API key */
