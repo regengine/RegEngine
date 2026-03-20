@@ -126,6 +126,20 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     }
     result["missing_cte_types"] = list(all_cte_types - set(result["cte_types_present"] or []))
 
+    # Query tenant's configured active CTE types for self-normalization.
+    # If the tenant has configured which CTE types apply to their operation,
+    # use that subset instead of assuming all 7.
+    active_row = db_session.execute(
+        text("""
+            SELECT ARRAY_AGG(DISTINCT cte_type)
+            FROM fsma.obligation_cte_rules ocr
+            JOIN fsma.obligations o ON o.id = ocr.obligation_id
+            WHERE o.tenant_id = CAST(:tid AS uuid)
+        """),
+        {"tid": tenant_id},
+    ).fetchone()
+    result["active_cte_types"] = active_row[0] if active_row and active_row[0] else None
+
     # 2) KDE completeness — ratio of filled vs required KDE fields
     kde_row = db_session.execute(
         text("""
@@ -335,12 +349,19 @@ def _compute_scores(data: dict) -> dict:
                 f"All {data['total_kdes']} KDE fields populated",
             )
 
-    # --- 3) CTE Completeness (25% weight) ---
-    total_cte_types = 7  # FSMA 204 defines 7 CTE types
+    # --- 3) CTE Completeness (20% weight) ---
+    # Self-normalize by tenant's active CTE types instead of assuming all 7.
+    # A cold-chain distributor may only use 3 CTE types (receiving, shipping,
+    # transformation) and should score 100% when all 3 are tracked.
+    active_cte_types = data.get("active_cte_types", None)
+    if active_cte_types and len(active_cte_types) > 0:
+        total_cte_types = len(active_cte_types)
+    else:
+        total_cte_types = 7  # Fallback: FSMA 204 defines 7 CTE types
     if data["distinct_cte_types"] == 0:
         scores["cte_completeness"] = (0, "No CTEs tracked")
     else:
-        cte_score = int((data["distinct_cte_types"] / total_cte_types) * 100)
+        cte_score = min(100, int((data["distinct_cte_types"] / total_cte_types) * 100))
         if data["missing_cte_types"]:
             missing_str = ", ".join(sorted(data["missing_cte_types"]))
             scores["cte_completeness"] = (
@@ -599,13 +620,20 @@ async def get_compliance_score(
         product_score = scores["product_coverage"][0]
         export_score = scores["export_readiness"][0]
 
+        # Weights aligned with FSMA 204 regulatory priorities:
+        # - Export readiness (30%): FDA may request records within 24h (§1.1455)
+        # - KDE completeness (25%): Core traceability data per §1.1325–§1.1350
+        # - CTE completeness (15%): Coverage of applicable critical tracking events
+        # - Chain integrity (10%): Hash-chain verification for tamper detection
+        # - Obligation coverage (10%): Regulatory obligation fulfillment
+        # - Product coverage (10%): Product catalog completeness
         overall = int(
-            chain_score * 0.25
-            + kde_score * 0.20
-            + cte_score * 0.20
-            + obligation_score * 0.15
+            chain_score * 0.10
+            + kde_score * 0.25
+            + cte_score * 0.15
+            + obligation_score * 0.10
             + product_score * 0.10
-            + export_score * 0.10
+            + export_score * 0.30
         )
 
         # Build next actions

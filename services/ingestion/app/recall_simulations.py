@@ -335,7 +335,16 @@ async def list_scenarios(_auth=Depends(require_permission("simulations.read"))):
         }
         for item in RECALL_SCENARIOS
     ]
-    return {"scenarios": scenarios, "total": len(scenarios)}
+    return {
+        "scenarios": scenarios,
+        "total": len(scenarios),
+        "demo_mode": True,
+        "demo_disclaimer": (
+            "These are illustrative recall scenarios with synthetic metrics. "
+            "They are not derived from your tenant's actual supply chain data. "
+            "Wire to tenant CTE events for production simulations."
+        ),
+    }
 
 
 @router.post("/run", status_code=201, summary="Run recall simulation")
@@ -353,6 +362,10 @@ async def run_recall_simulation(
         "scenario_id": scenario["id"],
         "created_at": created_at,
         "metrics": metrics,
+        "demo_mode": True,
+        "demo_disclaimer": (
+            "Simulation uses synthetic scenarios — not derived from tenant data."
+        ),
     }
     _simulation_store[simulation_id] = simulation_record
 

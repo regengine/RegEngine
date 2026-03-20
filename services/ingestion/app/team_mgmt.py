@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.webhook_compat import _verify_api_key
 
@@ -31,6 +31,10 @@ class TeamMember(BaseModel):
     last_active: Optional[str] = None
     invited_at: Optional[str] = None
     avatar_initials: str = ""
+    is_sample: bool = Field(
+        default=False,
+        description="True for auto-generated sample data. Replace with real team members.",
+    )
 
 
 class InviteRequest(BaseModel):
@@ -76,7 +80,7 @@ ROLE_PERMISSIONS = {
 
 def _generate_sample_team(tenant_id: str) -> list[TeamMember]:
     now = datetime.now(timezone.utc)
-    return [
+    records = [
         TeamMember(
             id=f"{tenant_id}-user-001", name="Jordan Smith", email="jsmith@example.com",
             role="owner", status="active", last_active=(now - timedelta(minutes=5)).isoformat(),
@@ -104,8 +108,13 @@ def _generate_sample_team(tenant_id: str) -> list[TeamMember]:
             avatar_initials="CL",
         ),
     ]
+    for r in records:
+        r.is_sample = True
+    return records
 
 
+# TODO(V042): Replace with fsma.tenant_team_members table queries.
+# Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
 _team_store: dict[str, list[TeamMember]] = {}
 
 
