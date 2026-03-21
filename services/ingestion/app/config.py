@@ -1,10 +1,14 @@
 """Configuration for the ingestion service."""
 
+import logging
+import warnings
 from functools import lru_cache
 from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -44,7 +48,7 @@ class Settings(BaseSettings):
         default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED"
     )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-    api_key: Optional[str] = Field(default="re_live_fsma204_key", alias="API_KEY")
+    api_key: Optional[str] = Field(default=None, alias="API_KEY")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
     env: str = Field(default="development", alias="ENV")
     allowed_origins: str = Field(
@@ -64,6 +68,21 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return cached settings instance."""
+    """Return cached settings instance.
+
+    Warns loudly if API_KEY is not configured in a production-like environment
+    so operators notice immediately instead of silently falling back.
+    """
     settings = Settings()
+    _is_prod = (
+        settings.env.lower() == "production"
+        or "pooler.supabase.com" in settings.redis_url  # unlikely but defensive
+    )
+    if settings.api_key is None and _is_prod:
+        msg = (
+            "API_KEY env var is not set in production. "
+            "Webhook ingestion will reject all requests until configured."
+        )
+        _logger.warning(msg)
+        warnings.warn(msg, stacklevel=2)
     return settings

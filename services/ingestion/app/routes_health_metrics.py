@@ -27,7 +27,13 @@ router = APIRouter(tags=["health-metrics"])
 
 @router.get("/health")
 def health() -> dict[str, str]:
-    """Health-check endpoint."""
+    """Health-check endpoint.
+
+    Returns ``"healthy"`` when all dependencies are reachable, or
+    ``"degraded"`` when optional dependencies (e.g. Kafka) are
+    unavailable.  Monitoring tools can alert on *degraded* without
+    treating the service as fully down.
+    """
     settings = get_settings()
     kafka_status = "unavailable"
     try:
@@ -43,8 +49,10 @@ def health() -> dict[str, str]:
         kafka_status = "available"
     except Exception as exc:
         logger.warning("ingestion_health_kafka_unavailable: %s", str(exc))
+
+    overall_status = "healthy" if kafka_status == "available" else "degraded"
     return {
-        "status": "healthy",
+        "status": overall_status,
         "service": "ingestion-service",
         "kafka": kafka_status,
     }
