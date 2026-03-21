@@ -44,13 +44,19 @@ export async function GET() {
         })
     );
 
-    const allHealthy = checks.every(c => c.status === 'healthy');
+    const configured = checks.filter(c => c.status !== 'not_configured');
+    const healthyCount = configured.filter(c => c.status === 'healthy').length;
+    const allHealthy = configured.length > 0 && healthyCount === configured.length;
 
     return NextResponse.json(
         {
             status: allHealthy ? 'healthy' : 'degraded',
             timestamp: new Date().toISOString(),
             services: checks,
+            summary: {
+                healthy: healthyCount,
+                total: configured.length,
+            },
         },
         { status: allHealthy ? 200 : 503 }
     );
