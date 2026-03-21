@@ -12,6 +12,7 @@ import {
     FileWarning, ChevronDown, ChevronRight, Timer, Shield, Zap,
     TrendingUp, AlertCircle, FileCheck, RotateCcw,
 } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 import {
     parseCSV, validateRecords, generateSampleCSV, getScoreColor,
     type ValidationResult, type ValidationFinding, type TraceabilityGap,
@@ -144,8 +145,21 @@ export function DrillSimulatorClient() {
         const validExtensions = ['.csv', '.tsv', '.xlsx'];
         const ext = '.' + file.name.split('.').pop()?.toLowerCase();
 
-        if (!validExtensions.includes(ext) || file.size > 10 * 1024 * 1024) {
-            alert('Please upload a CSV, TSV, or XLSX file under 10MB');
+        if (!validExtensions.includes(ext)) {
+            toast({
+                variant: 'destructive',
+                title: 'Invalid file type',
+                description: `Only CSV, TSV, and XLSX files are supported. You uploaded a ${ext} file.`,
+            });
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            toast({
+                variant: 'destructive',
+                title: 'File too large',
+                description: `Maximum file size is 10 MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)} MB.`,
+            });
             return;
         }
 

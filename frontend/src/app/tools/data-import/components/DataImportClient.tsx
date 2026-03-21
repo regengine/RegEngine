@@ -23,6 +23,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
+import { toast } from '@/components/ui/use-toast';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -106,6 +107,29 @@ export function DataImportClient() {
 
     const handleFileChange = useCallback((file: File | null) => {
         if (!file) return;
+
+        const VALID_EXTENSIONS = ['.csv', '.tsv'];
+        const MAX_SIZE_MB = 10;
+        const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+
+        if (!VALID_EXTENSIONS.includes(ext)) {
+            toast({
+                variant: 'destructive',
+                title: 'Invalid file type',
+                description: `Only CSV and TSV files are supported. You selected a ${ext} file.`,
+            });
+            return;
+        }
+
+        if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+            toast({
+                variant: 'destructive',
+                title: 'File too large',
+                description: `Maximum file size is ${MAX_SIZE_MB} MB. Your file is ${(file.size / (1024 * 1024)).toFixed(1)} MB.`,
+            });
+            return;
+        }
+
         setSelectedFile(file);
         setUploadState('idle');
         setUploadResult(null);
