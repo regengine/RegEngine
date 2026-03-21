@@ -21,7 +21,7 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
     { emoji: "🥬", label: "FTL Checker", desc: "Verify FDA Food Traceability List coverage", href: "/tools/ftl-checker" },
     { emoji: "🛡️", label: "Recall Readiness", desc: "Assess your recall response capability", href: "/tools/recall-readiness" },
     { emoji: "📊", label: "ROI Calculator", desc: "Calculate your compliance cost savings", href: "/tools/roi-calculator" },
-    { emoji: "📥", label: "Bulk Upload Templates", desc: "Download CSV and XLSX onboarding templates", href: "/onboarding/bulk-upload" },
+    { emoji: "🔧", label: "All Free Tools", desc: "Browse the full compliance toolkit", href: "/tools" },
 ];
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
