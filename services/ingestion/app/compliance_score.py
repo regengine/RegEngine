@@ -19,6 +19,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.config import get_settings
 from app.webhook_compat import _verify_api_key
@@ -602,9 +603,10 @@ async def get_compliance_score(
     try:
         # Query all scoring signals
         data = _query_scoring_data(db_session, tenant_id)
-    except Exception as exc:
+    except (OperationalError, ProgrammingError) as exc:
         # Tables may not exist yet (missing migrations) — return zero-score
         # rather than a 500, so the frontend renders the empty state.
+        # OperationalError: DB connection issues; ProgrammingError: missing tables/schema.
         logger.warning("compliance_score: query failed (likely missing schema): %s", exc)
         if db_session:
             db_session.close()

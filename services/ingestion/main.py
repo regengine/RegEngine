@@ -33,10 +33,14 @@ from app.routes import router as ingestion_router
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("ingestion_service_startup")
-    # Register all integration connectors
-    from shared.external_connectors.register_all import register_all_connectors
-    register_all_connectors()
-    logger.info("integration_connectors_registered")
+    # Register all integration connectors (best-effort: Kafka/external services
+    # may be unavailable in CI or lightweight deployments)
+    try:
+        from shared.external_connectors.register_all import register_all_connectors
+        register_all_connectors()
+        logger.info("integration_connectors_registered")
+    except Exception as exc:
+        logger.warning("connector_registration_skipped: %s", exc)
     yield
     # Shutdown
     logger.info("ingestion_service_shutdown")
