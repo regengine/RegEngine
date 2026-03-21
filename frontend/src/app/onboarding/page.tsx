@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check, Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { isValidEmail } from '@/lib/validation';
 
 export default function OnboardingPage() {
   const [email, setEmail] = useState('');
@@ -12,7 +13,7 @@ export default function OnboardingPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
 
-  const canSubmit = email.includes('@') && company.trim().length > 0;
+  const canSubmit = isValidEmail(email) && company.trim().length > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
