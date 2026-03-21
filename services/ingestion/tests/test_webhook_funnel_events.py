@@ -14,6 +14,8 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.webhook_router_v2 as webhook_router_v2
+from app.authz import IngestionPrincipal, get_ingestion_principal
+from app.webhook_router_v2 import _verify_api_key, _get_db_session
 
 
 class _FakeDBSession:
@@ -42,10 +44,32 @@ class _FakePersistence:
             idempotent=False,
         )
 
+    def store_events_batch(self, **_kwargs):
+        events = _kwargs.get("events", [])
+        return [
+            SimpleNamespace(
+                event_id=f"evt-{i+1}",
+                sha256_hash="abc123",
+                chain_hash="def456",
+                idempotent=False,
+            )
+            for i in range(len(events))
+        ]
+
 
 def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(webhook_router_v2.router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    def _fake_get_db_session():
+        yield _FakeDBSession()
+
+    app.dependency_overrides[_get_db_session] = _fake_get_db_session
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(webhook_router_v2, "_check_rate_limit", lambda _tenant_id: None)
@@ -76,6 +100,8 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
                     "ship_date": datetime.now(timezone.utc).date().isoformat(),
                     "ship_from_location": "Warehouse A",
                     "ship_to_location": "Retail DC",
+                    "reference_document": "BOL-2026-001",
+                    "tlc_source_reference": "REF-LOT-001",
                 },
             }
         ],
