@@ -54,7 +54,10 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
         auth_mode="test",
     )
     app.dependency_overrides[_verify_api_key] = lambda: None
-    app.dependency_overrides[_get_db_session] = lambda: _FakeDBSession()
+    def _fake_get_db_session():
+        yield _FakeDBSession()
+
+    app.dependency_overrides[_get_db_session] = _fake_get_db_session
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(webhook_router_v2, "_check_rate_limit", lambda _tenant_id: None)
