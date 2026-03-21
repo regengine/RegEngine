@@ -44,6 +44,18 @@ class _FakePersistence:
             idempotent=False,
         )
 
+    def store_events_batch(self, **_kwargs):
+        events = _kwargs.get("events", [])
+        return [
+            SimpleNamespace(
+                event_id=f"evt-{i+1}",
+                sha256_hash="abc123",
+                chain_hash="def456",
+                idempotent=False,
+            )
+            for i in range(len(events))
+        ]
+
 
 def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     app = FastAPI()
@@ -88,6 +100,8 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
                     "ship_date": datetime.now(timezone.utc).date().isoformat(),
                     "ship_from_location": "Warehouse A",
                     "ship_to_location": "Retail DC",
+                    "reference_document": "BOL-2026-001",
+                    "tlc_source_reference": "REF-LOT-001",
                 },
             }
         ],
