@@ -287,10 +287,12 @@ if _router_enabled("integration"):
     app.include_router(integration_router)
 
 # Standardized Health & Readiness (Phase 17)
-from shared.health import HealthCheck, install_health_router
-
-health = HealthCheck(service_name="ingestion-service")
-install_health_router(app, service_name="ingestion-service", health_check=health)
+# NOTE: Custom /health endpoint already registered via routes_health_metrics.py
+# which includes Kafka status. Do NOT install the Phase 17 generic health router
+# here — it overwrites the custom endpoint and crashes without configured deps.
+# from shared.health import HealthCheck, install_health_router
+# health = HealthCheck(service_name="ingestion-service")
+# install_health_router(app, service_name="ingestion-service", health_check=health)
 
 @app.get("/")
 async def root():
