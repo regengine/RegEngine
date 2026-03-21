@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Loader2, Lock, LayoutDashboard, ArrowRight, ShieldCheck, CalendarClock, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 
@@ -225,7 +225,7 @@ export default function LoginPage() {
                                     <Lock className="h-7 w-7 text-[var(--re-brand)]" />
                                 </div>
                             </div>
-                            <CardTitle className="text-center text-2xl font-bold text-[var(--re-text-primary)]">Welcome back</CardTitle>
+                            <h2 className="text-center text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">Welcome back</h2>
                             <CardDescription className="text-center text-[var(--re-text-muted)]">
                                 Sign in to your RegEngine account
                             </CardDescription>
