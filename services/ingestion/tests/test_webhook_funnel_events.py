@@ -15,7 +15,7 @@ sys.path.insert(0, str(service_dir))
 
 import app.webhook_router_v2 as webhook_router_v2
 from app.authz import IngestionPrincipal, get_ingestion_principal
-from app.webhook_router_v2 import _verify_api_key
+from app.webhook_router_v2 import _verify_api_key, _get_db_session
 
 
 class _FakeDBSession:
@@ -54,6 +54,7 @@ def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
         auth_mode="test",
     )
     app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[_get_db_session] = lambda: _FakeDBSession()
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(webhook_router_v2, "_check_rate_limit", lambda _tenant_id: None)
