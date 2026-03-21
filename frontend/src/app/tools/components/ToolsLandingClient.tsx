@@ -294,6 +294,7 @@ export function ToolsLandingClient() {
             </section>
             {/* ═══ CARD GRID ═══ */}
             <section className="relative z-[2] max-w-[1120px] mx-auto px-4 sm:px-6 py-8">
+                <h2 className="sr-only">Available Compliance Tools</h2>
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeCategory}

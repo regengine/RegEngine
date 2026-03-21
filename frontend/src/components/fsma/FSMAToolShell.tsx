@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Shield, ChevronRight, ChevronLeft, Lock, Mail, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { isValidEmail } from '@/lib/validation';
 import { ToolConfig, ToolStatus, LeadData } from '@/types/fsma-tools';
 import {
     FSMA_204_COMPLIANCE_DATE,
@@ -272,7 +273,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                             />
                             <Button
                                 className="w-full h-12 bg-[var(--re-brand)]"
-                                disabled={!email.includes('@')}
+                                disabled={!isValidEmail(email)}
                                 onClick={submitLead}
                             >
                                 {config.stages.leadGate?.cta} <ArrowRight className="ml-2 h-4 w-4" />
