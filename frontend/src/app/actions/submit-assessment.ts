@@ -1,6 +1,7 @@
 'use server';
 
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { isValidEmail } from '@/lib/validation';
 
 export interface AssessmentFormData {
   // Required — gate fields
@@ -42,7 +43,7 @@ export async function submitAssessment(
       return { success: false, error: 'Name, email, and company are required.' };
     }
 
-    if (!data.email.includes('@') || !data.email.includes('.')) {
+    if (!isValidEmail(data.email)) {
       return { success: false, error: 'Please enter a valid email address.' };
     }
 
