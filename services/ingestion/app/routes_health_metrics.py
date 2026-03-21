@@ -42,7 +42,7 @@ def health() -> dict[str, str]:
         admin_client.list_topics(timeout=5)
         kafka_status = "available"
     except Exception as exc:
-        logger.warning("ingestion_health_kafka_unavailable", error=str(exc))
+        logger.warning("ingestion_health_kafka_unavailable: %s", str(exc))
     return {
         "status": "healthy",
         "service": "ingestion-service",
