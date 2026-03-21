@@ -39,12 +39,9 @@ const nextConfig = {
                 permanent: true,
             },
             // HIGH #5 — Consolidate duplicate routes (UI Debug Audit 2026-03-19)
-            // Canonical path for retailer readiness is /tools/retailer-readiness
-            {
-                source: '/retailer-readiness',
-                destination: '/tools/retailer-readiness',
-                permanent: true,
-            },
+            // Canonical path for retailer readiness is /retailer-readiness (content lives there)
+            // /tools/retailer-readiness redirects TO /retailer-readiness via page.tsx
+            // (removed redirect that caused infinite loop with /tools/retailer-readiness/page.tsx)
             // Canonical path for settings is /dashboard/settings
             {
                 source: '/settings',
