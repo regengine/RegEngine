@@ -24,7 +24,7 @@ export async function GET() {
             const start = Date.now();
             try {
                 const res = await fetch(`${url}/health`, {
-                    signal: AbortSignal.timeout(5000),
+                    signal: AbortSignal.timeout(10000),
                     headers: { 'User-Agent': 'regengine-healthcheck/1.0' },
                 });
                 return {
