@@ -58,6 +58,16 @@ def _allow_in_memory_fallback() -> bool:
     return not _is_production()
 
 
+def _get_db_session():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
+
+
 # Tenant resolution is now imported from app.shared.tenant_resolution
 _resolve_tenant_id = resolve_tenant_id
 

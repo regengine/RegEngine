@@ -14,6 +14,7 @@ service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
 import app.webhook_router_v2 as webhook_router_v2
+from app.authz import IngestionPrincipal, get_ingestion_principal
 
 
 class _FakeDBSession:
@@ -46,6 +47,11 @@ class _FakePersistence:
 def test_ingest_events_emits_first_ingest_funnel_event(monkeypatch) -> None:
     app = FastAPI()
     app.include_router(webhook_router_v2.router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["*"],
+        auth_mode="test",
+    )
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(webhook_router_v2, "_check_rate_limit", lambda _tenant_id: None)

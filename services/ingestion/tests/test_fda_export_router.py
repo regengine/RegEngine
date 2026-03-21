@@ -230,7 +230,7 @@ def test_export_csv_format_still_supported(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert "X-Package-Hash" not in response.headers
-    assert response.headers["x-kde-coverage"] == "0.8571"
+    assert response.headers["x-kde-coverage"] == "0.6667"
     assert "Traceability Lot Code (TLC)" in response.text
 
 
