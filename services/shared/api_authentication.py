@@ -678,18 +678,35 @@ class AuthenticationService:
     
     def __init__(
         self,
-        jwt_secret: str = "change-me-in-production",
+        jwt_secret: Optional[str] = None,
     ):
-        """Initialize service."""
+        """Initialize service.
+
+        Raises ``ValueError`` if *jwt_secret* is not provided **and**
+        ``configure()`` has not been called first.  This prevents the
+        service from silently using a placeholder secret.
+        """
+        if jwt_secret is None:
+            raise ValueError(
+                "jwt_secret is required. Call AuthenticationService.configure(jwt_secret=...) "
+                "before using get_instance(), or set the JWT_SECRET environment variable."
+            )
         self.api_key_auth = APIKeyAuthenticator()
         self.jwt_auth = JWTAuthenticator(jwt_secret)
         self._basic_auth: Optional[BasicAuthenticator] = None
-    
+
     @classmethod
     def get_instance(cls) -> "AuthenticationService":
-        """Get singleton instance."""
+        """Get singleton instance.
+
+        Raises ``ValueError`` if the service has not been configured via
+        ``configure()`` first.
+        """
         if cls._instance is None:
-            cls._instance = cls()
+            raise ValueError(
+                "AuthenticationService has not been configured. "
+                "Call AuthenticationService.configure(jwt_secret=...) at startup."
+            )
         return cls._instance
     
     @classmethod
