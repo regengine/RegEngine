@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -92,7 +92,7 @@ function SignupForm() {
 
         <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-[var(--re-text-primary)]">Create Your Workspace</CardTitle>
+            <h1 className="text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">Create Your Workspace</h1>
             <CardDescription className="text-[var(--re-text-muted)]">
               Start your FSMA 204 compliance account.
             </CardDescription>

@@ -17,17 +17,21 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.regengine.co'),
   title: 'RegEngine — FSMA 204 Food Traceability Compliance',
   description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
   },
+  alternates: {
+    canonical: './',
+  },
   openGraph: {
     title: 'RegEngine — FSMA 204 Food Traceability Compliance',
     description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
     siteName: 'RegEngine',
-    url: 'https://regengine.co',
+    url: 'https://www.regengine.co',
     type: 'website',
   },
 }
@@ -47,6 +51,31 @@ export default function RootLayout({
         <link
           href="https://fonts.cdnfonts.com/css/opendyslexic"
           rel="stylesheet"
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'RegEngine',
+              url: 'https://www.regengine.co',
+              logo: 'https://www.regengine.co/icon.png',
+              description: 'FSMA 204 food traceability compliance platform. Ingest supplier data, verify chain of custody, and export audit-ready records.',
+              sameAs: [],
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: 'RegEngine',
+              url: 'https://www.regengine.co',
+            }),
+          }}
         />
       </head>
       <body
