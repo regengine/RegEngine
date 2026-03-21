@@ -602,7 +602,34 @@ async def get_compliance_score(
     try:
         # Query all scoring signals
         data = _query_scoring_data(db_session, tenant_id)
+    except Exception as exc:
+        # Tables may not exist yet (missing migrations) — return zero-score
+        # rather than a 500, so the frontend renders the empty state.
+        logger.warning("compliance_score: query failed (likely missing schema): %s", exc)
+        if db_session:
+            db_session.close()
+        return ComplianceScoreResponse(
+            tenant_id=tenant_id,
+            overall_score=0,
+            grade="F",
+            breakdown={
+                "chain_integrity": ScoreBreakdown(score=0, detail="Schema not initialized — run migrations"),
+                "kde_completeness": ScoreBreakdown(score=0, detail="Schema not initialized — run migrations"),
+                "cte_completeness": ScoreBreakdown(score=0, detail="Schema not initialized — run migrations"),
+                "product_coverage": ScoreBreakdown(score=0, detail="Schema not initialized — run migrations"),
+                "obligation_coverage": ScoreBreakdown(score=0, detail="Schema not initialized — run migrations"),
+                "export_readiness": ScoreBreakdown(score=0, detail="Schema not initialized — run migrations"),
+            },
+            next_actions=[
+                NextAction(
+                    priority="HIGH",
+                    action="Run database migrations to create the FSMA schema tables",
+                    impact="All scoring depends on fsma.cte_events, fsma.hash_chain, and related tables",
+                ),
+            ],
+        )
 
+    try:
         # Compute sub-scores
         scores = _compute_scores(data)
 
