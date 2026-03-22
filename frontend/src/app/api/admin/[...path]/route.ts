@@ -100,7 +100,7 @@ async function proxyRequest(  request: NextRequest,
       const serverApiKey =
         process.env.REGENGINE_API_KEY ||
         process.env.NEXT_PUBLIC_API_KEY ||
-        're_live_fsma204_key';
+        '';
       headers.set('x-regengine-api-key', serverApiKey);
     }
 

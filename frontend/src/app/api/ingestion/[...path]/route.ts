@@ -97,12 +97,12 @@ async function proxyRequest(
     }
 
     // Inject server-side API key if client didn't provide one.
-    // Falls back to the default key that matches the backend's config.py default.
+    // REGENGINE_API_KEY must be set on the deployment platform (Vercel).
     if (!headers.has('x-regengine-api-key')) {
       const serverApiKey =
         process.env.REGENGINE_API_KEY ||
         process.env.NEXT_PUBLIC_API_KEY ||
-        're_live_fsma204_key';
+        '';
       headers.set('x-regengine-api-key', serverApiKey);
     }
 
