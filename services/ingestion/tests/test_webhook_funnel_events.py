@@ -1,4 +1,4 @@
- """Tests for webhook ingest funnel instrumentation."""
+"""Tests for webhook ingest funnel instrumentation."""
 
 from __future__ import annotations
 
