@@ -17,7 +17,14 @@ from shared.auth import APIKey, require_api_key
 
 
 def _is_production_env() -> bool:
-    """Detect production by DATABASE_URL (Supabase pooler) or ENV=production."""
+    """Detect production environment.
+
+    Checks REGENGINE_ENV first (canonical), then falls back to ENV and
+    DATABASE_URL heuristics for backwards compatibility.
+    """
+    regengine_env = os.getenv("REGENGINE_ENV", "").lower()
+    if regengine_env == "production":
+        return True
     if os.getenv("ENV", "").lower() == "production":
         return True
     db_url = os.getenv("DATABASE_URL", "")
