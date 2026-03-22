@@ -78,11 +78,13 @@ export default function SupplierOnboardingFlow() {
 
   /* ── Funnel event tracker (fire-and-forget) ─────────────────── */
   const trackFunnelEvent = useCallback((payload) => {
+    if (!isLoggedIn) return;
     void apiClient.trackSupplierFunnelEvent(payload).catch(() => {});
-  }, []);
+  }, [isLoggedIn]);
 
-  /* ── Load social proof on mount ─────────────────────────────── */
+  /* ── Load social proof on mount (only when authenticated) ──── */
   useEffect(() => {
+    if (!isLoggedIn) return;
     let cancelled = false;
     (async () => {
       try {
@@ -91,10 +93,11 @@ export default function SupplierOnboardingFlow() {
       } catch { /* keep UI usable */ }
     })();
     return () => { cancelled = true; };
-  }, [tlcRefreshKey]);
+  }, [isLoggedIn, tlcRefreshKey]);
 
-  /* ── Track step views ───────────────────────────────────────── */
+  /* ── Track step views (only when authenticated) ──────────────── */
   useEffect(() => {
+    if (!isLoggedIn) return;
     void apiClient.trackSupplierFunnelEvent({
       event_name: "step_viewed",
       step: view,
@@ -102,7 +105,7 @@ export default function SupplierOnboardingFlow() {
       facility_id: facilityId || undefined,
       metadata: { step_number: VIEW_STEP_NUMBER[view] || null },
     }).catch(() => {});
-  }, [view, facilityId]);
+  }, [isLoggedIn, view, facilityId]);
 
   /* ── View router ────────────────────────────────────────────── */
   const viewComponents = {
