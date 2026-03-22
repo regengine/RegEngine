@@ -1,4 +1,4 @@
-"""Configuration for the ingestion service."""
+ """Configuration for the ingestion service."""
 
 import logging
 import warnings
