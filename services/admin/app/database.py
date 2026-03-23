@@ -144,40 +144,6 @@ def init_db() -> None:
         """))
         conn.commit()
 
-   # ARCHIVED: Create RLS helper functions in Entertainment DB
-    # with _entertainment_engine.connect() as conn:
-    #     conn.execute(text("DROP FUNCTION IF EXISTS set_tenant_context(text)"))
-    #     conn.execute(text("""
-    #         CREATE OR REPLACE FUNCTION set_tenant_context(tenant_id text) RETURNS void AS $$
-    #         BEGIN
-    #           PERFORM set_config('app.tenant_id', tenant_id, false);
-    #         END;
-    #         $$ LANGUAGE plpgsql;
-    #     """))
-        conn.execute(text("DROP FUNCTION IF EXISTS get_tenant_context()"))
-        conn.execute(text("""
-            CREATE OR REPLACE FUNCTION get_tenant_context() RETURNS UUID AS $$
-            DECLARE
-              tid TEXT;
-            BEGIN
-              tid := NULLIF(current_setting('app.tenant_id', true), '');
-              IF tid IS NULL THEN
-                RAISE EXCEPTION 'app.tenant_id not set — tenant context required for RLS';
-              END IF;
-              RETURN tid::UUID;
-            END;
-            $$ LANGUAGE plpgsql;
-        """))
-        conn.execute(text("DROP FUNCTION IF EXISTS set_admin_context(boolean)"))
-        conn.execute(text("""
-            CREATE OR REPLACE FUNCTION set_admin_context(p_is_sysadmin boolean) RETURNS void AS $$
-            BEGIN
-              PERFORM set_config('regengine.is_sysadmin', p_is_sysadmin::text, false);
-            END;
-            $$ LANGUAGE plpgsql;
-        """))
-        conn.commit()
-    
     logger.info("database_tables_initialized")
 
 
