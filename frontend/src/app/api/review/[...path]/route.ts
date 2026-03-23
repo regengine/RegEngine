@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
 
 // Proxy review API requests to the Admin backend service
 // This allows browser clients to access review endpoints without CORS issues
@@ -42,17 +43,28 @@ async function proxyRequest(
             return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
         }
 
-        const path = pathParts.join('/');
+        const path = sanitizePath(pathParts);
+        if (!path) {
+            return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
+        }
         const url = new URL(request.url);
         const queryString = url.search;
 
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        const adminKey = getAdminMasterKey();
+        if (adminKey) {
+            headers['X-Admin-Key'] = adminKey;
+        }
+        const apiKey = getServerApiKey();
+        if (apiKey) {
+            headers['X-RegEngine-API-Key'] = apiKey;
+        }
+
         const fetchOptions: RequestInit = {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Admin-Key': process.env.ADMIN_MASTER_KEY || 'admin',
-                'X-RegEngine-API-Key': 'admin',
-            },
+            headers,
         };
 
         // Include body for POST requests
@@ -102,9 +114,6 @@ async function proxyRequest(
     } catch (error: unknown) {
         console.error('Review proxy error:', error);
         const message = error instanceof Error ? error.message : 'Review request failed';
-        return NextResponse.json(
-            { error: message },
-            { status: 500 }
-        );
+        return proxyError(message, 500);
     }
 }
