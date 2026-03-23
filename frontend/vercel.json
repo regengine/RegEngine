@@ -11,6 +11,12 @@
     "functions": {
         "app/api/admin/[...path]/route.ts": {
             "maxDuration": 300
+        },
+        "app/api/ingestion/[...path]/route.ts": {
+            "maxDuration": 60
+        },
+        "app/api/compliance/[...path]/route.ts": {
+            "maxDuration": 60
         }
     },
     "env": {
