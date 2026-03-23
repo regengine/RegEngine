@@ -101,10 +101,11 @@ async function proxyRequest(  request: NextRequest,
 
     // Inject server-side API key if client didn't provide one
     if (!headers.has('x-regengine-api-key')) {
-      const serverApiKey = getServerApiKey();
-      if (serverApiKey) {
-        headers.set('x-regengine-api-key', serverApiKey);
-      }
+      const serverApiKey =
+        process.env.REGENGINE_API_KEY ||
+        process.env.NEXT_PUBLIC_API_KEY ||
+        '';
+      headers.set('x-regengine-api-key', serverApiKey);
     }
 
     const fetchOptions: RequestInit = {
