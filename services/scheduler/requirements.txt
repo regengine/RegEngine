@@ -6,7 +6,7 @@ structlog==24.1.0
 requests==2.32.5
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy==2.0.48
 psycopg[binary]>=3.2.4
 
 # Kafka
