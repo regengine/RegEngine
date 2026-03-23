@@ -131,6 +131,8 @@ services:
       <<: *env_common
       # Override DATABASE_URL to use the async driver (required by shared.api_key_store)
       DATABASE_URL: postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin
+      # Admin DB connection for cross-service audit log queries
+      ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
       # CORS origins for frontend access (comma-separated)
       CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080"
     volumes:
