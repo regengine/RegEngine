@@ -19,7 +19,7 @@ opentelemetry-sdk==1.30.0
 opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-exporter-otlp==1.30.0
 slowapi~=0.1.9
-tenacity~=8.2.0
+tenacity~=9.1.4
 
 # Testing
 pytest==7.4.3
