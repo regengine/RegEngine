@@ -7,12 +7,14 @@ Returns real audit data from Postgres instead of static sample rows.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 from app.webhook_compat import _verify_api_key
 from app.tenant_validation import validate_tenant_id
@@ -50,6 +52,45 @@ def _get_db_session():
         db = SessionLocal()
     except Exception as exc:
         logger.error("audit_log_db_session_init_failed error=%s", str(exc))
+        raise
+    return db
+
+
+# Lazy-initialised admin DB engine (only created if ADMIN_DATABASE_URL is set)
+_admin_engine = None
+_AdminSessionLocal = None
+
+
+def _get_admin_db_session():
+    """Return a session connected to the admin database (regengine_admin).
+
+    The audit_logs table lives in the admin DB, not the ingestion DB.
+    Falls back to the regular ingestion DB session if ADMIN_DATABASE_URL
+    is not configured.
+    """
+    global _admin_engine, _AdminSessionLocal
+
+    admin_url = os.getenv("ADMIN_DATABASE_URL")
+    if not admin_url:
+        logger.debug("ADMIN_DATABASE_URL not set, falling back to ingestion DB")
+        return _get_db_session()
+
+    if _admin_engine is None:
+        _admin_engine = create_engine(
+            admin_url,
+            pool_size=5,
+            max_overflow=10,
+            pool_pre_ping=True,
+            pool_recycle=300,
+        )
+        _AdminSessionLocal = sessionmaker(
+            autocommit=False, autoflush=False, bind=_admin_engine
+        )
+
+    try:
+        db = _AdminSessionLocal()
+    except Exception as exc:
+        logger.error("admin_db_session_init_failed error=%s", str(exc))
         raise
     return db
 
@@ -304,10 +345,21 @@ async def get_audit_log(
 ) -> AuditLogResponse:
     validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
+
+    # Query admin audit logs from the admin database
+    try:
+        admin_session = _get_admin_db_session()
+        try:
+            entries.extend(_query_admin_audit_logs(admin_session, tenant_id, limit=200))
+        finally:
+            admin_session.close()
+    except Exception as exc:
+        logger.warning("admin_audit_log_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
+
+    # Query CTE/export/alert data from the ingestion database
     try:
         db_session = _get_db_session()
         try:
-            entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=200))
             entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
             entries.extend(_query_exports(db_session, tenant_id, limit=100))
             entries.extend(_query_alert_events(db_session, tenant_id, limit=100))
