@@ -165,6 +165,11 @@ app.add_middleware(AuditContextMiddleware)
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=200)
 
+# API-01 / API-02: Request body size limit (10 MB) and global timeout (120s)
+from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
 @app.middleware("http")
 async def add_compliance_header(request, call_next):
     response = await call_next(request)

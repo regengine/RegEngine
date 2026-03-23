@@ -22,6 +22,7 @@ def add_security(app: FastAPI):
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
         "*.regengine.co",
         "*.up.railway.app",
+        "*.railway.internal",
         "localhost",
         "testserver",
         "ingestion-service",
