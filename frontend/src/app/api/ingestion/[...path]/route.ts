@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
 
-// Production Railway backend — used as fallback when no env var is configured
-const RAILWAY_INGESTION_URL = 'https://believable-respect-production-2fb3.up.railway.app';
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
 
@@ -70,7 +69,10 @@ async function proxyRequest(
       );
     }
 
-    const path = pathParts.join('/');
+    const path = sanitizePath(pathParts);
+    if (!path) {
+      return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
+    }
     const queryString = new URL(request.url).search;
     const targetBases = getIngestionTargets();
 
@@ -159,15 +161,10 @@ async function proxyRequest(
       }
     }
 
-    return NextResponse.json(
-      {
-        error: 'Unable to reach ingestion service',
-        details: attemptErrors,
-      },
-      { status: 502 },
-    );
+    return proxyError('Unable to reach ingestion service', 502, { details: attemptErrors });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Ingestion request failed';    return NextResponse.json({ error: message }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Ingestion request failed';
+    return proxyError(message, 500);
   }
 }
 
@@ -190,10 +187,12 @@ function getIngestionTargets(): string[] {
     candidates.push(internalIngestionUrl);
   }
 
-  // On Vercel with no env vars configured, use the Railway production backend
+  // Require INGESTION_PRODUCTION_URL env var on Vercel; fall back to localhost locally
   if (candidates.length === 0) {
-    if (runningOnVercel) {
-      candidates.push(RAILWAY_INGESTION_URL);    } else {
+    const productionUrl = process.env.INGESTION_PRODUCTION_URL;
+    if (runningOnVercel && productionUrl) {
+      candidates.push(productionUrl);
+    } else if (!runningOnVercel) {
       candidates.push(DEFAULT_INGESTION_URL);
     }
   }
