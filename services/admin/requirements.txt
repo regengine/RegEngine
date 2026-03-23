@@ -7,7 +7,7 @@ structlog==24.1.0
 pydantic>=2.10.6
 pydantic-core>=2.27.0
 pydantic-settings>=2.7.1
-setuptools<82
+setuptools<83
 prometheus-client==0.19.0
 httpx==0.25.2
 redis==5.0.1
