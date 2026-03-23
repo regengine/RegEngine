@@ -95,7 +95,7 @@ jobs:
           fi
 
       - name: Upload security report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-sweep-report
           path: security-report.md
@@ -165,7 +165,7 @@ jobs:
           fi
 
       - name: Upload UI report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ui-drift-report
           path: ui-report.md
@@ -229,7 +229,7 @@ jobs:
           done
 
       - name: Upload infra report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: infra-health-report
           path: infra-report.md
