@@ -27,10 +27,8 @@ from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
 from app.routes import router as fsma_router
 
-_is_prod = (
-    os.getenv("ENV", "").lower() == "production"
-    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
-)
+from shared.env import is_production
+_is_prod = is_production()
 
 app = FastAPI(
     title="RegEngine FSMA 204 Compliance Service",

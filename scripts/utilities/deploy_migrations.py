@@ -9,17 +9,17 @@ import psycopg
 from psycopg import IsolationLevel
 import sys
 
-# Database connection strings
-SUPABASE_DSN = os.getenv(
-    "SUPABASE_DSN",
-    "postgresql://postgres:trj.qxe_wxh6QGB%40auq@db.magbeerafyxmyuqmbfgv.supabase.co:5432/postgres?sslmode=require"
-)
+# Database connection strings — MUST be set via environment variables
+SUPABASE_DSN = os.getenv("SUPABASE_DSN")
+if not SUPABASE_DSN:
+    print("ERROR: SUPABASE_DSN environment variable is required.", file=sys.stderr)
+    print("Example: export SUPABASE_DSN='postgresql://user:pass@host:5432/db'", file=sys.stderr)
+    sys.exit(1)
 
-# Energy DB uses the local RegEngine admin DB (all tables are in one DB)
-ENERGY_DSN = os.getenv(
-    "ENERGY_DB_URL",
-    "postgresql://regengine:regengine@localhost:5432/regengine_admin"
-)
+ENERGY_DSN = os.getenv("ENERGY_DB_URL")
+if not ENERGY_DSN:
+    print("ERROR: ENERGY_DB_URL environment variable is required.", file=sys.stderr)
+    sys.exit(1)
 
 
 def run_migration(dsn: str, migration_file: str, migration_name: str):

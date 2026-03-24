@@ -29,10 +29,8 @@ logger = setup_logging()
 from app.routes import router as graph_router
 from app.config import settings
 
-_is_prod = (
-    os.getenv("ENV", "").lower() == "production"
-    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
-)
+from shared.env import is_production
+_is_prod = is_production()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
