@@ -228,6 +228,38 @@ class Mutator:
             ),
         )
 
+    def create_orphan(self, dataset: list[dict]) -> MutationResult:
+        """Alias for create_orphan_record — matches MutationType.CREATE_ORPHAN.value."""
+        return self.create_orphan_record(dataset)
+
+    def partial_ingestion(
+        self, dataset: list[dict], drop_ratio: float = 0.3
+    ) -> MutationResult:
+        """Alias for simulate_partial_ingestion — matches MutationType.PARTIAL_INGESTION.value."""
+        return self.simulate_partial_ingestion(dataset, drop_ratio=drop_ratio)
+
+    def encoding_error(self, csv_text: str) -> MutationResult:
+        """Alias for inject_encoding_errors — matches MutationType.ENCODING_ERROR.value."""
+        return self.inject_encoding_errors(csv_text)
+
+    def invalid_gln(self, record: dict) -> MutationResult:
+        """Replace a GLN field with an invalid value."""
+        rec = copy.deepcopy(record)
+        gln_fields = [f for f in ("origin_gln", "destination_gln") if f in rec]
+        if not gln_fields:
+            return MutationResult(rec, self._meta(MutationType.INVALID_GLN, 0))
+        target = self._rng.choice(gln_fields)
+        original = rec[target]
+        rec[target] = "INVALID_GLN_999"
+        return MutationResult(
+            rec,
+            self._meta(
+                MutationType.INVALID_GLN,
+                1,
+                details={"field": target, "original": original, "injected": rec[target]},
+            ),
+        )
+
     def missing_supplier(self, record: dict) -> MutationResult:
         """Remove the immediate_previous_source field."""
         rec = copy.deepcopy(record)
