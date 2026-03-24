@@ -113,7 +113,7 @@ def _db_get_settings(tenant_id: str) -> Optional[SettingsResponse]:
         return None
     try:
         row = db.execute(
-            text("SELECT settings_json FROM fsma.tenant_settings WHERE tenant_id = :tid"),
+            text("SELECT settings FROM fsma.tenant_settings WHERE tenant_id = :tid"),
             {"tid": tenant_id}
         ).fetchone()
         if not row:
@@ -137,9 +137,9 @@ def _db_save_settings(tenant_id: str, settings: SettingsResponse) -> bool:
         settings_json = json.dumps(settings.model_dump(exclude={"tenant_id"}))
         db.execute(
             text("""
-                INSERT INTO fsma.tenant_settings (tenant_id, settings_json, created_at, updated_at)
+                INSERT INTO fsma.tenant_settings (tenant_id, settings, created_at, updated_at)
                 VALUES (:tid, :json, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE SET settings_json = :json, updated_at = now()
+                ON CONFLICT (tenant_id) DO UPDATE SET settings = :json, updated_at = now()
             """),
             {"tid": tenant_id, "json": settings_json}
         )

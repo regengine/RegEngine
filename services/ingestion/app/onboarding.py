@@ -63,7 +63,7 @@ def _db_get_onboarding(tenant_id: str) -> Optional[dict]:
         return None
     try:
         row = db.execute(
-            text("SELECT progress_json FROM fsma.tenant_onboarding WHERE tenant_id = :tid"),
+            text("SELECT state FROM fsma.tenant_onboarding WHERE tenant_id = :tid"),
             {"tid": tenant_id}
         ).fetchone()
         if not row:
@@ -86,9 +86,9 @@ def _db_save_onboarding(tenant_id: str, progress: dict) -> bool:
         progress_json = json.dumps(progress)
         db.execute(
             text("""
-                INSERT INTO fsma.tenant_onboarding (tenant_id, progress_json, created_at, updated_at)
+                INSERT INTO fsma.tenant_onboarding (tenant_id, state, created_at, updated_at)
                 VALUES (:tid, :json, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE SET progress_json = :json, updated_at = now()
+                ON CONFLICT (tenant_id) DO UPDATE SET state = :json, updated_at = now()
             """),
             {"tid": tenant_id, "json": progress_json}
         )
