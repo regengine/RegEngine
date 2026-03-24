@@ -45,11 +45,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("ingestion_service_shutdown")
 
-import os as _os
-_is_prod = (
-    _os.getenv("ENV", "").lower() == "production"
-    or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
-)
+from shared.env import is_production
+_is_prod = is_production()
 
 app = FastAPI(
     title="Ingestion Service",

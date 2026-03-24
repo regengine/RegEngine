@@ -72,13 +72,9 @@ def get_settings() -> Settings:
     Warns loudly if API_KEY is not configured in a production-like environment
     so operators notice immediately instead of silently falling back.
     """
-    import os
+    from shared.env import is_production
     settings = Settings()
-    _regengine_env = os.getenv("REGENGINE_ENV", "").lower()
-    _is_prod = (
-        _regengine_env == "production"
-        or settings.env.lower() == "production"
-    )
+    _is_prod = is_production()
     if settings.api_key is None and _is_prod:
         msg = (
             "API_KEY env var is not set in production. "
