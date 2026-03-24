@@ -75,10 +75,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("shutdown_complete")
 
 
+_is_prod = (
+    os.getenv("ENV", "").lower() == "production"
+    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+)
+
 app = FastAPI(
     title="RegEngine Admin API",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
     description="""
 RegEngine Admin API provides tenant self-service capabilities for regulatory compliance management.
 
@@ -131,23 +139,30 @@ For API support, consult the documentation at `/docs` (this page) or `/redoc`.
     },
 )
 
-# CORS configuration
-# In production, replace with specific origins
-# HIGH #6 (UI Debug Audit): CORS origins MUST be explicit in production.
-# Never use "*" with allow_credentials=True — it allows any site to make
-# credentialed requests. In production, set CORS_ORIGINS to exactly:
-#   https://regengine.co,https://www.regengine.co
-_raw_cors = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080")
-cors_origins = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
-# Block wildcard with credentials — a common misconfiguration
-if "*" in cors_origins:
-    import warnings
-    warnings.warn(
-        "CORS_ORIGINS contains '*' which is insecure with allow_credentials=True. "
-        "Falling back to localhost-only origins. Set explicit origins in production.",
-        stacklevel=2,
-    )
-    cors_origins = ["http://localhost:3000", "http://localhost:3001"]
+# CORS configuration — explicit origins only, never wildcard with credentials
+_PROD_ORIGINS = [
+    "https://regengine.co",
+    "https://www.regengine.co",
+    "https://app.regengine.co",
+]
+_DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:8080",
+]
+_raw_cors = os.getenv("CORS_ORIGINS", "")
+if _raw_cors:
+    cors_origins = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
+    if "*" in cors_origins:
+        import warnings
+        warnings.warn(
+            "CORS_ORIGINS contains '*' which is insecure with allow_credentials=True. "
+            "Falling back to production origins.",
+            stacklevel=2,
+        )
+        cors_origins = _PROD_ORIGINS
+else:
+    cors_origins = _PROD_ORIGINS if _is_prod else _DEV_ORIGINS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,

@@ -42,6 +42,12 @@ from shared.audit_logging import (
 # Test Fixtures
 # =============================================================================
 
+@pytest.fixture(autouse=True)
+def _set_audit_key(monkeypatch):
+    """Ensure AUDIT_INTEGRITY_KEY is set for all tests."""
+    monkeypatch.setenv("AUDIT_INTEGRITY_KEY", "test-audit-key")
+
+
 @pytest.fixture
 def actor():
     """Create a test actor."""
@@ -810,17 +816,18 @@ class TestSingleton:
     
     def test_get_instance(self):
         """Should return singleton instance."""
+        AuditLogger._instance = None
         logger1 = AuditLogger.get_instance()
         logger2 = AuditLogger.get_instance()
         assert logger1 is logger2
-    
+
     def test_configure_creates_new_instance(self):
         """Should configure new instance."""
         logger = AuditLogger.configure(
             service_name="custom-service",
             environment="production",
         )
-        
+
         assert logger._service_name == "custom-service"
         assert logger._environment == "production"
 
