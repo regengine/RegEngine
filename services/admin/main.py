@@ -22,7 +22,7 @@ from app.compliance_routes import router as compliance_router
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from fastapi import FastAPI
-# from shared.correlation import CorrelationIdMiddleware
+from shared.correlation import CorrelationIdMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -170,7 +170,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID"],
 )
-# app.add_middleware(CorrelationIdMiddleware)
+app.add_middleware(CorrelationIdMiddleware)
 
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
 from app.audit_middleware import AuditContextMiddleware

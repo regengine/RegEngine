@@ -110,4 +110,6 @@ async def provisions_by_request_id(
         logger.exception(
             "provisions_by_request_error", request_id=request_id, error=str(exc)
         )
-        return {"count": 0, "items": []}
+        raise HTTPException(
+            status_code=502, detail=f"Graph database error: {str(exc)}"
+        ) from exc

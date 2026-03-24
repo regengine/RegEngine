@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from shared.cors import get_allowed_origins, should_allow_credentials
 # --- Standardized Bootstrap ---
 import sys
 from pathlib import Path
@@ -54,6 +55,13 @@ from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=should_allow_credentials(),
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Tenant-ID", "X-Request-ID"],
+)
 
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
@@ -76,8 +84,5 @@ async def root():
         },
     }
 
-# Standardized Health & Readiness (Phase 17)
-from shared.health import HealthCheck, install_health_router
-
-health = HealthCheck(service_name="graph-service")
-install_health_router(app, service_name="graph-service", health_check=health)
+# Health check is defined in app/routes.py with Neo4j connectivity verification.
+# Do NOT use install_health_router() here — it would overwrite the custom check.

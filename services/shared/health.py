@@ -5,6 +5,7 @@ Supports standard Phase 17/18 HealthCheck class and legacy health functions.
 
 from typing import Dict, Any, List, Optional, Callable
 from fastapi import FastAPI, APIRouter
+from fastapi.responses import JSONResponse
 import inspect
 import time
 import socket
@@ -57,6 +58,37 @@ def install_health_router(app: FastAPI, service_name: str, health_check: Optiona
         return res if res["status"] == "healthy" else JSONResponse(status_code=503, content=res)
 
     app.include_router(router)
+
+# --- Standard Dependency Checks ---
+def check_redis() -> Dict[str, Any]:
+    """Check Redis connectivity."""
+    url = os.getenv("REDIS_URL")
+    if not url:
+        return {"status": "healthy", "note": "not configured"}
+    try:
+        import redis
+        r = redis.from_url(url, socket_connect_timeout=2)
+        r.ping()
+        return {"status": "healthy"}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+
+
+def check_postgres() -> Dict[str, Any]:
+    """Check PostgreSQL connectivity."""
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        return {"status": "healthy", "note": "not configured"}
+    try:
+        from sqlalchemy import create_engine, text
+        engine = create_engine(url, pool_pre_ping=True)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        engine.dispose()
+        return {"status": "healthy"}
+    except Exception as e:
+        return {"status": "unhealthy", "error": str(e)}
+
 
 # --- Legacy Health Functions (for backward compatibility) ---
 def check_health() -> Dict[str, Any]:

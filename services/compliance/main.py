@@ -25,6 +25,9 @@ from shared.health import HealthCheck, install_health_router
 from shared.middleware import RequestIDMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 
+from fastapi.middleware.cors import CORSMiddleware
+from shared.cors import get_allowed_origins, should_allow_credentials
+
 from app.routes import router as fsma_router
 
 _is_prod = (
@@ -51,6 +54,13 @@ add_observability(app, service_name="compliance-service")
 
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=should_allow_credentials(),
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Tenant-ID", "X-Request-ID"],
+)
 
 install_exception_handlers(app)
 
@@ -72,8 +82,10 @@ async def root() -> dict:
 
 app.include_router(fsma_router)
 
-# Standardized Health & Readiness
+# Standardized Health & Readiness with dependency checks
+from shared.health import check_postgres
 health = HealthCheck(service_name="compliance-service")
+health.add_dependency("postgres", check_postgres)
 install_health_router(app, service_name="compliance-service", health_check=health)
 
 
