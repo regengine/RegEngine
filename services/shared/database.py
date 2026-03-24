@@ -78,11 +78,8 @@ def retry_with_jitter(func, max_retries=3, base_delay=0.1):
 
 # Engine initialization
 _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
-_regengine_env = os.getenv("REGENGINE_ENV", "").lower()
-_is_prod = (
-    _regengine_env == "production"
-    or os.getenv("ENV", "").lower() == "production"
-)
+from shared.env import is_production
+_is_prod = is_production()
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if not DATABASE_URL:
     if _is_prod:

@@ -426,7 +426,8 @@ _epcis_idempotency_index: dict[str, str] = {}
 
 
 def _is_production() -> bool:
-    return os.getenv("REGENGINE_ENV", "development").lower() in {"production", "prod"}
+    from shared.env import is_production
+    return is_production()
 
 
 # Safety: Allow in-memory fallback only outside production.

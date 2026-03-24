@@ -48,7 +48,8 @@ class ExchangeSendRequest(BaseModel):
 
 
 def _is_production() -> bool:
-    return os.getenv("REGENGINE_ENV", "development").lower() in {"production", "prod"}
+    from shared.env import is_production
+    return is_production()
 
 
 def _allow_in_memory_fallback() -> bool:

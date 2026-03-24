@@ -2,19 +2,16 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from shared.cors import get_allowed_origins
+
+
 def add_security(app: FastAPI):
     """Add CORS and TrustedHost security middleware to the FastAPI app."""
+    origins = get_allowed_origins()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "https://*.regengine.co",
-            "https://*.up.railway.app",
-            "https://*.vercel.app",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8002",
-            "http://localhost:8400",
-        ],
+        allow_origins=origins,
+        allow_origin_regex=r"https://.*\.(up\.railway\.app|vercel\.app)",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
