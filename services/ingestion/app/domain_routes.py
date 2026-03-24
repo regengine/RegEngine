@@ -1,3 +1,6 @@
+# NOTE: This router is NOT mounted in the application. It is retained as
+# legacy/reference code and may be integrated in a future release.
+
 from __future__ import annotations
 
 from typing import Literal, Optional

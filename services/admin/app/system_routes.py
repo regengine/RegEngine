@@ -205,7 +205,7 @@ async def get_system_metrics(
     open_alert_count = 0
     try:
         alert_row = db.execute(
-            text("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE tenant_id = :tid AND resolved_at IS NULL"),
+            text("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE org_id = CAST(:tid AS uuid) AND resolved = false"),
             {"tid": tenant},
         ).fetchone()
         open_alert_count = alert_row[0] if alert_row else 0

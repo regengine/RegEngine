@@ -248,8 +248,8 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             alert_row = db_session.execute(
                 text("""
                     SELECT COUNT(*) FROM fsma.compliance_alerts
-                    WHERE tenant_id = :tid
-                      AND alert_type = 'obligation_gap'
+                    WHERE org_id = CAST(:tid AS uuid)
+                      AND alert_type = 'chain_break'
                       AND (resolved IS NULL OR resolved = false)
                 """),
                 {"tid": tenant_id},
