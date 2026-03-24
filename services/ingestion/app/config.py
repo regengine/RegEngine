@@ -14,7 +14,6 @@ _logger = logging.getLogger(__name__)
 class Settings(BaseSettings):
     """Environment-driven configuration values."""
 
-    kafka_topic_normalized: str = "ingest.normalized"
     kafka_topic_dlq: str = "ingest.dlq"
 
     # Search / Discovery

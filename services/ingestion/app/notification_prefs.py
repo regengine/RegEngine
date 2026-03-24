@@ -115,7 +115,7 @@ def _db_get_preferences(tenant_id: str) -> Optional[NotificationPreferences]:
         return None
     try:
         row = db.execute(
-            text("SELECT prefs_json FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid"),
+            text("SELECT prefs FROM fsma.tenant_notification_prefs WHERE tenant_id = :tid"),
             {"tid": tenant_id}
         ).fetchone()
         if not row:
@@ -139,9 +139,9 @@ def _db_save_preferences(tenant_id: str, prefs: NotificationPreferences) -> bool
         prefs_json = json.dumps(prefs.model_dump(exclude={"tenant_id"}))
         db.execute(
             text("""
-                INSERT INTO fsma.tenant_notification_prefs (tenant_id, prefs_json, created_at, updated_at)
+                INSERT INTO fsma.tenant_notification_prefs (tenant_id, prefs, created_at, updated_at)
                 VALUES (:tid, :json, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE SET prefs_json = :json, updated_at = now()
+                ON CONFLICT (tenant_id) DO UPDATE SET prefs = :json, updated_at = now()
             """),
             {"tid": tenant_id, "json": prefs_json}
         )
