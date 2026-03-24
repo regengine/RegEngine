@@ -571,12 +571,15 @@ async def ingest_events(
                         from app.product_catalog import learn_from_event
                         learn_from_event(
                             tenant_id=tenant_id,
-                            product_description=event.product_description,
-                            gtin=event.kdes.get("gtin") if event.kdes else None,
-                            kdes=event.kdes,
+                            event={
+                                "product_description": event.product_description,
+                                "gtin": event.kdes.get("gtin") if event.kdes else None,
+                                "kdes": event.kdes,
+                                "location_name": event.location_name,
+                            },
                         )
                     except Exception as learn_err:
-                        logger.debug("catalog_learn_skipped: %s", str(learn_err))
+                        logger.warning("catalog_learn_skipped: %s", str(learn_err))
 
             except Exception as e:
                 logger.error(
@@ -614,12 +617,15 @@ async def ingest_events(
                             from app.product_catalog import learn_from_event
                             learn_from_event(
                                 tenant_id=tenant_id,
-                                product_description=event.product_description,
-                                gtin=event.kdes.get("gtin") if event.kdes else None,
-                                kdes=event.kdes,
+                                event={
+                                    "product_description": event.product_description,
+                                    "gtin": event.kdes.get("gtin") if event.kdes else None,
+                                    "kdes": event.kdes,
+                                    "location_name": event.location_name,
+                                },
                             )
-                        except Exception:
-                            pass
+                        except Exception as learn_err:
+                            logger.warning("catalog_learn_skipped: %s", str(learn_err))
                     except Exception as inner_e:
                         logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
                         results.append(EventResult(
