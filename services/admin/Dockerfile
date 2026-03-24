@@ -30,8 +30,7 @@ ENV PYTHONPATH=/app
 EXPOSE 8400
 
 # Health check (Railway-compatible dynamic port)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD sh -c 'curl -fsS "http://localhost:${PORT:-8400}/health" || exit 1'
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:${PORT:-8400}/health || exit 1
 
 # Set ownership and switch to non-root user
 RUN chown -R appuser:appuser /app
