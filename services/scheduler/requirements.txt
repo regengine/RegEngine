@@ -9,6 +9,9 @@ requests==2.32.5
 sqlalchemy==2.0.23
 psycopg[binary]>=3.2.4
 
+# Timezone
+pytz>=2024.1
+
 # Kafka
 kafka-python-ng==2.0.3
 

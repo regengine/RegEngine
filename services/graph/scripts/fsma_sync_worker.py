@@ -40,7 +40,12 @@ class FSMASyncWorker:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
-        neo4j_password = os.getenv("NEO4J_PASSWORD", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
+        if not neo4j_password:
+            raise ValueError(
+                "NEO4J_PASSWORD must be set. "
+                "Refusing to start with missing credentials."
+            )
 
         self.redis = redis.from_url(redis_url)
         self.driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))

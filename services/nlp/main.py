@@ -53,12 +53,20 @@ async def lifespan(api_app: FastAPI):
 
 from shared.cors import get_allowed_origins, should_allow_credentials
 
+_is_prod = (
+    os.getenv("ENV", "").lower() == "production"
+    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+)
+
 # Naming the instance 'app' is standard for uvicorn
 app = FastAPI(
     title="NLP Service",
     description="Regulatory text analysis and entity extraction",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # Production Hardening Middleware (Phase 18)
