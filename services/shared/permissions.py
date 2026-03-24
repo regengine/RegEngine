@@ -22,7 +22,7 @@ def permission_implies(granted_permission: str, required_permission: str) -> boo
     if not granted or not required:
         return False
 
-    if granted in {"*", "admin", "admin.*", "super_admin"}:
+    if granted in {"*", "admin.*", "super_admin"}:
         return True
 
     if granted == required:
