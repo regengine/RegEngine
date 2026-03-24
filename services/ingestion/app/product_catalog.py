@@ -4,7 +4,7 @@ Product Catalog Router.
 Manages the FTL product catalog for a tenant — products on the
 Food Traceability List that require FSMA 204 traceability.
 
-Persists to Supabase `product_catalog` table when DATABASE_URL is set,
+Persists to `fsma.products` table when DATABASE_URL is set,
 falls back to in-memory dict for local dev.
 """
 
@@ -159,7 +159,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
 
 
 def _db_add_product(tenant_id: str, product: Product) -> bool:
-    """Insert a product into Supabase. Returns True on success."""
+    """Insert a product into fsma.products. Returns True on success."""
     from sqlalchemy import text
     db = _get_db_session()
     if db is None:
@@ -167,20 +167,17 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
     try:
         db.execute(
             text("""
-                INSERT INTO product_catalog
-                    (tenant_id, name, category, ftl_covered, sku, gtin,
-                     description, suppliers, facilities, cte_count, last_cte)
+                INSERT INTO fsma.products
+                    (org_id, name, ftl_category, ftl_covered, sku, gtin,
+                     description, unit_of_measure)
                 VALUES
-                    (:tid, :name, :cat, :ftl, :sku, :gtin,
-                     :desc, :suppliers::jsonb, :facilities::jsonb, :cte, :last_cte)
-                ON CONFLICT (tenant_id, gtin)
-                    WHERE gtin != ''
+                    (CAST(:tid AS uuid), :name, :cat, :ftl, :sku, :gtin,
+                     :desc, :uom)
+                ON CONFLICT (org_id, gtin)
                 DO UPDATE SET
                     name = EXCLUDED.name,
-                    category = EXCLUDED.category,
+                    ftl_category = EXCLUDED.ftl_category,
                     description = EXCLUDED.description,
-                    suppliers = EXCLUDED.suppliers,
-                    facilities = EXCLUDED.facilities,
                     updated_at = now()
             """),
             {
@@ -191,10 +188,7 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
                 "sku": product.sku,
                 "gtin": product.gtin,
                 "desc": product.description,
-                "suppliers": json.dumps(product.suppliers),
-                "facilities": json.dumps(product.facilities),
-                "cte": product.cte_count,
-                "last_cte": product.last_cte,
+                "uom": "",
             },
         )
         db.commit()
@@ -215,10 +209,14 @@ def _db_lookup_by_gtin(tenant_id: str, gtin: str) -> Product | None:
         return None
     try:
         row = db.execute(
-            text("SELECT * FROM product_catalog WHERE tenant_id = :tid AND gtin = :gtin LIMIT 1"),
+            text(
+                "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
+                "unit_of_measure, created_at "
+                "FROM fsma.products WHERE org_id = CAST(:tid AS uuid) AND gtin = :gtin LIMIT 1"
+            ),
             {"tid": tenant_id, "gtin": gtin},
         ).fetchone()
-        return _row_to_product(row) if row else None
+        return _fsma_row_to_product(row) if row else None
     except Exception as e:
         logger.warning("db_catalog_lookup_failed: %s", e)
         return None
@@ -244,32 +242,19 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
     try:
         db.execute(
             text("""
-                INSERT INTO product_catalog
-                    (tenant_id, name, category, ftl_covered, gtin,
-                     description, facilities, cte_count, last_cte)
+                INSERT INTO fsma.products
+                    (org_id, name, description, gtin, ftl_covered, ftl_category)
                 VALUES
-                    (:tid, :name, '', true, :gtin,
-                     :name, :facilities::jsonb, 1, :now)
-                ON CONFLICT (tenant_id, gtin)
-                    WHERE gtin != ''
+                    (CAST(:tid AS uuid), :name, :name, :gtin, true, '')
+                ON CONFLICT (org_id, gtin)
                 DO UPDATE SET
-                    cte_count = product_catalog.cte_count + 1,
-                    last_cte = EXCLUDED.last_cte,
-                    facilities = (
-                        SELECT jsonb_agg(DISTINCT v)
-                        FROM jsonb_array_elements(
-                            COALESCE(product_catalog.facilities, '[]'::jsonb) ||
-                            EXCLUDED.facilities
-                        ) AS v
-                    ),
+                    name = COALESCE(NULLIF(EXCLUDED.name, ''), fsma.products.name),
                     updated_at = now()
             """),
             {
                 "tid": tenant_id,
                 "name": name,
                 "gtin": gtin,
-                "facilities": json.dumps([facility] if facility else []),
-                "now": now,
             },
         )
         db.commit()
