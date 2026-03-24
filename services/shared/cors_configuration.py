@@ -7,6 +7,9 @@ Provides secure Cross-Origin Resource Sharing (CORS) configuration:
 - Credentials handling
 - Preflight request handling
 - Origin whitelisting/blacklisting
+
+TODO: This module overlaps with shared/cors.py (get_allowed_origins).
+Consider merging into a single CORS configuration module in a follow-up.
 """
 
 import re

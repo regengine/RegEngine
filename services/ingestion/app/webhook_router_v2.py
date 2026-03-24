@@ -94,12 +94,9 @@ def _get_persistence(db_session=None):
 # ---------------------------------------------------------------------------
 
 def _is_production() -> bool:
-    """Detect production by DATABASE_URL (Supabase pooler) or ENV=production."""
-    import os
-    if os.getenv("ENV", "").lower() == "production":
-        return True
-    db_url = os.getenv("DATABASE_URL", "")
-    return "pooler.supabase.com" in db_url or "railway" in db_url
+    """Detect production using centralized environment detection."""
+    from shared.env import is_production
+    return is_production()
 
 
 def _verify_api_key(
