@@ -182,13 +182,16 @@ _db_store_instance: Optional[DatabaseAPIKeyStore] = None
 
 def get_key_store() -> Union[APIKeyStore, DatabaseAPIKeyStore]:
     """Get the global API key store instance.
-    
-    Returns DatabaseAPIKeyStore if configured, otherwise in-memory APIKeyStore.
+
+    In production, always returns DatabaseAPIKeyStore.
+    In development/test, returns in-memory APIKeyStore unless ENABLE_DB_API_KEYS=true.
     """
-    if os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true":
-        # We return the class instance, but initialization happens async.
-        # This is a bit tricky for sync contexts.
-        # For now, we assume the app startup has initialized it or we lazily init.
+    env = os.getenv("REGENGINE_ENV", "production").lower()
+    use_db = (
+        env == "production"
+        or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
+    )
+    if use_db:
         global _db_store_instance
         if _db_store_instance is None:
             _db_store_instance = DatabaseAPIKeyStore()
