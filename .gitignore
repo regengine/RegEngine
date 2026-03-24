@@ -100,3 +100,5 @@ RegEngine_UX_Walkthrough.pdf
 # Test artifacts
 stress_and_redteam.py
 test-write
+drill_output/
+drill_output_100/
