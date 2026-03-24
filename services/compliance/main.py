@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -15,8 +16,21 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Production Hardening
+from shared.middleware.security import add_security
+from shared.rate_limit import add_rate_limiting
+from shared.observability import add_observability
+from shared.error_handling import install_exception_handlers
+from shared.health import HealthCheck, install_health_router
+from shared.middleware import RequestIDMiddleware
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+
 from app.routes import router as fsma_router
 
+_is_prod = (
+    os.getenv("ENV", "").lower() == "production"
+    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+)
 
 app = FastAPI(
     title="RegEngine FSMA 204 Compliance Service",
@@ -25,12 +39,20 @@ app = FastAPI(
         "FSMA 204 compliance API providing checklists, industry categories, "
         "and configuration validation for food traceability requirements."
     ),
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
+# Production Hardening Middleware
+add_security(app)
+add_rate_limiting(app)
+add_observability(app, service_name="compliance-service")
 
-@app.get("/health")
-async def health_check() -> dict:
-    return {"status": "healthy", "service": "compliance-api"}
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
+
+install_exception_handlers(app)
 
 
 @app.get("/")
@@ -39,7 +61,6 @@ async def root() -> dict:
         "service": "compliance-api",
         "product": "RegEngine FSMA 204 Compliance Service",
         "version": app.version,
-        "docs": "/docs",
         "key_endpoints": {
             "industries": "/industries",
             "checklists": "/checklists",
@@ -50,6 +71,10 @@ async def root() -> dict:
 
 
 app.include_router(fsma_router)
+
+# Standardized Health & Readiness
+health = HealthCheck(service_name="compliance-service")
+install_health_router(app, service_name="compliance-service", health_check=health)
 
 
 if __name__ == "__main__":

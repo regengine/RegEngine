@@ -473,6 +473,8 @@ class TestConvenienceFunctions:
     
     def test_get_auth_service(self):
         """Should return service instance."""
+        from shared.api_authentication import AuthenticationService
+        AuthenticationService.configure(jwt_secret="test-secret-for-unit-tests")
         service = get_auth_service()
         assert service is not None
     
