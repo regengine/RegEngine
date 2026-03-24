@@ -1,0 +1,27 @@
+# Default owner for everything
+* @PetrefiedThunder
+
+# Frontend
+frontend/ @PetrefiedThunder
+
+# Backend services
+services/admin/ @PetrefiedThunder
+services/ingestion/ @PetrefiedThunder
+services/compliance/ @PetrefiedThunder
+services/graph/ @PetrefiedThunder
+services/nlp/ @PetrefiedThunder
+services/scheduler/ @PetrefiedThunder
+
+# Shared libraries
+shared/ @PetrefiedThunder
+
+# Infrastructure & CI
+.github/ @PetrefiedThunder
+docker-compose*.yml @PetrefiedThunder
+infra/ @PetrefiedThunder
+
+# Security-sensitive files
+SECURITY.md @PetrefiedThunder
+.gitleaks.toml @PetrefiedThunder
+services/shared/middleware/ @PetrefiedThunder
+services/shared/api_authentication.py @PetrefiedThunder

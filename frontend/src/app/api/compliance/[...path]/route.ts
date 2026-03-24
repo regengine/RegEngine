@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
 
 // Proxy compliance API requests to the Compliance backend service
 // This allows browser clients to access compliance endpoints without CORS issues
@@ -34,16 +35,24 @@ async function proxyRequest(
             return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
         }
 
-        const path = pathParts.join('/');
+        const path = sanitizePath(pathParts);
+        if (!path) {
+            return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
+        }
         const url = new URL(request.url);
         const queryString = url.search;
 
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        const apiKey = getServerApiKey();
+        if (apiKey) {
+            headers['X-RegEngine-API-Key'] = apiKey;
+        }
+
         const fetchOptions: RequestInit = {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': 'admin',
-            },
+            headers,
         };
 
         if (method === 'POST') {
@@ -74,9 +83,6 @@ async function proxyRequest(
     } catch (error: unknown) {
         console.error('Compliance proxy error:', error);
         const message = error instanceof Error ? error.message : 'Compliance request failed';
-        return NextResponse.json(
-            { error: message },
-            { status: 500 }
-        );
+        return proxyError(message, 500);
     }
 }
