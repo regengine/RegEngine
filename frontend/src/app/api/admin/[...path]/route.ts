@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
 
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
@@ -69,7 +70,10 @@ async function proxyRequest(  request: NextRequest,
       );
     }
 
-    const path = pathParts.join('/');
+    const path = sanitizePath(pathParts);
+    if (!path) {
+      return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
+    }
     const queryString = new URL(request.url).search;
     const targetBases = getAdminTargets();
 
@@ -100,7 +104,7 @@ async function proxyRequest(  request: NextRequest,
       const serverApiKey =
         process.env.REGENGINE_API_KEY ||
         process.env.NEXT_PUBLIC_API_KEY ||
-        're_live_fsma204_key';
+        '';
       headers.set('x-regengine-api-key', serverApiKey);
     }
 
@@ -157,16 +161,10 @@ async function proxyRequest(  request: NextRequest,
       }
     }
 
-    return NextResponse.json(
-      {
-        error: 'Unable to reach admin service',
-        details: attemptErrors,
-      },
-      { status: 502 },
-    );
+    return proxyError('Unable to reach admin service', 502, { details: attemptErrors });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Admin request failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return proxyError(message, 500);
   }
 }
 

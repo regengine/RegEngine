@@ -2,17 +2,23 @@
 Audit Log Router.
 
 Returns real audit data from Postgres instead of static sample rows.
+
+NOTE: The audit_logs table lives in the *admin* database while CTE/export/alert
+tables live in the *ingestion* database.  We maintain two session factories so
+queries hit the correct database.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 
 from app.webhook_compat import _verify_api_key
 from app.tenant_validation import validate_tenant_id
@@ -44,6 +50,7 @@ class AuditLogResponse(BaseModel):
 
 
 def _get_db_session():
+    """Return a session connected to the ingestion/shared database (CTE, exports, alerts)."""
     try:
         from shared.database import SessionLocal
 
@@ -52,6 +59,35 @@ def _get_db_session():
         logger.error("audit_log_db_session_init_failed error=%s", str(exc))
         raise
     return db
+
+
+# Lazy-init admin DB session factory — only created when first needed.
+_admin_session_factory = None
+
+
+def _get_admin_db_session():
+    """Return a session connected to the admin database (audit_logs table).
+
+    Uses ADMIN_DATABASE_URL env var.  Returns None if not configured,
+    allowing the caller to skip the admin audit query gracefully.
+    """
+    global _admin_session_factory
+    admin_url = os.getenv("ADMIN_DATABASE_URL")
+    if not admin_url:
+        return None
+    if _admin_session_factory is None:
+        # Convert psycopg driver URL to standard psycopg2 if needed
+        conn_url = admin_url.replace("postgresql+psycopg://", "postgresql://")
+        _admin_session_factory = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=create_engine(conn_url, pool_size=3, max_overflow=5, pool_pre_ping=True),
+        )
+    try:
+        return _admin_session_factory()
+    except Exception as exc:
+        logger.error("audit_log_admin_db_session_failed error=%s", str(exc))
+        return None
 
 
 def _to_iso(value: Any) -> str:
@@ -304,10 +340,22 @@ async def get_audit_log(
 ) -> AuditLogResponse:
     validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
+
+    # Query admin audit_logs from the admin database
+    try:
+        admin_session = _get_admin_db_session()
+        if admin_session is not None:
+            try:
+                entries.extend(_query_admin_audit_logs(admin_session, tenant_id, limit=200))
+            finally:
+                admin_session.close()
+    except Exception as exc:
+        logger.warning("audit_log_admin_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
+
+    # Query CTE events, exports, and alerts from the ingestion database
     try:
         db_session = _get_db_session()
         try:
-            entries.extend(_query_admin_audit_logs(db_session, tenant_id, limit=200))
             entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
             entries.extend(_query_exports(db_session, tenant_id, limit=100))
             entries.extend(_query_alert_events(db_session, tenant_id, limit=100))

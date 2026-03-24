@@ -88,6 +88,11 @@ const nextConfig = {
                 source: '/api/compliance/:path*',
                 destination: `${complianceUrl}/:path*`,
             },
+            // API-03: Proxy admin health endpoint for external monitoring
+            {
+                source: '/api/v1/health',
+                destination: `${apiGatewayUrl}/health`,
+            },
         ]
     },
 }
