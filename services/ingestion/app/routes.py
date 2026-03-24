@@ -105,7 +105,7 @@ _PIPELINE = ScraperPipeline()
 
 
 
-# NOTE: /v1/scrape/cppa moved to routes_scraping.py
+# NOTE: /v1/scrape/cppa moved to routes_sources.py
 
 
 ALLOWED_SCHEMES = {"https", "http"}

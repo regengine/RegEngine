@@ -30,10 +30,7 @@ from shared.cors import get_allowed_origins, should_allow_credentials
 
 from app.routes import router as fsma_router
 
-_is_prod = (
-    os.getenv("ENV", "").lower() == "production"
-    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
-)
+_is_prod = os.getenv("ENV", "").lower() == "production"
 
 app = FastAPI(
     title="RegEngine FSMA 204 Compliance Service",

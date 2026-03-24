@@ -75,10 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("shutdown_complete")
 
 
-_is_prod = (
-    os.getenv("ENV", "").lower() == "production"
-    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
-)
+_is_prod = os.getenv("ENV", "").lower() == "production"
 
 app = FastAPI(
     title="RegEngine Admin API",

@@ -101,7 +101,9 @@ class SessionConfig:
     # Cookie settings
     cookie: SessionCookieSettings = field(default_factory=SessionCookieSettings)
     
-    # Secret for signing (required)
+    # Secret for signing (required).
+    # SESSION_SECRET must be set in production; if unset the SessionManager
+    # constructor will raise ValueError.
     secret_key: Optional[str] = field(default_factory=lambda: os.environ.get("SESSION_SECRET"))
     
     @classmethod
