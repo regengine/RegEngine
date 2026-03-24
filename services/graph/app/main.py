@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,11 @@ logger = setup_logging()
 from app.routes import router as graph_router
 from app.config import settings
 
+_is_prod = (
+    os.getenv("ENV", "").lower() == "production"
+    or "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -41,6 +47,9 @@ app = FastAPI(
     description="Knowledge graph and fact linkage service",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # Production Hardening Middleware (Phase 18)
