@@ -592,7 +592,7 @@ class DatabaseAPIKeyStore:
             rate_limit_per_day=old_key.rate_limit_per_day,
             expires_at=old_key.expires_at,
             created_by=created_by,
-            extra_data={
+            metadata={
                 **(old_key.extra_data or {}),
                 "rotated_from": key_id,
                 "rotation_reason": reason,
