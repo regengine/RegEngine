@@ -139,7 +139,22 @@ class SecretsManager:
         Returns:
             Admin master key string
         """
-        return os.getenv("ADMIN_MASTER_KEY", "dev_master_key_change_in_production")
+        key = os.getenv("ADMIN_MASTER_KEY")
+        if not key:
+            env = os.getenv("REGENGINE_ENV", "development").lower()
+            if env == "production":
+                raise ValueError(
+                    "ADMIN_MASTER_KEY must be set in production. "
+                    "Generate a secure key and set it as an environment variable."
+                )
+            # Non-production: generate a random key so dev/test can proceed
+            import secrets as _secrets
+            key = f"dev-{_secrets.token_hex(16)}"
+            logger.warning(
+                "admin_master_key_not_set_using_random",
+                environment=env,
+            )
+        return key
 
 
 # Global instance for singleton pattern
