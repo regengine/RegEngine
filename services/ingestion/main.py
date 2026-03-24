@@ -138,6 +138,15 @@ if _router_enabled("discovery"):
     from app.routes_discovery import router as discovery_router
     app.include_router(discovery_router)
 
+# Status, audit, and document query routes
+from app.routes_status import router as status_router
+app.include_router(status_router)
+
+# Federal source ingestion (Federal Register, eCFR, openFDA)
+if _router_enabled("sources"):
+    from app.routes_sources import router as sources_router
+    app.include_router(sources_router)
+
 # Webhook Ingestion (V2: Postgres-backed CTE persistence)
 from app.webhook_router_v2 import router as webhook_router
 app.include_router(webhook_router)

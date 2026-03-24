@@ -105,38 +105,7 @@ _PIPELINE = ScraperPipeline()
 
 
 
-@router.post("/v1/scrape/cppa", status_code=202)
-async def scrape_cppa(
-    url: str,
-    background_tasks: BackgroundTasks,
-    api_key=Depends(require_api_key)
-):
-    # Entitlement gating for US-CA
-    verify_jurisdiction_access(api_key, "US-CA")
-    
-    # Use CPPA adaptor for specific headers/logic if needed
-    adaptor = ADAPTORS.get("cppa")
-    
-    logger.info("scrape_cppa_triggered", url=url, tenant_id=api_key.tenant_id)
-    
-    if adaptor:
-        background_tasks.add_task(
-            run_state_scrape_job,
-            adaptor_name="cppa",
-            adaptor_instance=adaptor,
-            url=url,
-            jurisdiction_code="US-CA",
-            tenant_id=api_key.tenant_id
-        )
-        return {"status": "accepted", "message": "CPPA scrape job started"}
-
-    background_tasks.add_task(
-        run_generic_scrape_job,
-        url=url,
-        jurisdiction_code="US-CA",
-        tenant_id=api_key.tenant_id
-    )
-    return {"status": "accepted", "message": "Generic scrape job started"}
+# NOTE: /v1/scrape/cppa moved to routes_scraping.py
 
 
 ALLOWED_SCHEMES = {"https", "http"}
@@ -308,296 +277,13 @@ async def ingest_regulation(
         raise HTTPException(status_code=500, detail="Failed to queue ingestion job")
 
 
-@router.get("/v1/ingest/status/{job_id}")
-async def get_ingestion_status(job_id: str):
-    """Check the status of a background ingestion job (v2)."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    status = r.get(f"ingest:status:{job_id}")
-    if not status:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    status_str = status.decode("utf-8")
-    response = {"job_id": job_id, "status": status_str}
-    
-    if status_str == "completed":
-        result = r.get(f"ingest:result:{job_id}")
-        if result:
-            response["result"] = json.loads(result.decode("utf-8"))
-            
-    return response
-
-
-@router.get("/v1/ingest/documents/{document_id}/analysis")
-async def get_document_analysis(document_id: str):
-    """Return an analysis summary for a completed ingestion job."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    status = r.get(f"ingest:status:{document_id}")
-    if not status:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    status_str = status.decode("utf-8")
-    result_raw = r.get(f"ingest:result:{document_id}")
-    result = json.loads(result_raw.decode("utf-8")) if result_raw else {}
-
-    return {
-        "document_id": document_id,
-        "status": status_str,
-        "risk_score": 0,
-        "obligations_count": result.get("sections", 0),
-        "missing_dates_count": 0,
-        "critical_risks": [],
-    }
-
-
-@router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])
-async def get_discovery_queue():
-    """Retrieve all items in the manual discovery queue."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    
-    # manual_upload_queue is a Redis list
-    items = r.lrange("manual_upload_queue", 0, -1)
-    results = []
-    for i, item in enumerate(items):
-        try:
-            val = item.decode("utf-8")
-            if ":" in val:
-                body, url = val.split(":", 1)
-                results.append(DiscoveryQueueItem(body=body, url=url, index=i))
-        except Exception as e:
-            logger.debug("discovery_queue_parse_skip", index=i, error=str(e))
-            continue
-    return results
-
-
-@router.get("/v1/ingest/manual-queue")
-async def get_manual_queue(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=500),
-    api_key: APIKey = Depends(require_api_key),
-):
-    """Retrieve items from the tenant-scoped manual upload queue.
-
-    Reads from ``manual_upload_queue:{tenant_id}`` — each tenant sees only
-    their own pending uploads, preventing cross-tenant data leakage.
-    """
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    tenant_id = api_key.tenant_id
-
-    queue_key = f"manual_upload_queue:{tenant_id}"
-    total = r.llen(queue_key)
-    raw_items = r.lrange(queue_key, skip, skip + limit - 1)
-
-    items = []
-    for i, raw in enumerate(raw_items):
-        try:
-            val = raw.decode("utf-8")
-            if ":" in val:
-                body, url = val.split(":", 1)
-                items.append({"index": skip + i, "body": body, "url": url})
-            else:
-                items.append({"index": skip + i, "body": val, "url": None})
-        except Exception as e:
-            logger.debug("manual_queue_parse_skip", index=skip + i, error=str(e))
-            continue
-
-    logger.info(
-        "manual_queue_fetched",
-        tenant_id=tenant_id,
-        total=total,
-        returned=len(items),
-    )
-    return {
-        "tenant_id": tenant_id,
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "items": items,
-    }
-
-
-@router.post("/v1/ingest/discovery/approve")
-async def approve_discovery(
-    index: int,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Approve a discovery item and trigger a scrape."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    
-    # Get the item at the specific index
-    item = r.lindex("manual_upload_queue", index)
-    if not item:
-        raise HTTPException(status_code=404, detail="Discovery item not found at index")
-    
-    val = item.decode("utf-8")
-    body, url = val.split(":", 1)
-    
-    # Remove it from the queue (using a safer approach would be better, but LREM with count 1 is standard)
-    # Note: index-based deletion is tricky in Redis if the list changes. 
-    # For now, we'll use LREM which might delete a different item if values are identical.
-    r.lrem("manual_upload_queue", 1, item)
-    
-    # Trigger the scrape
-    background_tasks.add_task(discovery.scrape, body, url)
-    
-    logger.info("discovery_approved", body=body, url=url, tenant_id=api_key.tenant_id)
-    return {"status": "approved", "body": body, "url": url}
-
-
-@router.post("/v1/ingest/discovery/reject")
-async def reject_discovery(
-    index: int,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Reject and remove a discovery item from the queue."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    
-    item = r.lindex("manual_upload_queue", index)
-    if not item:
-        raise HTTPException(status_code=404, detail="Discovery item not found at index")
-    
-    r.lrem("manual_upload_queue", 1, item)
-    logger.info("discovery_rejected", index=index, tenant_id=api_key.tenant_id)
-    return {"status": "rejected", "index": index}
-
-
-@router.post("/v1/ingest/discovery/bulk-approve")
-async def bulk_approve_discovery(
-    payload: BulkDiscoveryRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Approve multiple discovery items and trigger scrapes."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    
-    approved = []
-    # Sort indices descending to avoid shifting if we were using LPOP/LREM by index
-    # Since we LREM by value, indices change as we go.
-    # BEST: Get all values first.
-    items_to_process = []
-    for index in payload.indices:
-        item = r.lindex("manual_upload_queue", index)
-        if item:
-            items_to_process.append(item)
-            
-    for item in items_to_process:
-        val = item.decode("utf-8")
-        body, url = val.split(":", 1)
-        r.lrem("manual_upload_queue", 1, item)
-        background_tasks.add_task(discovery.scrape, body, url)
-        approved.append({"body": body, "url": url})
-            
-    logger.info("bulk_discovery_approved", count=len(approved), tenant_id=api_key.tenant_id)
-    return {"status": "approved", "count": len(approved), "items": approved}
-
-
-@router.post("/v1/ingest/discovery/bulk-reject")
-async def bulk_reject_discovery(
-    payload: BulkDiscoveryRequest,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Reject and remove multiple discovery items from the queue."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    
-    items_to_remove = []
-    for index in payload.indices:
-        item = r.lindex("manual_upload_queue", index)
-        if item:
-            items_to_remove.append(item)
-            
-    rejected_count = 0
-    for item in items_to_remove:
-        r.lrem("manual_upload_queue", 1, item)
-        rejected_count += 1
-            
-    logger.info("bulk_discovery_rejected", count=rejected_count, tenant_id=api_key.tenant_id)
-    return {"status": "rejected", "count": rejected_count}
-
-
-@router.post("/v1/ingest/all-regulations")
-async def ingest_all_regulations(
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key),
-):
-    """
-    Trigger an FDA-scoped, idempotent regulatory ingestion run.
-
-    Sources are limited to the curated FSMA_SOURCES list (eCFR Title 21,
-    Federal Register FSMA notices, FDA guidance pages). Each source is
-    deduplicated via ETag + SHA-256 content hash — unchanged documents
-    are skipped without re-parsing.
-    """
-    job_id = str(uuid.uuid4())
-    started_at = time.time()
-
-    logger.info(
-        "fsma_ingestion_triggered",
-        job_id=job_id,
-        sources=len(FSMA_SOURCES),
-        tenant_id=api_key.tenant_id,
-    )
-
-    # Run all sources concurrently (each scrape has its own 2 s polite delay)
-    tasks = [
-        discovery.scrape(
-            body=source["name"],
-            source_url=source["url"],
-            source_type=source["type"],
-            jurisdiction=source["jurisdiction"],
-        )
-        for source in FSMA_SOURCES
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Tally structured summary
-    summary: dict[str, int] = {
-        "sources_attempted": len(FSMA_SOURCES),
-        "queued_manual": 0,
-        "unchanged": 0,
-        "ingested": 0,
-        "failed": 0,
-    }
-    for r in results:
-        if isinstance(r, Exception):
-            summary["failed"] += 1
-        else:
-            status = r.get("status", "failed")
-            if status == "queued_manual":
-                summary["queued_manual"] += 1
-            elif status == "unchanged":
-                summary["unchanged"] += 1
-            elif status == "ingested":
-                summary["ingested"] += 1
-            else:
-                summary["failed"] += 1
-
-    duration_ms = int((time.time() - started_at) * 1000)
-
-    logger.info(
-        "fsma_ingestion_complete",
-        job_id=job_id,
-        duration_ms=duration_ms,
-        **summary,
-    )
-
-    return {
-        "job_id": job_id,
-        "status": "complete",
-        "jurisdiction": "FDA",
-        "duration_ms": duration_ms,
-        **summary,
-    }
+# NOTE: Status/query endpoints moved to routes_status.py
+# NOTE: Discovery queue endpoints moved to routes_discovery.py
 
 
 # NOTE: /health and /metrics endpoints moved to routes_health_metrics.py (Finding #8, Ingestion Debug Audit)
+# NOTE: /v1/ingest/all-regulations moved to routes_scraping.py
+# NOTE: /scrape/{adaptor} moved to routes_scraping.py
 
 
 def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
@@ -607,59 +293,6 @@ def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
         if not x_api_key or x_api_key != settings.api_key:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-
-@router.post("/scrape/{adaptor}")
-def scrape_registry(
-    adaptor: str,
-    api_key: APIKey = Depends(require_api_key),
-) -> dict:
-    """Run a state registry adaptor and enqueue normalized events.
-
-    Placeholder implementation: lists sources and returns their metadata without network fetch.
-    """
-    if adaptor not in ADAPTORS:
-        raise HTTPException(status_code=404, detail="Unknown adaptor")
-
-    scraper = ADAPTORS[adaptor]
-    sources: list[dict] = []
-    allowed = set(api_key.allowed_jurisdictions or [])
-    
-    # Run in thread pool to avoid blocking
-    # Ideally should use a background task (Celery/Arq) for full batch
-    # keeping it simple but functional for now
-    
-    results = []
-    
-    for src in scraper.list_sources():
-        if src.jurisdiction_code and src.jurisdiction_code not in allowed:
-            continue
-            
-        try:
-            # 1. Fetch using adaptor logic (headers, auth, etc)
-            fetched = scraper.fetch(src)
-            
-            if not fetched.content_bytes:
-                logger.warning("scrape_empty_content", source=src.url)
-                continue
-
-            # 2. Process via Pipeline
-            event = _PIPELINE.process_content(
-                content=fetched.content_bytes,
-                content_type=fetched.content_type,
-                jurisdiction_code=src.jurisdiction_code,
-                source_url=src.url,
-                tenant_id=api_key.tenant_id
-            )
-            
-            if event:
-                results.append(event)
-            
-        except Exception as e:
-            logger.error("scrape_source_failed", url=src.url, error=str(e))
-            # Continue to next source
-            continue
-
-    return {"adaptor": adaptor, "count": len(results), "sources": results}
 
 
 def _process_and_emit(
@@ -1092,30 +725,26 @@ async def ingest_url(
             db_manager.close()
 
 
-# === FEDERAL SOURCE ENDPOINTS ===
+# NOTE: Federal source endpoints moved to routes_sources.py
 
-from .models import FederalRegisterIngestRequest, ECFRIngestRequest, FDAIngestRequest
-from regengine_ingestion.sources import FederalRegisterAdapter, ECFRAdapter, FDAAdapter
 
 async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_id, **kwargs):
     """Background task to run a source adapter and process all findings."""
     db_manager = get_db_manager()
     audit_logger = None
-    
-    # Ensure tenant_id is a valid UUID
+
     tenant_id = tenant_id or "00000000-0000-0000-0000-000000000000"
-    
+
     if db_manager:
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
-        
-        # Initialize job record
+
         job = IngestionJob(
             job_id=job_id,
             vertical=vertical,
             source_type=source_system,
             status=JobStatus.RUNNING,
             started_at=datetime.now(timezone.utc),
-            config=kwargs
+            config=kwargs,
         )
         try:
             db_manager.insert_job(job)
@@ -1125,14 +754,14 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
     success_count = 0
     failed_count = 0
     skipped_count = 0
-    
+    count = 0
+
     try:
         for content, source_metadata, doc_metadata in adapter.fetch_documents(vertical=vertical, **kwargs):
-            job_id_param = job_id
             count += 1
             if audit_logger:
                 audit_logger.log_fetch(source_metadata.source_url, "success")
-                
+
             try:
                 event = _process_and_emit(
                     raw_bytes=content,
@@ -1144,7 +773,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                     job_id=job_id,
                     audit_logger=audit_logger,
                     db_manager=db_manager,
-                    vertical=vertical
+                    vertical=vertical,
                 )
                 if event.is_duplicate:
                     skipped_count += 1
@@ -1155,11 +784,10 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                 if audit_logger:
                     audit_logger.log("ingest", "document", status="failure", error=str(e), details={"url": source_metadata.source_url})
                 logger.error("federal_ingest_item_failed", url=source_metadata.source_url, error=str(e))
-        
+
         logger.info("federal_ingest_completed", source=adapter.get_source_name(), count=count)
-        
+
         if db_manager:
-            # Update job status
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
             job.documents_processed = count
@@ -1167,7 +795,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
             job.documents_failed = failed_count
             job.documents_skipped = skipped_count
             db_manager.update_job(job)
-            
+
     except Exception as e:
         logger.error("federal_ingest_job_failed", source=adapter.get_source_name(), error=str(e))
         if db_manager:
@@ -1180,121 +808,12 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                 error_message=str(e),
                 documents_processed=count,
                 documents_succeeded=success_count,
-                documents_failed=failed_count
+                documents_failed=failed_count,
             )
             db_manager.update_job(job)
     finally:
         if db_manager:
             db_manager.close()
-
-
-@router.post("/v1/ingest/federal-register", status_code=202)
-async def ingest_federal_register(
-    payload: FederalRegisterIngestRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Ingest documents from Federal Register API."""
-    # Gating
-    allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed:
-        raise HTTPException(status_code=403, detail="Access to federal regulations requires entitlement")
-
-    adapter = FederalRegisterAdapter(user_agent="RegEngine/1.0")
-    job_id = str(uuid.uuid4())
-    background_tasks.add_task(
-        _run_adapter_ingest,
-        adapter=adapter,
-        vertical=payload.vertical,
-        tenant_id=api_key.tenant_id,
-        source_system="federal_register_api",
-        job_id=job_id,
-        max_documents=payload.max_documents,
-        date_from=payload.date_from,
-        agencies=payload.agencies
-    )
-    return {"status": "accepted", "job_id": job_id, "message": "Federal Register ingestion started"}
-
-
-@router.post("/v1/ingest/ecfr", status_code=202)
-async def ingest_ecfr(
-    payload: ECFRIngestRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Ingest documents from eCFR API."""
-    allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed:
-        raise HTTPException(status_code=403, detail="Access to federal regulations requires entitlement")
-
-    adapter = ECFRAdapter(user_agent="RegEngine/1.0")
-    job_id = str(uuid.uuid4())
-    background_tasks.add_task(
-        _run_adapter_ingest,
-        adapter=adapter,
-        vertical=payload.vertical,
-        tenant_id=api_key.tenant_id,
-        source_system="ecfr_api",
-        job_id=job_id,
-        cfr_title=payload.cfr_title,
-        cfr_part=payload.cfr_part
-    )
-    return {"status": "accepted", "job_id": job_id, "message": "eCFR ingestion started"}
-
-
-@router.post("/v1/ingest/fda", status_code=202)
-async def ingest_fda(
-    payload: FDAIngestRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Ingest documents from openFDA API."""
-    allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed:
-        raise HTTPException(status_code=403, detail="Access to federal regulations requires entitlement")
-
-    adapter = FDAAdapter(api_key=None, user_agent="RegEngine/1.0")
-    job_id = str(uuid.uuid4())
-    background_tasks.add_task(
-        _run_adapter_ingest,
-        adapter=adapter,
-        vertical=payload.vertical,
-        tenant_id=api_key.tenant_id,
-        source_system="openfda_api",
-        job_id=job_id,
-        max_documents=payload.max_documents
-    )
-    return {"status": "accepted", "job_id": job_id, "message": "FDA ingestion started"}
-
-
-@router.get("/v1/ingest/sources")
-async def list_sources(api_key: APIKey = Depends(require_api_key)):
-    """List available source adapters and their capabilities."""
-    return {
-        "sources": [
-            {
-                "id": "federal_register",
-                "name": "Federal Register",
-                "type": "api",
-                "jurisdiction": "US",
-                "capabilities": ["date_filter", "agency_filter", "bulk_fetch"]
-            },
-            {
-                "id": "ecfr",
-                "name": "eCFR (Code of Federal Regulations)",
-                "type": "api",
-                "jurisdiction": "US",
-                "capabilities": ["title_part_filter"]
-            },
-            {
-                "id": "fda",
-                "name": "openFDA Warning Letters",
-                "type": "api",
-                "jurisdiction": "US",
-                "capabilities": ["bulk_fetch"]
-            }
-        ]
-    }
 
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB hard limit
@@ -1434,78 +953,4 @@ def _detect_extension(content_type: Optional[str]) -> str:
     return "bin"
 
 
-@router.get("/v1/audit/jobs/{job_id}")
-async def get_job_status(job_id: str, api_key: APIKey = Depends(require_api_key)):
-    """Get high-level status and metrics for an ingestion job."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Audit database not available")
-    
-    try:
-        job = db_manager.get_job(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return job
-    finally:
-        db_manager.close()
-
-
-@router.get("/v1/audit/logs/{job_id}")
-async def get_job_logs(job_id: str, limit: int = 100, api_key: APIKey = Depends(require_api_key)):
-    """Get detailed audit entries for a specific job."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Audit database not available")
-    
-    try:
-        logs = db_manager.get_audit_log(job_id, limit=limit)
-        return {"job_id": job_id, "entries": logs}
-    finally:
-        db_manager.close()
-
-
-@router.get("/v1/ingest/documents")
-async def list_documents(
-    vertical: Optional[str] = None,
-    source_type: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """List and search ingested documents."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        docs = db_manager.search_documents(vertical, source_type, limit, offset)
-        return {"documents": docs, "count": len(docs)}
-    finally:
-        db_manager.close()
-
-
-@router.get("/v1/verify/{document_id}")
-async def verify_document(document_id: str, api_key: APIKey = Depends(require_api_key)):
-    """Verify document integrity by re-computing hashes and comparing with stored metadata."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        doc = db_manager.get_document(document_id)
-        if not doc:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        return {
-            "document_id": document_id,
-            "status": "verified",
-            "hashes": {
-                "content_sha256": doc["content_sha256"],
-                "content_sha512": doc["content_sha512"],
-                "text_sha256": doc["text_sha256"],
-                "text_sha512": doc["text_sha512"]
-            },
-            "verified_at": datetime.now(timezone.utc).isoformat()
-        }
-    finally:
-        db_manager.close()
+# NOTE: Audit/status/documents/verify endpoints moved to routes_status.py
