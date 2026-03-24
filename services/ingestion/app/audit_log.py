@@ -65,15 +65,24 @@ def _get_db_session():
 _admin_session_factory = None
 
 
+_admin_url_warned = False
+
+
 def _get_admin_db_session():
     """Return a session connected to the admin database (audit_logs table).
 
     Uses ADMIN_DATABASE_URL env var.  Returns None if not configured,
     allowing the caller to skip the admin audit query gracefully.
     """
-    global _admin_session_factory
+    global _admin_session_factory, _admin_url_warned
     admin_url = os.getenv("ADMIN_DATABASE_URL")
     if not admin_url:
+        if not _admin_url_warned:
+            logger.warning(
+                "ADMIN_DATABASE_URL is not set — admin audit logs will be incomplete. "
+                "Set this env var to enable full audit trail."
+            )
+            _admin_url_warned = True
         return None
     if _admin_session_factory is None:
         # Convert psycopg driver URL to standard psycopg2 if needed

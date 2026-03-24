@@ -105,10 +105,17 @@ export default function LoginPage() {
             return;
         }
 
+        // If the middleware redirected here with an error flag, the user
+        // needs to re-authenticate — do NOT auto-redirect back.
+        const errorParam = searchParams.get('error');
+        if (errorParam === 'session_expired' || errorParam === 'auth_config') {
+            return;
+        }
+
         const safeNextPath = resolveSafeNextPath(nextParam);
         const fallbackPath = user.is_sysadmin ? '/sysadmin' : '/dashboard';
         router.push(safeNextPath || fallbackPath);
-    }, [isHydrated, user, nextParam, router]);
+    }, [isHydrated, user, nextParam, router, searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -126,9 +133,9 @@ export default function LoginPage() {
                 response.tenant_id
             );
 
-            const safeNextPath = resolveSafeNextPath(nextParam);
-            const fallbackPath = response.user.is_sysadmin ? '/sysadmin' : '/dashboard';
-            router.push(safeNextPath || fallbackPath);
+            // Ensure the middleware picks up the newly-set cookie before
+            // the useEffect redirect fires.
+            router.refresh();
         } catch (err: unknown) {
             console.error('Login error:', err);
             const apiError = err as {

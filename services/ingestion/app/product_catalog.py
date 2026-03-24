@@ -106,8 +106,27 @@ def _row_to_product(row) -> Product:
     )
 
 
+def _fsma_row_to_product(row) -> Product:
+    """Convert an fsma.products row to Product model."""
+    r = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+    return Product(
+        id=str(r.get("id", "")),
+        name=r.get("name", ""),
+        category=r.get("ftl_category", "") or "",
+        ftl_covered=bool(r.get("ftl_covered", False)),
+        sku=r.get("sku", "") or "",
+        gtin=r.get("gtin", "") or "",
+        description=r.get("description", "") or "",
+        suppliers=[],
+        facilities=[],
+        cte_count=0,
+        last_cte=None,
+        created_at=str(r.get("created_at", "")),
+    )
+
+
 def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product] | None:
-    """Fetch catalog from Supabase. Returns None if DB unavailable."""
+    """Fetch catalog from fsma.products table. Returns None if DB unavailable."""
     from sqlalchemy import text
     db = _get_db_session()
     if db is None:
@@ -115,15 +134,23 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
     try:
         if category:
             rows = db.execute(
-                text("SELECT * FROM product_catalog WHERE tenant_id = :tid AND category = :cat ORDER BY name"),
+                text(
+                    "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
+                    "unit_of_measure, created_at "
+                    "FROM fsma.products WHERE org_id = CAST(:tid AS uuid) AND ftl_category = :cat ORDER BY name"
+                ),
                 {"tid": tenant_id, "cat": category},
             ).fetchall()
         else:
             rows = db.execute(
-                text("SELECT * FROM product_catalog WHERE tenant_id = :tid ORDER BY name"),
+                text(
+                    "SELECT id, name, description, gtin, sku, ftl_category, ftl_covered, "
+                    "unit_of_measure, created_at "
+                    "FROM fsma.products WHERE org_id = CAST(:tid AS uuid) ORDER BY name"
+                ),
                 {"tid": tenant_id},
             ).fetchall()
-        return [_row_to_product(r) for r in rows]
+        return [_fsma_row_to_product(r) for r in rows]
     except Exception as e:
         logger.warning("db_catalog_read_failed: %s", e)
         return None
