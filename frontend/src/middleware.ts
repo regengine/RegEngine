@@ -62,6 +62,7 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
 async function verifyRegEngineToken(token: string): Promise<Record<string, unknown> | null> {
     const secret = process.env.AUTH_SECRET_KEY;
     if (!secret) {
+        console.warn('[middleware] AUTH_SECRET_KEY is not set — skipping RegEngine JWT verification. Falling back to Supabase auth.');
         return null;
     }
     try {
@@ -171,6 +172,15 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
+
+    // Signal the reason so the login page can display a message and
+    // avoid auto-redirecting back into a loop.
+    if (!process.env.AUTH_SECRET_KEY) {
+        url.searchParams.set('error', 'auth_config');
+    } else {
+        url.searchParams.set('error', 'session_expired');
+    }
+
     return NextResponse.redirect(url);
 }
 
