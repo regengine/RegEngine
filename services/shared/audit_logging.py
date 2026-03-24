@@ -5,6 +5,7 @@ This module provides a secure, tamper-evident audit logging system
 for tracking security-relevant events across the application.
 """
 
+import functools
 import hashlib
 import hmac
 import json
@@ -913,6 +914,7 @@ def audit_action(
             ...
     """
     def decorator(func):
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             audit_logger = AuditLogger.get_instance()
             
