@@ -192,7 +192,7 @@ class APIClient {
 
   async generateAPIKey(adminKey: string, tenantId?: string): Promise<APIKeyResponse> {
     const { data } = await this.adminClient.post(
-      '/v1/admin/api-keys',
+      '/v1/admin/keys',
       {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
@@ -309,8 +309,10 @@ class APIClient {
     limit?: number;
     since?: string;
   }): Promise<OpportunityArbitrage[]> {
-    const { data } = await this.graphClient.get('/graph/arbitrage', { params });
-    return data.items || [];
+    // TODO: No /graph/arbitrage endpoint exists in the graph service. Re-enable when backend adds this route.
+    // const { data } = await this.graphClient.get('/graph/arbitrage', { params });
+    // return data.items || [];
+    return [];
   }
 
   async getComplianceGaps(params: {
@@ -421,7 +423,7 @@ class APIClient {
     severity?: string;
     reason?: string;
   }): Promise<any> {
-    const { data } = await this.graphClient.post('/api/v1/fsma/recall/recall/drill', request);
+    const { data } = await this.graphClient.post('/api/v1/fsma/recall/drill', request);
     return data;
   }
 

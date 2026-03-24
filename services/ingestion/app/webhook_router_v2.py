@@ -333,7 +333,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 severity = "critical" if risk == "CRITICAL" else "warning"
                 alert = {
                     "severity": severity,
-                    "alert_type": "obligation_gap",
+                    "alert_type": "chain_break",
                     "message": f"Obligation not met: {obl_text[:100]}",
                     "obligation_id": str(obl_id),
                     "missing_kde": kde_key,
@@ -345,14 +345,14 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     db_session.execute(
                         text("""
                             INSERT INTO fsma.compliance_alerts
-                            (tenant_id, event_id, severity, alert_type, message, details)
-                            VALUES (:tid, :eid::uuid, :sev, :atype, :msg, :details::jsonb)
+                            (org_id, event_id, severity, alert_type, message, details)
+                            VALUES (CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
                         """),
                         {
                             "tid": tenant_id,
                             "eid": event_id,
                             "sev": severity,
-                            "atype": "obligation_gap",
+                            "atype": "chain_break",
                             "msg": f"Missing KDE '{kde_key}' required by obligation",
                             "details": json.dumps({
                                 "obligation_id": str(obl_id),

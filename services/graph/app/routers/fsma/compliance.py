@@ -562,7 +562,6 @@ async def export_recall_contacts(
 
 
 @router.get("/gaps")
-@router.get("/gaps")
 async def get_compliance_gaps(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
@@ -597,7 +596,6 @@ async def get_compliance_gaps(
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/gaps/orphans")
 @router.get("/gaps/orphans")
 async def get_orphaned_lots(
     days_stagnant: int = Query(
@@ -655,7 +653,6 @@ async def get_orphaned_lots(
 
 
 
-@router.get("/export/gaps")
 @router.get("/export/gaps")
 async def export_gaps_csv(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
