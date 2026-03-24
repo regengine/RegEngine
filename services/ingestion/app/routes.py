@@ -277,49 +277,7 @@ async def ingest_regulation(
         raise HTTPException(status_code=500, detail="Failed to queue ingestion job")
 
 
-@router.get("/v1/ingest/status/{job_id}")
-async def get_ingestion_status(job_id: str):
-    """Check the status of a background ingestion job (v2)."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    status = r.get(f"ingest:status:{job_id}")
-    if not status:
-        raise HTTPException(status_code=404, detail="Job not found")
-        
-    status_str = status.decode("utf-8")
-    response = {"job_id": job_id, "status": status_str}
-    
-    if status_str == "completed":
-        result = r.get(f"ingest:result:{job_id}")
-        if result:
-            response["result"] = json.loads(result.decode("utf-8"))
-            
-    return response
-
-
-@router.get("/v1/ingest/documents/{document_id}/analysis")
-async def get_document_analysis(document_id: str):
-    """Return an analysis summary for a completed ingestion job."""
-    settings = get_settings()
-    r = redis.from_url(settings.redis_url)
-    status = r.get(f"ingest:status:{document_id}")
-    if not status:
-        raise HTTPException(status_code=404, detail="Document not found")
-
-    status_str = status.decode("utf-8")
-    result_raw = r.get(f"ingest:result:{document_id}")
-    result = json.loads(result_raw.decode("utf-8")) if result_raw else {}
-
-    return {
-        "document_id": document_id,
-        "status": status_str,
-        "risk_score": 0,
-        "obligations_count": result.get("sections", 0),
-        "missing_dates_count": 0,
-        "critical_risks": [],
-    }
-
-
+# NOTE: Status/query endpoints moved to routes_status.py
 # NOTE: Discovery queue endpoints moved to routes_discovery.py
 
 
@@ -767,30 +725,26 @@ async def ingest_url(
             db_manager.close()
 
 
-# === FEDERAL SOURCE ENDPOINTS ===
+# NOTE: Federal source endpoints moved to routes_sources.py
 
-from .models import FederalRegisterIngestRequest, ECFRIngestRequest, FDAIngestRequest
-from regengine_ingestion.sources import FederalRegisterAdapter, ECFRAdapter, FDAAdapter
 
 async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_id, **kwargs):
     """Background task to run a source adapter and process all findings."""
     db_manager = get_db_manager()
     audit_logger = None
-    
-    # Ensure tenant_id is a valid UUID
+
     tenant_id = tenant_id or "00000000-0000-0000-0000-000000000000"
-    
+
     if db_manager:
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
-        
-        # Initialize job record
+
         job = IngestionJob(
             job_id=job_id,
             vertical=vertical,
             source_type=source_system,
             status=JobStatus.RUNNING,
             started_at=datetime.now(timezone.utc),
-            config=kwargs
+            config=kwargs,
         )
         try:
             db_manager.insert_job(job)
@@ -800,14 +754,14 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
     success_count = 0
     failed_count = 0
     skipped_count = 0
-    
+    count = 0
+
     try:
         for content, source_metadata, doc_metadata in adapter.fetch_documents(vertical=vertical, **kwargs):
-            job_id_param = job_id
             count += 1
             if audit_logger:
                 audit_logger.log_fetch(source_metadata.source_url, "success")
-                
+
             try:
                 event = _process_and_emit(
                     raw_bytes=content,
@@ -819,7 +773,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                     job_id=job_id,
                     audit_logger=audit_logger,
                     db_manager=db_manager,
-                    vertical=vertical
+                    vertical=vertical,
                 )
                 if event.is_duplicate:
                     skipped_count += 1
@@ -830,11 +784,10 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                 if audit_logger:
                     audit_logger.log("ingest", "document", status="failure", error=str(e), details={"url": source_metadata.source_url})
                 logger.error("federal_ingest_item_failed", url=source_metadata.source_url, error=str(e))
-        
+
         logger.info("federal_ingest_completed", source=adapter.get_source_name(), count=count)
-        
+
         if db_manager:
-            # Update job status
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
             job.documents_processed = count
@@ -842,7 +795,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
             job.documents_failed = failed_count
             job.documents_skipped = skipped_count
             db_manager.update_job(job)
-            
+
     except Exception as e:
         logger.error("federal_ingest_job_failed", source=adapter.get_source_name(), error=str(e))
         if db_manager:
@@ -855,121 +808,12 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                 error_message=str(e),
                 documents_processed=count,
                 documents_succeeded=success_count,
-                documents_failed=failed_count
+                documents_failed=failed_count,
             )
             db_manager.update_job(job)
     finally:
         if db_manager:
             db_manager.close()
-
-
-@router.post("/v1/ingest/federal-register", status_code=202)
-async def ingest_federal_register(
-    payload: FederalRegisterIngestRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Ingest documents from Federal Register API."""
-    # Gating
-    allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed:
-        raise HTTPException(status_code=403, detail="Access to federal regulations requires entitlement")
-
-    adapter = FederalRegisterAdapter(user_agent="RegEngine/1.0")
-    job_id = str(uuid.uuid4())
-    background_tasks.add_task(
-        _run_adapter_ingest,
-        adapter=adapter,
-        vertical=payload.vertical,
-        tenant_id=api_key.tenant_id,
-        source_system="federal_register_api",
-        job_id=job_id,
-        max_documents=payload.max_documents,
-        date_from=payload.date_from,
-        agencies=payload.agencies
-    )
-    return {"status": "accepted", "job_id": job_id, "message": "Federal Register ingestion started"}
-
-
-@router.post("/v1/ingest/ecfr", status_code=202)
-async def ingest_ecfr(
-    payload: ECFRIngestRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Ingest documents from eCFR API."""
-    allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed:
-        raise HTTPException(status_code=403, detail="Access to federal regulations requires entitlement")
-
-    adapter = ECFRAdapter(user_agent="RegEngine/1.0")
-    job_id = str(uuid.uuid4())
-    background_tasks.add_task(
-        _run_adapter_ingest,
-        adapter=adapter,
-        vertical=payload.vertical,
-        tenant_id=api_key.tenant_id,
-        source_system="ecfr_api",
-        job_id=job_id,
-        cfr_title=payload.cfr_title,
-        cfr_part=payload.cfr_part
-    )
-    return {"status": "accepted", "job_id": job_id, "message": "eCFR ingestion started"}
-
-
-@router.post("/v1/ingest/fda", status_code=202)
-async def ingest_fda(
-    payload: FDAIngestRequest,
-    background_tasks: BackgroundTasks,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """Ingest documents from openFDA API."""
-    allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed:
-        raise HTTPException(status_code=403, detail="Access to federal regulations requires entitlement")
-
-    adapter = FDAAdapter(api_key=None, user_agent="RegEngine/1.0")
-    job_id = str(uuid.uuid4())
-    background_tasks.add_task(
-        _run_adapter_ingest,
-        adapter=adapter,
-        vertical=payload.vertical,
-        tenant_id=api_key.tenant_id,
-        source_system="openfda_api",
-        job_id=job_id,
-        max_documents=payload.max_documents
-    )
-    return {"status": "accepted", "job_id": job_id, "message": "FDA ingestion started"}
-
-
-@router.get("/v1/ingest/sources")
-async def list_sources(api_key: APIKey = Depends(require_api_key)):
-    """List available source adapters and their capabilities."""
-    return {
-        "sources": [
-            {
-                "id": "federal_register",
-                "name": "Federal Register",
-                "type": "api",
-                "jurisdiction": "US",
-                "capabilities": ["date_filter", "agency_filter", "bulk_fetch"]
-            },
-            {
-                "id": "ecfr",
-                "name": "eCFR (Code of Federal Regulations)",
-                "type": "api",
-                "jurisdiction": "US",
-                "capabilities": ["title_part_filter"]
-            },
-            {
-                "id": "fda",
-                "name": "openFDA Warning Letters",
-                "type": "api",
-                "jurisdiction": "US",
-                "capabilities": ["bulk_fetch"]
-            }
-        ]
-    }
 
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB hard limit
@@ -1109,78 +953,4 @@ def _detect_extension(content_type: Optional[str]) -> str:
     return "bin"
 
 
-@router.get("/v1/audit/jobs/{job_id}")
-async def get_job_status(job_id: str, api_key: APIKey = Depends(require_api_key)):
-    """Get high-level status and metrics for an ingestion job."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Audit database not available")
-    
-    try:
-        job = db_manager.get_job(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return job
-    finally:
-        db_manager.close()
-
-
-@router.get("/v1/audit/logs/{job_id}")
-async def get_job_logs(job_id: str, limit: int = 100, api_key: APIKey = Depends(require_api_key)):
-    """Get detailed audit entries for a specific job."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Audit database not available")
-    
-    try:
-        logs = db_manager.get_audit_log(job_id, limit=limit)
-        return {"job_id": job_id, "entries": logs}
-    finally:
-        db_manager.close()
-
-
-@router.get("/v1/ingest/documents")
-async def list_documents(
-    vertical: Optional[str] = None,
-    source_type: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-    api_key: APIKey = Depends(require_api_key)
-):
-    """List and search ingested documents."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        docs = db_manager.search_documents(vertical, source_type, limit, offset)
-        return {"documents": docs, "count": len(docs)}
-    finally:
-        db_manager.close()
-
-
-@router.get("/v1/verify/{document_id}")
-async def verify_document(document_id: str, api_key: APIKey = Depends(require_api_key)):
-    """Verify document integrity by re-computing hashes and comparing with stored metadata."""
-    db_manager = get_db_manager()
-    if not db_manager:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    try:
-        doc = db_manager.get_document(document_id)
-        if not doc:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        return {
-            "document_id": document_id,
-            "status": "verified",
-            "hashes": {
-                "content_sha256": doc["content_sha256"],
-                "content_sha512": doc["content_sha512"],
-                "text_sha256": doc["text_sha256"],
-                "text_sha512": doc["text_sha512"]
-            },
-            "verified_at": datetime.now(timezone.utc).isoformat()
-        }
-    finally:
-        db_manager.close()
+# NOTE: Audit/status/documents/verify endpoints moved to routes_status.py
