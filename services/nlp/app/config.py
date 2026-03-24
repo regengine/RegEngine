@@ -61,6 +61,25 @@ def get_settings() -> Settings:
 
 try:
     settings = get_settings()
-except Exception:
-    # Settings may fail in test environments with incomplete env vars
-    settings = None
+except Exception as exc:
+    import logging as _logging
+
+    _logging.getLogger(__name__).error(
+        "Failed to load NLP settings: %s. Falling back to defaults.", exc
+    )
+    # Provide a Settings instance with defaults so the module remains importable
+    # in test environments with incomplete env vars.
+    settings = Settings.model_construct(
+        object_storage_endpoint_url=None,
+        raw_bucket="reg-engine-raw-data-dev",
+        processed_bucket="reg-engine-processed-data-dev",
+        kafka_bootstrap="redpanda:9092",
+        topic_in="ingest.normalized",
+        topic_out="nlp.extracted",
+        log_level="INFO",
+        extraction_confidence_high=0.95,
+        extraction_confidence_medium=0.85,
+        graph_service_url="http://graph-service:8200",
+        graph_request_timeout_s=15.0,
+        internal_service_secret=None,
+    )
