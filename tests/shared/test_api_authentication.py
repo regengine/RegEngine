@@ -471,8 +471,12 @@ class TestAuthenticationService:
 class TestConvenienceFunctions:
     """Test convenience functions."""
     
-    def test_get_auth_service(self):
+    def test_get_auth_service(self, monkeypatch):
         """Should return service instance."""
+        monkeypatch.setenv("JWT_SECRET", "test-secret-for-unit-tests")
+        # Reset singleton so it picks up the env var
+        from shared.api_authentication import AuthenticationService
+        AuthenticationService._instance = None
         service = get_auth_service()
         assert service is not None
     

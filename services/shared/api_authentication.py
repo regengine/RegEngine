@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import secrets
 import time
 from abc import ABC, abstractmethod
@@ -678,16 +679,27 @@ class AuthenticationService:
     
     def __init__(
         self,
-        jwt_secret: str = "change-me-in-production",
+        jwt_secret: Optional[str] = None,
     ):
-        """Initialize service."""
+        """Initialize service.
+
+        Args:
+            jwt_secret: JWT signing secret. If not provided, reads from
+                JWT_SECRET env var. Raises ValueError if neither is set.
+        """
+        secret = jwt_secret or os.environ.get("JWT_SECRET")
+        if not secret:
+            raise ValueError(
+                "JWT secret is required. Set the JWT_SECRET environment variable "
+                "or pass jwt_secret explicitly via AuthenticationService.configure()."
+            )
         self.api_key_auth = APIKeyAuthenticator()
-        self.jwt_auth = JWTAuthenticator(jwt_secret)
+        self.jwt_auth = JWTAuthenticator(secret)
         self._basic_auth: Optional[BasicAuthenticator] = None
-    
+
     @classmethod
     def get_instance(cls) -> "AuthenticationService":
-        """Get singleton instance."""
+        """Get singleton instance. Requires JWT_SECRET env var or prior configure() call."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance

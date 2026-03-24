@@ -113,7 +113,7 @@ class SessionConfig:
             max_concurrent=10,
             bind_to_ip=False,
             cookie=cookie,
-            secret_key="dev-session-secret-not-for-production",
+            secret_key=os.environ.get("SESSION_SECRET", "dev-only-" + os.urandom(16).hex()),
         )
 
 
