@@ -5,11 +5,12 @@ import uuid
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from shared.auth import require_api_key
+from shared.resilient_http import resilient_client
 from .fsma_spreadsheet import generate_fda_csv
 
 router = APIRouter(tags=["fsma-compliance"])
@@ -258,11 +259,12 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
 # FDA Audit Spreadsheet Export
 # ---------------------------------------------------------------------------
 
-_GRAPH_SERVICE_URL = os.getenv("GRAPH_SERVICE_URL", "http://localhost:8003")
+_GRAPH_SERVICE_URL = os.getenv("GRAPH_SERVICE_URL", "http://graph-service:8200")
 
 
 @router.get("/v1/fsma/audit/spreadsheet", dependencies=[Depends(require_api_key)])
 async def fsma_audit_spreadsheet(
+    request: Request,
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     tlc: str | None = Query(None, description="Filter by Traceability Lot Code"),
@@ -277,10 +279,20 @@ async def fsma_audit_spreadsheet(
     if tlc:
         params["tlc"] = tlc
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # Forward auth and correlation headers to downstream graph service
+    headers: dict[str, str] = {}
+    api_key = request.headers.get("X-RegEngine-API-Key")
+    if api_key:
+        headers["X-RegEngine-API-Key"] = api_key
+    request_id = request.headers.get("X-Request-ID")
+    if request_id:
+        headers["X-Request-ID"] = request_id
+
+    async with resilient_client(timeout=30.0) as client:
         resp = await client.get(
             f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
             params=params,
+            headers=headers,
         )
         if resp.status_code != 200:
             raise HTTPException(
