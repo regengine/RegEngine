@@ -78,7 +78,7 @@ services:
       redis:
         condition: service_healthy
       redpanda:
-        condition: service_started
+        condition: service_healthy
       ingestion-service:
         condition: service_healthy
     healthcheck:
@@ -142,7 +142,7 @@ services:
       redis:
         condition: service_healthy
       redpanda:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 10s
@@ -231,9 +231,9 @@ services:
       redis:
         condition: service_healthy
       minio:
-        condition: service_started
+        condition: service_healthy
       redpanda:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8100/health" ]
       interval: 10s

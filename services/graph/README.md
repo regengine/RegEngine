@@ -272,7 +272,7 @@ neo4j:
 ## Health Check
 
 ```bash
-curl http://localhost:8003/health
+curl http://localhost:8200/health
 ```
 
 **Response:**
