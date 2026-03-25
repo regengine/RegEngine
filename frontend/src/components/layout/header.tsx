@@ -33,7 +33,6 @@ import { useAuth } from '@/lib/auth-context';
 import {
   useAdminHealth,
   useIngestionHealth,
-  useOpportunityHealth,
   useComplianceHealth,
   useLabelsHealth,
 } from '@/hooks/use-api';
@@ -59,14 +58,12 @@ export function Header() {
 
   const adminHealth = useAdminHealth();
   const ingestionHealth = useIngestionHealth();
-  const opportunityHealth = useOpportunityHealth();
   const complianceHealth = useComplianceHealth();
   const labelsHealth = useLabelsHealth(); // Graph API
 
   const services = [
     { name: 'Admin', status: adminHealth.data?.status, isLoading: adminHealth.isLoading },
     { name: 'Ingestion', status: ingestionHealth.data?.status, isLoading: ingestionHealth.isLoading },
-    { name: 'Opportunity', status: opportunityHealth.data?.status, isLoading: opportunityHealth.isLoading },
     { name: 'Compliance', status: complianceHealth.data?.status, isLoading: complianceHealth.isLoading },
     { name: 'Graph', status: labelsHealth.data?.status, isLoading: labelsHealth.isLoading },
   ];
