@@ -247,9 +247,11 @@ async def _graph_get(
     if request_id:
         headers["X-Request-ID"] = request_id
 
+    # Always forward tenant context for downstream isolation
+    headers["X-RegEngine-Tenant-ID"] = tenant_id
+
     internal_secret = settings.internal_service_secret
     if internal_secret:
-        headers["X-RegEngine-Tenant-ID"] = tenant_id
         headers["X-RegEngine-Internal-Secret"] = internal_secret
 
     url = f"{settings.graph_service_url.rstrip('/')}{endpoint}"
@@ -263,11 +265,15 @@ async def _graph_get(
             detail=f"Graph service request failed: {exc}",
         ) from exc
 
-    if response.status_code >= 400:
-        detail = response.text[:500]
+    if response.status_code >= 500:
         raise HTTPException(
             status_code=502,
-            detail=f"Graph service error ({response.status_code}): {detail}",
+            detail=f"Graph service error ({response.status_code}): {response.text[:500]}",
+        )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Graph service rejected request: {response.text[:500]}",
         )
 
     try:
