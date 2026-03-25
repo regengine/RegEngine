@@ -63,7 +63,7 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 │   ├── graph/                   Neo4j traceability graph, recall, lineage, audit trail
 │   ├── nlp/                     Document extraction and NLP processing
 │   ├── scheduler/               Scheduled jobs, FDA feed polling, recalls
-│   └── shared/                  Auth, middleware, database, resilient HTTP, audit logging
+│   └── shared/                  Auth, middleware, database, resilient HTTP, circuit breaker, audit logging
 ├── kernel/reporting/            Reporting service
 ├── scripts/
 │   ├── security/                Tenant isolation, audit chain, SAST, ZAP, gitleaks
@@ -90,7 +90,8 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 | Layer | Technologies |
 |-------|-------------|
 | **Frontend** | Next.js 15, React 18, TypeScript, Tailwind CSS, Radix UI, Framer Motion, TanStack Query, jose (JWT), Supabase Auth |
-| **Backend** | FastAPI (Python 3.11), PostgreSQL 16, Neo4j 5 (graph), Kafka (Redpanda), Redis 7, Stripe, defusedxml, SQLAlchemy |
+| **Backend** | FastAPI (Python 3.11), PostgreSQL 16 (RLS), Neo4j 5 (graph), Kafka (Redpanda), Redis 7, Stripe, defusedxml, SQLAlchemy |
+| **Resilience** | Retry with exponential backoff + jitter, distributed circuit breaker (Redis-backed), per-service failure isolation, structured error proxying |
 | **Infrastructure** | Vercel Pro (frontend), Railway Pro (backend services), Supabase (auth + database) |
 | **Observability** | Prometheus, Grafana, OpenTelemetry, Jaeger, structlog |
 | **CI/CD** | GitHub Actions (8 workflows), Dependabot, CodeQL, Semgrep, gitleaks, Trivy |
@@ -181,6 +182,33 @@ See [SECURITY.md](SECURITY.md) for our vulnerability disclosure policy. **Do not
 
 ---
 
+## Inter-Service Resilience
+
+All service-to-service HTTP calls use `shared.resilient_http.resilient_client()` with layered protection:
+
+| Layer | Mechanism | Configuration |
+|-------|-----------|---------------|
+| **Retry** | Exponential backoff (0.5s–8s) with 20% jitter on 502/503/504 | 3 retries default |
+| **Circuit Breaker** | Per-service breaker trips after 5 consecutive failures, 30s recovery | `CIRCUIT_BREAKER_BACKEND=redis` for distributed state |
+| **Error Proxying** | 4xx passthrough (original status + body), 5xx → clean 502 | Structured error detail in response |
+| **Header Propagation** | `X-RegEngine-API-Key`, `X-RegEngine-Tenant-ID`, `X-Request-ID` forwarded on every call | Unconditional tenant context |
+| **Timeout** | Per-request configurable timeout | 30s default, 15s for graph queries |
+
+The circuit breaker supports two storage backends:
+
+- **Memory** (default) — single-process, zero dependencies
+- **Redis** — distributed state across all replicas, survives restarts, 1-hour TTL auto-expiry
+
+```bash
+# Enable distributed circuit breaker (Redis already in the Docker stack)
+CIRCUIT_BREAKER_BACKEND=redis
+CIRCUIT_BREAKER_REDIS_URL=redis://redis:6379/3  # optional, defaults to REDIS_URL
+```
+
+When a circuit opens, callers receive `503 Service Unavailable` with a `retry_after` hint instead of hanging or cascading failures.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -249,6 +277,13 @@ See [.env.example](.env.example) for the full list with descriptions.
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/admin/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/ingestion/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/compliance/tests/ -v
+
+# Shared resilience layer (circuit breaker, retry, HTTP client)
+PYTHONPATH=services:. pytest tests/shared/test_circuit_breaker.py tests/shared/test_circuit_breaker_store.py tests/shared/test_resilient_http.py -v
+
+# E2E tests (requires Docker stack running)
+docker compose up -d
+pytest tests/e2e/test_inter_service_resilience.py -v
 
 # Frontend
 cd frontend
