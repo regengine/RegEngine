@@ -64,6 +64,7 @@ async def get_regulation_sections(
             try:
                 result = await session.run("""
                     MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s:Section)
+                    WHERE s.tenant_id = $tenant_id
                     RETURN s.id as id, s.title as title, s.text as text, s.jurisdiction as jurisdiction, s.effective_date as effective_date
                     ORDER BY s.id
                     SKIP $skip LIMIT $limit
@@ -89,6 +90,7 @@ async def get_regulation_citations(
             try:
                 result = await session.run("""
                     MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s)-[:CITES]->(c:Citation)
+                    WHERE s.tenant_id = $tenant_id
                     RETURN DISTINCT c.text as citation, count(s) as mention_count
                     ORDER BY mention_count DESC
                     SKIP $skip LIMIT $limit
