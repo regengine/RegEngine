@@ -35,6 +35,7 @@ from app.webhook_models import (
     REQUIRED_KDES_BY_CTE,
     WebhookPayload,
 )
+from shared.canonical_event import normalize_webhook_event
 
 logger = logging.getLogger("webhook-ingestion")
 
@@ -559,6 +560,15 @@ async def ingest_events(
                         chain_hash=store_result.chain_hash,
                     ))
                     accepted += 1
+
+                    # Canonical normalization — write to traceability_events
+                    try:
+                        from shared.canonical_persistence import CanonicalEventStore
+                        canonical = normalize_webhook_event(event, tenant_id)
+                        canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                        canonical_store.persist_event(canonical)
+                    except Exception as canon_err:
+                        logger.warning("canonical_write_skipped: %s", str(canon_err))
 
                     # Post-ingest graph sync (non-blocking)
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
