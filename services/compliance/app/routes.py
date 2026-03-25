@@ -288,7 +288,7 @@ async def fsma_audit_spreadsheet(
     if request_id:
         headers["X-Request-ID"] = request_id
 
-    async with resilient_client(timeout=30.0) as client:
+    async with resilient_client(timeout=30.0, circuit_name="graph-service") as client:
         resp = await client.get(
             f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
             params=params,

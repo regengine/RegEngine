@@ -255,7 +255,7 @@ async def _graph_get(
     url = f"{settings.graph_service_url.rstrip('/')}{endpoint}"
 
     try:
-        async with resilient_client(timeout=settings.graph_request_timeout_s) as client:
+        async with resilient_client(timeout=settings.graph_request_timeout_s, circuit_name="graph-service") as client:
             response = await client.get(url, headers=headers, params=params)
     except httpx.RequestError as exc:
         raise HTTPException(
