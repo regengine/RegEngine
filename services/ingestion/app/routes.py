@@ -234,7 +234,7 @@ async def ingest_regulation(
     """Ingest a regulation and codify it asynchronously with optional webhook notification (v2)."""
     # Entitlement check
     allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed and "GLOBAL" not in allowedRegistration:
+    if "US" not in allowed and "GLOBAL" not in allowed:
         # Check if the user has specific permission for this action
         pass
 
@@ -245,7 +245,7 @@ async def ingest_regulation(
     if not content:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
     
-    if len(content) > 512 * 1024 * 1024:  # 512MB
+    if len(content) > 100 * 1024 * 1024:  # 100MB
         raise HTTPException(status_code=413, detail="File too large (max 100MB)")
 
     job_id = str(uuid.uuid4())

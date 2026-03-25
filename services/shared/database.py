@@ -6,6 +6,7 @@ import asyncio
 import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.exc import OperationalError
 from contextlib import contextmanager, asynccontextmanager
 from prometheus_client import Gauge, CollectorRegistry, REGISTRY
@@ -106,6 +107,22 @@ db_pool_overflow.set_function(lambda: engine.pool.overflow())
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 circuit_breaker = CircuitBreaker()
 
+# Async engine — convert driver portion of URL for asyncpg
+_ASYNC_DATABASE_URL = DATABASE_URL
+if _ASYNC_DATABASE_URL.startswith("postgresql://"):
+    _ASYNC_DATABASE_URL = _ASYNC_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif "+psycopg" in _ASYNC_DATABASE_URL:
+    _ASYNC_DATABASE_URL = _ASYNC_DATABASE_URL.replace("+psycopg://", "+asyncpg://", 1)
+    _ASYNC_DATABASE_URL = _ASYNC_DATABASE_URL.replace("+psycopg2://", "+asyncpg://", 1)
+async_engine = create_async_engine(
+    _ASYNC_DATABASE_URL,
+    pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+    pool_pre_ping=True,
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+)
+AsyncSessionLocal = async_sessionmaker(async_engine, class_=AsyncSession, expire_on_commit=False)
+
 @contextmanager
 def get_db():
     """Sync session generator with bulkhead, circuit breaker, and retry logic.
@@ -129,15 +146,11 @@ def get_db():
 
 @asynccontextmanager
 async def get_db_async():
-    """Async session generator with bulkhead, circuit breaker, and retry logic."""
+    """Async session generator with bulkhead and health-check."""
     async with async_bulkhead:
-        db = SessionLocal()
-        try:
-            retry_with_jitter(
-                lambda: circuit_breaker.call(
-                    lambda: db.execute(text("SELECT 1"))
-                )
-            )
-            yield db
-        finally:
-            db.close()
+        async with AsyncSessionLocal() as db:
+            try:
+                await db.execute(text("SELECT 1"))
+                yield db
+            finally:
+                await db.close()

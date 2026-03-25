@@ -335,7 +335,7 @@ export function Header() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link href="/api-keys" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                <Link href="/developer/portal/keys" className="cursor-pointer w-full flex items-center gap-3 py-2">
                   <Key className="h-4 w-4 text-orange-500" />
                   <div>
                     <div className="font-medium">API Keys</div>

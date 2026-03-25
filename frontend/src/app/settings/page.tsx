@@ -63,7 +63,7 @@ export default function SettingsPage() {
                                     Create and manage API keys for integrations
                                 </p>
                             </div>
-                            <Link href="/api-keys">
+                            <Link href="/developer/portal/keys">
                                 <Button variant="outline" className="w-full">
                                     Manage API Keys
                                 </Button>

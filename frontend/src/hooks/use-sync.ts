@@ -139,7 +139,7 @@ export function useSync() {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [apiKey]); // Re-run if API key changes (user logs in)
+    }, [apiKey, tenantId]); // Re-run if API key or tenant changes
 
     return { isOnline, isSyncing, manualSync: sync };
 }

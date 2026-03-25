@@ -473,13 +473,13 @@ class APIClient {
   }
 
   async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/approve`, {}, {
+    await this.adminClient.post(`/v1/admin/review/${itemId}/approve`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
 
   async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/reject`, {}, {
+    await this.adminClient.post(`/v1/admin/review/${itemId}/reject`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
