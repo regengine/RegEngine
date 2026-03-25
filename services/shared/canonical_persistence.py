@@ -246,6 +246,9 @@ class CanonicalEventStore:
         if self.dual_write:
             legacy_id = self._dual_write_legacy(event)
 
+        # --- Publish to graph sync queue ---
+        self._publish_graph_sync(event)
+
         logger.info(
             "canonical_event_persisted",
             extra={
@@ -399,6 +402,50 @@ class CanonicalEventStore:
         )
 
         return results
+
+    # ------------------------------------------------------------------
+    # Graph Sync
+    # ------------------------------------------------------------------
+
+    def _publish_graph_sync(self, event: TraceabilityEvent) -> None:
+        """Publish canonical event to Redis for Neo4j graph sync."""
+        import os
+        redis_url = os.getenv("REDIS_URL")
+        if not redis_url:
+            return
+
+        try:
+            import redis as redis_lib
+            client = redis_lib.from_url(redis_url)
+            message = {
+                "event": "canonical.created",
+                "data": {
+                    "canonical_event": {
+                        "event_id": str(event.event_id),
+                        "tenant_id": str(event.tenant_id),
+                        "event_type": event.event_type.value,
+                        "traceability_lot_code": event.traceability_lot_code,
+                        "product_reference": event.product_reference,
+                        "quantity": event.quantity,
+                        "unit_of_measure": event.unit_of_measure,
+                        "event_timestamp": event.event_timestamp.isoformat(),
+                        "from_facility_reference": event.from_facility_reference,
+                        "to_facility_reference": event.to_facility_reference,
+                        "from_entity_reference": event.from_entity_reference,
+                        "to_entity_reference": event.to_entity_reference,
+                        "source_system": event.source_system.value,
+                        "confidence_score": event.confidence_score,
+                        "schema_version": event.schema_version,
+                        "sha256_hash": event.sha256_hash,
+                    },
+                },
+            }
+            import json as _json
+            client.rpush("neo4j-sync", _json.dumps(message, default=str))
+        except Exception as exc:
+            logger.warning("canonical_graph_sync_failed", extra={
+                "event_id": str(event.event_id), "error": str(exc),
+            })
 
     # ------------------------------------------------------------------
     # Read Path

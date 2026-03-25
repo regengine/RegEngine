@@ -1037,3 +1037,360 @@ async def verify_export(
     finally:
         if db_session:
             db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# V2 Export — Canonical Model (fsma.traceability_events + rule evaluations)
+# ---------------------------------------------------------------------------
+
+# Extended column spec: original FDA columns + compliance columns
+FDA_COLUMNS_V2 = FDA_COLUMNS + [
+    "Compliance Status",
+    "Rule Failures",
+]
+
+
+def _event_to_fda_row_v2(event: dict) -> dict:
+    """Convert a canonical traceability_event row (with rule results) to an FDA spreadsheet row.
+
+    Accepts the same base fields as ``_event_to_fda_row`` plus:
+    - ``rule_results``: list[dict] with keys ``rule_name``, ``passed``, ``why_failed``
+    """
+    # Reuse the legacy mapper for core FDA columns
+    base_row = _event_to_fda_row(event)
+
+    # Compute compliance columns from attached rule results
+    rule_results: list[dict] = event.get("rule_results", [])
+    if not rule_results:
+        compliance_status = "NO_RULES_EVALUATED"
+        rule_failures_text = ""
+    else:
+        failed = [r for r in rule_results if not r.get("passed")]
+        if not failed:
+            compliance_status = "PASS"
+            rule_failures_text = ""
+        else:
+            compliance_status = "FAIL"
+            failure_descriptions = []
+            for f in failed:
+                name = f.get("rule_name", "unknown_rule")
+                reason = f.get("why_failed", "no reason provided")
+                failure_descriptions.append(f"{name}: {reason}")
+            rule_failures_text = "; ".join(failure_descriptions)
+
+    base_row["Compliance Status"] = compliance_status
+    base_row["Rule Failures"] = rule_failures_text
+    return base_row
+
+
+def _generate_csv_v2(events: list[dict]) -> str:
+    """Generate FDA-compliant CSV from canonical model events (with compliance columns)."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS_V2)
+    writer.writeheader()
+
+    for event in events:
+        writer.writerow(_event_to_fda_row_v2(event))
+
+    return output.getvalue()
+
+
+@router.get(
+    "/export/v2",
+    summary="Generate FDA export from canonical model (v2)",
+    description=(
+        "Query traceability events from the canonical fsma.traceability_events table, "
+        "join rule evaluation results from fsma.rule_evaluations + fsma.rule_definitions, "
+        "and generate an FDA-compliant CSV/package with Compliance Status and Rule Failures "
+        "columns appended. Backward-compatible with v1 column layout — new columns are "
+        "appended at the end."
+    ),
+)
+async def export_fda_spreadsheet_v2(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    tlc: Optional[str] = Query(None, description="Traceability Lot Code filter (exact or partial with %%)"),
+    start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
+    event_type: Optional[str] = Query(None, description="Filter by CTE type"),
+    format: Literal["package", "csv"] = Query(
+        default="csv",
+        description="Export format: package (zip bundle) or csv",
+    ),
+    _auth=Depends(require_permission("fda.export")),
+):
+    """Generate FDA-compliant traceability export from the canonical model with rule evaluation results."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+        from sqlalchemy import text
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        # ----- Build dynamic WHERE clause -----
+        conditions = ["e.tenant_id = :tid"]
+        params: dict[str, Any] = {"tid": tenant_id}
+
+        if tlc:
+            if "%" in tlc:
+                conditions.append("e.traceability_lot_code LIKE :tlc")
+            else:
+                conditions.append("e.traceability_lot_code = :tlc")
+            params["tlc"] = tlc
+
+        if event_type:
+            conditions.append("e.event_type = :etype")
+            params["etype"] = event_type
+
+        if start_date:
+            conditions.append("e.event_timestamp >= :start")
+            params["start"] = start_date
+
+        if end_date:
+            conditions.append("e.event_timestamp <= :end")
+            params["end"] = end_date + "T23:59:59"
+
+        where_clause = " AND ".join(conditions)
+
+        # ----- Query from canonical model with rule evaluations -----
+        rows = db_session.execute(
+            text(f"""
+                SELECT
+                    e.event_id,
+                    e.event_type,
+                    e.traceability_lot_code,
+                    e.product_description,
+                    e.quantity,
+                    e.unit_of_measure,
+                    e.event_timestamp,
+                    e.location_gln,
+                    e.location_name,
+                    e.source,
+                    e.sha256_hash,
+                    e.chain_hash,
+                    e.kdes,
+                    e.provenance,
+                    -- aggregate rule evaluation results per event
+                    COALESCE(
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'rule_name', rd.rule_name,
+                                'passed', re.passed,
+                                'why_failed', re.why_failed
+                            )
+                        ) FILTER (WHERE re.rule_id IS NOT NULL),
+                        '[]'::jsonb
+                    ) AS rule_results
+                FROM fsma.traceability_events e
+                LEFT JOIN fsma.rule_evaluations re ON re.event_id = e.event_id
+                LEFT JOIN fsma.rule_definitions rd ON rd.rule_id = re.rule_id
+                WHERE {where_clause}
+                GROUP BY
+                    e.event_id, e.event_type, e.traceability_lot_code,
+                    e.product_description, e.quantity, e.unit_of_measure,
+                    e.event_timestamp, e.location_gln, e.location_name,
+                    e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance
+                ORDER BY e.event_timestamp ASC
+                LIMIT 10000
+            """),
+            params,
+        ).fetchall()
+
+        if not rows:
+            detail_parts = [f"tenant_id='{tenant_id}'"]
+            if tlc:
+                detail_parts.append(f"tlc='{tlc}'")
+            if event_type:
+                detail_parts.append(f"event_type='{event_type}'")
+            if start_date:
+                detail_parts.append(f"from={start_date}")
+            if end_date:
+                detail_parts.append(f"to={end_date}")
+            raise HTTPException(
+                status_code=404,
+                detail=f"No traceability records found matching filters: {', '.join(detail_parts)}",
+            )
+
+        # ----- Convert rows to event dicts -----
+        events: list[dict] = []
+        for row in rows:
+            r = tuple(row)
+            kdes = r[12] if r[12] else {}
+            provenance = r[13] if r[13] else {}
+            rule_results_raw = r[14] if r[14] else []
+            ts = r[6]
+            if hasattr(ts, "isoformat"):
+                ts = ts.isoformat()
+
+            # Normalize rule_results: parse from JSON string if needed
+            if isinstance(rule_results_raw, str):
+                try:
+                    rule_results_raw = json.loads(rule_results_raw)
+                except (json.JSONDecodeError, TypeError):
+                    rule_results_raw = []
+
+            events.append({
+                "id": str(r[0]),
+                "event_type": r[1],
+                "traceability_lot_code": r[2],
+                "product_description": r[3],
+                "quantity": r[4],
+                "unit_of_measure": r[5],
+                "event_timestamp": str(ts) if ts else "",
+                "location_gln": r[7],
+                "location_name": r[8],
+                "source": r[9],
+                "sha256_hash": r[10],
+                "chain_hash": r[11] or "",
+                "kdes": kdes,
+                "provenance": provenance,
+                "rule_results": rule_results_raw,
+            })
+
+        # ----- Generate CSV with compliance columns -----
+        csv_content = _generate_csv_v2(events)
+        export_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        chain_verification = persistence.verify_chain(tenant_id=tenant_id)
+        completeness_summary = _build_completeness_summary(events)
+
+        # ----- Compute compliance summary stats -----
+        total_events = len(events)
+        events_passing = sum(
+            1 for e in events
+            if e.get("rule_results") and all(r.get("passed") for r in e["rule_results"])
+        )
+        events_failing = sum(
+            1 for e in events
+            if e.get("rule_results") and any(not r.get("passed") for r in e["rule_results"])
+        )
+        events_no_rules = total_events - events_passing - events_failing
+
+        # ----- Log the export to audit table -----
+        try:
+            db_session.execute(
+                text("""
+                    INSERT INTO fsma.fda_export_log
+                    (tenant_id, export_type, record_count, export_hash, generated_by,
+                     query_tlc, query_start_date, query_end_date)
+                    VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed)
+                """),
+                {
+                    "tid": tenant_id,
+                    "cnt": len(events),
+                    "hash": export_hash,
+                    "etype": "v2_package" if format == "package" else "v2_spreadsheet",
+                    "generated_by": "api_v2_package" if format == "package" else "api_v2",
+                    "tlc": tlc,
+                    "sd": start_date,
+                    "ed": end_date,
+                },
+            )
+            db_session.commit()
+        except Exception:
+            logger.warning("v2_export_audit_log_failed", exc_info=True)
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        scope = _safe_filename_token(tlc or "all")
+
+        logger.info(
+            "fda_export_v2_generated",
+            extra={
+                "tlc": tlc,
+                "record_count": len(events),
+                "export_hash": export_hash[:16],
+                "tenant_id": tenant_id,
+                "format": format,
+                "compliance_pass": events_passing,
+                "compliance_fail": events_failing,
+                "compliance_no_rules": events_no_rules,
+            },
+        )
+
+        if format == "package":
+            # Build chain verification payload with provenance metadata
+            chain_payload = _build_chain_verification_payload(
+                tenant_id=tenant_id,
+                tlc=tlc,
+                events=events,
+                csv_hash=export_hash,
+                chain_verification=chain_verification,
+                completeness_summary=completeness_summary,
+            )
+            # Enrich chain payload with v2 provenance + compliance metadata
+            chain_payload["data_source"] = "fsma.traceability_events (canonical model)"
+            chain_payload["compliance_summary"] = {
+                "total_events": total_events,
+                "events_passing": events_passing,
+                "events_failing": events_failing,
+                "events_no_rules": events_no_rules,
+                "compliance_rate": round(events_passing / total_events, 4) if total_events else 0,
+            }
+            chain_payload["provenance"] = {
+                "source_table": "fsma.traceability_events",
+                "rule_tables": ["fsma.rule_evaluations", "fsma.rule_definitions"],
+                "export_version": "2.0",
+            }
+            chain_payload["attestation"] = {
+                "attested_by": "regengine-fda-export-router-v2",
+                "assertion": (
+                    "Package generated from canonical fsma.traceability_events "
+                    "with rule evaluation results and chain verification."
+                ),
+            }
+
+            package_bytes, package_meta = _build_fda_package(
+                events=events,
+                csv_content=csv_content,
+                csv_hash=export_hash,
+                chain_payload=chain_payload,
+                completeness_summary=completeness_summary,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                query_start_date=start_date,
+                query_end_date=end_date,
+            )
+            filename = f"fda_v2_package_{scope}_{timestamp}.zip"
+            return StreamingResponse(
+                io.BytesIO(package_bytes),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Package-Hash": package_meta["package_hash"],
+                    "X-Record-Count": str(len(events)),
+                    "X-Export-Version": "2.0",
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                    "X-Compliance-Rate": str(
+                        round(events_passing / total_events, 4) if total_events else 0
+                    ),
+                },
+            )
+
+        # CSV-only response
+        filename = f"fda_v2_export_{scope}_{timestamp}.csv"
+        return StreamingResponse(
+            iter([csv_content]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Export-Hash": export_hash,
+                "X-Record-Count": str(len(events)),
+                "X-Export-Version": "2.0",
+                "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                "X-Compliance-Rate": str(
+                    round(events_passing / total_events, 4) if total_events else 0
+                ),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("fda_export_v2_failed", extra={"error": str(e), "tenant_id": tenant_id})
+        raise HTTPException(status_code=500, detail="V2 export failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()

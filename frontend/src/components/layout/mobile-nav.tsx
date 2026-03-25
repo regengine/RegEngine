@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Scan } from "lucide-react"
+import { Menu, Activity, Database, CheckCircle, Leaf, ClipboardCheck, TrendingUp, Shield, Camera, Key, Book, User, LogOut, Scan, AlertTriangle, Timer, FileSearch } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -24,6 +24,17 @@ export function MobileNav() {
                 { href: "/compliance", label: "Compliance", icon: CheckCircle },
                 { href: "/fsma", label: "FSMA", icon: Leaf },
                 { href: "/review", label: "Review", icon: ClipboardCheck },
+            ]
+        },
+        {
+            title: "Operations",
+            items: [
+                { href: "/exceptions", label: "Exceptions", icon: AlertTriangle, iconClass: "text-red-500" },
+                { href: "/requests", label: "Requests", icon: Timer, iconClass: "text-blue-500" },
+                { href: "/records", label: "Records", icon: FileSearch, iconClass: "text-indigo-500" },
+                { href: "/rules", label: "Rules", icon: Shield, iconClass: "text-blue-500" },
+                { href: "/identity", label: "Identity", icon: Database, iconClass: "text-cyan-500" },
+                { href: "/audit", label: "Auditor Review", icon: Shield, iconClass: "text-slate-500" },
             ]
         },
         {
