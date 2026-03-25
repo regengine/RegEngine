@@ -1,6 +1,7 @@
 """Circuit breaker pattern implementation for RegEngine services.
 
 Prevents cascading failures by failing fast when downstream services are unhealthy.
+Supports pluggable storage backends (in-memory or Redis) for distributed state.
 
 Usage:
     from shared.circuit_breaker import CircuitBreaker, CircuitOpenError
@@ -16,6 +17,8 @@ Usage:
     async def query_neo4j(query: str):
         # If circuit is open, raises CircuitOpenError immediately
         return await neo4j_client.run(query)
+
+Set CIRCUIT_BREAKER_BACKEND=redis to share state across instances.
 """
 
 from __future__ import annotations
@@ -28,6 +31,8 @@ from enum import Enum
 from typing import Any, Callable, Optional, TypeVar
 
 import structlog
+
+from shared.circuit_breaker_store import CircuitStore, get_store
 
 logger = structlog.get_logger("circuit_breaker")
 
@@ -53,7 +58,10 @@ class CircuitOpenError(Exception):
 @dataclass
 class CircuitBreaker:
     """Circuit breaker for protecting against cascading failures.
-    
+
+    State is stored in a pluggable backend (memory or Redis) so it can
+    be shared across multiple service instances.
+
     Attributes:
         name: Identifier for this circuit (e.g., "neo4j", "redis")
         failure_threshold: Number of failures before opening circuit
@@ -66,23 +74,51 @@ class CircuitBreaker:
     recovery_timeout: float = 30.0
     half_open_max_calls: int = 3
     exceptions: tuple = (Exception,)
-    
-    # Internal state
-    _state: CircuitState = field(default=CircuitState.CLOSED, init=False)
-    _failure_count: int = field(default=0, init=False)
-    _last_failure_time: float = field(default=0.0, init=False)
+
+    # Local counters (not persisted — metrics only)
     _half_open_calls: int = field(default=0, init=False)
     _success_count: int = field(default=0, init=False)
     _total_calls: int = field(default=0, init=False)
+    _store: Optional[CircuitStore] = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._store = get_store()
+
+    @property
+    def _state(self) -> CircuitState:
+        return CircuitState(self._store.get_state(self.name))
+
+    @_state.setter
+    def _state(self, value: CircuitState) -> None:
+        self._store.set_state(self.name, value.value)
+
+    @property
+    def _failure_count(self) -> int:
+        return self._store.get_failure_count(self.name)
+
+    @_failure_count.setter
+    def _failure_count(self, value: int) -> None:
+        if value == 0:
+            self._store.reset_failures(self.name)
+        # Non-zero values set via incr_failure in _record_failure
+
+    @property
+    def _last_failure_time(self) -> float:
+        return self._store.get_last_failure_time(self.name)
+
+    @_last_failure_time.setter
+    def _last_failure_time(self, value: float) -> None:
+        self._store.set_last_failure_time(self.name, value)
 
     @property
     def state(self) -> CircuitState:
         """Get current circuit state, transitioning if needed."""
-        if self._state == CircuitState.OPEN:
-            # Check if recovery timeout has passed
+        current = self._state
+        if current == CircuitState.OPEN:
             if time.monotonic() - self._last_failure_time >= self.recovery_timeout:
                 self._transition_to(CircuitState.HALF_OPEN)
-        return self._state
+                return CircuitState.HALF_OPEN
+        return current
 
     def _transition_to(self, new_state: CircuitState) -> None:
         """Transition to a new state with logging."""
@@ -105,29 +141,26 @@ class CircuitBreaker:
         if self._state == CircuitState.HALF_OPEN:
             self._half_open_calls += 1
             if self._half_open_calls >= self.half_open_max_calls:
-                # Recovered!
                 self._transition_to(CircuitState.CLOSED)
         elif self._state == CircuitState.CLOSED:
-            # Reset failure count on success
             self._failure_count = 0
 
     def _record_failure(self, exc: Exception) -> None:
         """Record a failed call."""
-        self._failure_count += 1
+        count = self._store.incr_failure(self.name)
         self._last_failure_time = time.monotonic()
-        
+
         logger.warning(
             "circuit_failure_recorded",
             circuit=self.name,
-            failure_count=self._failure_count,
+            failure_count=count,
             threshold=self.failure_threshold,
             error=str(exc),
         )
-        
+
         if self._state == CircuitState.HALF_OPEN:
-            # Failed during recovery test, reopen
             self._transition_to(CircuitState.OPEN)
-        elif self._failure_count >= self.failure_threshold:
+        elif count >= self.failure_threshold:
             self._transition_to(CircuitState.OPEN)
 
     def _check_state(self) -> None:
@@ -177,7 +210,7 @@ class CircuitBreaker:
                 result = func(*args, **kwargs)
                 if asyncio.iscoroutine(result):
                     result = await result
-            
+
             self._record_success()
             return result
         except self.exceptions as exc:
