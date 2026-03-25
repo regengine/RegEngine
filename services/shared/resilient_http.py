@@ -20,16 +20,16 @@ Usage::
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
+import structlog
 
 from shared.circuit_breaker import CircuitBreaker, CircuitOpenError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger("resilient_http")
 
 # Per-service circuit breaker registry (lazily populated)
 _http_circuits: dict[str, CircuitBreaker] = {}

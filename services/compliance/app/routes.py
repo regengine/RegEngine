@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from shared.auth import require_api_key
 from shared.resilient_http import resilient_client
+from .config import settings
 from .fsma_spreadsheet import generate_fda_csv
 
 router = APIRouter(tags=["fsma-compliance"])
@@ -259,7 +260,7 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
 # FDA Audit Spreadsheet Export
 # ---------------------------------------------------------------------------
 
-_GRAPH_SERVICE_URL = os.getenv("GRAPH_SERVICE_URL", "http://graph-service:8200")
+_GRAPH_SERVICE_URL = settings.graph_service_url
 
 
 @router.get("/v1/fsma/audit/spreadsheet", dependencies=[Depends(require_api_key)])
@@ -297,10 +298,15 @@ async def fsma_audit_spreadsheet(
             params=params,
             headers=headers,
         )
-        if resp.status_code != 200:
+        if resp.status_code >= 500:
             raise HTTPException(
                 status_code=502,
-                detail=f"Graph service returned {resp.status_code}: {resp.text[:200]}",
+                detail=f"Graph service error ({resp.status_code}): {resp.text[:200]}",
+            )
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=resp.status_code,
+                detail=f"Graph service rejected request: {resp.text[:200]}",
             )
         data = resp.json()
 
