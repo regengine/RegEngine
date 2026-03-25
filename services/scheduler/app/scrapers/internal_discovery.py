@@ -1,8 +1,8 @@
 import httpx
 import asyncio
 from tenacity import retry, stop_after_attempt, wait_exponential_jitter
-from shared.circuit_breaker import CircuitBreaker
 from shared.logging import logger
+from shared.resilient_http import resilient_client
 from app.config import get_settings
 from shared.metrics import (
     regulatory_discovery_runs_total,
@@ -11,23 +11,20 @@ from shared.metrics import (
 )
 
 settings = get_settings()
-discovery_breaker = CircuitBreaker("regulatory_discovery")
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential_jitter(initial=1, max=10))
 async def run_regulatory_discovery():
     regulatory_discovery_runs_total.inc()
-    async with httpx.AsyncClient(timeout=settings.discovery_timeout_seconds) as client:
+    async with resilient_client(
+        timeout=settings.discovery_timeout_seconds,
+        circuit_name="ingestion-service",
+    ) as client:
         try:
-            # Note: Using ingestion:8000 for internal docker communication
-            # Or settings.ingestion_service_url if it's configured correctly
             url = f"{settings.ingestion_service_url}/v1/ingest/all-regulations"
-            
-            response = await discovery_breaker.call(
-                lambda: client.post(
-                    url,
-                    headers={"X-RegEngine-API-Key": settings.scheduler_api_key},
-                    timeout=settings.discovery_timeout_seconds
-                )
+
+            response = await client.post(
+                url,
+                headers={"X-RegEngine-API-Key": settings.scheduler_api_key},
             )
             response.raise_for_status()
             logger.info("regulatory_discovery_completed", response=response.json())
