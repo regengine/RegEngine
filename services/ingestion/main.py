@@ -327,6 +327,16 @@ if _router_enabled("identity"):
     from app.identity_router import router as identity_resolution_router
     app.include_router(identity_resolution_router)
 
+# Auditor Review (read-only evidentiary chain access)
+if _router_enabled("auditor"):
+    from app.auditor_router import router as auditor_review_router
+    app.include_router(auditor_review_router)
+
+# Compliance Metrics (PRD Section 10 KPIs)
+if _router_enabled("compliance_metrics"):
+    from app.metrics_router import router as compliance_metrics_router
+    app.include_router(compliance_metrics_router)
+
 
 # Standardized Health & Readiness (Phase 17)
 # NOTE: Custom /health endpoint already registered via routes_health_metrics.py

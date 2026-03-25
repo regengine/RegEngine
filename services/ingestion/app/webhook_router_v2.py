@@ -561,12 +561,34 @@ async def ingest_events(
                     ))
                     accepted += 1
 
-                    # Canonical normalization — write to traceability_events
+                    # Canonical normalization + rule evaluation + exception creation
                     try:
                         from shared.canonical_persistence import CanonicalEventStore
                         canonical = normalize_webhook_event(event, tenant_id)
                         canonical_store = CanonicalEventStore(db_session, dual_write=False)
                         canonical_store.persist_event(canonical)
+                        # Auto-evaluate rules
+                        from shared.rules_engine import RulesEngine
+                        engine = RulesEngine(db_session)
+                        event_data = {
+                            "event_id": str(canonical.event_id),
+                            "event_type": canonical.event_type.value,
+                            "traceability_lot_code": canonical.traceability_lot_code,
+                            "product_reference": canonical.product_reference,
+                            "quantity": canonical.quantity,
+                            "unit_of_measure": canonical.unit_of_measure,
+                            "from_facility_reference": canonical.from_facility_reference,
+                            "to_facility_reference": canonical.to_facility_reference,
+                            "from_entity_reference": canonical.from_entity_reference,
+                            "to_entity_reference": canonical.to_entity_reference,
+                            "kdes": canonical.kdes,
+                        }
+                        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                        # Auto-create exceptions from failures
+                        if not summary.compliant:
+                            from shared.exception_queue import ExceptionQueueService
+                            exc_svc = ExceptionQueueService(db_session)
+                            exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
                     except Exception as canon_err:
                         logger.warning("canonical_write_skipped: %s", str(canon_err))
 
