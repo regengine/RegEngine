@@ -133,6 +133,15 @@ export default function LoginPage() {
                 response.tenant_id
             );
 
+            // Clear any error params (e.g. ?error=session_expired) left by
+            // middleware so the redirect useEffect doesn't block navigation
+            // after a successful re-login.
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('error')) {
+                url.searchParams.delete('error');
+                router.replace(url.pathname + url.search);
+            }
+
             // Ensure the middleware picks up the newly-set cookie before
             // the useEffect redirect fires.
             router.refresh();
