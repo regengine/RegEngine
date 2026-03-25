@@ -202,7 +202,7 @@ function DimensionRow({ dimKey, item }: { dimKey: string; item: ScoreBreakdownIt
 /* ── Page ── */
 
 export default function ComplianceDashboardPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -215,7 +215,7 @@ export default function ComplianceDashboardPage() {
         if (!isLoggedIn || !tenantId) return;
         setLoading(true);
         setError(null);
-        fetchComplianceScore(tenantId)
+        fetchComplianceScore(tenantId, apiKey || '')
             .then((data) => {
                 setScore(data as ComplianceScore);
                 setLastFetched(new Date());

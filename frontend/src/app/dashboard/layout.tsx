@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { DashboardBreadcrumb } from '@/components/dashboard/breadcrumb';
+import { DashboardErrorBoundary } from '@/components/dashboard/error-boundary';
 import { useAuth } from '@/lib/auth-context';
 import {
     BarChart3,
@@ -81,7 +82,19 @@ const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const { clearCredentials, demoMode } = useAuth();
+    const { clearCredentials, demoMode, isAuthenticated, isHydrated } = useAuth();
+
+    // Route-level auth guard: redirect unauthenticated users to login
+    React.useEffect(() => {
+        if (isHydrated && !isAuthenticated) {
+            router.push(`/login?next=${encodeURIComponent(pathname)}`);
+        }
+    }, [isHydrated, isAuthenticated, router, pathname]);
+
+    // Don't render dashboard chrome until auth is resolved
+    if (!isHydrated || !isAuthenticated) {
+        return null;
+    }
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -222,7 +235,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Main content */}
             <main className="flex-1 md:pt-0 pt-[52px] overflow-y-auto">
                 <DashboardBreadcrumb />
-                {children}
+                <DashboardErrorBoundary>
+                    {children}
+                </DashboardErrorBoundary>
             </main>
         </div>
         </div>

@@ -171,17 +171,8 @@ export default function DashboardPage() {
     const { tenantId } = useTenant();
     const router = useRouter();
 
-    // Resolve effective auth from React state OR localStorage (memoized to avoid re-render loops)
-    const effectiveUser = useMemo(() => {
-        if (user) return user;
-        if (typeof window === 'undefined') return null;
-        try { return JSON.parse(localStorage.getItem('regengine_user') || 'null'); } catch { return null; }
-    }, [user]);
-    const effectiveTenantId = useMemo(() => {
-        if (tenantId) return tenantId;
-        if (typeof window === 'undefined') return null;
-        return localStorage.getItem('regengine_tenant_id');
-    }, [tenantId]);
+    const effectiveUser = user;
+    const effectiveTenantId = tenantId;
 
     useEffect(() => {
         if (isHydrated && !effectiveUser) {

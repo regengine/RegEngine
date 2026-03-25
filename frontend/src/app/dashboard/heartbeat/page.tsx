@@ -337,22 +337,12 @@ function HeartbeatSkeleton() {
 // ── Page ──
 
 export default function HeartbeatPage() {
-    const { user, isHydrated } = useAuth();
+    const { user, isHydrated, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const router = useRouter();
 
-    // Resolve effective auth from React state OR localStorage (handles Supabase race condition)
-    // Memoize to avoid infinite re-render loops
-    const effectiveUser = useMemo(() => {
-        if (user) return user;
-        if (typeof window === 'undefined') return null;
-        try { return JSON.parse(localStorage.getItem('regengine_user') || 'null'); } catch { return null; }
-    }, [user]);
-    const effectiveTenantId = useMemo(() => {
-        if (tenantId) return tenantId;
-        if (typeof window === 'undefined') return null;
-        return localStorage.getItem('regengine_tenant_id');
-    }, [tenantId]);
+    const effectiveUser = user;
+    const effectiveTenantId = tenantId;
 
     const [compliance, setCompliance] = useState<ComplianceData | null>(null);
     const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -377,8 +367,8 @@ export default function HeartbeatPage() {
         setError(null);
         try {
             const [scoreData, alertsData] = await Promise.allSettled([
-                fetchComplianceScore(effectiveTenantId),
-                fetchAlerts(effectiveTenantId, { acknowledged: false }),
+                fetchComplianceScore(effectiveTenantId, apiKey || ''),
+                fetchAlerts(effectiveTenantId, apiKey || '', { acknowledged: false }),
             ]);
 
             if (scoreData.status === 'fulfilled') {
