@@ -23,11 +23,11 @@ import requests
 # ── Configuration ────────────────────────────────────────────────
 
 BASE_URL = os.getenv("REGENGINE_BASE_URL", "http://localhost")
-INGESTION_URL = os.getenv("INGESTION_URL", f"{BASE_URL}:8001")
-GRAPH_URL = os.getenv("GRAPH_URL", f"{BASE_URL}:8003")
-ADMIN_URL = os.getenv("ADMIN_URL", f"{BASE_URL}:8000")
-NLP_URL = os.getenv("NLP_URL", f"{BASE_URL}:8002")
-COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", f"{BASE_URL}:8004")
+INGESTION_URL = os.getenv("INGESTION_URL", f"{BASE_URL}:8002")
+GRAPH_URL = os.getenv("GRAPH_URL", f"{BASE_URL}:8200")
+ADMIN_URL = os.getenv("ADMIN_URL", f"{BASE_URL}:8400")
+NLP_URL = os.getenv("NLP_URL", f"{BASE_URL}:8100")
+COMPLIANCE_URL = os.getenv("COMPLIANCE_URL", f"{BASE_URL}:8500")
 
 API_KEY = os.getenv("REGENGINE_API_KEY", "test-key-smoke")
 TENANT_ID = os.getenv("REGENGINE_TENANT_ID", "smoke-test-tenant")
