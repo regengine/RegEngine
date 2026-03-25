@@ -13,8 +13,17 @@ def add_security(app: FastAPI):
         allow_origins=origins,
         allow_origin_regex=r"https://.*\.(up\.railway\.app|vercel\.app)",
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-RegEngine-API-Key",
+            "X-Admin-Key",
+            "X-Tenant-ID",
+            "X-Request-ID",
+            "X-Requested-With",
+            "X-Metrics-Key",
+        ],
     )
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
         "*.regengine.co",
