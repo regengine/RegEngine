@@ -15,6 +15,7 @@ from typing import Any, Optional
 import httpx
 import redis
 import stripe
+from shared.resilient_http import resilient_client
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -316,7 +317,7 @@ async def _create_tenant_via_admin(tenant_name: str) -> str:
     if not admin_master_key:
         raise RuntimeError("ADMIN_MASTER_KEY is required to create tenants from Stripe webhooks")
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with resilient_client(timeout=20.0, circuit_name="admin-service") as client:
         response = await client.post(
             f"{admin_base_url}/v1/admin/tenants",
             headers={"X-Admin-Key": admin_master_key},
