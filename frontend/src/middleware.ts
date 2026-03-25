@@ -62,7 +62,11 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
 async function verifyRegEngineToken(token: string): Promise<Record<string, unknown> | null> {
     const secret = process.env.AUTH_SECRET_KEY;
     if (!secret) {
-        console.warn('[middleware] AUTH_SECRET_KEY is not set — skipping RegEngine JWT verification. Falling back to Supabase auth.');
+        console.error(
+            '[middleware] AUTH_SECRET_KEY is NOT set on this deployment. ' +
+            'JWT verification is impossible — all authenticated routes will fail. ' +
+            'Set AUTH_SECRET_KEY in Vercel env vars (must match the backend Railway value).'
+        );
         return null;
     }
     try {
@@ -71,8 +75,13 @@ async function verifyRegEngineToken(token: string): Promise<Record<string, unkno
             algorithms: ['HS256'],
         });
         return payload as Record<string, unknown>;
-    } catch {
-        // Token expired, invalid signature, malformed, etc.
+    } catch (err) {
+        // Log the specific failure reason to help diagnose key mismatches
+        const message = err instanceof Error ? err.message : 'unknown';
+        console.warn(
+            `[middleware] JWT verification failed: ${message}. ` +
+            'If "signature verification failed", AUTH_SECRET_KEY on Vercel does not match the backend.'
+        );
         return null;
     }
 }
@@ -177,6 +186,9 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     // avoid auto-redirecting back into a loop.
     if (!process.env.AUTH_SECRET_KEY) {
         url.searchParams.set('error', 'auth_config');
+    } else if (reToken) {
+        // Token exists but verification failed — likely key mismatch
+        url.searchParams.set('error', 'token_invalid');
     } else {
         url.searchParams.set('error', 'session_expired');
     }

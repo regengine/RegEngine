@@ -184,7 +184,6 @@ cat test-results/load/summary-*.json | tail -1
 ```bash
 curl http://localhost:8000/health
 curl http://localhost:8001/health  # Energy
-curl http://localhost:8002/health  # Opportunity
 ```
 
 ---

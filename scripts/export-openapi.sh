@@ -41,14 +41,6 @@ else
     echo "✗ Graph API not available at http://localhost:8200"
 fi
 
-# Export Opportunity API
-if curl -sf http://localhost:8300/openapi.json > /dev/null 2>&1; then
-    curl -s http://localhost:8300/openapi.json | python3 -m json.tool > "$DOCS_DIR/opportunity-api.json"
-    echo "✓ Opportunity API exported to $DOCS_DIR/opportunity-api.json"
-else
-    echo "✗ Opportunity API not available at http://localhost:8300"
-fi
-
 echo ""
 echo "OpenAPI export complete. Files in $DOCS_DIR:"
 ls -la "$DOCS_DIR"
