@@ -3,6 +3,7 @@
 import pytest
 import httpx
 
+from shared.circuit_breaker_store import reset_store
 from shared.resilient_http import (
     resilient_client,
     get_http_circuit,
@@ -263,8 +264,9 @@ class TestCircuitBreakerIntegration:
     """Tests for circuit breaker integration with resilient_client."""
 
     def setup_method(self):
-        """Clear circuit breaker registry between tests."""
+        """Clear circuit breaker registry and store between tests."""
         _http_circuits.clear()
+        reset_store()
 
     def test_get_http_circuit_creates_new(self):
         """Should create a new circuit breaker for unknown name."""
