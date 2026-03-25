@@ -328,6 +328,17 @@ if _router_enabled("identity"):
     app.include_router(identity_resolution_router)
 
 
+# Readiness Wizard (PRD P2 — guided compliance assessment)
+if _router_enabled("readiness"):
+    from app.readiness_router import router as readiness_wizard_router
+    app.include_router(readiness_wizard_router)
+
+# Incident Command (PRD P2 — real-time recall coordination)
+if _router_enabled("incidents"):
+    from app.incident_router import router as incident_command_router
+    app.include_router(incident_command_router)
+
+
 # Standardized Health & Readiness (Phase 17)
 # NOTE: Custom /health endpoint already registered via routes_health_metrics.py
 # which includes Kafka status. Do NOT install the Phase 17 generic health router
