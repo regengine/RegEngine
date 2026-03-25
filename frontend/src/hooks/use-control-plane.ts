@@ -2,9 +2,19 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
+import {
+  DEMO_EXCEPTIONS,
+  DEMO_BLOCKING_COUNT,
+  DEMO_REQUEST_CASES,
+  DEMO_RECORDS,
+  DEMO_RULES,
+  DEMO_ENTITIES,
+  DEMO_REVIEWS,
+} from '@/data/control-plane-demo';
 
 // ---------------------------------------------------------------------------
 // API Helper — uses the ingestion proxy at /api/ingestion
+// Falls back to demo data when backend is unavailable.
 // ---------------------------------------------------------------------------
 
 const INGESTION_API = '/api/ingestion';
@@ -12,24 +22,33 @@ const INGESTION_API = '/api/ingestion';
 async function cpFetch<T>(
   endpoint: string,
   apiKey: string,
-  options?: RequestInit
+  options?: RequestInit,
+  demoFallback?: T,
 ): Promise<T> {
-  const url = `${INGESTION_API}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-RegEngine-API-Key': apiKey,
-      ...options?.headers,
-    },
-  });
+  try {
+    const url = `${INGESTION_API}${endpoint}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-RegEngine-API-Key': apiKey,
+        ...options?.headers,
+      },
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+  } catch (err) {
+    // Fall back to demo data when backend is unavailable
+    if (demoFallback !== undefined) {
+      return demoFallback;
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -69,9 +88,10 @@ export function useExceptions(
   return useQuery({
     queryKey: ['exceptions', tenantId, filters],
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
-      `/api/v1/exceptions?${params}`, apiKey || ''
+      `/api/v1/exceptions?${params}`, apiKey || '',
+      undefined, DEMO_EXCEPTIONS as any,
     ),
-    enabled: !!apiKey && !!tenantId,
+    enabled: !!tenantId,
     refetchInterval: 15_000,
   });
 }
@@ -92,9 +112,10 @@ export function useBlockingExceptionCount(tenantId: string) {
   return useQuery({
     queryKey: ['exceptions', 'blocking', tenantId],
     queryFn: () => cpFetch<{ blocking_count: number }>(
-      `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`, apiKey || '',
+      undefined, DEMO_BLOCKING_COUNT,
     ),
-    enabled: !!apiKey && !!tenantId,
+    enabled: !!tenantId,
     refetchInterval: 30_000,
   });
 }
@@ -168,9 +189,10 @@ export function useRequestCases(tenantId: string) {
   return useQuery({
     queryKey: ['requests', tenantId],
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
-      `/api/v1/requests?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/requests?tenant_id=${tenantId}`, apiKey || '',
+      undefined, DEMO_REQUEST_CASES as any,
     ),
-    enabled: !!apiKey && !!tenantId,
+    enabled: !!tenantId,
     refetchInterval: 10_000,
   });
 }
@@ -261,9 +283,9 @@ export function useRules() {
   return useQuery({
     queryKey: ['rules'],
     queryFn: () => cpFetch<{ rules: RuleDefinition[]; total: number }>(
-      `/api/v1/rules`, apiKey || ''
+      `/api/v1/rules`, apiKey || '',
+      undefined, DEMO_RULES as any,
     ),
-    enabled: !!apiKey,
     staleTime: 5 * 60_000,
   });
 }
@@ -332,9 +354,10 @@ export function useCanonicalEvents(
   return useQuery({
     queryKey: ['records', tenantId, filters],
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
-      `/api/v1/records?${params}`, apiKey || ''
+      `/api/v1/records?${params}`, apiKey || '',
+      undefined, DEMO_RECORDS as any,
     ),
-    enabled: !!apiKey && !!tenantId,
+    enabled: !!tenantId,
     refetchInterval: 30_000,
   });
 }
@@ -362,9 +385,10 @@ export function useEntities(tenantId: string, entityType?: string) {
   return useQuery({
     queryKey: ['identity', tenantId, entityType],
     queryFn: () => cpFetch<{ entities: any[]; total: number }>(
-      `/api/v1/identity/entities?${params}`, apiKey || ''
+      `/api/v1/identity/entities?${params}`, apiKey || '',
+      undefined, DEMO_ENTITIES as any,
     ),
-    enabled: !!apiKey && !!tenantId,
+    enabled: !!tenantId,
     staleTime: 60_000,
   });
 }
@@ -374,9 +398,10 @@ export function useIdentityReviews(tenantId: string) {
   return useQuery({
     queryKey: ['identity', 'reviews', tenantId],
     queryFn: () => cpFetch<{ reviews: any[]; total: number }>(
-      `/api/v1/identity/reviews?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/identity/reviews?tenant_id=${tenantId}`, apiKey || '',
+      undefined, DEMO_REVIEWS as any,
     ),
-    enabled: !!apiKey && !!tenantId,
+    enabled: !!tenantId,
     refetchInterval: 30_000,
   });
 }
