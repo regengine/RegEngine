@@ -9,10 +9,10 @@ import os
 from typing import AsyncGenerator
 
 # Service URLs from environment or defaults
-ADMIN_URL = os.getenv("TEST_ADMIN_URL", "http://localhost:8000")
-ENERGY_URL = os.getenv("TEST_ENERGY_URL", "http://localhost:8001")
+ADMIN_URL = os.getenv("TEST_ADMIN_URL", "http://localhost:8400")
+ENERGY_URL = os.getenv("TEST_ENERGY_URL", "http://localhost:8002")
 OPPORTUNITY_URL = os.getenv("TEST_OPPORTUNITY_URL", "http://localhost:8002")
-GRAPH_URL = os.getenv("TEST_GRAPH_URL", "http://localhost:8003")
+GRAPH_URL = os.getenv("TEST_GRAPH_URL", "http://localhost:8200")
 
 # Test credentials
 TEST_USER_EMAIL = os.getenv("TEST_USER_EMAIL", "integration@test.com")
