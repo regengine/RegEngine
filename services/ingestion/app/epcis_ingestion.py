@@ -1025,6 +1025,36 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
             epcis_biz_step=normalized.get("epcis_biz_step"),
         )
         db_session.commit()
+
+        # Canonical normalization — write to traceability_events + evaluate rules
+        if not result.idempotent:
+            try:
+                from shared.canonical_event import normalize_epcis_event
+                from shared.canonical_persistence import CanonicalEventStore
+                canonical = normalize_epcis_event(event, tenant_id)
+                canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                canonical_store.persist_event(canonical)
+                # Auto-evaluate rules
+                from shared.rules_engine import RulesEngine
+                engine = RulesEngine(db_session)
+                event_data = {
+                    "event_id": str(canonical.event_id),
+                    "event_type": canonical.event_type.value,
+                    "traceability_lot_code": canonical.traceability_lot_code,
+                    "product_reference": canonical.product_reference,
+                    "quantity": canonical.quantity,
+                    "unit_of_measure": canonical.unit_of_measure,
+                    "from_facility_reference": canonical.from_facility_reference,
+                    "to_facility_reference": canonical.to_facility_reference,
+                    "from_entity_reference": canonical.from_entity_reference,
+                    "to_entity_reference": canonical.to_entity_reference,
+                    "kdes": canonical.kdes,
+                }
+                engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                db_session.commit()
+            except Exception as canon_err:
+                logger.warning("epcis_canonical_write_skipped: %s", str(canon_err))
+
     except Exception:
         db_session.rollback()
         raise
