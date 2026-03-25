@@ -18,6 +18,11 @@ import {
   Camera,
   Scan,
   ShieldCheck,
+  AlertTriangle,
+  Timer,
+  FileSearch,
+  Target,
+  Siren,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -213,6 +218,97 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+
+          {/* Operations (Control Plane) */}
+          <DropdownMenu
+            modal={false}
+            open={openDropdown === 'operations'}
+            onOpenChange={(open) => setOpenDropdown(open ? 'operations' : null)}
+          >
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent smooth-transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:outline-none"
+                onMouseEnter={() => handleMouseEnter('operations')}
+                onMouseLeave={handleMouseLeave}
+              >
+                <Timer className="h-4 w-4 text-orange-500" />
+                <span>Operations</span>
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-64"
+              onMouseEnter={() => handleMouseEnter('operations')}
+              onMouseLeave={handleMouseLeave}
+            >
+              <DropdownMenuLabel className="text-xs uppercase text-muted-foreground tracking-wider">Control Plane</DropdownMenuLabel>
+              <DropdownMenuItem asChild>
+                <Link href="/exceptions" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <div>
+                    <div className="font-medium">Exceptions</div>
+                    <div className="text-xs text-muted-foreground">Remediation queue</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/requests" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Timer className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <div className="font-medium">Requests</div>
+                    <div className="text-xs text-muted-foreground">24-hour response workflow</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/incidents" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Siren className="h-4 w-4 text-red-600" />
+                  <div>
+                    <div className="font-medium">Incidents</div>
+                    <div className="text-xs text-muted-foreground">Real-time recall coordination</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/records" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <FileSearch className="h-4 w-4 text-indigo-500" />
+                  <div>
+                    <div className="font-medium">Records</div>
+                    <div className="text-xs text-muted-foreground">Canonical events with provenance</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/rules" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Shield className="h-4 w-4 text-blue-500" />
+                  <div>
+                    <div className="font-medium">Rules</div>
+                    <div className="text-xs text-muted-foreground">Compliance rule catalog</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/readiness" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Target className="h-4 w-4 text-purple-500" />
+                  <div>
+                    <div className="font-medium">Readiness</div>
+                    <div className="text-xs text-muted-foreground">Compliance maturity assessment</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/audit" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Shield className="h-4 w-4 text-slate-500" />
+                  <div>
+                    <div className="font-medium">Auditor Review</div>
+                    <div className="text-xs text-muted-foreground">Read-only compliance posture</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Free Tools */}
           <DropdownMenu
