@@ -2,6 +2,7 @@
 
 import pytest
 import asyncio
+import uuid
 from unittest.mock import MagicMock
 
 from shared.circuit_breaker import (
@@ -12,6 +13,20 @@ from shared.circuit_breaker import (
     redis_circuit,
     get_all_circuit_metrics,
 )
+from shared.circuit_breaker_store import reset_store
+
+
+def _unique_name(prefix: str = "test") -> str:
+    """Generate a unique circuit name to avoid cross-test pollution."""
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+@pytest.fixture(autouse=True)
+def _clean_store():
+    """Reset the global store between tests."""
+    reset_store()
+    yield
+    reset_store()
 
 
 class TestCircuitBreaker:
@@ -19,12 +34,12 @@ class TestCircuitBreaker:
 
     def test_initial_state_is_closed(self):
         """Circuit should start in CLOSED state."""
-        breaker = CircuitBreaker(name="test", failure_threshold=3)
+        breaker = CircuitBreaker(name=_unique_name(), failure_threshold=3)
         assert breaker.state == CircuitState.CLOSED
 
     def test_opens_after_failure_threshold(self):
         """Circuit should open after reaching failure threshold."""
-        breaker = CircuitBreaker(name="test", failure_threshold=3)
+        breaker = CircuitBreaker(name=_unique_name(), failure_threshold=3)
         
         @breaker
         def failing_func():
@@ -40,7 +55,7 @@ class TestCircuitBreaker:
 
     def test_rejects_when_open(self):
         """Circuit should reject calls when open."""
-        breaker = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=60)
+        breaker = CircuitBreaker(name=_unique_name(), failure_threshold=1, recovery_timeout=60)
         
         @breaker
         def failing_func():
@@ -54,12 +69,12 @@ class TestCircuitBreaker:
         with pytest.raises(CircuitOpenError) as exc_info:
             failing_func()
         
-        assert exc_info.value.name == "test"
+        assert exc_info.value.name == breaker.name
         assert exc_info.value.retry_after > 0
 
     def test_success_resets_failure_count(self):
         """Successful calls should reset failure count."""
-        breaker = CircuitBreaker(name="test", failure_threshold=3)
+        breaker = CircuitBreaker(name=_unique_name(), failure_threshold=3)
         call_count = 0
         
         @breaker
@@ -81,17 +96,17 @@ class TestCircuitBreaker:
 
     def test_metrics(self):
         """Should return metrics dict."""
-        breaker = CircuitBreaker(name="test-metrics", failure_threshold=5)
+        breaker = CircuitBreaker(name=_unique_name("metrics"), failure_threshold=5)
         metrics = breaker.get_metrics()
         
-        assert metrics["name"] == "test-metrics"
+        assert metrics["name"] == breaker.name
         assert metrics["state"] == "CLOSED"
         assert metrics["failure_threshold"] == 5
         assert "total_calls" in metrics
 
     def test_reset(self):
         """Manual reset should close circuit."""
-        breaker = CircuitBreaker(name="test", failure_threshold=1)
+        breaker = CircuitBreaker(name=_unique_name(), failure_threshold=1)
         
         @breaker
         def failing_func():
@@ -114,7 +129,7 @@ class TestAsyncCircuitBreaker:
     @pytest.mark.asyncio
     async def test_async_function_works(self):
         """Circuit breaker should work with async functions."""
-        breaker = CircuitBreaker(name="async-test", failure_threshold=3)
+        breaker = CircuitBreaker(name=_unique_name("async"), failure_threshold=3)
         
         @breaker
         async def async_func():
@@ -126,7 +141,7 @@ class TestAsyncCircuitBreaker:
     @pytest.mark.asyncio
     async def test_async_opens_after_failures(self):
         """Async circuit should open after failures."""
-        breaker = CircuitBreaker(name="async-fail", failure_threshold=2)
+        breaker = CircuitBreaker(name=_unique_name("async-fail"), failure_threshold=2)
         
         @breaker
         async def async_failing():
