@@ -47,7 +47,7 @@ const MATCH_TYPE_BADGE: Record<string, { variant: 'default' | 'destructive' | 'w
 
 export default function IdentityResolutionPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || '';
+  const tid = tenantId || 'demo';
 
   const [activeTab, setActiveTab] = useState('entities');
   const [entityTypeFilter, setEntityTypeFilter] = useState<string | undefined>();

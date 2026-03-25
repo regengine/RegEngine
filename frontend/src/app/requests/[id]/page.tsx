@@ -57,7 +57,7 @@ export default function RequestCaseDetailPage() {
   const params = useParams();
   const requestCaseId = params.id as string;
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || '';
+  const tid = tenantId || 'demo';
 
   const requests = useRequestCases(tid);
   const packages = usePackageHistory(tid, requestCaseId);
