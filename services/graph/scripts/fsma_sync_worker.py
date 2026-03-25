@@ -77,6 +77,9 @@ class FSMASyncWorker:
 
         if event == "cte.created":
             self._sync_cte(data.get("cte", {}))
+        elif event == "canonical.created":
+            # V2: Canonical traceability events (downstream from canonical store)
+            self._sync_canonical_event(data.get("canonical_event", {}))
         elif event == "product.created":
             self._sync_product(data.get("product", {}))
         elif event == "location.created":
@@ -187,6 +190,95 @@ class FSMASyncWorker:
                     dest_location_id=dest_location_id,
                     cte_id=cte_id,
                 )
+
+    def _sync_canonical_event(self, event: dict[str, Any]) -> None:
+        """Sync a canonical TraceabilityEvent to Neo4j.
+
+        Creates graph nodes for the event, lot, and facility references,
+        reading from the canonical model's richer field set (from/to
+        facility references, entity references, provenance metadata).
+        """
+        event_id = event.get("event_id")
+        if not event_id:
+            return
+
+        tenant_id = event.get("tenant_id", "")
+        db_name = f"reg_tenant_{tenant_id.replace('-', '')}" if tenant_id else None
+
+        properties = {
+            "event_type": event.get("event_type"),
+            "event_timestamp": event.get("event_timestamp"),
+            "source_system": event.get("source_system"),
+            "confidence_score": event.get("confidence_score"),
+            "schema_version": event.get("schema_version"),
+            "sha256_hash": event.get("sha256_hash"),
+        }
+
+        with self.driver.session(database=db_name) if db_name else self.driver.session() as session:
+            # Upsert the TraceEvent node
+            session.run(
+                """
+                MERGE (e:TraceEvent {event_id: $event_id})
+                SET e += $properties
+                SET e.synced_at = datetime()
+                """,
+                event_id=event_id,
+                properties=properties,
+            )
+
+            # Link to Lot via TLC
+            tlc = event.get("traceability_lot_code")
+            if tlc:
+                session.run(
+                    """
+                    MERGE (lot:Lot {tlc: $tlc})
+                    ON CREATE SET lot.product_description = $product_ref, lot.created_at = datetime()
+                    WITH lot
+                    MATCH (e:TraceEvent {event_id: $event_id})
+                    MERGE (lot)-[:UNDERWENT]->(e)
+                    """,
+                    tlc=tlc,
+                    product_ref=event.get("product_reference", ""),
+                    event_id=event_id,
+                )
+
+            # Link from-facility
+            from_ref = event.get("from_facility_reference")
+            if from_ref:
+                session.run(
+                    """
+                    MERGE (f:Facility {identifier: $ref})
+                    ON CREATE SET f.name = $ref, f.created_at = datetime()
+                    WITH f
+                    MATCH (e:TraceEvent {event_id: $event_id})
+                    MERGE (f)-[:SHIPPED]->(e)
+                    """,
+                    ref=from_ref,
+                    event_id=event_id,
+                )
+
+            # Link to-facility
+            to_ref = event.get("to_facility_reference")
+            if to_ref:
+                session.run(
+                    """
+                    MERGE (f:Facility {identifier: $ref})
+                    ON CREATE SET f.name = $ref, f.created_at = datetime()
+                    WITH f
+                    MATCH (e:TraceEvent {event_id: $event_id})
+                    MERGE (e)-[:SHIPPED_TO]->(f)
+                    """,
+                    ref=to_ref,
+                    event_id=event_id,
+                )
+
+        logger.info(
+            "canonical_event_synced",
+            event_id=event_id,
+            event_type=event.get("event_type"),
+            tenant_id=tenant_id,
+            request_id="sync-canonical",
+        )
 
     def _sync_product(self, product: dict[str, Any]) -> None:
         product_id = product.get("id")
