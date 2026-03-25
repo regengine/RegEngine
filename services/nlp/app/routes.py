@@ -7,6 +7,7 @@ from uuid import UUID
 import httpx
 import structlog
 from shared.resilient_http import resilient_client
+from shared.circuit_breaker import CircuitOpenError
 from fastapi import APIRouter, Depends, HTTPException, Request
 from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
@@ -259,6 +260,11 @@ async def _graph_get(
     try:
         async with resilient_client(timeout=settings.graph_request_timeout_s, circuit_name="graph-service") as client:
             response = await client.get(url, headers=headers, params=params)
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Graph service circuit open — retry after {exc.retry_after:.0f}s",
+        ) from exc
     except httpx.RequestError as exc:
         raise HTTPException(
             status_code=502,
