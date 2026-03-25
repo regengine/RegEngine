@@ -7,6 +7,7 @@ from uuid import UUID
 import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -50,7 +51,7 @@ def health():
     return {"status": "ok"}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 

@@ -9,7 +9,8 @@ import logging
 import os as _os
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -58,7 +59,7 @@ def health() -> dict[str, str]:
     }
 
 
-@router.get("/metrics", include_in_schema=False)
+@router.get("/metrics", include_in_schema=False, dependencies=[Depends(require_metrics_key)])
 def metrics() -> PlainTextResponse:
     """Expose Prometheus metrics (disabled in production)."""
     _prod = (
