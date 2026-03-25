@@ -279,11 +279,14 @@ async def fsma_audit_spreadsheet(
     if tlc:
         params["tlc"] = tlc
 
-    # Forward auth and correlation headers to downstream graph service
+    # Forward auth, tenant, and correlation headers to downstream graph service
     headers: dict[str, str] = {}
     api_key = request.headers.get("X-RegEngine-API-Key")
     if api_key:
         headers["X-RegEngine-API-Key"] = api_key
+    tenant_id = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+    if tenant_id:
+        headers["X-RegEngine-Tenant-ID"] = tenant_id
     request_id = request.headers.get("X-Request-ID")
     if request_id:
         headers["X-Request-ID"] = request_id
