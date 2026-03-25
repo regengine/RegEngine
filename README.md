@@ -12,8 +12,13 @@ RegEngine helps food suppliers meet FDA Food Safety Modernization Act Section 20
 
 - Ingest Critical Tracking Events (CTEs) via API, CSV, XLSX, EDI, EPCIS 2.0, QR/barcode scan, or IoT adapters
 - Bulk upload 10K+ rows with auto-cleaning, SHA-256 hashing, and Merkle tree chaining
-- Validate 102+ Key Data Elements (KDEs) against 21 CFR Part 1, Subpart S
-- Score compliance readiness across your entire supply chain
+- **Normalize all records into one canonical truth model** with dual payload preservation (raw + normalized)
+- **Evaluate records against 25 versioned compliance rules** with 21 CFR citations and human-readable failure explanations
+- **Manage exceptions through a remediation queue** with ownership, deadlines, waivers, and signoff chains
+- **Run 24-hour response workflows** from request intake to SHA-256 sealed package submission
+- **Resolve entity identity** across facilities, products, and firms with alias matching and merge/split
+- Score compliance readiness with a **5-level maturity assessment** (Not Started → Compliant)
+- **Coordinate active recalls** through an incident command layer with action tracking and timeline
 - Generate FDA-compliant sortable spreadsheets within the 24-hour response window
 - Trace lots forward and backward through a Neo4j knowledge graph
 - Run recall simulations and audit drill workflows with tamper-evident logging
@@ -58,12 +63,13 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 │   └── src/middleware.ts        Dual auth gate (RegEngine JWT + Supabase)
 ├── services/
 │   ├── admin/                   Auth, tenants, bulk upload, audit logs, billing
-│   ├── ingestion/               Ingest pipelines, EPCIS, webhook, FDA export, audit log
+│   ├── ingestion/               Ingest pipelines, EPCIS, webhook, FDA export, control plane routers
 │   ├── compliance/              FSMA 204 validation, compliance scoring, wizard
 │   ├── graph/                   Neo4j traceability graph, recall, lineage, audit trail
 │   ├── nlp/                     Document extraction and NLP processing
 │   ├── scheduler/               Scheduled jobs, FDA feed polling, recalls
-│   └── shared/                  Auth, middleware, database, resilient HTTP, audit logging
+│   └── shared/                  Auth, middleware, database, canonical model, rules engine,
+│                                exception queue, request workflow, identity resolution
 ├── kernel/reporting/            Reporting service
 ├── scripts/
 │   ├── security/                Tenant isolation, audit chain, SAST, ZAP, gitleaks
@@ -128,11 +134,64 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 
 ---
 
+## Compliance Control Plane
+
+RegEngine operates as a **request-response control plane** for FSMA 204 compliance. The core loop:
+
+```
+capture → normalize → evaluate rules → triage exceptions →
+assemble response package → submit → preserve audit trail
+```
+
+### Operational Pages
+
+| Page | Route | Purpose |
+|------|-------|---------|
+| **Exception Queue** | `/exceptions` | Manage compliance defects — assign, resolve, waive with approval chain |
+| **Request Workflow** | `/requests` | 24-hour FDA response: intake → scope → collect → gap analysis → assemble → submit |
+| **Request Detail** | `/requests/[id]` | 10-stage pipeline view with countdown timer, package history, signoff chain |
+| **Canonical Records** | `/records` | Every record with provenance: what is it, where from, what rules, what failed, what next |
+| **Rules Dashboard** | `/rules` | 25 versioned FSMA rules with 21 CFR citations and remediation guidance |
+| **Identity Resolution** | `/identity` | Canonical entities, alias management, ambiguous match review queue |
+| **Readiness Assessment** | `/readiness` | 5-level maturity wizard (Not Started → Ingesting → Validating → Operational → Audit-Ready → Compliant) |
+| **Incident Command** | `/incidents` | Real-time recall coordination — actions, timeline, impact assessment |
+| **Auditor Review** | `/audit` | Read-only compliance posture for FDA reviewers and auditors |
+
+### Control Plane API
+
+| Prefix | Endpoints | Purpose |
+|--------|-----------|---------|
+| `/api/v1/records` | 5 | Canonical events with provenance, amendment chain, ingestion runs |
+| `/api/v1/rules` | 6 | Rule catalog, evaluate single/batch events, evaluation history, seed |
+| `/api/v1/exceptions` | 9 | CRUD, assign, resolve, waive, comments, blocking count |
+| `/api/v1/requests` | 11 | 10-stage request lifecycle, package assembly, submission, amendment |
+| `/api/v1/identity` | 10 | Entity CRUD, aliases, fuzzy match, merge/split, review queue |
+| `/api/v1/audit` | 8 | Read-only compliance summary, events, rules, exceptions, chain verification |
+| `/api/v1/readiness` | 3 | Maturity assessment, checklist, gap analysis |
+| `/api/v1/incidents` | 9 | Incident lifecycle, action items, timeline, impact assessment |
+| `/api/v1/metrics/compliance` | 1 | PRD Section 10 KPIs (normalization rate, pass rate, median resolve time) |
+| `/api/v1/fda/export/v2` | 1 | FDA export from canonical model with compliance status columns |
+
+### Database Schema (fsma.*)
+
+| Table Group | Tables | Purpose |
+|-------------|--------|---------|
+| **Canonical Model** | `traceability_events`, `evidence_attachments`, `ingestion_runs` | One truth model for all records |
+| **Rules Engine** | `rule_definitions`, `rule_evaluations`, `rule_audit_log` | Versioned compliance rules as policy artifacts |
+| **Exception Queue** | `exception_cases`, `exception_comments`, `exception_attachments`, `exception_signoffs` | Remediation workflow |
+| **Request Workflow** | `request_cases`, `response_packages`, `submission_log`, `request_signoffs` | 24-hour response lifecycle |
+| **Identity Resolution** | `canonical_entities`, `entity_aliases`, `entity_merge_history`, `identity_review_queue` | Cross-record entity identity |
+
+All tables use Row-Level Security (RLS) for tenant isolation, GIN indexes for JSONB queries, and append-only audit patterns.
+
+---
+
 ## Dashboard
 
 | Section | Pages |
 |---------|-------|
 | **Overview** | Heartbeat, Compliance Score, Alerts |
+| **Operations** | Exceptions, Requests, Records, Rules, Identity, Readiness, Incidents, Auditor Review |
 | **Compliance** | Recall Report, Recall Drills, Export Jobs |
 | **Data** | Data Import (bulk CSV/XLSX), Field Capture, Receiving Dock, Scan, Integrations, Suppliers, Products, Audit Log |
 | **Settings** | Notifications, Team, Settings |
@@ -242,9 +301,27 @@ GRAFANA_PASSWORD=               # Required when running docker-compose.monitorin
 
 See [.env.example](.env.example) for the full list with descriptions.
 
+### Seed Demo Data
+
+```bash
+# Apply control plane migrations
+alembic upgrade head
+
+# Seed 20 realistic supply chain events (4 products, 5 facilities, all 7 CTE types)
+PYTHONPATH=services python3 scripts/seed_demo_data.py
+
+# Dry run (preview without persisting)
+PYTHONPATH=services python3 scripts/seed_demo_data.py --dry-run
+```
+
+The seeder creates canonical events, evaluates rules, generates exception cases, and opens a demo FDA request case with a 24-hour deadline.
+
 ### Running Tests
 
 ```bash
+# Control plane tests (canonical model + rules engine + E2E compliance loop)
+PYTHONPATH=services pytest tests/test_canonical_event.py tests/test_rules_engine.py tests/test_compliance_control_plane_e2e.py -v
+
 # Backend services (from repo root)
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/admin/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/ingestion/tests/ -v
