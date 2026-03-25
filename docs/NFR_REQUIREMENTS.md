@@ -84,7 +84,6 @@
 | NLP | 2 | 10 | Kafka lag > 1000 |
 | Graph | 2 | 5 | CPU > 70% |
 | Compliance | 1 | 5 | CPU > 70% |
-| Opportunity | 1 | 5 | Request latency > 2s |
 
 ### Data Growth Projections
 
