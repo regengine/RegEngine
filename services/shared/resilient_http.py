@@ -76,11 +76,11 @@ class RetryTransport(httpx.AsyncBaseTransport):
                 if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self._retries:
                     delay = self._delay(attempt)
                     logger.warning(
-                        "http_retry",
-                        url=str(request.url),
-                        status=response.status_code,
-                        attempt=attempt + 1,
-                        delay=delay,
+                        "http_retry url=%s status=%d attempt=%d delay=%.2f",
+                        str(request.url),
+                        response.status_code,
+                        attempt + 1,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -90,11 +90,11 @@ class RetryTransport(httpx.AsyncBaseTransport):
                 if attempt < self._retries:
                     delay = self._delay(attempt)
                     logger.warning(
-                        "http_retry_connection",
-                        url=str(request.url),
-                        error=str(exc),
-                        attempt=attempt + 1,
-                        delay=delay,
+                        "http_retry_connection url=%s error=%s attempt=%d delay=%.2f",
+                        str(request.url),
+                        str(exc),
+                        attempt + 1,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                     continue
