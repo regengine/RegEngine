@@ -20,16 +20,16 @@ Usage::
 from __future__ import annotations
 
 import asyncio
-import logging
 import random
 from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
+import structlog
 
 from shared.circuit_breaker import CircuitBreaker, CircuitOpenError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger("resilient_http")
 
 # Per-service circuit breaker registry (lazily populated)
 _http_circuits: dict[str, CircuitBreaker] = {}
@@ -76,11 +76,11 @@ class RetryTransport(httpx.AsyncBaseTransport):
                 if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self._retries:
                     delay = self._delay(attempt)
                     logger.warning(
-                        "http_retry url=%s status=%d attempt=%d delay=%.2f",
-                        str(request.url),
-                        response.status_code,
-                        attempt + 1,
-                        delay,
+                        "http_retry",
+                        url=str(request.url),
+                        status=response.status_code,
+                        attempt=attempt + 1,
+                        delay=delay,
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -90,11 +90,11 @@ class RetryTransport(httpx.AsyncBaseTransport):
                 if attempt < self._retries:
                     delay = self._delay(attempt)
                     logger.warning(
-                        "http_retry_connection url=%s error=%s attempt=%d delay=%.2f",
-                        str(request.url),
-                        str(exc),
-                        attempt + 1,
-                        delay,
+                        "http_retry_connection",
+                        url=str(request.url),
+                        error=str(exc),
+                        attempt=attempt + 1,
+                        delay=delay,
                     )
                     await asyncio.sleep(delay)
                     continue
