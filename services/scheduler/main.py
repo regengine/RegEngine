@@ -516,7 +516,15 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(b'{"status":"healthy","service":"scheduler"}')
 
     def _handle_metrics(self) -> None:
-        """Return Prometheus metrics."""
+        """Return Prometheus metrics (requires X-Metrics-Key header)."""
+        expected = os.environ.get("METRICS_API_KEY", "")
+        provided = self.headers.get("X-Metrics-Key", "")
+        if not expected or provided != expected:
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"detail":"Forbidden"}')
+            return
         content = metrics.get_metrics()
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")

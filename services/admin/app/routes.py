@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -240,7 +241,7 @@ def consumer_health():
     return JSONResponse(content=health_info, status_code=status_code)
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def metrics():
     """Prometheus metrics endpoint."""
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)

@@ -5,6 +5,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 
 from ...fsma_metrics import (
@@ -40,7 +41,7 @@ def fsma_health():
     return get_health_status()
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def fsma_metrics_endpoint():
     """
     Prometheus metrics endpoint for FSMA 204 compliance monitoring.

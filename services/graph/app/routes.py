@@ -2,6 +2,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query, Depends
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 import uuid
@@ -64,7 +65,7 @@ async def readiness():
     return {"status": "ready", "service": "graph-api"}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
