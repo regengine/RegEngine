@@ -297,6 +297,37 @@ if _router_enabled("integration"):
     from app.integration_router import router as integration_router
     app.include_router(integration_router)
 
+
+# ===========================================================================
+# Compliance Control Plane — FSMA 204 operational backbone
+# ===========================================================================
+
+# Canonical Records (provenance, amendment chain, ingestion runs)
+if _router_enabled("canonical_records"):
+    from app.canonical_router import router as canonical_records_router
+    app.include_router(canonical_records_router)
+
+# Rules Engine (evaluate, inspect, seed rule definitions)
+if _router_enabled("rules"):
+    from app.rules_router import router as rules_engine_router
+    app.include_router(rules_engine_router)
+
+# Exception Queue (remediation workflow)
+if _router_enabled("exceptions"):
+    from app.exception_router import router as exception_queue_router
+    app.include_router(exception_queue_router)
+
+# Request-Response Workflow (24-hour FDA response)
+if _router_enabled("request_workflow"):
+    from app.request_workflow_router import router as request_workflow_router
+    app.include_router(request_workflow_router)
+
+# Identity Resolution (entities, aliases, merges, review queue)
+if _router_enabled("identity"):
+    from app.identity_router import router as identity_resolution_router
+    app.include_router(identity_resolution_router)
+
+
 # Standardized Health & Readiness (Phase 17)
 # NOTE: Custom /health endpoint already registered via routes_health_metrics.py
 # which includes Kafka status. Do NOT install the Phase 17 generic health router
