@@ -20,14 +20,6 @@ export const useIngestionHealth = () => {
   });
 };
 
-export const useOpportunityHealth = () => {
-  return useQuery({
-    queryKey: ['opportunity', 'health'],
-    queryFn: () => apiClient.getOpportunityHealth(),
-    refetchInterval: 30000,
-  });
-};
-
 export const useComplianceHealth = () => {
   return useQuery({
     queryKey: ['compliance', 'health'],
@@ -144,38 +136,6 @@ export const useChecklist = (checklistId: string, enabled = true) => {
 export const useValidateConfig = () => {
   return useMutation({
     mutationFn: (request: ValidationRequest) => apiClient.validateConfig(request),
-  });
-};
-
-// Opportunities
-export const useArbitrageOpportunities = (params: {
-  j1?: string;
-  j2?: string;
-  concept?: string;
-  rel_delta?: number;
-  limit?: number;
-  since?: string;
-}) => {
-  return useQuery({
-    queryKey: ['opportunities', 'arbitrage', params],
-    queryFn: () => apiClient.getArbitrageOpportunities(params),
-    staleTime: 1 * 60 * 1000, // 1 minute
-    // Arbitrage endpoint allows optional jurisdictions, but we should still have at least one jurisdiction
-    enabled: !!params.j1 || !!params.j2,
-  });
-};
-
-export const useComplianceGaps = (params: {
-  j1?: string;
-  j2?: string;
-  limit?: number;
-}) => {
-  return useQuery({
-    queryKey: ['opportunities', 'gaps', params],
-    queryFn: () => apiClient.getComplianceGaps(params),
-    staleTime: 1 * 60 * 1000,
-    // Only fetch when both jurisdictions are provided (required by backend)
-    enabled: !!params.j1 && !!params.j2,
   });
 };
 

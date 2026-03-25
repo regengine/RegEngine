@@ -269,9 +269,6 @@ curl http://localhost:8100/health
 # Graph Service
 curl http://localhost:8200/health
 
-# Opportunity API
-curl http://localhost:8300/health
-
 # Compliance API
 curl http://localhost:8500/health
 ```

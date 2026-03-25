@@ -11,7 +11,6 @@
 | **Graph** | 1 | ⚠️ Basic |
 | **NLP** | 1 | ⚠️ Basic |
 | **Compliance** | 1 | ⚠️ Basic |
-| **Opportunity** | 1 | ⚠️ Basic |
 | **E2E** | 1 | ⚠️ Has mock fallback |
 | **Load** | 2 | ✅ Locust defined |
 | **Total** | 75+ | |

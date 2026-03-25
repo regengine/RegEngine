@@ -8,8 +8,6 @@ import type {
   ComplianceChecklist,
   ValidationRequest,
   ValidationResult,
-  OpportunityArbitrage,
-  ComplianceGap,
   Industry,
   TenantResponse,
   LoginResponse,
@@ -293,35 +291,6 @@ class APIClient {
   async bulkRejectDiscovery(indices: number[]): Promise<any> {
     const { data } = await this.ingestionClient.post('/v1/ingest/discovery/bulk-reject', { indices });
     return data;
-  }
-
-  // Opportunity API (served by Graph service)
-  async getOpportunityHealth(): Promise<HealthCheckResponse> {
-    const { data } = await this.graphClient.get('/health');
-    return data;
-  }
-
-  async getArbitrageOpportunities(params: {
-    j1?: string;
-    j2?: string;
-    concept?: string;
-    rel_delta?: number;
-    limit?: number;
-    since?: string;
-  }): Promise<OpportunityArbitrage[]> {
-    // TODO: No /graph/arbitrage endpoint exists in the graph service. Re-enable when backend adds this route.
-    // const { data } = await this.graphClient.get('/graph/arbitrage', { params });
-    // return data.items || [];
-    return [];
-  }
-
-  async getComplianceGaps(params: {
-    j1?: string;
-    j2?: string;
-    limit?: number;
-  }): Promise<ComplianceGap[]> {
-    const { data } = await this.graphClient.get('/graph/gaps', { params });
-    return data.items || [];
   }
 
   // Compliance API

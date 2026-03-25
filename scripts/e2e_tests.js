@@ -10,7 +10,6 @@
  *   - Admin API at http://localhost:8400
  *   - Ingestion Service at http://localhost:8000
  *   - Compliance API at http://localhost:8500
- *   - Opportunity API at http://localhost:8300
  *   - Frontend at http://localhost:3000
  * 
  * Usage:
@@ -43,7 +42,6 @@ function getAdminKey() {
 const ADMIN_URL = 'http://localhost:8400';
 const INGESTION_URL = 'http://localhost:8000';
 const COMPLIANCE_URL = 'http://localhost:8500';
-const OPPORTUNITY_URL = 'http://localhost:8300';
 const FRONTEND_URL = 'http://localhost:3000';
 
 let passed = 0;
@@ -100,13 +98,6 @@ async function runTests() {
         assert(res.ok, `Expected 200, got ${res.status}`);
         const data = await res.json();
         assert(data.status === 'healthy', 'Expected status=healthy');
-    });
-
-    await test('Opportunity API health', async () => {
-        const res = await fetch(`${OPPORTUNITY_URL}/health`);
-        assert(res.ok, `Expected 200, got ${res.status}`);
-        const data = await res.json();
-        assert(data.status === 'ok', 'Expected status=ok');
     });
 
     // ========================================
@@ -196,30 +187,6 @@ async function runTests() {
         });
         // Auth check happens first, then validation
         assert(res.status === 422 || res.status === 401, `Expected 422 or 401, got ${res.status}`);
-    });
-
-    // ========================================
-    // Opportunity API Tests
-    // ========================================
-    console.log('\n📋 Opportunity API\n');
-
-    await test('Arbitrage endpoint returns items', async () => {
-        const res = await fetch(`${OPPORTUNITY_URL}/opportunities/arbitrage?j1=EU&j2=US-NY`);
-        assert(res.ok, `Expected 200, got ${res.status}`);
-        const data = await res.json();
-        assert('items' in data, 'Expected items in response');
-    });
-
-    await test('Gaps endpoint returns items', async () => {
-        const res = await fetch(`${OPPORTUNITY_URL}/opportunities/gaps?j1=EU&j2=US-CA`);
-        assert(res.ok, `Expected 200, got ${res.status}`);
-        const data = await res.json();
-        assert('items' in data, 'Expected items in response');
-    });
-
-    await test('Gaps endpoint requires jurisdictions', async () => {
-        const res = await fetch(`${OPPORTUNITY_URL}/opportunities/gaps`);
-        assert(res.status === 422, `Expected 422, got ${res.status}`);
     });
 
     // ========================================
