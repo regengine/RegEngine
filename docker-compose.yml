@@ -260,8 +260,10 @@ services:
           cpus: '0.25'
           memory: 256M
     depends_on:
-      - neo4j
-      - redpanda
+      neo4j:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8200/health" ]
       interval: 10s
