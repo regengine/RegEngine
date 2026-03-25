@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
         authenticated: !!access_token,
         has_api_key: !!api_key,
         has_admin_key: !!admin_key,
+        has_credentials: !!(access_token || api_key || admin_key),
         tenant_id,
     });
 }

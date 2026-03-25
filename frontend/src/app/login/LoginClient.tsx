@@ -108,7 +108,7 @@ export default function LoginPage() {
         // If the middleware redirected here with an error flag, the user
         // needs to re-authenticate — do NOT auto-redirect back.
         const errorParam = searchParams.get('error');
-        if (errorParam === 'session_expired' || errorParam === 'auth_config') {
+        if (errorParam === 'session_expired' || errorParam === 'auth_config' || errorParam === 'token_invalid') {
             return;
         }
 
@@ -132,6 +132,15 @@ export default function LoginPage() {
                 response.user,
                 response.tenant_id
             );
+
+            // Clear any error params (e.g. ?error=session_expired) left by
+            // middleware so the redirect useEffect doesn't block navigation
+            // after a successful re-login.
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('error')) {
+                url.searchParams.delete('error');
+                router.replace(url.pathname + url.search);
+            }
 
             // Ensure the middleware picks up the newly-set cookie before
             // the useEffect redirect fires.
@@ -238,6 +247,21 @@ export default function LoginPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
+                            {searchParams.get('error') === 'auth_config' && (
+                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
+                                    Authentication is misconfigured (AUTH_SECRET_KEY not set). Contact your administrator.
+                                </div>
+                            )}
+                            {searchParams.get('error') === 'token_invalid' && (
+                                <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
+                                    Your session could not be verified. Please sign in again.
+                                </div>
+                            )}
+                            {searchParams.get('error') === 'session_expired' && (
+                                <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-400">
+                                    Your session has expired. Please sign in again.
+                                </div>
+                            )}
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 {error && (
                                     <div
