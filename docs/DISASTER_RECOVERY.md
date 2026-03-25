@@ -190,7 +190,7 @@ Step 3: Services
 ├── Deploy Admin API
 ├── Deploy Ingestion (with Kafka paused)
 ├── Deploy Graph Service
-├── Deploy Compliance/Opportunity APIs
+├── Deploy Compliance API
 └── Resume Kafka consumers
 
 Step 4: Verification

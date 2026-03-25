@@ -273,10 +273,6 @@ curl "https://api.regengine.ai/opportunities/arbitrage?j1=US&j2=EU&concept=capit
 **Ingestion API**:
 - `POST /ingest/url` - Ingest a regulatory document from URL
 
-**Opportunity API**:
-- `GET /opportunities/arbitrage` - Find threshold differences across jurisdictions
-- `GET /opportunities/gaps` - Detect concepts present in one jurisdiction but not another
-
 **Admin API**:
 - `POST /admin/keys` - Create API keys (requires admin auth)
 - `GET /admin/keys` - List all API keys

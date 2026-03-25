@@ -160,7 +160,6 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}Service Endpoints:${NC}"
 echo -e "  • Admin API: http://localhost:8400/docs"
 echo -e "  • Ingestion: http://localhost:8000/docs"
-echo -e "  • Opportunity: http://localhost:8300/docs"
 echo -e "  • Compliance: http://localhost:8500/docs"
 echo -e "  • Frontend UI: http://localhost:3000"
 echo -e "  • Tenant Controls: http://localhost:3000/controls"

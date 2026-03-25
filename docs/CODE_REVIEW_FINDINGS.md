@@ -354,7 +354,6 @@ Only ~40% of endpoints record Prometheus metrics:
 - ✅ Ingestion service: Full metrics
 - ❌ Graph service: No metrics
 - ❌ Admin service: Partial metrics
-- ✅ Opportunity service: Full metrics
 
 **Missing metrics on:**
 - `/v1/provisions/by-request`

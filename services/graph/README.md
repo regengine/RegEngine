@@ -1,6 +1,6 @@
 # Graph Service
 
-Graph analytics and opportunity detection service using Neo4j for relationship mapping and compliance arbitrage analysis.
+Graph analytics service using Neo4j for relationship mapping, opportunity detection, and compliance arbitrage analysis.
 
 ## Overview
 
@@ -424,7 +424,6 @@ redis-cli -n 2 FLUSHDB
 
 ## Related Documentation
 
-- [Opportunity Service](../opportunity/README.md) - Uses graph results
 - [Compliance Service](../compliance/README.md) - Framework definitions
 - [Neo4j Best Practices](../../docs/neo4j-best-practices.md)
 
