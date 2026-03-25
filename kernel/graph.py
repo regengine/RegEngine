@@ -39,9 +39,13 @@ class MappingEngine:
         """Close the Neo4j driver."""
         await self.driver.close()
 
-    async def map_requirement(self, obligation_id: str) -> List[Dict[str, Any]]:
+    async def map_requirement(self, obligation_id: str, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Find and link similar obligations across different regulations.
-        
+
+        Args:
+            obligation_id: The obligation text to find mappings for.
+            tenant_id: Optional tenant UUID string for multi-tenant isolation.
+
         Returns:
             List of detected mappings.
         """
@@ -51,22 +55,24 @@ class MappingEngine:
 
         # 1. Fetch the source obligation and its context
         async with self.driver.session() as session:
-            source_res = await session.run("""
-                MATCH (o:Obligation {text: $id})<-[:REQUIRES]-(s:Section)
+            tenant_filter = "AND o.tenant_id = $tenant_id" if tenant_id else ""
+            source_res = await session.run(f"""
+                MATCH (o:Obligation {{text: $id}})<-[:REQUIRES]-(s:Section)
+                WHERE true {tenant_filter}
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 1
-            """, id=obligation_id)
+            """, id=obligation_id, tenant_id=tenant_id)
             source = await source_res.single()
             if not source:
                 return []
 
             # 2. Find candidate obligations from OTHER regulations
-            candidates_res = await session.run("""
+            candidates_res = await session.run(f"""
                 MATCH (o:Obligation)<-[:REQUIRES]-(s:Section)
-                WHERE s.regulation <> $reg
+                WHERE s.regulation <> $reg {tenant_filter}
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 20
-            """, reg=source["regulation"])
+            """, reg=source["regulation"], tenant_id=tenant_id)
             candidates = [dict(c) async for c in candidates_res]
 
         if not candidates:
@@ -118,15 +124,16 @@ class MappingEngine:
 
         # 4. Persistence: Create MAPPED_TO relationships in the graph
         if mappings:
+            tenant_match = ", tenant_id: $tenant_id" if tenant_id else ""
             async with self.driver.session() as session:
-                await session.run("""
+                await session.run(f"""
                     UNWIND $mappings as map
-                    MATCH (o1:Obligation {text: map.source_id})
-                    MATCH (o2:Obligation {text: map.target_id})
+                    MATCH (o1:Obligation {{text: map.source_id{tenant_match}}})
+                    MATCH (o2:Obligation {{text: map.target_id{tenant_match}}})
                     MERGE (o1)-[r:MAPPED_TO]->(o2)
                     SET r.confidence = map.confidence,
                         r.justification = map.justification,
                         r.mapped_at = datetime()
-                """, mappings=mappings)
+                """, mappings=mappings, tenant_id=tenant_id)
                 
         return mappings
