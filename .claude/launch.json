@@ -1,0 +1,47 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend",
+      "runtimeExecutable": "/Users/sellers/RegEngine/frontend/node_modules/.bin/next",
+      "runtimeArgs": ["dev", "/Users/sellers/RegEngine/frontend"],
+      "port": 3000
+    },
+    {
+      "name": "admin-api",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8400"],
+      "port": 8400
+    },
+    {
+      "name": "ingestion-service",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "nlp-service",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8100"],
+      "port": 8100
+    },
+    {
+      "name": "graph-service",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8200"],
+      "port": 8200
+    },
+    {
+      "name": "compliance-api",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8500"],
+      "port": 8500
+    },
+    {
+      "name": "scheduler",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["main.py"],
+      "port": 8600
+    }
+  ]
+}

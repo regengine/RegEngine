@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from shared.auth import require_api_key
 from shared.resilient_http import resilient_client
+from shared.circuit_breaker import CircuitOpenError
 from .config import settings
 from .fsma_spreadsheet import generate_fda_csv
 
@@ -292,23 +293,30 @@ async def fsma_audit_spreadsheet(
     if request_id:
         headers["X-Request-ID"] = request_id
 
-    async with resilient_client(timeout=30.0, circuit_name="graph-service") as client:
-        resp = await client.get(
-            f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
-            params=params,
-            headers=headers,
+    try:
+        async with resilient_client(timeout=30.0, circuit_name="graph-service") as client:
+            resp = await client.get(
+                f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
+                params=params,
+                headers=headers,
+            )
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Graph service circuit open — retry after {exc.retry_after:.0f}s",
+        ) from exc
+
+    if resp.status_code >= 500:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Graph service error ({resp.status_code}): {resp.text[:200]}",
         )
-        if resp.status_code >= 500:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Graph service error ({resp.status_code}): {resp.text[:200]}",
-            )
-        if resp.status_code >= 400:
-            raise HTTPException(
-                status_code=resp.status_code,
-                detail=f"Graph service rejected request: {resp.text[:200]}",
-            )
-        data = resp.json()
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"Graph service rejected request: {resp.text[:200]}",
+        )
+    data = resp.json()
 
     events = data.get("events") or data.get("results") or []
 
