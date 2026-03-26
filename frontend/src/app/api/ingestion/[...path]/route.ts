@@ -101,10 +101,7 @@ async function proxyRequest(
     // Inject server-side API key if client didn't provide one.
     // REGENGINE_API_KEY must be set on the deployment platform (Vercel).
     if (!headers.has('x-regengine-api-key')) {
-      const serverApiKey =
-        process.env.REGENGINE_API_KEY ||
-        process.env.NEXT_PUBLIC_API_KEY ||
-        '';
+      const serverApiKey = process.env.REGENGINE_API_KEY || '';
       headers.set('x-regengine-api-key', serverApiKey);
     }
 
