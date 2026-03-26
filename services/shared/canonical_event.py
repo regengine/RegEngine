@@ -66,6 +66,8 @@ class IngestionSource(str, Enum):
     EPCIS_XML = "epcis_xml"
     EDI = "edi"
     MANUAL = "manual"
+    MOBILE_CAPTURE = "mobile_capture"
+    SUPPLIER_PORTAL = "supplier_portal"
     LEGACY_V002 = "legacy_v002"
 
 
