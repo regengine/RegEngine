@@ -65,7 +65,7 @@ async function proxyRequest(  request: NextRequest,
   try {
     if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
       return NextResponse.json(
-        { error: 'Admin API proxy unavailable during static build', static_mode: true },
+        { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
         { status: 503 },
       );
     }
@@ -147,6 +147,7 @@ async function proxyRequest(  request: NextRequest,
             outgoingHeaders.set(headerName, headerValue);
           }
         }
+        console.info(`[proxy/admin] ${method} ${path} → ${response.status}`);
         return new NextResponse(response.body, {
           status: response.status,
           headers: outgoingHeaders,
