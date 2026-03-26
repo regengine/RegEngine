@@ -165,6 +165,36 @@ async def create_request(
     return {"request_case_id": case_id, "status": "intake"}
 
 
+# NOTE: /deadlines MUST come before /{request_case_id} to avoid route shadowing
+@router.get(
+    "/deadlines",
+    summary="Check deadline status for all active cases",
+    description=(
+        "Returns urgency classification for all active request cases: "
+        "overdue (past deadline), critical (<2h), urgent (<6h), normal (>6h). "
+        "Use for dashboard alerts and background monitoring."
+    ),
+)
+async def check_deadlines(
+    tenant_id: Optional[str] = Query(None),
+    principal: IngestionPrincipal = Depends(require_permission("requests.read")),
+    db_session=Depends(_get_db_session),
+):
+    tid = _resolve_tenant(tenant_id, principal)
+    svc = _get_service(db_session)
+    cases = svc.check_deadline_status(tid)
+    overdue = [c for c in cases if c["urgency"] == "overdue"]
+    critical = [c for c in cases if c["urgency"] == "critical"]
+    return {
+        "tenant_id": tid,
+        "cases": cases,
+        "total": len(cases),
+        "overdue_count": len(overdue),
+        "critical_count": len(critical),
+        "alert": len(overdue) > 0 or len(critical) > 0,
+    }
+
+
 @router.get(
     "/{request_case_id}",
     summary="Get request case detail",
@@ -400,33 +430,4 @@ async def check_blockers(
     return {
         "request_case_id": request_case_id,
         **result,
-    }
-
-
-@router.get(
-    "/deadlines",
-    summary="Check deadline status for all active cases",
-    description=(
-        "Returns urgency classification for all active request cases: "
-        "overdue (past deadline), critical (<2h), urgent (<6h), normal (>6h). "
-        "Use for dashboard alerts and background monitoring."
-    ),
-)
-async def check_deadlines(
-    tenant_id: Optional[str] = Query(None),
-    principal: IngestionPrincipal = Depends(require_permission("requests.read")),
-    db_session=Depends(_get_db_session),
-):
-    tid = _resolve_tenant(tenant_id, principal)
-    svc = _get_service(db_session)
-    cases = svc.check_deadline_status(tid)
-    overdue = [c for c in cases if c["urgency"] == "overdue"]
-    critical = [c for c in cases if c["urgency"] == "critical"]
-    return {
-        "tenant_id": tid,
-        "cases": cases,
-        "total": len(cases),
-        "overdue_count": len(overdue),
-        "critical_count": len(critical),
-        "alert": len(overdue) > 0 or len(critical) > 0,
     }
