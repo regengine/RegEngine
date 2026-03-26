@@ -33,17 +33,7 @@ async function billingFetch<T>(path: string, options?: RequestInit): Promise<T> 
     return res.json();
 }
 
-function getApiKey(): string {
-    if (typeof window === 'undefined') {
-        return process.env.NEXT_PUBLIC_API_KEY || '';
-    }
-    return (
-        localStorage.getItem('regengine_api_key') ||
-        localStorage.getItem('re-api-key') ||
-        process.env.NEXT_PUBLIC_API_KEY ||
-        ''
-    );
-}
+// getApiKey removed — callers must pass apiKey from useAuth().apiKey
 
 function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
     if (typeof window === 'undefined') {
@@ -65,7 +55,7 @@ function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
 }
 
 async function createIngestionCheckout(
-    params: { tier_id: string; billing_cycle?: string; credit_code?: string },
+    params: { tier_id: string; billing_cycle?: string; credit_code?: string; apiKey?: string },
 ): Promise<CheckoutSessionData> {
     const { tenantId, customerEmail } = getCheckoutContext();
     const billingCycle = params.billing_cycle || 'annual';
@@ -73,7 +63,7 @@ async function createIngestionCheckout(
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-RegEngine-API-Key': getApiKey(),
+            'X-RegEngine-API-Key': params.apiKey || '',
         },
         body: JSON.stringify({
             plan_id: params.tier_id,
@@ -221,7 +211,7 @@ export function useCreateCheckout() {
     return useMutation<
         CheckoutSessionData,
         Error,
-        { tier_id: string; billing_cycle?: string; credit_code?: string }
+        { tier_id: string; billing_cycle?: string; credit_code?: string; apiKey?: string }
     >({
         mutationFn: createIngestionCheckout,
     });
