@@ -20,11 +20,7 @@ import {
 } from 'lucide-react';
 
 /* ── Available Integrations Catalog ── */
-// MEDIUM #10 (UI Debug Audit): These are available integrations, NOT connection
-// statuses. Previous version showed hardcoded "connected"/"pending" statuses that
-// didn't reflect actual tenant configuration. Status is now "available" for all
-// until the backend supports real integration status tracking.
-// TODO: Fetch actual integration status from GET /api/v1/integrations/{tenant_id}
+// Integration catalog — status is updated from API if available
 const INTEGRATIONS = [
     { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'available', desc: 'Cold-chain temperature monitoring' },
     { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'available', desc: 'Real-time shipment visibility' },
@@ -84,6 +80,35 @@ export default function SettingsPage() {
             }));
         }
     }, [currentOrg, user]);
+
+    // Fetch real integration status from backend
+    const [integrations, setIntegrations] = useState(INTEGRATIONS);
+    useEffect(() => {
+        if (!tenantId || !apiKey) return;
+        const fetchIntegrations = async () => {
+            try {
+                const { getServiceURL } = await import('@/lib/api-config');
+                const base = getServiceURL('ingestion');
+                const res = await fetch(`${base}/api/v1/integrations/${tenantId}`, {
+                    headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.integrations && Array.isArray(data.integrations)) {
+                        // Merge real status into catalog
+                        const statusMap = new Map(data.integrations.map((i: any) => [i.id, i.status]));
+                        setIntegrations(INTEGRATIONS.map(i => ({
+                            ...i,
+                            status: (statusMap.get(i.id) as string) || i.status,
+                        })));
+                    }
+                }
+            } catch {
+                // API unavailable — keep catalog defaults
+            }
+        };
+        fetchIntegrations();
+    }, [tenantId, apiKey]);
 
     // Derive plan display from subscription data
     const planName = subscriptionData?.subscription?.tier_id
@@ -198,7 +223,7 @@ export default function SettingsPage() {
                                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all whitespace-nowrap min-h-[44px] active:scale-[0.96] flex-shrink-0 ${activeTab === tab.id ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'}`}>
                                 <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {tab.label}
                                 {tab.id === 'integrations' && (
-                                    <span className="ml-1 text-[10px] bg-white/20 px-1.5 rounded-full">{INTEGRATIONS.filter(i => i.status === 'connected').length}</span>
+                                    <span className="ml-1 text-[10px] bg-white/20 px-1.5 rounded-full">{integrations.filter(i => i.status === 'connected').length}</span>
                                 )}
                             </button>
                         );
@@ -381,9 +406,9 @@ export default function SettingsPage() {
                         {/* Stats row */}
                         <div className="grid grid-cols-3 gap-2 sm:gap-3">
                             {[
-                                { label: 'Connected', value: INTEGRATIONS.filter(i => i.status === 'connected').length, color: '#10b981' },
-                                { label: 'Pending', value: INTEGRATIONS.filter(i => i.status === 'pending').length, color: '#f59e0b' },
-                                { label: 'Available', value: INTEGRATIONS.filter(i => i.status === 'disconnected').length, color: '#6b7280' },
+                                { label: 'Connected', value: integrations.filter(i => i.status === 'connected').length, color: '#10b981' },
+                                { label: 'Pending', value: integrations.filter(i => i.status === 'pending').length, color: '#f59e0b' },
+                                { label: 'Available', value: integrations.filter(i => i.status === 'available' || i.status === 'disconnected').length, color: '#6b7280' },
                             ].map((s) => (
                                 <div key={s.label} className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
                                     <div className="text-lg sm:text-xl font-bold" style={{ color: s.color }}>{s.value}</div>
@@ -401,7 +426,7 @@ export default function SettingsPage() {
                                 <CardDescription>Connect third-party systems for automated event ingestion and data sync</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2">
-                                {INTEGRATIONS.map((int) => {
+                                {integrations.map((int) => {
                                     const cfg = STATUS_CONFIG[int.status];
                                     return (
                                         <div key={int.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2 hover:border-[var(--re-brand)] transition-colors">                                            <div className="min-w-0">
