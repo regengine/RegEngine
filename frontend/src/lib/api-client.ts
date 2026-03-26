@@ -113,7 +113,7 @@ class APIClient {
     });
 
     // Default API key from environment (no hardcoded fallback)
-    const defaultApiKey = process.env.NEXT_PUBLIC_API_KEY || '';
+    const defaultApiKey = '';
 
     client.interceptors.request.use((config) => {
       // Check for existing API key headers (case-insensitive since axios lowercases header names)
