@@ -7,17 +7,13 @@ from __future__ import annotations
 
 import logging
 import os as _os
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-try:
-    from confluent_kafka.admin import AdminClient
-except ModuleNotFoundError:  # pragma: no cover
-    AdminClient = None  # type: ignore[assignment]
+from shared.kafka_consumer_base import kafka_health_check
 
 from .config import get_settings
 
@@ -36,20 +32,16 @@ def health() -> dict[str, str]:
     treating the service as fully down.
     """
     settings = get_settings()
-    kafka_status = "unavailable"
-    try:
-        if AdminClient is None:
-            raise RuntimeError("confluent_kafka is not installed")
-        admin_client = AdminClient(
-            {
-                "bootstrap.servers": settings.kafka_bootstrap_servers,
-                "client.id": "ingestion-healthcheck",
-            }
+    kafka_result = kafka_health_check(
+        bootstrap_servers=settings.kafka_bootstrap_servers, timeout=3.0,
+    )
+    kafka_status = kafka_result["status"]
+
+    if kafka_status != "available":
+        logger.warning(
+            "ingestion_health_kafka_unavailable: %s",
+            kafka_result.get("error", "unknown"),
         )
-        admin_client.list_topics(timeout=3)
-        kafka_status = "available"
-    except Exception as exc:
-        logger.warning("ingestion_health_kafka_unavailable: %s", str(exc))
 
     overall_status = "healthy" if kafka_status == "available" else "degraded"
     return {
