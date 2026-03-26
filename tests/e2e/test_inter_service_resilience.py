@@ -33,7 +33,7 @@ NLP_URL = os.getenv("NLP_URL", f"{BASE_URL}:8100")
 
 API_KEY = os.getenv("REGENGINE_API_KEY", "test-key-e2e")
 TENANT_ID = os.getenv("REGENGINE_TENANT_ID", "e2e-test-tenant")
-BYPASS_TOKEN = os.getenv("AUTH_TEST_BYPASS_TOKEN", "admin")
+BYPASS_TOKEN = os.getenv("AUTH_TEST_BYPASS_TOKEN", "test-bypass-ci-only-not-for-production")
 
 HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
