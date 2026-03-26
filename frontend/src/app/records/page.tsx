@@ -46,7 +46,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function CanonicalRecordsPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
 
   const [tlcFilter, setTlcFilter] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState<string | undefined>();

@@ -99,7 +99,7 @@ const DEMO_INCIDENTS = {
 
 export default function IncidentCommandPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const incidents = useQuery({
