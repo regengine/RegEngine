@@ -16,7 +16,9 @@ export function MarketingHeader() {
     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const toolsWrapperRef = useRef<HTMLDivElement | null>(null);
     const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
-    const { user } = useAuth();
+    const { user, isAuthenticated, isHydrated } = useAuth();
+    // Only show logged-in state when auth is fully verified
+    const showLoggedIn = isHydrated && isAuthenticated && !!user;
     const hideHeader =
         pathname === '/mobile/capture' ||
         pathname === '/fsma/field-capture' ||
@@ -330,7 +332,7 @@ export function MarketingHeader() {
                         <ThemeToggle />
 
                         {/* Auth-aware buttons */}
-                        {user ? (
+                        {showLoggedIn ? (
                             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                 <Link
                                     href="/dashboard"
@@ -655,7 +657,7 @@ export function MarketingHeader() {
                     gap: "10px",
                     paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
                 }}>
-                    {user ? (
+                    {showLoggedIn ? (
                         <>
                             <div style={{
                                 display: "flex",
