@@ -168,38 +168,52 @@ class Lot:
     def merge_cypher() -> str:
         """Return Cypher MERGE statement for Lot node."""
         return """
-        MERGE (l:Lot {tlc: $tlc})
+        MERGE (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
         ON CREATE SET l += $properties, l.created_at = datetime()
         ON MATCH SET l += $properties
         RETURN l
         """
 
-    def assigned_by_cypher(self) -> Optional[str]:
+    def assigned_by_cypher(self) -> Optional[tuple[str, Dict[str, Any]]]:
         """
         Generate Cypher to create ASSIGNED_BY relationship to TLC Source Facility.
 
         Returns None if neither tlc_source_gln nor tlc_source_fda_reg is set.
-        Uses GLN-based matching if available, otherwise falls back to FDA registration.
+        Returns a (cypher, params) tuple using parameterised queries to prevent
+        Cypher injection.  Uses GLN-based matching if available, otherwise falls
+        back to FDA registration.
 
         FSMA 204 requires that CREATION, INITIAL_PACKING, and TRANSFORMATION events
         must identify the entity that assigned the Traceability Lot Code.
         """
         if self.tlc_source_gln:
-            return f"""
-            MATCH (l:Lot {{tlc: '{self.tlc}'}})
-            MERGE (f:Facility {{gln: '{self.tlc_source_gln}'}})
-            ON CREATE SET f.name = 'TLC-Source-{self.tlc_source_gln}', f.created_at = datetime()
+            cypher = """
+            MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+            MERGE (f:Facility {gln: $source_gln, tenant_id: $tenant_id})
+            ON CREATE SET f.name = 'TLC-Source-' + $source_gln, f.created_at = datetime()
             MERGE (l)-[:ASSIGNED_BY]->(f)
             RETURN l, f
             """
+            params = {
+                "tlc": self.tlc,
+                "tenant_id": self.tenant_id,
+                "source_gln": self.tlc_source_gln,
+            }
+            return cypher, params
         elif self.tlc_source_fda_reg:
-            return f"""
-            MATCH (l:Lot {{tlc: '{self.tlc}'}})
-            MERGE (f:Facility {{fda_registration: '{self.tlc_source_fda_reg}'}})
-            ON CREATE SET f.name = 'TLC-Source-FDA-{self.tlc_source_fda_reg}', f.created_at = datetime()
+            cypher = """
+            MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+            MERGE (f:Facility {fda_registration: $source_fda_reg, tenant_id: $tenant_id})
+            ON CREATE SET f.name = 'TLC-Source-FDA-' + $source_fda_reg, f.created_at = datetime()
             MERGE (l)-[:ASSIGNED_BY]->(f)
             RETURN l, f
             """
+            params = {
+                "tlc": self.tlc,
+                "tenant_id": self.tenant_id,
+                "source_fda_reg": self.tlc_source_fda_reg,
+            }
+            return cypher, params
         return None
 
     def has_valid_tlc_source(self) -> bool:
@@ -294,7 +308,12 @@ class TraceEvent:
 
     @staticmethod
     def create_cypher() -> str:
-        """Return Cypher CREATE statement for TraceEvent node."""
+        """Return Cypher CREATE statement for TraceEvent node.
+
+        NOTE: tenant_id isolation depends on the caller including
+        ``tenant_id`` in the ``$properties`` map.  All call-sites must
+        ensure ``tenant_id`` is present before executing this statement.
+        """
         return """
         CREATE (e:TraceEvent $properties)
         SET e.created_at = datetime()
@@ -370,7 +389,7 @@ class Facility:
     def merge_cypher() -> str:
         """Return Cypher MERGE statement for Facility node."""
         return """
-        MERGE (f:Facility {gln: $gln})
+        MERGE (f:Facility {gln: $gln, tenant_id: $tenant_id})
         ON CREATE SET f += $properties, f.created_at = datetime()
         ON MATCH SET f += $properties
         RETURN f
@@ -380,7 +399,7 @@ class Facility:
     def merge_by_name_cypher() -> str:
         """Return Cypher MERGE statement for Facility by name (when no GLN)."""
         return """
-        MERGE (f:Facility {name: $name})
+        MERGE (f:Facility {name: $name, tenant_id: $tenant_id})
         ON CREATE SET f += $properties, f.created_at = datetime()
         ON MATCH SET f += $properties
         RETURN f
@@ -419,7 +438,7 @@ class FoodItem:
     def merge_cypher() -> str:
         """Return Cypher MERGE statement for FoodItem node."""
         return """
-        MERGE (p:FoodItem {name: $name})
+        MERGE (p:FoodItem {name: $name, tenant_id: $tenant_id})
         ON CREATE SET p += $properties, p.created_at = datetime()
         ON MATCH SET p += $properties
         RETURN p
@@ -476,7 +495,7 @@ class Document:
     def merge_cypher() -> str:
         """Return Cypher MERGE statement for Document node."""
         return """
-        MERGE (d:Document {document_id: $document_id})
+        MERGE (d:Document {document_id: $document_id, tenant_id: $tenant_id})
         ON CREATE SET d += $properties, d.created_at = datetime()
         ON MATCH SET d += $properties
         RETURN d
@@ -568,9 +587,9 @@ class FSMARelationships:
 FSMA_CONSTRAINTS = [
     # Uniqueness constraints
     "CREATE CONSTRAINT lot_tlc_tenant_unique IF NOT EXISTS FOR (l:Lot) REQUIRE (l.tlc, l.tenant_id) IS UNIQUE",
-    "CREATE CONSTRAINT facility_gln_unique IF NOT EXISTS FOR (f:Facility) REQUIRE f.gln IS UNIQUE",
-    "CREATE CONSTRAINT trace_event_id_unique IF NOT EXISTS FOR (e:TraceEvent) REQUIRE e.event_id IS UNIQUE",
-    "CREATE CONSTRAINT document_id_unique IF NOT EXISTS FOR (d:Document) REQUIRE d.document_id IS UNIQUE",
+    "CREATE CONSTRAINT facility_gln_tenant_unique IF NOT EXISTS FOR (f:Facility) REQUIRE (f.gln, f.tenant_id) IS UNIQUE",
+    "CREATE CONSTRAINT trace_event_id_tenant_unique IF NOT EXISTS FOR (e:TraceEvent) REQUIRE (e.event_id, e.tenant_id) IS UNIQUE",
+    "CREATE CONSTRAINT document_id_tenant_unique IF NOT EXISTS FOR (d:Document) REQUIRE (d.document_id, d.tenant_id) IS UNIQUE",
     # TLC Source indexes - support FSMA 204 mandate for tracking lot assignment provenance
     "CREATE INDEX lot_tlc_source_gln_idx IF NOT EXISTS FOR (l:Lot) ON (l.tlc_source_gln)",
     "CREATE INDEX lot_tlc_source_fda_idx IF NOT EXISTS FOR (l:Lot) ON (l.tlc_source_fda_reg)",
