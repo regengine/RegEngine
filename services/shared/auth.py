@@ -33,6 +33,7 @@ class APIKey(BaseModel):
     allowed_jurisdictions: list[str] = []  # e.g., ["US"], ["US","US-NY"]
     created_at: datetime
     expires_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
     rate_limit_per_minute: int = 60
     enabled: bool = True
     scopes: list[str] = []
@@ -128,6 +129,9 @@ class APIKeyStore:
         if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
             logger.warning("api_key_expired", key_id=key_id)
             return None
+
+        # Track last usage timestamp
+        api_key.last_used_at = datetime.now(timezone.utc)
 
         return api_key
 
@@ -304,10 +308,11 @@ async def require_api_key(
             )
 
     logger.info(
-        "api_key_validated",
+        "api_key_used",
         key_id=api_key.key_id,
-        name=api_key.name,
-        path=request.url.path,
+        tenant_id=getattr(api_key, "tenant_id", None),
+        endpoint=request.url.path,
+        method=request.method,
     )
     return api_key
 

@@ -10,6 +10,7 @@ Consolidates common patterns across admin, graph, and NLP consumers:
 
 Usage:
     from shared.kafka_consumer_base import (
+        kafka_health_check,
         ensure_topic,
         DLQManager,
         ConsumerHealthMonitor,
@@ -29,6 +30,69 @@ from typing import Any, Callable, Dict, Optional
 import structlog
 
 logger = structlog.get_logger("kafka-consumer-base")
+
+
+# ---------------------------------------------------------------------------
+# Health check
+# ---------------------------------------------------------------------------
+
+def kafka_health_check(
+    bootstrap_servers: Optional[str] = None,
+    timeout: float = 5.0,
+) -> Dict[str, Any]:
+    """Test Kafka/Redpanda connectivity and return status dict.
+
+    Returns a dict suitable for inclusion in HTTP health-check responses::
+
+        {"status": "available", "broker_count": 1}
+        {"status": "unavailable", "error": "..."}
+
+    Works with both ``confluent-kafka`` and ``kafka-python`` libraries,
+    preferring whichever is installed.
+    """
+    servers = bootstrap_servers or os.environ.get(
+        "KAFKA_BOOTSTRAP_SERVERS", "redpanda:9092"
+    )
+
+    # Try confluent-kafka first (used by ingestion service)
+    try:
+        from confluent_kafka.admin import AdminClient
+
+        admin = AdminClient({
+            "bootstrap.servers": servers,
+            "client.id": "health-check",
+        })
+        metadata = admin.list_topics(timeout=timeout)
+        broker_count = len(metadata.brokers)
+        logger.info("kafka_health_ok", brokers=broker_count)
+        return {"status": "available", "broker_count": broker_count}
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.warning("kafka_health_unavailable", error=str(exc))
+        return {"status": "unavailable", "error": str(exc)}
+
+    # Fallback to kafka-python
+    try:
+        from kafka.admin import KafkaAdminClient
+
+        admin = KafkaAdminClient(
+            bootstrap_servers=servers,
+            request_timeout_ms=int(timeout * 1000),
+        )
+        try:
+            brokers = admin.describe_cluster()
+            broker_count = len(brokers.get("brokers", []))
+            logger.info("kafka_health_ok", brokers=broker_count)
+            return {"status": "available", "broker_count": broker_count}
+        finally:
+            admin.close()
+    except ImportError:
+        logger.warning("kafka_libraries_not_installed")
+        return {"status": "unavailable", "error": "no kafka library installed"}
+    except Exception as exc:
+        logger.warning("kafka_health_unavailable", error=str(exc))
+        return {"status": "unavailable", "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +192,10 @@ class DLQManager:
         self._producer = None
         self._lock = threading.Lock()
         self._retry_counts: Dict[str, int] = {}
+        self._consecutive_failures: int = 0
+        self._total_dlq_sends: int = 0
+        self._total_dlq_failures: int = 0
+        self._failure_alert_threshold: int = 3
 
     def _get_producer(self):
         """Lazy, thread-safe producer initialization."""
@@ -160,9 +228,32 @@ class DLQManager:
             }
             producer.send(self._dlq_topic, value=dlq_payload)
             producer.flush(timeout=5.0)
-            logger.info("message_sent_to_dlq", topic=self._dlq_topic, error=error)
+            self._total_dlq_sends += 1
+            self._consecutive_failures = 0
+            logger.info(
+                "message_sent_to_dlq",
+                topic=self._dlq_topic,
+                error=error,
+                total_dlq_sends=self._total_dlq_sends,
+            )
         except Exception as exc:
-            logger.error("dlq_send_failed", topic=self._dlq_topic, error=str(exc))
+            self._consecutive_failures += 1
+            self._total_dlq_failures += 1
+            logger.error(
+                "dlq_send_failed",
+                topic=self._dlq_topic,
+                error=str(exc),
+                consecutive_failures=self._consecutive_failures,
+                total_failures=self._total_dlq_failures,
+            )
+            if self._consecutive_failures >= self._failure_alert_threshold:
+                logger.critical(
+                    "dlq_alert_dead_letter_unavailable",
+                    topic=self._dlq_topic,
+                    source_topic=self._source_topic,
+                    consecutive_failures=self._consecutive_failures,
+                    message="Dead letter queue is unreachable — failed events are being dropped",
+                )
 
     def track_retry(self, doc_id: str) -> int:
         """Increment and return the retry count for a document."""

@@ -125,8 +125,66 @@ def _fsma_row_to_product(row) -> Product:
     )
 
 
+def _derive_products_from_events(db, tenant_id: str, category: str | None = None) -> list[Product]:
+    """Derive product list from canonical fsma.traceability_events table.
+
+    Used as a fallback when fsma.products is empty for a tenant — the
+    canonical events store still has product_reference / lot data we can
+    surface so the catalog is not blank.
+    """
+    from sqlalchemy import text
+    try:
+        rows = db.execute(
+            text(
+                "SELECT product_reference, "
+                "       COUNT(*) AS cte_count, "
+                "       MAX(event_time) AS last_cte, "
+                "       MIN(event_time) AS first_seen, "
+                "       array_agg(DISTINCT traceability_lot_code) "
+                "           FILTER (WHERE traceability_lot_code IS NOT NULL) AS lot_codes "
+                "FROM fsma.traceability_events "
+                "WHERE tenant_id = CAST(:tid AS uuid) "
+                "  AND product_reference IS NOT NULL "
+                "  AND product_reference != '' "
+                "GROUP BY product_reference "
+                "ORDER BY product_reference"
+            ),
+            {"tid": tenant_id},
+        ).fetchall()
+    except Exception as e:
+        logger.warning("derive_products_from_events_failed: %s", e)
+        return []
+
+    products: list[Product] = []
+    for row in rows:
+        r = dict(row._mapping) if hasattr(row, "_mapping") else dict(row)
+        ref = r.get("product_reference", "")
+        p = Product(
+            id=f"{tenant_id}-ev-{abs(hash(ref)) % 10**8:08d}",
+            name=ref,
+            category="",  # not available from events
+            ftl_covered=True,
+            description=f"Derived from {r.get('cte_count', 0)} traceability events",
+            cte_count=int(r.get("cte_count", 0)),
+            last_cte=str(r["last_cte"]) if r.get("last_cte") else None,
+            created_at=str(r["first_seen"]) if r.get("first_seen") else "",
+        )
+        products.append(p)
+
+    # If a category filter was requested but events have no category, return
+    # all derived products only when no filter, or empty when filtered (we
+    # cannot match categories we don't have).
+    if category:
+        return []
+    return products
+
+
 def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product] | None:
-    """Fetch catalog from fsma.products table. Returns None if DB unavailable."""
+    """Fetch catalog from fsma.products table. Returns None if DB unavailable.
+
+    Falls back to deriving products from fsma.traceability_events when the
+    products table is empty for this tenant.
+    """
     from sqlalchemy import text
     db = _get_db_session()
     if db is None:
@@ -150,7 +208,15 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
                 ),
                 {"tid": tenant_id},
             ).fetchall()
-        return [_fsma_row_to_product(r) for r in rows]
+        products = [_fsma_row_to_product(r) for r in rows]
+
+        # Fallback: if dedicated products table is empty, derive from
+        # canonical traceability_events so the catalog is not blank.
+        if not products:
+            logger.info("products_table_empty tenant=%s, deriving from traceability_events", tenant_id)
+            products = _derive_products_from_events(db, tenant_id, category)
+
+        return products
     except Exception as e:
         logger.warning("db_catalog_read_failed: %s", e)
         return None
@@ -270,8 +336,9 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
 # In-memory fallback (dev / when DATABASE_URL is not set)
 # ---------------------------------------------------------------------------
 
-# TODO(V042): Replace with fsma.tenant_products table queries.
-# Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
+# NOTE(V042): fsma.products is the primary store; when empty for a tenant,
+# _db_get_catalog falls back to deriving products from fsma.traceability_events.
+# Full CRUD for fsma.tenant_products can be wired here when needed.
 _catalog_store: dict[str, list[Product]] = {}
 
 
