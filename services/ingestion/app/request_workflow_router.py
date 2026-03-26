@@ -16,6 +16,8 @@ Endpoints:
     POST   /api/v1/requests/{id}/submit            — Submit package
     POST   /api/v1/requests/{id}/amend             — Create amendment
     GET    /api/v1/requests/{id}/packages          — Package version history
+    GET    /api/v1/requests/{id}/blockers          — Check blocking defects
+    GET    /api/v1/requests/deadlines              — Deadline urgency for all cases
 """
 
 from __future__ import annotations
@@ -104,6 +106,10 @@ class SubmitRequest(BaseModel):
     submitted_by: str
     submission_method: str = "export"
     submission_notes: Optional[str] = None
+    force: bool = Field(
+        default=False,
+        description="Override blocking defects (logged as audit event).",
+    )
 
 
 class AmendRequest(BaseModel):
@@ -303,14 +309,20 @@ async def submit_package(
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
-    result = svc.submit_package(
-        tenant_id=tid,
-        request_case_id=request_case_id,
-        submitted_to=body.submitted_to,
-        submitted_by=body.submitted_by,
-        submission_method=body.submission_method,
-        submission_notes=body.submission_notes,
-    )
+    try:
+        result = svc.submit_package(
+            tenant_id=tid,
+            request_case_id=request_case_id,
+            submitted_to=body.submitted_to,
+            submitted_by=body.submitted_by,
+            submission_method=body.submission_method,
+            submission_notes=body.submission_notes,
+            force=body.force,
+        )
+    except ValueError as e:
+        if "blocking defect" in str(e).lower():
+            raise HTTPException(status_code=422, detail=str(e))
+        raise
     return {
         "request_case_id": request_case_id,
         "submission_id": result.get("submission_id"),
@@ -359,4 +371,62 @@ async def package_history(
         "request_case_id": request_case_id,
         "packages": packages,
         "total": len(packages),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Enforcement Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{request_case_id}/blockers",
+    summary="Check blocking defects",
+    description=(
+        "Returns all defects that prevent this request case from being submitted. "
+        "Critical rule failures, unresolved exceptions, unevaluated events, "
+        "missing signoffs, and identity ambiguity are all checked."
+    ),
+)
+async def check_blockers(
+    request_case_id: str,
+    tenant_id: Optional[str] = Query(None),
+    principal: IngestionPrincipal = Depends(require_permission("requests.read")),
+    db_session=Depends(_get_db_session),
+):
+    tid = _resolve_tenant(tenant_id, principal)
+    svc = _get_service(db_session)
+    result = svc.check_blocking_defects(tid, request_case_id)
+    return {
+        "request_case_id": request_case_id,
+        **result,
+    }
+
+
+@router.get(
+    "/deadlines",
+    summary="Check deadline status for all active cases",
+    description=(
+        "Returns urgency classification for all active request cases: "
+        "overdue (past deadline), critical (<2h), urgent (<6h), normal (>6h). "
+        "Use for dashboard alerts and background monitoring."
+    ),
+)
+async def check_deadlines(
+    tenant_id: Optional[str] = Query(None),
+    principal: IngestionPrincipal = Depends(require_permission("requests.read")),
+    db_session=Depends(_get_db_session),
+):
+    tid = _resolve_tenant(tenant_id, principal)
+    svc = _get_service(db_session)
+    cases = svc.check_deadline_status(tid)
+    overdue = [c for c in cases if c["urgency"] == "overdue"]
+    critical = [c for c in cases if c["urgency"] == "critical"]
+    return {
+        "tenant_id": tid,
+        "cases": cases,
+        "total": len(cases),
+        "overdue_count": len(overdue),
+        "critical_count": len(critical),
+        "alert": len(overdue) > 0 or len(critical) > 0,
     }
