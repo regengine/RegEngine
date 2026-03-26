@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { MARKETING_FREE_TOOLS, MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
-import { GlobalSearch } from '@/components/layout/global-search';
+// GlobalSearch removed — not ready for production
 
 export function MarketingHeader() {
     const pathname = usePathname();
@@ -325,7 +325,7 @@ export function MarketingHeader() {
                             </div>
                         </div>
 
-                        <GlobalSearch />
+                        {/* GlobalSearch removed */}
 
                         <ThemeToggle />
 
