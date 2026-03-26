@@ -250,21 +250,21 @@ ALTER TABLE fsma.ingestion_runs FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_ingestion_runs ON fsma.ingestion_runs;
 CREATE POLICY tenant_isolation_ingestion_runs ON fsma.ingestion_runs
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.traceability_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.traceability_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_trace_events ON fsma.traceability_events;
 CREATE POLICY tenant_isolation_trace_events ON fsma.traceability_events
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.evidence_attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.evidence_attachments FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_evidence ON fsma.evidence_attachments;
 CREATE POLICY tenant_isolation_evidence ON fsma.evidence_attachments
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 
 -- --------------------------------------------------------

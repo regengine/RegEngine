@@ -150,28 +150,28 @@ ALTER TABLE fsma.exception_cases FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_exception_cases ON fsma.exception_cases;
 CREATE POLICY tenant_isolation_exception_cases ON fsma.exception_cases
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.exception_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.exception_comments FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_exception_comments ON fsma.exception_comments;
 CREATE POLICY tenant_isolation_exception_comments ON fsma.exception_comments
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.exception_attachments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.exception_attachments FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_exception_attachments ON fsma.exception_attachments;
 CREATE POLICY tenant_isolation_exception_attachments ON fsma.exception_attachments
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.exception_signoffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.exception_signoffs FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_exception_signoffs ON fsma.exception_signoffs;
 CREATE POLICY tenant_isolation_exception_signoffs ON fsma.exception_signoffs
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 
 -- --------------------------------------------------------

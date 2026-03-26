@@ -200,35 +200,35 @@ ALTER TABLE fsma.cte_events FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_cte ON fsma.cte_events;
 CREATE POLICY tenant_isolation_cte ON fsma.cte_events
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.cte_kdes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.cte_kdes FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_kdes ON fsma.cte_kdes;
 CREATE POLICY tenant_isolation_kdes ON fsma.cte_kdes
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.hash_chain ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.hash_chain FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_chain ON fsma.hash_chain;
 CREATE POLICY tenant_isolation_chain ON fsma.hash_chain
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.compliance_alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.compliance_alerts FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_alerts ON fsma.compliance_alerts;
 CREATE POLICY tenant_isolation_alerts ON fsma.compliance_alerts
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.fda_export_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.fda_export_log FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_exports ON fsma.fda_export_log;
 CREATE POLICY tenant_isolation_exports ON fsma.fda_export_log
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 
 -- --------------------------------------------------------
