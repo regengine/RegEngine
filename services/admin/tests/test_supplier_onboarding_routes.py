@@ -88,9 +88,15 @@ def db_session() -> Session:
 @pytest.fixture
 def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import app.supplier_onboarding_routes as supplier_routes
+    from app.supplier_facilities_routes import router as facilities_router
+    from app.supplier_compliance_routes import router as compliance_router
+    from app.supplier_funnel_routes import router as funnel_router
 
     test_app = FastAPI()
     test_app.include_router(router, prefix="/v1")
+    test_app.include_router(facilities_router, prefix="/v1")
+    test_app.include_router(compliance_router, prefix="/v1")
+    test_app.include_router(funnel_router, prefix="/v1")
 
     current_user = db_session.get(UserModel, TEST_USER_ID)
 
@@ -101,8 +107,10 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         assert current_user is not None
         return current_user
 
-    test_app.dependency_overrides[supplier_routes.get_session] = override_get_session
-    test_app.dependency_overrides[supplier_routes.get_current_user] = override_get_current_user
+    from app.database import get_session
+    from app.dependencies import get_current_user
+    test_app.dependency_overrides[get_session] = override_get_session
+    test_app.dependency_overrides[get_current_user] = override_get_current_user
 
     monkeypatch.setattr(supplier_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(supplier_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kwargs: None)
