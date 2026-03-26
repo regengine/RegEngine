@@ -75,3 +75,26 @@ export function getServerApiKey(): string | undefined {
 export function getAdminMasterKey(): string | undefined {
   return process.env.ADMIN_MASTER_KEY || undefined;
 }
+
+// ---------------------------------------------------------------------------
+// Static export guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns a 503 response when running in static export mode.
+ * Use at the top of proxy route handlers to short-circuit.
+ * Returns null if not in static mode (caller should continue).
+ */
+export function staticExportGuard(serviceName: string): NextResponse | null {
+  if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
+    return NextResponse.json(
+      {
+        error: `${serviceName} proxy unavailable in static export mode`,
+        static_mode: true,
+        hint: 'Deploy with server-side rendering to enable API proxying',
+      },
+      { status: 503 },
+    );
+  }
+  return null;
+}
