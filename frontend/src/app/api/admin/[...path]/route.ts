@@ -161,9 +161,11 @@ async function proxyRequest(  request: NextRequest,
       }
     }
 
+    console.error('[proxy/admin] 502 — all targets failed:', attemptErrors);
     return proxyError('Unable to reach admin service', 502, { details: attemptErrors });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Admin request failed';
+    console.error('[proxy/admin] 500 —', message);
     return proxyError(message, 500);
   }
 }
