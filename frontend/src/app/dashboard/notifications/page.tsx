@@ -70,8 +70,7 @@ const CHANNEL_ICONS: Record<string, React.ElementType> = {
     sms: Smartphone,
 };
 
-async function apiFetchPrefs(tenantId: string): Promise<NotificationPreferences> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+async function apiFetchPrefs(tenantId: string, apiKey: string): Promise<NotificationPreferences> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/notifications/${tenantId}/preferences`, {
@@ -81,8 +80,7 @@ async function apiFetchPrefs(tenantId: string): Promise<NotificationPreferences>
     return res.json();
 }
 
-async function apiSavePrefs(tenantId: string, prefs: Partial<NotificationPreferences>): Promise<void> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+async function apiSavePrefs(tenantId: string, apiKey: string, prefs: Partial<NotificationPreferences>): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/notifications/${tenantId}/preferences`, {
@@ -110,7 +108,7 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 }
 
 export default function NotificationPrefsPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -125,14 +123,14 @@ export default function NotificationPrefsPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = await apiFetchPrefs(tenantId);
+            const data = await apiFetchPrefs(tenantId, apiKey || '');
             setPrefs(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load preferences');
         } finally {
             setLoading(false);
         }
-    }, [isLoggedIn, tenantId]);
+    }, [isLoggedIn, tenantId, apiKey]);
 
     useEffect(() => { loadPrefs(); }, [loadPrefs]);
 
@@ -156,7 +154,7 @@ export default function NotificationPrefsPage() {
         if (!prefs || !tenantId) return;
         setSaving(true);
         try {
-            await apiSavePrefs(tenantId, prefs);
+            await apiSavePrefs(tenantId, apiKey || '', prefs);
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         } catch (err) {

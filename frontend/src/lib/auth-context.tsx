@@ -366,11 +366,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearCredentials,
         login,
         logout,
-        isAuthenticated: !!(user && accessToken) || (
-          typeof window !== 'undefined' &&
-          !!localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) &&
-          !!localStorage.getItem(STORAGE_KEYS.USER)
-        ),
+        isAuthenticated: !!(user && accessToken),
       }}
     >
       {children}
