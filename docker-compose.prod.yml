@@ -25,6 +25,7 @@ x-env-prod: &env_prod
   OLLAMA_HOST: ${OLLAMA_HOST:?error}
   ENABLE_DB_API_KEYS: "true"
   RATE_LIMIT_BACKEND: redis
+  CIRCUIT_BREAKER_BACKEND: redis
 
 x-deploy-defaults: &deploy_defaults
   restart_policy:
