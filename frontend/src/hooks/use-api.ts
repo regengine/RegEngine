@@ -2,13 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { IngestURLRequest, ValidationRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
+import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
 
 // Health Checks
 export const useAdminHealth = () => {
   return useQuery({
     queryKey: ['admin', 'health'],
     queryFn: () => apiClient.getAdminHealth(),
-    refetchInterval: 30000,
+    refetchInterval: POLL_HEALTH,
   });
 };
 
@@ -16,7 +17,7 @@ export const useIngestionHealth = () => {
   return useQuery({
     queryKey: ['ingestion', 'health'],
     queryFn: () => apiClient.getIngestionHealth(),
-    refetchInterval: 30000,
+    refetchInterval: POLL_HEALTH,
   });
 };
 
@@ -24,16 +25,16 @@ export const useComplianceHealth = () => {
   return useQuery({
     queryKey: ['compliance', 'health'],
     queryFn: () => apiClient.getComplianceHealth(),
-    refetchInterval: 30000,
+    refetchInterval: POLL_HEALTH,
   });
 };
 
-// API Keys
+// System Status & Metrics
 export const useSystemStatus = () => {
   return useQuery({
     queryKey: ['system', 'status'],
     queryFn: () => apiClient.getSystemStatus(),
-    refetchInterval: 30000, // 30s polling
+    refetchInterval: POLL_HEALTH,
   });
 };
 
@@ -41,7 +42,7 @@ export const useSystemMetrics = () => {
   return useQuery({
     queryKey: ['system', 'metrics'],
     queryFn: () => apiClient.getSystemMetrics(),
-    refetchInterval: 15000, // 15s polling
+    refetchInterval: POLL_METRICS,
   });
 };
 
@@ -151,6 +152,6 @@ export const useLabelsHealth = () => {
   return useQuery({
     queryKey: ['labels', 'health'],
     queryFn: () => apiClient.getLabelsHealth(),
-    refetchInterval: 30000,
+    refetchInterval: POLL_HEALTH,
   });
 };

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
+import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
 import {
   DEMO_EXCEPTIONS,
   DEMO_BLOCKING_COUNT,
@@ -92,7 +93,7 @@ export function useExceptions(
       undefined, DEMO_EXCEPTIONS as any,
     ),
     enabled: !!tenantId,
-    refetchInterval: 15_000,
+    refetchInterval: POLL_CONTROL_PLANE_MS,
   });
 }
 
@@ -116,7 +117,7 @@ export function useBlockingExceptionCount(tenantId: string) {
       undefined, DEMO_BLOCKING_COUNT,
     ),
     enabled: !!tenantId,
-    refetchInterval: 30_000,
+    refetchInterval: POLL_DATA_MS,
   });
 }
 
@@ -193,7 +194,7 @@ export function useRequestCases(tenantId: string) {
       undefined, DEMO_REQUEST_CASES as any,
     ),
     enabled: !!tenantId,
-    refetchInterval: 10_000,
+    refetchInterval: POLL_METRICS_MS,
   });
 }
 
@@ -358,7 +359,7 @@ export function useCanonicalEvents(
       undefined, DEMO_RECORDS as any,
     ),
     enabled: !!tenantId,
-    refetchInterval: 30_000,
+    refetchInterval: POLL_DATA_MS,
   });
 }
 
@@ -402,6 +403,6 @@ export function useIdentityReviews(tenantId: string) {
       undefined, DEMO_REVIEWS as any,
     ),
     enabled: !!tenantId,
-    refetchInterval: 30_000,
+    refetchInterval: POLL_DATA_MS,
   });
 }

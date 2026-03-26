@@ -345,6 +345,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
   async logTraceabilityEvent(request: TraceabilityEventRequest): Promise<TraceabilityEventResponse> {
     const { data } = await this.graphClient.post('/api/v1/fsma/traceability/event', request);
     return data;
@@ -385,6 +386,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiMutate + graph service directly. */
   async createRecallDrill(request: {
     type?: string;
     target_tlc?: string;
@@ -396,11 +398,13 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
   async traceForward(tlc: string): Promise<any> {
     const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/forward/${encodeURIComponent(tlc)}`);
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
   async traceBackward(tlc: string): Promise<any> {
     const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/backward/${encodeURIComponent(tlc)}`);
     return data;
@@ -482,12 +486,14 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getMe(): Promise<User> {
     const { data } = await this.adminClient.get('/auth/me');
     return data;
   }
 
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async checkPermission(permission: string, authorized: boolean = true): Promise<boolean> {
     try {
       await this.adminClient.get(`/auth/check-permission?authorized=${authorized}`);
@@ -512,6 +518,7 @@ class APIClient {
     await this.adminClient.post(`/v1/admin/users/${userId}/deactivate`);
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async reactivateUser(userId: string): Promise<void> {
     await this.adminClient.post(`/v1/admin/users/${userId}/reactivate`);
   }
@@ -542,6 +549,7 @@ class APIClient {
     await this.adminClient.post('/v1/auth/accept-invite', data);
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFTLCategories(): Promise<FTLCategory[]> {
     const { data } = await this.adminClient.get<{ categories: FTLCategory[] }>('/v1/supplier/ftl-categories');
     return data.categories || [];
@@ -557,6 +565,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async setFacilityFTLCategories(
     facilityId: string,
     request: FacilityFTLScopingRequest,
@@ -568,6 +577,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
       `/v1/supplier/facilities/${facilityId}/required-ctes`,
@@ -575,6 +585,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async submitSupplierCTEEvent(
     facilityId: string,
     request: SupplierCTEEventCreateRequest,
@@ -586,6 +597,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async createSupplierTLC(request: SupplierTLCUpsertRequest): Promise<SupplierTLC> {
     const { data } = await this.adminClient.post<SupplierTLC>('/v1/supplier/tlcs', request);
     return data;
@@ -654,21 +666,25 @@ class APIClient {
     };
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async resetSupplierDemoData(): Promise<SupplierDemoResetResponse> {
     const { data } = await this.adminClient.post<SupplierDemoResetResponse>('/v1/supplier/demo/reset', {});
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async trackSupplierFunnelEvent(request: SupplierFunnelEventRequest): Promise<SupplierFunnelEventResponse> {
     const { data } = await this.adminClient.post<SupplierFunnelEventResponse>('/v1/supplier/funnel-events', request);
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getSupplierSocialProof(): Promise<SupplierSocialProofResponse> {
     const { data } = await this.adminClient.get<SupplierSocialProofResponse>('/v1/supplier/social-proof');
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getSupplierFunnelSummary(): Promise<SupplierFunnelSummaryResponse> {
     const { data } = await this.adminClient.get<SupplierFunnelSummaryResponse>('/v1/supplier/funnel-summary');
     return data;

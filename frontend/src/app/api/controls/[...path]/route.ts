@@ -28,7 +28,10 @@ async function proxyRequest(
     try {
         // Guard against static export execution
         if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+            return NextResponse.json(
+                { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
+                { status: 503 },
+            );
         }
 
         const path = pathParts.join('/');
@@ -67,6 +70,7 @@ async function proxyRequest(
             );
         }
 
+        console.info(`[proxy/controls] ${method} ${path} → ${response.status}`);
         return NextResponse.json(data);
 
     } catch (error: unknown) {

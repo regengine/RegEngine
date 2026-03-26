@@ -70,6 +70,7 @@ async function proxyRequest(
             );
         }
 
+        console.info(`[proxy/fsma] ${method} ${path} → ${response.status}`);
         return NextResponse.json(data);
 
     } catch (error: unknown) {
