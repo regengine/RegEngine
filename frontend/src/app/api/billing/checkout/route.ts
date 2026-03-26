@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
         // Get API key from HTTP-only cookie (set by /api/session) or env
         const apiKey = request.cookies.get('re_api_key')?.value
             || process.env.REGENGINE_SERVICE_API_KEY
-            || process.env.NEXT_PUBLIC_API_KEY
+            || process.env.REGENGINE_API_KEY
             || '';
 
         const backendResponse = await fetch(`${BILLING_BACKEND_URL}/api/v1/billing/checkout`, {

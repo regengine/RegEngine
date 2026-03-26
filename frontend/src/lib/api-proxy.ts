@@ -65,7 +65,7 @@ export function proxyError(
  * whether to reject the request or proceed without the header.
  */
 export function getServerApiKey(): string | undefined {
-  return process.env.REGENGINE_API_KEY || process.env.NEXT_PUBLIC_API_KEY || undefined;
+  return process.env.REGENGINE_API_KEY || undefined;
 }
 
 /**
