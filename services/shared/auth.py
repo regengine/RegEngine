@@ -18,6 +18,45 @@ import os
 
 logger = structlog.get_logger("auth")
 
+
+def validate_auth_config() -> None:
+    """Validate critical auth configuration at service startup.
+
+    Call this from each service's main.py after app creation.
+    Logs warnings for missing config and raises on fatal misconfigurations.
+    """
+    issues: list[str] = []
+
+    # JWT secret must be set and non-trivial
+    jwt_secret = os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET")
+    if not jwt_secret:
+        issues.append("AUTH_SECRET_KEY / JWT_SECRET not set — JWT auth will fail")
+    elif len(jwt_secret) < 16:
+        issues.append("AUTH_SECRET_KEY is too short (<16 chars) — insecure for production")
+    elif jwt_secret in ("dev_secret_key_change_me", "your-secret", "changeme", "secret"):
+        issues.append("AUTH_SECRET_KEY is a known default — change it before production")
+
+    # API key should be set for proxy auth
+    api_key = os.getenv("REGENGINE_API_KEY") or os.getenv("API_KEY")
+    if not api_key:
+        logger.warning("validate_auth_config", msg="REGENGINE_API_KEY not set — proxy auth will fail")
+
+    # Test bypass should not be active in production
+    bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
+    env = os.getenv("REGENGINE_ENV", "production").lower()
+    if bypass_token and env == "production":
+        issues.append("AUTH_TEST_BYPASS_TOKEN is set in production — remove it")
+
+    for issue in issues:
+        logger.error("auth_config_validation_failed", issue=issue)
+
+    if issues and env == "production":
+        raise RuntimeError(
+            f"Auth config validation failed ({len(issues)} issues): "
+            + "; ".join(issues)
+        )
+
+
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-RegEngine-API-Key", auto_error=False)
 
