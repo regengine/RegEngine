@@ -26,6 +26,15 @@ import {
     LogOut,
     Zap,
     AlertTriangle,
+    FileCheck,
+    Scale,
+    GitBranch,
+    Fingerprint,
+    ClipboardList,
+    Eye,
+    Wrench,
+    Code2,
+    BookOpen,
 } from 'lucide-react';
 
 interface NavItem {
