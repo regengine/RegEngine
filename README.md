@@ -184,17 +184,49 @@ assemble response package → submit → preserve audit trail
 
 All tables use Row-Level Security (RLS) for tenant isolation, GIN indexes for JSONB queries, and append-only audit patterns.
 
+### Enforcement Layer
+
+The control plane doesn't just track problems — it **prevents bad outcomes**.
+
+| Check | What It Blocks | Where |
+|-------|---------------|-------|
+| **Critical rule failures** | Unresolved critical failures with no waiver block submission | `submit_package()` |
+| **Unresolved exceptions** | Critical exception cases must be resolved or waived | `submit_package()` |
+| **Unevaluated events** | Events with zero rule evaluations cannot be in a submitted package | `submit_package()` |
+| **Missing signoffs** | Required signoffs (scope_approval, final_approval) must exist | `submit_package()` |
+| **Identity ambiguity** | High-confidence unresolved matches (>=85%) block submission | `submit_package()` |
+| **Deadline monitoring** | 5-minute cron classifies cases as overdue/critical/urgent/normal | `scheduler` |
+
+API endpoints: `GET /api/v1/requests/{id}/blockers` (check all defects), `GET /api/v1/requests/deadlines` (urgency for all active cases).
+
+### Canonical Pipeline
+
+All ingestion paths normalize through the canonical `TraceabilityEvent` model:
+
+| Path | Source | Normalizes? |
+|------|--------|------------|
+| Webhook v2 (happy path) | REST API | Yes |
+| Webhook v2 (fallback) | REST API | Yes (fixed) |
+| EPCIS ingestion | XML/JSON | Yes |
+| Mobile field capture | QR/barcode | Yes (bridges to canonical) |
+| Supplier CTE events | Portal/bulk upload | Yes (bridges to canonical) |
+| Kafka consumer | NLP extraction | Graph only (canonical pending) |
+
+No bypass paths. Every record hits rules evaluation and hash chain verification.
+
 ---
 
 ## Dashboard
 
 | Section | Pages |
 |---------|-------|
-| **Overview** | Heartbeat, Compliance Score, Alerts |
-| **Operations** | Exceptions, Requests, Records, Rules, Identity, Readiness, Incidents, Auditor Review |
-| **Compliance** | Recall Report, Recall Drills, Export Jobs |
-| **Data** | Data Import (bulk CSV/XLSX), Field Capture, Receiving Dock, Scan, Integrations, Suppliers, Products, Audit Log |
-| **Settings** | Notifications, Team, Settings |
+| **Overview** | Heartbeat, Compliance Score, Alerts, Issues & Blockers |
+| **FDA Response** | Requests, Recall Report, Recall Drills, Export Jobs |
+| **Control Plane** | Rules, Records, Exceptions, Identity, Review Queue |
+| **Supply Chain** | Data Import, Field Capture, Receiving Dock, Suppliers, Products, Integrations |
+| **Compliance** | FSMA Dashboard, Compliance Profile, Snapshots, Labels, Audit Trail |
+| **Tools** | FTL Checker, KDE Checker, Drill Simulator, SOP Generator, All Tools |
+| **Settings** | Notifications, Team, Settings, Developer Portal |
 
 ### Free Compliance Tools (20)
 
@@ -206,12 +238,15 @@ FTL Coverage Checker, KDE Checker, CTE Mapper, Retailer Readiness Assessment, RO
 
 ### Authentication
 
-- **Dual-strategy middleware**: checks RegEngine JWT (`re_access_token` cookie) first, falls back to Supabase session
+- **Dual-strategy middleware**: checks RegEngine JWT (`re_access_token` cookie) first, falls back to Supabase session, then checks API credentials
+- **30-day sessions**: JWT and cookies persist for 30 days — explicit logout is the session terminator (B2B SaaS, not a bank)
 - **HTTP-only cookies**: credentials stored server-side, never exposed to JavaScript
 - **Server-side API key injection**: proxy routes inject keys from env vars, never from client
+- **Preshared + database key auth**: `require_api_key` accepts both configured master key and database-stored scoped keys
 - **Path sanitization**: all proxy routes validate catch-all path segments against traversal, null bytes, and injection
+- **Railway URL guard**: proxy routes detect and reject `*.railway.internal` URLs on Vercel with clear warnings
 - **Row-Level Security (RLS)**: PostgreSQL enforces tenant isolation at the database layer
-- **Sysadmin verification**: database-level check of `is_sysadmin` flag for privileged operations
+- **Auth-gated routes**: 25+ route prefixes require valid session (dashboard, control plane, compliance, admin, developer)
 
 ### Audit Trail
 
@@ -316,9 +351,17 @@ PYTHONPATH=services python3 scripts/seed_demo_data.py --dry-run
 
 The seeder creates canonical events, evaluates rules, generates exception cases, and opens a demo FDA request case with a 24-hour deadline.
 
+### Sample Data
+
+6 CSV files in `sample_data/` simulate a real multi-supplier romaine lettuce supply chain. Import via Dashboard → Data Import → CSV Upload in order (01–06). Exercises the full chain: ingest → canonical → rules → hash chain → audit.
+
 ### Running Tests
 
 ```bash
+# E2E FDA request test — proves the full closed loop works
+# (requires DATABASE_URL — skips if not set)
+PYTHONPATH=services pytest tests/test_e2e_fda_request.py -v
+
 # Control plane tests (canonical model + rules engine + E2E compliance loop)
 PYTHONPATH=services pytest tests/test_canonical_event.py tests/test_rules_engine.py tests/test_compliance_control_plane_e2e.py -v
 
