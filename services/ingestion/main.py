@@ -115,7 +115,26 @@ _DISABLED_ROUTERS = {
 
 def _router_enabled(name: str) -> bool:
     """Check if a router should be mounted (not in DISABLED_ROUTERS)."""
-    return name.lower() not in _DISABLED_ROUTERS
+    enabled = name.lower() not in _DISABLED_ROUTERS
+    if enabled:
+        _MOUNTED_ROUTERS.append(name.lower())
+    return enabled
+
+# Track which routers are actually mounted for the /features endpoint
+_MOUNTED_ROUTERS: list[str] = []
+
+
+@app.get("/api/v1/features", tags=["system"])
+async def list_enabled_features():
+    """Return which optional routers are enabled.
+
+    Frontend can call this to know which features are available
+    instead of discovering disabled routers via 404 errors.
+    """
+    return {
+        "enabled": _MOUNTED_ROUTERS,
+        "disabled": sorted(_DISABLED_ROUTERS),
+    }
 
 
 app.include_router(ingestion_router)
