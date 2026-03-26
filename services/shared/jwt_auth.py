@@ -178,8 +178,8 @@ class JWTManager:
         private_key: Optional[str] = None,
         public_key: Optional[str] = None,
         algorithm: JWTAlgorithm = JWTAlgorithm.HS256,
-        access_token_expire_minutes: int = 15,
-        refresh_token_expire_days: int = 7,
+        access_token_expire_minutes: int = 43200,  # 30 days — B2B SaaS, not a bank
+        refresh_token_expire_days: int = 90,
         issuer: Optional[str] = None,
         audience: Optional[str | list[str]] = None,
     ):
