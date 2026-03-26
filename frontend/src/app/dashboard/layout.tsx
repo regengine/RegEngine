@@ -26,17 +26,6 @@ import {
     LogOut,
     Zap,
     AlertTriangle,
-    FileCheck,
-    Scale,
-    GitBranch,
-    Fingerprint,
-    ClipboardList,
-    Download,
-    Eye,
-    Wrench,
-    Code2,
-    ExternalLink,
-    BookOpen,
 } from 'lucide-react';
 
 interface NavItem {
@@ -57,7 +46,7 @@ const NAV_SECTIONS: NavSection[] = [
             { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
             { label: 'Compliance Score', href: '/dashboard/compliance', icon: BarChart3 },
             { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
-            { label: 'Issues & Blockers', href: '/dashboard/issues', icon: AlertTriangle },
+            { label: 'Issues', href: '/dashboard/issues', icon: AlertTriangle },
         ],
     },
     {
