@@ -972,7 +972,45 @@ class RequestWorkflow:
                 "message": f"Required signoff '{missing}' has not been provided.",
             })
 
-        # 5. Non-critical warnings (don't block but should be noted)
+        # 5. Pending identity reviews for entities in scope
+        #    High-confidence matches (>=0.85) that haven't been resolved
+        #    could mean duplicate entities are splitting traceability chains.
+        try:
+            identity_issues = self.db.execute(
+                text("""
+                    SELECT irq.review_id, irq.similarity_score,
+                           ea.canonical_name AS entity_a_name,
+                           eb.canonical_name AS entity_b_name
+                    FROM fsma.identity_review_queue irq
+                    JOIN fsma.canonical_entities ea
+                      ON irq.entity_a_id = ea.entity_id
+                    JOIN fsma.canonical_entities eb
+                      ON irq.entity_b_id = eb.entity_id
+                    WHERE irq.tenant_id = :tenant_id
+                      AND irq.status = 'pending'
+                      AND irq.similarity_score >= 0.85
+                    LIMIT 20
+                """),
+                {"tenant_id": tenant_id},
+            )
+            for row in identity_issues.mappings().fetchall():
+                blockers.append({
+                    "type": "identity_ambiguity",
+                    "review_id": str(row["review_id"]),
+                    "entity_a": row["entity_a_name"],
+                    "entity_b": row["entity_b_name"],
+                    "similarity": float(row["similarity_score"]),
+                    "message": (
+                        f"Identity ambiguity: '{row['entity_a_name']}' and "
+                        f"'{row['entity_b_name']}' are {int(row['similarity_score'] * 100)}% "
+                        f"similar but unresolved. This may split traceability chains."
+                    ),
+                })
+        except Exception:
+            # identity_review_queue table may not exist yet — non-fatal
+            logger.debug("identity_review_check_skipped", reason="table_not_available")
+
+        # 6. Non-critical warnings (don't block but should be noted)
         if event_ids:
             non_critical_fails = self.db.execute(
                 text("""
