@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +92,8 @@ export default function AuditReviewPage() {
           Read-Only Mode
         </Badge>
       </div>
+
+      <DemoBanner visible={false} />
 
       {summary.isLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

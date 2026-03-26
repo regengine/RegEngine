@@ -20,6 +20,7 @@ import {
   type CanonicalEventDetail,
   type RuleEvaluation,
 } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   AlertTriangle,
@@ -79,6 +80,8 @@ export default function CanonicalRecordsPage() {
           {events.data?.total ?? 0} total records
         </Badge>
       </div>
+
+      <DemoBanner visible={!!(events.data?.__isDemo)} />
 
       {/* Search & Filters */}
       <Card className="mb-6">
