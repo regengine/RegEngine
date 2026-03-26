@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 
 import { useAuth } from '@/lib/auth-context';
 import { useRules, useSeedRules } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   AlertTriangle,
@@ -90,6 +91,8 @@ export default function RulesDashboardPage() {
           </Badge>
         </div>
       </div>
+
+      <DemoBanner visible={!!(rules.data?.__isDemo)} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

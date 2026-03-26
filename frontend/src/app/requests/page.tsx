@@ -18,6 +18,7 @@ import {
   useAssemblePackage,
   useSubmitPackage,
 } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   AlertTriangle,
@@ -90,6 +91,8 @@ export default function RequestWorkflowPage() {
           New Request Case
         </Button>
       </div>
+
+      <DemoBanner visible={!!(requests.data?.__isDemo)} />
 
       {/* Create Form */}
       {showCreate && (

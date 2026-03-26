@@ -20,12 +20,18 @@ import {
 
 const INGESTION_API = '/api/ingestion';
 
+/** Wrapper result that tracks whether data came from the API or demo fallback */
+export interface CpResult<T> {
+  data: T;
+  isDemo: boolean;
+}
+
 async function cpFetch<T>(
   endpoint: string,
   apiKey: string,
   options?: RequestInit,
   demoFallback?: T,
-): Promise<T> {
+): Promise<CpResult<T>> {
   try {
     const url = `${INGESTION_API}${endpoint}`;
     const response = await fetch(url, {
@@ -42,14 +48,25 @@ async function cpFetch<T>(
       throw new Error(error.detail || `HTTP ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return { data, isDemo: false };
   } catch (err) {
     // Fall back to demo data when backend is unavailable
     if (demoFallback !== undefined) {
-      return demoFallback;
+      console.warn(`[control-plane] ${endpoint} unavailable, using demo data`);
+      return { data: demoFallback, isDemo: true };
     }
     throw err;
   }
+}
+
+/** Unwrap CpResult for backward compat — hooks still return the data shape pages expect */
+function unwrapCp<T>(result: CpResult<T>): T & { __isDemo?: boolean } {
+  const data = result.data as any;
+  if (data && typeof data === 'object') {
+    data.__isDemo = result.isDemo;
+  }
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +108,7 @@ export function useExceptions(
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
       `/api/v1/exceptions?${params}`, apiKey || '',
       undefined, DEMO_EXCEPTIONS as any,
-    ),
+    ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_CONTROL_PLANE_MS,
   });
@@ -103,7 +120,7 @@ export function useException(tenantId: string, caseId: string) {
     queryKey: ['exceptions', tenantId, caseId],
     queryFn: () => cpFetch<ExceptionCase>(
       `/api/v1/exceptions/${caseId}?tenant_id=${tenantId}`, apiKey || ''
-    ),
+    ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!caseId,
   });
 }
@@ -115,7 +132,7 @@ export function useBlockingExceptionCount(tenantId: string) {
     queryFn: () => cpFetch<{ blocking_count: number }>(
       `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`, apiKey || '',
       undefined, DEMO_BLOCKING_COUNT,
-    ),
+    ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
   });
@@ -129,7 +146,7 @@ export function useAssignException(tenantId: string) {
       cpFetch(`/api/v1/exceptions/${caseId}/assign?tenant_id=${tenantId}`, apiKey || '', {
         method: 'PATCH',
         body: JSON.stringify({ owner_user_id: ownerUserId }),
-      }),
+      }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['exceptions'] }),
   });
 }
@@ -143,7 +160,7 @@ export function useResolveException(tenantId: string) {
     }) => cpFetch(`/api/v1/exceptions/${caseId}/resolve?tenant_id=${tenantId}`, apiKey || '', {
       method: 'PATCH',
       body: JSON.stringify({ resolution_summary: resolutionSummary, resolved_by: resolvedBy }),
-    }),
+    }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['exceptions'] }),
   });
 }
@@ -157,7 +174,7 @@ export function useWaiveException(tenantId: string) {
     }) => cpFetch(`/api/v1/exceptions/${caseId}/waive?tenant_id=${tenantId}`, apiKey || '', {
       method: 'PATCH',
       body: JSON.stringify({ waiver_reason: waiverReason, waiver_approved_by: waiverApprovedBy }),
-    }),
+    }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['exceptions'] }),
   });
 }
@@ -192,7 +209,7 @@ export function useRequestCases(tenantId: string) {
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
       `/api/v1/requests?tenant_id=${tenantId}`, apiKey || '',
       undefined, DEMO_REQUEST_CASES as any,
-    ),
+    ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_METRICS_MS,
   });
@@ -213,7 +230,7 @@ export function useCreateRequestCase(tenantId: string) {
     }) => cpFetch(`/api/v1/requests?tenant_id=${tenantId}`, apiKey || '', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 }
@@ -225,7 +242,7 @@ export function useAssemblePackage(tenantId: string) {
     mutationFn: ({ requestCaseId, generatedBy }: { requestCaseId: string; generatedBy: string }) =>
       cpFetch(`/api/v1/requests/${requestCaseId}/assemble?tenant_id=${tenantId}&generated_by=${generatedBy}`, apiKey || '', {
         method: 'POST',
-      }),
+      }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 }
@@ -240,7 +257,7 @@ export function useSubmitPackage(tenantId: string) {
     }) => cpFetch(`/api/v1/requests/${requestCaseId}/submit?tenant_id=${tenantId}`, apiKey || '', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
   });
 }
@@ -251,7 +268,7 @@ export function usePackageHistory(tenantId: string, requestCaseId: string) {
     queryKey: ['requests', tenantId, requestCaseId, 'packages'],
     queryFn: () => cpFetch<{ packages: any[]; total: number }>(
       `/api/v1/requests/${requestCaseId}/packages?tenant_id=${tenantId}`, apiKey || ''
-    ),
+    ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!requestCaseId,
   });
 }
@@ -286,7 +303,7 @@ export function useRules() {
     queryFn: () => cpFetch<{ rules: RuleDefinition[]; total: number }>(
       `/api/v1/rules`, apiKey || '',
       undefined, DEMO_RULES as any,
-    ),
+    ).then(unwrapCp),
     staleTime: 5 * 60_000,
   });
 }
@@ -297,7 +314,7 @@ export function useEventEvaluations(tenantId: string, eventId: string) {
     queryKey: ['evaluations', tenantId, eventId],
     queryFn: () => cpFetch<{ evaluations: RuleEvaluation[]; total: number }>(
       `/api/v1/rules/evaluations/${eventId}?tenant_id=${tenantId}`, apiKey || ''
-    ),
+    ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!eventId,
   });
 }
@@ -306,7 +323,7 @@ export function useSeedRules() {
   const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => cpFetch(`/api/v1/rules/seed`, apiKey || '', { method: 'POST' }),
+    mutationFn: () => cpFetch(`/api/v1/rules/seed`, apiKey || '', { method: 'POST' }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
   });
 }
@@ -357,7 +374,7 @@ export function useCanonicalEvents(
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
       `/api/v1/records?${params}`, apiKey || '',
       undefined, DEMO_RECORDS as any,
-    ),
+    ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
   });
@@ -369,7 +386,7 @@ export function useCanonicalEvent(tenantId: string, eventId: string) {
     queryKey: ['records', tenantId, eventId],
     queryFn: () => cpFetch<CanonicalEventDetail>(
       `/api/v1/records/${eventId}?tenant_id=${tenantId}`, apiKey || ''
-    ),
+    ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!eventId,
   });
 }
@@ -388,7 +405,7 @@ export function useEntities(tenantId: string, entityType?: string) {
     queryFn: () => cpFetch<{ entities: any[]; total: number }>(
       `/api/v1/identity/entities?${params}`, apiKey || '',
       undefined, DEMO_ENTITIES as any,
-    ),
+    ).then(unwrapCp),
     enabled: !!tenantId,
     staleTime: 60_000,
   });
@@ -401,7 +418,7 @@ export function useIdentityReviews(tenantId: string) {
     queryFn: () => cpFetch<{ reviews: any[]; total: number }>(
       `/api/v1/identity/reviews?tenant_id=${tenantId}`, apiKey || '',
       undefined, DEMO_REVIEWS as any,
-    ),
+    ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
   });
