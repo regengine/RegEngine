@@ -97,18 +97,24 @@ const nextConfig = {
     },
 }
 
+const isProduction = process.env.VERCEL_ENV === 'production';
+
 const sentryWebpackPluginOptions = {
     // Suppresses source map upload logs during build
     silent: true,
 
-    // Upload source maps for better stack traces
-    widenClientFileUpload: true,
+    // Only upload source maps in production builds (#25)
+    widenClientFileUpload: isProduction,
 
     // Route Sentry requests through a Next.js rewrite to bypass ad blockers
     tunnelRoute: "/monitoring",
 
-    // Automatically tree-shake Sentry logger in production
+    // Hide source maps from client bundles
     hideSourceMaps: true,
+
+    // Disable source map upload entirely for non-production builds
+    disableServerWebpackPlugin: !isProduction,
+    disableClientWebpackPlugin: !isProduction,
 };
 
 module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
