@@ -236,17 +236,14 @@ def test_get_blockers(client, mock_svc):
 # Deadlines
 # ---------------------------------------------------------------------------
 
-def test_deadlines_route_shadowed_by_path_param(client, mock_svc):
-    """The /deadlines route is registered after /{request_case_id} in the
-    router, so FastAPI treats 'deadlines' as a request_case_id path
-    parameter.  This test documents the current (broken) routing behavior.
-    When the router is fixed (by moving /deadlines before /{request_case_id}),
-    update this test to assert 200.
-    """
-    mock_svc.get_active_cases.return_value = []
+def test_deadlines_route(client, mock_svc):
+    """The /deadlines route returns urgency classification for active cases."""
+    mock_svc.check_deadline_status.return_value = []
     resp = client.get("/api/v1/requests/deadlines")
-    # Currently 404 because "deadlines" is matched as a request_case_id
-    assert resp.status_code == 404
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 0
+    assert data["alert"] is False
 
 
 @pytest.mark.asyncio
