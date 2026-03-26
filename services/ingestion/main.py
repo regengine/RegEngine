@@ -116,6 +116,29 @@ _DISABLED_ROUTERS = {
 }
 
 
+# All valid router names — typos in DISABLED_ROUTERS are caught at startup
+_VALID_ROUTER_NAMES = {
+    "scraping", "discovery", "sources", "fda_export", "csv", "sensitech", "edi",
+    "score", "portal", "audit", "sop", "export", "epcis_ingestion", "qr_decoder",
+    "label_vision", "exchange", "billing", "alerts", "onboarding", "recall",
+    "recall_simulations", "supplier_mgmt", "audit_log", "product_catalog",
+    "notification_prefs", "team_mgmt", "settings", "integration",
+    "canonical_records", "rules", "exceptions", "request_workflow", "identity",
+    "auditor", "compliance_metrics", "readiness", "incidents",
+}
+
+# Validate DISABLED_ROUTERS — catch typos early
+_unknown_flags = _DISABLED_ROUTERS - _VALID_ROUTER_NAMES
+if _unknown_flags:
+    import structlog as _sl
+    _sl.get_logger("router_flags").error(
+        "unknown_router_names_in_DISABLED_ROUTERS",
+        unknown=sorted(_unknown_flags),
+        valid=sorted(_VALID_ROUTER_NAMES),
+        hint="Check spelling. These flags will have no effect.",
+    )
+
+
 def _router_enabled(name: str) -> bool:
     """Check if a router should be mounted (not in DISABLED_ROUTERS)."""
     enabled = name.lower() not in _DISABLED_ROUTERS
