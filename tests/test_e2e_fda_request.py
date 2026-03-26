@@ -231,6 +231,15 @@ def _make_events(tenant_id: str) -> List[Dict]:
 class TestFDARequestE2E:
     """Prove the system works end-to-end under realistic conditions."""
 
+    @pytest.fixture(autouse=True)
+    def _ensure_clean_session(self, db_session):
+        """Ensure DB session is clean before each test."""
+        try:
+            from sqlalchemy import text
+            db_session.execute(text("SELECT 1"))
+        except Exception:
+            db_session.rollback()
+
     def test_01_ingest_events_to_canonical_store(
         self, db_session, tenant_id, canonical_store
     ):
