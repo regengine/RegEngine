@@ -44,29 +44,59 @@ const NAV_SECTIONS: NavSection[] = [
         title: 'Overview',
         items: [
             { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
-            { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
+            { label: 'Compliance Score', href: '/dashboard/compliance', icon: BarChart3 },
             { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
             { label: 'Issues', href: '/dashboard/issues', icon: AlertTriangle },
         ],
     },
     {
-        title: 'Compliance',
+        title: 'FDA Response',
         items: [
+            { label: 'Requests', href: '/requests', icon: ClipboardList },
             { label: 'Recall Report', href: '/dashboard/recall-report', icon: ShieldCheck },
             { label: 'Recall Drills', href: '/dashboard/recall-drills', icon: Zap },
             { label: 'Export Jobs', href: '/dashboard/export-jobs', icon: Archive },
         ],
     },
     {
-        title: 'Data',
+        title: 'Control Plane',
+        items: [
+            { label: 'Rules', href: '/rules', icon: Scale },
+            { label: 'Records', href: '/records', icon: FileCheck },
+            { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle },
+            { label: 'Identity', href: '/identity', icon: Fingerprint },
+            { label: 'Review Queue', href: '/review', icon: Eye },
+        ],
+    },
+    {
+        title: 'Supply Chain',
         items: [
             { label: 'Data Import', href: '/tools/data-import', icon: FileSpreadsheet },
             { label: 'Field Capture', href: '/dashboard/scan', icon: Scan },
             { label: 'Receiving Dock', href: '/dashboard/receiving', icon: Truck },
-            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
             { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
             { label: 'Products', href: '/dashboard/products', icon: Package },
-            { label: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText },
+            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
+        ],
+    },
+    {
+        title: 'Compliance',
+        items: [
+            { label: 'FSMA Dashboard', href: '/fsma', icon: ShieldCheck },
+            { label: 'Compliance Profile', href: '/compliance/profile', icon: FileText },
+            { label: 'Snapshots', href: '/compliance/snapshots', icon: Archive },
+            { label: 'Labels', href: '/compliance/labels', icon: GitBranch },
+            { label: 'Audit Trail', href: '/dashboard/audit-log', icon: ScrollText },
+        ],
+    },
+    {
+        title: 'Tools',
+        items: [
+            { label: 'FTL Checker', href: '/tools/ftl-checker', icon: ShieldCheck },
+            { label: 'KDE Checker', href: '/tools/kde-checker', icon: FileCheck },
+            { label: 'Drill Simulator', href: '/tools/drill-simulator', icon: Zap },
+            { label: 'SOP Generator', href: '/tools/sop-generator', icon: BookOpen },
+            { label: 'All Tools', href: '/tools', icon: Wrench },
         ],
     },
     {
@@ -75,6 +105,7 @@ const NAV_SECTIONS: NavSection[] = [
             { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
             { label: 'Team', href: '/dashboard/team', icon: UserCog },
             { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+            { label: 'Developer Portal', href: '/developer/portal', icon: Code2 },
         ],
     },
 ];
@@ -214,7 +245,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Mobile top nav */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60 border-b border-[var(--re-border-default)]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
                 <nav aria-label="Dashboard quick navigation" className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto no-scrollbar scrollbar-none">
-                    {ALL_NAV_ITEMS.slice(0, 8).map((item) => {
+                    {ALL_NAV_ITEMS.slice(0, 10).map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
                         return (
