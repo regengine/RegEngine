@@ -203,28 +203,28 @@ ALTER TABLE fsma.canonical_entities FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_canonical_entities ON fsma.canonical_entities;
 CREATE POLICY tenant_isolation_canonical_entities ON fsma.canonical_entities
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.entity_aliases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.entity_aliases FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_entity_aliases ON fsma.entity_aliases;
 CREATE POLICY tenant_isolation_entity_aliases ON fsma.entity_aliases
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.entity_merge_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.entity_merge_history FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_merge_history ON fsma.entity_merge_history;
 CREATE POLICY tenant_isolation_merge_history ON fsma.entity_merge_history
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.identity_review_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.identity_review_queue FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_identity_review ON fsma.identity_review_queue;
 CREATE POLICY tenant_isolation_identity_review ON fsma.identity_review_queue
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 
 -- --------------------------------------------------------
