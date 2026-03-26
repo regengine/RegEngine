@@ -375,7 +375,7 @@ export default function HeartbeatPage() {
                 setCompliance(scoreData.value as ComplianceData);
             }
             if (alertsData.status === 'fulfilled') {
-                const raw = alertsData.value as any;
+                const raw = alertsData.value as Alert[] | { alerts: Alert[] };
                 setAlerts(Array.isArray(raw) ? raw : raw?.alerts ?? []);
             }
             setLastRefresh(new Date());
