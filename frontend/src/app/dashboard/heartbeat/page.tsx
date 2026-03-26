@@ -395,7 +395,8 @@ export default function HeartbeatPage() {
 
     // Auto-refresh every 60s
     useEffect(() => {
-        const interval = setInterval(() => loadData(true), 60_000);
+        const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
+        const interval = setInterval(() => loadData(true), POLL_MS);
         return () => clearInterval(interval);
     }, [loadData]);
 

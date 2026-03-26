@@ -5,6 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { POLL_SLOW_MS } from '@/lib/polling-config';
 
 const BILLING_API = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8800';
 
@@ -38,7 +39,7 @@ export function useDealPipeline() {
         queryKey: ['contracts', 'pipeline'],
         queryFn: () => fetchJSON<any>('/v1/billing/contracts/pipeline'),
         staleTime: 30_000,
-        refetchInterval: 60_000,
+        refetchInterval: POLL_SLOW_MS,
     });
 }
 
