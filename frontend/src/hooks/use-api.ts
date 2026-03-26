@@ -2,10 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { IngestURLRequest, ValidationRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
-
-// Configurable polling intervals (ms) — override via env vars
-const POLL_HEALTH = Number(process.env.NEXT_PUBLIC_POLL_HEALTH_MS) || 30_000;
-const POLL_METRICS = Number(process.env.NEXT_PUBLIC_POLL_METRICS_MS) || 15_000;
+import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
 
 // Health Checks
 export const useAdminHealth = () => {

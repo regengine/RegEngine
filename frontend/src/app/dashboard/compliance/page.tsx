@@ -231,7 +231,8 @@ export default function ComplianceDashboardPage() {
     // Auto-refresh every 60s
     useEffect(() => {
         if (!isLoggedIn || !tenantId) return;
-        const interval = setInterval(fetchScore, 60_000);
+        const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
+        const interval = setInterval(fetchScore, POLL_MS);
         return () => clearInterval(interval);
     }, [isLoggedIn, tenantId, fetchScore]);
 
