@@ -137,16 +137,21 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
         if (payload) {
-            // Token is valid — check sysadmin for /sysadmin routes
-            if (pathname.startsWith('/sysadmin')) {
-                // The JWT doesn't carry is_sysadmin, so we need a secondary check.
-                // For now, allow access if they have a valid token — the page-level
-                // check against the backend (/auth/me) will enforce sysadmin.
-                // This is acceptable because /sysadmin page already verifies server-side.
-            }
             return NextResponse.next({ request });
         }
-        // Token invalid/expired — fall through to Supabase check
+        // Token exists but verification failed.
+        // Before redirecting to login, check if we have other valid credentials.
+        // This handles the case where JWT expired but user has active localStorage
+        // session or Supabase session — we don't want to kick them out.
+        const hasApiKey = request.cookies.get('re_api_key')?.value;
+        const hasTenantId = request.cookies.get('re_tenant_id')?.value;
+        if (hasApiKey && hasTenantId) {
+            // User has valid API credentials — let them through.
+            // The page-level useAuth() will handle token refresh.
+            console.info('[middleware] JWT expired but API credentials present — allowing access');
+            return NextResponse.next({ request });
+        }
+        // Fall through to Supabase check
     }
 
     // Strategy 2: Check Supabase session
