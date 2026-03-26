@@ -22,6 +22,7 @@ import {
   useWaiveException,
   useAssignException,
 } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   AlertTriangle,
@@ -96,6 +97,8 @@ export default function ExceptionQueuePage() {
           )}
         </div>
       </div>
+
+      <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

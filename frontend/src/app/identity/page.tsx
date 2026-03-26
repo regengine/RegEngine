@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { useAuth } from '@/lib/auth-context';
 import { useEntities, useIdentityReviews } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   Building2,
@@ -80,6 +81,8 @@ export default function IdentityResolutionPage() {
           </Badge>
         )}
       </div>
+
+      <DemoBanner visible={!!(entities.data?.__isDemo)} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
