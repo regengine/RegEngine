@@ -161,9 +161,11 @@ async function proxyRequest(
       }
     }
 
+    console.error('[proxy/ingestion] 502 — all targets failed:', attemptErrors);
     return proxyError('Unable to reach ingestion service', 502, { details: attemptErrors });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Ingestion request failed';
+    console.error('[proxy/ingestion] 500 —', message);
     return proxyError(message, 500);
   }
 }

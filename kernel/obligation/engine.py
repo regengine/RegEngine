@@ -81,23 +81,25 @@ class RegulatoryEngine:
         decision_id: str,
         decision_type: str,
         decision_data: Dict[str, Any],
-        vertical: str = "finance"
+        vertical: str = "finance",
+        tenant_id: str = "",
     ) -> ObligationEvaluationResult:
         """
         Evaluate a decision against obligations.
-        
+
         Args:
             decision_id: Unique decision ID
             decision_type: Type of decision
             decision_data: Decision payload
             vertical: Vertical name
-            
+            tenant_id: Tenant identifier for cross-tenant isolation
+
         Returns:
             ObligationEvaluationResult
         """
         # Load evaluator for vertical
         evaluator = self.load_vertical_obligations(vertical)
-        
+
         # Perform evaluation
         result = evaluator.evaluate_decision(
             decision_id=decision_id,
@@ -105,13 +107,13 @@ class RegulatoryEngine:
             decision_data=decision_data,
             vertical=vertical
         )
-        
+
         # Persist result
-        self._persist_evaluation(result)
-        
+        self._persist_evaluation(result, tenant_id=tenant_id)
+
         return result
     
-    def _persist_evaluation(self, result: ObligationEvaluationResult):
+    def _persist_evaluation(self, result: ObligationEvaluationResult, tenant_id: str = ""):
         """
         Persist evaluation result to graph and database.
 
@@ -121,6 +123,10 @@ class RegulatoryEngine:
         Graph structure per match:
             (ObligationEvaluation)-[:FOR_DECISION]->(Decision)
             (ObligationEvaluation)-[:AGAINST_OBLIGATION]->(RegulatoryObligation)
+
+        Args:
+            result: The evaluation result to persist.
+            tenant_id: Tenant identifier for cross-tenant isolation.
         """
         if self.graph is None:
             logger.warning("No graph client configured, skipping persistence")
@@ -135,6 +141,7 @@ class RegulatoryEngine:
                         """
                         CREATE (oe:ObligationEvaluation {
                             evaluation_id: $evaluation_id,
+                            tenant_id: $tenant_id,
                             vertical: $vertical,
                             decision_id: $decision_id,
                             obligation_id: $obligation_id,
@@ -145,6 +152,7 @@ class RegulatoryEngine:
                         })
                         """,
                         evaluation_id=result.evaluation_id,
+                        tenant_id=tenant_id,
                         vertical=result.vertical,
                         decision_id=result.decision_id,
                         obligation_id=match.obligation_id,
@@ -160,12 +168,14 @@ class RegulatoryEngine:
                             """
                             MATCH (oe:ObligationEvaluation {
                                 evaluation_id: $evaluation_id,
+                                tenant_id: $tenant_id,
                                 obligation_id: $obligation_id
                             })
                             MATCH (d:Decision {decision_id: $decision_id})
                             MERGE (oe)-[:FOR_DECISION]->(d)
                             """,
                             evaluation_id=result.evaluation_id,
+                            tenant_id=tenant_id,
                             obligation_id=match.obligation_id,
                             decision_id=result.decision_id,
                         )
@@ -175,12 +185,14 @@ class RegulatoryEngine:
                         """
                         MATCH (oe:ObligationEvaluation {
                             evaluation_id: $evaluation_id,
+                            tenant_id: $tenant_id,
                             obligation_id: $obligation_id
                         })
                         MATCH (o:RegulatoryObligation {obligation_id: $obligation_id})
                         MERGE (oe)-[:AGAINST_OBLIGATION]->(o)
                         """,
                         evaluation_id=result.evaluation_id,
+                        tenant_id=tenant_id,
                         obligation_id=match.obligation_id,
                     )
 
@@ -191,13 +203,14 @@ class RegulatoryEngine:
         except Exception as e:
             logger.error(f"Failed to persist evaluation to graph: {e}")
     
-    def get_coverage_report(self, vertical: str = "finance") -> Dict[str, Any]:
+    def get_coverage_report(self, vertical: str = "finance", tenant_id: str = "") -> Dict[str, Any]:
         """
         Generate aggregate coverage report for a vertical.
-        
+
         Args:
             vertical: Vertical name
-            
+            tenant_id: Tenant identifier for cross-tenant isolation
+
         Returns:
             Coverage statistics
         """
@@ -211,44 +224,47 @@ class RegulatoryEngine:
                 "met_obligations": 0,
                 "coverage_percent": 0.0
             }
-        
+
         try:
             with self.graph.session() as session:
                 # Get total obligations for this vertical
                 total_result = session.run(
                     """
-                    MATCH (o:RegulatoryObligation {vertical: $vertical})
+                    MATCH (o:RegulatoryObligation {vertical: $vertical, tenant_id: $tenant_id})
                     RETURN count(o) as total
                     """,
-                    vertical=vertical
+                    vertical=vertical,
+                    tenant_id=tenant_id,
                 )
                 total_obligations = total_result.single()["total"]
-                
+
                 # Get evaluated obligations (recent evaluations)
                 evaluated_result = session.run(
                     """
-                    MATCH (oe:ObligationEvaluation {vertical: $vertical})
+                    MATCH (oe:ObligationEvaluation {vertical: $vertical, tenant_id: $tenant_id})
                     WHERE oe.evaluated_at > datetime() - duration('P30D')
                     RETURN count(DISTINCT oe.obligation_id) as evaluated,
                            sum(CASE WHEN oe.met THEN 1 ELSE 0 END) as met
                     """,
-                    vertical=vertical
+                    vertical=vertical,
+                    tenant_id=tenant_id,
                 )
                 eval_record = evaluated_result.single()
                 evaluated_obligations = eval_record["evaluated"] or 0
                 met_obligations = eval_record["met"] or 0
-                
+
                 # Get recent evaluations for trend analysis
                 trend_result = session.run(
                     """
-                    MATCH (oe:ObligationEvaluation {vertical: $vertical})
+                    MATCH (oe:ObligationEvaluation {vertical: $vertical, tenant_id: $tenant_id})
                     WHERE oe.evaluated_at > datetime() - duration('P7D')
-                    RETURN 
+                    RETURN
                         count(oe) as recent_evaluations,
                         avg(CASE WHEN oe.met THEN 1.0 ELSE 0.0 END) as recent_compliance_rate,
                         avg(oe.confidence) as avg_confidence
                     """,
-                    vertical=vertical
+                    vertical=vertical,
+                    tenant_id=tenant_id,
                 )
                 trend_record = trend_result.single()
                 

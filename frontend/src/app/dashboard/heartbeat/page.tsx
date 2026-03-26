@@ -375,7 +375,7 @@ export default function HeartbeatPage() {
                 setCompliance(scoreData.value as ComplianceData);
             }
             if (alertsData.status === 'fulfilled') {
-                const raw = alertsData.value as any;
+                const raw = alertsData.value as Alert[] | { alerts: Alert[] };
                 setAlerts(Array.isArray(raw) ? raw : raw?.alerts ?? []);
             }
             setLastRefresh(new Date());
@@ -395,7 +395,8 @@ export default function HeartbeatPage() {
 
     // Auto-refresh every 60s
     useEffect(() => {
-        const interval = setInterval(() => loadData(true), 60_000);
+        const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
+        const interval = setInterval(() => loadData(true), POLL_MS);
         return () => clearInterval(interval);
     }, [loadData]);
 

@@ -213,6 +213,15 @@ app.include_router(user_router, prefix="/v1")
 from app.supplier_onboarding_routes import router as supplier_onboarding_router
 app.include_router(supplier_onboarding_router, prefix="/v1")
 
+from app.supplier_facilities_routes import router as supplier_facilities_router
+app.include_router(supplier_facilities_router, prefix="/v1")
+
+from app.supplier_compliance_routes import router as supplier_compliance_router
+app.include_router(supplier_compliance_router, prefix="/v1")
+
+from app.supplier_funnel_routes import router as supplier_funnel_router
+app.include_router(supplier_funnel_router, prefix="/v1")
+
 from app.bulk_upload.routes import router as bulk_upload_router
 app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
 

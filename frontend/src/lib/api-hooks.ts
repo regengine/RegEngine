@@ -26,7 +26,7 @@ async function apiFetch<T>(path: string, apiKey: string, options: RequestInit = 
         throw new Error(`API error: ${res.status} ${res.statusText}`);
     }
 
-    return res.json();
+    throw lastError!;
 }
 
 // ── Alerts ──
