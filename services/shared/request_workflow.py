@@ -29,7 +29,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+try:
+    import structlog
+    logger = structlog.get_logger("request-workflow")
+    _USE_STRUCTLOG = True
+except ImportError:
+    import logging
+    _USE_STRUCTLOG = False
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
@@ -37,7 +43,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger("request-workflow")
+if not _USE_STRUCTLOG:
+    logger = logging.getLogger("request-workflow")
 
 # ---------------------------------------------------------------------------
 # Valid workflow stages (ordered)
@@ -978,7 +985,7 @@ class RequestWorkflow:
         try:
             identity_issues = self.db.execute(
                 text("""
-                    SELECT irq.review_id, irq.similarity_score,
+                    SELECT irq.review_id, irq.match_confidence,
                            ea.canonical_name AS entity_a_name,
                            eb.canonical_name AS entity_b_name
                     FROM fsma.identity_review_queue irq
@@ -988,7 +995,7 @@ class RequestWorkflow:
                       ON irq.entity_b_id = eb.entity_id
                     WHERE irq.tenant_id = :tenant_id
                       AND irq.status = 'pending'
-                      AND irq.similarity_score >= 0.85
+                      AND irq.match_confidence >= 0.85
                     LIMIT 20
                 """),
                 {"tenant_id": tenant_id},
