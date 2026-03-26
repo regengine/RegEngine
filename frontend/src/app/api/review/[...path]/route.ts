@@ -4,7 +4,15 @@ import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey } from '@/
 // Proxy review API requests to the Admin backend service
 // This allows browser clients to access review endpoints without CORS issues
 
-const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
+const ADMIN_URL = (() => {
+    const url = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
+    const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+    if (onVercel && url.includes('.railway.internal')) {
+        console.warn('[proxy/review] ADMIN_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
+        return 'http://localhost:8400';
+    }
+    return url;
+})();
 
 export const dynamic = 'force-dynamic';
 
