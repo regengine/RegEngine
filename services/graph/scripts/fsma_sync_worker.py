@@ -92,6 +92,8 @@ class FSMASyncWorker:
         if not cte_id:
             return
 
+        tenant_id = cte.get("tenant_id", "")
+
         properties = {
             "event_type": cte.get("event_type"),
             "event_time": cte.get("event_time"),
@@ -101,15 +103,17 @@ class FSMASyncWorker:
             "tlc": cte.get("tlc"),
             "lot_code": cte.get("lot_code"),
             "data_source": cte.get("data_source"),
+            "tenant_id": tenant_id,
         }
 
         with self.driver.session() as session:
             session.run(
                 """
-                MERGE (cte:CTE {id: $id})
+                MERGE (cte:CTE {id: $id, tenant_id: $tenant_id})
                 SET cte += $properties
                 """,
                 id=cte_id,
+                tenant_id=tenant_id,
                 properties=properties,
             )
 
@@ -117,13 +121,14 @@ class FSMASyncWorker:
             if tlc:
                 session.run(
                     """
-                    MERGE (lot:Lot {tlc: $tlc})
+                    MERGE (lot:Lot {tlc: $tlc, tenant_id: $tenant_id})
                     SET lot.lot_code = coalesce($lot_code, lot.lot_code)
                     WITH lot
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:INVOLVES_LOT]->(lot)
                     """,
                     tlc=tlc,
+                    tenant_id=tenant_id,
                     lot_code=cte.get("lot_code"),
                     cte_id=cte_id,
                 )
@@ -132,23 +137,25 @@ class FSMASyncWorker:
             if product_id:
                 session.run(
                     """
-                    MERGE (product:Product {id: $product_id})
+                    MERGE (product:Product {id: $product_id, tenant_id: $tenant_id})
                     WITH product
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:INVOLVES_PRODUCT]->(product)
                     """,
                     product_id=product_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
                 if tlc:
                     session.run(
                         """
-                        MATCH (product:Product {id: $product_id})
-                        MATCH (lot:Lot {tlc: $tlc})
+                        MATCH (product:Product {id: $product_id, tenant_id: $tenant_id})
+                        MATCH (lot:Lot {tlc: $tlc, tenant_id: $tenant_id})
                         MERGE (product)-[:HAS_LOT]->(lot)
                         """,
                         product_id=product_id,
+                        tenant_id=tenant_id,
                         tlc=tlc,
                     )
 
@@ -156,12 +163,13 @@ class FSMASyncWorker:
             if location_id:
                 session.run(
                     """
-                    MERGE (loc:Location {id: $location_id})
+                    MERGE (loc:Location {id: $location_id, tenant_id: $tenant_id})
                     WITH loc
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:OCCURRED_AT]->(loc)
                     """,
                     location_id=location_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
@@ -169,12 +177,13 @@ class FSMASyncWorker:
             if source_location_id:
                 session.run(
                     """
-                    MERGE (src:Location {id: $source_location_id})
+                    MERGE (src:Location {id: $source_location_id, tenant_id: $tenant_id})
                     WITH src
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:SHIPPED_FROM]->(src)
                     """,
                     source_location_id=source_location_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
@@ -182,12 +191,13 @@ class FSMASyncWorker:
             if dest_location_id:
                 session.run(
                     """
-                    MERGE (dst:Location {id: $dest_location_id})
+                    MERGE (dst:Location {id: $dest_location_id, tenant_id: $tenant_id})
                     WITH dst
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:SHIPPED_TO]->(dst)
                     """,
                     dest_location_id=dest_location_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
@@ -212,17 +222,19 @@ class FSMASyncWorker:
             "confidence_score": event.get("confidence_score"),
             "schema_version": event.get("schema_version"),
             "sha256_hash": event.get("sha256_hash"),
+            "tenant_id": tenant_id,
         }
 
         with self.driver.session(database=db_name) if db_name else self.driver.session() as session:
             # Upsert the TraceEvent node
             session.run(
                 """
-                MERGE (e:TraceEvent {event_id: $event_id})
+                MERGE (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
                 SET e += $properties
                 SET e.synced_at = datetime()
                 """,
                 event_id=event_id,
+                tenant_id=tenant_id,
                 properties=properties,
             )
 
@@ -231,13 +243,14 @@ class FSMASyncWorker:
             if tlc:
                 session.run(
                     """
-                    MERGE (lot:Lot {tlc: $tlc})
+                    MERGE (lot:Lot {tlc: $tlc, tenant_id: $tenant_id})
                     ON CREATE SET lot.product_description = $product_ref, lot.created_at = datetime()
                     WITH lot
-                    MATCH (e:TraceEvent {event_id: $event_id})
+                    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
                     MERGE (lot)-[:UNDERWENT]->(e)
                     """,
                     tlc=tlc,
+                    tenant_id=tenant_id,
                     product_ref=event.get("product_reference", ""),
                     event_id=event_id,
                 )
@@ -247,13 +260,14 @@ class FSMASyncWorker:
             if from_ref:
                 session.run(
                     """
-                    MERGE (f:Facility {identifier: $ref})
+                    MERGE (f:Facility {identifier: $ref, tenant_id: $tenant_id})
                     ON CREATE SET f.name = $ref, f.created_at = datetime()
                     WITH f
-                    MATCH (e:TraceEvent {event_id: $event_id})
+                    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
                     MERGE (f)-[:SHIPPED]->(e)
                     """,
                     ref=from_ref,
+                    tenant_id=tenant_id,
                     event_id=event_id,
                 )
 
@@ -262,13 +276,14 @@ class FSMASyncWorker:
             if to_ref:
                 session.run(
                     """
-                    MERGE (f:Facility {identifier: $ref})
+                    MERGE (f:Facility {identifier: $ref, tenant_id: $tenant_id})
                     ON CREATE SET f.name = $ref, f.created_at = datetime()
                     WITH f
-                    MATCH (e:TraceEvent {event_id: $event_id})
+                    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
                     MERGE (e)-[:SHIPPED_TO]->(f)
                     """,
                     ref=to_ref,
+                    tenant_id=tenant_id,
                     event_id=event_id,
                 )
 
@@ -285,19 +300,23 @@ class FSMASyncWorker:
         if not product_id:
             return
 
+        tenant_id = product.get("tenant_id", "")
+
         with self.driver.session() as session:
             session.run(
                 """
-                MERGE (product:Product {id: $id})
+                MERGE (product:Product {id: $id, tenant_id: $tenant_id})
                 SET product += $properties
                 """,
                 id=product_id,
+                tenant_id=tenant_id,
                 properties={
                     "name": product.get("name"),
                     "gtin": product.get("gtin"),
                     "sku": product.get("sku"),
                     "ftl_category": product.get("ftl_category"),
                     "ftl_covered": product.get("ftl_covered"),
+                    "tenant_id": tenant_id,
                 },
             )
 
@@ -306,18 +325,22 @@ class FSMASyncWorker:
         if not location_id:
             return
 
+        tenant_id = location.get("tenant_id", "")
+
         with self.driver.session() as session:
             session.run(
                 """
-                MERGE (loc:Location {id: $id})
+                MERGE (loc:Location {id: $id, tenant_id: $tenant_id})
                 SET loc += $properties
                 """,
                 id=location_id,
+                tenant_id=tenant_id,
                 properties={
                     "name": location.get("name"),
                     "gln": location.get("gln"),
                     "location_type": location.get("location_type"),
                     "fda_fei": location.get("fda_fei"),
+                    "tenant_id": tenant_id,
                 },
             )
 

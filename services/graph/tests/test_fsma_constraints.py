@@ -89,56 +89,70 @@ class TestLotAssignedByCypher:
         """Generates ASSIGNED_BY cypher when GLN is set."""
         lot = Lot(
             tlc="LOT-GLN-001",
+            tenant_id="t1",
             tlc_source_gln="1111111111111",
         )
-        cypher = lot.assigned_by_cypher()
+        result = lot.assigned_by_cypher()
 
-        assert cypher is not None
-        assert "MATCH (l:Lot {tlc: 'LOT-GLN-001'})" in cypher
-        assert "MERGE (f:Facility {gln: '1111111111111'})" in cypher
+        assert result is not None
+        cypher, params = result
+        assert "$tlc" in cypher
+        assert "$source_gln" in cypher
         assert "MERGE (l)-[:ASSIGNED_BY]->(f)" in cypher
+        assert params["tlc"] == "LOT-GLN-001"
+        assert params["source_gln"] == "1111111111111"
+        assert params["tenant_id"] == "t1"
 
     def test_assigned_by_cypher_with_fda_reg(self):
         """Generates ASSIGNED_BY cypher when FDA reg is set."""
         lot = Lot(
             tlc="LOT-FDA-001",
+            tenant_id="t1",
             tlc_source_fda_reg="22222222222",
         )
-        cypher = lot.assigned_by_cypher()
+        result = lot.assigned_by_cypher()
 
-        assert cypher is not None
-        assert "MATCH (l:Lot {tlc: 'LOT-FDA-001'})" in cypher
-        assert "fda_registration: '22222222222'" in cypher
+        assert result is not None
+        cypher, params = result
+        assert "$source_fda_reg" in cypher
         assert "ASSIGNED_BY" in cypher
+        assert params["source_fda_reg"] == "22222222222"
+        assert params["tenant_id"] == "t1"
 
     def test_assigned_by_cypher_prefers_gln(self):
         """When both GLN and FDA reg set, GLN is preferred."""
         lot = Lot(
             tlc="LOT-BOTH-001",
+            tenant_id="t1",
             tlc_source_gln="3333333333333",
             tlc_source_fda_reg="44444444444",
         )
-        cypher = lot.assigned_by_cypher()
+        result = lot.assigned_by_cypher()
 
-        assert "gln: '3333333333333'" in cypher
-        assert "fda_registration" not in cypher
+        assert result is not None
+        cypher, params = result
+        assert "source_gln" in params
+        assert "source_fda_reg" not in params
 
     def test_assigned_by_cypher_returns_none_without_source(self):
         """Returns None when no TLC source is set."""
         lot = Lot(tlc="LOT-NONE-001")
-        cypher = lot.assigned_by_cypher()
+        result = lot.assigned_by_cypher()
 
-        assert cypher is None
+        assert result is None
 
     def test_assigned_by_cypher_creates_facility_on_create(self):
         """Cypher includes ON CREATE SET for facility name."""
         lot = Lot(
             tlc="LOT-NEW-001",
+            tenant_id="t1",
             tlc_source_gln="5555555555555",
         )
-        cypher = lot.assigned_by_cypher()
+        result = lot.assigned_by_cypher()
 
-        assert "ON CREATE SET f.name = 'TLC-Source-5555555555555'" in cypher
+        assert result is not None
+        cypher, params = result
+        assert "ON CREATE SET f.name = 'TLC-Source-' + $source_gln" in cypher
         assert "f.created_at = datetime()" in cypher
 
 
@@ -392,7 +406,7 @@ class TestFSMAConstraints:
     def test_constraints_include_facility_unique(self):
         """Constraints include facility GLN uniqueness."""
         constraint_str = " ".join(FSMA_CONSTRAINTS)
-        assert "facility_gln_unique" in constraint_str
+        assert "facility_gln_tenant_unique" in constraint_str
 
     def test_constraints_include_tlc_source_gln_index(self):
         """Constraints include TLC source GLN index."""
