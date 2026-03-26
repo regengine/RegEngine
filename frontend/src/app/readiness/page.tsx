@@ -92,7 +92,7 @@ const DEMO_CHECKLIST = {
 
 export default function ReadinessWizardPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
 
   const assessment = useQuery({
     queryKey: ['readiness', 'assessment', tid],
