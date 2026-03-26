@@ -1,0 +1,161 @@
+name: Bundle Size Analysis
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/bundle-analysis.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/bundle-analysis.yml'
+
+concurrency:
+  group: bundle-analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  # Maximum total JS bundle size in bytes (2MB)
+  BUNDLE_SIZE_LIMIT: 2097152
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  analyze:
+    name: Bundle Size Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: Build production bundle
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+        run: cd frontend && npm run build
+
+      - name: Analyze bundle size
+        id: bundle
+        run: |
+          cd frontend
+
+          # Calculate total JS bundle size from .next/static
+          TOTAL_JS=$(find .next/static -name '*.js' -exec stat --format='%s' {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')
+          TOTAL_CSS=$(find .next/static -name '*.css' -exec stat --format='%s' {} + 2>/dev/null | awk '{s+=$1} END {print s+0}')
+          TOTAL_NEXT=$(du -sb .next 2>/dev/null | cut -f1)
+
+          # Human-readable sizes
+          JS_KB=$(echo "scale=1; $TOTAL_JS / 1024" | bc)
+          JS_MB=$(echo "scale=2; $TOTAL_JS / 1048576" | bc)
+          CSS_KB=$(echo "scale=1; $TOTAL_CSS / 1024" | bc)
+          NEXT_MB=$(echo "scale=2; $TOTAL_NEXT / 1048576" | bc)
+
+          echo "total_js=$TOTAL_JS" >> $GITHUB_OUTPUT
+          echo "js_kb=$JS_KB" >> $GITHUB_OUTPUT
+          echo "js_mb=$JS_MB" >> $GITHUB_OUTPUT
+          echo "css_kb=$CSS_KB" >> $GITHUB_OUTPUT
+          echo "next_mb=$NEXT_MB" >> $GITHUB_OUTPUT
+
+          # Top 10 largest JS chunks
+          LARGEST_CHUNKS=$(find .next/static -name '*.js' -exec ls -lS {} + | head -10 | awk '{printf "| `%s` | %s |\n", $NF, $5}')
+
+          echo "### Bundle Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Total JS | ${JS_KB}KB (${JS_MB}MB) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total CSS | ${CSS_KB}KB |" >> $GITHUB_STEP_SUMMARY
+          echo "| .next directory | ${NEXT_MB}MB |" >> $GITHUB_STEP_SUMMARY
+          echo "| Limit | $(echo "scale=1; $BUNDLE_SIZE_LIMIT / 1048576" | bc)MB |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Largest JS Chunks" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Bytes |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "$LARGEST_CHUNKS" >> $GITHUB_STEP_SUMMARY
+
+      - name: Comment bundle size on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const totalJs = parseInt('${{ steps.bundle.outputs.total_js }}') || 0;
+            const jsMb = '${{ steps.bundle.outputs.js_mb }}';
+            const jsKb = '${{ steps.bundle.outputs.js_kb }}';
+            const cssKb = '${{ steps.bundle.outputs.css_kb }}';
+            const limitMb = (${{ env.BUNDLE_SIZE_LIMIT }} / 1048576).toFixed(1);
+            const passed = totalJs <= ${{ env.BUNDLE_SIZE_LIMIT }};
+            const icon = passed ? ':white_check_mark:' : ':x:';
+
+            const body = [
+              `## ${icon} Bundle Size Report`,
+              '',
+              '| Metric | Size |',
+              '|--------|------|',
+              `| **Total JS** | ${jsKb}KB (${jsMb}MB) |`,
+              `| Total CSS | ${cssKb}KB |`,
+              `| Limit | ${limitMb}MB |`,
+              '',
+              passed
+                ? `Bundle is within the ${limitMb}MB limit.`
+                : `**Bundle exceeds the ${limitMb}MB limit!**`,
+            ].join('\n');
+
+            // Find and update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const marker = '## :white_check_mark: Bundle Size Report';
+            const markerFail = '## :x: Bundle Size Report';
+            const existing = comments.find(c =>
+              c.body?.includes(marker) || c.body?.includes(markerFail)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Enforce bundle size limit
+        run: |
+          TOTAL_JS=${{ steps.bundle.outputs.total_js }}
+          LIMIT=${{ env.BUNDLE_SIZE_LIMIT }}
+          JS_MB=${{ steps.bundle.outputs.js_mb }}
+          LIMIT_MB=$(echo "scale=1; $LIMIT / 1048576" | bc)
+
+          echo "Total JS: ${JS_MB}MB / Limit: ${LIMIT_MB}MB"
+
+          if [ "$TOTAL_JS" -gt "$LIMIT" ]; then
+            echo "::error::JS bundle size (${JS_MB}MB) exceeds limit (${LIMIT_MB}MB)"
+            exit 1
+          fi
+
+          echo "Bundle size is within limits."

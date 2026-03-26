@@ -1,0 +1,108 @@
+name: Proxy Route Smoke Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'frontend/src/app/api/**'
+      - '.github/workflows/proxy-smoke.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/src/app/api/**'
+      - '.github/workflows/proxy-smoke.yml'
+
+concurrency:
+  group: proxy-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  smoke:
+    name: Proxy Route Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: Build production bundle
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+        run: cd frontend && npm run build
+
+      - name: Start Next.js server
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+        run: |
+          cd frontend
+          npm start &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+          # Wait for server to be ready (up to 30s)
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+              echo "Server ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Smoke test proxy routes
+        run: |
+          PASS=0
+          FAIL=0
+          ROUTES=(
+            "/api/health"
+            "/api/admin/health"
+            "/api/ingestion/"
+            "/api/compliance/"
+          )
+
+          echo "### Proxy Route Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo '| Route | Status | Result |' >> $GITHUB_STEP_SUMMARY
+          echo '|-------|--------|--------|' >> $GITHUB_STEP_SUMMARY
+
+          for route in "${ROUTES[@]}"; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000${route}" 2>/dev/null || echo "000")
+            if [ "$STATUS" -ge 500 ] 2>/dev/null || [ "$STATUS" = "000" ]; then
+              echo "FAIL: $route -> $STATUS"
+              echo "| \`$route\` | $STATUS | FAIL |" >> $GITHUB_STEP_SUMMARY
+              FAIL=$((FAIL + 1))
+            else
+              echo "PASS: $route -> $STATUS"
+              echo "| \`$route\` | $STATUS | PASS |" >> $GITHUB_STEP_SUMMARY
+              PASS=$((PASS + 1))
+            fi
+          done
+
+          echo ""
+          echo "Results: $PASS passed, $FAIL failed"
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**$PASS passed, $FAIL failed**" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$FAIL" -gt 0 ]; then
+            echo "::error::$FAIL proxy route(s) returned 5xx or failed to respond"
+            exit 1
+          fi
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            kill "$SERVER_PID" 2>/dev/null || true
+          fi
