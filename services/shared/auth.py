@@ -240,8 +240,31 @@ async def require_api_key(
             allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
         )
 
+    # Check preshared/master key first — same pattern as get_ingestion_principal.
+    # This ensures server-side proxy injection (which uses the configured API_KEY
+    # env var) works for ALL endpoints, not just those using require_permission.
+    _configured_key = os.getenv("API_KEY") or os.getenv("REGENGINE_API_KEY")
+    if _configured_key and x_regengine_api_key:
+        import hmac as _hmac
+        if _hmac.compare_digest(
+            x_regengine_api_key.encode("utf-8"),
+            _configured_key.encode("utf-8"),
+        ):
+            return APIKey(
+                key_id="preshared-master",
+                key_hash="",
+                name="Preshared Master Key",
+                tenant_id=None,
+                created_at=datetime.now(timezone.utc),
+                rate_limit_per_minute=1000,
+                enabled=True,
+                scopes=["read", "write", "admin"],
+                billing_tier="ENTERPRISE",
+                allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
+            )
+
     key_store = get_key_store()
-    
+
     if isinstance(key_store, DatabaseAPIKeyStore):
         api_key = await key_store.validate_key(x_regengine_api_key)
     else:
