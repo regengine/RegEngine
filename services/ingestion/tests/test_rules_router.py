@@ -93,6 +93,22 @@ class _FakeSession:
         pass
 
 
+class _NullSession:
+    """Session that raises on any operation — simulates DB unavailable."""
+
+    def execute(self, *_args, **_kwargs):
+        raise RuntimeError("Database unavailable")
+
+    def commit(self) -> None:
+        raise RuntimeError("Database unavailable")
+
+    def rollback(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -104,14 +120,16 @@ SAMPLE_RULES = [
 ]
 
 
+_NO_DB = object()  # sentinel for "simulate DB unavailable"
+
 def _build_client(
     principal: IngestionPrincipal,
-    db_session: Any = None,
+    db_session: Any = _NO_DB,
 ) -> TestClient:
     app = FastAPI()
     app.include_router(rules_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: principal
-    if db_session is not None:
+    if db_session is not _NO_DB:
         app.dependency_overrides[_get_db_session] = lambda: db_session
     return TestClient(app)
 
@@ -583,7 +601,7 @@ class TestSeedRules:
     def test_seed_rules_db_unavailable_returns_503(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
 
-        with _build_client(_default_principal(), db_session=None) as client:
+        with _build_client(_default_principal(), db_session=_NullSession()) as client:
             resp = client.post("/api/v1/rules/seed")
 
         assert resp.status_code == 503
@@ -640,7 +658,7 @@ class TestDBUnavailable:
     def test_list_rules_db_unavailable_returns_503(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
 
-        with _build_client(_default_principal(), db_session=None) as client:
+        with _build_client(_default_principal(), db_session=_NullSession()) as client:
             resp = client.get("/api/v1/rules")
 
         assert resp.status_code == 503
@@ -649,7 +667,7 @@ class TestDBUnavailable:
     def test_evaluate_db_unavailable_returns_503(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_: (True, 99))
 
-        with _build_client(_default_principal(), db_session=None) as client:
+        with _build_client(_default_principal(), db_session=_NullSession()) as client:
             resp = client.post(
                 "/api/v1/rules/evaluate",
                 json=_sample_event(),
