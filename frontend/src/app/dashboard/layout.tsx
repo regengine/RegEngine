@@ -25,6 +25,7 @@ import {
     ChevronRight,
     LogOut,
     Zap,
+    AlertTriangle,
 } from 'lucide-react';
 
 interface NavItem {
@@ -45,6 +46,7 @@ const NAV_SECTIONS: NavSection[] = [
             { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
             { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
             { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
+            { label: 'Issues', href: '/dashboard/issues', icon: AlertTriangle },
         ],
     },
     {
