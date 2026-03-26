@@ -420,11 +420,93 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # Deadline monitoring — check every 5 minutes for overdue/critical cases
+        self.scheduler.add_job(
+            self.check_request_deadlines,
+            trigger=IntervalTrigger(minutes=5),
+            id="deadline_monitor",
+            name="FDA Request Deadline Monitor",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
+
         logger.info(
             "scheduler_ready",
-            total_jobs=3,
+            total_jobs=4,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def check_request_deadlines(self) -> None:
+        """Check all tenants for overdue/critical FDA request deadlines.
+
+        Queries all active request cases and logs warnings for any that are
+        overdue or approaching their deadline (<2 hours). Designed to run
+        every 5 minutes via APScheduler.
+        """
+        try:
+            from shared.database import SessionLocal
+            from shared.request_workflow import RequestWorkflow
+
+            db = SessionLocal()
+            try:
+                workflow = RequestWorkflow(db)
+
+                # Get all distinct tenant IDs with active cases
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        SELECT DISTINCT tenant_id
+                        FROM fsma.request_cases
+                        WHERE package_status NOT IN ('submitted', 'amended')
+                          AND response_due_at IS NOT NULL
+                    """)
+                )
+                tenant_ids = [str(r[0]) for r in result.fetchall()]
+
+                total_overdue = 0
+                total_critical = 0
+
+                for tid in tenant_ids:
+                    cases = workflow.check_deadline_status(tid)
+                    overdue = [c for c in cases if c["urgency"] == "overdue"]
+                    critical = [c for c in cases if c["urgency"] == "critical"]
+                    total_overdue += len(overdue)
+                    total_critical += len(critical)
+
+                    for case in overdue:
+                        logger.error(
+                            "deadline_overdue",
+                            tenant_id=tid,
+                            case_id=case["request_case_id"],
+                            hours_overdue=abs(case["hours_remaining"]),
+                            status=case["package_status"],
+                            requesting_party=case["requesting_party"],
+                        )
+
+                    for case in critical:
+                        logger.warning(
+                            "deadline_critical",
+                            tenant_id=tid,
+                            case_id=case["request_case_id"],
+                            hours_remaining=case["hours_remaining"],
+                            status=case["package_status"],
+                        )
+
+                if total_overdue > 0 or total_critical > 0:
+                    logger.warning(
+                        "deadline_monitor_summary",
+                        total_overdue=total_overdue,
+                        total_critical=total_critical,
+                        tenants_checked=len(tenant_ids),
+                    )
+                else:
+                    logger.debug(
+                        "deadline_monitor_ok",
+                        tenants_checked=len(tenant_ids),
+                    )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error("deadline_monitor_failed", error=str(e))
 
     def run_initial_scrape(self) -> None:
         """Run all scrapers immediately on startup."""
