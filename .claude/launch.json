@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "/Users/sellers/RegEngine/frontend/node_modules/.bin/next",
-      "runtimeArgs": ["dev", "/Users/sellers/RegEngine/frontend"],
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 3000
     },
     {
