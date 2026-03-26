@@ -31,6 +31,22 @@ const AUTHENTICATED_APP_ROUTES = [
     '/settings',
     '/onboarding',
     '/owner',
+    // Control Plane pages — contain operational data, must be auth-gated
+    '/rules',
+    '/records',
+    '/exceptions',
+    '/requests',
+    '/identity',
+    '/review',
+    '/audit',
+    '/readiness',
+    '/incidents',
+    '/controls',
+    '/trace',
+    // Compliance subsystem
+    '/compliance',
+    // Ingestion
+    '/ingest',
 ];
 
 // Public docs that remain accessible (product/compliance, not dev-facing)
@@ -187,16 +203,15 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
 
-    // Signal the reason so the login page can display a message and
-    // avoid auto-redirecting back into a loop.
+    // Signal the reason so the login page can display a contextual message.
+    // Only show "session expired" when a token actually existed but failed.
     if (!process.env.AUTH_SECRET_KEY) {
         url.searchParams.set('error', 'auth_config');
     } else if (reToken) {
-        // Token exists but verification failed — likely key mismatch
-        url.searchParams.set('error', 'token_invalid');
-    } else {
+        // Token exists but verification failed — likely expired or key mismatch
         url.searchParams.set('error', 'session_expired');
     }
+    // No token at all = first visit. Don't set any error — just show login form.
 
     return NextResponse.redirect(url);
 }
@@ -245,5 +260,21 @@ export const config = {
         '/developers/:path*',
         '/playground/:path*',
         '/api-keys/:path*',
+        // Control Plane
+        '/rules/:path*',
+        '/records/:path*',
+        '/exceptions/:path*',
+        '/requests/:path*',
+        '/identity/:path*',
+        '/review/:path*',
+        '/audit/:path*',
+        '/readiness/:path*',
+        '/incidents/:path*',
+        '/controls/:path*',
+        '/trace/:path*',
+        // Compliance
+        '/compliance/:path*',
+        // Ingestion
+        '/ingest/:path*',
     ],
 };
