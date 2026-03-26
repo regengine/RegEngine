@@ -126,9 +126,10 @@ export default function RecallReportPage() {
     useEffect(() => {
         if (!tenantId || !apiKey) return;
         fetchRecallReport(tenantId, apiKey)
-            .then((data: Record<string, unknown>) => {
-                if (data && Object.keys(data).length > 0) {
-                    setLiveData(data);
+            .then((data) => {
+                const record = data as Record<string, unknown> | null;
+                if (record && Object.keys(record).length > 0) {
+                    setLiveData(record);
                     setIsDemo(false);
                 }
             })
