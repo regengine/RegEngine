@@ -11,43 +11,19 @@ import { getServiceURL } from './api-config';
 
 const BASE = () => getServiceURL('ingestion');
 
-const MAX_RETRIES = 2;
-const RETRY_DELAYS = [500, 1500]; // ms — exponential backoff
-
-/** Shared fetch helper with API key and retry logic */
+/** Shared fetch helper with API key */
 async function apiFetch<T>(path: string, apiKey: string, options: RequestInit = {}): Promise<T> {
-    let lastError: Error | null = null;
+    const res = await fetch(`${BASE()}${path}`, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            'X-RegEngine-API-Key': apiKey,
+            ...options.headers,
+        },
+    });
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            const res = await fetch(`${BASE()}${path}`, {
-                ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': apiKey,
-                    ...options.headers,
-                },
-            });
-
-            // Don't retry client errors (4xx) — only server/network errors
-            if (res.ok) {
-                return res.json();
-            }
-
-            if (res.status >= 400 && res.status < 500) {
-                throw new Error(`API error: ${res.status} ${res.statusText}`);
-            }
-
-            // Server error (5xx) — retry
-            lastError = new Error(`API error: ${res.status} ${res.statusText}`);
-        } catch (err) {
-            lastError = err instanceof Error ? err : new Error('Network request failed');
-        }
-
-        // Wait before retrying (skip delay after last attempt)
-        if (attempt < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
-        }
+    if (!res.ok) {
+        throw new Error(`API error: ${res.status} ${res.statusText}`);
     }
 
     throw lastError!;
