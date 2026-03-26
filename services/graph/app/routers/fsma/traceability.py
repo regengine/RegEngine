@@ -439,6 +439,83 @@ async def log_traceability_event(
                 logger.info("secured_evidence_payload", doc_id=doc_id, event_id=event_id)
 
         await client.close()
+
+        # Bridge to canonical pipeline so mobile events are visible to
+        # FDA export, compliance scoring, and the canonical records API.
+        try:
+            from shared.canonical_event import (
+                TraceabilityEvent as CanonicalTraceabilityEvent,
+                CTEType as CanonicalCTEType,
+                IngestionSource,
+                ProvenanceMetadata,
+            )
+            from shared.canonical_persistence import CanonicalEventStore
+            from shared.database import SessionLocal
+
+            # Map graph CTEType to canonical CTEType
+            _cte_map = {
+                "HARVESTING": "harvesting", "COOLING": "cooling",
+                "INITIAL_PACKING": "initial_packing",
+                "FIRST_LAND_BASED_RECEIVING": "first_land_based_receiving",
+                "SHIPPING": "shipping", "RECEIVING": "receiving",
+                "TRANSFORMATION": "transformation",
+            }
+            cte_val = request.event_type.value if hasattr(request.event_type, "value") else str(request.event_type)
+            canonical_cte = _cte_map.get(cte_val.upper(), cte_val.lower())
+
+            kdes = {}
+            if request.gtin:
+                kdes["gtin"] = request.gtin
+
+            provenance = ProvenanceMetadata(
+                mapper_name="mobile_capture_bridge",
+                mapper_version="1.0.0",
+                original_format="json",
+                normalization_rules_applied=["mobile_field_capture"],
+            )
+
+            canonical_event = CanonicalTraceabilityEvent(
+                event_id=uuid.UUID(event_id),
+                tenant_id=tenant_id,
+                source_system=IngestionSource.MOBILE_CAPTURE,
+                event_type=CanonicalCTEType(canonical_cte),
+                event_timestamp=request.event_date,
+                traceability_lot_code=request.tlc,
+                product_reference=request.product_description or "",
+                lot_reference=request.tlc,
+                quantity=request.quantity or 1.0,
+                unit_of_measure=request.uom or "each",
+                from_facility_reference=request.location_identifier,
+                kdes=kdes,
+                raw_payload={
+                    "event_type": cte_val,
+                    "event_date": request.event_date,
+                    "tlc": request.tlc,
+                    "location_identifier": request.location_identifier,
+                    "quantity": request.quantity,
+                    "uom": request.uom,
+                    "product_description": request.product_description,
+                    "gtin": request.gtin,
+                },
+                provenance_metadata=provenance,
+            ).prepare_for_persistence()
+
+            db = SessionLocal()
+            try:
+                store = CanonicalEventStore(db, dual_write=True)
+                store.persist_event(canonical_event)
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.close()
+
+            logger.info("mobile_event_canonical_bridged", event_id=event_id, tlc=request.tlc)
+        except Exception as bridge_err:
+            # Non-blocking: Neo4j write already succeeded
+            logger.warning("mobile_canonical_bridge_failed", event_id=event_id, error=str(bridge_err))
+
         return {
             "status": "success",
             "event_id": event_id,
