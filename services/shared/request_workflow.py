@@ -71,6 +71,10 @@ VALID_SCOPE_TYPES = [
     "custom",
 ]
 
+# Signoff types REQUIRED before a case can reach "submitted" status.
+# Every submission must have at least these signoff types on record.
+REQUIRED_SIGNOFF_TYPES = {"scope_approval", "final_approval"}
+
 VALID_SUBMISSION_TYPES = ["initial", "amendment", "supplement", "correction"]
 VALID_SUBMISSION_METHODS = ["export", "email", "portal", "mail", "other"]
 VALID_REQUEST_CHANNELS = ["email", "phone", "portal", "letter", "drill", "other"]
@@ -828,6 +832,266 @@ class RequestWorkflow:
         }
 
     # ------------------------------------------------------------------
+    # 6b. Blocking Defect Check (ENFORCEMENT)
+    # ------------------------------------------------------------------
+
+    def check_blocking_defects(
+        self,
+        tenant_id: str,
+        request_case_id: str,
+    ) -> Dict[str, Any]:
+        """Check for defects that BLOCK package submission.
+
+        A blocking defect is any of:
+        - Critical rule failure with no corresponding waiver/resolution
+        - Unresolved critical exception cases
+        - Events in scope with zero rule evaluations
+        - Missing required signoff types
+
+        Returns:
+            Dict with 'can_submit' (bool), 'blockers' (list of blocking
+            issues), and 'warnings' (list of non-blocking issues).
+        """
+        case = self._get_case(tenant_id, request_case_id)
+        event_ids = self._get_scope_event_ids(tenant_id, case)
+        blockers: List[Dict[str, Any]] = []
+        warnings: List[Dict[str, Any]] = []
+
+        # 1. Critical rule failures not covered by exception waiver/resolution
+        if event_ids:
+            critical_fails = self.db.execute(
+                text("""
+                    SELECT re.evaluation_id, re.event_id, re.rule_id,
+                           re.why_failed, rd.title AS rule_title,
+                           rd.citation_reference
+                    FROM fsma.rule_evaluations re
+                    JOIN fsma.rule_definitions rd
+                      ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
+                    WHERE re.tenant_id = :tenant_id
+                      AND re.event_id = ANY(:event_ids)
+                      AND re.result = 'fail'
+                      AND rd.severity = 'critical'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM fsma.exception_cases ec
+                          WHERE ec.tenant_id = re.tenant_id
+                            AND ec.linked_event_ids @> ARRAY[re.event_id]::text[]
+                            AND ec.status IN ('resolved', 'waived')
+                      )
+                """),
+                {"tenant_id": tenant_id, "event_ids": event_ids},
+            )
+            for row in critical_fails.mappings().fetchall():
+                blockers.append({
+                    "type": "critical_rule_failure",
+                    "event_id": str(row["event_id"]),
+                    "rule_id": row["rule_id"],
+                    "rule_title": row["rule_title"],
+                    "citation": row["citation_reference"],
+                    "why_failed": row["why_failed"],
+                    "message": (
+                        f"Critical rule '{row['rule_title']}' failed on event "
+                        f"{str(row['event_id'])[:8]}... with no waiver or resolution."
+                    ),
+                })
+
+        # 2. Unresolved critical exceptions
+        critical_exceptions = self.db.execute(
+            text("""
+                SELECT case_id, severity, source_supplier,
+                       rule_category, recommended_remediation
+                FROM fsma.exception_cases
+                WHERE tenant_id = :tenant_id
+                  AND (request_case_id = :case_id
+                       OR linked_event_ids && :event_ids)
+                  AND status NOT IN ('resolved', 'waived')
+                  AND severity = 'critical'
+            """),
+            {
+                "tenant_id": tenant_id,
+                "case_id": request_case_id,
+                "event_ids": event_ids or [],
+            },
+        )
+        for row in critical_exceptions.mappings().fetchall():
+            blockers.append({
+                "type": "unresolved_critical_exception",
+                "exception_id": str(row["case_id"]),
+                "supplier": row["source_supplier"],
+                "rule_category": row["rule_category"],
+                "message": (
+                    f"Critical exception from {row['source_supplier'] or 'unknown'} "
+                    f"in '{row['rule_category'] or 'unknown'}' is unresolved."
+                ),
+            })
+
+        # 3. Events with zero rule evaluations (unevaluated data)
+        if event_ids:
+            unevaluated = self.db.execute(
+                text("""
+                    SELECT te.event_id, te.event_type, te.traceability_lot_code
+                    FROM fsma.traceability_events te
+                    WHERE te.tenant_id = :tenant_id
+                      AND te.event_id = ANY(:event_ids)
+                      AND te.status = 'active'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM fsma.rule_evaluations re
+                          WHERE re.tenant_id = te.tenant_id
+                            AND re.event_id = te.event_id
+                      )
+                """),
+                {"tenant_id": tenant_id, "event_ids": event_ids},
+            )
+            for row in unevaluated.mappings().fetchall():
+                blockers.append({
+                    "type": "unevaluated_event",
+                    "event_id": str(row["event_id"]),
+                    "event_type": row["event_type"],
+                    "tlc": row["traceability_lot_code"],
+                    "message": (
+                        f"Event {str(row['event_id'])[:8]}... ({row['event_type']}) "
+                        f"has no rule evaluations — cannot verify compliance."
+                    ),
+                })
+
+        # 4. Missing required signoff types
+        signoff_result = self.db.execute(
+            text("""
+                SELECT DISTINCT signoff_type
+                FROM fsma.request_signoffs
+                WHERE request_case_id = :case_id
+                  AND tenant_id = :tenant_id
+            """),
+            {"case_id": request_case_id, "tenant_id": tenant_id},
+        )
+        existing_signoffs = {r[0] for r in signoff_result.fetchall()}
+        missing_signoffs = REQUIRED_SIGNOFF_TYPES - existing_signoffs
+        for missing in sorted(missing_signoffs):
+            blockers.append({
+                "type": "missing_signoff",
+                "signoff_type": missing,
+                "message": f"Required signoff '{missing}' has not been provided.",
+            })
+
+        # 5. Non-critical warnings (don't block but should be noted)
+        if event_ids:
+            non_critical_fails = self.db.execute(
+                text("""
+                    SELECT COUNT(*) AS cnt
+                    FROM fsma.rule_evaluations re
+                    JOIN fsma.rule_definitions rd
+                      ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
+                    WHERE re.tenant_id = :tenant_id
+                      AND re.event_id = ANY(:event_ids)
+                      AND re.result = 'fail'
+                      AND rd.severity = 'warning'
+                """),
+                {"tenant_id": tenant_id, "event_ids": event_ids},
+            )
+            warn_count = non_critical_fails.scalar() or 0
+            if warn_count > 0:
+                warnings.append({
+                    "type": "non_critical_failures",
+                    "count": warn_count,
+                    "message": f"{warn_count} non-critical rule warning(s) present.",
+                })
+
+        can_submit = len(blockers) == 0
+
+        logger.info(
+            "blocking_defect_check",
+            case_id=request_case_id,
+            can_submit=can_submit,
+            blocker_count=len(blockers),
+            warning_count=len(warnings),
+        )
+
+        return {
+            "can_submit": can_submit,
+            "blockers": blockers,
+            "warnings": warnings,
+            "blocker_count": len(blockers),
+            "warning_count": len(warnings),
+        }
+
+    # ------------------------------------------------------------------
+    # 6c. Deadline Status Check (ENFORCEMENT)
+    # ------------------------------------------------------------------
+
+    def check_deadline_status(
+        self,
+        tenant_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Check all active cases for deadline urgency.
+
+        Returns list of cases with urgency classification:
+        - 'overdue': past deadline
+        - 'critical': <2 hours remaining
+        - 'urgent': <6 hours remaining
+        - 'normal': >6 hours remaining
+
+        Use this in a background job or health check to drive alerts.
+        """
+        result = self.db.execute(
+            text("""
+                SELECT request_case_id, package_status,
+                       requesting_party, scope_description,
+                       response_due_at,
+                       EXTRACT(EPOCH FROM (response_due_at - NOW())) / 3600.0
+                           AS hours_remaining,
+                       response_due_at < NOW() AS is_overdue,
+                       gap_count, active_exception_count
+                FROM fsma.request_cases
+                WHERE tenant_id = :tenant_id
+                  AND package_status NOT IN ('submitted', 'amended')
+                ORDER BY response_due_at ASC
+            """),
+            {"tenant_id": tenant_id},
+        )
+
+        cases = []
+        for row in result.mappings().fetchall():
+            hours = float(row["hours_remaining"] or 0)
+            if row["is_overdue"]:
+                urgency = "overdue"
+            elif hours < 2:
+                urgency = "critical"
+            elif hours < 6:
+                urgency = "urgent"
+            else:
+                urgency = "normal"
+
+            cases.append({
+                "request_case_id": str(row["request_case_id"]),
+                "package_status": row["package_status"],
+                "requesting_party": row["requesting_party"],
+                "scope_description": row["scope_description"],
+                "response_due_at": row["response_due_at"].isoformat() if row["response_due_at"] else None,
+                "hours_remaining": round(hours, 2),
+                "countdown_display": _format_countdown(hours),
+                "urgency": urgency,
+                "gap_count": row["gap_count"],
+                "active_exception_count": row["active_exception_count"],
+            })
+
+        overdue_count = sum(1 for c in cases if c["urgency"] == "overdue")
+        critical_count = sum(1 for c in cases if c["urgency"] == "critical")
+
+        if overdue_count > 0:
+            logger.warning(
+                "deadline_overdue",
+                tenant_id=tenant_id,
+                overdue_count=overdue_count,
+            )
+        if critical_count > 0:
+            logger.warning(
+                "deadline_critical",
+                tenant_id=tenant_id,
+                critical_count=critical_count,
+            )
+
+        return cases
+
+    # ------------------------------------------------------------------
     # 7. Submit Package
     # ------------------------------------------------------------------
 
@@ -842,11 +1106,15 @@ class RequestWorkflow:
         submission_method: str = "export",
         submission_notes: Optional[str] = None,
         submission_type: str = "initial",
+        force: bool = False,
     ) -> Dict[str, Any]:
         """Submit a package and mark the case as submitted.
 
         Creates a submission log entry with the immutable package hash
         and record count. Advances case to 'submitted'.
+
+        ENFORCEMENT: Checks for blocking defects before allowing submission.
+        Set force=True to override blockers (logged as an audit event).
         """
         if submission_type not in VALID_SUBMISSION_TYPES:
             raise ValueError(f"Invalid submission_type: {submission_type}")
@@ -859,6 +1127,26 @@ class RequestWorkflow:
                 f"Cannot submit in status '{case['package_status']}'. "
                 "Case must be in 'ready', 'submitted', or 'amended'."
             )
+
+        # ── ENFORCEMENT: Blocking defect gate ──
+        defect_check = self.check_blocking_defects(tenant_id, request_case_id)
+        if not defect_check["can_submit"]:
+            if not force:
+                blocker_summary = "; ".join(
+                    b["message"] for b in defect_check["blockers"][:5]
+                )
+                raise ValueError(
+                    f"Cannot submit: {defect_check['blocker_count']} blocking "
+                    f"defect(s). {blocker_summary}"
+                )
+            else:
+                logger.warning(
+                    "submission_forced_with_blockers",
+                    case_id=request_case_id,
+                    submitted_by=submitted_by,
+                    blocker_count=defect_check["blocker_count"],
+                    blockers=[b["message"] for b in defect_check["blockers"]],
+                )
 
         # Fetch the package to get its hash and record count
         pkg_result = self.db.execute(
