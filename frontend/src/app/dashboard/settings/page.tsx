@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -50,7 +50,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
-    const { user } = useAuth();
+    const { user, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const { organizations } = useOrganizations();
     const currentOrg = organizations.find(o => o.id === tenantId);
@@ -91,7 +91,33 @@ export default function SettingsPage() {
         : 'No Plan Selected';
     const billingCycle = subscriptionData?.subscription?.billing_cycle || '';
 
-    const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    const handleSave = useCallback(async () => {
+        if (!tenantId) return;
+        setSaving(true);
+        setSaveError(null);
+        try {
+            const { getServiceURL } = await import('@/lib/api-config');
+            const base = getServiceURL('ingestion');
+            const res = await fetch(`${base}/api/v1/settings/${tenantId}/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-RegEngine-API-Key': apiKey || '',
+                },
+                body: JSON.stringify(profile),
+            });
+            if (!res.ok) throw new Error(`Save failed: ${res.status} ${res.statusText}`);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch (err) {
+            setSaveError(err instanceof Error ? err.message : 'Failed to save settings');
+        } finally {
+            setSaving(false);
+        }
+    }, [tenantId, apiKey, profile]);
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
         setCopiedKey(id);
@@ -120,15 +146,16 @@ export default function SettingsPage() {
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">Manage your organization, API keys, and integrations</p>
                     </div>
-                    <Button onClick={handleSave} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
-                        {saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
+                    <Button onClick={handleSave} disabled={saving} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
+                        {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...</> : saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
                     </Button>
                 </div>
-                {/* Alpha program notice */}
-                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 flex items-center gap-2 text-blue-800 dark:text-blue-200 text-sm">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Founding Partner Alpha — Settings will sync with your live environment once onboarding is complete.</span>
-                </div>
+                {saveError && (
+                    <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-800 dark:text-red-200 text-sm">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>{saveError}</span>
+                    </div>
+                )}
 
                 {/* Plan Card */}
                 <Card className="border-[var(--re-brand)] overflow-hidden">
