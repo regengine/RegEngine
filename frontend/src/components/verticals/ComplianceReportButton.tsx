@@ -37,7 +37,7 @@ export function ComplianceReportButton({
         setState('generating');
 
         // Small delay for UX feedback
-        setTimeout(() => {
+        setTimeout(async () => {
             const now = new Date();
             const timestamp = now.toISOString().split('T')[0];
 
@@ -93,7 +93,7 @@ export function ComplianceReportButton({
                 });
             }
 
-            generateBrandedPDF({
+            await generateBrandedPDF({
                 title: dashboardTitle,
                 subtitle: `${vertical} Compliance Report`,
                 reportType: `${vertical} Dashboard Compliance`,
