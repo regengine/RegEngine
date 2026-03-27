@@ -167,7 +167,7 @@ const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
 };
 
 export default function DashboardPage() {
-    const { user, isHydrated } = useAuth()
+    const { user, isHydrated, apiKey } = useAuth()
     const { tenantId } = useTenant();
     const router = useRouter();
 
@@ -198,19 +198,20 @@ export default function DashboardPage() {
         return getQuickActions(tenantType);
     }, [tenantType]);
 
-    // Fetch pending reviews count from backend
+    // Fetch pending reviews count from backend via proxy
     const [pendingReviews, setPendingReviews] = useState(0);
     useEffect(() => {
-        if (!effectiveTenantId) return;
-        const { getServiceURL } = require('@/lib/api-config');
-        const base = getServiceURL('ingestion');
-        fetch(`${base}/api/v1/compliance/pending-reviews/${effectiveTenantId}`, {
-            headers: { 'Content-Type': 'application/json' },
+        if (!effectiveTenantId || !apiKey) return;
+        fetch(`/api/ingestion/api/v1/compliance/pending-reviews/${effectiveTenantId}`, {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-RegEngine-API-Key': apiKey,
+            },
         })
             .then(r => r.ok ? r.json() : null)
             .then(data => { if (data?.pending_reviews != null) setPendingReviews(data.pending_reviews); })
             .catch(() => {}); // Graceful — dashboard works without this
-    }, [effectiveTenantId]);
+    }, [effectiveTenantId, apiKey]);
 
     // Use real metrics from backend when available, show honest zeros otherwise
     const metrics = useMemo(() => {
