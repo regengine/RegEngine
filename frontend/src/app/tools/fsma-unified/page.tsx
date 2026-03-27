@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         title: "Unified FSMA Dashboard — RegEngine",
         description: "Anomaly Simulation & Knowledge Graph technical demos.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/fsma-unified",
+        url: "https://www.regengine.co/tools/fsma-unified",
     },
 };
 
