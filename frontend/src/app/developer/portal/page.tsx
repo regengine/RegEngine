@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import {
     Key, BarChart3, BookOpen, ArrowRight, Terminal, Zap,
     CheckCircle2, Circle, Webhook, Package, Loader2,
@@ -24,19 +25,19 @@ interface DashboardStats {
 
 export default function DeveloperPortalDashboard() {
     const supabase = createSupabaseBrowserClient();
+    const { user: authUser } = useAuth();
     const [profile, setProfile] = useState<DeveloperProfile | null>(null);
     const [stats, setStats] = useState<DashboardStats>({ totalKeys: 0, activeKeys: 0, totalRequests: 0 });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function load() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!authUser) return;
 
             const { data: prof } = await supabase
                 .from('developer_profiles')
                 .select('*')
-                .eq('auth_user_id', user.id)
+                .eq('auth_user_id', authUser.id)
                 .single();
 
             if (prof) {
@@ -57,7 +58,7 @@ export default function DeveloperPortalDashboard() {
             setLoading(false);
         }
         load();
-    }, [supabase]);
+    }, [supabase, authUser]);
 
     const greeting = profile?.display_name || profile?.email?.split('@')[0] || 'Developer';
 

@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import {
     LayoutDashboard, Key, BarChart3, BookOpen, LogOut,
     ShieldCheck, Terminal, Code2, Webhook, Package,
     AlertCircle, ChevronDown, ChevronRight, Zap,
-    FileText, ExternalLink,
+    FileText, ExternalLink, Loader2,
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -44,13 +44,29 @@ const NAV_SECTIONS = [
 export default function DeveloperPortalLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const supabase = createSupabaseBrowserClient();
+    const { isAuthenticated, isHydrated, logout } = useAuth();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-    async function handleLogout() {
-        await supabase.auth.signOut();
-        router.push('/developer/login');
+    // Redirect to main login if not authenticated
+    useEffect(() => {
+        if (isHydrated && !isAuthenticated) {
+            router.replace('/login?next=/developer/portal');
+        }
+    }, [isHydrated, isAuthenticated, router]);
+
+    function handleLogout() {
+        logout();
+        router.push('/login');
         router.refresh();
+    }
+
+    // Show loading while hydrating or redirecting
+    if (!isHydrated || !isAuthenticated) {
+        return (
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--re-surface-base)' }}>
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} />
+            </div>
+        );
     }
 
     function toggleSection(label: string) {

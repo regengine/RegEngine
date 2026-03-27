@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,9 +22,11 @@ interface ApiKey {
 
 function generateApiKey(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const array = new Uint8Array(48);
-    crypto.getRandomValues(array);
-    return 'rge_' + Array.from(array, b => chars[b % chars.length]).join('');
+    let result = 'rge_dev_';
+    for (let i = 0; i < 32; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
 }
 
 async function hashKey(key: string): Promise<string> {
@@ -35,6 +38,7 @@ async function hashKey(key: string): Promise<string> {
 
 export default function ApiKeysPage() {
     const supabase = createSupabaseBrowserClient();
+    const { user: authUser } = useAuth();
     const [keys, setKeys] = useState<ApiKey[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
@@ -45,13 +49,12 @@ export default function ApiKeysPage() {
     const [developerId, setDeveloperId] = useState<string | null>(null);
 
     const loadKeys = useCallback(async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!authUser) return;
 
         const { data: profile } = await supabase
             .from('developer_profiles')
             .select('id')
-            .eq('auth_user_id', user.id)
+            .eq('auth_user_id', authUser.id)
             .single();
 
         if (!profile) return;
@@ -65,7 +68,7 @@ export default function ApiKeysPage() {
 
         setKeys(data || []);
         setIsLoading(false);
-    }, [supabase]);
+    }, [supabase, authUser]);
 
     useEffect(() => { loadKeys(); }, [loadKeys]);
 
