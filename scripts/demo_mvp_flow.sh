@@ -18,7 +18,7 @@ set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
 ADMIN_URL="${ADMIN_URL:-http://localhost:8400}"
-INGEST_URL="${INGEST_URL:-http://localhost:8002}"
+INGEST_URL="${INGEST_URL:-http://localhost:8002}"  # matches docker-compose.mvp.yml port mapping
 API_KEY="${1:-}"
 ADMIN_MASTER_KEY="${ADMIN_MASTER_KEY:-}"
 TENANT_ID="${TENANT_ID:-demo-tenant}"
