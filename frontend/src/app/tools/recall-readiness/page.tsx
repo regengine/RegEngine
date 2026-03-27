@@ -11,7 +11,7 @@ export const metadata: Metadata = {
         title: "Recall Readiness Score — RegEngine",
         description: "Benchmark your 24-hour record retrieval speed.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/recall-readiness",
+        url: "https://www.regengine.co/tools/recall-readiness",
     },
 };
 
