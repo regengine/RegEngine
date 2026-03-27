@@ -99,7 +99,7 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 | **Backend** | FastAPI (Python 3.11), PostgreSQL 16, Neo4j 5 (graph), Kafka (Redpanda), Redis 7, Stripe, defusedxml, SQLAlchemy |
 | **Infrastructure** | Vercel Pro (frontend), Railway Pro (backend services), Supabase (auth + database) |
 | **Observability** | Prometheus, Grafana, OpenTelemetry, Jaeger, structlog |
-| **CI/CD** | GitHub Actions (8 workflows), Dependabot, CodeQL, Semgrep, gitleaks, Trivy |
+| **CI/CD** | GitHub Actions (10 workflows), Dependabot, CodeQL, Semgrep, gitleaks, Trivy |
 | **Security** | OWASP ZAP (DAST), pip-audit, npm audit, tenant isolation tests, audit chain verification |
 
 ### Service Architecture
@@ -142,6 +142,8 @@ RegEngine operates as a **request-response control plane** for FSMA 204 complian
 capture → normalize → evaluate rules → triage exceptions →
 assemble response package → submit → preserve audit trail
 ```
+
+**This pipeline is proven end-to-end.** The E2E integration test (`test_e2e_fda_request.py`) runs all 12 steps against a real PostgreSQL database in 0.25 seconds — from messy ingestion through sealed, hashed package submission and amendment.
 
 ### Operational Pages
 
@@ -295,7 +297,10 @@ xattr -cr .
 # Configure environment
 cp .env.example .env    # Fill in required values (see below)
 
-# Start all services
+# Start minimal dev stack (postgres, redis, neo4j, minio)
+docker compose -f docker-compose.dev.yml up -d
+
+# Or start all 17 services
 docker compose up -d
 
 # Frontend
@@ -358,30 +363,52 @@ The seeder creates canonical events, evaluates rules, generates exception cases,
 ### Running Tests
 
 ```bash
-# E2E FDA request test — proves the full closed loop works
-# (requires DATABASE_URL — skips if not set)
-PYTHONPATH=services pytest tests/test_e2e_fda_request.py -v
+# ── E2E: Full FDA 24-hour response pipeline (12 steps, 0.25s) ──
+# Requires: docker compose -f docker-compose.dev.yml up -d postgres
+DATABASE_URL="postgresql://regengine:regengine@localhost:5432/regengine" \
+  PYTHONPATH=services pytest tests/test_e2e_fda_request.py -v
 
-# Control plane tests (canonical model + rules engine + E2E compliance loop)
-PYTHONPATH=services pytest tests/test_canonical_event.py tests/test_rules_engine.py tests/test_compliance_control_plane_e2e.py -v
+# ── Domain logic unit tests (130 tests, no DB required) ──
+PYTHONPATH=services pytest \
+  tests/test_rules_engine_unit.py \
+  tests/test_request_workflow_unit.py \
+  tests/test_identity_service_unit.py -v
 
-# Backend services (from repo root)
+# ── Control plane router tests (96 tests, mocked DB) ──
+PYTHONPATH=services pytest \
+  services/ingestion/tests/test_canonical_router.py \
+  services/ingestion/tests/test_rules_router.py \
+  services/ingestion/tests/test_exception_router.py \
+  services/ingestion/tests/test_request_workflow_router.py \
+  services/ingestion/tests/test_identity_router.py -v
+
+# ── Backend service tests ──
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/admin/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/ingestion/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/compliance/tests/ -v
 
-# Frontend
+# ── Frontend tests (55 tests) ──
 cd frontend
-npm run build            # Full production build (130 pages)
-npm run lint             # ESLint
+npx vitest run           # Hook, component, and page tests
+npm run build            # Full production build (131 pages)
 
-# Integration test stack
+# ── Integration test stack ──
 docker compose -f docker-compose.test.yml up -d
 pytest services/<service>/tests/ -v
 
-# Stress test (4,600 requests across all 6 services)
+# ── Stress test (4,600 requests across all 6 services) ──
 python3 scripts/stress_test.py
 ```
+
+### Test Coverage Summary
+
+| Layer | Tests | What's Covered |
+|-------|-------|----------------|
+| **E2E pipeline** | 12 | Ingest → rules → request → gaps → blocking → signoff → package → submit → amend → deadlines |
+| **Domain logic** | 130 | Rules engine (42), request workflow (43), identity service (45) |
+| **Router HTTP** | 96 | Canonical (28), rules (23), exceptions (14), requests (16), identity (15) |
+| **Frontend** | 55 | useControlPlane hook (21), DemoBanner (3), page rendering (31) |
+| **Total** | **293** | |
 
 ### Monitoring
 
@@ -461,6 +488,7 @@ Additional compose files:
 
 | File | Purpose |
 |------|---------|
+| `docker-compose.dev.yml` | **Minimal dev stack** — just postgres, redis, neo4j, minio (4 services) |
 | `docker-compose.prod.yml` | Production deployment with image pulls from ghcr.io |
 | `docker-compose.test.yml` | CI integration tests (Postgres 16, Redis, Neo4j, LocalStack) |
 | `docker-compose.monitoring.yml` | Prometheus, Grafana, Node/Redis/Postgres exporters |
@@ -478,7 +506,9 @@ Additional compose files:
 | `test-suite-check.yml` | Push/PR on `services/**` | Unified test environment health check |
 | `qa-pipeline.yml` | Push/PR | QA environment validation |
 | `pr-quality.yml` | Pull request | Automated code quality checks |
-| `deploy.yml` | Push to main | Deployment automation |
+| `deploy.yml` | Push to main | Deployment automation (fails on missing secrets) |
+| `proxy-smoke.yml` | Push/PR on `frontend/src/app/api/**` | Proxy route smoke test — verifies routes load |
+| `bundle-analysis.yml` | Push/PR on `frontend/**` | JS bundle size check (fails if >2MB) |
 | `agent-sweep.yml` | Manual/scheduled | AI agent orchestration and maintenance |
 
 ---
