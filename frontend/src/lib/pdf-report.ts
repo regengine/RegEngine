@@ -1,5 +1,6 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// jspdf (~300KB) and jspdf-autotable are lazy-loaded inside generateBrandedPDF
+// to keep them out of the initial bundle.
+import type jsPDF from 'jspdf';
 
 const BRAND = {
     emerald: [16, 185, 129] as const,
@@ -116,7 +117,9 @@ function drawFooter(
     }
 }
 
-export function generateBrandedPDF(config: PDFReportConfig): void {
+export async function generateBrandedPDF(config: PDFReportConfig): Promise<void> {
+    const { default: jsPDF } = await import('jspdf');
+    const { default: autoTable } = await import('jspdf-autotable');
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
