@@ -1,7 +1,14 @@
 import Link from "next/link";
-import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer, CheckCircle2, XCircle, Lock, FileCheck, Database, Shield } from "lucide-react";
 import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
 import { SandboxUpload } from "@/components/marketing/SandboxUpload";
+
+const CREDIBILITY = [
+  { icon: FileCheck, label: "EPCIS 2.0 native" },
+  { icon: Lock, label: "SHA-256 verified chains" },
+  { icon: Database, label: "Built on Supabase" },
+  { icon: Shield, label: "SOC 2 in progress" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
@@ -159,8 +166,11 @@ export default function RegEngineLanding() {
               &ldquo;I&apos;m Chris Sellers, the founder. I work directly with every company in our founding cohort.
               You&apos;ll get a dedicated Slack channel, same-day responses, and my cell phone number.&rdquo;
             </p>
-            <p className="text-[0.8rem] text-[var(--re-text-muted)] mt-2">
-              Christopher Sellers, Founder &amp; CEO
+            <p className="text-[0.8rem] text-[var(--re-text-muted)] mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>Christopher Sellers, Founder &amp; CEO</span>
+              <Link href="/contact" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors font-medium">
+                Book a call →
+              </Link>
             </p>
           </div>
         </div>
@@ -181,6 +191,21 @@ export default function RegEngineLanding() {
           ))}
         </div>
       </div>
+
+      {/* ── BUILT ON STRIP ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 sm:py-10">
+        <p className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.1em] mb-4 text-center">
+          Built on standards you can audit
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
+          {CREDIBILITY.map((c) => (
+            <div key={c.label} className="flex items-center gap-2 text-[var(--re-text-secondary)]">
+              <c.icon className="h-4 w-4 text-[var(--re-text-muted)]" />
+              <span className="text-[0.8rem] sm:text-[0.85rem] font-medium">{c.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── WHO THIS IS FOR ── */}
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
