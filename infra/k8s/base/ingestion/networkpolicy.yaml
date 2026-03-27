@@ -1,0 +1,51 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingestion-service
+  labels:
+    app: ingestion
+spec:
+  podSelector:
+    matchLabels:
+      app: ingestion
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Allow ingress only from the NGINX ingress controller and the admin service
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: admin
+      ports:
+        - protocol: TCP
+          port: 8000
+
+  # Allow egress to PostgreSQL, Redis, and external HTTPS (e.g. webhook delivery)
+  egress:
+    # PostgreSQL
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 6379
+    # External HTTPS (webhooks, third-party APIs)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # DNS resolution (required for service discovery)
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
