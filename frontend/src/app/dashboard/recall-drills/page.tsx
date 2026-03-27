@@ -6,8 +6,10 @@ import type { RecallDrillRun } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/lib/auth-context';
 
 export default function RecallDrillsPage() {
+    const { apiKey } = useAuth();
     const [scenario, setScenario] = useState('Weekend retailer trace-back');
     const [lots, setLots] = useState('TOM-0226-F3-001, LET-0310-WH-21');
     const [dateRange, setDateRange] = useState('2026-03-01 to 2026-03-12');
@@ -21,7 +23,9 @@ export default function RecallDrillsPage() {
             setStatus('loading');
 
             try {
-                const response = await fetch('/api/fsma/customer-readiness/recall-drills');
+                const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
+                    headers: { 'X-RegEngine-API-Key': apiKey || '' },
+                });
                 if (!response.ok) {
                     throw new Error('Failed to load drills');
                 }
@@ -45,7 +49,7 @@ export default function RecallDrillsPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [apiKey]);
 
     async function handleStartDrill() {
         setStatus('saving');
@@ -53,7 +57,7 @@ export default function RecallDrillsPage() {
         try {
             const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
                 body: JSON.stringify({
                     scenario,
                     lots: lots.split(',').map((lot) => lot.trim()).filter(Boolean),

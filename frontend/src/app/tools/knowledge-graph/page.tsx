@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         title: "Supply Chain Knowledge Graph — RegEngine",
         description: "Interactive mapping tool for FSMA 204 supply chains.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/knowledge-graph",
+        url: "https://www.regengine.co/tools/knowledge-graph",
     },
 };
 

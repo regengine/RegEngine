@@ -21,11 +21,9 @@ interface ApiKey {
 
 function generateApiKey(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'rge_dev_';
-    for (let i = 0; i < 32; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    const array = new Uint8Array(48);
+    crypto.getRandomValues(array);
+    return 'rge_' + Array.from(array, b => chars[b % chars.length]).join('');
 }
 
 async function hashKey(key: string): Promise<string> {

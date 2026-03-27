@@ -11,7 +11,7 @@ export const metadata: Metadata = {
         title: "KDE Completeness Checker — RegEngine",
         description: "Generate your custom FSMA 204 KDE checklist.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/kde-checker",
+        url: "https://www.regengine.co/tools/kde-checker",
     },
 };
 
