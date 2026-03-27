@@ -270,6 +270,15 @@ async def require_api_key(
         and x_regengine_api_key == _test_bypass_token
     )
 
+    # Log a warning if bypass token is configured but we're in production
+    if _test_bypass_token and _current_env not in _allowed_envs:
+        logger.warning(
+            "auth_bypass_blocked_in_production",
+            path=request.url.path,
+            env=_current_env,
+            msg="AUTH_TEST_BYPASS_TOKEN is set but blocked — remove it from production config",
+        )
+
     if _is_env_bypass:
         logger.info("test_bypass_auth_used", path=request.url.path, env=_current_env)
         return APIKey(
