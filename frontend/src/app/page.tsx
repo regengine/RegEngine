@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer } from "lucide-react";
+import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
@@ -77,10 +78,10 @@ export default function RegEngineLanding() {
                 <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
               </Link>
               <Link
-                href="/retailer-readiness"
+                href="/walkthrough"
                 className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
               >
-                Free Readiness Assessment
+                See How It Works
               </Link>
             </div>
           </div>
@@ -161,6 +162,29 @@ export default function RegEngineLanding() {
           ))}
         </div>
       </div>
+
+      {/* ── DATA TRANSFORM DEMO ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          See what happens to bad data
+        </p>
+        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+          Messy CSV in. Defensible FDA package out.
+        </h2>
+        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
+          This is real. Missing fields, duplicate lots, inconsistent supplier names — the kind of data you actually get. Watch RegEngine catch it all.
+        </p>
+        <DataTransformDemo />
+        <div className="mt-8 text-center">
+          <Link
+            href="/walkthrough"
+            className="inline-flex items-center gap-2 text-[0.85rem] font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors"
+          >
+            See the full 24-hour FDA response walkthrough
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </section>
 
       {/* ── FREE TOOLS ── */}
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">

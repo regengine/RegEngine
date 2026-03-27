@@ -21,36 +21,24 @@ async function cpFetch<T>(
   endpoint: string,
   apiKey: string,
   options?: RequestInit,
-  demoFallback?: T,
 ): Promise<CpResult<T>> {
-  try {
-    const url = `${INGESTION_API}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-RegEngine-API-Key': apiKey,
-        ...options?.headers,
-      },
-    });
+  const url = `${INGESTION_API}${endpoint}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-RegEngine-API-Key': apiKey,
+      ...options?.headers,
+    },
+  });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    return { data, isDemo: false };
-  } catch (err) {
-    // Fall back to demo data when backend is unavailable
-    if (demoFallback !== undefined) {
-      console.warn(`[control-plane] ${endpoint} unavailable, using demo data`);
-      return { data: demoFallback, isDemo: true };
-    }
-    throw err;
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  return { data, isDemo: false };
 }
 
 /** Unwrap CpResult for backward compat — hooks still return the data shape pages expect */
@@ -100,7 +88,6 @@ export function useExceptions(
     queryKey: ['exceptions', tenantId, filters],
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
       `/api/v1/exceptions?${params}`, apiKey || '',
-      undefined, DEMO_EXCEPTIONS as any,
     ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_CONTROL_PLANE_MS,
@@ -124,7 +111,6 @@ export function useBlockingExceptionCount(tenantId: string) {
     queryKey: ['exceptions', 'blocking', tenantId],
     queryFn: () => cpFetch<{ blocking_count: number }>(
       `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`, apiKey || '',
-      undefined, DEMO_BLOCKING_COUNT,
     ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
@@ -201,7 +187,6 @@ export function useRequestCases(tenantId: string) {
     queryKey: ['requests', tenantId],
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
       `/api/v1/requests?tenant_id=${tenantId}`, apiKey || '',
-      undefined, DEMO_REQUEST_CASES as any,
     ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_METRICS_MS,
@@ -295,7 +280,6 @@ export function useRules() {
     queryKey: ['rules'],
     queryFn: () => cpFetch<{ rules: RuleDefinition[]; total: number }>(
       `/api/v1/rules`, apiKey || '',
-      undefined, DEMO_RULES as any,
     ).then(unwrapCp),
     staleTime: 5 * 60_000,
   });
@@ -366,7 +350,6 @@ export function useCanonicalEvents(
     queryKey: ['records', tenantId, filters],
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
       `/api/v1/records?${params}`, apiKey || '',
-      undefined, DEMO_RECORDS as any,
     ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
@@ -397,7 +380,6 @@ export function useEntities(tenantId: string, entityType?: string) {
     queryKey: ['identity', tenantId, entityType],
     queryFn: () => cpFetch<{ entities: any[]; total: number }>(
       `/api/v1/identity/entities?${params}`, apiKey || '',
-      undefined, DEMO_ENTITIES as any,
     ).then(unwrapCp),
     enabled: !!tenantId,
     staleTime: 60_000,
@@ -410,7 +392,6 @@ export function useIdentityReviews(tenantId: string) {
     queryKey: ['identity', 'reviews', tenantId],
     queryFn: () => cpFetch<{ reviews: any[]; total: number }>(
       `/api/v1/identity/reviews?tenant_id=${tenantId}`, apiKey || '',
-      undefined, DEMO_REVIEWS as any,
     ).then(unwrapCp),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
