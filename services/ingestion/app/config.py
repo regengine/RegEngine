@@ -82,4 +82,13 @@ def get_settings() -> Settings:
         )
         _logger.warning(msg)
         warnings.warn(msg, stacklevel=2)
+
+    # Block AUTH_TEST_BYPASS_TOKEN in production — fail closed.
+    if _is_prod and settings.auth_test_bypass_token:
+        _logger.warning(
+            "AUTH_TEST_BYPASS_TOKEN is set in a production environment — "
+            "forcing it to None. Remove this env var from your production config."
+        )
+        settings.auth_test_bypass_token = None
+
     return settings
