@@ -627,7 +627,7 @@ export function FTLCheckerClient() {
                         ? 'NOT EXEMPT'
                         : 'UNKNOWN';
 
-            generateBrandedPDF({
+            await generateBrandedPDF({
                 title: 'FTL Coverage Report',
                 subtitle: `${results.totalSelected} categor${results.totalSelected === 1 ? 'y' : 'ies'} analyzed`,
                 reportType: 'FDA FSMA 204 - Food Traceability List',
