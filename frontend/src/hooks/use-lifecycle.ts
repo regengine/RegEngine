@@ -17,7 +17,7 @@ export function useLifecycleChanges(tenantId?: string, changeType?: string) {
     const qs = params.toString() ? `?${params}` : '';
     return useQuery({
         queryKey: ['lifecycle', 'changes', tenantId, changeType],
-        queryFn: () => fetchJSON<any>(`/v1/billing/lifecycle/changes${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/lifecycle/changes${qs}`),
         staleTime: 30_000,
     });
 }
@@ -25,7 +25,7 @@ export function useLifecycleChanges(tenantId?: string, changeType?: string) {
 export function useLifecycleSummary() {
     return useQuery({
         queryKey: ['lifecycle', 'summary'],
-        queryFn: () => fetchJSON<any>('/v1/billing/lifecycle/summary'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/lifecycle/summary'),
         staleTime: 30_000,
     });
 }
@@ -34,7 +34,7 @@ export function useTrials(activeOnly = false) {
     const qs = activeOnly ? '?active_only=true' : '';
     return useQuery({
         queryKey: ['lifecycle', 'trials', activeOnly],
-        queryFn: () => fetchJSON<any>(`/v1/billing/lifecycle/trials${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/lifecycle/trials${qs}`),
         staleTime: 30_000,
     });
 }
@@ -42,7 +42,7 @@ export function useTrials(activeOnly = false) {
 export function usePlanCatalog() {
     return useQuery({
         queryKey: ['lifecycle', 'plans'],
-        queryFn: () => fetchJSON<any>('/v1/billing/lifecycle/plans'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/lifecycle/plans'),
         staleTime: 120_000,
     });
 }
@@ -51,7 +51,7 @@ export function useChangePlan() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data: { tenant_id: string; tenant_name: string; from_plan: string; to_plan: string }) =>
-            fetchJSON<any>('/v1/billing/lifecycle/change', {
+            fetchJSON<unknown>('/v1/billing/lifecycle/change', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             }),

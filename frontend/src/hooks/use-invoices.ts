@@ -17,7 +17,7 @@ export function useInvoices(tenantId?: string, status?: string) {
     const qs = params.toString() ? `?${params}` : '';
     return useQuery({
         queryKey: ['invoices', 'list', tenantId, status],
-        queryFn: () => fetchJSON<any>(`/v1/billing/invoices${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/invoices${qs}`),
         staleTime: 30_000,
     });
 }
@@ -25,7 +25,7 @@ export function useInvoices(tenantId?: string, status?: string) {
 export function useInvoice(invoiceId: string) {
     return useQuery({
         queryKey: ['invoices', invoiceId],
-        queryFn: () => fetchJSON<any>(`/v1/billing/invoices/${invoiceId}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/invoices/${invoiceId}`),
         enabled: !!invoiceId,
     });
 }
@@ -33,7 +33,7 @@ export function useInvoice(invoiceId: string) {
 export function useAgingReport() {
     return useQuery({
         queryKey: ['invoices', 'aging'],
-        queryFn: () => fetchJSON<any>('/v1/billing/invoices/aging'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/invoices/aging'),
         staleTime: 60_000,
     });
 }
@@ -41,7 +41,7 @@ export function useAgingReport() {
 export function useRevenueSummary() {
     return useQuery({
         queryKey: ['invoices', 'revenue-summary'],
-        queryFn: () => fetchJSON<any>('/v1/billing/invoices/revenue-summary'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/invoices/revenue-summary'),
         staleTime: 30_000,
     });
 }
@@ -50,7 +50,7 @@ export function usePayments(tenantId?: string) {
     const qs = tenantId ? `?tenant_id=${tenantId}` : '';
     return useQuery({
         queryKey: ['invoices', 'payments', tenantId],
-        queryFn: () => fetchJSON<any>(`/v1/billing/invoices/payments${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/invoices/payments${qs}`),
         staleTime: 30_000,
     });
 }
@@ -59,7 +59,7 @@ export function useCreateInvoice() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data: { tenant_id: string; tenant_name: string; tier_id: string }) =>
-            fetchJSON<any>('/v1/billing/invoices', {
+            fetchJSON<unknown>('/v1/billing/invoices', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             }),
@@ -71,7 +71,7 @@ export function usePayInvoice() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ invoiceId, amount_cents }: { invoiceId: string; amount_cents: number }) =>
-            fetchJSON<any>(`/v1/billing/invoices/${invoiceId}/pay`, {
+            fetchJSON<unknown>(`/v1/billing/invoices/${invoiceId}/pay`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount_cents }),
             }),

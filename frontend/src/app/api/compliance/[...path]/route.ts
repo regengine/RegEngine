@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
+import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy compliance API requests to the Compliance backend service
 // This allows browser clients to access compliance endpoints without CORS issues
 
 function getComplianceUrl(): string {
-    const url = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
+    const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
     // Guard: *.railway.internal URLs are unreachable from Vercel serverless
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
         console.warn('[proxy/compliance] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel. Set a public Railway URL.');
-        return 'http://localhost:8500'; // Will fail with a clear connection error
+        return getServerServiceURL('compliance'); // Will fail with a clear connection error
     }
     return url;
 }

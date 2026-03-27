@@ -21,7 +21,7 @@ export function useContracts(stage?: string) {
     const params = stage ? `?stage=${stage}` : '';
     return useQuery({
         queryKey: ['contracts', 'list', stage],
-        queryFn: () => fetchJSON<any>(`/v1/billing/contracts${params}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/contracts${params}`),
         staleTime: 30_000,
     });
 }
@@ -29,7 +29,7 @@ export function useContracts(stage?: string) {
 export function useContract(contractId: string) {
     return useQuery({
         queryKey: ['contracts', contractId],
-        queryFn: () => fetchJSON<any>(`/v1/billing/contracts/${contractId}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/contracts/${contractId}`),
         enabled: !!contractId,
     });
 }
@@ -37,7 +37,7 @@ export function useContract(contractId: string) {
 export function useDealPipeline() {
     return useQuery({
         queryKey: ['contracts', 'pipeline'],
-        queryFn: () => fetchJSON<any>('/v1/billing/contracts/pipeline'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/contracts/pipeline'),
         staleTime: 30_000,
         refetchInterval: POLL_SLOW_MS,
     });
@@ -46,7 +46,7 @@ export function useDealPipeline() {
 export function useSLAStatus() {
     return useQuery({
         queryKey: ['contracts', 'sla-status'],
-        queryFn: () => fetchJSON<any>('/v1/billing/contracts/sla-status'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/contracts/sla-status'),
         staleTime: 30_000,
     });
 }
@@ -54,7 +54,7 @@ export function useSLAStatus() {
 export function useRenewals(days = 90) {
     return useQuery({
         queryKey: ['contracts', 'renewals', days],
-        queryFn: () => fetchJSON<any>(`/v1/billing/contracts/renewals?days=${days}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/contracts/renewals?days=${days}`),
         staleTime: 60_000,
     });
 }
@@ -65,7 +65,7 @@ export function useCreateContract() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (data: { tenant_id: string; tenant_name: string; tier_id: string; term_years?: number }) =>
-            fetchJSON<any>('/v1/billing/contracts', {
+            fetchJSON<unknown>('/v1/billing/contracts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
@@ -78,7 +78,7 @@ export function useAdvanceStage() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({ contractId, newStage }: { contractId: string; newStage: string }) =>
-            fetchJSON<any>(`/v1/billing/contracts/${contractId}/stage`, {
+            fetchJSON<unknown>(`/v1/billing/contracts/${contractId}/stage`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ new_stage: newStage }),
@@ -91,7 +91,7 @@ export function useGenerateQuote() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({ contractId, ...data }: { contractId: string; discount_codes?: string[]; custom_discount_pct?: number }) =>
-            fetchJSON<any>(`/v1/billing/contracts/${contractId}/quote`, {
+            fetchJSON<unknown>(`/v1/billing/contracts/${contractId}/quote`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),

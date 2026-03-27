@@ -14,7 +14,7 @@ export function usePartners(tier?: string) {
     const qs = tier ? `?tier=${tier}` : '';
     return useQuery({
         queryKey: ['partners', 'list', tier],
-        queryFn: () => fetchJSON<any>(`/v1/billing/partners${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/partners${qs}`),
         staleTime: 30_000,
     });
 }
@@ -22,7 +22,7 @@ export function usePartners(tier?: string) {
 export function usePartner(partnerId: string) {
     return useQuery({
         queryKey: ['partners', partnerId],
-        queryFn: () => fetchJSON<any>(`/v1/billing/partners/${partnerId}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/partners/${partnerId}`),
         enabled: !!partnerId,
     });
 }
@@ -30,7 +30,7 @@ export function usePartner(partnerId: string) {
 export function usePartnerSummary() {
     return useQuery({
         queryKey: ['partners', 'summary'],
-        queryFn: () => fetchJSON<any>('/v1/billing/partners/summary'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/partners/summary'),
         staleTime: 30_000,
     });
 }
@@ -39,7 +39,7 @@ export function useReferrals(partnerId?: string) {
     const qs = partnerId ? `?partner_id=${partnerId}` : '';
     return useQuery({
         queryKey: ['partners', 'referrals', partnerId],
-        queryFn: () => fetchJSON<any>(`/v1/billing/partners/referrals${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/partners/referrals${qs}`),
         staleTime: 30_000,
     });
 }
@@ -48,7 +48,7 @@ export function usePayouts(partnerId?: string) {
     const qs = partnerId ? `?partner_id=${partnerId}` : '';
     return useQuery({
         queryKey: ['partners', 'payouts', partnerId],
-        queryFn: () => fetchJSON<any>(`/v1/billing/partners/payouts${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/partners/payouts${qs}`),
         staleTime: 30_000,
     });
 }
@@ -57,7 +57,7 @@ export function useRegisterPartner() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (data: { name: string; company: string; email: string }) =>
-            fetchJSON<any>('/v1/billing/partners', {
+            fetchJSON<unknown>('/v1/billing/partners', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             }),
@@ -69,7 +69,7 @@ export function useRecordReferral() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: ({ partnerId, ...data }: { partnerId: string; tenant_id: string; tenant_name: string; tier_id: string; monthly_value_cents: number }) =>
-            fetchJSON<any>(`/v1/billing/partners/${partnerId}/referral`, {
+            fetchJSON<unknown>(`/v1/billing/partners/${partnerId}/referral`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
             }),

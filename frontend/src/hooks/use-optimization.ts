@@ -13,7 +13,7 @@ async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
 export function usePricingRecommendations() {
     return useQuery({
         queryKey: ['optimization', 'pricing'],
-        queryFn: () => fetchJSON<any>('/v1/billing/optimization/pricing'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/optimization/pricing'),
         staleTime: 120_000,
     });
 }
@@ -22,7 +22,7 @@ export function useRevenueOpportunities(type?: string) {
     const qs = type ? `?opp_type=${type}` : '';
     return useQuery({
         queryKey: ['optimization', 'opportunities', type],
-        queryFn: () => fetchJSON<any>(`/v1/billing/optimization/opportunities${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/optimization/opportunities${qs}`),
         staleTime: 30_000,
     });
 }
@@ -30,7 +30,7 @@ export function useRevenueOpportunities(type?: string) {
 export function useWinBackCampaigns() {
     return useQuery({
         queryKey: ['optimization', 'campaigns'],
-        queryFn: () => fetchJSON<any>('/v1/billing/optimization/campaigns'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/optimization/campaigns'),
         staleTime: 30_000,
     });
 }
@@ -38,7 +38,7 @@ export function useWinBackCampaigns() {
 export function useCustomerHealth() {
     return useQuery({
         queryKey: ['optimization', 'health'],
-        queryFn: () => fetchJSON<any>('/v1/billing/optimization/health'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/optimization/health'),
         staleTime: 60_000,
     });
 }
@@ -46,7 +46,7 @@ export function useCustomerHealth() {
 export function useExpansionMetrics() {
     return useQuery({
         queryKey: ['optimization', 'expansion'],
-        queryFn: () => fetchJSON<any>('/v1/billing/optimization/expansion'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/optimization/expansion'),
         staleTime: 60_000,
     });
 }
@@ -54,7 +54,7 @@ export function useExpansionMetrics() {
 export function usePipelineSummary() {
     return useQuery({
         queryKey: ['optimization', 'pipeline'],
-        queryFn: () => fetchJSON<any>('/v1/billing/optimization/pipeline'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/optimization/pipeline'),
         staleTime: 30_000,
     });
 }

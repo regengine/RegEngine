@@ -13,7 +13,7 @@ async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
 export function useAlertRules() {
     return useQuery({
         queryKey: ['alerts', 'rules'],
-        queryFn: () => fetchJSON<any>('/v1/billing/alerts/rules'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/alerts/rules'),
         staleTime: 30_000,
     });
 }
@@ -25,7 +25,7 @@ export function useAlertEvents(alertType?: string, severity?: string) {
     const qs = params.toString() ? `?${params}` : '';
     return useQuery({
         queryKey: ['alerts', 'events', alertType, severity],
-        queryFn: () => fetchJSON<any>(`/v1/billing/alerts/events${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/alerts/events${qs}`),
         staleTime: 15_000,
     });
 }
@@ -33,7 +33,7 @@ export function useAlertEvents(alertType?: string, severity?: string) {
 export function useAlertsSummary() {
     return useQuery({
         queryKey: ['alerts', 'summary'],
-        queryFn: () => fetchJSON<any>('/v1/billing/alerts/summary'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/alerts/summary'),
         staleTime: 30_000,
     });
 }
@@ -41,7 +41,7 @@ export function useAlertsSummary() {
 export function useWebhookLog() {
     return useQuery({
         queryKey: ['alerts', 'webhooks'],
-        queryFn: () => fetchJSON<any>('/v1/billing/alerts/webhooks'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/alerts/webhooks'),
         staleTime: 30_000,
     });
 }
@@ -50,7 +50,7 @@ export function useAcknowledgeAlert() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (eventId: string) =>
-            fetchJSON<any>(`/v1/billing/alerts/events/${eventId}/acknowledge`, { method: 'POST' }),
+            fetchJSON<unknown>(`/v1/billing/alerts/events/${eventId}/acknowledge`, { method: 'POST' }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
     });
 }

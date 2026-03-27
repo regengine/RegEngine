@@ -17,7 +17,7 @@ export function useDunningCases(status?: string, stage?: string) {
     const qs = params.toString() ? `?${params}` : '';
     return useQuery({
         queryKey: ['dunning', 'list', status, stage],
-        queryFn: () => fetchJSON<any>(`/v1/billing/dunning${qs}`),
+        queryFn: () => fetchJSON<unknown>(`/v1/billing/dunning${qs}`),
         staleTime: 30_000,
     });
 }
@@ -25,7 +25,7 @@ export function useDunningCases(status?: string, stage?: string) {
 export function useDunningSummary() {
     return useQuery({
         queryKey: ['dunning', 'summary'],
-        queryFn: () => fetchJSON<any>('/v1/billing/dunning/summary'),
+        queryFn: () => fetchJSON<unknown>('/v1/billing/dunning/summary'),
         staleTime: 30_000,
     });
 }
@@ -34,7 +34,7 @@ export function useRetryPayment() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (caseId: string) =>
-            fetchJSON<any>(`/v1/billing/dunning/${caseId}/retry`, { method: 'POST' }),
+            fetchJSON<unknown>(`/v1/billing/dunning/${caseId}/retry`, { method: 'POST' }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['dunning'] }),
     });
 }
@@ -43,7 +43,7 @@ export function useEscalateCase() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (caseId: string) =>
-            fetchJSON<any>(`/v1/billing/dunning/${caseId}/escalate`, { method: 'POST' }),
+            fetchJSON<unknown>(`/v1/billing/dunning/${caseId}/escalate`, { method: 'POST' }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['dunning'] }),
     });
 }
