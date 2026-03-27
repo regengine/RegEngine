@@ -9,12 +9,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useInitializeLabelBatch } from '@/hooks/use-api';
-import { Package, QrCode, Printer, CheckCircle, FileDown } from 'lucide-react';
+import { Package, QrCode, Printer, CheckCircle } from 'lucide-react';
 import { useTenant } from '@/lib/tenant-context';
 import type { LabelFormData, LabelBatchInitResponse } from '@/types/labels';
-import QRCode from 'qrcode';
-import { PDFDownloadLink } from '@react-pdf/renderer';
-import { LabelPdfDocument } from '@/components/labels/LabelPdfDocument';
+import dynamic from 'next/dynamic';
+
+const LabelPdfDownloadSection = dynamic(
+  () => import('@/components/labels/LabelPdfDownloadSection'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex-1 flex items-center justify-center h-10 rounded-md bg-muted animate-pulse">
+        <span className="text-xs text-muted-foreground">Loading PDF renderer...</span>
+      </div>
+    ),
+  }
+);
 
 type Step = 'input' | 'generating' | 'preview';
 
@@ -115,6 +125,7 @@ export default function LabelsPage() {
       const entries = await Promise.all(
         labelResponse.labels.slice(0, 5).map(async (label) => {
           // Use required qr_code_data field
+          const QRCode = (await import('qrcode')).default;
           const dataUrl = await QRCode.toDataURL(label.qr_code_data, { width: 150, margin: 1 });
           return [label.serial_number, dataUrl] as const;
         })
@@ -410,24 +421,11 @@ export default function LabelsPage() {
                       <Printer className="mr-2 h-4 w-4" />
                       Download ZPL File
                     </Button>
-                    <PDFDownloadLink
-                      document={
-                        <LabelPdfDocument
-                          labels={getPdfLabels()}
-                          productName={formData.productDescription}
-                          batchId={labelResponse.batch_id}
-                        />
-                      }
-                      fileName={`labels-${labelResponse.batch_id}.pdf`}
-                      className="flex-1"
-                    >
-                      {({ loading }) => (
-                        <Button className="w-full" disabled={loading}>
-                          <FileDown className="mr-2 h-4 w-4" />
-                          {loading ? 'Generating PDF...' : 'Download PDF (Click & Print)'}
-                        </Button>
-                      )}
-                    </PDFDownloadLink>
+                    <LabelPdfDownloadSection
+                      labels={getPdfLabels()}
+                      productName={formData.productDescription}
+                      batchId={labelResponse.batch_id}
+                    />
                   </div>
                 </CardContent>
               </Card>

@@ -4,7 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Camera, Loader2, Package, Scan, Wifi, WifiOff } from 'lucide-react';
 
-import { BarcodeScanner } from '@/components/mobile/BarcodeScanner';
+import dynamic from 'next/dynamic';
+
+const BarcodeScanner = dynamic(
+  () => import('@/components/mobile/BarcodeScanner').then(mod => ({ default: mod.BarcodeScanner })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full max-w-sm aspect-square bg-muted rounded-lg animate-pulse flex items-center justify-center">
+        <span className="text-xs text-muted-foreground">Loading scanner...</span>
+      </div>
+    ),
+  }
+);
 import { ImageCapture } from '@/components/mobile/ImageCapture';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
