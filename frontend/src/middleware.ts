@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
+import { getVerificationKeys } from '@/lib/jwt-keys';
+import { verifyCsrfToken, CSRF_HEADER, CSRF_SIG_COOKIE, CSRF_PROTECTED_METHODS } from '@/lib/csrf';
 
 // ---------------------------------------------------------------------------
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
@@ -112,33 +114,55 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
 
 /**
  * Verify the custom RegEngine JWT from the re_access_token cookie.
+ *
+ * Supports key rotation: tries the current signing key first, then falls
+ * back to the previous key (if configured). When a token verifies only
+ * with the previous key, a warning is logged so ops knows rotation is
+ * still in progress.
+ *
  * Returns the decoded payload if valid, null otherwise.
  */
 async function verifyRegEngineToken(token: string): Promise<Record<string, unknown> | null> {
-    const secret = process.env.AUTH_SECRET_KEY;
-    if (!secret) {
+    const keys = getVerificationKeys();
+
+    if (keys.length === 0) {
         console.error(
-            '[middleware] AUTH_SECRET_KEY is NOT set on this deployment. ' +
-            'JWT verification is impossible — all authenticated routes will fail. ' +
-            'Set AUTH_SECRET_KEY in Vercel env vars (must match the backend Railway value).'
+            '[middleware] No JWT verification keys configured. ' +
+            'Set JWT_SIGNING_KEY (or AUTH_SECRET_KEY) in Vercel env vars ' +
+            '(must match the backend Railway value).'
         );
         return null;
     }
-    try {
-        const secretKey = new TextEncoder().encode(secret);
-        const { payload } = await jwtVerify(token, secretKey, {
-            algorithms: ['HS256'],
-        });
-        return payload as Record<string, unknown>;
-    } catch (err) {
-        // Log the specific failure reason to help diagnose key mismatches
-        const message = err instanceof Error ? err.message : 'unknown';
-        console.warn(
-            `[middleware] JWT verification failed: ${message}. ` +
-            'If "signature verification failed", AUTH_SECRET_KEY on Vercel does not match the backend.'
-        );
-        return null;
+
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        try {
+            const { payload } = await jwtVerify(token, key.secret, {
+                algorithms: ['HS256'],
+            });
+
+            if (i > 0) {
+                // Token verified with the previous (non-current) key — rotation in progress
+                console.warn(
+                    `[middleware] JWT verified with previous key (kid=${key.kid}). ` +
+                    'Key rotation is in progress — token was signed before the latest rotation.'
+                );
+            }
+
+            return payload as Record<string, unknown>;
+        } catch {
+            // If this is the last key, fall through to return null below
+            if (i === keys.length - 1) {
+                console.warn(
+                    '[middleware] JWT verification failed with all configured keys. ' +
+                    'If "signature verification failed", check that JWT_SIGNING_KEY ' +
+                    '(or AUTH_SECRET_KEY) on Vercel matches the backend signing key.'
+                );
+            }
+        }
     }
+
+    return null;
 }
 
 /**
@@ -253,7 +277,7 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
 
     // Signal the reason so the login page can display a contextual message.
     // Only show "session expired" when a token actually existed but failed.
-    if (!process.env.AUTH_SECRET_KEY) {
+    if (!process.env.JWT_SIGNING_KEY && !process.env.AUTH_SECRET_KEY) {
         url.searchParams.set('error', 'auth_config');
     } else if (reToken) {
         // Token exists but verification failed — likely expired or key mismatch
