@@ -13,6 +13,7 @@
  * Cookie settings: httpOnly, secure (prod), sameSite=lax, path=/, maxAge=7d
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { generateCsrfToken, signCsrfToken, CSRF_COOKIE, CSRF_SIG_COOKIE } from '@/lib/csrf';
 
 const SEVEN_DAYS = 60 * 60 * 24 * 7;
 
@@ -52,6 +53,17 @@ export async function POST(request: NextRequest) {
                 httpOnly: false, // client needs user info for UI rendering
             });
         }
+
+        // CSRF double-submit cookies — set on every session POST so the
+        // client always has a valid token after login / credential update.
+        const csrfToken = generateCsrfToken();
+        const csrfSig = await signCsrfToken(csrfToken);
+
+        response.cookies.set(CSRF_COOKIE, csrfToken, {
+            ...COOKIE_OPTIONS,
+            httpOnly: false, // JS must read this to send as X-CSRF-Token header
+        });
+        response.cookies.set(CSRF_SIG_COOKIE, csrfSig, COOKIE_OPTIONS);
 
         return response;
     } catch {
@@ -93,5 +105,7 @@ export async function DELETE() {
     response.cookies.delete('re_admin_key');
     response.cookies.delete('re_tenant_id');
     response.cookies.delete('re_user');
+    response.cookies.delete(CSRF_COOKIE);
+    response.cookies.delete(CSRF_SIG_COOKIE);
     return response;
 }
