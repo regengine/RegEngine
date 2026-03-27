@@ -1,306 +1,255 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-    Terminal, ArrowRight, Shield, BookOpen, ChevronRight,
-    Layers, Lock, Activity, Package, Webhook, FileJson,
-    Clock, Globe, Hash, AlertTriangle, ExternalLink,
-    Download, Database, ArrowUpRight,
+    ArrowRight, Webhook, Cog, Users, FileSpreadsheet,
+    BarChart3, GitBranch, Terminal, BookOpen, LogIn,
 } from 'lucide-react';
-import { T, QUICKSTART, PLATFORM_STATS, ENDPOINT_GROUPS, SDK_ITEMS, ERROR_EXAMPLES, WEBHOOK_EVENTS } from './_data';
-import { StickyNav } from './_components/sticky-nav';
-import { CodeExamples } from './_components/code-examples';
-import { CopyButton } from './_components/copy-button';
-import { DevProviders } from './_components/dev-providers';
-import './developers.css';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
-/* Icon lookup for data-driven rendering */
-const ICONS: Record<string, React.ComponentType<{ style?: React.CSSProperties }>> = {
-    Activity, Clock, Globe, Hash, Layers, Shield, Package,
+export const metadata: Metadata = {
+    title: 'Developers | RegEngine — FSMA 204 Compliance API',
+    description:
+        'Build on the RegEngine API: webhook ingestion with KDE validation, 25+ FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
+    openGraph: {
+        title: 'Developers | RegEngine — FSMA 204 Compliance API',
+        description:
+            'Build on the RegEngine API: webhook ingestion, rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
+        url: 'https://www.regengine.co/developers',
+        type: 'website',
+    },
 };
+
+/* ── API Capabilities ── */
+const capabilities = [
+    {
+        Icon: Webhook,
+        title: 'Webhook Ingestion',
+        description: 'POST events with KDE validation. Every inbound CTE is validated against FSMA 204 Key Data Elements before chain-hashing.',
+    },
+    {
+        Icon: Cog,
+        title: 'Rules Engine',
+        description: '25+ FSMA 204 validation rules run automatically on every event. Catch missing fields, invalid TLCs, and schema violations in real time.',
+    },
+    {
+        Icon: Users,
+        title: 'Identity Resolution',
+        description: 'Fuzzy matching across trading partners with confidence scoring. Deduplicate facilities, carriers, and contacts automatically.',
+    },
+    {
+        Icon: FileSpreadsheet,
+        title: 'FDA Export',
+        description: '21 CFR 1.1455 sortable spreadsheet and EPCIS 2.0 event export. One API call to generate an FDA-ready compliance package.',
+    },
+    {
+        Icon: BarChart3,
+        title: 'Compliance Scoring',
+        description: '6-dimension score with letter grade. Coverage, completeness, timeliness, accuracy, chain integrity, and identity resolution.',
+    },
+    {
+        Icon: GitBranch,
+        title: 'Request Workflow',
+        description: '10-state machine for FDA response management. Track requests from intake through investigation, response, and closure.',
+    },
+];
+
+/* ── SDK install commands ── */
+const sdks = [
+    { lang: 'Python', cmd: 'pip install regengine' },
+    { lang: 'Node.js', cmd: 'npm install @regengine/sdk' },
+    { lang: 'Go', cmd: 'go get github.com/regengine/regengine-go' },
+];
+
+/* ── Quick-start curl snippet ── */
+const curlSnippet = `curl -X POST https://api.regengine.co/v1/webhooks/ingest \\
+  -H "X-RegEngine-API-Key: rge_live_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "event_type": "receiving",
+    "tlc": "urn:epc:id:sgln:0614141.00001.0",
+    "event_time": "2026-03-26T14:30:00Z",
+    "kde": {
+      "product": "Atlantic Salmon Fillet",
+      "lot": "LOT-2026-0326",
+      "quantity": 500,
+      "unit": "KG"
+    }
+  }'`;
 
 export default function DevelopersPage() {
     return (
-        <DevProviders>
-        <div className="re-page re-grid-bg" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
-
-            {/* ═══ HERO (server-rendered for SEO) ═══ */}
-            <section style={{ position: 'relative', zIndex: 2, maxWidth: 880, margin: '0 auto', padding: '72px 24px 28px', textAlign: 'center' }}>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: T.accentBg, border: `1px solid ${T.accentBorder}`, borderRadius: 20, padding: '6px 16px', fontSize: 13, fontWeight: 600, color: T.accent, marginBottom: 24 }}>
-                    <Terminal style={{ width: 14, height: 14 }} />
-                    REST API &middot; EPCIS 2.0 &middot; Webhooks
-                </div>
-                <h1 style={{ fontSize: 'clamp(34px, 5vw, 56px)', fontWeight: 700, color: T.heading, lineHeight: 1.05, margin: '0 0 18px', letterSpacing: '-0.025em' }}>
-                    Build FSMA 204 compliance<br />
-                    <span style={{ color: T.accent }}>into your stack</span>
+        <div className="re-page">
+            {/* ═══ HERO ═══ */}
+            <section className="relative z-[2] max-w-[800px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-12 sm:pb-16 text-center">
+                <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
+                    <Terminal className="w-3.5 h-3.5 mr-1.5" />
+                    Developer Platform
+                </Badge>
+                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
+                    Build on{' '}
+                    <span className="text-re-brand">RegEngine</span>
                 </h1>
-                <p style={{ fontSize: 18, color: T.textMuted, maxWidth: 580, margin: '0 auto 28px', lineHeight: 1.65 }}>
-                    One API to record CTEs, verify chain integrity, run recall simulations, and export FDA-ready packages. Ship compliance in hours, not months.
+                <p className="text-lg text-re-text-muted max-w-xl mx-auto leading-relaxed mb-8">
+                    The FSMA 204 compliance API. Record critical tracking events,
+                    validate against 25+ rules, resolve identities, and export
+                    FDA-ready packages &mdash; all through a single REST interface.
                 </p>
-                {/* Time to integrate */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 32, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span style={{ fontSize: 36, fontWeight: 700, color: T.accent, fontFamily: T.mono }}>5</span>
-                        <span style={{ fontSize: 14, color: T.textMuted }}>min to first CTE</span>
-                    </div>
-                    <div style={{ width: 1, height: 28, background: T.border }} />
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span style={{ fontSize: 36, fontWeight: 700, color: T.accent, fontFamily: T.mono }}>1</span>
-                        <span style={{ fontSize: 14, color: T.textMuted }}>API call to record</span>
-                    </div>
-                    <div style={{ width: 1, height: 28, background: T.border }} />
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span style={{ fontSize: 36, fontWeight: 700, color: T.accent, fontFamily: T.mono }}>24h</span>
-                        <span style={{ fontSize: 14, color: T.textMuted }}>recall SLA</span>
-                    </div>
-                </div>
-                {/* CTA */}
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 40 }}>
-                    <Link href="/docs/api">
-                        <button className="re-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: T.accent, color: '#000', fontWeight: 600, padding: '13px 30px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14 }}>
-                            API Reference <ArrowRight style={{ width: 16, height: 16 }} />
-                        </button>
+                <div className="flex gap-3 justify-center flex-wrap">
+                    <Link href="/alpha">
+                        <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                            Get API Access
+                            <ArrowRight className="ml-2 w-4 h-4" />
+                        </Button>
                     </Link>
-                    <a href="#quickstart">
-                        <button className="re-btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'transparent', color: T.text, fontWeight: 600, padding: '13px 30px', borderRadius: 8, border: `1px solid ${T.border}`, cursor: 'pointer', fontSize: 14 }}>
-                            Quickstart Guide
-                        </button>
-                    </a>
-                </div>
-                {/* Stats bar */}
-                <div className="re-hero-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: T.border, borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.border}` }}>
-                    {PLATFORM_STATS.map((s) => {
-                        const Icon = ICONS[s.iconName];
-                        return (
-                            <div key={s.label} style={{ background: T.surface, padding: '16px 12px', textAlign: 'center' }}>
-                                {Icon && <Icon style={{ width: 14, height: 14, color: T.accent, margin: '0 auto 6px', display: 'block' }} />}
-                                <div style={{ fontSize: 18, fontWeight: 700, color: T.heading, fontFamily: T.mono }}>{s.value}</div>
-                                <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{s.label}</div>
-                            </div>
-                        );
-                    })}
+                    <Link href="/docs">
+                        <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                            <BookOpen className="mr-2 w-4 h-4" />
+                            Full Documentation
+                        </Button>
+                    </Link>
                 </div>
             </section>
 
-            {/* ═══ STICKY NAV (client island) ═══ */}
-            <StickyNav />
-
-            {/* ═══ QUICKSTART (server-rendered) ═══ */}
-            <section id="quickstart" style={{ position: 'relative', zIndex: 2, maxWidth: 880, margin: '0 auto', padding: '48px 24px 48px', scrollMarginTop: 60 }}>
-                <h2 style={{ fontSize: 13, fontWeight: 700, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Get Started</h2>
-                <p style={{ fontSize: 22, fontWeight: 600, color: T.heading, marginBottom: 28 }}>Three steps to your first compliance event</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-                    {QUICKSTART.map((s, idx) => (
-                        <div key={s.step} className="re-dev-card" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '24px 20px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                                <span style={{ width: 30, height: 30, borderRadius: '50%', background: T.accentBg, border: `1px solid ${T.accentBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: T.accent }}>{s.step}</span>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, color: T.heading, margin: 0 }}>{s.title}</h3>
-                            </div>
-                            <p style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.6, margin: '0 0 16px' }}>{s.desc}</p>
-                            <Link href={s.link} className="re-link-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: T.accent, textDecoration: 'none' }}>
-                                {s.linkText} <ChevronRight style={{ width: 12, height: 12 }} />
-                            </Link>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* ═══ CODE EXAMPLES (client island) ═══ */}
-            <CodeExamples />
-
-            {/* ═══ API ENDPOINTS (server-rendered for SEO) ═══ */}
-            <section id="endpoints" style={{ position: 'relative', zIndex: 2, maxWidth: 880, margin: '0 auto', padding: '64px 24px', scrollMarginTop: 60 }}>
-                <h2 style={{ fontSize: 13, fontWeight: 700, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Reference</h2>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-                    <p style={{ fontSize: 22, fontWeight: 600, color: T.heading, margin: 0 }}>API Endpoints</p>
-                    <a href="/docs/api" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: T.accent, textDecoration: 'none', fontWeight: 600 }}>
-                        Full docs <ExternalLink style={{ width: 11, height: 11 }} />
-                    </a>
-                </div>
-                <p style={{ fontSize: 14, color: T.textMuted, marginBottom: 32 }}>
-                    All endpoints require <code style={{ fontFamily: T.mono, fontSize: 12, color: T.accent, background: T.accentBg, padding: '2px 8px', borderRadius: 4 }}>X-RegEngine-API-Key</code>. Latency shown is p50 production.
+            {/* ═══ QUICK START CURL ═══ */}
+            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Quick start</h2>
+                <p className="text-sm text-re-text-muted text-center mb-8 max-w-lg mx-auto">
+                    Record your first critical tracking event in one request.
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-                    {ENDPOINT_GROUPS.map((g) => {
-                        const Icon = ICONS[g.iconName];
-                        return (
-                            <div key={g.category}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                                    {Icon && <Icon style={{ width: 15, height: 15, color: T.accent }} />}
-                                    <h3 style={{ fontSize: 13, fontWeight: 700, color: T.heading, margin: 0, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.category}</h3>
-                                    <span style={{ fontSize: 11, color: T.textMuted }}>{g.endpoints.length} endpoints</span>
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                    {g.endpoints.map((ep, i) => (
-                                        <div key={i} className="re-endpoint-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8 }}>
-                                            <span style={{ fontSize: 11, fontWeight: 700, fontFamily: T.mono, padding: '3px 8px', borderRadius: 4, minWidth: 46, textAlign: 'center' as const, background: ep.method === 'POST' ? T.accentBg : T.blueBg, color: ep.method === 'POST' ? T.accent : T.blue }}>{ep.method}</span>
-                                            <code style={{ fontSize: 13, fontFamily: T.mono, color: T.heading, flex: 1 }}>{ep.path}</code>
-                                            <span className="re-endpoint-desc" style={{ fontSize: 12, color: T.textMuted }}>{ep.desc}</span>
-                                            <span className="re-endpoint-latency" style={{ fontSize: 11, fontFamily: T.mono, color: 'rgba(255,255,255,0.2)', minWidth: 56, textAlign: 'right' as const }}>{ep.latency}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })}
+                <div
+                    className="rounded-2xl border border-[var(--re-surface-border)] overflow-hidden"
+                    style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.10)' }}
+                >
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)]">
+                        <Terminal className="w-3.5 h-3.5 text-[var(--re-brand)]" />
+                        <span className="text-xs font-mono font-semibold text-re-text-muted">bash</span>
+                    </div>
+                    <pre className="bg-[var(--re-surface-card)] p-5 overflow-x-auto text-[13px] leading-relaxed font-mono text-re-text-secondary">
+                        <code>{curlSnippet}</code>
+                    </pre>
                 </div>
             </section>
 
-            {/* ═══ AUTHENTICATION (server-rendered) ═══ */}
-            <section id="auth" style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.008)', scrollMarginTop: 60 }}>
-                <div style={{ maxWidth: 880, margin: '0 auto', padding: '64px 24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                        <Lock style={{ width: 20, height: 20, color: T.accent }} />
-                        <h2 style={{ fontSize: 26, fontWeight: 700, color: T.heading, margin: 0 }}>Authentication</h2>
-                    </div>
-                    <p style={{ fontSize: 14, color: T.textMuted, marginBottom: 24, maxWidth: 540 }}>
-                        Per-tenant API keys with RBAC scoping. Generate keys in the <Link href="/developer/portal" style={{ color: T.accent, textDecoration: 'underline' }}>Developer Portal</Link>.
-                    </p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-                        <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.border}` }}>
-                            <div style={{ padding: '10px 16px', background: 'rgba(0,0,0,0.25)', borderBottom: `1px solid ${T.border}`, fontSize: 12, fontFamily: T.mono, color: T.textMuted, fontWeight: 600 }}>Required Headers</div>
-                            <CopyButton text={`X-RegEngine-API-Key: rge_live_abc123\nContent-Type: application/json`} />
-                            <pre style={{ background: 'rgba(0,0,0,0.35)', padding: '16px 18px', overflow: 'auto', fontSize: 12, lineHeight: 2.2, fontFamily: T.mono, color: T.textMuted, margin: 0 }}>
-                                <code><span style={{ color: '#82aaff' }}>X-RegEngine-API-Key</span>: rge_live_...<br/><span style={{ color: '#82aaff' }}>Content-Type</span>: application/json</code>
-                            </pre>
-                        </div>
-                        <div style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.border}` }}>
-                            <div style={{ padding: '10px 16px', background: 'rgba(0,0,0,0.25)', borderBottom: `1px solid ${T.border}`, fontSize: 12, fontFamily: T.mono, color: T.textMuted, fontWeight: 600 }}>Response Codes</div>
-                            <div style={{ background: 'rgba(0,0,0,0.35)', padding: '10px 0' }}>
-                                {[
-                                    { code: '200', label: 'OK', desc: 'Sync response', color: '#10b981' },
-                                    { code: '202', label: 'Accepted', desc: 'Async job queued', color: '#10b981' },
-                                    { code: '400', label: 'Bad Request', desc: 'Validation error', color: T.amber },
-                                    { code: '401', label: 'Unauthorized', desc: 'Invalid key', color: T.red },
-                                    { code: '422', label: 'Unprocessable', desc: 'Schema violation', color: T.red },
-                                    { code: '429', label: 'Rate Limited', desc: 'Backoff required', color: T.amber },
-                                ].map((r) => (
-                                    <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '5px 18px' }}>
-                                        <code style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: r.color, minWidth: 28 }}>{r.code}</code>
-                                        <span style={{ fontSize: 12, color: T.heading, minWidth: 90 }}>{r.label}</span>
-                                        <span style={{ fontSize: 11, color: T.textMuted }}>{r.desc}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* ═══ ERROR HANDLING (server-rendered) ═══ */}
-            <section id="errors" style={{ position: 'relative', zIndex: 2, maxWidth: 880, margin: '0 auto', padding: '64px 24px', scrollMarginTop: 60 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <AlertTriangle style={{ width: 20, height: 20, color: T.amber }} />
-                    <h2 style={{ fontSize: 26, fontWeight: 700, color: T.heading, margin: 0 }}>Error Handling</h2>
-                </div>
-                <p style={{ fontSize: 14, color: T.textMuted, marginBottom: 24, maxWidth: 540 }}>
-                    All errors return structured JSON with an error code, message, and relevant context. Parse the <code style={{ fontFamily: T.mono, fontSize: 12, color: T.accent }}>error</code> field for programmatic handling.
+            {/* ═══ API CAPABILITIES GRID ═══ */}
+            <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">API capabilities</h2>
+                <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
+                    Six core services, one unified API. Everything you need for end-to-end FSMA 204 compliance.
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {ERROR_EXAMPLES.map((err) => (
-                        <div key={err.code} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
-                                <code style={{ fontFamily: T.mono, fontSize: 12, fontWeight: 700, color: err.code >= 500 ? T.red : err.code >= 400 ? T.amber : T.accent }}>{err.code}</code>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: T.heading }}>{err.title}</span>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {capabilities.map((cap) => (
+                        <article
+                            key={cap.title}
+                            className="rounded-2xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 flex flex-col"
+                            style={{
+                                borderTop: '3px solid var(--re-brand)',
+                                boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 0 0 1px var(--re-surface-border)',
+                            }}
+                        >
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
+                                    <cap.Icon className="w-5 h-5 text-[var(--re-brand)]" />
+                                </div>
+                                <h3 className="text-base font-semibold text-re-text-primary">{cap.title}</h3>
                             </div>
-                            <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '12px 16px', overflow: 'auto', fontSize: 12, lineHeight: 1.6, fontFamily: T.mono, color: T.textMuted, margin: 0 }}>
-                                <code>{err.body}</code>
-                            </pre>
-                        </div>
+                            <p className="text-sm text-re-text-muted leading-relaxed">{cap.description}</p>
+                        </article>
                     ))}
                 </div>
             </section>
 
-            {/* ═══ WEBHOOKS (server-rendered) ═══ */}
-            <section id="webhooks" style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.008)', scrollMarginTop: 60 }}>
-                <div style={{ maxWidth: 880, margin: '0 auto', padding: '64px 24px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                        <Webhook style={{ width: 20, height: 20, color: T.accent }} />
-                        <h2 style={{ fontSize: 26, fontWeight: 700, color: T.heading, margin: 0 }}>Webhook Events</h2>
-                    </div>
-                    <p style={{ fontSize: 14, color: T.textMuted, marginBottom: 24, maxWidth: 540 }}>
-                        Subscribe to real-time events. All payloads include an HMAC-SHA256 signature for verification.
+            {/* ═══ SDK INSTALL ═══ */}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[900px] mx-auto py-16 px-6">
+                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Official SDKs</h2>
+                    <p className="text-sm text-re-text-muted text-center mb-10 max-w-md mx-auto">
+                        Install and start integrating in under a minute.
                     </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {WEBHOOK_EVENTS.map((w) => (
-                            <div key={w.event} className="re-endpoint-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8 }}>
-                                <code style={{ fontSize: 12, fontFamily: T.mono, color: T.accent, fontWeight: 600, minWidth: 200 }}>{w.event}</code>
-                                <span className="re-endpoint-desc" style={{ fontSize: 12, color: T.textMuted, flex: 1 }}>{w.desc}</span>
-                                <span className="re-endpoint-latency" style={{ fontSize: 11, fontFamily: T.mono, color: 'rgba(255,255,255,0.2)' }}>{w.payload}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            {/* ═══ SDKs (server-rendered) ═══ */}
-            <section id="sdks" style={{ position: 'relative', zIndex: 2, maxWidth: 880, margin: '0 auto', padding: '64px 24px', scrollMarginTop: 60 }}>
-                <h2 style={{ fontSize: 13, fontWeight: 700, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Libraries</h2>
-                <p style={{ fontSize: 22, fontWeight: 600, color: T.heading, marginBottom: 28 }}>Official SDKs</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                    {SDK_ITEMS.map((sdk) => (
-                        <div key={sdk.lang} className="re-dev-card" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: 22 }}>{sdk.icon}</span>
-                                <span style={{
-                                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
-                                    padding: '3px 10px', borderRadius: 20,
-                                    background: sdk.status === 'beta' ? T.accentBg : 'rgba(255,255,255,0.04)',
-                                    color: sdk.status === 'beta' ? T.accent : T.textMuted,
-                                    border: `1px solid ${sdk.status === 'beta' ? T.accentBorder : T.border}`,
-                                }}>{sdk.status}</span>
-                            </div>
-                            <h3 style={{ fontSize: 15, fontWeight: 600, color: T.heading, margin: 0 }}>{sdk.lang}</h3>
-                            <code style={{ fontSize: 11, fontFamily: T.mono, color: T.textMuted }}>{sdk.note}</code>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* ═══ RESOURCES (server-rendered) ═══ */}
-            <section id="resources" style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: 'rgba(255,255,255,0.008)', scrollMarginTop: 60 }}>
-                <div style={{ maxWidth: 880, margin: '0 auto', padding: '64px 24px' }}>
-                    <h2 style={{ fontSize: 13, fontWeight: 700, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Developer Resources</h2>
-                    <p style={{ fontSize: 22, fontWeight: 600, color: T.heading, marginBottom: 28 }}>Everything you need</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                        {[
-                            { title: 'API Reference', desc: 'Full endpoint docs with Swagger UI', href: '/docs/api', Icon: BookOpen },
-                            { title: 'FSMA 204 Guide', desc: 'Regulatory background and CTE requirements', href: '/fsma-204-guide', Icon: FileJson },
-                            { title: 'Trust Center', desc: 'Security, compliance, and SLA details', href: '/trust', Icon: Shield },
-                            { title: 'Changelog', desc: 'API versions, breaking changes, deprecations', href: '/changelog', Icon: Database },
-                        ].map((r) => (
-                            <Link key={r.title} href={r.href} className="re-dev-card" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: '20px', textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                <r.Icon style={{ width: 18, height: 18, color: T.accent }} />
-                                <h3 style={{ fontSize: 15, fontWeight: 600, color: T.heading, margin: 0 }}>{r.title}</h3>
-                                <p style={{ fontSize: 13, color: T.textMuted, margin: 0, lineHeight: 1.5 }}>{r.desc}</p>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 'auto' }}>
-                                    View <ArrowUpRight style={{ width: 12, height: 12 }} />
+                    <div className="grid sm:grid-cols-3 gap-4">
+                        {sdks.map((sdk) => (
+                            <div
+                                key={sdk.lang}
+                                className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5"
+                                style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+                            >
+                                <span className="text-[11px] font-semibold uppercase tracking-wider text-re-text-disabled mb-2 block">
+                                    {sdk.lang}
                                 </span>
-                            </Link>
+                                <code className="text-sm font-mono text-[var(--re-brand)]">{sdk.cmd}</code>
+                            </div>
                         ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ═══ RATE LIMITS ═══ */}
+            <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Rate limits</h2>
+                <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
+                    Generous defaults with enterprise tiers for high-volume integrations.
+                </p>
+                <div className="grid sm:grid-cols-2 gap-4 max-w-[600px] mx-auto">
+                    <div
+                        className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 text-center"
+                        style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+                    >
+                        <p className="text-3xl font-bold text-re-text-primary font-mono mb-1">1,000</p>
+                        <p className="text-sm text-re-text-muted">requests / minute</p>
+                        <span className="inline-block mt-3 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20">
+                            Standard
+                        </span>
+                    </div>
+                    <div
+                        className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 text-center"
+                        style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+                    >
+                        <p className="text-3xl font-bold text-re-text-primary font-mono mb-1">5,000</p>
+                        <p className="text-sm text-re-text-muted">requests / minute</p>
+                        <span className="inline-block mt-3 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                            Enterprise
+                        </span>
                     </div>
                 </div>
             </section>
 
             {/* ═══ CTA ═══ */}
-            <section style={{ position: 'relative', zIndex: 2, borderTop: `1px solid ${T.border}`, background: T.accentBg, padding: '64px 24px', textAlign: 'center' }}>
-                <h2 style={{ fontSize: 28, fontWeight: 700, color: T.heading, marginBottom: 12 }}>Ready to integrate?</h2>
-                <p style={{ fontSize: 15, color: T.textMuted, marginBottom: 28, maxWidth: 480, margin: '0 auto 28px' }}>
-                    Get your API key and record your first CTE in under 5 minutes. Full REST API with EPCIS 2.0 support.
-                </p>
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Link href="/developer/portal">
-                        <button className="re-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: T.accent, color: '#000', fontWeight: 600, padding: '13px 30px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 14 }}>
-                            Get API Key <ArrowRight style={{ width: 16, height: 16 }} />
-                        </button>
-                    </Link>
-                    <Link href="/contact">
-                        <button className="re-btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'transparent', color: T.text, fontWeight: 600, padding: '13px 30px', borderRadius: 8, border: `1px solid ${T.border}`, cursor: 'pointer', fontSize: 14 }}>
-                            Scope an Integration
-                        </button>
-                    </Link>
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[700px] mx-auto py-16 px-6 text-center">
+                    <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
+                        Ready to integrate?
+                    </Badge>
+                    <h2 className="text-xl font-bold text-re-text-primary mb-2">Start building on RegEngine</h2>
+                    <p className="text-sm text-re-text-muted max-w-md mx-auto mb-6">
+                        Get your API key and record your first critical tracking event in under 5 minutes.
+                        Full REST API with EPCIS 2.0 support.
+                    </p>
+                    <div className="flex gap-3 justify-center flex-wrap">
+                        <Link href="/alpha">
+                            <Button className="bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white font-semibold px-6 shadow-[0_4px_16px_var(--re-brand-muted)] hover:-translate-y-0.5 transition-all">
+                                Get API Access
+                                <ArrowRight className="ml-2 w-4 h-4" />
+                            </Button>
+                        </Link>
+                        <Link href="/login?next=/developer/portal">
+                            <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                                <LogIn className="mr-2 w-4 h-4" />
+                                Developer Portal
+                            </Button>
+                        </Link>
+                    </div>
+                    <p className="text-xs text-re-text-disabled mt-6">
+                        Already have an account?{' '}
+                        <Link href="/login?next=/developer/portal" className="text-[var(--re-brand)] underline">
+                            Sign in to the portal
+                        </Link>
+                        {' '}&middot;{' '}
+                        <Link href="/docs" className="text-[var(--re-brand)] underline">
+                            Read the docs
+                        </Link>
+                    </p>
                 </div>
             </section>
-
         </div>
-        </DevProviders>
     );
 }
