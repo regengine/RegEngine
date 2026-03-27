@@ -124,7 +124,7 @@ _VALID_ROUTER_NAMES = {
     "recall_simulations", "supplier_mgmt", "audit_log", "product_catalog",
     "notification_prefs", "team_mgmt", "settings", "integration",
     "canonical_records", "rules", "exceptions", "request_workflow", "identity",
-    "auditor", "compliance_metrics", "readiness", "incidents",
+    "auditor", "compliance_metrics", "readiness", "incidents", "sandbox",
 }
 
 # Validate DISABLED_ROUTERS — catch typos early
@@ -192,6 +192,11 @@ if _router_enabled("sources"):
 # Webhook Ingestion (V2: Postgres-backed CTE persistence)
 from app.webhook_router_v2 import router as webhook_router
 app.include_router(webhook_router)
+
+# Sandbox Evaluation (stateless, no auth, no persistence)
+if _router_enabled("sandbox"):
+    from app.sandbox_router import router as sandbox_router
+    app.include_router(sandbox_router)
 
 # FDA 24-Hour Export
 if _router_enabled("fda_export"):
