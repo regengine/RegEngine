@@ -1,0 +1,150 @@
+# MVP Compose Stack — minimum viable services for the core demo flow:
+#   CSV upload → ingestion → normalization → rule evaluation → FDA export
+#
+# Only 2 application services (ingestion + admin) + 3 infrastructure (postgres, redis, minio).
+# No Kafka, Neo4j, NLP, Graph, Compliance, or Scheduler.
+#
+# Usage:
+#   cp .env.example .env  # fill in required values
+#   docker compose -f docker-compose.mvp.yml up -d
+#   # Wait for health checks, then:
+#   curl http://localhost:8400/health
+#   curl http://localhost:8002/health
+
+x-mvp-env: &mvp-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine
+  ADMIN_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin
+  REDIS_URL: redis://redis:6379/0
+  OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_ACCESS_KEY_ID:?OBJECT_STORAGE_ACCESS_KEY_ID must be set}
+  OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_SECRET_ACCESS_KEY:?OBJECT_STORAGE_SECRET_ACCESS_KEY must be set}
+  OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
+  OBJECT_STORAGE_ENDPOINT_URL: http://minio:9000
+  RAW_DATA_BUCKET: ${RAW_DATA_BUCKET:-reg-engine-raw-data-dev}
+  PROCESSED_DATA_BUCKET: ${PROCESSED_DATA_BUCKET:-reg-engine-processed-data-dev}
+  ADMIN_MASTER_KEY: ${ADMIN_MASTER_KEY:?ADMIN_MASTER_KEY must be set}
+  AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-dev-auth-secret-change-me}
+  REGENGINE_ENV: ${REGENGINE_ENV:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  ENABLE_OTEL: "false"
+  ENABLE_DB_API_KEYS: "true"
+  # Kafka disabled — async NLP/Graph enrichment not needed for MVP
+  KAFKA_BOOTSTRAP_SERVERS: ""
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure (3 services)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-regengine}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-regengine}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5433:5432"
+    volumes:
+      - mvp_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-regengine}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - mvp_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_ACCESS_KEY:-minioadmin123}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - mvp_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Application services (2 services — the MVP core)
+  # ---------------------------------------------------------------------------
+  admin-api:
+    build:
+      context: .
+      dockerfile: services/admin/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *mvp-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin
+    ports:
+      - "8400:8400"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8400/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *mvp-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    ports:
+      - "8002:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+volumes:
+  mvp_postgres_data:
+  mvp_redis_data:
+  mvp_minio_data:
