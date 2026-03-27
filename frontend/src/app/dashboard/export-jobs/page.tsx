@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
 
 export default function ExportJobsPage() {
     const { apiKey } = useAuth();
+    const { tenantId } = useTenant();
     const [name, setName] = useState('Weekly FSMA archive');
     const [cadence, setCadence] = useState<ArchiveExportJob['cadence']>('Weekly');
     const [format, setFormat] = useState<ArchiveExportJob['format']>('FDA Package');
@@ -69,7 +71,7 @@ export default function ExportJobsPage() {
                     cadence,
                     format,
                     destination,
-                    tenantId: 'tenant_acme_001',
+                    tenantId: tenantId || '',
                 }),
             });
 
