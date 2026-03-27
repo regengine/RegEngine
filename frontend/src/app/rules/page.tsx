@@ -48,6 +48,20 @@ export default function RulesDashboardPage() {
 
   const ruleList = rules.data?.rules ?? [];
 
+  if (rules.error) {
+    return (
+      <PageContainer>
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
+          <p className="text-sm text-muted-foreground/60 mt-2">{(rules.error as Error).message}</p>
+          <button onClick={() => rules.refetch()} className="mt-4 text-sm text-primary hover:underline">
+            Retry
+          </button>
+        </div>
+      </PageContainer>
+    );
+  }
+
   // Apply filters
   const filtered = ruleList.filter((r: any) => {
     if (categoryFilter && r.category !== categoryFilter) return false;

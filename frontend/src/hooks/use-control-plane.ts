@@ -3,19 +3,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
-import {
-  DEMO_EXCEPTIONS,
-  DEMO_BLOCKING_COUNT,
-  DEMO_REQUEST_CASES,
-  DEMO_RECORDS,
-  DEMO_RULES,
-  DEMO_ENTITIES,
-  DEMO_REVIEWS,
-} from '@/data/control-plane-demo';
 
 // ---------------------------------------------------------------------------
 // API Helper — uses the ingestion proxy at /api/ingestion
-// Falls back to demo data when backend is unavailable.
+// Errors propagate to React Query for proper error/retry handling.
 // ---------------------------------------------------------------------------
 
 const INGESTION_API = '/api/ingestion';
@@ -24,32 +15,23 @@ async function cpFetch<T>(
   endpoint: string,
   apiKey: string,
   options?: RequestInit,
-  demoFallback?: T,
 ): Promise<T> {
-  try {
-    const url = `${INGESTION_API}${endpoint}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-RegEngine-API-Key': apiKey,
-        ...options?.headers,
-      },
-    });
+  const url = `${INGESTION_API}${endpoint}`;
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-RegEngine-API-Key': apiKey,
+      ...options?.headers,
+    },
+  });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
-    }
-
-    return response.json();
-  } catch (err) {
-    // Fall back to demo data when backend is unavailable
-    if (demoFallback !== undefined) {
-      return demoFallback;
-    }
-    throw err;
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
   }
+
+  return response.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +72,6 @@ export function useExceptions(
     queryKey: ['exceptions', tenantId, filters],
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
       `/api/v1/exceptions?${params}`, apiKey || '',
-      undefined, DEMO_EXCEPTIONS as any,
     ),
     enabled: !!tenantId,
     refetchInterval: POLL_CONTROL_PLANE_MS,
@@ -114,7 +95,6 @@ export function useBlockingExceptionCount(tenantId: string) {
     queryKey: ['exceptions', 'blocking', tenantId],
     queryFn: () => cpFetch<{ blocking_count: number }>(
       `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`, apiKey || '',
-      undefined, DEMO_BLOCKING_COUNT,
     ),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
@@ -191,7 +171,6 @@ export function useRequestCases(tenantId: string) {
     queryKey: ['requests', tenantId],
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
       `/api/v1/requests?tenant_id=${tenantId}`, apiKey || '',
-      undefined, DEMO_REQUEST_CASES as any,
     ),
     enabled: !!tenantId,
     refetchInterval: POLL_METRICS_MS,
@@ -285,7 +264,6 @@ export function useRules() {
     queryKey: ['rules'],
     queryFn: () => cpFetch<{ rules: RuleDefinition[]; total: number }>(
       `/api/v1/rules`, apiKey || '',
-      undefined, DEMO_RULES as any,
     ),
     staleTime: 5 * 60_000,
   });
@@ -356,7 +334,6 @@ export function useCanonicalEvents(
     queryKey: ['records', tenantId, filters],
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
       `/api/v1/records?${params}`, apiKey || '',
-      undefined, DEMO_RECORDS as any,
     ),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,
@@ -387,7 +364,6 @@ export function useEntities(tenantId: string, entityType?: string) {
     queryKey: ['identity', tenantId, entityType],
     queryFn: () => cpFetch<{ entities: any[]; total: number }>(
       `/api/v1/identity/entities?${params}`, apiKey || '',
-      undefined, DEMO_ENTITIES as any,
     ),
     enabled: !!tenantId,
     staleTime: 60_000,
@@ -400,7 +376,6 @@ export function useIdentityReviews(tenantId: string) {
     queryKey: ['identity', 'reviews', tenantId],
     queryFn: () => cpFetch<{ reviews: any[]; total: number }>(
       `/api/v1/identity/reviews?tenant_id=${tenantId}`, apiKey || '',
-      undefined, DEMO_REVIEWS as any,
     ),
     enabled: !!tenantId,
     refetchInterval: POLL_DATA_MS,

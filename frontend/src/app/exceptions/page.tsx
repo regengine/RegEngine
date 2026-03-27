@@ -68,6 +68,20 @@ export default function ExceptionQueuePage() {
   const blockingCount = blocking.data?.blocking_count ?? 0;
   const cases = exceptions.data?.cases ?? [];
 
+  if (exceptions.error) {
+    return (
+      <PageContainer>
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
+          <p className="text-sm text-muted-foreground/60 mt-2">{(exceptions.error as Error).message}</p>
+          <button onClick={() => exceptions.refetch()} className="mt-4 text-sm text-primary hover:underline">
+            Retry
+          </button>
+        </div>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer>
       {/* Header */}
