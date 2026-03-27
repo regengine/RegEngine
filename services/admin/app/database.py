@@ -110,9 +110,16 @@ def init_db() -> None:
             END;
             $$ LANGUAGE plpgsql;
         """))
+        # SECURITY: set_admin_context sets the regengine.is_sysadmin session
+        # variable. This alone is NOT sufficient for RLS bypass — the RLS
+        # policies also require current_user = 'regengine_sysadmin'.
+        # See: migrations/V048__rls_sysadmin_defense_in_depth.sql
         conn.execute(text("""
             CREATE OR REPLACE FUNCTION set_admin_context(p_is_sysadmin boolean) RETURNS void AS $$
             BEGIN
+              IF p_is_sysadmin AND current_user != 'regengine_sysadmin' THEN
+                RAISE WARNING 'set_admin_context(true) called by non-sysadmin role';
+              END IF;
               PERFORM set_config('regengine.is_sysadmin', p_is_sysadmin::text, false);
             END;
             $$ LANGUAGE plpgsql;
