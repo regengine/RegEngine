@@ -8,6 +8,7 @@ and monitoring supplier compliance health.
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 import json
@@ -69,8 +70,9 @@ class CreateSupplierRequest(BaseModel):
     products: list[str] = Field(default_factory=list)
 
 
-# In-memory fallback for when DB is unavailable
+# In-memory fallback for when DB is unavailable (thread-safe via _suppliers_lock)
 _suppliers_store: dict[str, list[SupplierRecord]] = {}
+_suppliers_lock = threading.Lock()
 
 
 def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
@@ -164,9 +166,10 @@ async def get_supplier_dashboard(
     
     # Fall back to memory if DB unavailable
     if suppliers is None:
-        if tenant_id not in _suppliers_store:
-            _suppliers_store[tenant_id] = []
-        suppliers = _suppliers_store[tenant_id]
+        with _suppliers_lock:
+            if tenant_id not in _suppliers_store:
+                _suppliers_store[tenant_id] = []
+            suppliers = list(_suppliers_store[tenant_id])
     active_links = sum(1 for s in suppliers if s.portal_status == "active")
     expired_links = sum(1 for s in suppliers if s.portal_status == "expired")
     total_subs = sum(s.submissions_count for s in suppliers)
@@ -196,10 +199,11 @@ async def add_supplier(
     # Get current count from DB or memory
     suppliers = _db_get_suppliers(tenant_id)
     if suppliers is None:
-        if tenant_id not in _suppliers_store:
-            _suppliers_store[tenant_id] = []
-        suppliers = _suppliers_store[tenant_id]
-    
+        with _suppliers_lock:
+            if tenant_id not in _suppliers_store:
+                _suppliers_store[tenant_id] = []
+            suppliers = list(_suppliers_store[tenant_id])
+
     new_supplier = SupplierRecord(
         id=f"{tenant_id}-sup-{len(suppliers) + 1:03d}",
         name=request.name,
@@ -212,9 +216,10 @@ async def add_supplier(
     # Try DB first, fall back to memory
     db_success = _db_add_supplier(tenant_id, new_supplier)
     if not db_success:
-        if tenant_id not in _suppliers_store:
-            _suppliers_store[tenant_id] = []
-        _suppliers_store[tenant_id].append(new_supplier)
+        with _suppliers_lock:
+            if tenant_id not in _suppliers_store:
+                _suppliers_store[tenant_id] = []
+            _suppliers_store[tenant_id].append(new_supplier)
 
     return {"created": True, "supplier": new_supplier.model_dump()}
 
@@ -232,8 +237,9 @@ async def send_portal_link(
     # Try DB first
     suppliers = _db_get_suppliers(tenant_id)
     if suppliers is None:
-        suppliers = _suppliers_store.get(tenant_id, [])
-    
+        with _suppliers_lock:
+            suppliers = list(_suppliers_store.get(tenant_id, []))
+
     for supplier in suppliers:
         if supplier.id == supplier_id:
             supplier.portal_link_id = f"portal-{supplier_id[-3:]}-new"
@@ -242,11 +248,12 @@ async def send_portal_link(
             # Update in DB or memory
             db_success = _db_add_supplier(tenant_id, supplier)
             if not db_success:
-                if tenant_id in _suppliers_store:
-                    for mem_sup in _suppliers_store[tenant_id]:
-                        if mem_sup.id == supplier_id:
-                            mem_sup.portal_link_id = supplier.portal_link_id
-                            mem_sup.portal_status = supplier.portal_status
+                with _suppliers_lock:
+                    if tenant_id in _suppliers_store:
+                        for mem_sup in _suppliers_store[tenant_id]:
+                            if mem_sup.id == supplier_id:
+                                mem_sup.portal_link_id = supplier.portal_link_id
+                                mem_sup.portal_status = supplier.portal_status
             
             return {
                 "sent": True,
@@ -270,9 +277,10 @@ async def supplier_health(
     # Try DB first
     suppliers = _db_get_suppliers(tenant_id)
     if suppliers is None:
-        if tenant_id not in _suppliers_store:
-            _suppliers_store[tenant_id] = []
-        suppliers = _suppliers_store[tenant_id]
+        with _suppliers_lock:
+            if tenant_id not in _suppliers_store:
+                _suppliers_store[tenant_id] = []
+            suppliers = list(_suppliers_store[tenant_id])
     now = datetime.now(timezone.utc)
 
     active_30d = 0
