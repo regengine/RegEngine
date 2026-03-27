@@ -48,9 +48,9 @@ export function useFeatureFlags() {
 
         const base = getServiceURL('ingestion');
         fetch(`${base}/api/v1/features`, {
+            credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': apiKey || '',
             },
         })
             .then(res => {

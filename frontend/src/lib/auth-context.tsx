@@ -8,11 +8,13 @@ import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 interface AuthContextType {
   user: User | null;
   accessToken: string | null;
+  /** @deprecated API key is no longer exposed to client JS. Use proxy routes instead. */
   apiKey: string | null;
+  /** @deprecated Admin key is no longer exposed to client JS. Use proxy routes instead. */
   adminKey: string | null;
   tenantId: string | null;
   isOnboarded: boolean;
-  isHydrated: boolean;  // Added for hydration tracking
+  isHydrated: boolean;
   demoMode: boolean;
   setApiKey: (key: string | null) => void;
   setAdminKey: (key: string | null) => void;
@@ -28,64 +30,132 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * SECURITY NOTE (CRITICAL #2 — UI Debug Audit 2026-03-19):
+ * HTTP-only cookie auth — CRITICAL #2 fix complete.
  *
- * These localStorage keys are a security risk — any XSS vector can read them.
- * Migration plan:
- *   1. /api/session route now stores api_key + admin_key in HTTP-only cookies
- *   2. /api/proxy route forwards requests using cookie credentials
- *   3. login() and setApiKey()/setAdminKey() dual-write to both localStorage
- *      AND the /api/session HTTP-only cookie endpoint
- *   4. clearCredentials() clears both
- *   5. NEXT STEP: Migrate all apiClient.fetch() calls to use /api/proxy,
- *      then remove API_KEY, ADMIN_KEY, and ACCESS_TOKEN from localStorage entirely
+ * Sensitive credentials (access_token, api_key, admin_key) are stored
+ * ONLY in HTTP-only cookies via /api/session. They are never readable
+ * by client-side JavaScript, eliminating XSS credential theft.
  *
- * MIGRATION PHASE 2: Remove localStorage reads once all clients use cookie-based auth.
- * Currently dual-writing to both localStorage and HTTP-only cookies for backward compatibility.
- * All new code should use /api/proxy instead of direct API calls with localStorage keys.
+ * Non-sensitive data (tenant_id, onboarded, demo_mode, user profile)
+ * remains in localStorage for fast hydration.
+ *
+ * The apiKey/adminKey fields in the context are set to a placeholder value
+ * ("cookie-managed") to satisfy existing enabled-checks (!!apiKey) without
+ * exposing actual secrets.
  */
+
+/** Placeholder value for apiKey/adminKey — indicates credentials are
+ *  managed server-side in HTTP-only cookies. NOT the real key. */
+const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
+
 const STORAGE_KEYS = {
-  API_KEY: 'regengine_api_key',
-  ADMIN_KEY: 'regengine_admin_key',
   TENANT_ID: 'regengine_tenant_id',
   ONBOARDED: 'regengine_onboarded',
   DEMO_MODE: 'regengine_demo_mode',
-  ACCESS_TOKEN: 'regengine_access_token',
   USER: 'regengine_user',
+  // DEPRECATED — migrated to HTTP-only cookies, then removed from localStorage
+  _LEGACY_API_KEY: 'regengine_api_key',
+  _LEGACY_ADMIN_KEY: 'regengine_admin_key',
+  _LEGACY_ACCESS_TOKEN: 'regengine_access_token',
 };
 
-/** Sync sensitive credentials to HTTP-only cookies via /api/session.
- *  Returns a promise so callers can await the cookie being set before navigating. */
-async function syncSessionCookies(
-  accessToken?: string | null,
-  apiKey?: string | null,
-  adminKey?: string | null,
-  tenantId?: string | null,
-): Promise<void> {
+// ---------------------------------------------------------------------------
+// Cookie helpers — talk to /api/session (server-side)
+// ---------------------------------------------------------------------------
+
+/** Store sensitive credentials in HTTP-only cookies via /api/session POST. */
+async function setSessionCookies(params: {
+  accessToken?: string | null;
+  apiKey?: string | null;
+  adminKey?: string | null;
+  tenantId?: string | null;
+  user?: User | null;
+}): Promise<void> {
   if (typeof window === 'undefined') return;
-  const body: Record<string, string> = {};
-  if (accessToken) body.access_token = accessToken;
-  if (apiKey) body.api_key = apiKey;
-  if (adminKey) body.admin_key = adminKey;
-  if (tenantId) body.tenant_id = tenantId;
-  if (Object.keys(body).length > 0) {
-    try {
-      await fetch('/api/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      /* best-effort — localStorage is the fallback */
-    }
+  const body: Record<string, unknown> = {};
+  if (params.accessToken) body.access_token = params.accessToken;
+  if (params.apiKey) body.api_key = params.apiKey;
+  if (params.adminKey) body.admin_key = params.adminKey;
+  if (params.tenantId) body.tenant_id = params.tenantId;
+  if (params.user) body.user = params.user;
+  if (Object.keys(body).length === 0) return;
+  try {
+    await fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Best-effort
   }
 }
 
-/** Clear HTTP-only session cookies */
+/** Clear all session cookies via /api/session DELETE. */
 function clearSessionCookies() {
   if (typeof window === 'undefined') return;
   fetch('/api/session', { method: 'DELETE' }).catch(() => {});
 }
+
+/** Check current session via /api/session GET — never returns raw tokens. */
+async function getSessionInfo(): Promise<{
+  authenticated: boolean;
+  has_api_key: boolean;
+  has_admin_key: boolean;
+  has_credentials: boolean;
+  tenant_id: string | null;
+  user: User | null;
+} | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await fetch('/api/session', { method: 'GET', credentials: 'include' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Migration: move localStorage secrets to HTTP-only cookies, then delete them
+// ---------------------------------------------------------------------------
+
+async function migrateLocalStorageToCookies(): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  const legacyApiKey = localStorage.getItem(STORAGE_KEYS._LEGACY_API_KEY);
+  const legacyAdminKey = localStorage.getItem(STORAGE_KEYS._LEGACY_ADMIN_KEY);
+  const legacyAccessToken = localStorage.getItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
+
+  if (!legacyApiKey && !legacyAdminKey && !legacyAccessToken) return;
+
+  console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
+
+  const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
+  const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+  let user: User | null = null;
+  try {
+    if (userStr) user = JSON.parse(userStr);
+  } catch { /* ignore */ }
+
+  await setSessionCookies({
+    accessToken: legacyAccessToken,
+    apiKey: legacyApiKey,
+    adminKey: legacyAdminKey,
+    tenantId,
+    user,
+  });
+
+  // Remove sensitive keys from localStorage permanently
+  localStorage.removeItem(STORAGE_KEYS._LEGACY_API_KEY);
+  localStorage.removeItem(STORAGE_KEYS._LEGACY_ADMIN_KEY);
+  localStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
+
+  console.info('[auth] Migration complete — localStorage secrets removed.');
+}
+
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
@@ -97,95 +167,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [demoMode, setDemoModeState] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Load from localStorage on mount
+  // ---- Hydration: migrate localStorage, then hydrate from cookie session ----
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedApiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-      const storedAdminKey = localStorage.getItem(STORAGE_KEYS.ADMIN_KEY);
+    if (typeof window === 'undefined') return;
+
+    const hydrate = async () => {
+      // Step 1: If localStorage still has secrets, migrate them to cookies
+      await migrateLocalStorageToCookies();
+
+      // Step 2: Read non-sensitive state from localStorage
       const storedTenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
       const storedOnboarded = localStorage.getItem(STORAGE_KEYS.ONBOARDED);
       const storedDemoMode = localStorage.getItem(STORAGE_KEYS.DEMO_MODE);
-      const storedAccessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
       const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
 
-      // MIGRATION: Warn on localStorage reads for sensitive credentials
-      if (storedApiKey) {
-        console.warn("[DEPRECATED] Reading API key from localStorage. Migrate to cookie-based auth via /api/proxy.");
-        setApiKeyState(storedApiKey);
-      }
-      if (storedAdminKey) {
-        console.warn("[DEPRECATED] Reading admin key from localStorage. Migrate to cookie-based auth via /api/proxy.");
-        setAdminKeyState(storedAdminKey);
-      }
-
-      // Use stored key or env var (no hardcoded fallback)
-      const envKey = process.env.NEXT_PUBLIC_API_KEY || '';
-      if (!storedApiKey) setApiKeyState(envKey);
-      if (!storedAdminKey) setAdminKeyState(envKey);
       if (storedTenantId) setTenantIdState(storedTenantId);
       if (storedOnboarded === 'true') setIsOnboarded(true);
       if (storedDemoMode === 'true') setDemoModeState(true);
 
-      if (storedAccessToken) {
-        setAccessTokenState(storedAccessToken);
-        apiClient.setAccessToken(storedAccessToken);
-      }
       if (storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           setUserState(parsedUser);
           apiClient.setUser(parsedUser);
-        } catch (e) {
-          console.error("Failed to parse stored user", e);
+        } catch { /* ignore corrupt data */ }
+      }
+
+      // Step 3: Check cookie-based session for credentials
+      const session = await getSessionInfo();
+      if (session) {
+        if (session.tenant_id && !storedTenantId) {
+          setTenantIdState(session.tenant_id);
+        }
+        if (session.user && !storedUser) {
+          setUserState(session.user);
+          apiClient.setUser(session.user);
+        }
+        if (session.authenticated) {
+          setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
+          apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
+        }
+        if (session.has_api_key) {
+          setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
+        }
+        if (session.has_admin_key) {
+          setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
+        }
+      } else {
+        // No cookie session — check if env var provides a default API key
+        const envKey = process.env.NEXT_PUBLIC_API_KEY || '';
+        if (envKey) {
+          await setSessionCookies({ apiKey: envKey, adminKey: envKey });
+          setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
+          setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
         }
       }
 
       setIsHydrated(true);
-    }
+    };
+
+    hydrate();
   }, []);
 
-  // MIGRATION PHASE 2: Gradual migration from localStorage to cookie-based auth
-  // Once cookies are established via /api/session, clear localStorage copies
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isHydrated) {
-      // Check if HTTP-only cookies are set by making a test request to /api/session
-      // If successful, clear the localStorage copies of sensitive credentials
-      const checkAndMigrate = async () => {
-        try {
-          const response = await fetch('/api/session', { method: 'GET', credentials: 'include' });
-          if (response.ok) {
-            const data = await response.json();
-            // If cookies exist, safe to remove localStorage copies
-            if (data.has_credentials) {
-              if (localStorage.getItem(STORAGE_KEYS.API_KEY)) {
-                console.info("[MIGRATION] HTTP-only cookies detected. Removing API_KEY from localStorage.");
-                localStorage.removeItem(STORAGE_KEYS.API_KEY);
-              }
-              if (localStorage.getItem(STORAGE_KEYS.ADMIN_KEY)) {
-                console.info("[MIGRATION] HTTP-only cookies detected. Removing ADMIN_KEY from localStorage.");
-                localStorage.removeItem(STORAGE_KEYS.ADMIN_KEY);
-              }
-            }
-          }
-        } catch (e) {
-          // /api/session endpoint may not exist yet or server error — skip migration
-        }
-      };
-      checkAndMigrate();
-    }
-  }, [isHydrated]);
-
-  // Supabase auth state listener — keeps token + user in sync
+  // ---- Supabase auth state listener ----
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | undefined;
     try {
       const supabase = createSupabaseBrowserClient();
 
-      // Hydrate from Supabase session ONLY if no existing credentials
-      // (the custom /auth/login flow stores credentials in localStorage,
-      // which the first useEffect already loaded)
       supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.access_token && session.user && !localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN)) {
+        if (session?.access_token && session.user && !accessToken) {
           const appUser: User = {
             id: session.user.id,
             email: session.user.email || '',
@@ -193,25 +244,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active',
             role_name: session.user.user_metadata?.role || 'member',
           };
-          setAccessTokenState(session.access_token);
+          setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           setUserState(appUser);
-          apiClient.setAccessToken(session.access_token);
+          apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setUser(appUser);
           if (session.user.user_metadata?.tenant_id) {
             setTenantIdState(session.user.user_metadata.tenant_id);
             apiClient.setCurrentTenant(session.user.user_metadata.tenant_id);
+            localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.user.user_metadata.tenant_id);
           }
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.access_token);
-            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
-            if (session.user.user_metadata?.tenant_id) {
-              localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.user.user_metadata.tenant_id);
-            }
-          }
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
+          setSessionCookies({
+            accessToken: session.access_token,
+            user: appUser,
+            tenantId: session.user.user_metadata?.tenant_id || null,
+          });
         }
       });
 
-      // Listen for auth state changes (token refresh, sign out, etc.)
       const { data } = supabase.auth.onAuthStateChange((event, session) => {
         if (session?.access_token && session.user) {
           const appUser: User = {
@@ -221,59 +271,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active',
             role_name: session.user.user_metadata?.role || 'member',
           };
-          setAccessTokenState(session.access_token);
+          setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           setUserState(appUser);
-          apiClient.setAccessToken(session.access_token);
+          apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setUser(appUser);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, session.access_token);
-            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
-          }
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
+          setSessionCookies({ accessToken: session.access_token, user: appUser });
         }
 
-        // Only clear on explicit sign-out — NOT on missing session.
-        // The custom /auth/login flow doesn't create Supabase sessions,
-        // so INITIAL_SESSION fires with session=null. We must not wipe
-        // the valid localStorage-hydrated credentials in that case.
         if (event === 'SIGNED_OUT') {
           setAccessTokenState(null);
           setUserState(null);
+          setApiKeyState(null);
+          setAdminKeyState(null);
           apiClient.setAccessToken(null);
           apiClient.setUser(null);
           apiClient.setCurrentTenant(null);
           if (typeof window !== 'undefined') {
             Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
           }
+          clearSessionCookies();
         }
       });
       subscription = data.subscription;
     } catch {
-      // Supabase not configured — skip listener (dev/test environments)
+      // Supabase not configured — skip
     }
     return () => subscription?.unsubscribe();
-  }, []);
+  }, [accessToken]);
 
   const setApiKey = useCallback((key: string | null) => {
-    setApiKeyState(key);
-    if (typeof window !== 'undefined') {
-      if (key) {
-        localStorage.setItem(STORAGE_KEYS.API_KEY, key);
-        syncSessionCookies(null, key, null, null);
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.API_KEY);
-      }
+    if (key) {
+      setSessionCookies({ apiKey: key });
+      setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
+    } else {
+      setApiKeyState(null);
     }
   }, []);
 
   const setAdminKey = useCallback((key: string | null) => {
-    setAdminKeyState(key);
-    if (typeof window !== 'undefined') {
-      if (key) {
-        localStorage.setItem(STORAGE_KEYS.ADMIN_KEY, key);
-        syncSessionCookies(null, null, key, null);
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.ADMIN_KEY);
-      }
+    if (key) {
+      setSessionCookies({ adminKey: key });
+      setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
+    } else {
+      setAdminKeyState(null);
     }
   }, []);
 
@@ -282,6 +323,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       if (id) {
         localStorage.setItem(STORAGE_KEYS.TENANT_ID, id);
+        setSessionCookies({ tenantId: id });
       } else {
         localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
       }
@@ -302,25 +344,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (token: string, user: User, tenantId?: string) => {
-    setAccessTokenState(token);
-    setUserState(user);
-    if (tenantId) setTenantIdState(tenantId);
+  const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string) => {
+    setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
+    setUserState(loginUser);
+    if (loginTenantId) setTenantIdState(loginTenantId);
 
-    apiClient.setAccessToken(token);
-    apiClient.setUser(user);
-    if (tenantId) apiClient.setCurrentTenant(tenantId);
+    apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
+    apiClient.setUser(loginUser);
+    if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-      if (tenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, tenantId);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(loginUser));
+      if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
     }
-    // Dual-write: store access_token + credentials in HTTP-only cookies.
+
+    // Store sensitive credentials in HTTP-only cookies.
     // MUST await — middleware checks this cookie on the next navigation.
-    // Without await, router.push() races ahead and middleware sees no cookie.
-    await syncSessionCookies(token, apiKey, adminKey, tenantId);
-  }, [apiKey, adminKey]);
+    await setSessionCookies({
+      accessToken: token,
+      tenantId: loginTenantId,
+      user: loginUser,
+    });
+  }, []);
 
   const clearCredentials = useCallback(() => {
     setApiKeyState(null);
@@ -328,7 +373,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTenantIdState(null);
     setAccessTokenState(null);
     setUserState(null);
-
     setIsOnboarded(false);
     setDemoModeState(false);
 
@@ -339,7 +383,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
     }
-    // Also clear HTTP-only cookies
     clearSessionCookies();
   }, []);
 
@@ -356,7 +399,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         accessToken,
         user,
         isOnboarded,
-        isHydrated,  // Expose hydration state
+        isHydrated,
         demoMode,
         setApiKey,
         setAdminKey,

@@ -40,6 +40,7 @@ function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
         return {};
     }
 
+    // tenant_id and user are non-sensitive — safe to read from localStorage
     const tenantId = localStorage.getItem('regengine_tenant_id') || undefined;
     const rawUser = localStorage.getItem('regengine_user');
     if (!rawUser) {
@@ -59,11 +60,12 @@ async function createIngestionCheckout(
 ): Promise<CheckoutSessionData> {
     const { tenantId, customerEmail } = getCheckoutContext();
     const billingCycle = params.billing_cycle || 'annual';
+    // Credentials are in HTTP-only cookies — proxy injects them
     const res = await fetch(`${getServiceURL('ingestion')}/api/v1/billing/checkout`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
-            'X-RegEngine-API-Key': params.apiKey || '',
         },
         body: JSON.stringify({
             plan_id: params.tier_id,

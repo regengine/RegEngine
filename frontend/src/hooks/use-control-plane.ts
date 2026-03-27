@@ -6,7 +6,7 @@ import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/poll
 
 // ---------------------------------------------------------------------------
 // API Helper — uses the ingestion proxy at /api/ingestion
-// Errors propagate to React Query for proper error/retry handling.
+// The proxy reads credentials from HTTP-only cookies — no client-side API key needed.
 // ---------------------------------------------------------------------------
 
 const INGESTION_API = '/api/ingestion';
@@ -19,15 +19,14 @@ export interface CpResult<T> {
 
 async function cpFetch<T>(
   endpoint: string,
-  apiKey: string,
   options?: RequestInit,
 ): Promise<CpResult<T>> {
   const url = `${INGESTION_API}${endpoint}`;
   const response = await fetch(url, {
     ...options,
+    credentials: 'include', // Send HTTP-only cookies to same-origin proxy
     headers: {
       'Content-Type': 'application/json',
-      'X-RegEngine-API-Key': apiKey,
       ...options?.headers,
     },
   });
@@ -87,9 +86,9 @@ export function useExceptions(
   return useQuery({
     queryKey: ['exceptions', tenantId, filters],
     queryFn: () => cpFetch<{ cases: ExceptionCase[]; total: number }>(
-      `/api/v1/exceptions?${params}`, apiKey || '',
+      `/api/v1/exceptions?${params}`,
     ).then(unwrapCp),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_CONTROL_PLANE_MS,
   });
 }
@@ -99,7 +98,7 @@ export function useException(tenantId: string, caseId: string) {
   return useQuery({
     queryKey: ['exceptions', tenantId, caseId],
     queryFn: () => cpFetch<ExceptionCase>(
-      `/api/v1/exceptions/${caseId}?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/exceptions/${caseId}?tenant_id=${tenantId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!caseId,
   });
@@ -110,19 +109,18 @@ export function useBlockingExceptionCount(tenantId: string) {
   return useQuery({
     queryKey: ['exceptions', 'blocking', tenantId],
     queryFn: () => cpFetch<{ blocking_count: number }>(
-      `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`, apiKey || '',
+      `/api/v1/exceptions/stats/blocking?tenant_id=${tenantId}`,
     ).then(unwrapCp),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_DATA_MS,
   });
 }
 
 export function useAssignException(tenantId: string) {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ caseId, ownerUserId }: { caseId: string; ownerUserId: string }) =>
-      cpFetch(`/api/v1/exceptions/${caseId}/assign?tenant_id=${tenantId}`, apiKey || '', {
+      cpFetch(`/api/v1/exceptions/${caseId}/assign?tenant_id=${tenantId}`, {
         method: 'PATCH',
         body: JSON.stringify({ owner_user_id: ownerUserId }),
       }).then(r => r.data),
@@ -131,12 +129,11 @@ export function useAssignException(tenantId: string) {
 }
 
 export function useResolveException(tenantId: string) {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ caseId, resolutionSummary, resolvedBy }: {
       caseId: string; resolutionSummary: string; resolvedBy: string;
-    }) => cpFetch(`/api/v1/exceptions/${caseId}/resolve?tenant_id=${tenantId}`, apiKey || '', {
+    }) => cpFetch(`/api/v1/exceptions/${caseId}/resolve?tenant_id=${tenantId}`, {
       method: 'PATCH',
       body: JSON.stringify({ resolution_summary: resolutionSummary, resolved_by: resolvedBy }),
     }).then(r => r.data),
@@ -145,12 +142,11 @@ export function useResolveException(tenantId: string) {
 }
 
 export function useWaiveException(tenantId: string) {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ caseId, waiverReason, waiverApprovedBy }: {
       caseId: string; waiverReason: string; waiverApprovedBy: string;
-    }) => cpFetch(`/api/v1/exceptions/${caseId}/waive?tenant_id=${tenantId}`, apiKey || '', {
+    }) => cpFetch(`/api/v1/exceptions/${caseId}/waive?tenant_id=${tenantId}`, {
       method: 'PATCH',
       body: JSON.stringify({ waiver_reason: waiverReason, waiver_approved_by: waiverApprovedBy }),
     }).then(r => r.data),
@@ -186,15 +182,14 @@ export function useRequestCases(tenantId: string) {
   return useQuery({
     queryKey: ['requests', tenantId],
     queryFn: () => cpFetch<{ cases: RequestCase[]; total: number }>(
-      `/api/v1/requests?tenant_id=${tenantId}`, apiKey || '',
+      `/api/v1/requests?tenant_id=${tenantId}`,
     ).then(unwrapCp),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_METRICS_MS,
   });
 }
 
 export function useCreateRequestCase(tenantId: string) {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: {
@@ -205,7 +200,7 @@ export function useCreateRequestCase(tenantId: string) {
       affected_products?: string[];
       affected_facilities?: string[];
       response_hours?: number;
-    }) => cpFetch(`/api/v1/requests?tenant_id=${tenantId}`, apiKey || '', {
+    }) => cpFetch(`/api/v1/requests?tenant_id=${tenantId}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }).then(r => r.data),
@@ -214,11 +209,10 @@ export function useCreateRequestCase(tenantId: string) {
 }
 
 export function useAssemblePackage(tenantId: string) {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestCaseId, generatedBy }: { requestCaseId: string; generatedBy: string }) =>
-      cpFetch(`/api/v1/requests/${requestCaseId}/assemble?tenant_id=${tenantId}&generated_by=${generatedBy}`, apiKey || '', {
+      cpFetch(`/api/v1/requests/${requestCaseId}/assemble?tenant_id=${tenantId}&generated_by=${generatedBy}`, {
         method: 'POST',
       }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
@@ -226,13 +220,12 @@ export function useAssemblePackage(tenantId: string) {
 }
 
 export function useSubmitPackage(tenantId: string) {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ requestCaseId, ...data }: {
       requestCaseId: string; submitted_to?: string; submitted_by: string;
       submission_method?: string; submission_notes?: string;
-    }) => cpFetch(`/api/v1/requests/${requestCaseId}/submit?tenant_id=${tenantId}`, apiKey || '', {
+    }) => cpFetch(`/api/v1/requests/${requestCaseId}/submit?tenant_id=${tenantId}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }).then(r => r.data),
@@ -245,7 +238,7 @@ export function usePackageHistory(tenantId: string, requestCaseId: string) {
   return useQuery({
     queryKey: ['requests', tenantId, requestCaseId, 'packages'],
     queryFn: () => cpFetch<{ packages: any[]; total: number }>(
-      `/api/v1/requests/${requestCaseId}/packages?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/requests/${requestCaseId}/packages?tenant_id=${tenantId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!requestCaseId,
   });
@@ -279,8 +272,9 @@ export function useRules() {
   return useQuery({
     queryKey: ['rules'],
     queryFn: () => cpFetch<{ rules: RuleDefinition[]; total: number }>(
-      `/api/v1/rules`, apiKey || '',
+      `/api/v1/rules`,
     ).then(unwrapCp),
+    enabled: !!apiKey,
     staleTime: 5 * 60_000,
   });
 }
@@ -290,17 +284,16 @@ export function useEventEvaluations(tenantId: string, eventId: string) {
   return useQuery({
     queryKey: ['evaluations', tenantId, eventId],
     queryFn: () => cpFetch<{ evaluations: RuleEvaluation[]; total: number }>(
-      `/api/v1/rules/evaluations/${eventId}?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/rules/evaluations/${eventId}?tenant_id=${tenantId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!eventId,
   });
 }
 
 export function useSeedRules() {
-  const { apiKey } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => cpFetch(`/api/v1/rules/seed`, apiKey || '', { method: 'POST' }).then(r => r.data),
+    mutationFn: () => cpFetch(`/api/v1/rules/seed`, { method: 'POST' }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rules'] }),
   });
 }
@@ -349,9 +342,9 @@ export function useCanonicalEvents(
   return useQuery({
     queryKey: ['records', tenantId, filters],
     queryFn: () => cpFetch<{ events: CanonicalEvent[]; total: number }>(
-      `/api/v1/records?${params}`, apiKey || '',
+      `/api/v1/records?${params}`,
     ).then(unwrapCp),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_DATA_MS,
   });
 }
@@ -361,7 +354,7 @@ export function useCanonicalEvent(tenantId: string, eventId: string) {
   return useQuery({
     queryKey: ['records', tenantId, eventId],
     queryFn: () => cpFetch<CanonicalEventDetail>(
-      `/api/v1/records/${eventId}?tenant_id=${tenantId}`, apiKey || ''
+      `/api/v1/records/${eventId}?tenant_id=${tenantId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!eventId,
   });
@@ -379,9 +372,9 @@ export function useEntities(tenantId: string, entityType?: string) {
   return useQuery({
     queryKey: ['identity', tenantId, entityType],
     queryFn: () => cpFetch<{ entities: any[]; total: number }>(
-      `/api/v1/identity/entities?${params}`, apiKey || '',
+      `/api/v1/identity/entities?${params}`,
     ).then(unwrapCp),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!apiKey,
     staleTime: 60_000,
   });
 }
@@ -391,9 +384,9 @@ export function useIdentityReviews(tenantId: string) {
   return useQuery({
     queryKey: ['identity', 'reviews', tenantId],
     queryFn: () => cpFetch<{ reviews: any[]; total: number }>(
-      `/api/v1/identity/reviews?tenant_id=${tenantId}`, apiKey || '',
+      `/api/v1/identity/reviews?tenant_id=${tenantId}`,
     ).then(unwrapCp),
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!apiKey,
     refetchInterval: POLL_DATA_MS,
   });
 }

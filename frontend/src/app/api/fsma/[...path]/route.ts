@@ -30,8 +30,14 @@ async function proxyRequest(
         const url = new URL(request.url);
         const queryString = url.search;
 
-        const apiKey = request.headers.get('X-RegEngine-API-Key') || '';
-        const tenantId = request.headers.get('X-Tenant-ID') || '';
+        // Read credentials from HTTP-only cookies first, fall back to headers
+        const apiKey = request.cookies.get('re_api_key')?.value
+            || request.headers.get('X-RegEngine-API-Key')
+            || process.env.REGENGINE_API_KEY
+            || '';
+        const tenantId = request.cookies.get('re_tenant_id')?.value
+            || request.headers.get('X-Tenant-ID')
+            || '';
 
         const fetchOptions: RequestInit = {
             method,
