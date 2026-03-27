@@ -110,24 +110,16 @@ class APIClient {
     const client = axios.create({
       baseURL,
       timeout: 30000,
+      // Send cookies to same-origin proxy routes so the proxy can read
+      // HTTP-only session cookies for credential injection.
+      withCredentials: true,
     });
 
-    // Default API key from environment (no hardcoded fallback)
-    const defaultApiKey = '';
-
     client.interceptors.request.use((config) => {
-      // Check for existing API key headers (case-insensitive since axios lowercases header names)
-      const headerKeys = Object.keys(config.headers || {}).map(k => k.toLowerCase());
-      const hasApiKey = headerKeys.some(k =>
-        k === 'x-api-key' || k === 'x-admin-key' || k === 'x-regengine-api-key'
-      );
+      // API key is NO LONGER injected here — it lives in HTTP-only cookies
+      // and the server-side proxy reads it. This prevents XSS from stealing keys.
 
-      // Only add default API key if no API key header is already present
-      if (!hasApiKey) {
-        config.headers['X-RegEngine-API-Key'] = defaultApiKey;
-      }
-
-      // Add Bearer Token if available
+      // Add Bearer Token if available (placeholder value is fine — proxy reads cookie)
       if (this.accessToken) {
         config.headers['Authorization'] = `Bearer ${this.accessToken}`;
       }
