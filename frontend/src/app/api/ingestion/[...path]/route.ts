@@ -98,11 +98,28 @@ async function proxyRequest(
       }
     }
 
-    // Inject server-side API key if client didn't provide one.
-    // REGENGINE_API_KEY must be set on the deployment platform (Vercel).
+    // Inject API key from HTTP-only cookie (preferred) or server-side env var.
+    // The client no longer sends X-RegEngine-API-Key — credentials live in cookies.
     if (!headers.has('x-regengine-api-key')) {
-      const serverApiKey = process.env.REGENGINE_API_KEY || '';
+      const cookieApiKey = request.cookies.get('re_api_key')?.value;
+      const serverApiKey = cookieApiKey || process.env.REGENGINE_API_KEY || '';
       headers.set('x-regengine-api-key', serverApiKey);
+    }
+
+    // Inject admin key from cookie if not already present
+    if (!headers.has('x-admin-key')) {
+      const cookieAdminKey = request.cookies.get('re_admin_key')?.value;
+      if (cookieAdminKey) {
+        headers.set('x-admin-key', cookieAdminKey);
+      }
+    }
+
+    // Inject tenant ID from cookie if not already present
+    if (!headers.has('x-tenant-id')) {
+      const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
+      if (cookieTenantId) {
+        headers.set('x-tenant-id', cookieTenantId);
+      }
     }
 
     const fetchOptions: RequestInit = {

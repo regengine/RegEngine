@@ -3,14 +3,9 @@
 /**
  * Unified data fetching hooks — the PREFERRED pattern for all new code.
  *
- * Consolidates the 4 existing patterns (M1 from API audit):
- *   1. Direct fetch() with manual headers → use useApiQuery instead
- *   2. apiClient Axios class → use useApiQuery for reads, useApiMutate for writes
- *   3. Raw useQuery() without auth → use useApiQuery (auto-injects credentials)
- *   4. api-hooks.ts standalone functions → pass to useApiQuery's queryFn
- *
- * These wrappers combine React Query with useAuth() so credentials
- * are always sourced from the auth context (never localStorage or env vars).
+ * Credentials are stored in HTTP-only cookies and injected by the
+ * server-side proxy routes (/api/ingestion, /api/admin, etc.).
+ * Client code no longer sends API keys in headers.
  */
 
 import {
@@ -29,20 +24,19 @@ type ServiceName = 'ingestion' | 'admin' | 'compliance' | 'graph';
 
 /**
  * Authenticated fetch helper — used internally by the hooks below.
- * Automatically injects X-RegEngine-API-Key header.
+ * Credentials are in HTTP-only cookies; the proxy injects them server-side.
  */
 async function authFetch<T>(
     service: ServiceName,
     path: string,
-    apiKey: string,
     options: RequestInit = {},
 ): Promise<T> {
     const base = getServiceURL(service);
     const res = await fetch(`${base}${path}`, {
         ...options,
+        credentials: 'include', // Send cookies to same-origin proxies
         headers: {
             'Content-Type': 'application/json',
-            'X-RegEngine-API-Key': apiKey,
             ...options.headers,
         },
     });
@@ -56,19 +50,6 @@ async function authFetch<T>(
 
 /**
  * Authenticated React Query hook for GET requests.
- *
- * Usage:
- *   const { data, isLoading } = useApiQuery(
- *     ['products', tenantId],
- *     `/api/v1/products/${tenantId}`,
- *   );
- *
- * Or with a custom service:
- *   const { data } = useApiQuery(
- *     ['compliance', tenantId],
- *     `/v1/compliance/score/${tenantId}`,
- *     { service: 'compliance' },
- *   );
  */
 export function useApiQuery<T = unknown>(
     queryKey: QueryKey,
@@ -85,21 +66,14 @@ export function useApiQuery<T = unknown>(
 
     return useQuery<T, Error>({
         queryKey,
-        queryFn: () => authFetch<T>(service, path, apiKey || ''),
-        enabled: isAuthenticated && (enabled ?? true),
+        queryFn: () => authFetch<T>(service, path),
+        enabled: isAuthenticated && !!apiKey && (enabled ?? true),
         ...restOptions,
     });
 }
 
 /**
  * Authenticated React Query hook for mutations (POST/PUT/DELETE).
- *
- * Usage:
- *   const { mutateAsync } = useApiMutate<Product, CreateProductInput>(
- *     `/api/v1/products/${tenantId}`,
- *     { method: 'POST', invalidateKeys: [['products', tenantId]] },
- *   );
- *   await mutateAsync({ name: 'Romaine', category: 'Leafy Greens' });
  */
 export function useApiMutate<TData = unknown, TInput = unknown>(
     path: string,
@@ -109,18 +83,16 @@ export function useApiMutate<TData = unknown, TInput = unknown>(
         invalidateKeys?: QueryKey[];
     } & Omit<UseMutationOptions<TData, Error, TInput>, 'mutationFn'>,
 ) {
-    const { apiKey } = useAuth();
     const queryClient = useQueryClient();
     const { service = 'ingestion', method = 'POST', invalidateKeys, ...restOptions } = options ?? {};
 
     return useMutation<TData, Error, TInput>({
         mutationFn: (input: TInput) =>
-            authFetch<TData>(service, path, apiKey || '', {
+            authFetch<TData>(service, path, {
                 method,
                 body: JSON.stringify(input),
             }),
         onSuccess: (...args) => {
-            // Auto-invalidate related queries
             if (invalidateKeys) {
                 for (const key of invalidateKeys) {
                     queryClient.invalidateQueries({ queryKey: key });
@@ -133,8 +105,7 @@ export function useApiMutate<TData = unknown, TInput = unknown>(
 }
 
 /**
- * Hook that returns the current tenant ID and API key for manual fetching.
- * Use when you need more control than useApiQuery provides.
+ * Hook that returns the current tenant ID and auth state for manual fetching.
  */
 export function useApiContext() {
     const { apiKey, isAuthenticated } = useAuth();
@@ -146,6 +117,6 @@ export function useApiContext() {
         isAuthenticated,
         /** Convenience: authenticated fetch for one-off calls */
         fetch: <T>(service: ServiceName, path: string, options?: RequestInit) =>
-            authFetch<T>(service, path, apiKey || '', options),
+            authFetch<T>(service, path, options),
     };
 }

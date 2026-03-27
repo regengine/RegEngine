@@ -21,24 +21,21 @@ const GRAPH_API_BASE = typeof window !== 'undefined'
   ? '/api/fsma'  // Browser: use Next.js API proxy
   : (process.env.NEXT_PUBLIC_GRAPH_API_URL || 'http://localhost:8200/v1/fsma');
 
-// Helper to make authenticated API calls
+// Helper to make authenticated API calls.
+// Credentials are in HTTP-only cookies — the proxy injects them server-side.
+// The `apiKey` parameter is kept for backward compatibility but is ignored.
 async function fsmaFetch<T>(
   endpoint: string,
-  apiKey: string,
+  _apiKey: string,
   options?: RequestInit
 ): Promise<T> {
-  // For browser, GRAPH_API_BASE is '/api/fsma' and endpoint starts with '/'
-  // For server, GRAPH_API_BASE is 'http://localhost:8200/v1/fsma'
-  // The endpoint already starts with '/', so we just concatenate
-  const url = typeof window !== 'undefined'
-    ? `${GRAPH_API_BASE}${endpoint}`  // Browser: /api/fsma/dashboard
-    : `${GRAPH_API_BASE}${endpoint}`; // Server: http://localhost:8200/v1/fsma/dashboard
+  const url = `${GRAPH_API_BASE}${endpoint}`;
 
   const response = await fetch(url, {
     ...options,
+    credentials: 'include', // Send HTTP-only cookies
     headers: {
       'Content-Type': 'application/json',
-      'X-RegEngine-API-Key': apiKey,
       ...options?.headers,
     },
   });
@@ -86,9 +83,7 @@ export function useExportTrace(apiKey: string) {
       const response = await fetch(
         `${GRAPH_API_BASE}/export/trace/${encodeURIComponent(tlc)}?direction=${direction}`,
         {
-          headers: {
-            'X-RegEngine-API-Key': apiKey,
-          },
+          credentials: 'include',
         }
       );
       if (!response.ok) throw new Error('Export failed');
@@ -112,9 +107,7 @@ export function useExportRecallContacts(apiKey: string) {
       const response = await fetch(
         `${GRAPH_API_BASE}/export/recall-contacts/${encodeURIComponent(tlc)}`,
         {
-          headers: {
-            'X-RegEngine-API-Key': apiKey,
-          },
+          credentials: 'include',
         }
       );
       if (!response.ok) throw new Error('Export failed');
