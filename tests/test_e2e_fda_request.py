@@ -402,12 +402,13 @@ class TestFDARequestE2E:
         assert package["package_hash"], "Package must have SHA-256 hash"
         assert len(package["package_hash"]) == 64, "Hash must be 64 hex chars (SHA-256)"
 
-        # Verify hash is reproducible
+        # Verify hash is reproducible (hash is computed WITHOUT the package_hash field)
         contents = package["package_contents"]
         if isinstance(contents, str):
             contents = json.loads(contents)
+        contents_for_hash = {k: v for k, v in contents.items() if k != "package_hash"}
         recomputed = hashlib.sha256(
-            json.dumps(contents, sort_keys=True, default=str).encode()
+            json.dumps(contents_for_hash, sort_keys=True, default=str).encode()
         ).hexdigest()
         assert recomputed == package["package_hash"], "Package hash must be reproducible"
 
