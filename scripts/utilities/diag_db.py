@@ -9,7 +9,10 @@ SessionLocal = sessionmaker(bind=engine)
 
 def test_insert():
     db = SessionLocal()
-    # Set admin context to bypass RLS
+    # SECURITY: set_admin_context(true) sets the session variable, but RLS bypass
+    # only works if connected as the 'regengine_sysadmin' role. With the standard
+    # 'regengine' role, this call is a no-op for bypass purposes.
+    # For full sysadmin access, use ADMIN_DATABASE_URL with regengine_sysadmin credentials.
     db.execute(text("SELECT set_admin_context(true)"))
     user_id = str(uuid.uuid4())
     email = f"test-{user_id[:8]}@example.com"

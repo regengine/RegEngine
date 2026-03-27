@@ -245,12 +245,33 @@ class TenantContext:
 
     @staticmethod
     def set_admin_context(session, is_sysadmin: bool) -> None:
-        """Set administrative context to bypass RLS.
+        """Set administrative context for RLS bypass (defense-in-depth).
+
+        SECURITY NOTE: Setting this session variable alone is NOT sufficient
+        to bypass RLS. The database policies also require the connection to
+        use the 'regengine_sysadmin' role (current_user check). This means
+        a regular 'regengine' role connection CANNOT bypass RLS even if
+        this variable is set to 'true'. Only connections using the
+        'regengine_sysadmin' role with this variable set will see
+        cross-tenant data. All sysadmin bypass usage is logged to
+        audit.sysadmin_access_log.
+
+        When to use: Cross-tenant admin operations (user provisioning,
+        tenant onboarding, system diagnostics). Never in request-scoped
+        tenant sessions.
 
         Args:
             session: SQLAlchemy session
             is_sysadmin: Whether to enable sysadmin bypass
         """
+        import structlog
+        _logger = structlog.get_logger("rls-admin-context")
+        if is_sysadmin:
+            _logger.warning(
+                "sysadmin_context_activated",
+                msg="RLS sysadmin bypass enabled for this session. "
+                    "Bypass only effective if connected as regengine_sysadmin role.",
+            )
         session.execute(
             text("SELECT set_admin_context(:is_admin)"),
             {"is_admin": is_sysadmin}
