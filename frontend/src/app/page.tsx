@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer } from "lucide-react";
 import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
+import { SandboxUpload } from "@/components/marketing/SandboxUpload";
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
@@ -184,6 +185,20 @@ export default function RegEngineLanding() {
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
+      </section>
+
+      {/* ── LIVE SANDBOX ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-12 sm:pb-20">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          Try it yourself — no signup required
+        </p>
+        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+          Paste your data. See what breaks.
+        </h2>
+        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
+          Drop your CSV below and RegEngine will evaluate it against all 25 FSMA 204 rules in real time. Nothing is stored.
+        </p>
+        <SandboxUpload />
       </section>
 
       {/* ── FREE TOOLS ── */}
