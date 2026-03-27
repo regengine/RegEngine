@@ -19,6 +19,8 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.authz import require_permission, IngestionPrincipal
@@ -59,7 +61,7 @@ def _get_db_session():
         try:
             yield db
             db.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.rollback()
             raise
         finally:

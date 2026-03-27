@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
 const ADMIN_URL = (() => {
-    const url = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
+    const url = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
         console.warn('[proxy/controls] ADMIN_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
-        return 'http://localhost:8400';
+        return getServerServiceURL('admin');
     }
     return url;
 })();
