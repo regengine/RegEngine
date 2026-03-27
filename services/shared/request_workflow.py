@@ -29,13 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-try:
-    import structlog
-    logger = structlog.get_logger("request-workflow")
-    _USE_STRUCTLOG = True
-except ImportError:
-    import logging
-    _USE_STRUCTLOG = False
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
@@ -43,8 +37,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-if not _USE_STRUCTLOG:
-    logger = logging.getLogger("request-workflow")
+logger = logging.getLogger("request-workflow")
 
 # ---------------------------------------------------------------------------
 # Valid workflow stages (ordered)
@@ -397,7 +390,7 @@ class RequestWorkflow:
                     JOIN fsma.rule_definitions rd
                       ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
                     WHERE re.tenant_id = :tenant_id
-                      AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND re.event_id = ANY(:event_ids)
                       AND re.result IN ('fail', 'warn')
                     ORDER BY rd.severity, re.evaluated_at
                 """),
@@ -415,7 +408,7 @@ class RequestWorkflow:
                 FROM fsma.exception_cases
                 WHERE tenant_id = :tenant_id
                   AND (request_case_id = :case_id
-                       OR linked_event_ids && CAST(:event_ids AS uuid[]))
+                       OR linked_event_ids && :event_ids)
                   AND status NOT IN ('resolved', 'waived')
                 ORDER BY severity, created_at
             """),
@@ -443,7 +436,7 @@ class RequestWorkflow:
                     SELECT DISTINCT event_id
                     FROM fsma.rule_evaluations
                     WHERE tenant_id = :tenant_id
-                      AND event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND event_id = ANY(:event_ids)
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
@@ -554,7 +547,7 @@ class RequestWorkflow:
                            normalized_payload
                     FROM fsma.traceability_events
                     WHERE tenant_id = :tenant_id
-                      AND event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND event_id = ANY(:event_ids)
                       AND status = 'active'
                     ORDER BY event_timestamp
                 """),
@@ -579,7 +572,7 @@ class RequestWorkflow:
                     JOIN fsma.rule_definitions rd
                       ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
                     WHERE re.tenant_id = :tenant_id
-                      AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND re.event_id = ANY(:event_ids)
                     ORDER BY re.evaluated_at
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
@@ -600,7 +593,7 @@ class RequestWorkflow:
                 FROM fsma.exception_cases
                 WHERE tenant_id = :tenant_id
                   AND (request_case_id = :case_id
-                       OR linked_event_ids && CAST(:event_ids AS uuid[]))
+                       OR linked_event_ids && :event_ids)
                 ORDER BY created_at
             """),
             {
@@ -677,8 +670,8 @@ class RequestWorkflow:
                     generated_at, generated_by
                 ) VALUES (
                     :pkg_id, :tenant_id, :case_id,
-                    :version, CAST(:contents AS jsonb), :hash,
-                    CAST(:gap AS jsonb), CAST(:diff AS jsonb),
+                    :version, :contents::jsonb, :hash,
+                    :gap::jsonb, :diff::jsonb,
                     :now, :generated_by
                 )
                 RETURNING *
@@ -875,13 +868,13 @@ class RequestWorkflow:
                     JOIN fsma.rule_definitions rd
                       ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
                     WHERE re.tenant_id = :tenant_id
-                      AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND re.event_id = ANY(:event_ids)
                       AND re.result = 'fail'
                       AND rd.severity = 'critical'
                       AND NOT EXISTS (
                           SELECT 1 FROM fsma.exception_cases ec
                           WHERE ec.tenant_id = re.tenant_id
-                            AND ec.linked_event_ids @> ARRAY[re.event_id]
+                            AND ec.linked_event_ids @> ARRAY[re.event_id]::text[]
                             AND ec.status IN ('resolved', 'waived')
                       )
                 """),
@@ -909,7 +902,7 @@ class RequestWorkflow:
                 FROM fsma.exception_cases
                 WHERE tenant_id = :tenant_id
                   AND (request_case_id = :case_id
-                       OR linked_event_ids && CAST(:event_ids AS uuid[]))
+                       OR linked_event_ids && :event_ids)
                   AND status NOT IN ('resolved', 'waived')
                   AND severity = 'critical'
             """),
@@ -938,7 +931,7 @@ class RequestWorkflow:
                     SELECT te.event_id, te.event_type, te.traceability_lot_code
                     FROM fsma.traceability_events te
                     WHERE te.tenant_id = :tenant_id
-                      AND te.event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND te.event_id = ANY(:event_ids)
                       AND te.status = 'active'
                       AND NOT EXISTS (
                           SELECT 1 FROM fsma.rule_evaluations re
@@ -1006,10 +999,10 @@ class RequestWorkflow:
                     "review_id": str(row["review_id"]),
                     "entity_a": row["entity_a_name"],
                     "entity_b": row["entity_b_name"],
-                    "similarity": float(row["similarity_score"]),
+                    "similarity": float(row["match_confidence"]),
                     "message": (
                         f"Identity ambiguity: '{row['entity_a_name']}' and "
-                        f"'{row['entity_b_name']}' are {int(row['similarity_score'] * 100)}% "
+                        f"'{row['entity_b_name']}' are {int(row['match_confidence'] * 100)}% "
                         f"similar but unresolved. This may split traceability chains."
                     ),
                 })
@@ -1026,7 +1019,7 @@ class RequestWorkflow:
                     JOIN fsma.rule_definitions rd
                       ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
                     WHERE re.tenant_id = :tenant_id
-                      AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND re.event_id = ANY(:event_ids)
                       AND re.result = 'fail'
                       AND rd.severity = 'warning'
                 """),
@@ -1537,7 +1530,7 @@ class RequestWorkflow:
                     JOIN fsma.rule_definitions rd
                       ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
                     WHERE re.tenant_id = :tenant_id
-                      AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND re.event_id = ANY(:event_ids)
                       AND re.result IN ('fail', 'warn')
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
@@ -1552,7 +1545,7 @@ class RequestWorkflow:
                     SELECT DISTINCT event_id
                     FROM fsma.rule_evaluations
                     WHERE tenant_id = :tenant_id
-                      AND event_id = ANY(CAST(:event_ids AS uuid[]))
+                      AND event_id = ANY(:event_ids)
                 """),
                 {"tenant_id": tenant_id, "event_ids": event_ids},
             )
@@ -1566,7 +1559,7 @@ class RequestWorkflow:
                 FROM fsma.exception_cases
                 WHERE tenant_id = :tenant_id
                   AND (request_case_id = :case_id
-                       OR linked_event_ids && CAST(:event_ids AS uuid[]))
+                       OR linked_event_ids && :event_ids)
                   AND status NOT IN ('resolved', 'waived')
             """),
             {
