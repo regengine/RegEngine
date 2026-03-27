@@ -823,26 +823,31 @@ class CTEPersistence:
             where_clauses.append("event_type = :event_type")
             params["event_type"] = event_type
 
+        # `where` is composed exclusively from static string literals above;
+        # all dynamic values use :named bind parameters -- no user input is
+        # ever interpolated into the SQL text itself.
         where = " AND ".join(where_clauses)
 
         # Get total count
+        count_sql = "SELECT COUNT(*) FROM fsma.cte_events WHERE " + where
         count_row = self.session.execute(
-            text(f"SELECT COUNT(*) FROM fsma.cte_events WHERE {where}"),
+            text(count_sql),
             params,
         ).fetchone()
         total = count_row[0] if count_row else 0
 
         # Get page of results
+        select_sql = (
+            "SELECT id, event_type, traceability_lot_code,"
+            "       product_description, quantity, unit_of_measure,"
+            "       event_timestamp, validation_status, sha256_hash"
+            " FROM fsma.cte_events"
+            " WHERE " + where +
+            " ORDER BY event_timestamp DESC"
+            " LIMIT :lim OFFSET :off"
+        )
         rows = self.session.execute(
-            text(f"""
-                SELECT id, event_type, traceability_lot_code,
-                       product_description, quantity, unit_of_measure,
-                       event_timestamp, validation_status, sha256_hash
-                FROM fsma.cte_events
-                WHERE {where}
-                ORDER BY event_timestamp DESC
-                LIMIT :lim OFFSET :off
-            """),
+            text(select_sql),
             params,
         ).fetchall()
 
