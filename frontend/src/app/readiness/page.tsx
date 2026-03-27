@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -92,7 +94,8 @@ const DEMO_CHECKLIST = {
 
 export default function ReadinessWizardPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
+  const [isDemo, setIsDemo] = useState(false);
 
   const assessment = useQuery({
     queryKey: ['readiness', 'assessment', tid],
@@ -102,8 +105,9 @@ export default function ReadinessWizardPage() {
           headers: { 'X-RegEngine-API-Key': apiKey || '' },
         });
         if (!res.ok) throw new Error();
+        setIsDemo(false);
         return res.json();
-      } catch { return DEMO_ASSESSMENT; }
+      } catch { setIsDemo(true); return DEMO_ASSESSMENT; }
     },
     staleTime: 60_000,
   });
@@ -116,8 +120,9 @@ export default function ReadinessWizardPage() {
           headers: { 'X-RegEngine-API-Key': apiKey || '' },
         });
         if (!res.ok) throw new Error();
+        setIsDemo(false);
         return res.json();
-      } catch { return DEMO_CHECKLIST; }
+      } catch { setIsDemo(true); return DEMO_CHECKLIST; }
     },
     staleTime: 60_000,
   });
@@ -138,6 +143,8 @@ export default function ReadinessWizardPage() {
           </p>
         </div>
       </div>
+
+      <DemoBanner visible={isDemo} />
 
       {!a ? (
         <div className="space-y-4">{[1,2,3].map(i => <Skeleton key={i} className="h-40" />)}</div>

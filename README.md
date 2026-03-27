@@ -10,18 +10,23 @@ RegEngine helps food suppliers meet FDA Food Safety Modernization Act Section 20
 
 ## What RegEngine Does
 
-- Ingest Critical Tracking Events (CTEs) via API, CSV, XLSX, EDI, EPCIS 2.0, QR/barcode scan, or IoT adapters
-- Bulk upload 10K+ rows with auto-cleaning, SHA-256 hashing, and Merkle tree chaining
+**Core loop (proven end-to-end):**
+- Ingest CTEs via API, CSV, XLSX, QR/barcode scan, or supplier portal
 - **Normalize all records into one canonical truth model** with dual payload preservation (raw + normalized)
 - **Evaluate records against 25 versioned compliance rules** with 21 CFR citations and human-readable failure explanations
+- **Block bad submissions** — critical failures, unresolved exceptions, unevaluated events, missing signoffs, and identity ambiguity all prevent package assembly
+- **Run 24-hour response workflows** from request intake to SHA-256 sealed, immutable package submission
+- **Amend packages** with full history — prior packages preserved, diffs tracked
 - **Manage exceptions through a remediation queue** with ownership, deadlines, waivers, and signoff chains
-- **Run 24-hour response workflows** from request intake to SHA-256 sealed package submission
-- **Resolve entity identity** across facilities, products, and firms with alias matching and merge/split
-- Score compliance readiness with a **5-level maturity assessment** (Not Started → Compliant)
-- **Coordinate active recalls** through an incident command layer with action tracking and timeline
-- Generate FDA-compliant sortable spreadsheets within the 24-hour response window
-- Trace lots forward and backward through a Neo4j knowledge graph
-- Run recall simulations and audit drill workflows with tamper-evident logging
+- **Resolve entity identity** across facilities, products, and firms with alias matching and confidence scoring
+
+**Additional capabilities (functional, less proven):**
+- Bulk upload 10K+ rows with auto-cleaning, SHA-256 hashing, and Merkle tree chaining
+- EDI, EPCIS 2.0, and IoT adapter ingestion paths
+- Forward/backward lot tracing via Neo4j knowledge graph
+- Recall simulations and audit drill workflows with tamper-evident logging
+- Incident command layer with action tracking and timeline
+- 5-level compliance readiness maturity assessment
 - Developer portal with API keys, interactive playground, SDKs, and webhook delivery tracking
 - 20 free compliance tools (no login required)
 
@@ -99,7 +104,7 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 | **Backend** | FastAPI (Python 3.11), PostgreSQL 16, Neo4j 5 (graph), Kafka (Redpanda), Redis 7, Stripe, defusedxml, SQLAlchemy |
 | **Infrastructure** | Vercel Pro (frontend), Railway Pro (backend services), Supabase (auth + database) |
 | **Observability** | Prometheus, Grafana, OpenTelemetry, Jaeger, structlog |
-| **CI/CD** | GitHub Actions (8 workflows), Dependabot, CodeQL, Semgrep, gitleaks, Trivy |
+| **CI/CD** | GitHub Actions (10 workflows), Dependabot, CodeQL, Semgrep, gitleaks, Trivy |
 | **Security** | OWASP ZAP (DAST), pip-audit, npm audit, tenant isolation tests, audit chain verification |
 
 ### Service Architecture
@@ -143,6 +148,8 @@ capture → normalize → evaluate rules → triage exceptions →
 assemble response package → submit → preserve audit trail
 ```
 
+**The core pipeline is proven end-to-end.** The E2E integration test (`test_e2e_fda_request.py`) runs 12 steps against a real PostgreSQL database — from messy ingestion through sealed, hashed package submission and amendment. This proves the happy path and the blocked-submission path. Scenarios not yet proven: identity ambiguity blocking, multi-tenant isolation under concurrent requests, deadline breach escalation, and graph-backed recall traversal.
+
 ### Operational Pages
 
 | Page | Route | Purpose |
@@ -184,21 +191,49 @@ assemble response package → submit → preserve audit trail
 
 All tables use Row-Level Security (RLS) for tenant isolation, GIN indexes for JSONB queries, and append-only audit patterns.
 
+### Enforcement Layer
+
+The control plane doesn't just track problems — it **prevents bad outcomes**.
+
+| Check | What It Blocks | Where |
+|-------|---------------|-------|
+| **Critical rule failures** | Unresolved critical failures with no waiver block submission | `submit_package()` |
+| **Unresolved exceptions** | Critical exception cases must be resolved or waived | `submit_package()` |
+| **Unevaluated events** | Events with zero rule evaluations cannot be in a submitted package | `submit_package()` |
+| **Missing signoffs** | Required signoffs (scope_approval, final_approval) must exist | `submit_package()` |
+| **Identity ambiguity** | High-confidence unresolved matches (>=85%) block submission | `submit_package()` |
+| **Deadline monitoring** | 5-minute cron classifies cases as overdue/critical/urgent/normal | `scheduler` |
+
+API endpoints: `GET /api/v1/requests/{id}/blockers` (check all defects), `GET /api/v1/requests/deadlines` (urgency for all active cases).
+
+### Canonical Pipeline
+
+Regulated ingestion paths normalize through the canonical `TraceabilityEvent` model:
+
+| Path | Source | Normalizes? |
+|------|--------|------------|
+| Webhook v2 (happy path) | REST API | Yes |
+| Webhook v2 (fallback) | REST API | Yes |
+| EPCIS ingestion | XML/JSON | Yes |
+| Mobile field capture | QR/barcode | Yes (bridges to canonical) |
+| Supplier CTE events | Portal/bulk upload | Yes (bridges to canonical) |
+| Kafka consumer | NLP extraction | **Graph only — canonical pending** |
+
+The Kafka/NLP path writes to the graph but does not yet normalize into the canonical store. All other paths hit rules evaluation and hash chain verification.
+
 ---
 
 ## Dashboard
 
-| Section | Pages |
-|---------|-------|
-| **Overview** | Heartbeat, Compliance Score, Alerts |
-| **Operations** | Exceptions, Requests, Records, Rules, Identity, Readiness, Incidents, Auditor Review |
-| **Compliance** | Recall Report, Recall Drills, Export Jobs |
-| **Data** | Data Import (bulk CSV/XLSX), Field Capture, Receiving Dock, Scan, Integrations, Suppliers, Products, Audit Log |
-| **Settings** | Notifications, Team, Settings |
+The dashboard is organized around the operator loop, not feature categories.
 
-### Free Compliance Tools (20)
+**Primary workflow** — the path a compliance operator uses daily:
+- **Heartbeat** → **Alerts** → **Issues & Blockers** → **Requests** → **Export Jobs**
 
-FTL Coverage Checker, KDE Checker, CTE Mapper, Retailer Readiness Assessment, ROI Calculator, Recall Readiness, Label Scanner, Drill Simulator, Anomaly Simulator, Notice Validator, Obligation Scanner, Knowledge Graph Explorer, FDA Export Preview, SOP Generator, TLC Validator, FSMA Unified Dashboard, Data Import, Ask (AI assistant), and QR/Barcode Scan.
+**Control plane** — where rules, records, and identity live:
+- Rules, Canonical Records, Exceptions, Identity Resolution, Review Queue
+
+**Everything else** — data import, suppliers, products, integrations, team, settings, and 20 free compliance tools accessible without login.
 
 ---
 
@@ -206,12 +241,15 @@ FTL Coverage Checker, KDE Checker, CTE Mapper, Retailer Readiness Assessment, RO
 
 ### Authentication
 
-- **Dual-strategy middleware**: checks RegEngine JWT (`re_access_token` cookie) first, falls back to Supabase session
+- **Dual-strategy middleware**: checks RegEngine JWT (`re_access_token` cookie) first, falls back to Supabase session, then checks API credentials
+- **30-day sessions**: JWT and cookies persist for 30 days — explicit logout is the session terminator (B2B SaaS, not a bank)
 - **HTTP-only cookies**: credentials stored server-side, never exposed to JavaScript
 - **Server-side API key injection**: proxy routes inject keys from env vars, never from client
+- **Preshared + database key auth**: `require_api_key` accepts both configured master key and database-stored scoped keys
 - **Path sanitization**: all proxy routes validate catch-all path segments against traversal, null bytes, and injection
+- **Railway URL guard**: proxy routes detect and reject `*.railway.internal` URLs on Vercel with clear warnings
 - **Row-Level Security (RLS)**: PostgreSQL enforces tenant isolation at the database layer
-- **Sysadmin verification**: database-level check of `is_sysadmin` flag for privileged operations
+- **Auth-gated routes**: 25+ route prefixes require valid session (dashboard, control plane, compliance, admin, developer)
 
 ### Audit Trail
 
@@ -260,7 +298,10 @@ xattr -cr .
 # Configure environment
 cp .env.example .env    # Fill in required values (see below)
 
-# Start all services
+# Start minimal dev stack (postgres, redis, neo4j, minio)
+docker compose -f docker-compose.dev.yml up -d
+
+# Or start all 17 services
 docker compose up -d
 
 # Frontend
@@ -316,29 +357,64 @@ PYTHONPATH=services python3 scripts/seed_demo_data.py --dry-run
 
 The seeder creates canonical events, evaluates rules, generates exception cases, and opens a demo FDA request case with a 24-hour deadline.
 
+### Sample Data
+
+6 CSV files in `sample_data/` simulate a real multi-supplier romaine lettuce supply chain. Import via Dashboard → Data Import → CSV Upload in order (01–06). Exercises the full chain: ingest → canonical → rules → hash chain → audit.
+
 ### Running Tests
 
 ```bash
-# Control plane tests (canonical model + rules engine + E2E compliance loop)
-PYTHONPATH=services pytest tests/test_canonical_event.py tests/test_rules_engine.py tests/test_compliance_control_plane_e2e.py -v
+# ── E2E: Full FDA 24-hour response pipeline (12 steps, 0.25s) ──
+# Requires: docker compose -f docker-compose.dev.yml up -d postgres
+DATABASE_URL="postgresql://regengine:regengine@localhost:5432/regengine" \
+  PYTHONPATH=services pytest tests/test_e2e_fda_request.py -v
 
-# Backend services (from repo root)
+# ── Domain logic unit tests (130 tests, no DB required) ──
+PYTHONPATH=services pytest \
+  tests/test_rules_engine_unit.py \
+  tests/test_request_workflow_unit.py \
+  tests/test_identity_service_unit.py -v
+
+# ── Control plane router tests (96 tests, mocked DB) ──
+PYTHONPATH=services pytest \
+  services/ingestion/tests/test_canonical_router.py \
+  services/ingestion/tests/test_rules_router.py \
+  services/ingestion/tests/test_exception_router.py \
+  services/ingestion/tests/test_request_workflow_router.py \
+  services/ingestion/tests/test_identity_router.py -v
+
+# ── Backend service tests ──
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/admin/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/ingestion/tests/ -v
 PYTHONPATH=$(pwd):$PYTHONPATH pytest services/compliance/tests/ -v
 
-# Frontend
+# ── Frontend tests (55 tests) ──
 cd frontend
-npm run build            # Full production build (130 pages)
-npm run lint             # ESLint
+npx vitest run           # Hook, component, and page tests
+npm run build            # Full production build (131 pages)
 
-# Integration test stack
+# ── Integration test stack ──
 docker compose -f docker-compose.test.yml up -d
 pytest services/<service>/tests/ -v
 
-# Stress test (4,600 requests across all 6 services)
+# ── Stress test (4,600 requests across all 6 services) ──
 python3 scripts/stress_test.py
 ```
+
+### What's Proven by Tests
+
+| Invariant | Test |
+|-----------|------|
+| Bad data normalizes into canonical store | E2E step 1–3 |
+| Rules evaluate and detect failures | E2E step 4, 42 unit tests |
+| Blocking defects prevent package submission | E2E step 7, router tests |
+| Signoffs are required before submission | E2E step 8, workflow unit tests |
+| Packages are SHA-256 hashed and immutable | E2E step 9 |
+| Amendments create new packages, preserve history | E2E step 11 |
+| Identity ambiguity detection works | 45 identity unit tests |
+| Tenant isolation on all control plane routes | Router auth tests |
+
+293 tests total across E2E (12), domain logic (130), HTTP routers (96), and frontend (55).
 
 ### Monitoring
 
@@ -418,6 +494,7 @@ Additional compose files:
 
 | File | Purpose |
 |------|---------|
+| `docker-compose.dev.yml` | **Minimal dev stack** — just postgres, redis, neo4j, minio (4 services) |
 | `docker-compose.prod.yml` | Production deployment with image pulls from ghcr.io |
 | `docker-compose.test.yml` | CI integration tests (Postgres 16, Redis, Neo4j, LocalStack) |
 | `docker-compose.monitoring.yml` | Prometheus, Grafana, Node/Redis/Postgres exporters |
@@ -435,7 +512,9 @@ Additional compose files:
 | `test-suite-check.yml` | Push/PR on `services/**` | Unified test environment health check |
 | `qa-pipeline.yml` | Push/PR | QA environment validation |
 | `pr-quality.yml` | Pull request | Automated code quality checks |
-| `deploy.yml` | Push to main | Deployment automation |
+| `deploy.yml` | Push to main | Deployment automation (fails on missing secrets) |
+| `proxy-smoke.yml` | Push/PR on `frontend/src/app/api/**` | Proxy route smoke test — verifies routes load |
+| `bundle-analysis.yml` | Push/PR on `frontend/**` | JS bundle size check (fails if >2MB) |
 | `agent-sweep.yml` | Manual/scheduled | AI agent orchestration and maintenance |
 
 ---

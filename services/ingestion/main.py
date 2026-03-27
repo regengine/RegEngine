@@ -101,6 +101,9 @@ app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
+from shared.auth import validate_auth_config
+validate_auth_config()
+
 # ---------------------------------------------------------------------------
 # Router Feature Flags — disable non-core routers via DISABLED_ROUTERS env var
 # Comma-separated list of router names to skip, e.g.: "billing,mock_audit,recall_simulations"
@@ -111,6 +114,29 @@ _DISABLED_ROUTERS = {
     for r in _os.getenv("DISABLED_ROUTERS", "").split(",")
     if r.strip()
 }
+
+
+# All valid router names — typos in DISABLED_ROUTERS are caught at startup
+_VALID_ROUTER_NAMES = {
+    "scraping", "discovery", "sources", "fda_export", "csv", "sensitech", "edi",
+    "score", "portal", "audit", "sop", "export", "epcis_ingestion", "qr_decoder",
+    "label_vision", "exchange", "billing", "alerts", "onboarding", "recall",
+    "recall_simulations", "supplier_mgmt", "audit_log", "product_catalog",
+    "notification_prefs", "team_mgmt", "settings", "integration",
+    "canonical_records", "rules", "exceptions", "request_workflow", "identity",
+    "auditor", "compliance_metrics", "readiness", "incidents",
+}
+
+# Validate DISABLED_ROUTERS — catch typos early
+_unknown_flags = _DISABLED_ROUTERS - _VALID_ROUTER_NAMES
+if _unknown_flags:
+    import structlog as _sl
+    _sl.get_logger("router_flags").error(
+        "unknown_router_names_in_DISABLED_ROUTERS",
+        unknown=sorted(_unknown_flags),
+        valid=sorted(_VALID_ROUTER_NAMES),
+        hint="Check spelling. These flags will have no effect.",
+    )
 
 
 def _router_enabled(name: str) -> bool:

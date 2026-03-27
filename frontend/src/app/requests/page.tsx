@@ -18,6 +18,7 @@ import {
   useAssemblePackage,
   useSubmitPackage,
 } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   AlertTriangle,
@@ -45,7 +46,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; progress: nu
 
 export default function RequestWorkflowPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
 
   const [showCreate, setShowCreate] = useState(false);
   const [newRequestParty, setNewRequestParty] = useState('FDA');
@@ -104,6 +105,8 @@ export default function RequestWorkflowPage() {
           New Request Case
         </Button>
       </div>
+
+      <DemoBanner visible={!!(requests.data?.__isDemo)} />
 
       {/* Create Form */}
       {showCreate && (

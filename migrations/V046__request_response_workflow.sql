@@ -200,28 +200,28 @@ ALTER TABLE fsma.request_cases FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_request_cases ON fsma.request_cases;
 CREATE POLICY tenant_isolation_request_cases ON fsma.request_cases
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.response_packages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.response_packages FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_response_packages ON fsma.response_packages;
 CREATE POLICY tenant_isolation_response_packages ON fsma.response_packages
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.submission_log ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.submission_log FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_submission_log ON fsma.submission_log;
 CREATE POLICY tenant_isolation_submission_log ON fsma.submission_log
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 ALTER TABLE fsma.request_signoffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fsma.request_signoffs FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_request_signoffs ON fsma.request_signoffs;
 CREATE POLICY tenant_isolation_request_signoffs ON fsma.request_signoffs
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 
 -- --------------------------------------------------------

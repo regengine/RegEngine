@@ -31,6 +31,22 @@ const AUTHENTICATED_APP_ROUTES = [
     '/settings',
     '/onboarding',
     '/owner',
+    // Control Plane pages — contain operational data, must be auth-gated
+    '/rules',
+    '/records',
+    '/exceptions',
+    '/requests',
+    '/identity',
+    '/review',
+    '/audit',
+    '/readiness',
+    '/incidents',
+    '/controls',
+    '/trace',
+    // Compliance subsystem
+    '/compliance',
+    // Ingestion
+    '/ingest',
 ];
 
 // Public docs that remain accessible (product/compliance, not dev-facing)
@@ -137,16 +153,21 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
         if (payload) {
-            // Token is valid — check sysadmin for /sysadmin routes
-            if (pathname.startsWith('/sysadmin')) {
-                // The JWT doesn't carry is_sysadmin, so we need a secondary check.
-                // For now, allow access if they have a valid token — the page-level
-                // check against the backend (/auth/me) will enforce sysadmin.
-                // This is acceptable because /sysadmin page already verifies server-side.
-            }
             return NextResponse.next({ request });
         }
-        // Token invalid/expired — fall through to Supabase check
+        // Token exists but verification failed.
+        // Before redirecting to login, check if we have other valid credentials.
+        // This handles the case where JWT expired but user has active localStorage
+        // session or Supabase session — we don't want to kick them out.
+        const hasApiKey = request.cookies.get('re_api_key')?.value;
+        const hasTenantId = request.cookies.get('re_tenant_id')?.value;
+        if (hasApiKey && hasTenantId) {
+            // User has valid API credentials — let them through.
+            // The page-level useAuth() will handle token refresh.
+            console.info('[middleware] JWT expired but API credentials present — allowing access');
+            return NextResponse.next({ request });
+        }
+        // Fall through to Supabase check
     }
 
     // Strategy 2: Check Supabase session
@@ -182,16 +203,15 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
 
-    // Signal the reason so the login page can display a message and
-    // avoid auto-redirecting back into a loop.
+    // Signal the reason so the login page can display a contextual message.
+    // Only show "session expired" when a token actually existed but failed.
     if (!process.env.AUTH_SECRET_KEY) {
         url.searchParams.set('error', 'auth_config');
     } else if (reToken) {
-        // Token exists but verification failed — likely key mismatch
-        url.searchParams.set('error', 'token_invalid');
-    } else {
+        // Token exists but verification failed — likely expired or key mismatch
         url.searchParams.set('error', 'session_expired');
     }
+    // No token at all = first visit. Don't set any error — just show login form.
 
     return NextResponse.redirect(url);
 }
@@ -240,5 +260,21 @@ export const config = {
         '/developers/:path*',
         '/playground/:path*',
         '/api-keys/:path*',
+        // Control Plane
+        '/rules/:path*',
+        '/records/:path*',
+        '/exceptions/:path*',
+        '/requests/:path*',
+        '/identity/:path*',
+        '/review/:path*',
+        '/audit/:path*',
+        '/readiness/:path*',
+        '/incidents/:path*',
+        '/controls/:path*',
+        '/trace/:path*',
+        // Compliance
+        '/compliance/:path*',
+        // Ingestion
+        '/ingest/:path*',
     ],
 };

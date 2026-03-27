@@ -43,9 +43,8 @@ jobs:
           [ -z "$RAILWAY_SERVICE_ID" ] && missing+=("RAILWAY_SERVICE_ID")
 
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping Railway deploy (missing secrets: ${missing[*]})"
+            echo "::error::Railway deploy BLOCKED — missing secrets: ${missing[*]}"
+            exit 1
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
@@ -64,7 +63,3 @@ jobs:
             --environment "$RAILWAY_ENVIRONMENT_ID" \
             --service "$RAILWAY_SERVICE_ID"
 
-      - name: Railway deploy skipped
-        if: steps.validate_railway.outputs.ready != 'true'
-        run: |
-          echo "Railway deployment skipped; missing secrets: ${{ steps.validate_railway.outputs.missing }}"

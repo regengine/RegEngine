@@ -177,7 +177,7 @@ ALTER TABLE fsma.rule_evaluations FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation_rule_evals ON fsma.rule_evaluations;
 CREATE POLICY tenant_isolation_rule_evals ON fsma.rule_evaluations
     FOR ALL TO regengine
-    USING (tenant_id = get_tenant_context());
+    USING (tenant_id = get_tenant_context()::uuid);
 
 
 -- --------------------------------------------------------

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -99,8 +100,9 @@ const DEMO_INCIDENTS = {
 
 export default function IncidentCommandPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   const incidents = useQuery({
     queryKey: ['incidents', tid],
@@ -110,8 +112,9 @@ export default function IncidentCommandPage() {
           headers: { 'X-RegEngine-API-Key': apiKey || '' },
         });
         if (!res.ok) throw new Error();
+        setIsDemo(false);
         return res.json();
-      } catch { return DEMO_INCIDENTS; }
+      } catch { setIsDemo(true); return DEMO_INCIDENTS; }
     },
     refetchInterval: 10_000,
   });
@@ -136,6 +139,8 @@ export default function IncidentCommandPage() {
           Open Incident
         </Button>
       </div>
+
+      <DemoBanner visible={isDemo} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Incident List */}

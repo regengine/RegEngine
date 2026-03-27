@@ -611,13 +611,101 @@ class RequestWorkflow:
             tenant_id, request_case_id, event_ids
         )
 
-        # Build package contents
+        # Snapshot rule versions at assembly time
+        rule_versions = {}
+        try:
+            rv_result = self.db.execute(
+                text("SELECT rule_id, rule_version, title, severity, category FROM fsma.rule_definitions"),
+            )
+            for rv in rv_result.mappings().fetchall():
+                rule_versions[str(rv["rule_id"])] = {
+                    "version": rv.get("rule_version"),
+                    "title": rv.get("title"),
+                    "severity": rv.get("severity"),
+                    "category": rv.get("category"),
+                }
+        except Exception:
+            pass
+
+        # Snapshot identity state at assembly time
+        identity_state = {}
+        try:
+            ent_result = self.db.execute(
+                text("""
+                    SELECT entity_id, canonical_name, entity_type, confidence_score
+                    FROM fsma.canonical_entities
+                    WHERE tenant_id = :tenant_id
+                """),
+                {"tenant_id": tenant_id},
+            )
+            for ent in ent_result.mappings().fetchall():
+                eid = str(ent["entity_id"])
+                aliases = []
+                try:
+                    al_result = self.db.execute(
+                        text("SELECT alias_value, alias_type FROM fsma.entity_aliases WHERE entity_id = :eid"),
+                        {"eid": eid},
+                    )
+                    aliases = [{"value": a["alias_value"], "type": a["alias_type"]} for a in al_result.mappings().fetchall()]
+                except Exception:
+                    pass
+                identity_state[eid] = {
+                    "name": ent.get("canonical_name"),
+                    "type": ent.get("entity_type"),
+                    "confidence": float(ent["confidence_score"]) if ent.get("confidence_score") else None,
+                    "aliases": aliases,
+                }
+        except Exception:
+            pass
+
+        # Snapshot signoff state
+        signoff_state = []
+        try:
+            sig_result = self.db.execute(
+                text("""
+                    SELECT signoff_type, signed_by, signed_at, notes
+                    FROM fsma.request_signoffs
+                    WHERE request_case_id = :case_id
+                    ORDER BY signed_at
+                """),
+                {"case_id": request_case_id},
+            )
+            signoff_state = [_row_to_serializable(s) for s in sig_result.mappings().fetchall()]
+        except Exception:
+            pass
+
+        # Waiver state — waived exception IDs
+        waiver_state = [
+            str(e.get("exception_id"))
+            for e in exception_cases
+            if e.get("status") == "waived"
+        ]
+
+        # Build package contents with full manifest
+        sorted_event_ids = sorted([str(e.get("event_id", e) if isinstance(e, dict) else e) for e in event_ids]) if event_ids else []
+        eval_ids = sorted([str(r.get("evaluation_id", "")) for r in rule_evaluations if r.get("evaluation_id")])
+
         package_contents = {
+            "manifest_version": "1.0",
             "request_case_id": request_case_id,
             "tenant_id": tenant_id,
             "version_number": version_number,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "assembled_at": datetime.now(timezone.utc).isoformat(),
             "generated_by": generated_by,
+            "scoped_event_ids": sorted_event_ids,
+            "rule_evaluation_ids": eval_ids,
+            "rule_versions": rule_versions,
+            "identity_state": identity_state,
+            "exception_state": {
+                str(e.get("exception_id", "")): {
+                    "status": e.get("status"),
+                    "resolution": e.get("resolution_summary"),
+                }
+                for e in exception_cases
+                if e.get("exception_id")
+            },
+            "signoff_state": signoff_state,
+            "waiver_state": waiver_state,
             "scope": {
                 "scope_type": case.get("scope_type"),
                 "scope_description": case.get("scope_description"),
@@ -625,7 +713,7 @@ class RequestWorkflow:
                 "affected_lots": case.get("affected_lots") or [],
                 "affected_facilities": case.get("affected_facilities") or [],
             },
-            "event_ids": [str(e.get("event_id", e) if isinstance(e, dict) else e) for e in event_ids] if event_ids else [],
+            "event_ids": sorted_event_ids,
             "trace_data": events_data,
             "rule_evaluations": rule_evaluations,
             "exception_cases": exception_cases,
@@ -647,9 +735,14 @@ class RequestWorkflow:
             },
         }
 
-        # Compute SHA-256 hash
+        # Compute manifest hash (exclude package_hash itself for self-verification)
+        contents_for_hash = {k: v for k, v in package_contents.items() if k != "package_hash"}
+        manifest_json = json.dumps(contents_for_hash, sort_keys=True, default=str)
+        package_contents["package_hash"] = hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
+
+        # Use the manifest hash computed above
         contents_json = json.dumps(package_contents, sort_keys=True, default=str)
-        package_hash = hashlib.sha256(contents_json.encode("utf-8")).hexdigest()
+        package_hash = package_contents["package_hash"]
 
         # Compute diff from previous version
         diff_from_previous = None
@@ -978,7 +1071,7 @@ class RequestWorkflow:
         try:
             identity_issues = self.db.execute(
                 text("""
-                    SELECT irq.review_id, irq.similarity_score,
+                    SELECT irq.review_id, irq.match_confidence,
                            ea.canonical_name AS entity_a_name,
                            eb.canonical_name AS entity_b_name
                     FROM fsma.identity_review_queue irq
@@ -988,7 +1081,7 @@ class RequestWorkflow:
                       ON irq.entity_b_id = eb.entity_id
                     WHERE irq.tenant_id = :tenant_id
                       AND irq.status = 'pending'
-                      AND irq.similarity_score >= 0.85
+                      AND irq.match_confidence >= 0.85
                     LIMIT 20
                 """),
                 {"tenant_id": tenant_id},
@@ -999,10 +1092,10 @@ class RequestWorkflow:
                     "review_id": str(row["review_id"]),
                     "entity_a": row["entity_a_name"],
                     "entity_b": row["entity_b_name"],
-                    "similarity": float(row["similarity_score"]),
+                    "similarity": float(row["match_confidence"]),
                     "message": (
                         f"Identity ambiguity: '{row['entity_a_name']}' and "
-                        f"'{row['entity_b_name']}' are {int(row['similarity_score'] * 100)}% "
+                        f"'{row['entity_b_name']}' are {int(row['match_confidence'] * 100)}% "
                         f"similar but unresolved. This may split traceability chains."
                     ),
                 })
@@ -1010,7 +1103,57 @@ class RequestWorkflow:
             # identity_review_queue table may not exist yet — non-fatal
             logger.debug("identity_review_check_skipped", reason="table_not_available")
 
-        # 6. Non-critical warnings (don't block but should be noted)
+        # 6. Stale evaluations — events modified or rules changed after evaluation
+        if event_ids:
+            try:
+                stale_result = self.db.execute(
+                    text("""
+                        SELECT re.event_id, re.rule_id,
+                               COALESCE(e.amended_at, e.created_at) AS event_modified,
+                               re.evaluated_at,
+                               rd.rule_version AS current_version,
+                               re.rule_version AS eval_version
+                        FROM fsma.rule_evaluations re
+                        JOIN fsma.traceability_events e
+                          ON re.event_id = e.event_id AND re.tenant_id = e.tenant_id
+                        JOIN fsma.rule_definitions rd
+                          ON re.rule_id = rd.rule_id
+                        WHERE re.tenant_id = :tenant_id
+                          AND re.event_id = ANY(:event_ids)
+                          AND (
+                            COALESCE(e.amended_at, e.created_at) > re.evaluated_at
+                            OR rd.rule_version != re.rule_version
+                          )
+                    """),
+                    {"tenant_id": tenant_id, "event_ids": event_ids},
+                )
+                stale_rows = stale_result.mappings().fetchall()
+                if stale_rows:
+                    stale_details = []
+                    for sr in stale_rows:
+                        event_mod = sr.get("event_modified")
+                        eval_at = sr.get("evaluated_at")
+                        cur_ver = sr.get("current_version")
+                        eval_ver = sr.get("eval_version")
+                        if event_mod and eval_at and event_mod > eval_at:
+                            reason = "event_modified"
+                        else:
+                            reason = "rule_version_changed"
+                        stale_details.append({
+                            "event_id": str(sr["event_id"]),
+                            "rule_id": str(sr["rule_id"]),
+                            "reason": reason,
+                        })
+                    blockers.append({
+                        "type": "stale_evaluations",
+                        "count": len(stale_details),
+                        "details": stale_details,
+                        "message": f"{len(stale_details)} evaluation(s) are stale — re-evaluate before submission.",
+                    })
+            except Exception:
+                logger.debug("stale_evaluation_check_skipped", reason="query_failed")
+
+        # 7. Non-critical warnings (don't block but should be noted)
         if event_ids:
             non_critical_fails = self.db.execute(
                 text("""

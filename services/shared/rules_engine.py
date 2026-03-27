@@ -508,7 +508,7 @@ class RulesEngine:
                         ) VALUES (
                             :eval_id, :tenant_id, :event_id,
                             :rule_id, :rule_version, :result,
-                            :why_failed, :evidence::jsonb,
+                            :why_failed, CAST(:evidence AS jsonb),
                             :confidence
                         )
                     """),
@@ -543,7 +543,7 @@ class RulesEngine:
             for i, (event_id, r) in enumerate(chunk):
                 values_clauses.append(
                     f"(:eid_{i}, :tid_{i}, :evid_{i}, :rid_{i}, :rv_{i}, "
-                    f":res_{i}, :why_{i}, :ev_{i}::jsonb, :conf_{i})"
+                    f":res_{i}, :why_{i}, CAST(:ev_{i} AS jsonb), :conf_{i})"
                 )
                 params.update({
                     f"eid_{i}": r.evaluation_id,
@@ -973,8 +973,8 @@ def seed_rule_definitions(session: Session) -> int:
                     remediation_suggestion
                 ) VALUES (
                     :rule_id, :title, :description, :severity, :category,
-                    :applicability::jsonb, :citation,
-                    :logic::jsonb, :failure_template,
+                    CAST(:applicability AS jsonb), :citation,
+                    CAST(:logic AS jsonb), :failure_template,
                     :remediation
                 )
             """),
@@ -996,7 +996,7 @@ def seed_rule_definitions(session: Session) -> int:
         session.execute(
             text("""
                 INSERT INTO fsma.rule_audit_log (rule_id, action, new_values, changed_by)
-                VALUES (:rule_id, 'created', :values::jsonb, 'system_seed')
+                VALUES (:rule_id, 'created', CAST(:values AS jsonb), 'system_seed')
             """),
             {
                 "rule_id": rule_id,

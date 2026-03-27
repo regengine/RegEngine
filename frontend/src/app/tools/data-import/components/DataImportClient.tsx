@@ -140,7 +140,7 @@ export function DataImportClient() {
         setUploadState('uploading');
         setUploadResult(null);
         try {
-            const effectiveKey = apiKey || process.env.NEXT_PUBLIC_API_KEY || '';
+            const effectiveKey = apiKey || '';
             const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'fsma');
             const jobId = (result as any).job_id || (result as any).id || (result as any).task_id;
             setUploadResult({ jobId, status: 200 });
@@ -186,7 +186,7 @@ export function DataImportClient() {
         }));
 
         try {
-            const effectiveKey = apiKey || process.env.NEXT_PUBLIC_API_KEY || '';
+            const effectiveKey = apiKey || '';
             const result = await apiClient.ingestWebhookEvents(
                 effectiveKey,
                 webhookEvents,

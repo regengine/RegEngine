@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { useAuth } from '@/lib/auth-context';
 import { useEntities, useIdentityReviews } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   Building2,
@@ -47,7 +48,7 @@ const MATCH_TYPE_BADGE: Record<string, { variant: 'default' | 'destructive' | 'w
 
 export default function IdentityResolutionPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
 
   const [activeTab, setActiveTab] = useState('entities');
   const [entityTypeFilter, setEntityTypeFilter] = useState<string | undefined>();
@@ -96,6 +97,8 @@ export default function IdentityResolutionPage() {
           </Badge>
         )}
       </div>
+
+      <DemoBanner visible={!!(entities.data?.__isDemo)} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">

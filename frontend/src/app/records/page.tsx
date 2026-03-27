@@ -20,6 +20,7 @@ import {
   type CanonicalEventDetail,
   type RuleEvaluation,
 } from '@/hooks/use-control-plane';
+import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
   AlertTriangle,
@@ -46,7 +47,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 export default function CanonicalRecordsPage() {
   const { apiKey, tenantId } = useAuth();
-  const tid = tenantId || 'demo';
+  const tid = tenantId || '';
 
   const [tlcFilter, setTlcFilter] = useState('');
   const [eventTypeFilter, setEventTypeFilter] = useState<string | undefined>();
@@ -93,6 +94,8 @@ export default function CanonicalRecordsPage() {
           {events.data?.total ?? 0} total records
         </Badge>
       </div>
+
+      <DemoBanner visible={!!(events.data?.__isDemo)} />
 
       {/* Search & Filters */}
       <Card className="mb-6">
