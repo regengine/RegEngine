@@ -3,7 +3,13 @@ import { updateSession } from '@/lib/supabase/middleware';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
 import { getVerificationKeys } from '@/lib/jwt-keys';
-import { verifyCsrfToken, CSRF_HEADER, CSRF_SIG_COOKIE, CSRF_PROTECTED_METHODS } from '@/lib/csrf';
+import {
+    verifyCsrfToken,
+    CSRF_HEADER,
+    CSRF_SIG_COOKIE,
+    CSRF_PROTECTED_METHODS,
+    isCsrfExempt,
+} from '@/lib/csrf';
 
 // ---------------------------------------------------------------------------
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
@@ -291,6 +297,34 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    // -----------------------------------------------------------------------
+    // CSRF protection for mutating API requests (double-submit cookie check)
+    // -----------------------------------------------------------------------
+    if (
+        pathname.startsWith('/api/') &&
+        CSRF_PROTECTED_METHODS.has(request.method) &&
+        !isCsrfExempt(pathname) &&
+        !request.headers.get('authorization')?.startsWith('Bearer ')
+    ) {
+        const headerToken = request.headers.get(CSRF_HEADER);
+        const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
+
+        if (!headerToken || !sigCookie) {
+            return NextResponse.json(
+                { error: 'Missing CSRF token' },
+                { status: 403 },
+            );
+        }
+
+        const valid = await verifyCsrfToken(headerToken, sigCookie);
+        if (!valid) {
+            return NextResponse.json(
+                { error: 'Invalid CSRF token' },
+                { status: 403 },
+            );
+        }
+    }
+
     // Authenticated app routes — server-side session check
     if (isAuthenticatedAppRoute(pathname)) {
         return await requireAppAuth(request);
@@ -319,6 +353,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
+        '/api/:path*',
         '/dashboard/:path*',
         '/admin/:path*',
         '/sysadmin/:path*',
