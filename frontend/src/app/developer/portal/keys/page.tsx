@@ -22,9 +22,11 @@ interface ApiKey {
 
 function generateApiKey(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
     let result = 'rge_dev_';
     for (let i = 0; i < 32; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+        result += chars.charAt(randomBytes[i] % chars.length);
     }
     return result;
 }
