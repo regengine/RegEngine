@@ -51,9 +51,13 @@ def _get_db_session():
         yield None
 
 
+def _db_unavailable():
+    raise HTTPException(status_code=503, detail="Database unavailable")
+
+
 def _get_engine(db_session):
     if db_session is None:
-        raise HTTPException(status_code=503, detail="Database unavailable")
+        _db_unavailable()
     from shared.rules_engine import RulesEngine
     return RulesEngine(db_session)
 
@@ -117,8 +121,11 @@ async def list_rules(
     principal: IngestionPrincipal = Depends(require_permission("rules.read")),
     db_session=Depends(_get_db_session),
 ):
-    engine = _get_engine(db_session)
-    rules = engine.load_active_rules()
+    try:
+        engine = _get_engine(db_session)
+        rules = engine.load_active_rules()
+    except RuntimeError:
+        _db_unavailable()
 
     # Optional filters
     if category:
@@ -196,10 +203,12 @@ async def evaluate_event(
     db_session=Depends(_get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
-    engine = _get_engine(db_session)
-
-    event_data = body.model_dump()
-    summary = engine.evaluate_event(event_data, persist=persist, tenant_id=tid)
+    try:
+        engine = _get_engine(db_session)
+        event_data = body.model_dump()
+        summary = engine.evaluate_event(event_data, persist=persist, tenant_id=tid)
+    except RuntimeError:
+        _db_unavailable()
 
     return EvaluationResponse(
         event_id=body.event_id,
@@ -335,7 +344,10 @@ async def seed_rules(
     db_session=Depends(_get_db_session),
 ):
     if db_session is None:
-        raise HTTPException(status_code=503, detail="Database unavailable")
-    from shared.rules_engine import seed_rule_definitions
-    count = seed_rule_definitions(db_session)
+        _db_unavailable()
+    try:
+        from shared.rules_engine import seed_rule_definitions
+        count = seed_rule_definitions(db_session)
+    except RuntimeError:
+        _db_unavailable()
     return {"seeded": count, "status": "ok"}
