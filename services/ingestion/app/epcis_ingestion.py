@@ -662,7 +662,33 @@ def _build_kde_map(event: dict, normalized: dict, idempotency_key: str) -> dict[
 
 
 def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
-    columns = {
+    # Allowlisted column identifiers for fsma.compliance_alerts dynamic SQL
+    _ALLOWED_COLS = frozenset(
+        {
+            "tenant_id",
+            "org_id",
+            "cte_event_id",
+            "event_id",
+            "message",
+            "description",
+            "alert_type",
+            "severity",
+            "created_at",
+            "id",
+            "title",
+            "resolved",
+            "acknowledged",
+            "resolved_at",
+            "acknowledged_at",
+            "resolved_by",
+            "acknowledged_by",
+            "details",
+            "metadata",
+            "entity_id",
+        }
+    )
+
+    raw_columns = {
         row[0]
         for row in db_session.execute(
             text(
@@ -675,15 +701,30 @@ def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
             )
         ).fetchall()
     }
+    # Only allow known-safe column names to prevent SQL injection
+    columns = raw_columns & _ALLOWED_COLS
     if not columns:
         return []
 
-    tenant_col = "tenant_id" if "tenant_id" in columns else ("org_id" if "org_id" in columns else None)
-    event_col = "cte_event_id" if "cte_event_id" in columns else ("event_id" if "event_id" in columns else None)
+    tenant_col = (
+        "tenant_id"
+        if "tenant_id" in columns
+        else ("org_id" if "org_id" in columns else None)
+    )
+    event_col = (
+        "cte_event_id"
+        if "cte_event_id" in columns
+        else ("event_id" if "event_id" in columns else None)
+    )
     if tenant_col is None or event_col is None:
         return []
 
-    message_expr = "message" if "message" in columns else ("description" if "description" in columns else "alert_type")
+    message_expr = (
+        "message"
+        if "message" in columns
+        else ("description" if "description" in columns else "alert_type")
+    )
+    # All interpolated identifiers are guaranteed members of _ALLOWED_COLS
     rows = db_session.execute(
         text(
             f"""
