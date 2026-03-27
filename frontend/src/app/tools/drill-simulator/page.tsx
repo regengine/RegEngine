@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         title: "24-Hour Drill Simulator — RegEngine",
         description: "Test your FDA outbreak response speed.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/drill-simulator",
+        url: "https://www.regengine.co/tools/drill-simulator",
     },
 };
 

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
         title: "TLC Validator — RegEngine",
         description: "Validate your GS1 Traceability Lot Codes.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/tlc-validator",
+        url: "https://www.regengine.co/tools/tlc-validator",
     },
 };
 
