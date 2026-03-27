@@ -10,18 +10,23 @@ RegEngine helps food suppliers meet FDA Food Safety Modernization Act Section 20
 
 ## What RegEngine Does
 
-- Ingest Critical Tracking Events (CTEs) via API, CSV, XLSX, EDI, EPCIS 2.0, QR/barcode scan, or IoT adapters
-- Bulk upload 10K+ rows with auto-cleaning, SHA-256 hashing, and Merkle tree chaining
+**Core loop (proven end-to-end):**
+- Ingest CTEs via API, CSV, XLSX, QR/barcode scan, or supplier portal
 - **Normalize all records into one canonical truth model** with dual payload preservation (raw + normalized)
 - **Evaluate records against 25 versioned compliance rules** with 21 CFR citations and human-readable failure explanations
+- **Block bad submissions** — critical failures, unresolved exceptions, unevaluated events, missing signoffs, and identity ambiguity all prevent package assembly
+- **Run 24-hour response workflows** from request intake to SHA-256 sealed, immutable package submission
+- **Amend packages** with full history — prior packages preserved, diffs tracked
 - **Manage exceptions through a remediation queue** with ownership, deadlines, waivers, and signoff chains
-- **Run 24-hour response workflows** from request intake to SHA-256 sealed package submission
-- **Resolve entity identity** across facilities, products, and firms with alias matching and merge/split
-- Score compliance readiness with a **5-level maturity assessment** (Not Started → Compliant)
-- **Coordinate active recalls** through an incident command layer with action tracking and timeline
-- Generate FDA-compliant sortable spreadsheets within the 24-hour response window
-- Trace lots forward and backward through a Neo4j knowledge graph
-- Run recall simulations and audit drill workflows with tamper-evident logging
+- **Resolve entity identity** across facilities, products, and firms with alias matching and confidence scoring
+
+**Additional capabilities (functional, less proven):**
+- Bulk upload 10K+ rows with auto-cleaning, SHA-256 hashing, and Merkle tree chaining
+- EDI, EPCIS 2.0, and IoT adapter ingestion paths
+- Forward/backward lot tracing via Neo4j knowledge graph
+- Recall simulations and audit drill workflows with tamper-evident logging
+- Incident command layer with action tracking and timeline
+- 5-level compliance readiness maturity assessment
 - Developer portal with API keys, interactive playground, SDKs, and webhook delivery tracking
 - 20 free compliance tools (no login required)
 
@@ -143,7 +148,7 @@ capture → normalize → evaluate rules → triage exceptions →
 assemble response package → submit → preserve audit trail
 ```
 
-**This pipeline is proven end-to-end.** The E2E integration test (`test_e2e_fda_request.py`) runs all 12 steps against a real PostgreSQL database in 0.25 seconds — from messy ingestion through sealed, hashed package submission and amendment.
+**The core pipeline is proven end-to-end.** The E2E integration test (`test_e2e_fda_request.py`) runs 12 steps against a real PostgreSQL database — from messy ingestion through sealed, hashed package submission and amendment. This proves the happy path and the blocked-submission path. Scenarios not yet proven: identity ambiguity blocking, multi-tenant isolation under concurrent requests, deadline breach escalation, and graph-backed recall traversal.
 
 ### Operational Pages
 
@@ -203,36 +208,32 @@ API endpoints: `GET /api/v1/requests/{id}/blockers` (check all defects), `GET /a
 
 ### Canonical Pipeline
 
-All ingestion paths normalize through the canonical `TraceabilityEvent` model:
+Regulated ingestion paths normalize through the canonical `TraceabilityEvent` model:
 
 | Path | Source | Normalizes? |
 |------|--------|------------|
 | Webhook v2 (happy path) | REST API | Yes |
-| Webhook v2 (fallback) | REST API | Yes (fixed) |
+| Webhook v2 (fallback) | REST API | Yes |
 | EPCIS ingestion | XML/JSON | Yes |
 | Mobile field capture | QR/barcode | Yes (bridges to canonical) |
 | Supplier CTE events | Portal/bulk upload | Yes (bridges to canonical) |
-| Kafka consumer | NLP extraction | Graph only (canonical pending) |
+| Kafka consumer | NLP extraction | **Graph only — canonical pending** |
 
-No bypass paths. Every record hits rules evaluation and hash chain verification.
+The Kafka/NLP path writes to the graph but does not yet normalize into the canonical store. All other paths hit rules evaluation and hash chain verification.
 
 ---
 
 ## Dashboard
 
-| Section | Pages |
-|---------|-------|
-| **Overview** | Heartbeat, Compliance Score, Alerts, Issues & Blockers |
-| **FDA Response** | Requests, Recall Report, Recall Drills, Export Jobs |
-| **Control Plane** | Rules, Records, Exceptions, Identity, Review Queue |
-| **Supply Chain** | Data Import, Field Capture, Receiving Dock, Suppliers, Products, Integrations |
-| **Compliance** | FSMA Dashboard, Compliance Profile, Snapshots, Labels, Audit Trail |
-| **Tools** | FTL Checker, KDE Checker, Drill Simulator, SOP Generator, All Tools |
-| **Settings** | Notifications, Team, Settings, Developer Portal |
+The dashboard is organized around the operator loop, not feature categories.
 
-### Free Compliance Tools (20)
+**Primary workflow** — the path a compliance operator uses daily:
+- **Heartbeat** → **Alerts** → **Issues & Blockers** → **Requests** → **Export Jobs**
 
-FTL Coverage Checker, KDE Checker, CTE Mapper, Retailer Readiness Assessment, ROI Calculator, Recall Readiness, Label Scanner, Drill Simulator, Anomaly Simulator, Notice Validator, Obligation Scanner, Knowledge Graph Explorer, FDA Export Preview, SOP Generator, TLC Validator, FSMA Unified Dashboard, Data Import, Ask (AI assistant), and QR/Barcode Scan.
+**Control plane** — where rules, records, and identity live:
+- Rules, Canonical Records, Exceptions, Identity Resolution, Review Queue
+
+**Everything else** — data import, suppliers, products, integrations, team, settings, and 20 free compliance tools accessible without login.
 
 ---
 
@@ -400,15 +401,20 @@ pytest services/<service>/tests/ -v
 python3 scripts/stress_test.py
 ```
 
-### Test Coverage Summary
+### What's Proven by Tests
 
-| Layer | Tests | What's Covered |
-|-------|-------|----------------|
-| **E2E pipeline** | 12 | Ingest → rules → request → gaps → blocking → signoff → package → submit → amend → deadlines |
-| **Domain logic** | 130 | Rules engine (42), request workflow (43), identity service (45) |
-| **Router HTTP** | 96 | Canonical (28), rules (23), exceptions (14), requests (16), identity (15) |
-| **Frontend** | 55 | useControlPlane hook (21), DemoBanner (3), page rendering (31) |
-| **Total** | **293** | |
+| Invariant | Test |
+|-----------|------|
+| Bad data normalizes into canonical store | E2E step 1–3 |
+| Rules evaluate and detect failures | E2E step 4, 42 unit tests |
+| Blocking defects prevent package submission | E2E step 7, router tests |
+| Signoffs are required before submission | E2E step 8, workflow unit tests |
+| Packages are SHA-256 hashed and immutable | E2E step 9 |
+| Amendments create new packages, preserve history | E2E step 11 |
+| Identity ambiguity detection works | 45 identity unit tests |
+| Tenant isolation on all control plane routes | Router auth tests |
+
+293 tests total across E2E (12), domain logic (130), HTTP routers (96), and frontend (55).
 
 ### Monitoring
 
