@@ -60,6 +60,20 @@ export default function RequestWorkflowPage() {
   const activeCases = cases.filter(c => !['submitted', 'amended'].includes(c.package_status));
   const completedCases = cases.filter(c => ['submitted', 'amended'].includes(c.package_status));
 
+  if (requests.error) {
+    return (
+      <PageContainer>
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
+          <p className="text-sm text-muted-foreground/60 mt-2">{(requests.error as Error).message}</p>
+          <button onClick={() => requests.refetch()} className="mt-4 text-sm text-primary hover:underline">
+            Retry
+          </button>
+        </div>
+      </PageContainer>
+    );
+  }
+
   const handleCreate = async () => {
     const lots = newRequestLots.split(',').map(s => s.trim()).filter(Boolean);
     await createRequest.mutateAsync({
