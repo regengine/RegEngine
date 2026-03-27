@@ -2,7 +2,19 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { AnomalyDetectionSimulator } from "./AnomalySimulator";
+import dynamic from "next/dynamic";
+
+const AnomalyDetectionSimulator = dynamic(
+  () => import("./AnomalySimulator").then(mod => ({ default: mod.AnomalyDetectionSimulator })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[400px] w-full rounded-3xl border bg-muted/20 animate-pulse flex items-center justify-center">
+        <span className="text-sm text-muted-foreground">Loading simulator...</span>
+      </div>
+    ),
+  }
+);
 import { FreeToolPageShell } from "@/components/layout/FreeToolPageShell";
 import { LeadGate } from "@/components/lead-gate/LeadGate";
 
