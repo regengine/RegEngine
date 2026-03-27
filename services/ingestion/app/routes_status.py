@@ -19,7 +19,7 @@ router = APIRouter(tags=["ingestion-status"])
 
 
 @router.get("/v1/ingest/status/{job_id}")
-async def get_ingestion_status(job_id: str):
+async def get_ingestion_status(job_id: str, api_key: APIKey = Depends(require_api_key)):
     """Check the status of a background ingestion job."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
@@ -39,7 +39,7 @@ async def get_ingestion_status(job_id: str):
 
 
 @router.get("/v1/ingest/documents/{document_id}/analysis")
-async def get_document_analysis(document_id: str):
+async def get_document_analysis(document_id: str, api_key: APIKey = Depends(require_api_key)):
     """Return an analysis summary for a completed ingestion job."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
