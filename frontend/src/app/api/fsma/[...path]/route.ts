@@ -5,8 +5,17 @@ import { sanitizePath, proxyError } from '@/lib/api-proxy';
 // CI no longer uses static export.
 export const dynamic = 'force-dynamic';
 
-const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
-const GRAPH_SERVICE_URL = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
+function guardUrl(envVar: string, fallback: string): string {
+    const url = process.env[envVar] || fallback;
+    const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+    if (onVercel && url.includes('.railway.internal')) {
+        console.warn(`[proxy/fsma] ${envVar} points to internal Railway URL — unreachable from Vercel.`);
+        return fallback;
+    }
+    return url;
+}
+const COMPLIANCE_URL = guardUrl('COMPLIANCE_SERVICE_URL', 'http://localhost:8500');
+const GRAPH_SERVICE_URL = guardUrl('GRAPH_SERVICE_URL', 'http://localhost:8200');
 
 async function proxyRequest(
     request: NextRequest,

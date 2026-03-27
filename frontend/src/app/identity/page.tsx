@@ -61,6 +61,22 @@ export default function IdentityResolutionPage() {
   const reviewList = reviews.data?.reviews ?? [];
   const pendingReviewCount = reviewList.filter((r: any) => r.status === 'pending').length;
 
+  if (entities.error || reviews.error) {
+    const err = (entities.error || reviews.error) as Error;
+    const refetchAll = () => { entities.refetch(); reviews.refetch(); };
+    return (
+      <PageContainer>
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
+          <p className="text-sm text-muted-foreground/60 mt-2">{err.message}</p>
+          <button onClick={refetchAll} className="mt-4 text-sm text-primary hover:underline">
+            Retry
+          </button>
+        </div>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer>
       {/* Header */}

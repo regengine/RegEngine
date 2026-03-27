@@ -63,6 +63,20 @@ export default function CanonicalRecordsPage() {
   const records = events.data?.events ?? [];
   const detail = eventDetail.data;
 
+  if (events.error) {
+    return (
+      <PageContainer>
+        <div className="p-8 text-center">
+          <p className="text-muted-foreground">Unable to load data from the control plane API.</p>
+          <p className="text-sm text-muted-foreground/60 mt-2">{(events.error as Error).message}</p>
+          <button onClick={() => events.refetch()} className="mt-4 text-sm text-primary hover:underline">
+            Retry
+          </button>
+        </div>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer>
       {/* Header */}

@@ -3,19 +3,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
-import {
-  DEMO_EXCEPTIONS,
-  DEMO_BLOCKING_COUNT,
-  DEMO_REQUEST_CASES,
-  DEMO_RECORDS,
-  DEMO_RULES,
-  DEMO_ENTITIES,
-  DEMO_REVIEWS,
-} from '@/data/control-plane-demo';
 
 // ---------------------------------------------------------------------------
 // API Helper — uses the ingestion proxy at /api/ingestion
-// Falls back to demo data when backend is unavailable.
+// Errors propagate to React Query for proper error/retry handling.
 // ---------------------------------------------------------------------------
 
 const INGESTION_API = '/api/ingestion';
@@ -58,6 +49,8 @@ async function cpFetch<T>(
     }
     throw err;
   }
+
+  return response.json();
 }
 
 /** Unwrap CpResult for backward compat — hooks still return the data shape pages expect */

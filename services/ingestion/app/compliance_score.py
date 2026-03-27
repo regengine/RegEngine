@@ -703,3 +703,118 @@ async def get_compliance_score(
     finally:
         if db_session:
             db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Pending Reviews Endpoint (M11)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/pending-reviews/{tenant_id}",
+    summary="Get count of items pending compliance review",
+    description=(
+        "Returns a count of unresolved exception cases, pending identity "
+        "reviews, and active request cases that need attention. Used by "
+        "the dashboard overview to show the pending reviews metric."
+    ),
+)
+async def get_pending_reviews(
+    tenant_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """Count all items requiring compliance review for a tenant."""
+    validate_tenant_id(tenant_id)
+
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        db_session = SessionLocal()
+    except Exception as exc:
+        logger.warning("pending_reviews: DB unavailable (%s)", exc)
+        return {
+            "tenant_id": tenant_id,
+            "pending_reviews": 0,
+            "breakdown": {},
+            "db_available": False,
+        }
+
+    try:
+        # 1. Unresolved exception cases
+        exc_count = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.exception_cases
+                WHERE tenant_id = :tid
+                  AND status NOT IN ('resolved', 'waived')
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
+        # 2. Pending identity reviews
+        identity_count = 0
+        try:
+            identity_count = db_session.execute(
+                text("""
+                    SELECT COUNT(*) FROM fsma.identity_review_queue
+                    WHERE tenant_id = :tid AND status = 'pending'
+                """),
+                {"tid": tenant_id},
+            ).scalar() or 0
+        except Exception:
+            pass  # table may not exist
+
+        # 3. Active request cases not yet submitted
+        request_count = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.request_cases
+                WHERE tenant_id = :tid
+                  AND package_status NOT IN ('submitted', 'amended')
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
+        # 4. Events with failed critical rule evaluations (unresolved)
+        critical_failures = db_session.execute(
+            text("""
+                SELECT COUNT(DISTINCT re.event_id)
+                FROM fsma.rule_evaluations re
+                JOIN fsma.rule_definitions rd
+                  ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
+                WHERE re.tenant_id = :tid
+                  AND re.result = 'fail'
+                  AND rd.severity = 'critical'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM fsma.exception_cases ec
+                      WHERE ec.tenant_id = re.tenant_id
+                        AND ec.linked_event_ids @> ARRAY[re.event_id]::text[]
+                        AND ec.status IN ('resolved', 'waived')
+                  )
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
+        total = exc_count + identity_count + request_count + critical_failures
+
+        return {
+            "tenant_id": tenant_id,
+            "pending_reviews": total,
+            "breakdown": {
+                "unresolved_exceptions": exc_count,
+                "identity_reviews": identity_count,
+                "active_requests": request_count,
+                "critical_failures": critical_failures,
+            },
+            "db_available": True,
+        }
+
+    except Exception as exc:
+        logger.warning("pending_reviews: query failed: %s", exc)
+        return {
+            "tenant_id": tenant_id,
+            "pending_reviews": 0,
+            "breakdown": {},
+            "db_available": False,
+            "error": str(exc),
+        }
+    finally:
+        if db_session:
+            db_session.close()
