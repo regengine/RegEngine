@@ -223,36 +223,6 @@ export function MarketingHeader() {
                             >
                                 Free Tools ▾
                             </button>
-                            <Link
-                                href="/developer/portal"
-                                style={{
-                                    fontSize: "13px",
-                                    fontWeight: 500,
-                                    color: "var(--re-text-muted)",
-                                    textDecoration: "none",
-                                    transition: "color 0.2s",
-                                    padding: "8px 0",
-                                }}
-                                onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
-                                onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
-                            >
-                                Developers
-                            </Link>
-                            <Link
-                                href="/docs"
-                                style={{
-                                    fontSize: "13px",
-                                    fontWeight: 500,
-                                    color: "var(--re-text-muted)",
-                                    textDecoration: "none",
-                                    transition: "color 0.2s",
-                                    padding: "8px 0",
-                                }}
-                                onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
-                                onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
-                            >
-                                Docs
-                            </Link>
                             <div
                                 data-tools-dropdown
                                 style={{
@@ -327,7 +297,37 @@ export function MarketingHeader() {
                             </div>
                         </div>
 
-                        {/* GlobalSearch removed */}
+                        {/* Developer & Docs links — outside dropdown wrapper so they're always clickable */}
+                        <Link
+                            href="/developer/portal"
+                            style={{
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                color: "var(--re-text-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                                padding: "8px 0",
+                            }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
+                        >
+                            Developers
+                        </Link>
+                        <Link
+                            href="/docs"
+                            style={{
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                color: "var(--re-text-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                                padding: "8px 0",
+                            }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
+                        >
+                            Docs
+                        </Link>
 
                         <ThemeToggle />
 
