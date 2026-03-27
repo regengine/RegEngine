@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -198,6 +198,20 @@ export default function DashboardPage() {
         return getQuickActions(tenantType);
     }, [tenantType]);
 
+    // Fetch pending reviews count from backend
+    const [pendingReviews, setPendingReviews] = useState(0);
+    useEffect(() => {
+        if (!effectiveTenantId) return;
+        const { getServiceURL } = require('@/lib/api-config');
+        const base = getServiceURL('ingestion');
+        fetch(`${base}/api/v1/compliance/pending-reviews/${effectiveTenantId}`, {
+            headers: { 'Content-Type': 'application/json' },
+        })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data?.pending_reviews != null) setPendingReviews(data.pending_reviews); })
+            .catch(() => {}); // Graceful — dashboard works without this
+    }, [effectiveTenantId]);
+
     // Use real metrics from backend when available, show honest zeros otherwise
     const metrics = useMemo(() => {
         if (systemMetrics) {
@@ -205,18 +219,16 @@ export default function DashboardPage() {
                 documentsIngested: systemMetrics.events_ingested ?? systemMetrics.total_documents ?? 0,
                 complianceScore: systemMetrics.compliance_score ?? 0,
                 openAlerts: systemMetrics.open_alerts ?? 0,
-                // TODO: Wire pendingReviews to /api/v1/compliance/pending-reviews endpoint
-                pendingReviews: 0,
+                pendingReviews,
             };
         }
         return {
             documentsIngested: 0,
             complianceScore: 0,
             openAlerts: 0,
-            // TODO: Wire pendingReviews to DB-backed endpoint
-            pendingReviews: 0,
+            pendingReviews,
         };
-    }, [systemMetrics]);
+    }, [systemMetrics, pendingReviews]);
 
     if (!isHydrated || !effectiveUser) {
         return null;
