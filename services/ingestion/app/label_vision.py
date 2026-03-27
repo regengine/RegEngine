@@ -14,8 +14,10 @@ import os
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+
+from shared.auth import APIKey, require_api_key
 
 logger = logging.getLogger("label-vision")
 
@@ -112,6 +114,7 @@ Return ONLY valid JSON matching this schema:
 )
 async def analyze_label(
     file: UploadFile = File(..., description="Photo of food label or packaging"),
+    api_key: APIKey = Depends(require_api_key),
 ) -> LabelVisionResponse:
     # Validate image
     if not file.content_type or not file.content_type.startswith("image/"):

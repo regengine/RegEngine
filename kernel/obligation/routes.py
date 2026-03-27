@@ -9,6 +9,7 @@ from pathlib import Path
 import os
 import logging
 
+from shared.auth import APIKey, require_api_key
 from .models import (
     ObligationEvaluationRequest,
     ObligationEvaluationResult,
@@ -26,7 +27,7 @@ engine = RegulatoryEngine(verticals_dir=VERTICALS_DIR)
 
 
 @router.post("/evaluate", response_model=ObligationEvaluationResult)
-async def evaluate_obligations(request: ObligationEvaluationRequest):
+async def evaluate_obligations(request: ObligationEvaluationRequest, api_key: APIKey = Depends(require_api_key)):
     """
     Evaluate a decision against regulatory obligations.
     
@@ -61,7 +62,7 @@ async def evaluate_obligations(request: ObligationEvaluationRequest):
 
 
 @router.get("/coverage/{vertical}", response_model=ObligationCoverageReport)
-async def get_coverage_report(vertical: str):
+async def get_coverage_report(vertical: str, api_key: APIKey = Depends(require_api_key)):
     """
     Get aggregate obligation coverage report for a vertical.
     
