@@ -1,18 +1,19 @@
 /**
  * API hooks for all new sprint endpoints.
- * Uses getServiceURL('ingestion') for backend calls.
+ * Routes through the Next.js ingestion proxy (/api/ingestion) which
+ * reads credentials from HTTP-only cookies — no client-side API key needed.
  *
- * All functions accept an `apiKey` parameter — callers should get this
- * from `useAuth().apiKey` so credentials flow through the auth context
- * instead of env vars or localStorage.
+ * The `apiKey` parameter is kept for backward compatibility but is ignored.
+ * Callers still pass `useAuth().apiKey` (which is now a placeholder string)
+ * so that existing call sites don't break.
  */
 
 import { getServiceURL } from './api-config';
 
 const BASE = () => getServiceURL('ingestion');
 
-/** Shared fetch helper with API key and retry logic (L12) */
-async function apiFetch<T>(path: string, apiKey: string, options: RequestInit = {}): Promise<T> {
+/** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
+async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit = {}): Promise<T> {
     const MAX_RETRIES = 2;
     const RETRY_DELAYS = [500, 1500];
     let lastError: Error | null = null;
@@ -21,9 +22,9 @@ async function apiFetch<T>(path: string, apiKey: string, options: RequestInit = 
         try {
             const res = await fetch(`${BASE()}${path}`, {
                 ...options,
+                credentials: 'include', // Send HTTP-only cookies
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-RegEngine-API-Key': apiKey,
                     ...options.headers,
                 },
             });
