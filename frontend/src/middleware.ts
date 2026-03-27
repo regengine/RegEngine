@@ -3,6 +3,45 @@ import { updateSession } from '@/lib/supabase/middleware';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
 
+// ---------------------------------------------------------------------------
+// Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
+// In-memory LRU with a 5-minute TTL, keyed by auth_user_id.
+// ---------------------------------------------------------------------------
+const SYSADMIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SYSADMIN_CACHE_MAX_SIZE = 256;
+
+interface SysadminCacheEntry {
+    isSysadmin: boolean;
+    expiresAt: number;
+}
+
+const sysadminCache = new Map<string, SysadminCacheEntry>();
+
+function getSysadminCached(userId: string): boolean | null {
+    const entry = sysadminCache.get(userId);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+        sysadminCache.delete(userId);
+        return null;
+    }
+    // Move to end for LRU ordering (Map preserves insertion order)
+    sysadminCache.delete(userId);
+    sysadminCache.set(userId, entry);
+    return entry.isSysadmin;
+}
+
+function setSysadminCached(userId: string, isSysadmin: boolean): void {
+    // Evict oldest entry if at capacity
+    if (sysadminCache.size >= SYSADMIN_CACHE_MAX_SIZE) {
+        const oldestKey = sysadminCache.keys().next().value;
+        if (oldestKey) sysadminCache.delete(oldestKey);
+    }
+    sysadminCache.set(userId, {
+        isSysadmin,
+        expiresAt: Date.now() + SYSADMIN_CACHE_TTL_MS,
+    });
+}
+
 // Only FSMA verticals are supported — all others redirect to home.
 const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 
@@ -173,25 +212,34 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     // Strategy 2: Check Supabase session
     const { user, response: supabaseResponse } = await checkSupabaseSession(request);
     if (user) {
-        // Sysadmin check for /sysadmin routes
+        // Sysadmin check for /sysadmin routes (with in-memory LRU cache)
         if (pathname.startsWith('/sysadmin')) {
-            const supabase = createServerClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                {
-                    cookies: {
-                        getAll() { return request.cookies.getAll(); },
-                        setAll() { /* read-only for this check */ },
-                    },
-                }
-            );
-            const { data: profile } = await supabase
-                .from('developer_profiles')
-                .select('is_sysadmin')
-                .eq('auth_user_id', (user as { id: string }).id)
-                .single();
+            const userId = (user as { id: string }).id;
+            let isSysadmin = getSysadminCached(userId);
 
-            if (!profile?.is_sysadmin) {
+            if (isSysadmin === null) {
+                // Cache miss — query the database
+                const supabase = createServerClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                    {
+                        cookies: {
+                            getAll() { return request.cookies.getAll(); },
+                            setAll() { /* read-only for this check */ },
+                        },
+                    }
+                );
+                const { data: profile } = await supabase
+                    .from('developer_profiles')
+                    .select('is_sysadmin')
+                    .eq('auth_user_id', userId)
+                    .single();
+
+                isSysadmin = !!profile?.is_sysadmin;
+                setSysadminCached(userId, isSysadmin);
+            }
+
+            if (!isSysadmin) {
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
         }
