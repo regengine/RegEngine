@@ -28,6 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from shared.pagination import PaginationParams
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
 
@@ -127,6 +128,7 @@ async def list_exceptions(
     source_facility_reference: Optional[str] = Query(None),
     due_before: Optional[str] = Query(None),
     rule_category: Optional[str] = Query(None),
+    pagination: PaginationParams = Depends(),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
     db_session=Depends(_get_db_session),
 ):
@@ -140,8 +142,10 @@ async def list_exceptions(
         source_facility_reference=source_facility_reference,
         due_before=due_before,
         rule_category=rule_category,
+        limit=pagination.limit,
+        offset=pagination.skip,
     )
-    return {"tenant_id": tid, "cases": cases, "total": len(cases)}
+    return {"tenant_id": tid, "cases": cases, "total": len(cases), "skip": pagination.skip, "limit": pagination.limit}
 
 
 @router.get(

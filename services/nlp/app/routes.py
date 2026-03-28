@@ -17,6 +17,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from .config import settings
 from .query_planner import QueryPlan, parse_query
 from shared.auth import APIKey, require_api_key
+from shared.rate_limit import limiter
 from shared.api_key_store import APIKeyResponse
 from shared.funnel_events import emit_funnel_event
 from shared.permissions import has_permission
@@ -63,6 +64,7 @@ def metrics():
     response_model=TraceabilityQueryResponse,
     summary="Natural language traceability query",
 )
+@limiter.limit("5/minute")
 async def query_traceability(
     payload: TraceabilityQueryRequest,
     request: Request,

@@ -616,13 +616,17 @@ class DatabaseAPIKeyStore:
         self,
         tenant_id: Optional[str] = None,
         include_disabled: bool = False,
+        limit: int = 500,
+        offset: int = 0,
     ) -> Sequence[APIKeyResponse]:
         """List API keys, optionally filtered by tenant.
-        
+
         Args:
             tenant_id: Filter by tenant ID (None = all tenants)
             include_disabled: Include revoked/disabled keys
-            
+            limit: Maximum number of keys to return (default 500)
+            offset: Number of keys to skip (default 0)
+
         Returns:
             List of APIKeyResponse objects
         """
@@ -637,6 +641,7 @@ class DatabaseAPIKeyStore:
                 query = query.where(APIKeyModel.enabled == True)
 
             query = query.order_by(APIKeyModel.created_at.desc())
+            query = query.limit(limit).offset(offset)
 
             result = await session.execute(query)
             keys = result.scalars().all()
