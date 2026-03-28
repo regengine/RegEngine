@@ -150,7 +150,7 @@ class SchedulerService:
         try:
             self.state_manager.initialize()
             logger.info("state_manager_ready")
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError) as e:
             logger.error("state_manager_init_failed", error=str(e))
             # Continue without state management - will process duplicates
 
@@ -309,7 +309,7 @@ class SchedulerService:
                 success=success,
                 failures=failures,
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("kafka_emission_failed", error=str(e))
 
         # Transform FDA recalls to FSMA events and emit to graph consumer
@@ -325,7 +325,7 @@ class SchedulerService:
                     failures=fsma_failures,
                     topic="fsma.events.extracted",
                 )
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, RuntimeError) as e:
             logger.error("fsma_transformation_failed", error=str(e))
 
         # Send webhook notifications
@@ -337,7 +337,7 @@ class SchedulerService:
                 total=len(results),
                 successful=successful,
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("webhook_notification_failed", error=str(e))
 
         # Log high-priority items
@@ -509,7 +509,7 @@ class SchedulerService:
                     )
             finally:
                 db.close()
-        except Exception as e:
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
             logger.error("deadline_monitor_failed", error=str(e))
 
     def run_initial_scrape(self) -> None:
@@ -572,7 +572,7 @@ class SchedulerService:
 
         try:
             self.kafka_producer.close()
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError) as e:
             logger.error("kafka_close_failed", error=str(e))
 
         logger.info("scheduler_stopped")
@@ -652,7 +652,7 @@ def start_health_server(port: int) -> None:
         server = HTTPServer(("0.0.0.0", port), HealthHandler)
         logger.info("health_server_started", port=port)
         server.serve_forever()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error("health_server_failed", error=str(e))
 
 

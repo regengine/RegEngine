@@ -72,7 +72,7 @@ class FDARecallsScraper(BaseScraper):
                 count=len(items),
             )
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, ValueError, KeyError) as e:
             error_message = str(e)
             logger.error(
                 "fda_recalls_failed",
@@ -114,7 +114,7 @@ class FDARecallsScraper(BaseScraper):
                 item = self._parse_recall(result)
                 if item:
                     items.append(item)
-            except Exception as e:
+            except (ValueError, TypeError, KeyError, AttributeError) as e:
                 logger.warning(
                     "recall_parse_error",
                     error=str(e),
@@ -228,7 +228,7 @@ class FDARecallsScraper(BaseScraper):
                 count=len(items),
             )
 
-        except Exception as e:
+        except (requests.RequestException, ConnectionError, TimeoutError, ValueError, KeyError) as e:
             error_message = str(e)
             logger.error(
                 "fda_recalls_by_class_failed",

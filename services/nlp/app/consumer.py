@@ -244,13 +244,13 @@ def _ensure_topic(topic: str) -> None:
         admin.create_topics([NewTopic(topic, num_partitions=1, replication_factor=1)])
     except TopicAlreadyExistsError:
         pass
-    except Exception as exc:  # pragma: no cover - infra dependent
+    except (ConnectionError, TimeoutError, RuntimeError, OSError) as exc:  # pragma: no cover - infra dependent
         logger.warning("topic_creation_failed", topic=topic, error=str(exc))
     finally:
         if admin is not None:
             try:
                 admin.close()
-            except Exception:  # pragma: no cover
+            except (RuntimeError, OSError):  # pragma: no cover
                 pass
 
 
@@ -360,7 +360,7 @@ def _send_to_dlq(
         )
         producer.flush(timeout=1.0)
         logger.info("message_sent_to_dlq", document_id=doc_id, error=error)
-    except Exception as dlq_exc:
+    except (ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
         logger.error("dlq_send_failed", document_id=doc_id, error=str(dlq_exc))
 
 
@@ -391,7 +391,7 @@ def _send_to_fsma_dlq(
         producer.send(topic, key=doc_id or "unknown", value=payload, headers=headers or [])
         producer.flush(timeout=1.0)
         logger.info("message_routed_to_dlq", topic=topic, document_id=doc_id, error=error)
-    except Exception as dlq_exc:
+    except (ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
         logger.error("dlq_routing_failed", topic=topic, document_id=doc_id, error=str(dlq_exc))
 
 
@@ -444,7 +444,7 @@ def run_consumer() -> None:
                     raw_value = record.value
                     try:
                         evt = json.loads(raw_value.decode("utf-8")) if raw_value else {}
-                    except Exception as exc:
+                    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
                         logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
                         POISON_PILL_COUNTER.inc()
                         _send_to_dlq(producer, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
@@ -462,7 +462,7 @@ def run_consumer() -> None:
                         inline_text = evt.get("text_clean")
                         tenant_id = evt.get("tenant_id")
                         provenance = evt.get("provenance") or {}
-                    except Exception as field_exc:
+                    except (KeyError, TypeError, ValueError, AttributeError) as field_exc:
                         logger.error(
                             "malformed_event_fields",
                             error=str(field_exc),

@@ -80,7 +80,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     count=len(items),
                 )
 
-        except Exception as scrap_error:
+        except (requests.RequestException, ConnectionError, TimeoutError, ValueError, KeyError) as scrap_error:
             logger.warning(
                 "scrape_attempt_failed",
                 error=str(scrap_error),
@@ -160,7 +160,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     )
                 )
 
-            except Exception as item_error:
+            except (ValueError, TypeError, KeyError, AttributeError) as item_error:
                 logger.warning(
                     "rss_item_parse_error",
                     error=str(item_error),
@@ -226,7 +226,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     )
                 )
 
-            except Exception as item_error:
+            except (ValueError, TypeError, KeyError, AttributeError) as item_error:
                 logger.warning(
                     "api_item_parse_error",
                     error=str(item_error),
@@ -245,5 +245,5 @@ class FDAWarningLettersScraper(BaseScraper):
             from email.utils import parsedate_to_datetime
 
             return parsedate_to_datetime(date_str)
-        except Exception:
+        except (ValueError, TypeError, OverflowError):
             return datetime.now(timezone.utc)
