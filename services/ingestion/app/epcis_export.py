@@ -352,15 +352,19 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
 """
         event_count = 6
 
+    fda_headers: dict[str, str] = {
+        "Content-Disposition": f'attachment; filename="regengine_fda_export_{request.tenant_id}_{now.strftime("%Y%m%d")}.csv"',
+        "X-RegEngine-Events-Count": str(event_count),
+        "X-RegEngine-Format": "FDA_21CFR1.1455",
+        "X-RegEngine-Data-Source": data_source,
+    }
+    if data_source == "sample":
+        fda_headers["X-RegEngine-Disclaimer"] = SAMPLE_EXPORT_DISCLAIMER
+
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="regengine_fda_export_{request.tenant_id}_{now.strftime("%Y%m%d")}.csv"',
-            "X-RegEngine-Events-Count": str(event_count),
-            "X-RegEngine-Format": "FDA_21CFR1.1455",
-            "X-RegEngine-Data-Source": data_source,
-        },
+        headers=fda_headers,
     )
 
 
