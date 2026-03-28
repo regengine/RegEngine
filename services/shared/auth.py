@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -44,19 +43,32 @@ def validate_auth_config(*, require_supabase: bool = False) -> None:
         )
 
         if is_cloud:
-            supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+            supabase_url = (
+                os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+                or os.getenv("SUPABASE_URL")
+            )
+            supabase_key = (
+                os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+                or os.getenv("SUPABASE_ANON_KEY")
+                or os.getenv("SUPABASE_SERVICE_KEY")
+            )
 
             if not supabase_url or not supabase_key:
-                logger.critical(
-                    "fail_closed_auth",
+                # Warn loudly but don't crash — backend services handle
+                # missing Supabase gracefully (SupabaseManager returns None).
+                # sys.exit(1) here was killing services on Railway that had
+                # valid JWT + API key auth but not SUPABASE_ANON_KEY.
+                logger.error(
+                    "supabase_credentials_missing_in_cloud",
                     msg=(
-                        "FATAL: Cloud deployment detected but Supabase auth credentials missing. "
-                        "Set SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_ variants). "
-                        "Refusing to start without authentication — this prevents silent auth bypass."
+                        "Cloud deployment detected but Supabase credentials missing. "
+                        "Set SUPABASE_URL and SUPABASE_SERVICE_KEY (or ANON_KEY variants). "
+                        "Supabase-dependent features will be degraded. "
+                        "Services continue with JWT/API key auth."
                     ),
+                    supabase_url_set=bool(supabase_url),
+                    supabase_key_set=bool(supabase_key),
                 )
-                sys.exit(1)
 
     issues: list[str] = []
 
