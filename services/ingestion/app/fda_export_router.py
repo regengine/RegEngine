@@ -223,6 +223,49 @@ def _build_completeness_summary(events: list[dict]) -> dict:
     }
 
 
+def _build_validation_errors_log(events: list[dict], completeness_summary: dict) -> str | None:
+    """Generate a VALIDATION_ERRORS.log for events with missing required KDEs.
+
+    Returns None if all events pass validation (no log needed).
+    """
+    missing_events = completeness_summary.get("missing_required_events", [])
+    if not missing_events:
+        return None
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    coverage = completeness_summary["required_kde_coverage_ratio"]
+    total_events = len(events)
+    events_with_errors = completeness_summary["events_with_missing_required_fields"]
+
+    lines = [
+        f"VALIDATION ERRORS — Generated {timestamp}",
+        f"{'=' * 60}",
+        "",
+        f"Total events exported: {total_events}",
+        f"Events with validation errors: {events_with_errors}",
+        f"KDE Coverage: {coverage * 100:.1f}%",
+        "",
+        "NOTE: These errors do NOT block the export. FDA may need whatever",
+        "data is available. Fix these issues to improve compliance score.",
+        "",
+        "-" * 60,
+        "",
+    ]
+
+    for entry in missing_events:
+        tlc = entry.get("traceability_lot_code") or "UNKNOWN"
+        event_type = entry.get("event_type") or "UNKNOWN"
+        missing = ", ".join(entry.get("missing_fields", []))
+        lines.append(f"Event TLC: {tlc} | Type: {event_type} | Missing: {missing}")
+
+    lines.append("")
+    lines.append(f"Total: {events_with_errors} events with validation errors out of {total_events} exported")
+    lines.append(f"KDE Coverage: {coverage * 100:.1f}%")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 def _build_chain_verification_payload(
     *,
     tenant_id: str,
@@ -290,11 +333,14 @@ def _build_fda_package(
     scope = _safe_filename_token(tlc or "all")
     csv_name = f"fda_spreadsheet_{scope}_{timestamp}.csv"
     chain_name = f"chain_verification_{scope}_{timestamp}.json"
+    validation_name = f"VALIDATION_ERRORS_{scope}_{timestamp}.log"
     manifest_name = "manifest.json"
     readme_name = "README.txt"
 
     csv_bytes = csv_content.encode("utf-8")
     chain_bytes = json.dumps(chain_payload, indent=2, sort_keys=True).encode("utf-8")
+    validation_log = _build_validation_errors_log(events, completeness_summary)
+    validation_bytes = validation_log.encode("utf-8") if validation_log else None
     readme_bytes = (
         "RegEngine FDA Traceability Package\n"
         "=================================\n"
@@ -302,7 +348,8 @@ def _build_fda_package(
         "1) fda_spreadsheet_*.csv - FDA-sortable traceability rows\n"
         "2) chain_verification_*.json - chain integrity and hash coverage metadata\n"
         "3) manifest.json - package metadata and file checksums\n"
-        "\n"
+        + ("4) VALIDATION_ERRORS_*.log - KDE validation warnings per event\n" if validation_log else "")
+        + "\n"
         "Verification:\n"
         "- Compare manifest file hashes with local SHA-256 calculations.\n"
         "- Validate chain_verification.verification_status == VERIFIED or PARTIAL.\n"
@@ -313,6 +360,8 @@ def _build_fda_package(
         chain_name: hashlib.sha256(chain_bytes).hexdigest(),
         readme_name: hashlib.sha256(readme_bytes).hexdigest(),
     }
+    if validation_bytes:
+        file_hashes[validation_name] = hashlib.sha256(validation_bytes).hexdigest()
 
     event_types: dict[str, int] = {}
     tlc_counts: dict[str, int] = {}
@@ -360,6 +409,8 @@ def _build_fda_package(
     with zipfile.ZipFile(payload, mode="w", compression=zipfile.ZIP_DEFLATED) as zipf:
         zipf.writestr(csv_name, csv_bytes)
         zipf.writestr(chain_name, chain_bytes)
+        if validation_bytes:
+            zipf.writestr(validation_name, validation_bytes)
         zipf.writestr(manifest_name, manifest_bytes)
         zipf.writestr(readme_name, readme_bytes)
 
@@ -456,6 +507,15 @@ async def export_fda_spreadsheet(
             },
         )
 
+        kde_coverage = completeness_summary["required_kde_coverage_ratio"]
+        kde_warnings = completeness_summary["events_with_missing_required_fields"]
+        compliance_headers: dict[str, str] = {
+            "X-KDE-Coverage": str(kde_coverage),
+            "X-KDE-Warnings": str(kde_warnings),
+        }
+        if kde_coverage < 0.80:
+            compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
+
         if format == "package":
             chain_payload = _build_chain_verification_payload(
                 tenant_id=tenant_id,
@@ -486,7 +546,7 @@ async def export_fda_spreadsheet(
                     "X-Package-Hash": package_meta["package_hash"],
                     "X-Record-Count": str(len(events)),
                     "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                    "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                    **compliance_headers,
                 },
             )
 
@@ -499,7 +559,7 @@ async def export_fda_spreadsheet(
                 "X-Export-Hash": export_hash,
                 "X-Record-Count": str(len(events)),
                 "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                **compliance_headers,
             },
         )
 
@@ -584,6 +644,15 @@ async def export_all_events(
         db_session.commit()
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        kde_coverage = completeness_summary["required_kde_coverage_ratio"]
+        kde_warnings = completeness_summary["events_with_missing_required_fields"]
+        compliance_headers: dict[str, str] = {
+            "X-KDE-Coverage": str(kde_coverage),
+            "X-KDE-Warnings": str(kde_warnings),
+        }
+        if kde_coverage < 0.80:
+            compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
+
         if format == "package":
             chain_payload = _build_chain_verification_payload(
                 tenant_id=tenant_id,
@@ -614,7 +683,7 @@ async def export_all_events(
                     "X-Package-Hash": package_meta["package_hash"],
                     "X-Record-Count": str(len(deduped)),
                     "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                    "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                    **compliance_headers,
                 },
             )
 
@@ -628,7 +697,7 @@ async def export_all_events(
                 "X-Export-Hash": export_hash,
                 "X-Record-Count": str(len(deduped)),
                 "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                **compliance_headers,
             },
         )
 

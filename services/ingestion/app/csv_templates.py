@@ -21,6 +21,7 @@ from app.shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_B
 from app.webhook_models import (
     IngestEvent,
     IngestResponse,
+    REQUIRED_KDES_BY_CTE,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -38,6 +39,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "500", "Numeric quantity"),
         ("unit_of_measure", "cases", "Unit: cases, lbs, kg, pallets"),
         ("harvest_date", "2026-02-26", "Date of harvest (YYYY-MM-DD)"),
+        ("event_time", "08:30:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Valley Fresh Farms, Salinas CA", "Farm or field name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional, 13 digits)"),
         ("field_id", "FIELD-A7", "Field or growing area identifier"),
@@ -49,6 +51,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "500", "Numeric quantity"),
         ("unit_of_measure", "cases", "Unit"),
         ("cooling_date", "2026-02-26", "Date of cooling (YYYY-MM-DD)"),
+        ("event_time", "10:00:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Valley Fresh Cooler #2", "Cooling facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("temperature_celsius", "2.1", "Temperature at cooling (optional but recommended)"),
@@ -59,6 +62,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "200", "Quantity of packed units"),
         ("unit_of_measure", "cases", "Unit"),
         ("packing_date", "2026-02-26", "Date of packing (YYYY-MM-DD)"),
+        ("event_time", "14:00:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Valley Fresh Packhouse", "Packing facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001", "Source lot code(s), comma-separated if multiple"),
@@ -69,6 +73,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "200", "Quantity shipped"),
         ("unit_of_measure", "cases", "Unit"),
         ("ship_date", "2026-02-27", "Ship date (YYYY-MM-DD)"),
+        ("event_time", "16:30:00", "Time of event HH:MM:SS (optional)"),
         ("ship_from_location", "Valley Fresh Farms, Salinas CA", "Origin facility"),
         ("ship_to_location", "Metro Distribution Center, LA", "Destination facility"),
         ("ship_from_gln", "0614141000005", "Origin GLN (optional)"),
@@ -82,6 +87,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "200", "Quantity received"),
         ("unit_of_measure", "cases", "Unit"),
         ("receive_date", "2026-02-28", "Date received (YYYY-MM-DD)"),
+        ("event_time", "09:15:00", "Time of event HH:MM:SS (optional)"),
         ("receiving_location", "Metro Distribution Center, LA", "Receiving facility name"),
         ("receiving_gln", "0614141000006", "Receiving facility GLN (optional)"),
         ("immediate_previous_source", "Valley Fresh Farms", "Who shipped this to you"),
@@ -93,9 +99,23 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "1000", "Output quantity"),
         ("unit_of_measure", "bags", "Unit"),
         ("transformation_date", "2026-02-28", "Date of transformation (YYYY-MM-DD)"),
+        ("event_time", "10:00:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Metro Processing Plant", "Transformation facility"),
         ("location_gln", "0614141000007", "Facility GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001,LET-0226-A2-003", "ALL input lot codes, comma-separated"),
+    ],
+    "first_land_based_receiving": [
+        ("traceability_lot_code", "SAL-0301-DOCK4-001", "Lot code assigned at landing"),
+        ("product_description", "Atlantic Salmon Fillets", "Product name"),
+        ("quantity", "2000", "Numeric quantity"),
+        ("unit_of_measure", "lbs", "Unit: lbs, kg, cases, pallets"),
+        ("landing_date", "2026-03-01", "Date of first land-based receipt (YYYY-MM-DD)"),
+        ("event_time", "06:00:00", "Time of event HH:MM:SS (optional)"),
+        ("receiving_location", "Pacific Seafood Dock 4, Portland OR", "Receiving facility name"),
+        ("receiving_gln", "0614141000020", "Receiving facility GLN (optional, 13 digits)"),
+        ("immediate_previous_source", "FV Ocean Harvest", "Vessel or entity that delivered product"),
+        ("reference_document", "BOL-2026-0301-042", "Bill of lading or reference document number"),
+        ("temperature_celsius", "-1.5", "Temperature at receipt (optional but recommended)"),
     ],
 }
 
@@ -188,6 +208,7 @@ _DATE_FIELDS = [
     "event_date", "date", "timestamp",
     "harvest_date", "cooling_date", "packing_date",
     "ship_date", "receive_date", "transformation_date",
+    "landing_date",
 ]
 
 # Columns that might hold the CTE type in a mixed-type CSV
@@ -248,6 +269,32 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
                     break
 
 
+def _validate_kde_completeness(
+    cte_type: str, event: IngestEvent, kdes: dict
+) -> list[str]:
+    """Check required KDEs for a CTE type. Returns list of missing field names."""
+    try:
+        cte_enum = WebhookCTEType(cte_type)
+    except ValueError:
+        return []
+    required = REQUIRED_KDES_BY_CTE.get(cte_enum, [])
+    missing = []
+    for field in required:
+        # Check in top-level event fields first, then KDEs
+        if field in {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}:
+            val = getattr(event, field, None)
+            if val is None or str(val).strip() in ("", "0", "0.0"):
+                missing.append(field)
+        elif field == "location_name":
+            if not (event.location_name or kdes.get("location_name")):
+                missing.append(field)
+        else:
+            val = kdes.get(field)
+            if val is None or str(val).strip() == "":
+                missing.append(field)
+    return missing
+
+
 @router.post(
     "/ingest/csv",
     response_model=IngestResponse,
@@ -286,6 +333,7 @@ async def ingest_csv(
 
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
+    kde_warnings: list[str] = []
     MAX_CSV_ROWS = 500
 
     for row_num, row in enumerate(reader, start=2):
@@ -316,7 +364,11 @@ async def ingest_csv(
 
             ts = date_field
             if "T" not in ts and len(ts) <= 10:
-                ts = f"{ts}T00:00:00Z"
+                event_time = (row.get("event_time") or "").strip()
+                if event_time:
+                    ts = f"{ts}T{event_time}" + ("Z" if "+" not in event_time and "Z" not in event_time else "")
+                else:
+                    ts = f"{ts}T00:00:00Z"
 
             loc_gln = (row.get("location_gln") or row.get("ship_from_gln")
                 or row.get("receiving_gln") or row.get("gln") or None)
@@ -354,6 +406,13 @@ async def ingest_csv(
                 kdes=kdes,
             )
             events.append(event)
+
+            # KDE completeness validation (warn, don't reject)
+            missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
+            if missing_kdes:
+                kde_warnings.append(
+                    f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}"
+                )
         except Exception as e:
             parse_errors.append(f"Row {row_num}: {str(e)}")
 
@@ -374,6 +433,18 @@ async def ingest_csv(
             response.rejected += 1
             response.total += 1
 
-    logger.info("csv_ingest_complete: total=%d accepted=%d rejected=%d",
-        response.total, response.accepted, response.rejected)
-    return response
+    if kde_warnings:
+        logger.warning("csv_ingest_kde_warnings: %d events with missing KDEs: %s",
+            len(kde_warnings), "; ".join(kde_warnings[:5]))
+
+    logger.info("csv_ingest_complete: total=%d accepted=%d rejected=%d kde_warnings=%d",
+        response.total, response.accepted, response.rejected, len(kde_warnings))
+
+    # Attach KDE warnings as extra response metadata via JSONResponse
+    # so callers can see which events are missing required fields
+    from fastapi.responses import JSONResponse
+    response_data = response.model_dump()
+    if kde_warnings:
+        response_data["kde_warnings"] = kde_warnings
+        response_data["kde_warning_count"] = len(kde_warnings)
+    return JSONResponse(content=response_data)

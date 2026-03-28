@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, requireProxyAuth } from '@/lib/api-proxy';
 
 // force-dynamic ensures this proxy runs as a serverless function on every request.
 // CI no longer uses static export.
@@ -23,6 +23,10 @@ async function proxyRequest(
     method: string
 ) {
     try {
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
+
         const path = sanitizePath(pathParts);
         if (!path) {
             return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });

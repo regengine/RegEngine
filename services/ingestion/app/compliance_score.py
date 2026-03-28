@@ -194,6 +194,22 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     else:
         result["chain_gaps"] = 0
 
+    # 3b) Time precision — count events with midnight timestamps (no real time)
+    if result["event_count"] > 0:
+        midnight_row = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                  AND EXTRACT(HOUR FROM event_timestamp) = 0
+                  AND EXTRACT(MINUTE FROM event_timestamp) = 0
+                  AND EXTRACT(SECOND FROM event_timestamp) = 0
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["events_missing_time"] = midnight_row[0] if midnight_row else 0
+    else:
+        result["events_missing_time"] = 0
+
     # 4) Obligation coverage — check rules against actual event KDE presence
     # Note: obligations.tenant_id is UUID, but cte_events.tenant_id may be text.
     # Use try/except to handle type mismatches gracefully.
@@ -339,16 +355,24 @@ def _compute_scores(data: dict) -> dict:
     else:
         kde_ratio = data["filled_kdes"] / data["total_kdes"]
         kde_score = int(kde_ratio * 100)
+
+        # Penalize for missing event time precision (FDA requires time, not just date)
+        events_missing_time = data.get("events_missing_time", 0)
+        if events_missing_time > 0 and data["event_count"] > 0:
+            time_penalty = min(10, int((events_missing_time / data["event_count"]) * 10))
+            kde_score = max(0, kde_score - time_penalty)
+
         missing = data["total_kdes"] - data["filled_kdes"]
+        time_note = f"; {events_missing_time} events lack precise time" if events_missing_time > 0 else ""
         if missing > 0:
             scores["kde_completeness"] = (
                 kde_score,
-                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank",
+                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank{time_note}",
             )
         else:
             scores["kde_completeness"] = (
-                100,
-                f"All {data['total_kdes']} KDE fields populated",
+                kde_score if events_missing_time > 0 else 100,
+                f"All {data['total_kdes']} KDE fields populated{time_note}",
             )
 
     # --- 3) CTE Completeness (20% weight) ---
@@ -494,13 +518,13 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
             actions.append(NextAction(
                 priority="HIGH",
                 action="URGENT: Chain tampering detected — investigate immediately",
-                impact="Chain integrity is 25% of overall score; tampering = audit failure",
+                impact="Chain integrity is 10% of overall score; tampering = audit failure",
             ))
         else:
             actions.append(NextAction(
                 priority="HIGH",
                 action="Investigate chain integrity issues — possible data loss",
-                impact="Chain integrity is 25% of overall score",
+                impact="Chain integrity is 10% of overall score",
             ))
 
     if obligation_score < 80:
@@ -636,13 +660,13 @@ async def get_compliance_score(
         # Compute sub-scores
         scores = _compute_scores(data)
 
-        # Weighted overall — 6 dimensions
-        # Chain integrity:      25% (tamper-proof audit trail)
-        # KDE completeness:     20% (data quality per event)
-        # CTE completeness:     20% (supply chain coverage)
-        # Obligation coverage:  15% (regulatory requirement satisfaction)
+        # Weighted overall — 6 dimensions (aligned with FSMA 204 priorities)
+        # Export readiness:     30% (FDA 24-hour response capability — §1.1455)
+        # KDE completeness:     25% (data quality per event — §1.1325–§1.1350)
+        # CTE completeness:     15% (supply chain coverage)
+        # Chain integrity:      10% (tamper-proof audit trail)
+        # Obligation coverage:  10% (regulatory requirement satisfaction)
         # Product coverage:     10% (FTL food category mapping)
-        # Export readiness:     10% (FDA 24-hour response capability)
         chain_score = scores["chain_integrity"][0]
         kde_score = scores["kde_completeness"][0]
         cte_score = scores["cte_completeness"][0]
