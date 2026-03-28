@@ -75,7 +75,7 @@ def _send_to_dlq(
         _dlq_producer.flush(timeout=5.0)
         DLQ_COUNTER.labels(reason=reason).inc()
         logger.info("message_sent_to_dlq", topic=TOPIC_DLQ, document_id=doc_id, reason=reason)
-    except Exception as exc:
+    except (ConnectionError, TimeoutError, OSError, RuntimeError) as exc:
         logger.critical("dlq_send_failed", error=str(exc), document_id=doc_id)
 
 
@@ -120,7 +120,7 @@ def _handle_processing_error(
     MESSAGES_COUNTER.labels(status="error").inc()
     try:
         consumer.commit(message=record, asynchronous=False)
-    except Exception as commit_exc:
+    except (RuntimeError, ConnectionError, OSError) as commit_exc:
         logger.error("offset_commit_failed", error=str(commit_exc))
 
 
@@ -153,7 +153,7 @@ def json_deserializer(v, ctx):
         return None
     try:
         return json.loads(v.decode("utf-8"))
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
         return v
 
 async def run_consumer() -> None:
@@ -228,7 +228,7 @@ async def run_consumer() -> None:
                     if k == "X-Request-ID" and v:
                         req_id = v.decode('utf-8')
                         break
-            except Exception as header_exc:
+            except (TypeError, ValueError, AttributeError, UnicodeDecodeError) as header_exc:
                  logger.debug("header_parse_error", error=str(header_exc))
             
             if req_id:

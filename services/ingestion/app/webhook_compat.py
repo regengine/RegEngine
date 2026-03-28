@@ -82,7 +82,7 @@ async def ingest_events(
     try:
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
-    except Exception as exc:
+    except (ImportError, RuntimeError, ConnectionError) as exc:
         # Exhaust the generator so cleanup runs
         try:
             next(db_gen, None)
@@ -189,10 +189,10 @@ async def ingest_events(
                         exc_svc = ExceptionQueueService(db_session)
                         exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
                     canon_sp.commit()
-                except Exception as canon_err:
+                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
                     canon_sp.rollback()
                     logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
-            except Exception as exc:
+            except (ValueError, TypeError, RuntimeError) as exc:
                 savepoint.rollback()
                 logger.error("compat_persistence_failed: %s", str(exc))
                 results.append(EventResult(
