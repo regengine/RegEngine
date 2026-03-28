@@ -38,6 +38,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "500", "Numeric quantity"),
         ("unit_of_measure", "cases", "Unit: cases, lbs, kg, pallets"),
         ("harvest_date", "2026-02-26", "Date of harvest (YYYY-MM-DD)"),
+        ("event_time", "08:30:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Valley Fresh Farms, Salinas CA", "Farm or field name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional, 13 digits)"),
         ("field_id", "FIELD-A7", "Field or growing area identifier"),
@@ -49,6 +50,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "500", "Numeric quantity"),
         ("unit_of_measure", "cases", "Unit"),
         ("cooling_date", "2026-02-26", "Date of cooling (YYYY-MM-DD)"),
+        ("event_time", "10:00:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Valley Fresh Cooler #2", "Cooling facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("temperature_celsius", "2.1", "Temperature at cooling (optional but recommended)"),
@@ -59,6 +61,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "200", "Quantity of packed units"),
         ("unit_of_measure", "cases", "Unit"),
         ("packing_date", "2026-02-26", "Date of packing (YYYY-MM-DD)"),
+        ("event_time", "14:00:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Valley Fresh Packhouse", "Packing facility name"),
         ("location_gln", "0614141000005", "GS1 GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001", "Source lot code(s), comma-separated if multiple"),
@@ -69,6 +72,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "200", "Quantity shipped"),
         ("unit_of_measure", "cases", "Unit"),
         ("ship_date", "2026-02-27", "Ship date (YYYY-MM-DD)"),
+        ("event_time", "16:30:00", "Time of event HH:MM:SS (optional)"),
         ("ship_from_location", "Valley Fresh Farms, Salinas CA", "Origin facility"),
         ("ship_to_location", "Metro Distribution Center, LA", "Destination facility"),
         ("ship_from_gln", "0614141000005", "Origin GLN (optional)"),
@@ -82,6 +86,7 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "200", "Quantity received"),
         ("unit_of_measure", "cases", "Unit"),
         ("receive_date", "2026-02-28", "Date received (YYYY-MM-DD)"),
+        ("event_time", "09:15:00", "Time of event HH:MM:SS (optional)"),
         ("receiving_location", "Metro Distribution Center, LA", "Receiving facility name"),
         ("receiving_gln", "0614141000006", "Receiving facility GLN (optional)"),
         ("immediate_previous_source", "Valley Fresh Farms", "Who shipped this to you"),
@@ -93,9 +98,23 @@ CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
         ("quantity", "1000", "Output quantity"),
         ("unit_of_measure", "bags", "Unit"),
         ("transformation_date", "2026-02-28", "Date of transformation (YYYY-MM-DD)"),
+        ("event_time", "10:00:00", "Time of event HH:MM:SS (optional)"),
         ("location_name", "Metro Processing Plant", "Transformation facility"),
         ("location_gln", "0614141000007", "Facility GLN (optional)"),
         ("input_lot_codes", "TOM-0226-F3-001,LET-0226-A2-003", "ALL input lot codes, comma-separated"),
+    ],
+    "first_land_based_receiving": [
+        ("traceability_lot_code", "SAL-0301-DOCK4-001", "Lot code assigned at landing"),
+        ("product_description", "Atlantic Salmon Fillets", "Product name"),
+        ("quantity", "2000", "Numeric quantity"),
+        ("unit_of_measure", "lbs", "Unit: lbs, kg, cases, pallets"),
+        ("landing_date", "2026-03-01", "Date of first land-based receipt (YYYY-MM-DD)"),
+        ("event_time", "06:00:00", "Time of event HH:MM:SS (optional)"),
+        ("receiving_location", "Pacific Seafood Dock 4, Portland OR", "Receiving facility name"),
+        ("receiving_gln", "0614141000020", "Receiving facility GLN (optional, 13 digits)"),
+        ("immediate_previous_source", "FV Ocean Harvest", "Vessel or entity that delivered product"),
+        ("reference_document", "BOL-2026-0301-042", "Bill of lading or reference document number"),
+        ("temperature_celsius", "-1.5", "Temperature at receipt (optional but recommended)"),
     ],
 }
 
@@ -188,6 +207,7 @@ _DATE_FIELDS = [
     "event_date", "date", "timestamp",
     "harvest_date", "cooling_date", "packing_date",
     "ship_date", "receive_date", "transformation_date",
+    "landing_date",
 ]
 
 # Columns that might hold the CTE type in a mixed-type CSV
@@ -316,7 +336,11 @@ async def ingest_csv(
 
             ts = date_field
             if "T" not in ts and len(ts) <= 10:
-                ts = f"{ts}T00:00:00Z"
+                event_time = (row.get("event_time") or "").strip()
+                if event_time:
+                    ts = f"{ts}T{event_time}" + ("Z" if "+" not in event_time and "Z" not in event_time else "")
+                else:
+                    ts = f"{ts}T00:00:00Z"
 
             loc_gln = (row.get("location_gln") or row.get("ship_from_gln")
                 or row.get("receiving_gln") or row.get("gln") or None)

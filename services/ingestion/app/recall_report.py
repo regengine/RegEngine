@@ -31,33 +31,48 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
             cte_count = db.execute(text(
                 "SELECT COUNT(*) FROM fsma.cte_events WHERE tenant_id = :tid"
             ), {"tid": tenant_id}).scalar() or 0
-            
+
             # Count distinct TLCs
             tlc_count = db.execute(text(
                 "SELECT COUNT(DISTINCT traceability_lot_code) FROM fsma.cte_events WHERE tenant_id = :tid"
             ), {"tid": tenant_id}).scalar() or 0
-            
+
             # Count CTE types covered
             cte_types = db.execute(text(
                 "SELECT COUNT(DISTINCT event_type) FROM fsma.cte_events WHERE tenant_id = :tid"
             ), {"tid": tenant_id}).scalar() or 0
-            
+
             # Check FDA export capability
             has_export = db.execute(text(
                 "SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"
             ), {"tid": tenant_id}).scalar() or 0
-            
+
             # Count suppliers
             supplier_count = db.execute(text(
                 "SELECT COUNT(*) FROM fsma.tenant_suppliers WHERE tenant_id = :tid"
             ), {"tid": tenant_id}).scalar() or 0
-            
+
+            # Chain integrity: count chain entries and detect sequence gaps
+            chain_length = db.execute(text(
+                "SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"
+            ), {"tid": tenant_id}).scalar() or 0
+
+            chain_gap_count = 0
+            if chain_length > 0:
+                max_seq = db.execute(text(
+                    "SELECT MAX(sequence_number) FROM fsma.hash_chain WHERE tenant_id = :tid"
+                ), {"tid": tenant_id}).scalar() or 0
+                # Gaps = expected entries minus actual entries
+                chain_gap_count = max(0, max_seq - chain_length)
+
             return {
                 "cte_count": cte_count,
                 "tlc_count": tlc_count,
                 "cte_types": cte_types,
                 "has_export": has_export > 0,
                 "supplier_count": supplier_count,
+                "chain_length": chain_length,
+                "chain_gap_count": chain_gap_count,
             }
         finally:
             db.close()
@@ -162,8 +177,13 @@ async def generate_report(
         # Team readiness: conservative estimate based on data maturity
         team_readiness_score = min(100, 60 + (cte_count // 100))
 
-        # Chain integrity: assume strong (we enforce SHA-256)
-        chain_integrity_score = 95
+        # Chain integrity: compute from actual hash chain data
+        chain_length = scoring_data.get("chain_length", 0)
+        chain_gap_count = scoring_data.get("chain_gap_count", 0)
+        if chain_length == 0:
+            chain_integrity_score = 50  # No chain data yet
+        else:
+            chain_integrity_score = max(0, min(100, 100 - (25 * chain_gap_count)))
 
         dimensions = [
             RecallDimension(
@@ -205,13 +225,20 @@ async def generate_report(
                 grade=_grade(chain_integrity_score),
                 status=_status(chain_integrity_score),
                 findings=[
-                    "SHA-256 hash chain: 100% verified",
-                    "No gaps in event sequence",
+                    f"SHA-256 hash chain length: {chain_length} entries",
+                    f"Sequence gaps detected: {chain_gap_count}" if chain_gap_count > 0 else "No gaps in event sequence",
                     "All immutability triggers active",
+                ] if chain_length > 0 else [
+                    "No hash chain entries recorded yet",
+                    "Chain verification will activate after first event ingestion",
                 ],
                 recommendations=[
                     "Maintain current integrity practices",
                     "Consider adding independent third-party verification",
+                ] if chain_gap_count == 0 else [
+                    f"Investigate {chain_gap_count} sequence gap(s) in the hash chain",
+                    "Run chain verification via /api/v1/fda/export/verify",
+                    "Consider re-ingesting events to fill gaps",
                 ],
             ),
             RecallDimension(
