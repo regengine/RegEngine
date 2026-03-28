@@ -505,7 +505,7 @@ async def export_fda_spreadsheet(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_export_failed", extra={"error": str(e), "tlc": tlc})
         raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
     finally:
@@ -632,7 +632,7 @@ async def export_all_events(
             },
         )
 
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_export_all_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
     finally:
@@ -688,7 +688,7 @@ async def export_history(
             "total": len(rows),
         }
 
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("export_history_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="History query failed. Check server logs for details.")
     finally:
@@ -848,7 +848,7 @@ async def export_recall_filtered(
                 },
             )
             db_session.commit()
-        except Exception:
+        except (ValueError, RuntimeError, OSError):
             pass  # Don't fail the export if audit logging fails
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -915,7 +915,7 @@ async def export_recall_filtered(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_recall_export_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Recall export failed. Check server logs for details.")
     finally:
@@ -1031,7 +1031,7 @@ async def verify_export(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("export_verify_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Verification failed. Check server logs for details.")
     finally:
@@ -1287,7 +1287,7 @@ async def export_fda_spreadsheet_v2(
                 },
             )
             db_session.commit()
-        except Exception:
+        except (ValueError, RuntimeError, OSError):
             logger.warning("v2_export_audit_log_failed", exc_info=True)
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -1388,7 +1388,7 @@ async def export_fda_spreadsheet_v2(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_export_v2_failed", extra={"error": str(e), "tenant_id": tenant_id})
         raise HTTPException(status_code=500, detail="V2 export failed. Check server logs for details.")
     finally:
