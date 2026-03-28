@@ -70,6 +70,12 @@ const nextConfig = {
                 destination: '/dashboard/integrations',
                 permanent: true,
             },
+            // /about is disabled — redirect to contact page (has founder info)
+            {
+                source: '/about',
+                destination: '/contact',
+                permanent: false,
+            },
         ];
     },
     async rewrites() {
