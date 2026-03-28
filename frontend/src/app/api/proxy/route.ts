@@ -9,12 +9,17 @@
  * to calls through this proxy.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { requireProxyAuth } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('admin');
 
 export async function POST(request: NextRequest) {
     try {
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
+
         const { url, method = 'GET', body } = await request.json();
 
         if (!url || typeof url !== 'string') {
