@@ -39,7 +39,6 @@ jobs:
 
       - name: Unit tests
         run: cd frontend && npm run test:run
-        continue-on-error: true
 
       - name: FSMA 204 compliance checks
         run: node qa/fsma-lite-check.js

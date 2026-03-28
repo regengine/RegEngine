@@ -85,7 +85,7 @@ def _get_db_session():
             yield db
         finally:
             db.close()
-    except Exception as exc:
+    except (ImportError, OSError, OperationalError) as exc:
         logger.warning("compliance_score: DB unavailable (%s), using fallback", exc)
         yield None
 
@@ -204,7 +204,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             {"tid": tenant_id},
         ).fetchone()
         result["obligation_count"] = obl_row[0] if obl_row else 0
-    except Exception:
+    except (OperationalError, ProgrammingError) as _obl_err:
         db_session.rollback()
         result["obligation_count"] = 0
 
@@ -238,7 +238,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             ).fetchone()
             result["applicable_obligation_rules"] = obl_coverage[0] if obl_coverage else 0
             result["total_obligation_rules"] = obl_coverage[1] if obl_coverage else 0
-        except Exception:
+        except (OperationalError, ProgrammingError) as _obl_cov_err:
             db_session.rollback()
             result["applicable_obligation_rules"] = 0
             result["total_obligation_rules"] = 0
@@ -255,7 +255,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
                 {"tid": tenant_id},
             ).fetchone()
             result["open_obligation_alerts"] = alert_row[0] if alert_row else 0
-        except Exception:
+        except (OperationalError, ProgrammingError) as _alert_err:
             db_session.rollback()
             result["open_obligation_alerts"] = 0
     else:
@@ -271,7 +271,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             """),
         ).fetchone()
         result["ftl_category_count"] = ftl_row[0] if ftl_row else 0
-    except Exception:
+    except (OperationalError, ProgrammingError) as _ftl_err:
         db_session.rollback()
         result["ftl_category_count"] = 0
 
@@ -282,7 +282,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         chain_result = persistence.verify_chain(tenant_id)
         result["chain_verified"] = chain_result.valid
         result["chain_verification_errors"] = chain_result.errors
-    except Exception as exc:
+    except (ImportError, OperationalError, ProgrammingError) as exc:
         logger.warning("chain_verification_in_scoring_failed: %s", exc)
         result["chain_verified"] = None  # unknown
         result["chain_verification_errors"] = []
@@ -575,7 +575,7 @@ async def get_compliance_score(
     try:
         from shared.database import SessionLocal
         db_session = SessionLocal()
-    except Exception as exc:
+    except (ImportError, OSError, OperationalError) as exc:
         logger.warning("compliance_score: DB unavailable (%s)", exc)
 
     if db_session is None:
@@ -729,7 +729,7 @@ async def get_pending_reviews(
     try:
         from shared.database import SessionLocal
         db_session = SessionLocal()
-    except Exception as exc:
+    except (ImportError, OSError, OperationalError) as exc:
         logger.warning("pending_reviews: DB unavailable (%s)", exc)
         return {
             "tenant_id": tenant_id,
@@ -759,7 +759,7 @@ async def get_pending_reviews(
                 """),
                 {"tid": tenant_id},
             ).scalar() or 0
-        except Exception:
+        except (OperationalError, ProgrammingError):
             pass  # table may not exist
 
         # 3. Active request cases not yet submitted
