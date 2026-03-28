@@ -493,13 +493,13 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
             actions.append(NextAction(
                 priority="HIGH",
                 action="URGENT: Chain tampering detected — investigate immediately",
-                impact="Chain integrity is 25% of overall score; tampering = audit failure",
+                impact="Chain integrity is 10% of overall score; tampering = audit failure",
             ))
         else:
             actions.append(NextAction(
                 priority="HIGH",
                 action="Investigate chain integrity issues — possible data loss",
-                impact="Chain integrity is 25% of overall score",
+                impact="Chain integrity is 10% of overall score",
             ))
 
     if obligation_score < 80:
@@ -635,13 +635,13 @@ async def get_compliance_score(
         # Compute sub-scores
         scores = _compute_scores(data)
 
-        # Weighted overall — 6 dimensions
-        # Chain integrity:      25% (tamper-proof audit trail)
-        # KDE completeness:     20% (data quality per event)
-        # CTE completeness:     20% (supply chain coverage)
-        # Obligation coverage:  15% (regulatory requirement satisfaction)
+        # Weighted overall — 6 dimensions (aligned with FSMA 204 priorities)
+        # Export readiness:     30% (FDA 24-hour response capability — §1.1455)
+        # KDE completeness:     25% (data quality per event — §1.1325–§1.1350)
+        # CTE completeness:     15% (supply chain coverage)
+        # Chain integrity:      10% (tamper-proof audit trail)
+        # Obligation coverage:  10% (regulatory requirement satisfaction)
         # Product coverage:     10% (FTL food category mapping)
-        # Export readiness:     10% (FDA 24-hour response capability)
         chain_score = scores["chain_integrity"][0]
         kde_score = scores["kde_completeness"][0]
         cte_score = scores["cte_completeness"][0]

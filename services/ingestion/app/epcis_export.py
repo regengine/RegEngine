@@ -86,6 +86,16 @@ def _query_tenant_events(tenant_id: str, lot_code: str | None, date_from: str | 
         db.close()
 
 
+_CTE_TO_BIZSTEP = {
+    "receiving": "urn:epcglobal:cbv:bizstep:receiving",
+    "shipping": "urn:epcglobal:cbv:bizstep:shipping",
+    "transformation": "urn:epcglobal:cbv:bizstep:transforming",
+    "initial_packing": "urn:epcglobal:cbv:bizstep:packing",
+    "harvesting": "urn:epcglobal:cbv:bizstep:harvesting",
+    "cooling": "urn:epcglobal:cbv:bizstep:storing",
+    "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:landing",
+}
+
 router = APIRouter(prefix="/api/v1/export", tags=["EPCIS & FDA Export"])
 
 
@@ -176,7 +186,7 @@ async def export_epcis(
                 "eventTime": ts.isoformat() if ts else now.isoformat(),
                 "eventTimeZoneOffset": "-08:00",
                 "action": r["epcis_action"] or "OBSERVE",
-                "bizStep": r["epcis_biz_step"] or f"urn:epcglobal:cbv:bizstep:{(r['event_type'] or 'observing').lower()}",
+                "bizStep": r["epcis_biz_step"] or _CTE_TO_BIZSTEP.get(r["event_type"] or "", "urn:epcglobal:cbv:bizstep:observing"),
                 "readPoint": {"id": f"urn:epc:id:sgln:{r['location_gln'] or '0000000000000'}.0"},
                 "extension": {
                     "quantityList": [{
@@ -209,8 +219,12 @@ async def export_epcis(
             "generatedAt": now.isoformat(),
             "eventsCount": len(event_list),
             "dataSource": data_source,
-            "integrityVerified": True,
+            "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
+            **({"regengine:disclaimer": (
+                "This export contains illustrative sample data, not actual tenant "
+                "traceability records. Do not submit to FDA or trading partners."
+            )} if data_source == "sample" else {}),
         }
     }
 
