@@ -197,7 +197,7 @@ from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
 from shared.auth import validate_auth_config
-validate_auth_config(require_supabase=True)
+validate_auth_config()
 
 app.include_router(router)
 app.include_router(v1_router)
