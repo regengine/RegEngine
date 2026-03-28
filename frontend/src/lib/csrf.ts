@@ -89,8 +89,8 @@ export function getCsrfTokenFromCookie(): string {
 /** HTTP methods that require CSRF validation. */
 export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-/** Paths exempt from CSRF checks (auth callbacks, webhooks, session bootstrap). */
-const CSRF_EXEMPT_PREFIXES = ['/api/auth/', '/api/webhooks/', '/api/session'];
+/** Paths exempt from CSRF checks (auth callbacks, webhooks, session bootstrap, public sandbox). */
+const CSRF_EXEMPT_PREFIXES = ['/api/auth/', '/api/webhooks/', '/api/session', '/api/ingestion/api/v1/sandbox/'];
 
 /** Check whether a request path is exempt from CSRF verification. */
 export function isCsrfExempt(pathname: string): boolean {
