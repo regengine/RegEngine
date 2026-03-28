@@ -4,9 +4,11 @@
  * – sanitizePath: prevents path traversal and null-byte injection
  * – proxyError: returns a consistent JSON error shape across all proxies
  * – requireEnvApiKey: resolves the server-side API key without hardcoded fallbacks
+ * – validateProxySession: validates Supabase session tokens before proxying
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 
 // ---------------------------------------------------------------------------
 // Path sanitisation
@@ -116,6 +118,73 @@ export function requireProxyAuth(request: NextRequest): NextResponse | null {
     { error: 'Unauthorized — no valid credentials provided' },
     { status: 401 },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Supabase session validation for proxy routes
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates Supabase session tokens before proxying to the backend.
+ *
+ * Only validates when Supabase cookies are present (sb-* cookies indicate
+ * the user authenticated via Supabase). API-key-only requests (re_api_key,
+ * re_admin_key) are validated by the backend — the proxy can't verify those.
+ *
+ * Returns a 401 NextResponse if the session is invalid/expired,
+ * or null if the request should proceed.
+ */
+export async function validateProxySession(
+  request: NextRequest,
+): Promise<NextResponse | null> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Skip validation when Supabase is not configured
+  if (!supabaseUrl || !supabaseKey) return null;
+
+  // Only validate when Supabase session cookies are present
+  const hasSupabaseCookies = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith('sb-'));
+  if (!hasSupabaseCookies) return null;
+
+  // Also skip if the request carries an API key — backend handles that auth
+  const hasApiKey =
+    !!request.cookies.get('re_api_key')?.value ||
+    !!request.headers.get('x-regengine-api-key');
+  if (hasApiKey) return null;
+
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll() {
+          // Route handlers are read-only for cookies; session refresh
+          // is handled by the middleware layer.
+        },
+      },
+    });
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      return NextResponse.json(
+        { error: 'Session expired or invalid — please log in again' },
+        { status: 401 },
+      );
+    }
+  } catch {
+    // Supabase SDK error — don't block the request, let backend validate
+    return null;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------

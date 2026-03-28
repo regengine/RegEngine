@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey, requireProxyAuth } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy review API requests to the Admin backend service
@@ -58,6 +58,10 @@ async function proxyRequest(
         // Defense-in-depth: reject requests with no auth credentials before proxying
         const authError = requireProxyAuth(request);
         if (authError) return authError;
+
+        // Validate Supabase session tokens (expired/revoked sessions get 401)
+        const sessionError = await validateProxySession(request);
+        if (sessionError) return sessionError;
 
         const path = sanitizePath(pathParts);
         if (!path) {
