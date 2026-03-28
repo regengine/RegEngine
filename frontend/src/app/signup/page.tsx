@@ -94,7 +94,7 @@ function SignupForm() {
           <CardHeader className="space-y-1">
             <h1 className="text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">Create Your Workspace</h1>
             <CardDescription className="text-[var(--re-text-muted)]">
-              Start your FSMA 204 compliance account.
+              14-day free trial. No credit card required.
             </CardDescription>
           </CardHeader>
           <CardContent>
