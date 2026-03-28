@@ -35,28 +35,10 @@ export default function RateLimitsDocsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                <div className="p-6 bg-background border rounded-lg text-center">
-                                    <div className="text-3xl font-bold text-primary mb-1">100</div>
-                                    <div className="text-sm text-muted-foreground">Requests per Minute</div>
-                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Growth</div>
-                                </div>
-                                <div className="p-6 bg-background border rounded-lg text-center">
-                                    <div className="text-3xl font-bold text-primary mb-1">500</div>
-                                    <div className="text-sm text-muted-foreground">Requests per Minute</div>
-                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Growth</div>
-                                </div>
-                                <div className="p-6 bg-background border rounded-lg text-center">
-                                    <div className="text-3xl font-bold text-primary mb-1">1,000</div>
-                                    <div className="text-sm text-muted-foreground">Requests per Minute</div>
-                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Scale</div>
-                                </div>
-                                <div className="p-6 bg-background border rounded-lg text-center">
-                                    <div className="text-3xl font-bold text-primary mb-1">Custom</div>
-                                    <div className="text-sm text-muted-foreground">Requests per Minute</div>
-                                    <div className="mt-2 text-xs font-mono bg-muted py-1 px-2 rounded inline-block">Enterprise</div>
-                                </div>
-                            </div>
+                            <p className="text-muted-foreground">
+                                All API keys are rate limited on a per-key basis. If you need higher throughput,{' '}
+                                <Link href="/alpha" className="text-primary underline">contact us</Link> to discuss your requirements.
+                            </p>
                         </CardContent>
                     </Card>
 

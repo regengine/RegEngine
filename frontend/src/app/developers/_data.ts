@@ -63,10 +63,9 @@ export const ENDPOINT_GROUPS = [
 ];
 
 export const SDK_ITEMS = [
-    { lang: 'Python', status: 'beta' as const, note: 'pip install regengine', icon: '🐍', docsHref: '/docs/sdks' },
-    { lang: 'Node.js', status: 'beta' as const, note: 'npm install @regengine/sdk', icon: '⬢', docsHref: '/docs/sdks' },
-    { lang: 'Ruby', status: 'planned' as const, note: 'Q3 2026', icon: '💎', docsHref: '/docs/sdks' },
-    { lang: 'Go', status: 'planned' as const, note: 'Q4 2026', icon: '🔵', docsHref: '/docs/sdks' },
+    { lang: 'Python', status: 'planned' as const, note: 'Planned', icon: '🐍', docsHref: '/docs/sdks' },
+    { lang: 'Node.js', status: 'planned' as const, note: 'Planned', icon: '⬢', docsHref: '/docs/sdks' },
+    { lang: 'Go', status: 'planned' as const, note: 'Planned', icon: '🔵', docsHref: '/docs/sdks' },
 ];
 
 export const ERROR_EXAMPLES = [

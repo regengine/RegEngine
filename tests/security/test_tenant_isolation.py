@@ -100,8 +100,11 @@ class TestTenantHeaderValidation:
                     "X-Tenant-ID": "'; DROP TABLE tenants; --"
                 }
             )
-            # Should return 400 (bad request) not 500
-            assert response.status_code in [200, 400, 401, 403]
+            # SQL injection payloads must be rejected, never accepted as valid input
+            assert response.status_code in [400, 401, 403, 422], (
+                f"SQL injection payload was accepted with status {response.status_code}; "
+                "expected rejection (400/401/403/422)"
+            )
             
         except httpx.ConnectError:
             pytest.skip("Graph API not running")
