@@ -2,7 +2,7 @@
 
 from typing import Optional, Dict, Any
 
-from lxml import etree
+from defusedxml.lxml import fromstring as _safe_fromstring
 
 from .base import DocumentParser
 
@@ -38,14 +38,8 @@ class XMLParser(DocumentParser):
             Extracted text from all text nodes
         """
         try:
-            # Parse XML with XXE-safe settings
-            parser = etree.XMLParser(
-                resolve_entities=False,
-                no_network=True,
-                remove_blank_text=True,
-                recover=True,
-            )
-            root = etree.fromstring(content, parser=parser)
+            # Parse XML with defusedxml for XXE prevention
+            root = _safe_fromstring(content)
             
             # Extract all text content
             text_parts = []
