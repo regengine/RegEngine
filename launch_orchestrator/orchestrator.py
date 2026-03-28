@@ -502,7 +502,9 @@ Contact: sales@regengine.ai
             return
 
         try:
-            result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+            # Use shlex.split instead of shell=True to prevent command injection
+            import shlex
+            result = subprocess.run(shlex.split(command), check=True, capture_output=True, text=True)
             self.result.add_event(
                 phase,
                 action,

@@ -10,14 +10,6 @@ const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 const GATED_DEV_ROUTES = [
     '/developer',
     '/developers',
-    '/docs/api',
-    '/docs/authentication',
-    '/docs/quickstart',
-    '/docs/sdks',
-    '/docs/webhooks',
-    '/docs/rate-limits',
-    '/docs/errors',
-    '/docs/changelog',
     '/playground',
     '/api-keys',
 ];
@@ -33,9 +25,17 @@ const AUTHENTICATED_APP_ROUTES = [
     '/owner',
 ];
 
-// Public docs that remain accessible (product/compliance, not dev-facing)
+// Public docs — all documentation is accessible without auth
 const PUBLIC_DOCS = [
     '/docs',
+    '/docs/api',
+    '/docs/authentication',
+    '/docs/quickstart',
+    '/docs/sdks',
+    '/docs/webhooks',
+    '/docs/rate-limits',
+    '/docs/errors',
+    '/docs/changelog',
     '/docs/fsma-204',
 ];
 
@@ -122,6 +122,9 @@ async function checkSupabaseSession(request: NextRequest): Promise<{ user: Recor
 async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
 
+    // Track whether user had a token that failed validation (expired vs never logged in)
+    let hadExpiredToken = false;
+
     // Strategy 1: Check custom RegEngine JWT cookie
     const reToken = request.cookies.get('re_access_token')?.value;
     if (reToken) {
@@ -136,7 +139,8 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
             }
             return NextResponse.next({ request });
         }
-        // Token invalid/expired — fall through to Supabase check
+        // Token existed but was invalid/expired
+        hadExpiredToken = true;
     }
 
     // Strategy 2: Check Supabase session
@@ -171,6 +175,9 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
+    if (hadExpiredToken) {
+        url.searchParams.set('error', 'session_expired');
+    }
     return NextResponse.redirect(url);
 }
 
