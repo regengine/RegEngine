@@ -24,6 +24,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.authz import require_permission, IngestionPrincipal
+from app.subscription_gate import require_active_subscription
 from app.config import get_settings
 from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
@@ -475,6 +476,7 @@ async def ingest_events(
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _auth: None = Depends(_verify_api_key),
+    _subscription: None = Depends(require_active_subscription),
     db_session=Depends(_get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
