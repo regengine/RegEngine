@@ -54,12 +54,7 @@ const capabilities = [
     },
 ];
 
-/* ── SDK install commands ── */
-const sdks = [
-    { lang: 'Python', cmd: 'pip install regengine' },
-    { lang: 'Node.js', cmd: 'npm install @regengine/sdk' },
-    { lang: 'Go', cmd: 'go get github.com/regengine/regengine-go' },
-];
+/* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
 const curlSnippet = `curl -X POST https://api.regengine.co/v1/webhooks/ingest \\
@@ -159,58 +154,33 @@ export default function DevelopersPage() {
                 </div>
             </section>
 
-            {/* ═══ SDK INSTALL ═══ */}
+            {/* ═══ SDKs Coming Soon ═══ */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-                <div className="max-w-[900px] mx-auto py-16 px-6">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Official SDKs</h2>
-                    <p className="text-sm text-re-text-muted text-center mb-10 max-w-md mx-auto">
-                        Install and start integrating in under a minute.
+                <div className="max-w-[900px] mx-auto py-16 px-6 text-center">
+                    <h2 className="text-2xl font-bold text-re-text-primary mb-3">SDKs Coming Soon</h2>
+                    <p className="text-sm text-re-text-muted mb-6 max-w-md mx-auto">
+                        Official client libraries for Python, Node.js, and Go are planned.
+                        In the meantime, use our REST API directly &mdash; all endpoints accept and return JSON.
                     </p>
-                    <div className="grid sm:grid-cols-3 gap-4">
-                        {sdks.map((sdk) => (
-                            <div
-                                key={sdk.lang}
-                                className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5"
-                                style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
-                            >
-                                <span className="text-[11px] font-semibold uppercase tracking-wider text-re-text-disabled mb-2 block">
-                                    {sdk.lang}
-                                </span>
-                                <code className="text-sm font-mono text-[var(--re-brand)]">{sdk.cmd}</code>
-                            </div>
-                        ))}
-                    </div>
+                    <Link href="/docs/sdks">
+                        <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
+                            Get Notified When SDKs Launch
+                        </Button>
+                    </Link>
                 </div>
             </section>
 
             {/* ═══ RATE LIMITS ═══ */}
             <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
                 <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Rate limits</h2>
-                <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
-                    Generous defaults with enterprise tiers for high-volume integrations.
+                <p className="text-sm text-re-text-muted text-center mb-6 max-w-lg mx-auto">
+                    All API requests are rate limited per API key.
+                    If you hit a limit, the API returns a <code className="text-re-text-secondary">429</code> with a <code className="text-re-text-secondary">Retry-After</code> header.
                 </p>
-                <div className="grid sm:grid-cols-2 gap-4 max-w-[600px] mx-auto">
-                    <div
-                        className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 text-center"
-                        style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
-                    >
-                        <p className="text-3xl font-bold text-re-text-primary font-mono mb-1">1,000</p>
-                        <p className="text-sm text-re-text-muted">requests / minute</p>
-                        <span className="inline-block mt-3 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-brand)]/20">
-                            Standard
-                        </span>
-                    </div>
-                    <div
-                        className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-6 text-center"
-                        style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
-                    >
-                        <p className="text-3xl font-bold text-re-text-primary font-mono mb-1">5,000</p>
-                        <p className="text-sm text-re-text-muted">requests / minute</p>
-                        <span className="inline-block mt-3 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                            Enterprise
-                        </span>
-                    </div>
-                </div>
+                <p className="text-sm text-re-text-muted text-center max-w-lg mx-auto">
+                    Need higher throughput?{' '}
+                    <Link href="/alpha" className="text-[var(--re-brand)] underline">Contact us</Link> to discuss your requirements.
+                </p>
             </section>
 
             {/* ═══ CTA ═══ */}

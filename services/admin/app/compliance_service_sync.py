@@ -6,7 +6,7 @@ This is the sync version compatible with the existing SQLAlchemy sync session.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID, uuid4
 
 import structlog
@@ -659,14 +659,6 @@ class ComplianceServiceSync:
         ])
         
         return output.getvalue()
-        
-        return {
-            "snapshot_id": str(snapshot_id),
-            "attested_by": attested_by,
-            "attestation_title": attestation_title,
-            "attested_at": now.isoformat(),
-            "is_attested": True,
-        }
 
     def get_snapshot_for_alert(self, alert_id: UUID) -> Optional[ComplianceSnapshotModel]:
         """Get the snapshot bound to a specific alert."""

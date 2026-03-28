@@ -5,15 +5,17 @@ import { createClient } from '@supabase/supabase-js';
 
 // Use a dedicated client that queries the fsma schema.
 // Lazy-init to avoid "supabaseUrl is required" errors in test/CI environments.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _fsmaClient: any = null;
-function getFsmaClient() {
+// SupabaseClient type for non-default schema requires a generic cast.
+// Using the base client type since we only call .from().select() on it.
+import type { SupabaseClient } from '@supabase/supabase-js';
+let _fsmaClient: SupabaseClient | null = null;
+function getFsmaClient(): SupabaseClient | null {
     if (!_fsmaClient) {
         const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
         if (!url || !key) return null;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        _fsmaClient = (createClient as any)(url, key, { db: { schema: 'fsma' } });
+        // Schema override requires casting — Supabase generics don't support custom schemas without codegen
+        _fsmaClient = createClient(url, key, { db: { schema: 'fsma' } } as unknown as Parameters<typeof createClient>[2]);
     }
     return _fsmaClient;
 }

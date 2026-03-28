@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
-const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
+const COMPLIANCE_URL = getServerServiceURL('compliance');
 
 export const dynamic = 'force-dynamic';
 

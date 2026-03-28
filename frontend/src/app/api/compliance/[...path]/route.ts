@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy compliance API requests to the Compliance backend service
 // This allows browser clients to access compliance endpoints without CORS issues
 
 function getComplianceUrl(): string {
-    const url = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
+    const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
     // Guard: *.railway.internal URLs are unreachable from Vercel serverless
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
         console.warn('[proxy/compliance] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel. Set a public Railway URL.');
-        return 'http://localhost:8500'; // Will fail with a clear connection error
+        return getServerServiceURL('compliance'); // Will fail with a clear connection error
     }
     return url;
 }
@@ -47,6 +48,14 @@ async function proxyRequest(
                 { status: 503 },
             );
         }
+
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
+
+        // Validate Supabase session tokens (expired/revoked sessions get 401)
+        const sessionError = await validateProxySession(request);
+        if (sessionError) return sessionError;
 
         const path = sanitizePath(pathParts);
         if (!path) {

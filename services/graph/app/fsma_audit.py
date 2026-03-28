@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import os
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -23,6 +25,50 @@ from typing import Any, Dict, List, Optional, Union
 import structlog
 
 logger = structlog.get_logger("fsma-audit")
+
+
+def _persist_audit_entry(entry) -> None:
+    """Persist an audit entry to Postgres. Best-effort — failures logged, not raised."""
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return
+
+    try:
+        from sqlalchemy import create_engine, text
+        engine = create_engine(db_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO fsma.fsma_audit_trail
+                    (event_id, actor, actor_type, action, target_type, target_id,
+                     tenant_id, correlation_id, confidence, evidence_link,
+                     checksum, previous_checksum, diff_json, created_at)
+                    VALUES
+                    (:event_id, :actor, :actor_type, :action, :target_type, :target_id,
+                     :tenant_id, :correlation_id, :confidence, :evidence_link,
+                     :checksum, :previous_checksum, :diff_json, :created_at)
+                """),
+                {
+                    "event_id": entry.event_id,
+                    "actor": entry.actor,
+                    "actor_type": entry.actor_type.value if hasattr(entry.actor_type, 'value') else str(entry.actor_type),
+                    "action": entry.action.value if hasattr(entry.action, 'value') else str(entry.action),
+                    "target_type": entry.target_type,
+                    "target_id": entry.target_id,
+                    "tenant_id": entry.tenant_id,
+                    "correlation_id": entry.correlation_id,
+                    "confidence": entry.confidence,
+                    "evidence_link": entry.evidence_link,
+                    "checksum": entry.checksum,
+                    "previous_checksum": entry.previous_checksum,
+                    "diff_json": json.dumps([d.to_dict() for d in entry.diff]) if entry.diff else None,
+                    "created_at": entry.timestamp,
+                },
+            )
+            conn.commit()
+    except Exception as e:
+        # Best-effort: log failure but don't break in-memory audit
+        logging.getLogger("fsma_audit").warning("Failed to persist audit entry: %s", e)
 
 
 # Thread-safe audit log storage
@@ -254,6 +300,9 @@ class FSMAAuditLog:
             )
 
             self._entries.append(entry)
+
+            # Persist to database (best-effort)
+            _persist_audit_entry(entry)
 
             # Index by target
             if target_id not in self._by_target:

@@ -125,6 +125,10 @@ async def ingest_events(
 
             alerts = _generate_alerts(event)
 
+            # Each event gets its own savepoint so a failure on one
+            # event (storage, canonical write, or rule evaluation)
+            # never poisons the DB transaction for subsequent events.
+            savepoint = db_session.begin_nested()
             try:
                 store_result = persistence.store_event(
                     tenant_id=tenant_id,
@@ -140,6 +144,8 @@ async def ingest_events(
                     kdes=event.kdes,
                     alerts=alerts,
                 )
+                savepoint.commit()
+
                 results.append(EventResult(
                     traceability_lot_code=event.traceability_lot_code,
                     cte_type=event.cte_type.value,
@@ -151,7 +157,9 @@ async def ingest_events(
                 accepted += 1
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
-                # Canonical normalization + rule evaluation
+                # Canonical normalization + rule evaluation (best-effort).
+                # Separate savepoint: never blocks primary CTE persistence.
+                canon_sp = db_session.begin_nested()
                 try:
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
@@ -180,9 +188,12 @@ async def ingest_events(
                         from shared.exception_queue import ExceptionQueueService
                         exc_svc = ExceptionQueueService(db_session)
                         exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
+                    canon_sp.commit()
                 except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                    canon_sp.rollback()
                     logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
             except (ValueError, TypeError, RuntimeError) as exc:
+                savepoint.rollback()
                 logger.error("compat_persistence_failed: %s", str(exc))
                 results.append(EventResult(
                     traceability_lot_code=event.traceability_lot_code,
