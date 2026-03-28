@@ -376,18 +376,54 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
 # Neo4j Graph Sync
 # ---------------------------------------------------------------------------
 
-_graph_sync_failures = 0
+_SYNC_COUNTER_PREFIX = "regengine:graph_sync"
+_graph_sync_failures = 0  # Fallback when Redis unavailable
 _graph_sync_successes = 0
 
 
+def _get_redis_client():
+    """Get Redis client for counter persistence. Returns None if unavailable."""
+    try:
+        import redis
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        return redis.from_url(redis_url, decode_responses=True, socket_timeout=1)
+    except Exception:
+        return None
+
+
+def _incr_sync_counter(key: str) -> None:
+    """Increment a graph sync counter in Redis with in-memory fallback."""
+    global _graph_sync_failures, _graph_sync_successes
+    try:
+        client = _get_redis_client()
+        if client:
+            client.incr(f"{_SYNC_COUNTER_PREFIX}:{key}")
+            return
+    except Exception:
+        pass
+    # Fallback to in-memory
+    if key == "failures":
+        _graph_sync_failures += 1
+    else:
+        _graph_sync_successes += 1
+
+
 def get_graph_sync_stats() -> dict:
-    """Return graph sync health counters for the /health endpoint."""
+    """Return graph sync success/failure counts from Redis or in-memory fallback."""
+    try:
+        client = _get_redis_client()
+        if client:
+            return {
+                "successes": int(client.get(f"{_SYNC_COUNTER_PREFIX}:successes") or 0),
+                "failures": int(client.get(f"{_SYNC_COUNTER_PREFIX}:failures") or 0),
+            }
+    except Exception:
+        pass
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync."""
-    global _graph_sync_failures, _graph_sync_successes
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return
@@ -414,9 +450,9 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
             },
         }
         client.rpush("neo4j-sync", json.dumps(message, default=str))
-        _graph_sync_successes += 1
+        _incr_sync_counter("successes")
     except (ConnectionError, OSError, ValueError, TypeError) as exc:
-        _graph_sync_failures += 1
+        _incr_sync_counter("failures")
         logger.warning("graph_sync_publish_failed event_id=%s error=%s", event_id, str(exc))
 
 
