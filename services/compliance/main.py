@@ -16,6 +16,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before app creation)
+from shared.error_handling import init_sentry
+init_sentry()
+
 # Production Hardening
 from shared.middleware.security import add_security
 from shared.rate_limit import add_rate_limiting
