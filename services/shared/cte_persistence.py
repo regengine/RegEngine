@@ -90,6 +90,19 @@ class ChainVerification:
             setattr(self, slot, kwargs.get(slot))
 
 
+class MerkleVerification:
+    """Result of Merkle tree verification for a tenant's hash chain."""
+
+    __slots__ = (
+        "valid", "merkle_root", "chain_length", "tree_depth",
+        "errors", "checked_at",
+    )
+
+    def __init__(self, **kwargs):
+        for slot in self.__slots__:
+            setattr(self, slot, kwargs.get(slot))
+
+
 # ---------------------------------------------------------------------------
 # Hashing Utilities
 # ---------------------------------------------------------------------------
@@ -937,6 +950,133 @@ class CTEPersistence:
             errors=errors,
             checked_at=datetime.now(timezone.utc).isoformat(),
         )
+
+    # ------------------------------------------------------------------
+    # Merkle Tree Verification
+    # ------------------------------------------------------------------
+
+    def verify_chain_merkle(self, tenant_id: str) -> MerkleVerification:
+        """
+        Build a Merkle tree from a tenant's hash chain and return verification info.
+
+        This provides O(log n) inclusion proofs as a complement to the
+        linear verify_chain() method. The Merkle tree is computed in memory
+        from the ordered event_hashes stored in fsma.hash_chain.
+        """
+        from shared.merkle_tree import MerkleTree
+
+        rows = self.session.execute(
+            text("""
+                SELECT event_hash
+                FROM fsma.hash_chain
+                WHERE tenant_id = :tid
+                ORDER BY sequence_num ASC
+            """),
+            {"tid": tenant_id},
+        ).fetchall()
+
+        if not rows:
+            return MerkleVerification(
+                valid=True,
+                merkle_root=None,
+                chain_length=0,
+                tree_depth=0,
+                errors=[],
+                checked_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        hashes = [row[0] for row in rows]
+        errors = []
+
+        try:
+            tree = MerkleTree(hashes)
+            merkle_root = tree.root
+            tree_depth = tree.depth
+        except Exception as e:
+            logger.error(
+                "merkle_tree_build_failed",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
+            return MerkleVerification(
+                valid=False,
+                merkle_root=None,
+                chain_length=len(hashes),
+                tree_depth=0,
+                errors=[f"Failed to build Merkle tree: {e}"],
+                checked_at=datetime.now(timezone.utc).isoformat(),
+            )
+
+        # Verify every leaf can produce a valid proof back to the root
+        for i, event_hash in enumerate(hashes):
+            try:
+                proof = tree.generate_proof(i)
+                if not MerkleTree.verify_proof(event_hash, proof, merkle_root):
+                    errors.append(
+                        f"Merkle proof verification failed for event at index {i}"
+                    )
+            except Exception as e:
+                errors.append(
+                    f"Merkle proof generation failed at index {i}: {e}"
+                )
+
+        return MerkleVerification(
+            valid=len(errors) == 0,
+            merkle_root=merkle_root,
+            chain_length=len(hashes),
+            tree_depth=tree_depth,
+            errors=errors,
+            checked_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    def get_merkle_proof(
+        self, tenant_id: str, event_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Generate a Merkle inclusion proof for a specific event.
+
+        Returns a dict with merkle_root, proof steps, event_hash, and index,
+        or None if the event is not found in the chain.
+        """
+        from shared.merkle_tree import MerkleTree
+
+        rows = self.session.execute(
+            text("""
+                SELECT cte_event_id, event_hash
+                FROM fsma.hash_chain
+                WHERE tenant_id = :tid
+                ORDER BY sequence_num ASC
+            """),
+            {"tid": tenant_id},
+        ).fetchall()
+
+        if not rows:
+            return None
+
+        # Find the target event's index in the chain
+        target_index = None
+        target_hash = None
+        hashes = []
+        for i, row in enumerate(rows):
+            hashes.append(row[1])
+            if str(row[0]) == str(event_id):
+                target_index = i
+                target_hash = row[1]
+
+        if target_index is None:
+            return None
+
+        tree = MerkleTree(hashes)
+        proof = tree.generate_proof(target_index)
+
+        return {
+            "event_id": str(event_id),
+            "event_hash": target_hash,
+            "index": target_index,
+            "merkle_root": tree.root,
+            "tree_depth": tree.depth,
+            "chain_length": len(hashes),
+            "proof": proof,
+        }
 
     # ------------------------------------------------------------------
     # Export Support

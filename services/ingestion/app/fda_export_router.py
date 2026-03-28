@@ -1463,3 +1463,110 @@ async def export_fda_spreadsheet_v2(
     finally:
         if db_session:
             db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Merkle Tree Verification Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/export/merkle-root",
+    summary="Get Merkle root for a tenant's hash chain",
+    description=(
+        "Computes a Merkle tree from all hash chain entries for the tenant "
+        "and returns the root hash. This enables O(log n) verification of "
+        "individual event inclusion without walking the entire chain."
+    ),
+)
+async def get_merkle_root(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    _auth=Depends(require_permission("fda.verify")),
+):
+    """Return the current Merkle root for a tenant's hash chain."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        result = persistence.verify_chain_merkle(tenant_id)
+
+        return {
+            "tenant_id": tenant_id,
+            "valid": result.valid,
+            "merkle_root": result.merkle_root,
+            "chain_length": result.chain_length,
+            "tree_depth": result.tree_depth,
+            "errors": result.errors,
+            "checked_at": result.checked_at,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "merkle_root_failed",
+            extra={"error": str(e), "tenant_id": tenant_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Merkle root computation failed. Check server logs.",
+        )
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.get(
+    "/export/merkle-proof",
+    summary="Get Merkle inclusion proof for a specific event",
+    description=(
+        "Generates a Merkle inclusion proof that cryptographically demonstrates "
+        "a specific event is part of the tenant's hash chain. The proof can be "
+        "independently verified with just the event hash, proof steps, and root."
+    ),
+)
+async def get_merkle_proof(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    event_id: str = Query(..., description="CTE event ID to prove inclusion for"),
+    _auth=Depends(require_permission("fda.verify")),
+):
+    """Return a Merkle inclusion proof for a specific event."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        proof_data = persistence.get_merkle_proof(tenant_id, event_id)
+
+        if proof_data is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Event '{event_id}' not found in hash chain for tenant '{tenant_id}'",
+            )
+
+        return {
+            "tenant_id": tenant_id,
+            **proof_data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "merkle_proof_failed",
+            extra={"error": str(e), "tenant_id": tenant_id, "event_id": event_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Merkle proof generation failed. Check server logs.",
+        )
+    finally:
+        if db_session:
+            db_session.close()
