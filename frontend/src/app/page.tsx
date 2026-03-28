@@ -7,7 +7,7 @@ const CREDIBILITY = [
   { icon: FileCheck, label: "EPCIS 2.0 native" },
   { icon: Lock, label: "SHA-256 verified chains" },
   { icon: Database, label: "Built on Supabase" },
-  { icon: Shield, label: "SOC 2 in progress" },
+  { icon: Shield, label: "SOC 2 Type I — Q3 2026" },
 ];
 
 /* ------------------------------------------------------------------ */
