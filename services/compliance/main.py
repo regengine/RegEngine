@@ -57,7 +57,7 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 install_exception_handlers(app)
 
 from shared.auth import validate_auth_config
-validate_auth_config()
+validate_auth_config(require_supabase=True)
 
 
 @app.get("/")
