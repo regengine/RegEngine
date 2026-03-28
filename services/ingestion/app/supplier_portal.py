@@ -20,6 +20,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 from app.webhook_compat import _verify_api_key, ingest_events
@@ -28,12 +29,112 @@ logger = logging.getLogger("supplier-portal")
 
 router = APIRouter(prefix="/api/v1/portal", tags=["Supplier Portal"])
 
-# In-memory portal link store (in production: database)
+# In-memory portal link store (fallback when DB is unavailable)
 _portal_links: dict[str, dict] = {}
 
 
+def _get_db():
+    """Get database session. Returns None if unavailable."""
+    try:
+        from shared.database import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_unavailable error=%s", str(exc))
+        return None
+
+
+def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
+    """Insert a portal link into the database. Returns True on success."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        db.execute(
+            text("""
+                INSERT INTO fsma.tenant_portal_links
+                (id, tenant_id, supplier_name, link_token, status, created_at, expires_at)
+                VALUES (gen_random_uuid(), :tenant_id, :supplier_name, :link_token, 'active', :created_at, :expires_at)
+                ON CONFLICT (link_token) DO UPDATE SET
+                    supplier_name = :supplier_name,
+                    status = 'active',
+                    expires_at = :expires_at
+            """),
+            {
+                "tenant_id": link_data["tenant_id"],
+                "supplier_name": link_data["supplier_name"],
+                "link_token": portal_id,
+                "created_at": link_data["created_at"],
+                "expires_at": link_data["expires_at"],
+            },
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_store_portal_link_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
+
+
+def _db_get_portal_link(portal_id: str) -> Optional[dict]:
+    """Fetch a portal link from the database by link_token. Returns dict or None."""
+    db = _get_db()
+    if not db:
+        return None
+    try:
+        row = db.execute(
+            text("""
+                SELECT tenant_id, supplier_name, link_token, status, created_at, expires_at
+                FROM fsma.tenant_portal_links
+                WHERE link_token = :link_token AND status = 'active'
+            """),
+            {"link_token": portal_id},
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "tenant_id": str(row[0]),
+            "supplier_name": row[1],
+            "supplier_email": None,
+            "allowed_cte_types": ["shipping"],
+            "expires_at": row[5].isoformat() if row[5] else None,
+            "created_at": row[4].isoformat() if row[4] else None,
+        }
+    except Exception as exc:
+        logger.warning("db_get_portal_link_failed error=%s", str(exc))
+        return None
+    finally:
+        db.close()
+
+
+def _db_update_portal_link_status(portal_id: str, status: str) -> bool:
+    """Update the status of a portal link in the database."""
+    db = _get_db()
+    if not db:
+        return False
+    try:
+        db.execute(
+            text("UPDATE fsma.tenant_portal_links SET status = :status WHERE link_token = :link_token"),
+            {"status": status, "link_token": portal_id},
+        )
+        db.commit()
+        return True
+    except Exception as exc:
+        logger.warning("db_update_portal_link_status_failed error=%s", str(exc))
+        if db:
+            db.rollback()
+        return False
+    finally:
+        db.close()
+
+
 def _get_active_portal_link(portal_id: str) -> dict:
-    link = _portal_links.get(portal_id)
+    # Try DB first, fall back to in-memory
+    link = _db_get_portal_link(portal_id)
+    if link is None:
+        link = _portal_links.get(portal_id)
     if not link:
         raise HTTPException(status_code=404, detail="Portal link not found or expired")
 
@@ -48,6 +149,7 @@ def _get_active_portal_link(portal_id: str) -> dict:
 
     if expires_at <= datetime.now(timezone.utc):
         _portal_links.pop(portal_id, None)
+        _db_update_portal_link_status(portal_id, "expired")
         raise HTTPException(status_code=404, detail="Portal link not found or expired")
 
     return link
@@ -114,16 +216,24 @@ async def create_portal_link(
 ) -> PortalLinkResponse:
     """Create a supplier portal link."""
     portal_id = secrets.token_urlsafe(16)
-    expires_at = (datetime.now(timezone.utc) + timedelta(days=request.expires_days)).isoformat()
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(days=request.expires_days)).isoformat()
 
-    _portal_links[portal_id] = {
+    link_data = {
         "tenant_id": request.tenant_id,
         "supplier_name": request.supplier_name,
         "supplier_email": request.supplier_email,
         "allowed_cte_types": request.allowed_cte_types,
         "expires_at": expires_at,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": now.isoformat(),
     }
+
+    # Try DB first, fall back to in-memory
+    db_success = _db_store_portal_link(portal_id, link_data)
+    if not db_success:
+        logger.info("db_store_fallback using in-memory for portal_id=%s", portal_id)
+    # Always store in-memory as well for supplemental fields (supplier_email, allowed_cte_types)
+    _portal_links[portal_id] = link_data
 
     logger.info(
         "portal_link_created",

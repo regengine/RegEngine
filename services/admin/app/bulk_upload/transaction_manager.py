@@ -7,6 +7,7 @@ from typing import Any
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.supplier_cte_service import _persist_supplier_cte_event
@@ -360,7 +361,7 @@ def execute_bulk_commit(
 
         db.commit()
 
-    except Exception:
+    except SQLAlchemyError:
         db.rollback()
         raise
 

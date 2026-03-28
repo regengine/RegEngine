@@ -232,7 +232,7 @@ async def readiness():
     return {"status": "ready", "service": "admin-api"}
 
 
-@router.get("/health/consumer")
+@router.get("/health/consumer", dependencies=[Depends(verify_admin_key)])
 def consumer_health():
     """Health check endpoint for the Kafka review consumer."""
     from fastapi.responses import JSONResponse

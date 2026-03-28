@@ -83,6 +83,7 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 ├── migrations/                  Database migrations (Flyway-style)
 ├── gateway/                     Nginx API gateway config
 ├── docker-compose.yml           Local dev stack (17 services)
+├── docker-compose.mvp.yml       MVP demo stack (4 services)
 ├── docker-compose.prod.yml      Production deployment
 ├── docker-compose.test.yml      CI integration test stack
 ├── docker-compose.monitoring.yml Prometheus + Grafana monitoring
@@ -100,7 +101,7 @@ Annual billing saves ~15%. All plans include FSMA 204 traceability workspace, FD
 
 | Layer | Technologies |
 |-------|-------------|
-| **Frontend** | Next.js 15, React 18, TypeScript, Tailwind CSS, Radix UI, Framer Motion, TanStack Query, jose (JWT), Supabase Auth |
+| **Frontend** | Next.js 15, React 18, TypeScript, Tailwind CSS, Radix UI, Framer Motion, TanStack Query, jose (JWT), Supabase Auth, Capacitor (mobile) |
 | **Backend** | FastAPI (Python 3.11), PostgreSQL 16, Neo4j 5 (graph), Kafka (Redpanda), Redis 7, Stripe, defusedxml, SQLAlchemy |
 | **Infrastructure** | Vercel Pro (frontend), Railway Pro (backend services), Supabase (auth + database) |
 | **Observability** | Prometheus, Grafana, OpenTelemetry, Jaeger, structlog |
@@ -280,18 +281,44 @@ See [SECURITY.md](SECURITY.md) for our vulnerability disclosure policy. **Do not
 
 ## Quick Start
 
-### Prerequisites
+### 5-Minute MVP Demo
 
-- Docker and Docker Compose
-- Node.js 18+ and npm
-- Python 3.11+ (for running backend tests locally)
-
-### Setup
+The fastest way to see RegEngine work end-to-end. Requires only Docker.
 
 ```bash
 git clone https://github.com/PetrefiedThunder/RegEngine.git
 cd RegEngine
 
+# Configure environment
+cp .env.example .env
+# Set these three values in .env:
+#   ADMIN_MASTER_KEY=<any-string>
+#   REGENGINE_API_KEY=<any-string>
+#   POSTGRES_PASSWORD=regengine
+
+# Start the minimal 4-service stack (Postgres, Redis, Admin, Ingestion)
+docker compose -f docker-compose.mvp.yml up -d
+
+# Run database migrations
+alembic upgrade head
+
+# Run the demo (CSV upload → normalize → hash → FDA export)
+REGENGINE_API_KEY=<your-key> ./scripts/demo_mvp_flow.sh
+```
+
+The demo uploads 6 supply chain CSVs (harvest → cool → pack → ship → receive → transform), normalizes each into canonical CTE records with SHA-256 hashes and chain linkage, then generates an FDA-ready export CSV. Takes under 30 seconds.
+
+### Full Development Setup
+
+#### Prerequisites
+
+- Docker and Docker Compose
+- Node.js 20+ and npm
+- Python 3.11+ (for running backend tests locally)
+
+#### Setup
+
+```bash
 # Fix macOS extended attributes (if "Operation not permitted" errors)
 xattr -cr .
 
@@ -359,7 +386,7 @@ The seeder creates canonical events, evaluates rules, generates exception cases,
 
 ### Sample Data
 
-6 CSV files in `sample_data/` simulate a real multi-supplier romaine lettuce supply chain. Import via Dashboard → Data Import → CSV Upload in order (01–06). Exercises the full chain: ingest → canonical → rules → hash chain → audit.
+6 CSV files in `sample_data/` simulate a real multi-supplier romaine lettuce supply chain covering all FSMA 204 CTEs with valid GS1 GLNs, reference documents, and required KDEs. Import via Dashboard → Data Import → CSV Upload in order (01–06), or run the MVP demo script to ingest all 6 programmatically. Exercises the full chain: ingest → canonical → rules → hash chain → FDA export.
 
 ### Running Tests
 
@@ -494,7 +521,8 @@ Additional compose files:
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.dev.yml` | **Minimal dev stack** — just postgres, redis, neo4j, minio (4 services) |
+| `docker-compose.mvp.yml` | **MVP demo** — Postgres, Redis, Admin, Ingestion (4 services, no Kafka/Neo4j) |
+| `docker-compose.dev.yml` | **Dev stack** — Postgres, Redis, Neo4j, MinIO (infrastructure only) |
 | `docker-compose.prod.yml` | Production deployment with image pulls from ghcr.io |
 | `docker-compose.test.yml` | CI integration tests (Postgres 16, Redis, Neo4j, LocalStack) |
 | `docker-compose.monitoring.yml` | Prometheus, Grafana, Node/Redis/Postgres exporters |

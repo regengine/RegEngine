@@ -37,15 +37,33 @@ vi.mock('@/lib/api-client', () => ({
 
 describe('LoginPage', () => {
     const mockPush = vi.fn();
-    const mockLogin = vi.fn();
+    const mockReplace = vi.fn();
+    const mockRefresh = vi.fn();
     const mockSearchParamGet = vi.fn();
+
+    // Track the current auth state so mockLogin can trigger user update
+    let authState: { user: any; login: any; isHydrated: boolean };
+    const mockLogin = vi.fn().mockImplementation(async (_token: string, user: any, _tenantId?: string) => {
+        // Simulate what the real login does: update user state
+        authState.user = user;
+        // useAuth mock will return updated user on next render
+        (useAuth as any).mockReturnValue({ ...authState });
+    });
 
     beforeEach(() => {
         vi.clearAllMocks();
-        (useRouter as any).mockReturnValue({ push: mockPush });
+        (useRouter as any).mockReturnValue({
+            push: mockPush,
+            replace: mockReplace,
+            refresh: mockRefresh,
+            back: vi.fn(),
+            forward: vi.fn(),
+            prefetch: vi.fn(),
+        });
         mockSearchParamGet.mockReturnValue(null);
         (useSearchParams as any).mockReturnValue({ get: mockSearchParamGet });
-        (useAuth as any).mockReturnValue({ login: mockLogin, user: null, isHydrated: true });
+        authState = { login: mockLogin, user: null, isHydrated: true };
+        (useAuth as any).mockReturnValue(authState);
     });
 
     describe('Rendering', () => {

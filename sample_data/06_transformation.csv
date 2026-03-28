@@ -1,3 +1,3 @@
-traceability_lot_code,product_description,quantity,unit_of_measure,transformation_date,location_name,location_gln,input_lot_codes
-SALAD-2026-0316-001,Garden Fresh Salad Mix 16oz,3500,bags,2026-03-16,Metro Processing Plant,0061414100060,"LOT-ROM-2026-0312A-PK,LOT-ROM-2026-0312B-PK"
-SALAD-2026-0316-002,Caesar Romaine Kit 10oz,1800,bags,2026-03-16,Metro Processing Plant,0061414100060,LOT-ROM-2026-0311C-PK
+traceability_lot_code,product_description,quantity,unit_of_measure,transformation_date,location_name,location_gln,input_lot_codes,reference_document
+SALAD-2026-0316-001,Garden Fresh Salad Mix 16oz,3500,bags,2026-03-16,Metro Processing Plant,0061414100069,"LOT-ROM-2026-0312A-PK,LOT-ROM-2026-0312B-PK",TRANS-WFM-2026-0315-001
+SALAD-2026-0316-002,Caesar Romaine Kit 10oz,1800,bags,2026-03-16,Metro Processing Plant,0061414100069,LOT-ROM-2026-0311C-PK,TRANS-WFM-2026-0315-002
