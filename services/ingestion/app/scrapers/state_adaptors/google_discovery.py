@@ -3,6 +3,7 @@ import requests
 from typing import Iterable, Optional
 from datetime import datetime, timezone
 
+from shared.url_validation import validate_url
 from ...config import get_settings
 from .base import StateRegistryScraper, Source, FetchedItem
 
@@ -44,6 +45,7 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                     "start": start_index
                 }
                 
+                validate_url(self.base_url)
                 resp = requests.get(self.base_url, params=params, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
@@ -90,6 +92,7 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
         Fetch the content of the discovered document.
         """
         try:
+            validate_url(source.url)
             resp = requests.get(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
             

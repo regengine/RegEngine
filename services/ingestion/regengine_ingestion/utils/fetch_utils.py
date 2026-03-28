@@ -4,6 +4,8 @@ import asyncio
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
 
+from shared.url_validation import validate_url
+
 logger = logging.getLogger("ingestion.fetch")
 
 STANDARD_HEADERS = {
@@ -20,6 +22,7 @@ def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True
     """
     Standard fetch utility with browser fallback support.
     """
+    validate_url(url)
     try:
         response = requests.get(url, headers=STANDARD_HEADERS, timeout=timeout, allow_redirects=True)
         

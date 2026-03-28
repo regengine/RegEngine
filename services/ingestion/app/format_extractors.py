@@ -98,23 +98,23 @@ def extract_from_xml(
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
     """Extract text from XML content using lxml."""
     try:
-        from lxml import etree
+        from defusedxml.lxml import parse as _safe_parse
+        from lxml import etree as _etree_utils
     except ImportError:
         logger.warning("lxml_missing")
         return _fallback_extraction(raw_bytes, "xml")
 
     try:
-        # Parse XML
-        parser = etree.XMLParser(remove_blank_text=True, recover=True, resolve_entities=False, no_network=True)
-        tree = etree.parse(io.BytesIO(raw_bytes), parser)
+        # Parse XML using defusedxml for XXE prevention
+        tree = _safe_parse(io.BytesIO(raw_bytes))
         root = tree.getroot()
-        
+
         # Extract all text content with element context
         text_parts = []
-        
+
         def extract_element_text(element, depth=0):
             """Recursively extract text from XML elements."""
-            tag_name = etree.QName(element.tag).localname if isinstance(element.tag, str) else str(element.tag)
+            tag_name = _etree_utils.QName(element.tag).localname if isinstance(element.tag, str) else str(element.tag)
             
             # Get direct text content
             if element.text and element.text.strip():
