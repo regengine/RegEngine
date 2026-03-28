@@ -83,7 +83,7 @@ def extract_from_html(
             ),
             position_map,
         )
-    except Exception as exc:
+    except (OSError, IOError, AttributeError, TypeError, ValueError) as exc:
         logger.warning("html_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "html")
 
@@ -96,25 +96,25 @@ def extract_from_xml(
     raw_bytes: bytes,
     encoding: str = "utf-8"
 ) -> Tuple[str, TextExtractionMetadata, List[PositionMapEntry]]:
-    """Extract text from XML content using lxml."""
+    """Extract text from XML content using defusedxml."""
     try:
-        from lxml import etree
+        import defusedxml.ElementTree as SafeET
     except ImportError:
-        logger.warning("lxml_missing")
+        logger.warning("defusedxml_missing")
         return _fallback_extraction(raw_bytes, "xml")
 
     try:
-        # Parse XML
-        parser = etree.XMLParser(remove_blank_text=True, recover=True, resolve_entities=False, no_network=True)
-        tree = etree.parse(io.BytesIO(raw_bytes), parser)
-        root = tree.getroot()
+        # Parse XML safely (defusedxml blocks XXE, entity expansion, DTD retrieval)
+        root = SafeET.fromstring(raw_bytes)
         
         # Extract all text content with element context
         text_parts = []
         
         def extract_element_text(element, depth=0):
             """Recursively extract text from XML elements."""
-            tag_name = etree.QName(element.tag).localname if isinstance(element.tag, str) else str(element.tag)
+            # Extract local name from potentially namespaced tag
+            tag = element.tag if isinstance(element.tag, str) else str(element.tag)
+            tag_name = tag.rsplit('}', 1)[-1] if '}' in tag else tag
             
             # Get direct text content
             if element.text and element.text.strip():
@@ -149,7 +149,7 @@ def extract_from_xml(
             ),
             position_map,
         )
-    except Exception as exc:
+    except (OSError, IOError, AttributeError, TypeError, ValueError) as exc:
         logger.warning("xml_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "xml")
 
@@ -210,7 +210,7 @@ def extract_from_csv(
                 TextExtractionMetadata(engine="pandas", confidence_mean=0.97, confidence_std=0.03),
                 position_map,
             )
-        except Exception as exc:
+        except (ValueError, KeyError, IndexError, UnicodeDecodeError) as exc:
             logger.warning("csv_stdlib_fallback_failed", exc_info=exc)
             return _fallback_extraction(raw_bytes, "csv")
 
@@ -265,7 +265,7 @@ def extract_from_csv(
             ),
             position_map,
         )
-    except Exception as exc:
+    except (ValueError, KeyError, IndexError, UnicodeDecodeError, OSError, IOError) as exc:
         logger.warning("csv_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "csv")
 
@@ -288,7 +288,7 @@ def extract_from_excel(
         # Try xlsx first (more common)
         try:
             excel_file = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
-        except Exception:
+        except (OSError, IOError, ValueError, TypeError):
             # Fall back to xlrd for .xls files
             try:
                 excel_file = pd.ExcelFile(io.BytesIO(raw_bytes), engine="xlrd")
@@ -338,7 +338,7 @@ def extract_from_excel(
             ),
             position_map if position_map else [PositionMapEntry(page=1, char_start=0, char_end=len(final_text), source_start=0, source_end=len(raw_bytes))],
         )
-    except Exception as exc:
+    except (OSError, IOError, ValueError, TypeError, KeyError, IndexError) as exc:
         logger.warning("excel_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "excel")
 
@@ -403,7 +403,7 @@ def extract_from_docx(
             ),
             position_map,
         )
-    except Exception as exc:
+    except (OSError, IOError, ValueError, TypeError, KeyError, IndexError) as exc:
         logger.warning("docx_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "docx")
 
@@ -437,8 +437,8 @@ def extract_from_edi(
             else:
                 logger.warning("edi_format_unknown")
                 return _fallback_extraction(raw_bytes, "edi")
-                
-    except Exception as exc:
+
+    except (ValueError, UnicodeDecodeError, OSError, IOError) as exc:
         logger.warning("edi_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "edi")
 
@@ -656,7 +656,7 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
                 return "edi"
             elif text_sample.startswith("UNA") or text_sample.startswith("UNB"):
                 return "edi"
-        except Exception as e:
+        except (ValueError, UnicodeDecodeError) as e:
             logger.debug("format_detection_error", error=str(e))
     
     return "unknown"
@@ -673,7 +673,7 @@ def is_edi_content(raw_bytes: bytes) -> bool:
             "ISA*" in sample or
             "UNB+" in sample
         )
-    except Exception:
+    except (ValueError, UnicodeDecodeError):
         return False
 
 
@@ -688,7 +688,7 @@ def _fallback_extraction(
     """Fallback text extraction when specialized parsers fail."""
     try:
         text = raw_bytes.decode("utf-8", errors="ignore")
-    except Exception:
+    except (ValueError, UnicodeDecodeError):
         text = raw_bytes.decode("latin-1", errors="ignore")
     
     position_map = [

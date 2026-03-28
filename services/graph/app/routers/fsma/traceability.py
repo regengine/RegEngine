@@ -5,10 +5,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...fsma_metrics import record_trace_query
+from shared.subscription_guard import require_active_subscription
 from ...fsma_utils import (
     TraceResult,
     get_lot_timeline,
@@ -45,6 +46,7 @@ logger = structlog.get_logger("fsma-traceability")
 
 @router.get("/trace/forward/{tlc}")
 async def trace_forward_endpoint(
+    request: Request,
     tlc: str,
     max_depth: int = Query(10, ge=1, le=20, description="Maximum hops in trace"),
     enforce_time_arrow: bool = Query(
@@ -52,6 +54,7 @@ async def trace_forward_endpoint(
     ),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """
     Trace forward from a lot to find all downstream facilities and products.
@@ -108,10 +111,12 @@ async def trace_forward_endpoint(
 
 @router.get("/trace/backward/{tlc}")
 async def trace_backward_endpoint(
+    request: Request,
     tlc: str,
     max_depth: int = Query(10, ge=1, le=20, description="Maximum hops in trace"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """
     Trace backward from a lot to find all source materials and suppliers.
@@ -158,9 +163,11 @@ async def trace_backward_endpoint(
 
 @router.get("/timeline/{tlc}")
 async def lot_timeline_endpoint(
+    request: Request,
     tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """
     Get chronological timeline of all events for a specific lot.

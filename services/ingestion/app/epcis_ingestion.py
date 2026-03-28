@@ -290,24 +290,17 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
     JSON-LD path so downstream normalization works identically.
     """
     try:
-        from lxml import etree
+        import defusedxml.ElementTree as SafeET
     except ImportError:
-        logger.warning("lxml_not_available_for_epcis_xml_parsing")
+        logger.warning("defusedxml_not_available_for_epcis_xml_parsing")
         return []
 
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
 
     try:
-        parser = etree.XMLParser(
-            remove_blank_text=True,
-            recover=True,
-            resolve_entities=False,
-            no_network=True,
-        )
-        tree = etree.parse(io.BytesIO(raw), parser)
-        root = tree.getroot()
-    except Exception as exc:
+        root = SafeET.fromstring(raw)
+    except (SafeET.ParseError, Exception) as exc:
         logger.warning("epcis_xml_parse_failed error=%s", str(exc))
         return []
 
@@ -370,7 +363,7 @@ def _audit_log_validation_failure(
             loop.create_task(coro)
         except RuntimeError:
             pass  # No running loop — skip async audit (logged via stdlib above)
-    except Exception:
+    except (ImportError, AttributeError, TypeError) as exc:
         logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
 
 
@@ -1024,7 +1017,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
             epcis_biz_step=normalized.get("epcis_biz_step"),
         )
         db_session.commit()
-    except Exception:
+    except (RuntimeError, OSError, AttributeError, TypeError) as exc:
         db_session.rollback()
         raise
     finally:
@@ -1047,7 +1040,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
 def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
     try:
         return _ingest_single_event_db(tenant_id, event)
-    except Exception as exc:
+    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
         if not _allow_in_memory_fallback():
             logger.error("epcis_db_persistence_failed_no_fallback error=%s", str(exc))
             raise HTTPException(
@@ -1138,7 +1131,7 @@ async def get_epcis_event(
     event = None
     try:
         event = _fetch_event_from_db(resolved_tenant, event_id)
-    except Exception as exc:
+    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         logger.warning("epcis_get_db_failed_using_fallback error=%s", str(exc))
@@ -1168,7 +1161,7 @@ async def export_epcis_events(
     events: list[dict] = []
     try:
         events = _list_events_from_db(resolved_tenant, start_date, end_date, product_id)
-    except Exception as exc:
+    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         logger.warning("epcis_export_db_failed_using_fallback error=%s", str(exc))

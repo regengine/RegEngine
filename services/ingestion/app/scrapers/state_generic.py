@@ -5,6 +5,7 @@ import uuid
 from typing import Optional
 
 import requests
+from shared.url_validation import validate_url, SSRFError
 
 
 # Stubs for S3 and Kafka integrations; replace with actual clients
@@ -41,6 +42,12 @@ class StateRegistryScraper:
     async def fetch_document(
         self, url: str, jurisdiction_code: str, tenant_id: Optional[str] = None
     ) -> dict:
+        # SSRF protection: validate URL before fetching
+        try:
+            url = validate_url(url)
+        except SSRFError as e:
+            raise ValueError(f"URL validation failed: {str(e)}") from e
+
         loop = asyncio.get_running_loop()
 
         def _fetch():

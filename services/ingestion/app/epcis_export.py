@@ -13,12 +13,13 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.subscription_guard import require_active_subscription
 
 logger = logging.getLogger("epcis-export")
 
@@ -160,6 +161,7 @@ SAMPLE_EPCIS_EVENTS = [
 async def export_epcis(
     request: ExportRequest,
     _: None = Depends(_verify_api_key),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """Export traceability data in EPCIS 2.0 JSON-LD format."""
     now = datetime.now(timezone.utc)
@@ -236,6 +238,7 @@ async def export_epcis(
 async def export_fda(
     request: ExportRequest,
     _: None = Depends(_verify_api_key),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """Export traceability data in FDA-compliant sortable spreadsheet format."""
     now = datetime.now(timezone.utc)

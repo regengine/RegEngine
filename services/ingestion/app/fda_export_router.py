@@ -26,11 +26,12 @@ from typing import Any, Literal, Optional
 from uuid import uuid4
 import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from app.authz import require_permission
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from shared.subscription_guard import require_active_subscription
 
 logger = logging.getLogger("fda-export")
 
@@ -391,6 +392,7 @@ def _build_fda_package(
     ),
 )
 async def export_fda_spreadsheet(
+    request: Request,
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
@@ -400,6 +402,7 @@ async def export_fda_spreadsheet(
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """Generate and return an FDA-compliant traceability export."""
     db_session = None
@@ -519,6 +522,7 @@ async def export_fda_spreadsheet(
     description="Export all traceability events for a tenant within an optional date range.",
 )
 async def export_all_events(
+    request: Request,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     event_type: Optional[str] = Query(None, description="Filter by CTE type"),
@@ -528,6 +532,7 @@ async def export_all_events(
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
+    _sub: bool = Depends(require_active_subscription),
 ):
     """Export all events as FDA-format CSV."""
     db_session = None
