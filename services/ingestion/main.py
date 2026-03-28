@@ -52,8 +52,8 @@ _is_prod = (
 )
 
 app = FastAPI(
-    title="Ingestion Service",
-    description="Regulatory document ingestion and processing",
+    title="RegEngine Ingestion API",
+    description="Multi-source regulatory document ingestion, parsing, and processing for FSMA 204 compliance",
     version="1.0.0",
     lifespan=lifespan,
     docs_url=None if _is_prod else "/docs",
@@ -121,175 +121,175 @@ def _router_enabled(name: str) -> bool:
     return name.lower() not in _DISABLED_ROUTERS
 
 
-app.include_router(ingestion_router)
+app.include_router(ingestion_router, tags=["Document Ingestion"])
 
 # Health & Metrics (extracted from routes.py, Finding #8)
 from app.routes_health_metrics import router as health_metrics_router
-app.include_router(health_metrics_router)
+app.include_router(health_metrics_router, tags=["Health & Metrics"])
 
 
 # Decomposed sub-routers (extracted from routes.py god file)
 if _router_enabled("scraping"):
     from app.routes_scraping import router as scraping_router
-    app.include_router(scraping_router)
+    app.include_router(scraping_router, tags=["Web Scraping"])
 
 
 if _router_enabled("discovery"):
     from app.routes_discovery import router as discovery_router
-    app.include_router(discovery_router)
+    app.include_router(discovery_router, tags=["Discovery"])
 
 # Webhook Ingestion (V2: Postgres-backed CTE persistence)
 from app.webhook_router_v2 import router as webhook_router
-app.include_router(webhook_router)
+app.include_router(webhook_router, tags=["Webhooks"])
 
 # FDA 24-Hour Export
 if _router_enabled("fda_export"):
     from app.fda_export_router import router as fda_export_router
-    app.include_router(fda_export_router)
+    app.include_router(fda_export_router, tags=["FDA Exports"])
 
 
 # CSV Templates & Import
 if _router_enabled("csv"):
     from app.csv_templates import router as csv_router
-    app.include_router(csv_router)
+    app.include_router(csv_router, tags=["CSV Import"])
 
 
 # IoT Import (Sensitech TempTale)
 if _router_enabled("sensitech"):
     from app.sensitech_parser import router as sensitech_router
-    app.include_router(sensitech_router)
+    app.include_router(sensitech_router, tags=["IoT Ingestion"])
 
 
 # EDI 856 Inbound
 if _router_enabled("edi"):
     from app.edi_ingestion import router as edi_router
-    app.include_router(edi_router)
+    app.include_router(edi_router, tags=["EDI Ingestion"])
 
 
 # Compliance Score
 if _router_enabled("score"):
     from app.compliance_score import router as score_router
-    app.include_router(score_router)
+    app.include_router(score_router, tags=["Compliance Scoring"])
 
 
 # Supplier Portal
 if _router_enabled("portal"):
     from app.supplier_portal import router as portal_router
-    app.include_router(portal_router)
+    app.include_router(portal_router, tags=["Supplier Portal"])
 
 
 # Mock Audit Mode
 if _router_enabled("audit"):
     from app.mock_audit import router as audit_router
-    app.include_router(audit_router)
+    app.include_router(audit_router, tags=["Audit"])
 
 
 # SOP Generator
 if _router_enabled("sop"):
     from app.sop_generator import router as sop_router
-    app.include_router(sop_router)
+    app.include_router(sop_router, tags=["SOP Generation"])
 
 
 # EPCIS & FDA Export
 if _router_enabled("export"):
     from app.epcis_export import router as export_router
-    app.include_router(export_router)
+    app.include_router(export_router, tags=["Data Export"])
 
 
 # EPCIS 2.0 Ingestion
 if _router_enabled("epcis_ingestion"):
     from app.epcis_ingestion import router as epcis_ingestion_router
-    app.include_router(epcis_ingestion_router)
+    app.include_router(epcis_ingestion_router, tags=["EPCIS"])
 
 
 # QR / GS1 Decode
 if _router_enabled("qr_decoder"):
     from app.qr_decoder import router as qr_decoder_router
-    app.include_router(qr_decoder_router)
+    app.include_router(qr_decoder_router, tags=["QR & GS1 Decoding"])
 
 
 # Computer Vision — Label Analysis
 if _router_enabled("label_vision"):
     from app.label_vision import router as label_vision_router
-    app.include_router(label_vision_router)
+    app.include_router(label_vision_router, tags=["Computer Vision"])
 
 
 # B2B Exchange API (EPCIS shipping package handoff)
 if _router_enabled("exchange"):
     from app.exchange_api import router as exchange_router
-    app.include_router(exchange_router)
+    app.include_router(exchange_router, tags=["B2B Exchange"])
 
 
 # Stripe Billing
 if _router_enabled("billing"):
     from app.stripe_billing import router as billing_router
-    app.include_router(billing_router)
+    app.include_router(billing_router, tags=["Billing"])
 
 
 # Alerts & Notifications
 if _router_enabled("alerts"):
     from app.alerts import router as alerts_router
-    app.include_router(alerts_router)
+    app.include_router(alerts_router, tags=["Alerts"])
 
 
 # Onboarding
 if _router_enabled("onboarding"):
     from app.onboarding import router as onboarding_router
-    app.include_router(onboarding_router)
+    app.include_router(onboarding_router, tags=["Onboarding"])
 
 
 # Recall Readiness Report
 if _router_enabled("recall"):
     from app.recall_report import router as recall_router
-    app.include_router(recall_router)
+    app.include_router(recall_router, tags=["Recall Reporting"])
 
 
 # Recall Simulations
 if _router_enabled("recall_simulations"):
     from app.recall_simulations import router as recall_simulations_router
-    app.include_router(recall_simulations_router)
+    app.include_router(recall_simulations_router, tags=["Recall Simulations"])
 
 
 # Supplier Management
 if _router_enabled("supplier_mgmt"):
     from app.supplier_mgmt import router as supplier_mgmt_router
-    app.include_router(supplier_mgmt_router)
+    app.include_router(supplier_mgmt_router, tags=["Supplier Management"])
 
 
 # Audit Log
 if _router_enabled("audit_log"):
     from app.audit_log import router as audit_log_router
-    app.include_router(audit_log_router)
+    app.include_router(audit_log_router, tags=["Audit Logs"])
 
 
 # Product Catalog
 if _router_enabled("product_catalog"):
     from app.product_catalog import router as product_catalog_router
-    app.include_router(product_catalog_router)
+    app.include_router(product_catalog_router, tags=["Product Catalog"])
 
 
 # Notification Preferences
 if _router_enabled("notification_prefs"):
     from app.notification_prefs import router as notification_prefs_router
-    app.include_router(notification_prefs_router)
+    app.include_router(notification_prefs_router, tags=["Notifications"])
 
 
 # Team Management
 if _router_enabled("team_mgmt"):
     from app.team_mgmt import router as team_mgmt_router
-    app.include_router(team_mgmt_router)
+    app.include_router(team_mgmt_router, tags=["Team Management"])
 
 
 # Settings
 if _router_enabled("settings"):
     from app.settings import router as settings_router
-    app.include_router(settings_router)
+    app.include_router(settings_router, tags=["Settings"])
 
 
 # Integration Connectors (SafetyCulture, CSV/SFTP, retailers, IoT)
 if _router_enabled("integration"):
     from app.integration_router import router as integration_router
-    app.include_router(integration_router)
+    app.include_router(integration_router, tags=["Integration Connectors"])
 
 # Standardized Health & Readiness (Phase 17)
 # NOTE: Custom /health endpoint already registered via routes_health_metrics.py

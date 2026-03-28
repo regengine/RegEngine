@@ -22,9 +22,11 @@ app = FastAPI(
     title="RegEngine FSMA 204 Compliance Service",
     version="1.0.0",
     description=(
-        "FSMA 204 compliance API providing checklists, industry categories, "
-        "and configuration validation for food traceability requirements."
+        "FSMA 204 compliance API providing regulatory checklists, industry categories, "
+        "configuration validation, and audit spreadsheet generation for food traceability requirements."
     ),
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Request ID correlation middleware (distributed tracing)
@@ -53,7 +55,7 @@ async def root() -> dict:
     }
 
 
-app.include_router(fsma_router)
+app.include_router(fsma_router, tags=["FSMA 204 Compliance"])
 
 
 if __name__ == "__main__":
