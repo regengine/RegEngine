@@ -394,7 +394,7 @@ export function MarketingHeader() {
                                     Log In
                                 </Link>
                                 <Link
-                                    href="/onboarding"
+                                    href="/retailer-readiness"
                                     style={{
                                         fontSize: "13px",
                                         fontWeight: 600,
@@ -409,7 +409,7 @@ export function MarketingHeader() {
                                     onMouseEnter={(e) => { (e.target as HTMLElement).style.transform = "translateY(-1px)"; (e.target as HTMLElement).style.boxShadow = "0 4px 16px var(--re-brand-muted)"; }}
                                     onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 2px 8px var(--re-brand-muted)"; }}
                                 >
-                                    Start Your Workspace →
+                                    Free Assessment →
                                 </Link>
                             </>
                         )}
@@ -719,7 +719,7 @@ export function MarketingHeader() {
                     ) : (
                         <>
                             <Link
-                                href="/onboarding"
+                                href="/retailer-readiness"
                                 onClick={() => setMobileOpen(false)}
                                 style={{
                                     display: "flex",

@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission
+from app.disclaimers import SIMULATION_DISCLAIMER
 
 logger = logging.getLogger("recall-simulations")
 
@@ -379,11 +380,7 @@ async def list_scenarios(_auth=Depends(require_permission("simulations.read")), 
         "scenarios": scenarios,
         "total": len(scenarios),
         "is_illustrative": True,
-        "demo_disclaimer": (
-            "These are illustrative recall scenarios with synthetic metrics. "
-            "They are not derived from your tenant's actual supply chain data. "
-            "Wire to tenant CTE events for production simulations."
-        ),
+        "demo_disclaimer": SIMULATION_DISCLAIMER,
     }
 
 
@@ -401,16 +398,29 @@ async def run_recall_simulation(
     # Try to compute real metrics from tenant data
     is_illustrative = True
     real_metrics = None
+    data_source = "demo"
     if tenant_id:
         tenant_data = _query_tenant_recall_metrics(tenant_id)
         if tenant_data and tenant_data.get("cte_count", 0) > 0:
             is_illustrative = False
+            data_source = "tenant"
             real_metrics = {
                 "cte_events": tenant_data["cte_count"],
                 "suppliers": tenant_data["supplier_count"],
                 "tlcs": tenant_data["tlc_count"],
                 "export_ready": tenant_data["has_export"],
             }
+            # Scale scenario metrics based on tenant's actual data volume
+            scale = max(0.1, min(3.0, tenant_data["cte_count"] / max(1, scenario["total_lots"])))
+            metrics["total_lots_in_system"] = tenant_data["tlc_count"] or scenario["total_lots"]
+            metrics["affected_lots"] = max(1, int(scenario["affected_lots"] * scale))
+            metrics["affected_locations"] = max(1, int(scenario["locations_involved"] * min(scale, 1.5)))
+            # Tenant with export capability gets faster response estimate
+            if tenant_data["has_export"]:
+                metrics["with_regengine"]["response_time_minutes"] = max(
+                    5, scenario["regengine_response_minutes"] - 10
+                )
+                metrics["with_regengine"]["kde_completeness"] = min(1.0, scenario["regengine_completeness"] + 0.01)
 
     simulation_record = {
         "id": simulation_id,
@@ -418,10 +428,9 @@ async def run_recall_simulation(
         "created_at": created_at,
         "metrics": metrics,
         "is_illustrative": is_illustrative,
+        "data_source": data_source,
         "tenant_metrics": real_metrics,
-        "demo_disclaimer": (
-            "Simulation uses synthetic scenarios — not derived from tenant data."
-        ) if is_illustrative else None,
+        "demo_disclaimer": SIMULATION_DISCLAIMER if is_illustrative else None,
     }
     _simulation_store[simulation_id] = simulation_record
 

@@ -345,27 +345,30 @@ class TestOrphanDetectionLogic:
 # ============================================================================
 
 
-@pytest.mark.xfail(reason="KDE analysis returns 0 events — mock setup needs update", strict=False)
 class TestKDECompletenessAnalysisLogic:
     """Tests for KDE completeness analysis logic with mocked Neo4j."""
+
+    def _make_mock_client_and_session(self):
+        """Create a mock Neo4j client with async context manager session."""
+        mock_client = MagicMock()
+        mock_session = AsyncMock()
+
+        # analyze_kde_completeness uses `async with client.session()` (async context manager)
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_client.session = MagicMock(return_value=ctx)
+
+        return mock_client, mock_session
 
     @pytest.mark.asyncio
     async def test_analysis_returns_report(self):
         """analyze_kde_completeness returns a DataQualityReport."""
-        mock_client = MagicMock()
-        mock_session = AsyncMock()
+        mock_client, mock_session = self._make_mock_client_and_session()
 
         # Mock empty async iterator result
-        mock_result = AsyncMock()
-        mock_result.__aiter__ = lambda self: self
-        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_result = AsyncIteratorMock([])
         mock_session.run = AsyncMock(return_value=mock_result)
-
-        # Note: analyze_kde_completeness uses `with client.session()` (sync context manager)
-        # but awaits session.run() and uses async for
-        mock_client.session = MagicMock(return_value=mock_session)
-        mock_session.__enter__ = MagicMock(return_value=mock_session)
-        mock_session.__exit__ = MagicMock(return_value=False)
 
         result = await analyze_kde_completeness(mock_client, tenant_id=None)
 
@@ -374,8 +377,7 @@ class TestKDECompletenessAnalysisLogic:
     @pytest.mark.asyncio
     async def test_analysis_with_event_data(self):
         """analyze_kde_completeness parses event metrics correctly."""
-        mock_client = MagicMock()
-        mock_session = AsyncMock()
+        mock_client, mock_session = self._make_mock_client_and_session()
 
         # Mock result with metrics for one event type
         mock_record = MagicMock()
@@ -392,11 +394,6 @@ class TestKDECompletenessAnalysisLogic:
         mock_result = AsyncIteratorMock([mock_record])
         mock_session.run = AsyncMock(return_value=mock_result)
 
-        # analyze_kde_completeness uses sync context manager `with client.session()`
-        mock_client.session = MagicMock(return_value=mock_session)
-        mock_session.__enter__ = MagicMock(return_value=mock_session)
-        mock_session.__exit__ = MagicMock(return_value=False)
-
         result = await analyze_kde_completeness(mock_client, tenant_id=None)
 
         assert result.total_events == 100
@@ -407,19 +404,11 @@ class TestKDECompletenessAnalysisLogic:
     @pytest.mark.asyncio
     async def test_analysis_confidence_threshold(self):
         """analyze_kde_completeness uses custom confidence threshold."""
-        mock_client = MagicMock()
-        mock_session = AsyncMock()
+        mock_client, mock_session = self._make_mock_client_and_session()
 
         # Mock empty async iterator result
-        mock_result = AsyncMock()
-        mock_result.__aiter__ = lambda self: self
-        mock_result.__anext__ = AsyncMock(side_effect=StopAsyncIteration)
+        mock_result = AsyncIteratorMock([])
         mock_session.run = AsyncMock(return_value=mock_result)
-
-        # analyze_kde_completeness uses sync context manager `with client.session()`
-        mock_client.session = MagicMock(return_value=mock_session)
-        mock_session.__enter__ = MagicMock(return_value=mock_session)
-        mock_session.__exit__ = MagicMock(return_value=False)
 
         # Call with custom threshold
         await analyze_kde_completeness(mock_client, tenant_id=None, confidence_threshold=0.90)

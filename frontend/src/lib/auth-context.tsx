@@ -214,13 +214,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
         }
       } else {
-        // No cookie session — check if env var provides a default API key
-        const envKey = process.env.NEXT_PUBLIC_API_KEY || '';
-        if (envKey) {
-          await setSessionCookies({ apiKey: envKey, adminKey: envKey });
-          setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
-          setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
-        }
+        // No cookie session — user is unauthenticated.
+        // NEXT_PUBLIC_API_KEY fallback removed: proxy routes inject
+        // server-side API keys; baking secrets into the JS bundle is unsafe.
       }
 
       setIsHydrated(true);
