@@ -53,20 +53,12 @@ function setSysadminCached(userId: string, isSysadmin: boolean): void {
 // Only FSMA verticals are supported — all others redirect to home.
 const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 
-// Developer-facing routes that require portal auth
+// Developer-facing routes that require portal auth.
+// Documentation and developer portal are PUBLIC to enable developer evaluation.
+// Only key generation and playground (makes real API calls) are gated.
 const GATED_DEV_ROUTES = [
-    '/developer',
-    '/developers',
-    '/docs/api',
-    '/docs/authentication',
-    '/docs/quickstart',
-    '/docs/sdks',
-    '/docs/webhooks',
-    '/docs/rate-limits',
-    '/docs/errors',
-    '/docs/changelog',
-    '/playground',
     '/api-keys',
+    '/playground',
 ];
 
 // Authenticated app routes — require a valid session.
@@ -96,10 +88,18 @@ const AUTHENTICATED_APP_ROUTES = [
     '/ingest',
 ];
 
-// Public docs that remain accessible (product/compliance, not dev-facing)
+// All docs are public — developer evaluation requires accessible documentation.
 const PUBLIC_DOCS = [
     '/docs',
     '/docs/fsma-204',
+    '/docs/api',
+    '/docs/authentication',
+    '/docs/quickstart',
+    '/docs/sdks',
+    '/docs/webhooks',
+    '/docs/rate-limits',
+    '/docs/errors',
+    '/docs/changelog',
 ];
 
 function isGatedRoute(pathname: string): boolean {
@@ -282,14 +282,12 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     url.searchParams.set('next', pathname);
 
     // Signal the reason so the login page can display a contextual message.
-    // Only show "session expired" when a token actually existed but failed.
-    if (!process.env.JWT_SIGNING_KEY && !process.env.AUTH_SECRET_KEY) {
-        url.searchParams.set('error', 'auth_config');
-    } else if (reToken) {
-        // Token exists but verification failed — likely expired or key mismatch
+    // Only show "session expired" when a token actually existed but failed verification.
+    // First-time visitors (no token) see a clean login form with no error.
+    if (reToken) {
         url.searchParams.set('error', 'session_expired');
     }
-    // No token at all = first visit. Don't set any error — just show login form.
+    // auth_config errors are logged server-side, not shown to visitors.
 
     return NextResponse.redirect(url);
 }
@@ -330,8 +328,9 @@ export async function middleware(request: NextRequest) {
         return await requireAppAuth(request);
     }
 
-    // Developer portal routes — same dual auth as app routes
-    if (pathname.startsWith('/developer') || isGatedRoute(pathname)) {
+    // Developer portal: only gate key generation and playground behind auth.
+    // All docs, codegen, and portal pages are public for developer evaluation.
+    if (isGatedRoute(pathname) || pathname === '/developer/portal/keys') {
         return await requireAppAuth(request);
     }
 
@@ -341,12 +340,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Docs routing: only public docs pass through, others redirect
-    if (pathname.startsWith('/docs/')) {
-        if (!isPublicDoc(pathname) && !ALLOWED_VERTICALS.includes(pathname.split('/')[2])) {
-            return NextResponse.redirect(new URL('/docs/fsma-204', request.url));
-        }
-    }
+    // All /docs/* routes are public — no redirect needed.
 
     return NextResponse.next();
 }
