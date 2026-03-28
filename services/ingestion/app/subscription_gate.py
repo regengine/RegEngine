@@ -16,6 +16,8 @@ from typing import Optional
 
 from fastapi import Depends, Header, HTTPException, Query, Request
 
+from shared.circuit_breaker import CircuitOpenError, redis_circuit
+
 logger = logging.getLogger("subscription-gate")
 
 
@@ -56,10 +58,15 @@ def _check_subscription_in_redis(tenant_id: str) -> Optional[str]:
     try:
         import redis as redis_lib
 
+        redis_circuit._check_state()  # raises CircuitOpenError if open
         client = redis_lib.from_url(redis_url, decode_responses=True)
         status = client.hget(f"billing:tenant:{tenant_id}", "status")
+        redis_circuit._record_success()
         return status
+    except CircuitOpenError:
+        raise
     except Exception as exc:
+        redis_circuit._record_failure(exc)
         logger.warning(
             "subscription_gate_redis_unavailable tenant_id=%s error=%s",
             tenant_id,
@@ -76,7 +83,8 @@ async def require_active_subscription(request: Request) -> None:
     2. Query Redis for ``billing:tenant:{tenant_id}`` -> ``status``.
     3. Allow if status is ``active`` or ``trialing``.
     4. Return HTTP 402 if the subscription is missing, cancelled, or unpaid.
-    5. Gracefully allow through if Redis is unreachable (fail-open with warning).
+    5. Return HTTP 503 if the Redis circuit breaker is open (fail-closed).
+    6. Gracefully allow through if Redis key is missing (new tenant, not yet billed).
     """
     tenant_id = _get_tenant_id_from_request(request)
     if not tenant_id:
@@ -84,7 +92,13 @@ async def require_active_subscription(request: Request) -> None:
         # This avoids blocking unauthenticated health-check probes, etc.
         return
 
-    status = _check_subscription_in_redis(tenant_id)
+    try:
+        status = _check_subscription_in_redis(tenant_id)
+    except CircuitOpenError:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing system temporarily unavailable. Please try again shortly.",
+        )
 
     if status is None:
         # Redis unavailable or key missing — fail open to avoid blocking
