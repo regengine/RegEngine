@@ -73,7 +73,7 @@ export function AuditPackDownload({ projectId }: Props) {
         }
     }
 
-    function downloadAsPDF() {
+    async function downloadAsPDF() {
         if (!auditPack) return;
 
         const sections: PDFSection[] = [
@@ -169,7 +169,7 @@ export function AuditPackDownload({ projectId }: Props) {
             });
         }
 
-        generateBrandedPDF({
+        await generateBrandedPDF({
             title: 'Audit Pack Report',
             subtitle: `${auditPack.project.project_name} (${auditPack.project.project_code})`,
             reportType: 'RegEngine Audit Pack',
