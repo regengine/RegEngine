@@ -1,6 +1,6 @@
 # RegEngine Architecture (FSMA-First)
 
-Last updated: March 9, 2026
+Last updated: March 28, 2026
 
 ## Purpose
 
@@ -25,6 +25,30 @@ See also:
 - `README.md`
 - `docs/FSMA_RAILWAY_DEPLOYMENT.md`
 - `docs/ENV_SETUP_CHECKLIST.md`
+
+## Deployment Routing
+
+### Production (Railway)
+Railway's native routing is the production source of truth. Each service runs as an independent Railway service with:
+- Auto-TLS termination and per-service domains (e.g., `regengine-production.up.railway.app`)
+- Internal service-to-service communication via Railway's private networking
+- No nginx reverse proxy — Railway handles load balancing and routing natively
+
+| Service | Public Domain | Role |
+|---------|--------------|------|
+| RegEngine (admin) | regengine-production.up.railway.app | Admin API, billing, tenant management |
+| believable-respect (ingestion) | believable-respect-production-2fb3.up.railway.app | CTE ingestion, FDA export, webhooks |
+| intelligent-essence (compliance) | intelligent-essence-production.up.railway.app | Compliance checks, rules engine |
+| Graph | Internal only | Neo4j graph queries, FSMA trace |
+| NLP | Internal only | Entity extraction, document analysis |
+| Scheduler | Internal only | APScheduler-based cron jobs (no HTTP) |
+
+### Local Development / Self-Hosted
+`infra/gateway/nginx.conf` provides a unified reverse proxy for local development and self-hosted deployments. It consolidates all services behind a single port with:
+- Rate limiting (10r/s API, 20r/s FSMA, 5r/s auth)
+- Security headers (CSP, HSTS, X-Frame-Options)
+- Request correlation (X-Request-ID injection)
+- Per-endpoint timeout tuning (10s-180s)
 
 ## Core Service Map
 
