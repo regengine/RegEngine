@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey, requireProxyAuth } from '@/lib/api-proxy';
 
 // Proxy review API requests to the Admin backend service
 // This allows browser clients to access review endpoints without CORS issues
@@ -53,6 +53,10 @@ async function proxyRequest(
                 { status: 503 },
             );
         }
+
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
 
         const path = sanitizePath(pathParts);
         if (!path) {

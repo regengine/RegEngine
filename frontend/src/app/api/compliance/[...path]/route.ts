@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, requireProxyAuth } from '@/lib/api-proxy';
 
 // Proxy compliance API requests to the Compliance backend service
 // This allows browser clients to access compliance endpoints without CORS issues
@@ -47,6 +47,10 @@ async function proxyRequest(
                 { status: 503 },
             );
         }
+
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
 
         const path = sanitizePath(pathParts);
         if (!path) {
