@@ -69,7 +69,7 @@ lxml==4.9.0
 
 # Regulation Ingestion
 langchain==1.2.0
-langchain-core==1.2.11
+langchain-core==1.2.22
 langchain-community==0.4.0
 langchain-text-splitters==1.1.0
 langchain-groq==1.1.0
