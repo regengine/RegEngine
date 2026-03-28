@@ -67,11 +67,16 @@ export function LeadGate({
         });
     }, []);
 
-    // Check localStorage for returning leads
+    // Check localStorage for returning leads (non-PII flag only — no email stored)
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const stored = localStorage.getItem('re_lead_email');
-        if (stored) {
+        // Migrate: clear legacy plain-text email if present
+        if (localStorage.getItem('re_lead_email')) {
+            localStorage.removeItem('re_lead_email');
+            localStorage.setItem('re_lead_captured', '1');
+        }
+        const captured = localStorage.getItem('re_lead_captured');
+        if (captured) {
             setStep('done');
             onUnlock?.();
         }
@@ -105,8 +110,8 @@ export function LeadGate({
                 return;
             }
 
-            // Persist email so returning visitors bypass the gate
-            try { localStorage.setItem('re_lead_email', data.email); } catch {}
+            // Persist a non-PII flag so returning visitors bypass the gate
+            try { localStorage.setItem('re_lead_captured', '1'); } catch {}
             setGateData(data);
             setStep('enrich');
         },

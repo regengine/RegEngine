@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { getServiceURL } from './api-config';
+import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -127,6 +128,13 @@ class APIClient {
       // Add X-Tenant-ID header for multi-tenancy if tenant is set
       if (this.currentTenantId && !config.headers['X-Tenant-ID']) {
         config.headers['X-Tenant-ID'] = this.currentTenantId;
+      }
+
+      // CSRF header on mutating requests (double-submit cookie pattern)
+      const method = (config.method || 'GET').toUpperCase();
+      if (CSRF_PROTECTED_METHODS.has(method)) {
+        const csrfHeaders = getCsrfHeaders();
+        Object.assign(config.headers, csrfHeaders);
       }
 
       return config;

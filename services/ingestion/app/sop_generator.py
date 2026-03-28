@@ -130,6 +130,28 @@ def _generate_cte_procedures(company_type: str, products: list[str], has_iot: bo
 
 **Responsible**: Receiving/Warehouse Manager""")
 
+    if company_type in ("importer", "distributor"):
+        sections.append(f"""### 4.5 First Land-Based Receiving CTE (§1.1325(c))
+
+**Scope**: All first land-based receiving of FTL products imported or landed from vessels
+
+**Procedure**:
+1. Upon first receipt at a land-based facility, assign or verify Traceability Lot Code (TLC)
+2. Record required KDEs:
+   - TLC for product received
+   - Product description (species, variety, pack size)
+   - Quantity and unit of measure
+   - Landing date and time
+   - Receiving location (GLN or facility name + address)
+   - Immediate previous source (vessel name, exporter, or transshipment entity)
+   - Reference document number (Bill of Lading, import entry, or catch certificate)
+   - Temperature at receipt (recommended)
+3. Verify product documentation matches physical shipment
+4. Enter FLBR CTE into RegEngine within 2 hours of landing receipt
+5. Retain all import documentation for 2 years minimum
+
+**Responsible**: Import/Receiving Manager""")
+
     if company_type in ("manufacturer",):
         sections.append(f"""### 4.5 Transformation CTE (§1.1350)
 
@@ -276,6 +298,7 @@ Example: `ROM-0226-F3-001` (Romaine Lettuce, Feb 26, Facility 3, Lot 001)
 | Initial Packing | 2 hours after completion |
 | Shipping | Before truck departure |
 | Receiving | 2 hours after receipt |
+| First Land-Based Receiving | 2 hours after landing receipt |
 | Transformation | Immediately upon completion |
 
 ### 5.3 Supplier Data Collection

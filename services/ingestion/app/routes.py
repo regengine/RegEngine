@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
 from pathlib import Path
-from typing import Iterable, Optional, List
+from typing import Dict, Iterable, Optional, List
 from urllib.parse import urlparse
 
 import requests
@@ -234,7 +234,7 @@ async def ingest_regulation(
     """Ingest a regulation and codify it asynchronously with optional webhook notification (v2)."""
     # Entitlement check
     allowed = set(api_key.allowed_jurisdictions or [])
-    if "US" not in allowed and "GLOBAL" not in allowedRegistration:
+    if "US" not in allowed and "GLOBAL" not in allowed:
         # Check if the user has specific permission for this action
         pass
 
