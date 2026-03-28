@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -24,7 +25,34 @@ def validate_auth_config() -> None:
 
     Call this from each service's main.py after app creation.
     Logs warnings for missing config and raises on fatal misconfigurations.
+
+    Fail-closed (H2): In cloud environments (Railway, Vercel), refuses to
+    start if Supabase auth credentials are missing — prevents silent auth bypass.
     """
+    # ------------------------------------------------------------------
+    # H2: Fail-closed — refuse to start in cloud without Supabase creds
+    # ------------------------------------------------------------------
+    is_cloud = bool(
+        os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_SERVICE_NAME")
+        or os.getenv("VERCEL_ENV")
+    )
+
+    if is_cloud:
+        supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+
+        if not supabase_url or not supabase_key:
+            logger.critical(
+                "fail_closed_auth",
+                msg=(
+                    "FATAL: Cloud deployment detected but Supabase auth credentials missing. "
+                    "Set SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_ variants). "
+                    "Refusing to start without authentication — this prevents silent auth bypass."
+                ),
+            )
+            sys.exit(1)
+
     issues: list[str] = []
 
     # JWT secret must be set and non-trivial
