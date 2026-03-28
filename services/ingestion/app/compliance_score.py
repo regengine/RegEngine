@@ -193,6 +193,22 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     else:
         result["chain_gaps"] = 0
 
+    # 3b) Time precision — count events with midnight timestamps (no real time)
+    if result["event_count"] > 0:
+        midnight_row = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                  AND EXTRACT(HOUR FROM event_timestamp) = 0
+                  AND EXTRACT(MINUTE FROM event_timestamp) = 0
+                  AND EXTRACT(SECOND FROM event_timestamp) = 0
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["events_missing_time"] = midnight_row[0] if midnight_row else 0
+    else:
+        result["events_missing_time"] = 0
+
     # 4) Obligation coverage — check rules against actual event KDE presence
     # Note: obligations.tenant_id is UUID, but cte_events.tenant_id may be text.
     # Use try/except to handle type mismatches gracefully.
@@ -338,16 +354,24 @@ def _compute_scores(data: dict) -> dict:
     else:
         kde_ratio = data["filled_kdes"] / data["total_kdes"]
         kde_score = int(kde_ratio * 100)
+
+        # Penalize for missing event time precision (FDA requires time, not just date)
+        events_missing_time = data.get("events_missing_time", 0)
+        if events_missing_time > 0 and data["event_count"] > 0:
+            time_penalty = min(10, int((events_missing_time / data["event_count"]) * 10))
+            kde_score = max(0, kde_score - time_penalty)
+
         missing = data["total_kdes"] - data["filled_kdes"]
+        time_note = f"; {events_missing_time} events lack precise time" if events_missing_time > 0 else ""
         if missing > 0:
             scores["kde_completeness"] = (
                 kde_score,
-                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank",
+                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank{time_note}",
             )
         else:
             scores["kde_completeness"] = (
-                100,
-                f"All {data['total_kdes']} KDE fields populated",
+                kde_score if events_missing_time > 0 else 100,
+                f"All {data['total_kdes']} KDE fields populated{time_note}",
             )
 
     # --- 3) CTE Completeness (20% weight) ---

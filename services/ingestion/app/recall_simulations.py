@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission
+from app.disclaimers import SIMULATION_DISCLAIMER
 
 logger = logging.getLogger("recall-simulations")
 
@@ -379,11 +380,7 @@ async def list_scenarios(_auth=Depends(require_permission("simulations.read")), 
         "scenarios": scenarios,
         "total": len(scenarios),
         "is_illustrative": True,
-        "demo_disclaimer": (
-            "These are illustrative recall scenarios with synthetic metrics. "
-            "They are not derived from your tenant's actual supply chain data. "
-            "Wire to tenant CTE events for production simulations."
-        ),
+        "demo_disclaimer": SIMULATION_DISCLAIMER,
     }
 
 
@@ -419,9 +416,7 @@ async def run_recall_simulation(
         "metrics": metrics,
         "is_illustrative": is_illustrative,
         "tenant_metrics": real_metrics,
-        "demo_disclaimer": (
-            "Simulation uses synthetic scenarios — not derived from tenant data."
-        ) if is_illustrative else None,
+        "demo_disclaimer": SIMULATION_DISCLAIMER if is_illustrative else None,
     }
     _simulation_store[simulation_id] = simulation_record
 

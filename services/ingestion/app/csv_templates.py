@@ -21,6 +21,7 @@ from app.shared.upload_limits import read_upload_with_limit, MAX_CSV_FILE_SIZE_B
 from app.webhook_models import (
     IngestEvent,
     IngestResponse,
+    REQUIRED_KDES_BY_CTE,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -268,6 +269,32 @@ def _inject_required_kdes(kdes: dict, row_cte: str, row: dict, loc_name: Optiona
                     break
 
 
+def _validate_kde_completeness(
+    cte_type: str, event: IngestEvent, kdes: dict
+) -> list[str]:
+    """Check required KDEs for a CTE type. Returns list of missing field names."""
+    try:
+        cte_enum = WebhookCTEType(cte_type)
+    except ValueError:
+        return []
+    required = REQUIRED_KDES_BY_CTE.get(cte_enum, [])
+    missing = []
+    for field in required:
+        # Check in top-level event fields first, then KDEs
+        if field in {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}:
+            val = getattr(event, field, None)
+            if val is None or str(val).strip() in ("", "0", "0.0"):
+                missing.append(field)
+        elif field == "location_name":
+            if not (event.location_name or kdes.get("location_name")):
+                missing.append(field)
+        else:
+            val = kdes.get(field)
+            if val is None or str(val).strip() == "":
+                missing.append(field)
+    return missing
+
+
 @router.post(
     "/ingest/csv",
     response_model=IngestResponse,
@@ -306,6 +333,7 @@ async def ingest_csv(
 
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
+    kde_warnings: list[str] = []
     MAX_CSV_ROWS = 500
 
     for row_num, row in enumerate(reader, start=2):
@@ -378,6 +406,13 @@ async def ingest_csv(
                 kdes=kdes,
             )
             events.append(event)
+
+            # KDE completeness validation (warn, don't reject)
+            missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
+            if missing_kdes:
+                kde_warnings.append(
+                    f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}"
+                )
         except Exception as e:
             parse_errors.append(f"Row {row_num}: {str(e)}")
 
@@ -398,6 +433,18 @@ async def ingest_csv(
             response.rejected += 1
             response.total += 1
 
-    logger.info("csv_ingest_complete: total=%d accepted=%d rejected=%d",
-        response.total, response.accepted, response.rejected)
-    return response
+    if kde_warnings:
+        logger.warning("csv_ingest_kde_warnings: %d events with missing KDEs: %s",
+            len(kde_warnings), "; ".join(kde_warnings[:5]))
+
+    logger.info("csv_ingest_complete: total=%d accepted=%d rejected=%d kde_warnings=%d",
+        response.total, response.accepted, response.rejected, len(kde_warnings))
+
+    # Attach KDE warnings as extra response metadata via JSONResponse
+    # so callers can see which events are missing required fields
+    from fastapi.responses import JSONResponse
+    response_data = response.model_dump()
+    if kde_warnings:
+        response_data["kde_warnings"] = kde_warnings
+        response_data["kde_warning_count"] = len(kde_warnings)
+    return JSONResponse(content=response_data)
