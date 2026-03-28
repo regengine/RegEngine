@@ -3,70 +3,70 @@
 /** FSMA 204 is the only supported vertical. */
 export const DEFAULT_VERTICAL = "food-safety" as const;
 
-export function isStaticExport(): boolean {
-    // Detect if we are running in a static/mobile context (e.g. Capacitor)
-    return typeof window !== 'undefined' &&
-        ((window as any).Capacitor !== undefined ||
-            process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export');
+/** Default port for each backend service (used only for local dev fallback). */
+const SERVICE_PORTS = { ingestion: 8002, graph: 8200, compliance: 8500, admin: 8400, nlp: 8100 } as const;
+
+type ServiceName = keyof typeof SERVICE_PORTS;
+
+/**
+ * Server-side only — resolve backend URL from env vars with localhost fallback.
+ * Use this in Next.js API routes instead of inline `|| 'http://localhost:XXXX'`.
+ */
+export function getServerServiceURL(service: ServiceName): string {
+    const envMap: Record<ServiceName, string | undefined> = {
+        ingestion: process.env.INGESTION_SERVICE_URL,
+        graph: process.env.GRAPH_SERVICE_URL,
+        compliance: process.env.COMPLIANCE_SERVICE_URL,
+        admin: process.env.ADMIN_SERVICE_URL,
+        nlp: process.env.NLP_SERVICE_URL,
+    };
+    return envMap[service] || `http://localhost:${SERVICE_PORTS[service]}`;
 }
 
-export function getServiceURL(service: 'ingestion' | 'graph' | 'compliance' | 'admin' | 'nlp'): string {
-    const isClient = typeof window !== 'undefined';
-    const isCapacitorClient = isClient && (window as any).Capacitor !== undefined;
+/** Detect Capacitor window global without triggering TS errors */
+function hasCapacitor(): boolean {
+    return typeof window !== 'undefined' && 'Capacitor' in window;
+}
 
-    // In production static export (Capacitor), we MUST use absolute URLs
-    // We prefer a unified API gateway if NEXT_PUBLIC_API_BASE_URL is set
+export function isStaticExport(): boolean {
+    return typeof window !== 'undefined' &&
+        (hasCapacitor() || process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export');
+}
+
+function localFallback(service: ServiceName): string {
+    return `http://localhost:${SERVICE_PORTS[service]}`;
+}
+
+export function getServiceURL(service: ServiceName): string {
+    const isClient = typeof window !== 'undefined';
+    const isCapacitorClient = isClient && hasCapacitor();
+
     const gatewayUrl = isClient ? process.env.NEXT_PUBLIC_API_BASE_URL : null;
 
     if (!isClient) {
-        // Server-side (Standard Next.js Server Components or SSR)
-        switch (service) {
-            case 'ingestion':
-                return process.env.INGESTION_SERVICE_URL || 'http://localhost:8002';
-            case 'graph':
-                return process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
-            case 'compliance':
-                return process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
-            case 'admin':
-                return process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
-            case 'nlp':
-                return process.env.NLP_SERVICE_URL || 'http://localhost:8100';
-        }
+        return getServerServiceURL(service);
     }
 
     if (service === 'admin') {
-        // On web, always prefer same-origin proxy to avoid CORS and domain drift issues.
-        if (!isCapacitorClient) {
-            return '/api/admin';
-        }
-        if (gatewayUrl) {
-            return `${gatewayUrl}/admin`;
-        }
-        return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
+        if (!isCapacitorClient) return '/api/admin';
+        if (gatewayUrl) return `${gatewayUrl}/admin`;
+        return process.env.NEXT_PUBLIC_ADMIN_URL || localFallback('admin');
     }
 
-    // On web (non-Capacitor), prefer same-origin proxy to avoid CORS and domain drift.
     if (service === 'ingestion' && !isCapacitorClient) {
         return '/api/ingestion';
     }
 
-    // Client-side / Static Export
     if (gatewayUrl) {
-        // If a gateway is provided (e.g. Nginx proxy), use it for non-admin services
-        // The gateway should route based on paths like /ingestion, /graph, etc.
         return `${gatewayUrl}/${service}`;
     }
 
-    switch (service) {
-        case 'ingestion':
-            return process.env.NEXT_PUBLIC_INGESTION_URL || 'http://localhost:8002';
-        case 'graph':
-            return process.env.NEXT_PUBLIC_GRAPH_URL || 'http://localhost:8200';
-        case 'compliance':
-            return process.env.NEXT_PUBLIC_COMPLIANCE_URL || 'http://localhost:8500';
-        case 'nlp':
-            return process.env.NEXT_PUBLIC_NLP_URL || 'http://localhost:8100';
-        default:
-            return process.env.NEXT_PUBLIC_ADMIN_URL || 'http://localhost:8400';
-    }
+    const clientEnvMap: Record<ServiceName, string | undefined> = {
+        ingestion: process.env.NEXT_PUBLIC_INGESTION_URL,
+        graph: process.env.NEXT_PUBLIC_GRAPH_URL,
+        compliance: process.env.NEXT_PUBLIC_COMPLIANCE_URL,
+        admin: process.env.NEXT_PUBLIC_ADMIN_URL,
+        nlp: process.env.NEXT_PUBLIC_NLP_URL,
+    };
+    return clientEnvMap[service] || localFallback(service);
 }

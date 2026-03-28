@@ -15,6 +15,20 @@ const nextConfig = {
     images: {
         unoptimized: isStatic,
     },
+    async headers() {
+        return [
+            {
+                source: '/(.*)',
+                headers: [
+                    { key: 'X-Frame-Options', value: 'DENY' },
+                    { key: 'X-Content-Type-Options', value: 'nosniff' },
+                    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                    { key: 'X-XSS-Protection', value: '0' },
+                    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+                ],
+            },
+        ];
+    },
     async redirects() {
         return [
             // Existing redirects
@@ -69,6 +83,12 @@ const nextConfig = {
                 source: '/integrations',
                 destination: '/dashboard/integrations',
                 permanent: true,
+            },
+            // /about is disabled — redirect to contact page (has founder info)
+            {
+                source: '/about',
+                destination: '/contact',
+                permanent: false,
             },
         ];
     },

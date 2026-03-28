@@ -10,8 +10,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireProxyAuth } from '@/lib/api-proxy';
+import { getServerServiceURL } from '@/lib/api-config';
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+const BACKEND_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('admin');
 
 export async function POST(request: NextRequest) {
     try {

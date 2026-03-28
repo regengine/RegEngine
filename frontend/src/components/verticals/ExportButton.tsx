@@ -18,7 +18,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import ExcelJS from 'exceljs';
 import { generateBrandedPDF, type PDFSection } from '@/lib/pdf-report';
 
 export interface ExportData {
@@ -99,7 +98,7 @@ export function ExportButton({
                 });
             }
 
-            generateBrandedPDF({
+            await generateBrandedPDF({
                 title: data.title,
                 subtitle: data.subtitle,
                 reportType: 'RegEngine Compliance Report',
@@ -121,6 +120,7 @@ export function ExportButton({
     const exportToExcel = async () => {
         try {
             setIsExporting(true);
+            const ExcelJS = (await import('exceljs')).default;
             const workbook = new ExcelJS.Workbook();
             workbook.created = new Date();
 

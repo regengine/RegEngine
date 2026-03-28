@@ -1,12 +1,12 @@
 /**
  * React Hook Tests - useAuth
- * 
+ *
  * Tests for the authentication hook:
  * - Login/logout functionality
- * - Token management
+ * - Token management (HTTP-only cookie based)
  * - User state
  * - Hydration handling
- * - Local storage persistence
+ * - localStorage persistence (non-sensitive data only)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -25,6 +25,13 @@ vi.mock('@/lib/api-client', () => ({
     },
 }));
 
+// Mock supabase client to avoid real auth calls
+vi.mock('@/lib/supabase/client', () => ({
+    createSupabaseBrowserClient: vi.fn(() => {
+        throw new Error('Supabase not configured');
+    }),
+}));
+
 // Mock localStorage
 const localStorageMock = (() => {
     let store: Record<string, string> = {};
@@ -41,6 +48,9 @@ Object.defineProperty(window, 'localStorage', {
     value: localStorageMock,
 });
 
+// Mock global fetch for /api/session calls
+const mockFetch = vi.fn();
+
 describe('useAuth Hook', () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
         <AuthProvider>{children}</AuthProvider>
@@ -49,6 +59,29 @@ describe('useAuth Hook', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorageMock.clear();
+
+        // Default: /api/session GET returns no session, POST succeeds
+        mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+            if (typeof url === 'string' && url.includes('/api/session')) {
+                if (options?.method === 'POST' || options?.method === 'DELETE') {
+                    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                }
+                // GET — no active session by default
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        authenticated: false,
+                        has_api_key: false,
+                        has_admin_key: false,
+                        has_credentials: false,
+                        tenant_id: null,
+                        user: null,
+                    }),
+                });
+            }
+            return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+        });
+        global.fetch = mockFetch;
     });
 
     describe('Initialization', () => {
@@ -74,7 +107,27 @@ describe('useAuth Hook', () => {
             };
 
             localStorageMock.setItem('regengine_user', JSON.stringify(mockUser));
-            localStorageMock.setItem('regengine_access_token', 'test-token');
+
+            // Session endpoint says user is authenticated (cookie has token)
+            mockFetch.mockImplementation((url: string, options?: RequestInit) => {
+                if (typeof url === 'string' && url.includes('/api/session')) {
+                    if (options?.method === 'POST' || options?.method === 'DELETE') {
+                        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+                    }
+                    return Promise.resolve({
+                        ok: true,
+                        json: () => Promise.resolve({
+                            authenticated: true,
+                            has_api_key: false,
+                            has_admin_key: false,
+                            has_credentials: true,
+                            tenant_id: 'tenant-123',
+                            user: mockUser,
+                        }),
+                    });
+                }
+                return Promise.reject(new Error(`Unmocked fetch: ${url}`));
+            });
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -83,7 +136,8 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user).toEqual(mockUser);
-            expect(result.current.accessToken).toBe('test-token');
+            // Access token is now a placeholder since actual token is in HTTP-only cookie
+            expect(result.current.accessToken).toBe('cookie-managed');
         });
 
         it('sets isHydrated to true after initialization', async () => {
@@ -112,15 +166,16 @@ describe('useAuth Hook', () => {
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
             expect(result.current.user).toEqual(mockUser);
-            expect(result.current.accessToken).toBe('test-token');
+            // Access token in state is the cookie-managed placeholder
+            expect(result.current.accessToken).toBe('cookie-managed');
         });
 
-        it('persists to localStorage on login', async () => {
+        it('persists user to localStorage on login', async () => {
             const mockUser = {
                 id: '123',
                 email: 'test@example.com',
@@ -136,15 +191,17 @@ describe('useAuth Hook', () => {
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
-            expect(localStorageMock.getItem('regengine_access_token')).toBe('test-token');
+            // User profile is still stored in localStorage (non-sensitive)
             expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
+            // Tenant ID is still stored in localStorage (non-sensitive)
+            expect(localStorageMock.getItem('regengine_tenant_id')).toBe('tenant-123');
         });
 
-        it('calls apiClient.setAccessToken on login', () => {
+        it('stores credentials in HTTP-only cookies via /api/session on login', async () => {
             const mockUser = {
                 id: '123',
                 email: 'test@example.com',
@@ -160,11 +217,43 @@ describe('useAuth Hook', () => {
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
-            expect(apiClient.setAccessToken).toHaveBeenCalledWith('test-token');
+            // Verify /api/session POST was called with the token
+            const sessionPostCalls = mockFetch.mock.calls.filter(
+                ([url, opts]: [string, RequestInit?]) =>
+                    url.includes('/api/session') && opts?.method === 'POST'
+            );
+            expect(sessionPostCalls.length).toBeGreaterThan(0);
+
+            const lastPostBody = JSON.parse(sessionPostCalls[sessionPostCalls.length - 1][1].body);
+            expect(lastPostBody.access_token).toBe('test-token');
+        });
+
+        it('calls apiClient.setAccessToken on login', async () => {
+            const mockUser = {
+                id: '123',
+                email: 'test@example.com',
+                name: 'Test User',
+                is_sysadmin: false,
+                tenant_id: 'tenant-123',
+                role_id: 'role-1',
+                is_active: true,
+                status: 'active',
+                created_at: '2026-01-01T00:00:00Z',
+                updated_at: '2026-01-27T00:00:00Z',
+            };
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
+            });
+
+            // apiClient receives the placeholder, not the real token
+            expect(apiClient.setAccessToken).toHaveBeenCalledWith('cookie-managed');
             expect(apiClient.setUser).toHaveBeenCalledWith(mockUser);
         });
     });
@@ -187,8 +276,8 @@ describe('useAuth Hook', () => {
             const { result } = renderHook(() => useAuth(), { wrapper });
 
             // Login first
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
             // Then logout
@@ -200,7 +289,7 @@ describe('useAuth Hook', () => {
             expect(result.current.accessToken).toBeNull();
         });
 
-        it('clears localStorage on logout', () => {
+        it('clears localStorage on logout', async () => {
             const mockUser = {
                 id: '123',
                 email: 'test@example.com',
@@ -217,8 +306,8 @@ describe('useAuth Hook', () => {
             const { result } = renderHook(() => useAuth(), { wrapper });
 
             // Login first
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
             // Then logout
@@ -226,11 +315,11 @@ describe('useAuth Hook', () => {
                 result.current.logout();
             });
 
-            expect(localStorageMock.getItem('accessToken')).toBeNull();
-            expect(localStorageMock.getItem('user')).toBeNull();
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+            expect(localStorageMock.getItem('regengine_tenant_id')).toBeNull();
         });
 
-        it('calls apiClient.setAccessToken(null) on logout', () => {
+        it('calls apiClient.setAccessToken(null) on logout', async () => {
             const mockUser = {
                 id: '123',
                 email: 'test@example.com',
@@ -247,8 +336,8 @@ describe('useAuth Hook', () => {
             const { result } = renderHook(() => useAuth(), { wrapper });
 
             // Login first
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
             // Clear previous calls
@@ -265,7 +354,7 @@ describe('useAuth Hook', () => {
     });
 
     describe('Computed Properties', () => {
-        it('isAuthenticated is true when user exists', () => {
+        it('isAuthenticated is true when user exists', async () => {
             const mockUser = {
                 id: '123',
                 email: 'test@example.com',
@@ -281,8 +370,8 @@ describe('useAuth Hook', () => {
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
-            act(() => {
-                result.current.login('test-token', mockUser, 'tenant-123');
+            await act(async () => {
+                await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
             expect(result.current.isAuthenticated).toBe(true);
@@ -294,7 +383,7 @@ describe('useAuth Hook', () => {
             expect(result.current.isAuthenticated).toBe(false);
         });
 
-        it('detects sysadmin users', () => {
+        it('detects sysadmin users', async () => {
             const adminUser = {
                 id: '456',
                 email: 'admin@example.com',
@@ -310,8 +399,8 @@ describe('useAuth Hook', () => {
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
-            act(() => {
-                result.current.login('admin-token', adminUser, 'tenant-456');
+            await act(async () => {
+                await result.current.login('admin-token', adminUser, 'tenant-456');
             });
 
             expect(result.current.user?.is_sysadmin).toBe(true);
@@ -320,8 +409,7 @@ describe('useAuth Hook', () => {
 
     describe('Error Handling', () => {
         it('handles corrupted localStorage data gracefully', async () => {
-            localStorageMock.setItem('user', 'invalid-json');
-            localStorageMock.setItem('accessToken', 'test-token');
+            localStorageMock.setItem('regengine_user', 'invalid-json');
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
