@@ -76,6 +76,8 @@ FDA_COLUMNS = [
     "Temperature (°F)",
     "Carrier",
     "Additional KDEs (JSON)",
+    # FSMA 204 §1.1455(c): date/time event entered into system
+    "System Entry Timestamp",
 ]
 
 
@@ -141,6 +143,11 @@ def _event_to_fda_row(event: dict) -> dict:
     # Remaining KDEs not in named columns → JSON blob
     extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS}
     row["Additional KDEs (JSON)"] = json.dumps(extra_kdes) if extra_kdes else ""
+
+    # FSMA 204 requires "system entry timestamp" — when the record was entered
+    # into the traceability system (distinct from when the physical event occurred).
+    # This maps to the ingested_at column which defaults to NOW() on INSERT.
+    row["System Entry Timestamp"] = event.get("ingested_at", "") or ""
 
     return row
 
@@ -848,7 +855,8 @@ async def export_recall_filtered(
                     e.location_gln, e.location_name, e.source, e.sha256_hash,
                     h.chain_hash,
                     (SELECT jsonb_object_agg(k.kde_key, k.kde_value)
-                     FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes
+                     FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes,
+                    e.ingested_at
                 FROM fsma.cte_events e
                 LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
                 WHERE {where_clause}
@@ -880,6 +888,7 @@ async def export_recall_filtered(
             ts = r[6]
             if hasattr(ts, "isoformat"):
                 ts = ts.isoformat()
+            ingested = r[13]
             events.append({
                 "id": str(r[0]),
                 "event_type": r[1],
@@ -894,6 +903,7 @@ async def export_recall_filtered(
                 "sha256_hash": r[10],
                 "chain_hash": r[11] or "",
                 "kdes": kdes,
+                "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
             })
 
         csv_content = _generate_csv(events)
@@ -1250,7 +1260,8 @@ async def export_fda_spreadsheet_v2(
                             )
                         ) FILTER (WHERE re.rule_id IS NOT NULL),
                         '[]'::jsonb
-                    ) AS rule_results
+                    ) AS rule_results,
+                    e.ingested_at
                 FROM fsma.traceability_events e
                 LEFT JOIN fsma.rule_evaluations re ON re.event_id = e.event_id
                 LEFT JOIN fsma.rule_definitions rd ON rd.rule_id = re.rule_id
@@ -1259,7 +1270,8 @@ async def export_fda_spreadsheet_v2(
                     e.event_id, e.event_type, e.traceability_lot_code,
                     e.product_description, e.quantity, e.unit_of_measure,
                     e.event_timestamp, e.location_gln, e.location_name,
-                    e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance
+                    e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance,
+                    e.ingested_at
                 ORDER BY e.event_timestamp ASC
                 LIMIT 10000
             """),
@@ -1288,6 +1300,7 @@ async def export_fda_spreadsheet_v2(
             kdes = r[12] if r[12] else {}
             provenance = r[13] if r[13] else {}
             rule_results_raw = r[14] if r[14] else []
+            ingested = r[15]
             ts = r[6]
             if hasattr(ts, "isoformat"):
                 ts = ts.isoformat()
@@ -1315,6 +1328,7 @@ async def export_fda_spreadsheet_v2(
                 "kdes": kdes,
                 "provenance": provenance,
                 "rule_results": rule_results_raw,
+                "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
             })
 
         # ----- Generate CSV with compliance columns -----
