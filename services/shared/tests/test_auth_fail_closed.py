@@ -1,4 +1,4 @@
-"""Tests for H2: fail-closed auth — cloud startup refuses without Supabase credentials."""
+"""Tests for auth config validation at service startup."""
 
 import os
 import subprocess
@@ -11,15 +11,6 @@ VALIDATE_SCRIPT = (
     "import os, sys; "
     "sys.path.insert(0, 'services'); "
     "from shared.auth import validate_auth_config; "
-    "validate_auth_config(require_supabase=True); "
-    "print('STARTED_OK')"
-)
-
-# Script WITHOUT require_supabase — simulates graph/NLP services
-VALIDATE_SCRIPT_NO_SUPABASE = (
-    "import os, sys; "
-    "sys.path.insert(0, 'services'); "
-    "from shared.auth import validate_auth_config; "
     "validate_auth_config(); "
     "print('STARTED_OK')"
 )
@@ -28,25 +19,21 @@ VALIDATE_SCRIPT_NO_SUPABASE = (
 def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
     """Run validate_auth_config() in a subprocess with the given env vars."""
     env = {
-        # Strip cloud/production indicators from the parent env
         k: v
         for k, v in os.environ.items()
         if k not in (
             "RAILWAY_ENVIRONMENT",
             "RAILWAY_SERVICE_NAME",
             "VERCEL_ENV",
-            "NEXT_PUBLIC_SUPABASE_URL",
-            "SUPABASE_URL",
-            "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-            "SUPABASE_ANON_KEY",
             "AUTH_SECRET_KEY",
             "JWT_SECRET",
             "REGENGINE_ENV",
+            "AUTH_TEST_BYPASS_TOKEN",
+            "REGENGINE_API_KEY",
+            "API_KEY",
         )
     }
     env.update(env_overrides)
-    # Ensure we don't trip the JWT validation by providing a valid secret
-    env.setdefault("AUTH_SECRET_KEY", "test-secret-key-long-enough")
     env.setdefault("REGENGINE_ENV", "development")
     return subprocess.run(
         [sys.executable, "-c", VALIDATE_SCRIPT],
@@ -56,99 +43,55 @@ def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
     )
 
 
-class TestFailClosedAuth:
-    """H2: services must refuse to start in cloud without Supabase credentials."""
+class TestAuthConfigValidation:
+    """Validate auth config catches misconfigurations at startup."""
 
-    def test_local_dev_starts_without_supabase_creds(self):
-        """Local dev (no cloud env vars) should start fine without Supabase creds."""
+    def test_starts_with_valid_config(self):
+        """Valid JWT secret should start cleanly."""
+        result = _run_validate({"AUTH_SECRET_KEY": "a-valid-secret-key-long-enough"})
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_starts_in_dev_without_jwt_secret(self):
+        """Dev mode without JWT secret should start (warns but no crash)."""
         result = _run_validate({})
         assert result.returncode == 0
         assert "STARTED_OK" in result.stdout
 
-    def test_cloud_warns_without_supabase_url(self):
-        """Cloud env with missing SUPABASE_URL should warn but still start."""
-        result = _run_validate({
-            "RAILWAY_ENVIRONMENT": "production",
-            "NEXT_PUBLIC_SUPABASE_ANON_KEY": "test-anon-key",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
+    def test_cloud_starts_without_supabase_creds(self):
+        """Cloud env should start fine without Supabase — no longer checked.
 
-    def test_cloud_warns_without_supabase_key(self):
-        """Cloud env with missing SUPABASE_ANON_KEY should warn but still start."""
-        result = _run_validate({
-            "RAILWAY_ENVIRONMENT": "production",
-            "NEXT_PUBLIC_SUPABASE_URL": "https://test.supabase.co",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
-
-    def test_cloud_warns_without_both_creds(self):
-        """Cloud env with neither Supabase credential should warn but still start."""
-        result = _run_validate({
-            "RAILWAY_ENVIRONMENT": "production",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
-
-    def test_cloud_starts_with_supabase_creds(self):
-        """Cloud env with both Supabase creds should start normally."""
-        result = _run_validate({
-            "RAILWAY_ENVIRONMENT": "production",
-            "NEXT_PUBLIC_SUPABASE_URL": "https://test.supabase.co",
-            "NEXT_PUBLIC_SUPABASE_ANON_KEY": "test-anon-key",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
-
-    def test_cloud_starts_with_non_prefixed_creds(self):
-        """Cloud env with SUPABASE_URL/SUPABASE_ANON_KEY (no NEXT_PUBLIC_ prefix) should work."""
-        result = _run_validate({
-            "RAILWAY_SERVICE_NAME": "admin",
-            "SUPABASE_URL": "https://test.supabase.co",
-            "SUPABASE_ANON_KEY": "test-anon-key",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
-
-    def test_vercel_env_triggers_warning(self):
-        """VERCEL_ENV should trigger a warning but still start."""
-        result = _run_validate({
-            "VERCEL_ENV": "production",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
-
-    def test_railway_service_name_triggers_warning(self):
-        """RAILWAY_SERVICE_NAME should trigger a warning but still start."""
-        result = _run_validate({
-            "RAILWAY_SERVICE_NAME": "ingestion",
-        })
-        assert result.returncode == 0
-        assert "STARTED_OK" in result.stdout
-
-    def test_internal_service_starts_without_supabase_in_cloud(self):
-        """Internal services (graph, NLP) should start in cloud without Supabase creds.
-
-        Only services that pass require_supabase=True should be gated.
+        Supabase credential validation was removed after it caused production
+        outages. SupabaseManager.get_client() handles missing creds gracefully.
         """
-        env = {
-            k: v
-            for k, v in os.environ.items()
-            if k not in (
-                "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME", "VERCEL_ENV",
-                "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL",
-                "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY",
-                "AUTH_SECRET_KEY", "JWT_SECRET", "REGENGINE_ENV",
-            )
-        }
-        env["RAILWAY_ENVIRONMENT"] = "production"
-        env["AUTH_SECRET_KEY"] = "test-secret-key-long-enough"
-        env["REGENGINE_ENV"] = "development"
-        # No Supabase creds — but require_supabase=False (default)
-        result = subprocess.run(
-            [sys.executable, "-c", VALIDATE_SCRIPT_NO_SUPABASE],
-            capture_output=True, text=True, env=env,
-        )
+        result = _run_validate({
+            "RAILWAY_ENVIRONMENT": "production",
+            "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+        })
         assert result.returncode == 0
         assert "STARTED_OK" in result.stdout
+
+    def test_rejects_short_jwt_secret_in_production(self):
+        """Production with a too-short JWT secret should fail."""
+        result = _run_validate({
+            "REGENGINE_ENV": "production",
+            "AUTH_SECRET_KEY": "short",
+        })
+        assert result.returncode != 0
+
+    def test_rejects_default_jwt_secret_in_production(self):
+        """Production with a known-default JWT secret should fail."""
+        result = _run_validate({
+            "REGENGINE_ENV": "production",
+            "AUTH_SECRET_KEY": "changeme",
+        })
+        assert result.returncode != 0
+
+    def test_rejects_bypass_token_in_production(self):
+        """Production with AUTH_TEST_BYPASS_TOKEN should fail."""
+        result = _run_validate({
+            "REGENGINE_ENV": "production",
+            "AUTH_SECRET_KEY": "a-valid-secret-key-long-enough",
+            "AUTH_TEST_BYPASS_TOKEN": "some-bypass-token",
+        })
+        assert result.returncode != 0

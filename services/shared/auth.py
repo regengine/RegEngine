@@ -19,57 +19,17 @@ import os
 logger = structlog.get_logger("auth")
 
 
-def validate_auth_config(*, require_supabase: bool = False) -> None:
+def validate_auth_config() -> None:
     """Validate critical auth configuration at service startup.
 
     Call this from each service's main.py after app creation.
     Logs warnings for missing config and raises on fatal misconfigurations.
 
-    Args:
-        require_supabase: If True, enforce Supabase credentials in cloud.
-            Only services that directly use Supabase auth (admin, ingestion,
-            compliance) should set this. Internal services (graph, NLP,
-            scheduler) use API key auth and do not need Supabase.
+    Note: Supabase credential checks were removed (H2 postmortem). The
+    SupabaseManager.get_client() already handles missing creds gracefully
+    by returning None. Duplicating that check here caused production
+    outages when env var names didn't match expectations.
     """
-    # ------------------------------------------------------------------
-    # H2: Fail-closed — refuse to start in cloud without Supabase creds
-    # Only enforced for services that actually use Supabase auth.
-    # ------------------------------------------------------------------
-    if require_supabase:
-        is_cloud = bool(
-            os.getenv("RAILWAY_ENVIRONMENT")
-            or os.getenv("RAILWAY_SERVICE_NAME")
-            or os.getenv("VERCEL_ENV")
-        )
-
-        if is_cloud:
-            supabase_url = (
-                os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-                or os.getenv("SUPABASE_URL")
-            )
-            supabase_key = (
-                os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-                or os.getenv("SUPABASE_ANON_KEY")
-                or os.getenv("SUPABASE_SERVICE_KEY")
-            )
-
-            if not supabase_url or not supabase_key:
-                # Warn loudly but don't crash — backend services handle
-                # missing Supabase gracefully (SupabaseManager returns None).
-                # sys.exit(1) here was killing services on Railway that had
-                # valid JWT + API key auth but not SUPABASE_ANON_KEY.
-                logger.error(
-                    "supabase_credentials_missing_in_cloud",
-                    msg=(
-                        "Cloud deployment detected but Supabase credentials missing. "
-                        "Set SUPABASE_URL and SUPABASE_SERVICE_KEY (or ANON_KEY variants). "
-                        "Supabase-dependent features will be degraded. "
-                        "Services continue with JWT/API key auth."
-                    ),
-                    supabase_url_set=bool(supabase_url),
-                    supabase_key_set=bool(supabase_key),
-                )
-
     issues: list[str] = []
 
     # JWT secret must be set and non-trivial
