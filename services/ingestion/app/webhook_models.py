@@ -14,7 +14,29 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import logging
+
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+_gln_logger = logging.getLogger("gln-validation")
+
+
+def validate_gln(gln: str) -> tuple[bool, str | None]:
+    """Validate a GS1 Global Location Number (13-digit with mod-10 check digit).
+
+    Returns (is_valid, error_message). Standalone helper for use outside Pydantic.
+    """
+    clean = re.sub(r"\D", "", gln)
+    if len(clean) != 13:
+        return False, f"GLN must be exactly 13 digits, got {len(clean)}"
+    total = sum(
+        int(d) * (1 if i % 2 else 3)
+        for i, d in enumerate(reversed(clean[:-1]))
+    )
+    expected = (10 - (total % 10)) % 10
+    if int(clean[-1]) != expected:
+        return False, f"GLN check digit invalid: expected {expected}, got {clean[-1]}"
+    return True, None
 
 
 class WebhookCTEType(str, Enum):
@@ -128,22 +150,19 @@ class IngestEvent(BaseModel):
     @field_validator("location_gln")
     @classmethod
     def validate_gln_format(cls, v: Optional[str]) -> Optional[str]:
-        """Validate GLN is 13 digits with valid GS1 check digit."""
+        """Validate GLN is 13 digits with valid GS1 check digit.
+
+        Warning-only: logs invalid GLNs but accepts them to avoid
+        breaking existing imports. Use validate_gln() for strict checks.
+        """
         if v is None or v.strip() == "":
             return v
         clean = re.sub(r"\D", "", v)
-        if len(clean) != 13:
-            raise ValueError(f"GLN must be exactly 13 digits, got {len(clean)}")
-        # GS1 check digit validation (positions from right: odd×3, even×1)
-        total = sum(
-            int(d) * (1 if i % 2 else 3)
-            for i, d in enumerate(reversed(clean[:-1]))
-        )
-        expected = (10 - (total % 10)) % 10
-        if int(clean[-1]) != expected:
-            raise ValueError(
-                f"GLN check digit invalid: expected {expected}, got {clean[-1]}"
-            )
+        is_valid, error_msg = validate_gln(clean) if len(clean) == 13 else (False, f"GLN must be exactly 13 digits, got {len(clean)}")
+        if not is_valid:
+            _gln_logger.warning("invalid_gln value=%s error=%s", v, error_msg)
+            # Return cleaned value anyway — warn, don't reject
+            return clean if len(clean) == 13 else v
         return clean
 
     @field_validator("unit_of_measure")

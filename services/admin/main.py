@@ -13,6 +13,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before app creation)
+from shared.error_handling import init_sentry
+init_sentry()
+
 import structlog
 from app.api_overlay import router as overlay_router
 from app.config import get_settings
@@ -49,7 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.database import init_db
         init_db()
         log.info("database_initialized")
-    except Exception as e:
+    except (ImportError, RuntimeError, ConnectionError, OSError) as e:
         log.error("database_init_failed", error=str(e))
         # Continue - service can still serve health checks
     
@@ -59,7 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from shared.api_key_store import get_db_key_store
             await get_db_key_store()
             log.info("api_key_store_initialized")
-        except Exception as e:
+        except (ImportError, RuntimeError, ConnectionError, OSError) as e:
             log.warning("api_key_store_init_failed", error=str(e))
             # Continue - can fall back to static keys
 
@@ -75,10 +79,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log.info("shutdown_complete")
 
 
+from shared.env import is_production
+_is_prod = is_production()
+
 app = FastAPI(
     title="RegEngine Admin API",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
     description="""
 RegEngine Admin API provides tenant self-service capabilities for regulatory compliance management.
 
@@ -131,23 +141,30 @@ For API support, consult the documentation at `/docs` (this page) or `/redoc`.
     },
 )
 
-# CORS configuration
-# In production, replace with specific origins
-# HIGH #6 (UI Debug Audit): CORS origins MUST be explicit in production.
-# Never use "*" with allow_credentials=True — it allows any site to make
-# credentialed requests. In production, set CORS_ORIGINS to exactly:
-#   https://regengine.co,https://www.regengine.co
-_raw_cors = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001,http://localhost:8080")
-cors_origins = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
-# Block wildcard with credentials — a common misconfiguration
-if "*" in cors_origins:
-    import warnings
-    warnings.warn(
-        "CORS_ORIGINS contains '*' which is insecure with allow_credentials=True. "
-        "Falling back to localhost-only origins. Set explicit origins in production.",
-        stacklevel=2,
-    )
-    cors_origins = ["http://localhost:3000", "http://localhost:3001"]
+# CORS configuration — explicit origins only, never wildcard with credentials
+_PROD_ORIGINS = [
+    "https://regengine.co",
+    "https://www.regengine.co",
+    "https://app.regengine.co",
+]
+_DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:8080",
+]
+_raw_cors = os.getenv("CORS_ORIGINS", "")
+if _raw_cors:
+    cors_origins = [origin.strip() for origin in _raw_cors.split(",") if origin.strip()]
+    if "*" in cors_origins:
+        import warnings
+        warnings.warn(
+            "CORS_ORIGINS contains '*' which is insecure with allow_credentials=True. "
+            "Falling back to production origins.",
+            stacklevel=2,
+        )
+        cors_origins = _PROD_ORIGINS
+else:
+    cors_origins = _PROD_ORIGINS if _is_prod else _DEV_ORIGINS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -156,10 +173,6 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-RegEngine-API-Key", "X-Admin-Key", "X-Tenant-ID", "X-Request-ID"],
 )
 # app.add_middleware(CorrelationIdMiddleware)
-
-# Request ID correlation middleware (distributed tracing)
-from shared.middleware import RequestIDMiddleware
-app.add_middleware(RequestIDMiddleware)
 
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
 from app.audit_middleware import AuditContextMiddleware
@@ -183,44 +196,56 @@ async def add_compliance_header(request, call_next):
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-app.include_router(router, tags=["Core Admin"])
-app.include_router(v1_router, tags=["API v1"])
-app.include_router(overlay_router, tags=["Content Graph Overlay"])
-app.include_router(compliance_router, tags=["Compliance"])
+from shared.auth import validate_auth_config
+validate_auth_config(require_supabase=True)
+
+app.include_router(router)
+app.include_router(v1_router)
+app.include_router(overlay_router)
+app.include_router(compliance_router)
 
 from app.system_routes import router as system_router
-app.include_router(system_router, prefix="/v1", tags=["System"])
+app.include_router(system_router, prefix="/v1")
 
 
 from app.auth_routes import router as auth_router
-app.include_router(auth_router, tags=["Authentication"])
+app.include_router(auth_router)
 
 from app.invite_routes import router as invite_router
-app.include_router(invite_router, prefix="/v1", tags=["Invitations"])
+app.include_router(invite_router, prefix="/v1")
 
 from app.user_routes import router as user_router
-app.include_router(user_router, prefix="/v1", tags=["Users"])
+app.include_router(user_router, prefix="/v1")
 
 from app.supplier_onboarding_routes import router as supplier_onboarding_router
-app.include_router(supplier_onboarding_router, prefix="/v1", tags=["Supplier Onboarding"])
+app.include_router(supplier_onboarding_router, prefix="/v1")
+
+from app.supplier_facilities_routes import router as supplier_facilities_router
+app.include_router(supplier_facilities_router, prefix="/v1")
+
+from app.supplier_compliance_routes import router as supplier_compliance_router
+app.include_router(supplier_compliance_router, prefix="/v1")
+
+from app.supplier_funnel_routes import router as supplier_funnel_router
+app.include_router(supplier_funnel_router, prefix="/v1")
 
 from app.bulk_upload.routes import router as bulk_upload_router
-app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Bulk Upload"])
+app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
 
 # Production Compliance OS (CA/LA) — gated behind ENABLE_PCOS to keep FSMA 204 focused
 if os.getenv("ENABLE_PCOS", "false").lower() == "true":
     from app.pcos import router as pcos_router
-    app.include_router(pcos_router, tags=["Production Compliance"])
+    app.include_router(pcos_router)
 
 # Legacy verticals router removed — non-FSMA verticals pruned
 
 # Review Queue for curator workflow
 from app.review_routes import router as review_router
-app.include_router(review_router, tags=["Review Queue"])
+app.include_router(review_router)
 
 # Audit log export (tamper-evident) — ISO 27001 12.4.1
 from app.audit_routes import router as audit_router
-app.include_router(audit_router, tags=["Audit Logs"])
+app.include_router(audit_router)
 
 
 
@@ -241,7 +266,7 @@ def _start_review_consumer() -> None:
         _consumer_thread = threading.Thread(target=run_consumer, daemon=True)
         _consumer_thread.start()
         structlog.get_logger("admin").info("review_consumer_thread_started")
-    except Exception as exc:  # pragma: no cover - optional feature
+    except (ImportError, RuntimeError, ConnectionError) as exc:  # pragma: no cover - optional feature
         structlog.get_logger("admin").warning("review_consumer_import_failed", error=str(exc))
 
 

@@ -39,6 +39,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
         priority: 0.7,
     }));
 
+    // Content pages (high SEO value)
+    const contentPages = [
+        { url: `${baseUrl}/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.9 },
+        { url: `${baseUrl}/developers`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },
+        { url: `${baseUrl}/blog/24-hour-rule`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/blog/fsma-204-traceability-lot-codes`, changeFrequency: 'monthly' as const, priority: 0.8 },
+    ];
+
     // Resource pages
     const resourcePages = [
         { url: `${baseUrl}/tools`, changeFrequency: 'monthly' as const, priority: 0.8 },
@@ -49,7 +58,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/verticals/food-safety`, changeFrequency: 'monthly' as const, priority: 0.6 },
     ];
 
-    return [...marketingPages, ...toolPages, ...resourcePages].map((page) => ({
+    return [...marketingPages, ...contentPages, ...toolPages, ...resourcePages].map((page) => ({
         ...page,
         lastModified: now,
     }));

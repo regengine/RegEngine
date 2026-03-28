@@ -1,42 +1,60 @@
 /**
  * API hooks for all new sprint endpoints.
- * Uses getServiceURL('ingestion') for backend calls.
- * Falls back to mock data when backend is unavailable.
+ * Routes through the Next.js ingestion proxy (/api/ingestion) which
+ * reads credentials from HTTP-only cookies — no client-side API key needed.
+ *
+ * The `apiKey` parameter is kept for backward compatibility but is ignored.
+ * Callers still pass `useAuth().apiKey` (which is now a placeholder string)
+ * so that existing call sites don't break.
  */
 
 import { getServiceURL } from './api-config';
 
 const BASE = () => getServiceURL('ingestion');
 
-function getApiKey(): string {
-    // API key is provided via environment variable only.
-    // Never store API keys in localStorage (XSS-accessible).
-    return process.env.NEXT_PUBLIC_API_KEY || '';
-}
+/** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
+async function apiFetch<T>(path: string, _apiKey: string, options: RequestInit = {}): Promise<T> {
+    const MAX_RETRIES = 2;
+    const RETRY_DELAYS = [500, 1500];
+    let lastError: Error | null = null;
 
-/** Shared fetch helper with API key */
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const apiKey = getApiKey();
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const res = await fetch(`${BASE()}${path}`, {
+                ...options,
+                credentials: 'include', // Send HTTP-only cookies
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers,
+                },
+            });
 
-    const res = await fetch(`${BASE()}${path}`, {
-        ...options,
-        headers: {
-            'Content-Type': 'application/json',
-            'X-RegEngine-API-Key': apiKey,
-            ...options.headers,
-        },
-    });
+            if (res.ok) {
+                return res.json();
+            }
 
-    if (!res.ok) {
-        throw new Error(`API error: ${res.status} ${res.statusText}`);
+            // Don't retry client errors (4xx)
+            if (res.status >= 400 && res.status < 500) {
+                throw new Error(`API error: ${res.status} ${res.statusText}`);
+            }
+
+            // Server error (5xx) — retry
+            lastError = new Error(`API error: ${res.status} ${res.statusText}`);
+        } catch (err) {
+            lastError = err instanceof Error ? err : new Error('Network request failed');
+        }
+
+        if (attempt < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+        }
     }
 
-    return res.json();
+    throw lastError!;
 }
 
 // ── Alerts ──
 
-export async function fetchAlerts(tenantId: string, params?: {
+export async function fetchAlerts(tenantId: string, apiKey: string, params?: {
     severity?: string; category?: string; acknowledged?: boolean;
 }) {
     const search = new URLSearchParams();
@@ -44,21 +62,21 @@ export async function fetchAlerts(tenantId: string, params?: {
     if (params?.category) search.set('category', params.category);
     if (params?.acknowledged !== undefined) search.set('acknowledged', String(params.acknowledged));
     const qs = search.toString() ? `?${search}` : '';
-    return apiFetch(`/api/v1/alerts/${tenantId}${qs}`);
+    return apiFetch(`/api/v1/alerts/${tenantId}${qs}`, apiKey);
 }
 
-export async function acknowledgeAlert(tenantId: string, alertId: string) {
-    return apiFetch(`/api/v1/alerts/${tenantId}/${alertId}/acknowledge`, { method: 'POST' });
+export async function acknowledgeAlert(tenantId: string, apiKey: string, alertId: string) {
+    return apiFetch(`/api/v1/alerts/${tenantId}/${alertId}/acknowledge`, apiKey, { method: 'POST' });
 }
 
-export async function fetchAlertSummary(tenantId: string) {
-    return apiFetch(`/api/v1/alerts/${tenantId}/summary`);
+export async function fetchAlertSummary(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/alerts/${tenantId}/summary`, apiKey);
 }
 
 // ── Compliance ──
 
-export async function fetchComplianceScore(tenantId: string) {
-    return apiFetch(`/api/v1/compliance/score/${tenantId}`);
+export async function fetchComplianceScore(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/compliance/score/${tenantId}`, apiKey);
 }
 
 // ── SOP Generator ──
@@ -75,8 +93,8 @@ export interface SOPRequest {
     target_retailers?: string[];
 }
 
-export async function generateSOP(request: SOPRequest) {
-    return apiFetch('/api/v1/sop/generate', {
+export async function generateSOP(apiKey: string, request: SOPRequest) {
+    return apiFetch('/api/v1/sop/generate', apiKey, {
         method: 'POST',
         body: JSON.stringify(request),
     });
@@ -84,32 +102,32 @@ export async function generateSOP(request: SOPRequest) {
 
 // ── EPCIS Export ──
 
-export async function exportEPCIS(tenantId: string, retailer?: string) {
-    return apiFetch('/api/v1/export/epcis', {
+export async function exportEPCIS(tenantId: string, apiKey: string, retailer?: string) {
+    return apiFetch('/api/v1/export/epcis', apiKey, {
         method: 'POST',
         body: JSON.stringify({ tenant_id: tenantId, target_retailer: retailer }),
     });
 }
 
-export async function exportFDA(tenantId: string) {
-    return apiFetch('/api/v1/export/fda', {
+export async function exportFDA(tenantId: string, apiKey: string) {
+    return apiFetch('/api/v1/export/fda', apiKey, {
         method: 'POST',
         body: JSON.stringify({ tenant_id: tenantId }),
     });
 }
 
-export async function fetchExportFormats() {
-    return apiFetch('/api/v1/export/formats');
+export async function fetchExportFormats(apiKey: string) {
+    return apiFetch('/api/v1/export/formats', apiKey);
 }
 
 // ── Billing ──
 
-export async function fetchPlans() {
-    return apiFetch('/api/v1/billing/plans');
+export async function fetchPlans(apiKey: string) {
+    return apiFetch('/api/v1/billing/plans', apiKey);
 }
 
-export async function createCheckout(planId: string, tenantId: string, billingPeriod: string) {
-    return apiFetch('/api/v1/billing/checkout', {
+export async function createCheckout(apiKey: string, planId: string, tenantId: string, billingPeriod: string) {
+    return apiFetch('/api/v1/billing/checkout', apiKey, {
         method: 'POST',
         body: JSON.stringify({
             plan_id: planId,
@@ -119,66 +137,66 @@ export async function createCheckout(planId: string, tenantId: string, billingPe
     });
 }
 
-export async function fetchSubscription(tenantId: string) {
-    return apiFetch(`/api/v1/billing/subscription/${tenantId}`);
+export async function fetchSubscription(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/billing/subscription/${tenantId}`, apiKey);
 }
 
 // ── Supplier Management ──
 
-export async function fetchSupplierDashboard(tenantId: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}`);
+export async function fetchSupplierDashboard(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/suppliers/${tenantId}`, apiKey);
 }
 
-export async function addSupplier(tenantId: string, name: string, email: string, products: string[]) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}`, {
+export async function addSupplier(tenantId: string, apiKey: string, name: string, email: string, products: string[]) {
+    return apiFetch(`/api/v1/suppliers/${tenantId}`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ name, contact_email: email, products }),
     });
 }
 
-export async function sendPortalLink(tenantId: string, supplierId: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}/${supplierId}/send-link`, { method: 'POST' });
+export async function sendPortalLink(tenantId: string, apiKey: string, supplierId: string) {
+    return apiFetch(`/api/v1/suppliers/${tenantId}/${supplierId}/send-link`, apiKey, { method: 'POST' });
 }
 
-export async function fetchSupplierHealth(tenantId: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}/health`);
+export async function fetchSupplierHealth(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/suppliers/${tenantId}/health`, apiKey);
 }
 
 // ── Recall Readiness ──
 
-export async function fetchRecallReport(tenantId: string) {
-    return apiFetch(`/api/v1/recall/${tenantId}/report`);
+export async function fetchRecallReport(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/recall/${tenantId}/report`, apiKey);
 }
 
 // ── Onboarding ──
 
-export async function fetchOnboardingSteps() {
-    return apiFetch('/api/v1/onboarding/steps');
+export async function fetchOnboardingSteps(apiKey: string) {
+    return apiFetch('/api/v1/onboarding/steps', apiKey);
 }
 
-export async function fetchOnboardingProgress(tenantId: string) {
-    return apiFetch(`/api/v1/onboarding/${tenantId}/progress`);
+export async function fetchOnboardingProgress(tenantId: string, apiKey: string) {
+    return apiFetch(`/api/v1/onboarding/${tenantId}/progress`, apiKey);
 }
 
-export async function completeOnboardingStep(tenantId: string, stepId: string) {
-    return apiFetch(`/api/v1/onboarding/${tenantId}/step/${stepId}`, { method: 'POST' });
+export async function completeOnboardingStep(tenantId: string, apiKey: string, stepId: string) {
+    return apiFetch(`/api/v1/onboarding/${tenantId}/step/${stepId}`, apiKey, { method: 'POST' });
 }
 
 // ── Mock Audit ──
 
-export async function startDrill(scenario: string, tenantId: string) {
-    return apiFetch('/api/v1/audit/drill/start', {
+export async function startDrill(apiKey: string, scenario: string, tenantId: string) {
+    return apiFetch('/api/v1/audit/drill/start', apiKey, {
         method: 'POST',
         body: JSON.stringify({ scenario_id: scenario, tenant_id: tenantId }),
     });
 }
 
-export async function fetchDrillStatus(drillId: string) {
-    return apiFetch(`/api/v1/audit/drill/${drillId}`);
+export async function fetchDrillStatus(apiKey: string, drillId: string) {
+    return apiFetch(`/api/v1/audit/drill/${drillId}`, apiKey);
 }
 
-export async function submitDrillResponse(drillId: string, checklist: Record<string, boolean>) {
-    return apiFetch(`/api/v1/audit/drill/${drillId}/submit`, {
+export async function submitDrillResponse(apiKey: string, drillId: string, checklist: Record<string, boolean>) {
+    return apiFetch(`/api/v1/audit/drill/${drillId}/submit`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ checklist }),
     });

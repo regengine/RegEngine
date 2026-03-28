@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { getServiceURL } from './api-config';
+import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -8,8 +9,6 @@ import type {
   ComplianceChecklist,
   ValidationRequest,
   ValidationResult,
-  OpportunityArbitrage,
-  ComplianceGap,
   Industry,
   TenantResponse,
   LoginResponse,
@@ -112,24 +111,16 @@ class APIClient {
     const client = axios.create({
       baseURL,
       timeout: 30000,
+      // Send cookies to same-origin proxy routes so the proxy can read
+      // HTTP-only session cookies for credential injection.
+      withCredentials: true,
     });
 
-    // Default API key from environment (no hardcoded fallback)
-    const defaultApiKey = process.env.NEXT_PUBLIC_API_KEY || '';
-
     client.interceptors.request.use((config) => {
-      // Check for existing API key headers (case-insensitive since axios lowercases header names)
-      const headerKeys = Object.keys(config.headers || {}).map(k => k.toLowerCase());
-      const hasApiKey = headerKeys.some(k =>
-        k === 'x-api-key' || k === 'x-admin-key' || k === 'x-regengine-api-key'
-      );
+      // API key is NO LONGER injected here — it lives in HTTP-only cookies
+      // and the server-side proxy reads it. This prevents XSS from stealing keys.
 
-      // Only add default API key if no API key header is already present
-      if (!hasApiKey) {
-        config.headers['X-RegEngine-API-Key'] = defaultApiKey;
-      }
-
-      // Add Bearer Token if available
+      // Add Bearer Token if available (placeholder value is fine — proxy reads cookie)
       if (this.accessToken) {
         config.headers['Authorization'] = `Bearer ${this.accessToken}`;
       }
@@ -137,6 +128,13 @@ class APIClient {
       // Add X-Tenant-ID header for multi-tenancy if tenant is set
       if (this.currentTenantId && !config.headers['X-Tenant-ID']) {
         config.headers['X-Tenant-ID'] = this.currentTenantId;
+      }
+
+      // CSRF header on mutating requests (double-submit cookie pattern)
+      const method = (config.method || 'GET').toUpperCase();
+      if (CSRF_PROTECTED_METHODS.has(method)) {
+        const csrfHeaders = getCsrfHeaders();
+        Object.assign(config.headers, csrfHeaders);
       }
 
       return config;
@@ -192,7 +190,7 @@ class APIClient {
 
   async generateAPIKey(adminKey: string, tenantId?: string): Promise<APIKeyResponse> {
     const { data } = await this.adminClient.post(
-      '/v1/admin/api-keys',
+      '/v1/admin/keys',
       {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
@@ -295,33 +293,6 @@ class APIClient {
     return data;
   }
 
-  // Opportunity API (served by Graph service)
-  async getOpportunityHealth(): Promise<HealthCheckResponse> {
-    const { data } = await this.graphClient.get('/health');
-    return data;
-  }
-
-  async getArbitrageOpportunities(params: {
-    j1?: string;
-    j2?: string;
-    concept?: string;
-    rel_delta?: number;
-    limit?: number;
-    since?: string;
-  }): Promise<OpportunityArbitrage[]> {
-    const { data } = await this.graphClient.get('/graph/arbitrage', { params });
-    return data.items || [];
-  }
-
-  async getComplianceGaps(params: {
-    j1?: string;
-    j2?: string;
-    limit?: number;
-  }): Promise<ComplianceGap[]> {
-    const { data } = await this.graphClient.get('/graph/gaps', { params });
-    return data.items || [];
-  }
-
   // Compliance API
   async getComplianceHealth(): Promise<HealthCheckResponse> {
     const { data } = await this.complianceClient.get('/health');
@@ -374,6 +345,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
   async logTraceabilityEvent(request: TraceabilityEventRequest): Promise<TraceabilityEventResponse> {
     const { data } = await this.graphClient.post('/api/v1/fsma/traceability/event', request);
     return data;
@@ -414,6 +386,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiMutate + graph service directly. */
   async createRecallDrill(request: {
     type?: string;
     target_tlc?: string;
@@ -421,15 +394,17 @@ class APIClient {
     severity?: string;
     reason?: string;
   }): Promise<any> {
-    const { data } = await this.graphClient.post('/api/v1/fsma/recall/recall/drill', request);
+    const { data } = await this.graphClient.post('/api/v1/fsma/recall/drill', request);
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
   async traceForward(tlc: string): Promise<any> {
     const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/forward/${encodeURIComponent(tlc)}`);
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
   async traceBackward(tlc: string): Promise<any> {
     const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/backward/${encodeURIComponent(tlc)}`);
     return data;
@@ -511,12 +486,14 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getMe(): Promise<User> {
     const { data } = await this.adminClient.get('/auth/me');
     return data;
   }
 
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async checkPermission(permission: string, authorized: boolean = true): Promise<boolean> {
     try {
       await this.adminClient.get(`/auth/check-permission?authorized=${authorized}`);
@@ -541,6 +518,7 @@ class APIClient {
     await this.adminClient.post(`/v1/admin/users/${userId}/deactivate`);
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async reactivateUser(userId: string): Promise<void> {
     await this.adminClient.post(`/v1/admin/users/${userId}/reactivate`);
   }
@@ -571,6 +549,7 @@ class APIClient {
     await this.adminClient.post('/v1/auth/accept-invite', data);
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFTLCategories(): Promise<FTLCategory[]> {
     const { data } = await this.adminClient.get<{ categories: FTLCategory[] }>('/v1/supplier/ftl-categories');
     return data.categories || [];
@@ -586,6 +565,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async setFacilityFTLCategories(
     facilityId: string,
     request: FacilityFTLScopingRequest,
@@ -597,6 +577,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
       `/v1/supplier/facilities/${facilityId}/required-ctes`,
@@ -604,6 +585,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async submitSupplierCTEEvent(
     facilityId: string,
     request: SupplierCTEEventCreateRequest,
@@ -615,6 +597,7 @@ class APIClient {
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async createSupplierTLC(request: SupplierTLCUpsertRequest): Promise<SupplierTLC> {
     const { data } = await this.adminClient.post<SupplierTLC>('/v1/supplier/tlcs', request);
     return data;
@@ -683,21 +666,25 @@ class APIClient {
     };
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async resetSupplierDemoData(): Promise<SupplierDemoResetResponse> {
     const { data } = await this.adminClient.post<SupplierDemoResetResponse>('/v1/supplier/demo/reset', {});
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async trackSupplierFunnelEvent(request: SupplierFunnelEventRequest): Promise<SupplierFunnelEventResponse> {
     const { data } = await this.adminClient.post<SupplierFunnelEventResponse>('/v1/supplier/funnel-events', request);
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getSupplierSocialProof(): Promise<SupplierSocialProofResponse> {
     const { data } = await this.adminClient.get<SupplierSocialProofResponse>('/v1/supplier/social-proof');
     return data;
   }
 
+  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getSupplierFunnelSummary(): Promise<SupplierFunnelSummaryResponse> {
     const { data } = await this.adminClient.get<SupplierFunnelSummaryResponse>('/v1/supplier/funnel-summary');
     return data;

@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy compliance API requests to the Compliance backend service
 // This allows browser clients to access compliance endpoints without CORS issues
 
-const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
+function getComplianceUrl(): string {
+    const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
+    // Guard: *.railway.internal URLs are unreachable from Vercel serverless
+    const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+    if (onVercel && url.includes('.railway.internal')) {
+        console.warn('[proxy/compliance] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel. Set a public Railway URL.');
+        return getServerServiceURL('compliance'); // Will fail with a clear connection error
+    }
+    return url;
+}
+const COMPLIANCE_URL = getComplianceUrl();
 
 export const dynamic = 'force-dynamic';
 
@@ -32,8 +43,19 @@ async function proxyRequest(
     try {
         // Guard against static export execution
         if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+            return NextResponse.json(
+                { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
+                { status: 503 },
+            );
         }
+
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
+
+        // Validate Supabase session tokens (expired/revoked sessions get 401)
+        const sessionError = await validateProxySession(request);
+        if (sessionError) return sessionError;
 
         const path = sanitizePath(pathParts);
         if (!path) {
@@ -78,6 +100,7 @@ async function proxyRequest(
             );
         }
 
+        console.info(`[proxy/compliance] ${method} ${path} → ${response.status}`);
         return NextResponse.json(data);
 
     } catch (error: unknown) {

@@ -38,9 +38,9 @@ export function useSync() {
                         // Structured payload saved by FieldCaptureClient — replay directly
                         const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                             method: 'POST',
+                            credentials: 'include', // Send HTTP-only cookies
                             headers: {
                                 'Content-Type': 'application/json',
-                                'X-RegEngine-API-Key': apiKey,
                                 ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
                             },
                             body: scan.payload,
@@ -64,9 +64,9 @@ export function useSync() {
                         };
                         const response = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                             method: 'POST',
+                            credentials: 'include', // Send HTTP-only cookies
                             headers: {
                                 'Content-Type': 'application/json',
-                                'X-RegEngine-API-Key': apiKey,
                                 ...(tenantId ? { 'X-Tenant-ID': tenantId } : {}),
                             },
                             body: JSON.stringify(payload),

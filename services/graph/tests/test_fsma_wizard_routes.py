@@ -46,6 +46,14 @@ _force_stub(
 )
 _force_stub("shared.fsma_rules", TimeArrowRule=object, TraceEvent=object)
 
+# Stub shared.auth so wizard.py's `from shared.auth import require_api_key` works.
+# The mock require_api_key always returns None (no-op auth for tests).
+_force_stub(
+    "shared.auth",
+    require_api_key=lambda: None,
+    APIKey=object,
+)
+
 # Ensure shared package itself is registered
 if "shared" not in sys.modules:
     _force_stub("shared")
@@ -103,8 +111,8 @@ class TestFTLCategoriesEndpoint:
         response = client.get("/v1/fsma/wizard/ftl-categories")
         assert response.status_code == 200
 
-    def test_no_auth_required(self, client):
-        """Endpoint is public — no API key header needed."""
+    def test_auth_dependency_present(self, client):
+        """Endpoint requires API key authentication."""
         response = client.get("/v1/fsma/wizard/ftl-categories")
         assert response.status_code == 200
 
@@ -154,7 +162,7 @@ class TestApplicabilityEndpoint:
         response = client.post("/v1/fsma/wizard/applicability", json={"selections": ["leafy-greens-fresh"]})
         assert response.status_code == 200
 
-    def test_no_auth_required(self, client):
+    def test_auth_dependency_present(self, client):
         response = client.post("/v1/fsma/wizard/applicability", json={"selections": ["eggs"]})
         assert response.status_code == 200
 
@@ -204,7 +212,7 @@ class TestExemptionsEndpoint:
         response = client.post("/v1/fsma/wizard/exemptions", json={"answers": {}})
         assert response.status_code == 200
 
-    def test_no_auth_required(self, client):
+    def test_auth_dependency_present(self, client):
         response = client.post("/v1/fsma/wizard/exemptions", json={"answers": {"small-producer": True}})
         assert response.status_code == 200
 

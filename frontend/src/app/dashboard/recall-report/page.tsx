@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
+import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
+import { fetchRecallReport } from '@/lib/api-hooks';
 import {
     Download,
     Timer,
@@ -113,7 +116,30 @@ function riskBadge(risk: string) {
 /* ── Page Component ── */
 
 export default function RecallReportPage() {
+    const { apiKey } = useAuth();
+    const { tenantId } = useTenant();
     const [expanded, setExpanded] = useState<string | null>(null);
+    const [liveData, setLiveData] = useState<Record<string, unknown> | null>(null);
+    const [isDemo, setIsDemo] = useState(true);
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
+
+    // Attempt to fetch real recall data; fall back to demo scenario
+    useEffect(() => {
+        if (!tenantId || !apiKey) return;
+        fetchRecallReport(tenantId, apiKey)
+            .then((data) => {
+                const record = data as Record<string, unknown> | null;
+                if (record && Object.keys(record).length > 0) {
+                    setLiveData(record);
+                    setIsDemo(false);
+                }
+            })
+            .catch(() => {
+                // API not available — show demo scenario
+            });
+    }, [tenantId, apiKey]);
+
     const overallScore = Math.round(DIMENSIONS.reduce((s, d) => s + d.score, 0) / DIMENSIONS.length);
     const overallGrade = overallScore >= 90 ? 'A' : overallScore >= 80 ? 'B' : overallScore >= 70 ? 'C' : overallScore >= 60 ? 'D' : 'F';
     const slaPercent = Math.round((INVESTIGATION.response_time_hours / INVESTIGATION.sla_target) * 100);
@@ -143,17 +169,62 @@ export default function RecallReportPage() {
                                 <Play className="h-3.5 w-3.5 mr-1.5" /> Run Mock Drill
                             </Button>
                         </Link>
-                        <Button size="sm" className="rounded-xl min-h-[44px] bg-red-600 hover:bg-red-700 text-white active:scale-[0.97]">
-                            <Download className="h-3.5 w-3.5 mr-1.5" /> Generate FDA 24-Hour Response
+                        <Button
+                            size="sm"
+                            className="rounded-xl min-h-[44px] bg-red-600 hover:bg-red-700 text-white active:scale-[0.97]"
+                            disabled={exporting}
+                            onClick={async () => {
+                                if (!tenantId) return;
+                                setExporting(true);
+                                setExportError(null);
+                                try {
+                                    const { getServiceURL } = await import('@/lib/api-config');
+                                    const base = getServiceURL('ingestion');
+                                    const res = await fetch(
+                                        `${base}/api/v1/fda/export/all?tenant_id=${tenantId}&format=csv`,
+                                        { headers: { 'X-RegEngine-API-Key': apiKey || '' } }
+                                    );
+                                    if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+                                    const blob = await res.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `fda_24hr_response_${new Date().toISOString().slice(0, 10)}.csv`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    a.remove();
+                                    window.URL.revokeObjectURL(url);
+                                } catch (err) {
+                                    setExportError(err instanceof Error ? err.message : 'Export failed');
+                                } finally {
+                                    setExporting(false);
+                                }
+                            }}
+                        >
+                            {exporting ? (
+                                <><Clock className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Generating...</>
+                            ) : (
+                                <><Download className="h-3.5 w-3.5 mr-1.5" /> Generate FDA 24-Hour Response</>
+                            )}
                         </Button>
                     </div>
                 </div>
 
-                {/* Alpha notice */}
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 text-blue-300 text-xs">
-                    <Info className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span>Sample Scenario — Explore a realistic recall investigation. Your live data populates automatically after onboarding.</span>
-                </div>
+                {/* Export error */}
+                {exportError && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/[0.06] border border-red-500/20 text-red-400 text-xs">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span>Export failed: {exportError}</span>
+                    </div>
+                )}
+
+                {/* Data source notice */}
+                {isDemo && (
+                    <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/20 text-blue-300 text-xs">
+                        <Info className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span>Sample Scenario — Explore a realistic recall investigation. Your live data populates automatically after onboarding.</span>
+                    </div>
+                )}
 
                 {/* Risk Summary Banner */}
                 <motion.div

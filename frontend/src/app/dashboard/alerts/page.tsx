@@ -79,7 +79,7 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function AlertsDashboardPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -93,7 +93,7 @@ export default function AlertsDashboardPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = (await fetchAlerts(tenantId)) as AlertsResponse;
+            const data = (await fetchAlerts(tenantId, apiKey || '')) as AlertsResponse;
             setAlerts(data.alerts || []);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load alerts');
@@ -106,7 +106,7 @@ export default function AlertsDashboardPage() {
 
     const handleAcknowledge = async (alertId: string) => {
         try {
-            await acknowledgeAlert(tenantId, alertId);
+            await acknowledgeAlert(tenantId, apiKey || '', alertId);
             setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to acknowledge alert');

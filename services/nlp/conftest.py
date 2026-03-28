@@ -6,7 +6,7 @@ import os
 
 # Set test environment variables BEFORE any imports
 os.environ.setdefault("ADMIN_SERVICE_URL", "http://localhost:8000")
-os.environ.setdefault("GRAPH_SERVICE_URL", "http://localhost:8003")
+os.environ.setdefault("GRAPH_SERVICE_URL", "http://localhost:8200")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
 os.environ.setdefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")

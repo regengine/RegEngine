@@ -15,12 +15,12 @@ import Link from "next/link";
 
 export default function ComplianceStatusPage() {
     const { selectedTenant } = useTenantContext();
-    const { user } = useAuth();
+    const { user, apiKey } = useAuth();
     const [selectedAlert, setSelectedAlert] = useState<ComplianceAlert | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
 
-    // Use selected tenant or demo
-    const tenantId = selectedTenant?.id || "demo-tenant";
+    // Use selected tenant — no demo fallback
+    const tenantId = selectedTenant?.id || "";
     const userId = user?.id || user?.email || "anonymous";
 
     const handleAlertClick = (alert: ComplianceAlert) => {
@@ -30,9 +30,9 @@ export default function ComplianceStatusPage() {
 
     const handleAcknowledge = async (alertId: string) => {
         try {
-            const response = await fetch(`/api/v1/compliance/alerts/${tenantId}/${alertId}/acknowledge`, {
+            const response = await fetch(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/acknowledge`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "X-RegEngine-API-Key": apiKey || "" },
                 body: JSON.stringify({ user_id: userId }),
             });
             if (!response.ok) throw new Error("Failed to acknowledge");
@@ -44,9 +44,9 @@ export default function ComplianceStatusPage() {
 
     const handleResolve = async (alertId: string, notes: string) => {
         try {
-            const response = await fetch(`/api/v1/compliance/alerts/${tenantId}/${alertId}/resolve`, {
+            const response = await fetch(`/api/ingestion/api/v1/compliance/alerts/${tenantId}/${alertId}/resolve`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "X-RegEngine-API-Key": apiKey || "" },
                 body: JSON.stringify({ user_id: userId, notes }),
             });
             if (!response.ok) throw new Error("Failed to resolve");

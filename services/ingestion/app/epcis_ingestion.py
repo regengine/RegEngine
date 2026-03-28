@@ -290,17 +290,18 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
     JSON-LD path so downstream normalization works identically.
     """
     try:
-        import defusedxml.ElementTree as SafeET
+        from defusedxml.lxml import parse as _safe_parse
     except ImportError:
-        logger.warning("defusedxml_not_available_for_epcis_xml_parsing")
+        logger.warning("lxml_not_available_for_epcis_xml_parsing")
         return []
 
     if isinstance(raw, str):
         raw = raw.encode("utf-8")
 
     try:
-        root = SafeET.fromstring(raw)
-    except (SafeET.ParseError, Exception) as exc:
+        tree = _safe_parse(io.BytesIO(raw))
+        root = tree.getroot()
+    except Exception as exc:
         logger.warning("epcis_xml_parse_failed error=%s", str(exc))
         return []
 
@@ -363,7 +364,7 @@ def _audit_log_validation_failure(
             loop.create_task(coro)
         except RuntimeError:
             pass  # No running loop — skip async audit (logged via stdlib above)
-    except (ImportError, AttributeError, TypeError) as exc:
+    except Exception:
         logger.debug("audit_log_validation_failure: could not emit audit event", exc_info=True)
 
 
@@ -419,7 +420,8 @@ _epcis_idempotency_index: dict[str, str] = {}
 
 
 def _is_production() -> bool:
-    return os.getenv("REGENGINE_ENV", "development").lower() in {"production", "prod"}
+    from shared.env import is_production
+    return is_production()
 
 
 # Safety: Allow in-memory fallback only outside production.
@@ -520,6 +522,13 @@ def _event_idempotency_key(event: dict) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _fallback_event_type(biz_step: str) -> str:
+    """Log a warning for unmapped bizStep URIs and default to 'receiving'."""
+    if biz_step:
+        logger.warning("unmapped_epcis_bizstep uri=%s — defaulting to 'receiving'", biz_step)
+    return "receiving"
+
+
 def _normalize_epcis_to_cte(event: dict) -> dict:
     event_type_map = {
         "urn:epcglobal:cbv:bizstep:receiving": "receiving",
@@ -527,6 +536,9 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
         "urn:epcglobal:cbv:bizstep:transforming": "transformation",
         "urn:epcglobal:cbv:bizstep:commissioning": "initial_packing",
         "urn:epcglobal:cbv:bizstep:packing": "initial_packing",
+        "urn:epcglobal:cbv:bizstep:harvesting": "harvesting",
+        "urn:epcglobal:cbv:bizstep:storing": "cooling",
+        "urn:epcglobal:cbv:bizstep:landing": "first_land_based_receiving",
     }
 
     ilmd = event.get("ilmd") or event.get("extension", {}).get("ilmd") or {}
@@ -543,7 +555,7 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
         unit = quantity_list[0].get("uom")
 
     return {
-        "event_type": event_type_map.get(biz_step, "receiving"),
+        "event_type": event_type_map.get(biz_step) or _fallback_event_type(biz_step),
         "epcis_event_type": event.get("type"),
         "epcis_action": event.get("action"),
         "epcis_biz_step": event.get("bizStep"),
@@ -654,7 +666,33 @@ def _build_kde_map(event: dict, normalized: dict, idempotency_key: str) -> dict[
 
 
 def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
-    columns = {
+    # Allowlisted column identifiers for fsma.compliance_alerts dynamic SQL
+    _ALLOWED_COLS = frozenset(
+        {
+            "tenant_id",
+            "org_id",
+            "cte_event_id",
+            "event_id",
+            "message",
+            "description",
+            "alert_type",
+            "severity",
+            "created_at",
+            "id",
+            "title",
+            "resolved",
+            "acknowledged",
+            "resolved_at",
+            "acknowledged_at",
+            "resolved_by",
+            "acknowledged_by",
+            "details",
+            "metadata",
+            "entity_id",
+        }
+    )
+
+    raw_columns = {
         row[0]
         for row in db_session.execute(
             text(
@@ -667,15 +705,30 @@ def _query_alert_rows(db_session, tenant_id: str, event_id: str) -> list[dict]:
             )
         ).fetchall()
     }
+    # Only allow known-safe column names to prevent SQL injection
+    columns = raw_columns & _ALLOWED_COLS
     if not columns:
         return []
 
-    tenant_col = "tenant_id" if "tenant_id" in columns else ("org_id" if "org_id" in columns else None)
-    event_col = "cte_event_id" if "cte_event_id" in columns else ("event_id" if "event_id" in columns else None)
+    tenant_col = (
+        "tenant_id"
+        if "tenant_id" in columns
+        else ("org_id" if "org_id" in columns else None)
+    )
+    event_col = (
+        "cte_event_id"
+        if "cte_event_id" in columns
+        else ("event_id" if "event_id" in columns else None)
+    )
     if tenant_col is None or event_col is None:
         return []
 
-    message_expr = "message" if "message" in columns else ("description" if "description" in columns else "alert_type")
+    message_expr = (
+        "message"
+        if "message" in columns
+        else ("description" if "description" in columns else "alert_type")
+    )
+    # All interpolated identifiers are guaranteed members of _ALLOWED_COLS
     rows = db_session.execute(
         text(
             f"""
@@ -1017,7 +1070,37 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
             epcis_biz_step=normalized.get("epcis_biz_step"),
         )
         db_session.commit()
-    except (RuntimeError, OSError, AttributeError, TypeError) as exc:
+
+        # Canonical normalization — write to traceability_events + evaluate rules
+        if not result.idempotent:
+            try:
+                from shared.canonical_event import normalize_epcis_event
+                from shared.canonical_persistence import CanonicalEventStore
+                canonical = normalize_epcis_event(event, tenant_id)
+                canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                canonical_store.persist_event(canonical)
+                # Auto-evaluate rules
+                from shared.rules_engine import RulesEngine
+                engine = RulesEngine(db_session)
+                event_data = {
+                    "event_id": str(canonical.event_id),
+                    "event_type": canonical.event_type.value,
+                    "traceability_lot_code": canonical.traceability_lot_code,
+                    "product_reference": canonical.product_reference,
+                    "quantity": canonical.quantity,
+                    "unit_of_measure": canonical.unit_of_measure,
+                    "from_facility_reference": canonical.from_facility_reference,
+                    "to_facility_reference": canonical.to_facility_reference,
+                    "from_entity_reference": canonical.from_entity_reference,
+                    "to_entity_reference": canonical.to_entity_reference,
+                    "kdes": canonical.kdes,
+                }
+                engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                db_session.commit()
+            except Exception as canon_err:
+                logger.warning("epcis_canonical_write_skipped: %s", str(canon_err))
+
+    except Exception:
         db_session.rollback()
         raise
     finally:
@@ -1040,7 +1123,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
 def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
     try:
         return _ingest_single_event_db(tenant_id, event)
-    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
+    except Exception as exc:
         if not _allow_in_memory_fallback():
             logger.error("epcis_db_persistence_failed_no_fallback error=%s", str(exc))
             raise HTTPException(
@@ -1131,7 +1214,7 @@ async def get_epcis_event(
     event = None
     try:
         event = _fetch_event_from_db(resolved_tenant, event_id)
-    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
+    except Exception as exc:
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         logger.warning("epcis_get_db_failed_using_fallback error=%s", str(exc))
@@ -1161,7 +1244,7 @@ async def export_epcis_events(
     events: list[dict] = []
     try:
         events = _list_events_from_db(resolved_tenant, start_date, end_date, product_id)
-    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
+    except Exception as exc:
         if not _allow_in_memory_fallback():
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         logger.warning("epcis_export_db_failed_using_fallback error=%s", str(exc))

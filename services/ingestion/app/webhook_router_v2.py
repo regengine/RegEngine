@@ -19,14 +19,16 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.authz import require_permission, IngestionPrincipal
+from app.subscription_gate import require_active_subscription
 from app.config import get_settings
 from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
 from shared.tenant_rate_limiting import consume_tenant_rate_limit
-from shared.subscription_guard import require_active_subscription
 from app.webhook_models import (
     ChainVerifyResponse,
     EventResult,
@@ -36,6 +38,7 @@ from app.webhook_models import (
     REQUIRED_KDES_BY_CTE,
     WebhookPayload,
 )
+from shared.canonical_event import normalize_webhook_event
 
 logger = logging.getLogger("webhook-ingestion")
 
@@ -59,14 +62,12 @@ def _get_db_session():
         try:
             yield db
             db.commit()
-        except Exception:
-            # Rollback on any error from db operations (SQLAlchemy, psycopg2, etc.)
-            # We catch all exceptions here since this is a critical teardown path
+        except SQLAlchemyError:
             db.rollback()
             raise
         finally:
             db.close()
-    except (ImportError, ConnectionError, TimeoutError, RuntimeError) as e:
+    except (ImportError, RuntimeError, ConnectionError, OSError, SQLAlchemyError) as e:
         logger.warning("database_unavailable, falling back to in-memory: %s", str(e))
         yield None
 
@@ -97,12 +98,9 @@ def _get_persistence(db_session=None):
 # ---------------------------------------------------------------------------
 
 def _is_production() -> bool:
-    """Detect production by DATABASE_URL (Supabase pooler) or ENV=production."""
-    import os
-    if os.getenv("ENV", "").lower() == "production":
-        return True
-    db_url = os.getenv("DATABASE_URL", "")
-    return "pooler.supabase.com" in db_url or "railway" in db_url
+    """Detect production using centralized environment detection."""
+    from shared.env import is_production
+    return is_production()
 
 
 def _verify_api_key(
@@ -249,9 +247,9 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 """),
                 {"tid": tenant_id, "cte_type": event.cte_type.value},
             ).fetchall()
-        except (ValueError, TypeError) as e:
-            # UUID cast failure or type error in query parameters
+        except (SQLAlchemyError, ValueError, TypeError, RuntimeError) as exc:
             nested.rollback()
+            logger.debug("obligation_query_rollback: %s", str(exc))
             return []
 
         if not rows:
@@ -293,9 +291,8 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             {"tid": tenant_id, "tlc": event.traceability_lot_code},
                         ).scalar()
                         passed = (prior or 0) > 0
-                    except (ValueError, TypeError) as e:
-                        # Type error in query parameters; don't block ingest
-                        passed = True
+                    except (SQLAlchemyError, ValueError, RuntimeError) as _db_err:
+                        passed = True  # Don't block ingest on query failure
                 else:
                     passed = True
             elif validation_rule == "downstream_transmitted":
@@ -331,15 +328,14 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     # chain entry may not exist yet). Allow it.
                     # For subsequent events, at least 1 prior chain entry should exist.
                     passed = True  # Chain is verified at scoring time; here we just check existence
-                except (ValueError, TypeError) as e:
-                    # Type error in query parameters; don't block ingest
-                    passed = True
+                except (SQLAlchemyError, ValueError, RuntimeError) as _db_err:
+                    passed = True  # Don't block ingest on query failure
 
             if not passed:
                 severity = "critical" if risk == "CRITICAL" else "warning"
                 alert = {
                     "severity": severity,
-                    "alert_type": "obligation_gap",
+                    "alert_type": "chain_break",
                     "message": f"Obligation not met: {obl_text[:100]}",
                     "obligation_id": str(obl_id),
                     "missing_kde": kde_key,
@@ -351,14 +347,14 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     db_session.execute(
                         text("""
                             INSERT INTO fsma.compliance_alerts
-                            (tenant_id, event_id, severity, alert_type, message, details)
-                            VALUES (:tid, :eid::uuid, :sev, :atype, :msg, :details::jsonb)
+                            (org_id, event_id, severity, alert_type, message, details)
+                            VALUES (CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
                         """),
                         {
                             "tid": tenant_id,
                             "eid": event_id,
                             "sev": severity,
-                            "atype": "obligation_gap",
+                            "atype": "chain_break",
                             "msg": f"Missing KDE '{kde_key}' required by obligation",
                             "details": json.dumps({
                                 "obligation_id": str(obl_id),
@@ -368,12 +364,12 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             }),
                         },
                     )
-                except (ValueError, TypeError, json.JSONDecodeError) as alert_err:
+                except (SQLAlchemyError, ValueError, RuntimeError) as alert_err:
                     logger.warning("obligation_alert_write_failed: %s", str(alert_err))
 
         return alerts
 
-    except (ValueError, TypeError) as exc:
+    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as exc:
         logger.warning("obligation_check_failed: %s", str(exc))
         return []
 
@@ -382,18 +378,54 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
 # Neo4j Graph Sync
 # ---------------------------------------------------------------------------
 
-_graph_sync_failures = 0
+_SYNC_COUNTER_PREFIX = "regengine:graph_sync"
+_graph_sync_failures = 0  # Fallback when Redis unavailable
 _graph_sync_successes = 0
 
 
+def _get_redis_client():
+    """Get Redis client for counter persistence. Returns None if unavailable."""
+    try:
+        import redis
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        return redis.from_url(redis_url, decode_responses=True, socket_timeout=1)
+    except Exception:
+        return None
+
+
+def _incr_sync_counter(key: str) -> None:
+    """Increment a graph sync counter in Redis with in-memory fallback."""
+    global _graph_sync_failures, _graph_sync_successes
+    try:
+        client = _get_redis_client()
+        if client:
+            client.incr(f"{_SYNC_COUNTER_PREFIX}:{key}")
+            return
+    except Exception:
+        pass
+    # Fallback to in-memory
+    if key == "failures":
+        _graph_sync_failures += 1
+    else:
+        _graph_sync_successes += 1
+
+
 def get_graph_sync_stats() -> dict:
-    """Return graph sync health counters for the /health endpoint."""
+    """Return graph sync success/failure counts from Redis or in-memory fallback."""
+    try:
+        client = _get_redis_client()
+        if client:
+            return {
+                "successes": int(client.get(f"{_SYNC_COUNTER_PREFIX}:successes") or 0),
+                "failures": int(client.get(f"{_SYNC_COUNTER_PREFIX}:failures") or 0),
+            }
+    except Exception:
+        pass
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync."""
-    global _graph_sync_failures, _graph_sync_successes
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return
@@ -420,10 +452,9 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
             },
         }
         client.rpush("neo4j-sync", json.dumps(message, default=str))
-        _graph_sync_successes += 1
-    except (redis_lib.RedisError, json.JSONDecodeError, TypeError) as exc:
-        # Redis connection/operation failure or JSON serialization error
-        _graph_sync_failures += 1
+        _incr_sync_counter("successes")
+    except (ImportError, ConnectionError, TimeoutError, OSError, ValueError, TypeError) as exc:
+        _incr_sync_counter("failures")
         logger.warning("graph_sync_publish_failed event_id=%s error=%s", event_id, str(exc))
 
 
@@ -446,7 +477,7 @@ async def ingest_events(
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _auth: None = Depends(_verify_api_key),
-    _sub: bool = Depends(require_active_subscription),
+    _subscription: None = Depends(require_active_subscription),
     db_session=Depends(_get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
@@ -464,8 +495,7 @@ async def ingest_events(
             if _row and _row[0]:
                 tenant_id = str(_row[0])
             _db.close()
-        except (ValueError, TypeError, KeyError) as e:
-            # API key lookup failed due to parameter error; skip tenant resolution
+        except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as _tenant_err:
             pass
     # Fallback: use tenant from RBAC principal if available
     if not tenant_id and principal.tenant_id:
@@ -495,7 +525,7 @@ async def ingest_events(
     try:
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
-    except (ImportError, TypeError, AttributeError) as e:
+    except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
         logger.error("db_init_failed — rejecting ingest: %s", str(e))
         raise HTTPException(
             status_code=503,
@@ -572,6 +602,37 @@ async def ingest_events(
                     ))
                     accepted += 1
 
+                    # Canonical normalization + rule evaluation + exception creation
+                    try:
+                        from shared.canonical_persistence import CanonicalEventStore
+                        canonical = normalize_webhook_event(event, tenant_id)
+                        canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                        canonical_store.persist_event(canonical)
+                        # Auto-evaluate rules
+                        from shared.rules_engine import RulesEngine
+                        engine = RulesEngine(db_session)
+                        event_data = {
+                            "event_id": str(canonical.event_id),
+                            "event_type": canonical.event_type.value,
+                            "traceability_lot_code": canonical.traceability_lot_code,
+                            "product_reference": canonical.product_reference,
+                            "quantity": canonical.quantity,
+                            "unit_of_measure": canonical.unit_of_measure,
+                            "from_facility_reference": canonical.from_facility_reference,
+                            "to_facility_reference": canonical.to_facility_reference,
+                            "from_entity_reference": canonical.from_entity_reference,
+                            "to_entity_reference": canonical.to_entity_reference,
+                            "kdes": canonical.kdes,
+                        }
+                        summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                        # Auto-create exceptions from failures
+                        if not summary.compliant:
+                            from shared.exception_queue import ExceptionQueueService
+                            exc_svc = ExceptionQueueService(db_session)
+                            exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
+                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
+                        logger.warning("canonical_write_skipped: %s", str(canon_err))
+
                     # Post-ingest graph sync (non-blocking)
                     _publish_graph_sync(store_result.event_id, event, tenant_id)
 
@@ -580,14 +641,17 @@ async def ingest_events(
                         from app.product_catalog import learn_from_event
                         learn_from_event(
                             tenant_id=tenant_id,
-                            product_description=event.product_description,
-                            gtin=event.kdes.get("gtin") if event.kdes else None,
-                            kdes=event.kdes,
+                            event={
+                                "product_description": event.product_description,
+                                "gtin": event.kdes.get("gtin") if event.kdes else None,
+                                "kdes": event.kdes,
+                                "location_name": event.location_name,
+                            },
                         )
-                    except (ImportError, AttributeError, ValueError) as learn_err:
-                        logger.debug("catalog_learn_skipped: %s", str(learn_err))
+                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as learn_err:
+                        logger.warning("catalog_learn_skipped: %s", str(learn_err))
 
-            except (AttributeError, ValueError, TypeError) as e:
+            except (ValueError, TypeError, RuntimeError, AttributeError) as e:
                 logger.error(
                     "batch_persistence_failed",
                     extra={"error": str(e), "batch_size": len(valid_events)},
@@ -618,19 +682,51 @@ async def ingest_events(
                             chain_hash=store_result.chain_hash,
                         ))
                         accepted += 1
+
+                        # Canonical normalization + rule evaluation (mirrors batch happy path)
+                        try:
+                            from shared.canonical_persistence import CanonicalEventStore
+                            canonical = normalize_webhook_event(event, tenant_id)
+                            canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                            canonical_store.persist_event(canonical)
+                            from shared.rules_engine import RulesEngine
+                            engine = RulesEngine(db_session)
+                            event_data = {
+                                "event_id": str(canonical.event_id),
+                                "event_type": canonical.event_type.value,
+                                "traceability_lot_code": canonical.traceability_lot_code,
+                                "product_reference": canonical.product_reference,
+                                "quantity": canonical.quantity,
+                                "unit_of_measure": canonical.unit_of_measure,
+                                "from_facility_reference": canonical.from_facility_reference,
+                                "to_facility_reference": canonical.to_facility_reference,
+                                "from_entity_reference": canonical.from_entity_reference,
+                                "to_entity_reference": canonical.to_entity_reference,
+                                "kdes": canonical.kdes,
+                            }
+                            summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                            if not summary.compliant:
+                                from shared.exception_queue import ExceptionQueueService
+                                exc_svc = ExceptionQueueService(db_session)
+                                exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
+                        except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
+                            logger.warning("canonical_write_skipped_fallback: %s", str(canon_err))
+
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
                             from app.product_catalog import learn_from_event
                             learn_from_event(
                                 tenant_id=tenant_id,
-                                product_description=event.product_description,
-                                gtin=event.kdes.get("gtin") if event.kdes else None,
-                                kdes=event.kdes,
+                                event={
+                                    "product_description": event.product_description,
+                                    "gtin": event.kdes.get("gtin") if event.kdes else None,
+                                    "kdes": event.kdes,
+                                    "location_name": event.location_name,
+                                },
                             )
-                        except (ImportError, AttributeError, ValueError):
-                            # Product catalog learning failed; this is non-critical
-                            pass
-                    except (AttributeError, ValueError, TypeError) as inner_e:
+                        except (ImportError, SQLAlchemyError, ValueError, TypeError, KeyError) as learn_err:
+                            logger.warning("catalog_learn_skipped: %s", str(learn_err))
+                    except (SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as inner_e:
                         logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,
@@ -655,8 +751,7 @@ async def ingest_events(
         if db_session:
             db_session.commit()
 
-    except (ValueError, TypeError, AttributeError) as e:
-        # Critical parameter/data validation error in ingest batch
+    except Exception as e:
         if db_session:
             db_session.rollback()
         logger.error("ingest_batch_failed", extra={"error": str(e)})
@@ -717,7 +812,7 @@ async def get_recent_events(
             for r in rows
         ]
         return {"tenant_id": tenant_id, "events": events, "total": len(events)}
-    except (ValueError, TypeError, AttributeError) as e:
+    except (ImportError, ValueError, RuntimeError) as e:
         logger.warning("recent_events_query_failed: %s", str(e))
         return {"tenant_id": tenant_id, "events": [], "total": 0}
     finally:
@@ -770,7 +865,7 @@ async def verify_chain(
             "errors": result.errors,
             "checked_at": result.checked_at,
         }
-    except (ValueError, TypeError, AttributeError) as e:
+    except (ImportError, ValueError, RuntimeError) as e:
         logger.error("chain_verification_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Chain verification failed. Check server logs for details.")
     finally:

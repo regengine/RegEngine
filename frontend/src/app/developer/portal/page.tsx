@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import {
     Key, BarChart3, BookOpen, ArrowRight, Terminal, Zap,
     CheckCircle2, Circle, Webhook, Package, Loader2,
@@ -24,19 +25,19 @@ interface DashboardStats {
 
 export default function DeveloperPortalDashboard() {
     const supabase = createSupabaseBrowserClient();
+    const { user: authUser } = useAuth();
     const [profile, setProfile] = useState<DeveloperProfile | null>(null);
     const [stats, setStats] = useState<DashboardStats>({ totalKeys: 0, activeKeys: 0, totalRequests: 0 });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function load() {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
+            if (!authUser) return;
 
             const { data: prof } = await supabase
                 .from('developer_profiles')
                 .select('*')
-                .eq('auth_user_id', user.id)
+                .eq('auth_user_id', authUser.id)
                 .single();
 
             if (prof) {
@@ -57,7 +58,7 @@ export default function DeveloperPortalDashboard() {
             setLoading(false);
         }
         load();
-    }, [supabase]);
+    }, [supabase, authUser]);
 
     const greeting = profile?.display_name || profile?.email?.split('@')[0] || 'Developer';
 
@@ -65,9 +66,9 @@ export default function DeveloperPortalDashboard() {
     const onboardingSteps = [
         { label: 'Create your account', done: true, href: '#' },
         { label: 'Generate an API key', done: stats.activeKeys > 0, href: '/developer/portal/keys' },
-        { label: 'Send your first event', done: stats.totalRequests > 0, href: '/developer/portal/docs' },
+        { label: 'Send your first event', done: stats.totalRequests > 0, href: '/docs' },
         { label: 'Try the API Playground', done: false, href: '/developer/portal/playground' },
-        { label: 'Set up webhooks', done: false, href: '/developer/portal/docs/webhooks' },
+        { label: 'Set up webhooks', done: false, href: '/docs/webhooks' },
     ];
     const completedSteps = onboardingSteps.filter(s => s.done).length;
     const progress = Math.round((completedSteps / onboardingSteps.length) * 100);
@@ -162,10 +163,10 @@ export default function DeveloperPortalDashboard() {
                     {[
                         { label: 'API Keys', desc: 'Generate, revoke, and rotate', href: '/developer/portal/keys', icon: Key },
                         { label: 'Usage & Logs', desc: 'Requests, latency, errors', href: '/developer/portal/usage', icon: BarChart3 },
-                        { label: 'Quickstart', desc: '60-second integration guide', href: '/developer/portal/docs', icon: Zap },
-                        { label: 'API Reference', desc: 'All endpoints documented', href: '/developer/portal/docs/endpoints', icon: BookOpen },
+                        { label: 'Quickstart', desc: '60-second integration guide', href: '/docs', icon: Zap },
+                        { label: 'API Reference', desc: 'All endpoints documented', href: '/docs/api', icon: BookOpen },
                         { label: 'Playground', desc: 'Test endpoints live', href: '/developer/portal/playground', icon: Terminal },
-                        { label: 'Webhooks', desc: 'Real-time event delivery', href: '/developer/portal/docs/webhooks', icon: Webhook },
+                        { label: 'Webhooks', desc: 'Real-time event delivery', href: '/docs/webhooks', icon: Webhook },
                     ].map((item) => (
                         <Link key={item.href} href={item.href} className="group flex items-center gap-3 rounded-lg p-4 no-underline transition-all" style={{
                             background: 'rgba(255,255,255,0.02)',

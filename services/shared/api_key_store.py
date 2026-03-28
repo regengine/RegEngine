@@ -45,6 +45,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -244,7 +245,7 @@ class DatabaseAPIKeyStore:
         try:
             yield session
             await session.commit()
-        except Exception:
+        except SQLAlchemyError:
             await session.rollback()
             raise
         finally:
@@ -592,7 +593,7 @@ class DatabaseAPIKeyStore:
             rate_limit_per_day=old_key.rate_limit_per_day,
             expires_at=old_key.expires_at,
             created_by=created_by,
-            extra_data={
+            metadata={
                 **(old_key.extra_data or {}),
                 "rotated_from": key_id,
                 "rotation_reason": reason,
@@ -615,13 +616,17 @@ class DatabaseAPIKeyStore:
         self,
         tenant_id: Optional[str] = None,
         include_disabled: bool = False,
+        limit: int = 500,
+        offset: int = 0,
     ) -> Sequence[APIKeyResponse]:
         """List API keys, optionally filtered by tenant.
-        
+
         Args:
             tenant_id: Filter by tenant ID (None = all tenants)
             include_disabled: Include revoked/disabled keys
-            
+            limit: Maximum number of keys to return (default 500)
+            offset: Number of keys to skip (default 0)
+
         Returns:
             List of APIKeyResponse objects
         """
@@ -636,6 +641,7 @@ class DatabaseAPIKeyStore:
                 query = query.where(APIKeyModel.enabled == True)
 
             query = query.order_by(APIKeyModel.created_at.desc())
+            query = query.limit(limit).offset(offset)
 
             result = await session.execute(query)
             keys = result.scalars().all()

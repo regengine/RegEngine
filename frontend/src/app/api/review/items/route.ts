@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -6,7 +7,7 @@ function getAdminKey(): string | null {
     return process.env.ADMIN_MASTER_KEY || null;
 }
 
-const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
+const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
 
 export async function GET() {
     // Guard against static export execution

@@ -2,7 +2,7 @@
 
 from typing import Optional, Dict, Any
 
-import defusedxml.ElementTree as SafeET
+from defusedxml.lxml import fromstring as _safe_fromstring
 
 from .base import DocumentParser
 
@@ -38,8 +38,8 @@ class XMLParser(DocumentParser):
             Extracted text from all text nodes
         """
         try:
-            # Parse XML safely — defusedxml blocks XXE, entity expansion, DTD retrieval
-            root = SafeET.fromstring(content)
+            # Parse XML with defusedxml for XXE prevention
+            root = _safe_fromstring(content)
             
             # Extract all text content
             text_parts = []

@@ -2,16 +2,63 @@ import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
+import { getVerificationKeys } from '@/lib/jwt-keys';
+import {
+    verifyCsrfToken,
+    CSRF_HEADER,
+    CSRF_SIG_COOKIE,
+    CSRF_PROTECTED_METHODS,
+    isCsrfExempt,
+} from '@/lib/csrf';
+
+// ---------------------------------------------------------------------------
+// Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
+// In-memory LRU with a 5-minute TTL, keyed by auth_user_id.
+// ---------------------------------------------------------------------------
+const SYSADMIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SYSADMIN_CACHE_MAX_SIZE = 256;
+
+interface SysadminCacheEntry {
+    isSysadmin: boolean;
+    expiresAt: number;
+}
+
+const sysadminCache = new Map<string, SysadminCacheEntry>();
+
+function getSysadminCached(userId: string): boolean | null {
+    const entry = sysadminCache.get(userId);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+        sysadminCache.delete(userId);
+        return null;
+    }
+    // Move to end for LRU ordering (Map preserves insertion order)
+    sysadminCache.delete(userId);
+    sysadminCache.set(userId, entry);
+    return entry.isSysadmin;
+}
+
+function setSysadminCached(userId: string, isSysadmin: boolean): void {
+    // Evict oldest entry if at capacity
+    if (sysadminCache.size >= SYSADMIN_CACHE_MAX_SIZE) {
+        const oldestKey = sysadminCache.keys().next().value;
+        if (oldestKey) sysadminCache.delete(oldestKey);
+    }
+    sysadminCache.set(userId, {
+        isSysadmin,
+        expiresAt: Date.now() + SYSADMIN_CACHE_TTL_MS,
+    });
+}
 
 // Only FSMA verticals are supported — all others redirect to home.
 const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 
-// Developer-facing routes that require portal auth
+// Developer-facing routes that require portal auth.
+// Documentation and developer portal are PUBLIC to enable developer evaluation.
+// Only key generation and playground (makes real API calls) are gated.
 const GATED_DEV_ROUTES = [
-    '/developer',
-    '/developers',
-    '/playground',
     '/api-keys',
+    '/playground',
 ];
 
 // Authenticated app routes — require a valid session.
@@ -23,11 +70,28 @@ const AUTHENTICATED_APP_ROUTES = [
     '/settings',
     '/onboarding',
     '/owner',
+    // Control Plane pages — contain operational data, must be auth-gated
+    '/rules',
+    '/records',
+    '/exceptions',
+    '/requests',
+    '/identity',
+    '/review',
+    '/audit',
+    '/readiness',
+    '/incidents',
+    '/controls',
+    '/trace',
+    // Compliance subsystem
+    '/compliance',
+    // Ingestion
+    '/ingest',
 ];
 
-// Public docs — all documentation is accessible without auth
+// All docs are public — developer evaluation requires accessible documentation.
 const PUBLIC_DOCS = [
     '/docs',
+    '/docs/fsma-204',
     '/docs/api',
     '/docs/authentication',
     '/docs/quickstart',
@@ -36,7 +100,6 @@ const PUBLIC_DOCS = [
     '/docs/rate-limits',
     '/docs/errors',
     '/docs/changelog',
-    '/docs/fsma-204',
 ];
 
 function isGatedRoute(pathname: string): boolean {
@@ -57,23 +120,55 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
 
 /**
  * Verify the custom RegEngine JWT from the re_access_token cookie.
+ *
+ * Supports key rotation: tries the current signing key first, then falls
+ * back to the previous key (if configured). When a token verifies only
+ * with the previous key, a warning is logged so ops knows rotation is
+ * still in progress.
+ *
  * Returns the decoded payload if valid, null otherwise.
  */
 async function verifyRegEngineToken(token: string): Promise<Record<string, unknown> | null> {
-    const secret = process.env.AUTH_SECRET_KEY;
-    if (!secret) {
+    const keys = getVerificationKeys();
+
+    if (keys.length === 0) {
+        console.error(
+            '[middleware] No JWT verification keys configured. ' +
+            'Set JWT_SIGNING_KEY (or AUTH_SECRET_KEY) in Vercel env vars ' +
+            '(must match the backend Railway value).'
+        );
         return null;
     }
-    try {
-        const secretKey = new TextEncoder().encode(secret);
-        const { payload } = await jwtVerify(token, secretKey, {
-            algorithms: ['HS256'],
-        });
-        return payload as Record<string, unknown>;
-    } catch {
-        // Token expired, invalid signature, malformed, etc.
-        return null;
+
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        try {
+            const { payload } = await jwtVerify(token, key.secret, {
+                algorithms: ['HS256'],
+            });
+
+            if (i > 0) {
+                // Token verified with the previous (non-current) key — rotation in progress
+                console.warn(
+                    `[middleware] JWT verified with previous key (kid=${key.kid}). ` +
+                    'Key rotation is in progress — token was signed before the latest rotation.'
+                );
+            }
+
+            return payload as Record<string, unknown>;
+        } catch {
+            // If this is the last key, fall through to return null below
+            if (i === keys.length - 1) {
+                console.warn(
+                    '[middleware] JWT verification failed with all configured keys. ' +
+                    'If "signature verification failed", check that JWT_SIGNING_KEY ' +
+                    '(or AUTH_SECRET_KEY) on Vercel matches the backend signing key.'
+                );
+            }
+        }
     }
+
+    return null;
 }
 
 /**
@@ -122,84 +217,59 @@ async function checkSupabaseSession(request: NextRequest): Promise<{ user: Recor
 async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
 
-    // Track whether user had a token that failed validation (expired vs never logged in)
-    let hadExpiredToken = false;
-
     // Strategy 1: Check custom RegEngine JWT cookie
     const reToken = request.cookies.get('re_access_token')?.value;
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
         if (payload) {
-            // Token is valid — check sysadmin for /sysadmin routes
-            if (pathname.startsWith('/sysadmin')) {
-                // The JWT doesn't carry is_sysadmin, so we need a secondary check.
-                // For now, allow access if they have a valid token — the page-level
-                // check against the backend (/auth/me) will enforce sysadmin.
-                // This is acceptable because /sysadmin page already verifies server-side.
-            }
-
-            // Silent refresh: if token expires within 10 minutes, refresh proactively
-            const exp = payload.exp as number | undefined;
-            const TEN_MINUTES = 10 * 60;
-            if (exp && (exp - Math.floor(Date.now() / 1000)) < TEN_MINUTES) {
-                try {
-                    const backendUrl = process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL;
-                    if (backendUrl) {
-                        const refreshRes = await fetch(`${backendUrl}/auth/refresh`, {
-                            method: 'POST',
-                            headers: {
-                                'Authorization': `Bearer ${reToken}`,
-                                'Content-Type': 'application/json',
-                            },
-                        });
-                        if (refreshRes.ok) {
-                            const data = await refreshRes.json();
-                            if (data.access_token) {
-                                const response = NextResponse.next({ request });
-                                response.cookies.set('re_access_token', data.access_token, {
-                                    httpOnly: true,
-                                    secure: process.env.NODE_ENV === 'production',
-                                    sameSite: 'lax',
-                                    path: '/',
-                                    maxAge: 60 * 60 * 24, // 24 hours
-                                });
-                                return response;
-                            }
-                        }
-                    }
-                } catch {
-                    // Refresh failed silently — let the current (still valid) token through
-                }
-            }
-
             return NextResponse.next({ request });
         }
-        // Token existed but was invalid/expired
-        hadExpiredToken = true;
+        // Token exists but verification failed.
+        // Before redirecting to login, check if we have other valid credentials.
+        // This handles the case where JWT expired but user has active localStorage
+        // session or Supabase session — we don't want to kick them out.
+        const hasApiKey = request.cookies.get('re_api_key')?.value;
+        const hasTenantId = request.cookies.get('re_tenant_id')?.value;
+        if (hasApiKey && hasTenantId) {
+            // User has valid API credentials — let them through.
+            // The page-level useAuth() will handle token refresh.
+            console.info('[middleware] JWT expired but API credentials present — allowing access');
+            return NextResponse.next({ request });
+        }
+        // Fall through to Supabase check
     }
 
     // Strategy 2: Check Supabase session
     const { user, response: supabaseResponse } = await checkSupabaseSession(request);
     if (user) {
-        // Sysadmin check for /sysadmin routes
+        // Sysadmin check for /sysadmin routes (with in-memory LRU cache)
         if (pathname.startsWith('/sysadmin')) {
-            const supabase = createServerClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                {
-                    cookies: {
-                        getAll() { return request.cookies.getAll(); },
-                        setAll() { /* read-only for this check */ },
-                    },
-                }
-            );
-            const { data: profile } = await supabase
-                .from('developer_profiles')
-                .select('is_sysadmin')
-                .eq('auth_user_id', (user as { id: string }).id)
-                .single();
+            const userId = (user as { id: string }).id;
+            let isSysadmin = getSysadminCached(userId);
 
-            if (!profile?.is_sysadmin) {
+            if (isSysadmin === null) {
+                // Cache miss — query the database
+                const supabase = createServerClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                    {
+                        cookies: {
+                            getAll() { return request.cookies.getAll(); },
+                            setAll() { /* read-only for this check */ },
+                        },
+                    }
+                );
+                const { data: profile } = await supabase
+                    .from('developer_profiles')
+                    .select('is_sysadmin')
+                    .eq('auth_user_id', userId)
+                    .single();
+
+                isSysadmin = !!profile?.is_sysadmin;
+                setSysadminCached(userId, isSysadmin);
+            }
+
+            if (!isSysadmin) {
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
         }
@@ -210,22 +280,57 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
-    if (hadExpiredToken) {
+
+    // Signal the reason so the login page can display a contextual message.
+    // Only show "session expired" when a token actually existed but failed verification.
+    // First-time visitors (no token) see a clean login form with no error.
+    if (reToken) {
         url.searchParams.set('error', 'session_expired');
     }
+    // auth_config errors are logged server-side, not shown to visitors.
+
     return NextResponse.redirect(url);
 }
 
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    // -----------------------------------------------------------------------
+    // CSRF protection for mutating API requests (double-submit cookie check)
+    // -----------------------------------------------------------------------
+    if (
+        pathname.startsWith('/api/') &&
+        CSRF_PROTECTED_METHODS.has(request.method) &&
+        !isCsrfExempt(pathname) &&
+        !request.headers.get('authorization')?.startsWith('Bearer ')
+    ) {
+        const headerToken = request.headers.get(CSRF_HEADER);
+        const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
+
+        if (!headerToken || !sigCookie) {
+            return NextResponse.json(
+                { error: 'Missing CSRF token' },
+                { status: 403 },
+            );
+        }
+
+        const valid = await verifyCsrfToken(headerToken, sigCookie);
+        if (!valid) {
+            return NextResponse.json(
+                { error: 'Invalid CSRF token' },
+                { status: 403 },
+            );
+        }
+    }
+
     // Authenticated app routes — server-side session check
     if (isAuthenticatedAppRoute(pathname)) {
         return await requireAppAuth(request);
     }
 
-    // Developer portal routes — same dual auth as app routes
-    if (pathname.startsWith('/developer') || isGatedRoute(pathname)) {
+    // Developer portal: only gate key generation and playground behind auth.
+    // All docs, codegen, and portal pages are public for developer evaluation.
+    if (isGatedRoute(pathname) || pathname === '/developer/portal/keys') {
         return await requireAppAuth(request);
     }
 
@@ -235,18 +340,14 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Docs routing: only public docs pass through, others redirect
-    if (pathname.startsWith('/docs/')) {
-        if (!isPublicDoc(pathname) && !ALLOWED_VERTICALS.includes(pathname.split('/')[2])) {
-            return NextResponse.redirect(new URL('/docs/fsma-204', request.url));
-        }
-    }
+    // All /docs/* routes are public — no redirect needed.
 
     return NextResponse.next();
 }
 
 export const config = {
     matcher: [
+        '/api/:path*',
         '/dashboard/:path*',
         '/admin/:path*',
         '/sysadmin/:path*',
@@ -260,5 +361,21 @@ export const config = {
         '/developers/:path*',
         '/playground/:path*',
         '/api-keys/:path*',
+        // Control Plane
+        '/rules/:path*',
+        '/records/:path*',
+        '/exceptions/:path*',
+        '/requests/:path*',
+        '/identity/:path*',
+        '/review/:path*',
+        '/audit/:path*',
+        '/readiness/:path*',
+        '/incidents/:path*',
+        '/controls/:path*',
+        '/trace/:path*',
+        // Compliance
+        '/compliance/:path*',
+        // Ingestion
+        '/ingest/:path*',
     ],
 };

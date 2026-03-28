@@ -5,6 +5,7 @@ This module provides a secure, tamper-evident audit logging system
 for tracking security-relevant events across the application.
 """
 
+import functools
 import hashlib
 import hmac
 import json
@@ -262,10 +263,13 @@ class AuditIntegrity:
         Args:
             secret_key: Secret key for HMAC (uses env var if not provided)
         """
-        self._secret_key = (
-            secret_key or 
-            os.environ.get("AUDIT_INTEGRITY_KEY", "default-audit-key")
-        ).encode()
+        resolved = secret_key or os.environ.get("AUDIT_INTEGRITY_KEY")
+        if not resolved:
+            raise ValueError(
+                "Audit integrity key is required. Set the AUDIT_INTEGRITY_KEY "
+                "environment variable or pass secret_key explicitly."
+            )
+        self._secret_key = resolved.encode()
         self._last_hash: Optional[str] = None
     
     def compute_hash(self, event: AuditEvent) -> str:
@@ -910,6 +914,7 @@ def audit_action(
             ...
     """
     def decorator(func):
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             audit_logger = AuditLogger.get_instance()
             

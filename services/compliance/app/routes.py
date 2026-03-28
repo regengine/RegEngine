@@ -5,11 +5,14 @@ import uuid
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from shared.auth import require_api_key
+from shared.resilient_http import resilient_client
+from shared.circuit_breaker import CircuitOpenError
+from .config import settings
 from .fsma_spreadsheet import generate_fda_csv
 
 router = APIRouter(tags=["fsma-compliance"])
@@ -258,11 +261,12 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
 # FDA Audit Spreadsheet Export
 # ---------------------------------------------------------------------------
 
-_GRAPH_SERVICE_URL = os.getenv("GRAPH_SERVICE_URL", "http://localhost:8003")
+_GRAPH_SERVICE_URL = settings.graph_service_url
 
 
 @router.get("/v1/fsma/audit/spreadsheet", dependencies=[Depends(require_api_key)])
 async def fsma_audit_spreadsheet(
+    request: Request,
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
     tlc: str | None = Query(None, description="Filter by Traceability Lot Code"),
@@ -277,17 +281,42 @@ async def fsma_audit_spreadsheet(
     if tlc:
         params["tlc"] = tlc
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(
-            f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
-            params=params,
-        )
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Graph service returned {resp.status_code}: {resp.text[:200]}",
+    # Forward auth, tenant, and correlation headers to downstream graph service
+    headers: dict[str, str] = {}
+    api_key = request.headers.get("X-RegEngine-API-Key")
+    if api_key:
+        headers["X-RegEngine-API-Key"] = api_key
+    tenant_id = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+    if tenant_id:
+        headers["X-RegEngine-Tenant-ID"] = tenant_id
+    request_id = request.headers.get("X-Request-ID")
+    if request_id:
+        headers["X-Request-ID"] = request_id
+
+    try:
+        async with resilient_client(timeout=30.0, circuit_name="graph-service") as client:
+            resp = await client.get(
+                f"{_GRAPH_SERVICE_URL}/v1/fsma/traceability/search/events",
+                params=params,
+                headers=headers,
             )
-        data = resp.json()
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Graph service circuit open — retry after {exc.retry_after:.0f}s",
+        ) from exc
+
+    if resp.status_code >= 500:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Graph service error ({resp.status_code}): {resp.text[:200]}",
+        )
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"Graph service rejected request: {resp.text[:200]}",
+        )
+    data = resp.json()
 
     events = data.get("events") or data.get("results") or []
 

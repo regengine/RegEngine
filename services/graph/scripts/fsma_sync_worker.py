@@ -40,7 +40,12 @@ class FSMASyncWorker:
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
-        neo4j_password = os.getenv("NEO4J_PASSWORD", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
+        if not neo4j_password:
+            raise ValueError(
+                "NEO4J_PASSWORD must be set. "
+                "Refusing to start with missing credentials."
+            )
 
         self.redis = redis.from_url(redis_url)
         self.driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
@@ -72,6 +77,9 @@ class FSMASyncWorker:
 
         if event == "cte.created":
             self._sync_cte(data.get("cte", {}))
+        elif event == "canonical.created":
+            # V2: Canonical traceability events (downstream from canonical store)
+            self._sync_canonical_event(data.get("canonical_event", {}))
         elif event == "product.created":
             self._sync_product(data.get("product", {}))
         elif event == "location.created":
@@ -84,6 +92,8 @@ class FSMASyncWorker:
         if not cte_id:
             return
 
+        tenant_id = cte.get("tenant_id", "")
+
         properties = {
             "event_type": cte.get("event_type"),
             "event_time": cte.get("event_time"),
@@ -93,15 +103,17 @@ class FSMASyncWorker:
             "tlc": cte.get("tlc"),
             "lot_code": cte.get("lot_code"),
             "data_source": cte.get("data_source"),
+            "tenant_id": tenant_id,
         }
 
         with self.driver.session() as session:
             session.run(
                 """
-                MERGE (cte:CTE {id: $id})
+                MERGE (cte:CTE {id: $id, tenant_id: $tenant_id})
                 SET cte += $properties
                 """,
                 id=cte_id,
+                tenant_id=tenant_id,
                 properties=properties,
             )
 
@@ -109,13 +121,14 @@ class FSMASyncWorker:
             if tlc:
                 session.run(
                     """
-                    MERGE (lot:Lot {tlc: $tlc})
+                    MERGE (lot:Lot {tlc: $tlc, tenant_id: $tenant_id})
                     SET lot.lot_code = coalesce($lot_code, lot.lot_code)
                     WITH lot
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:INVOLVES_LOT]->(lot)
                     """,
                     tlc=tlc,
+                    tenant_id=tenant_id,
                     lot_code=cte.get("lot_code"),
                     cte_id=cte_id,
                 )
@@ -124,23 +137,25 @@ class FSMASyncWorker:
             if product_id:
                 session.run(
                     """
-                    MERGE (product:Product {id: $product_id})
+                    MERGE (product:Product {id: $product_id, tenant_id: $tenant_id})
                     WITH product
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:INVOLVES_PRODUCT]->(product)
                     """,
                     product_id=product_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
                 if tlc:
                     session.run(
                         """
-                        MATCH (product:Product {id: $product_id})
-                        MATCH (lot:Lot {tlc: $tlc})
+                        MATCH (product:Product {id: $product_id, tenant_id: $tenant_id})
+                        MATCH (lot:Lot {tlc: $tlc, tenant_id: $tenant_id})
                         MERGE (product)-[:HAS_LOT]->(lot)
                         """,
                         product_id=product_id,
+                        tenant_id=tenant_id,
                         tlc=tlc,
                     )
 
@@ -148,12 +163,13 @@ class FSMASyncWorker:
             if location_id:
                 session.run(
                     """
-                    MERGE (loc:Location {id: $location_id})
+                    MERGE (loc:Location {id: $location_id, tenant_id: $tenant_id})
                     WITH loc
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:OCCURRED_AT]->(loc)
                     """,
                     location_id=location_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
@@ -161,12 +177,13 @@ class FSMASyncWorker:
             if source_location_id:
                 session.run(
                     """
-                    MERGE (src:Location {id: $source_location_id})
+                    MERGE (src:Location {id: $source_location_id, tenant_id: $tenant_id})
                     WITH src
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:SHIPPED_FROM]->(src)
                     """,
                     source_location_id=source_location_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
 
@@ -174,33 +191,132 @@ class FSMASyncWorker:
             if dest_location_id:
                 session.run(
                     """
-                    MERGE (dst:Location {id: $dest_location_id})
+                    MERGE (dst:Location {id: $dest_location_id, tenant_id: $tenant_id})
                     WITH dst
-                    MATCH (cte:CTE {id: $cte_id})
+                    MATCH (cte:CTE {id: $cte_id, tenant_id: $tenant_id})
                     MERGE (cte)-[:SHIPPED_TO]->(dst)
                     """,
                     dest_location_id=dest_location_id,
+                    tenant_id=tenant_id,
                     cte_id=cte_id,
                 )
+
+    def _sync_canonical_event(self, event: dict[str, Any]) -> None:
+        """Sync a canonical TraceabilityEvent to Neo4j.
+
+        Creates graph nodes for the event, lot, and facility references,
+        reading from the canonical model's richer field set (from/to
+        facility references, entity references, provenance metadata).
+        """
+        event_id = event.get("event_id")
+        if not event_id:
+            return
+
+        tenant_id = event.get("tenant_id", "")
+        db_name = f"reg_tenant_{tenant_id.replace('-', '')}" if tenant_id else None
+
+        properties = {
+            "event_type": event.get("event_type"),
+            "event_timestamp": event.get("event_timestamp"),
+            "source_system": event.get("source_system"),
+            "confidence_score": event.get("confidence_score"),
+            "schema_version": event.get("schema_version"),
+            "sha256_hash": event.get("sha256_hash"),
+            "tenant_id": tenant_id,
+        }
+
+        with self.driver.session(database=db_name) if db_name else self.driver.session() as session:
+            # Upsert the TraceEvent node
+            session.run(
+                """
+                MERGE (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+                SET e += $properties
+                SET e.synced_at = datetime()
+                """,
+                event_id=event_id,
+                tenant_id=tenant_id,
+                properties=properties,
+            )
+
+            # Link to Lot via TLC
+            tlc = event.get("traceability_lot_code")
+            if tlc:
+                session.run(
+                    """
+                    MERGE (lot:Lot {tlc: $tlc, tenant_id: $tenant_id})
+                    ON CREATE SET lot.product_description = $product_ref, lot.created_at = datetime()
+                    WITH lot
+                    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+                    MERGE (lot)-[:UNDERWENT]->(e)
+                    """,
+                    tlc=tlc,
+                    tenant_id=tenant_id,
+                    product_ref=event.get("product_reference", ""),
+                    event_id=event_id,
+                )
+
+            # Link from-facility
+            from_ref = event.get("from_facility_reference")
+            if from_ref:
+                session.run(
+                    """
+                    MERGE (f:Facility {identifier: $ref, tenant_id: $tenant_id})
+                    ON CREATE SET f.name = $ref, f.created_at = datetime()
+                    WITH f
+                    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+                    MERGE (f)-[:SHIPPED]->(e)
+                    """,
+                    ref=from_ref,
+                    tenant_id=tenant_id,
+                    event_id=event_id,
+                )
+
+            # Link to-facility
+            to_ref = event.get("to_facility_reference")
+            if to_ref:
+                session.run(
+                    """
+                    MERGE (f:Facility {identifier: $ref, tenant_id: $tenant_id})
+                    ON CREATE SET f.name = $ref, f.created_at = datetime()
+                    WITH f
+                    MATCH (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+                    MERGE (e)-[:SHIPPED_TO]->(f)
+                    """,
+                    ref=to_ref,
+                    tenant_id=tenant_id,
+                    event_id=event_id,
+                )
+
+        logger.info(
+            "canonical_event_synced",
+            event_id=event_id,
+            event_type=event.get("event_type"),
+            tenant_id=tenant_id,
+            request_id="sync-canonical",
+        )
 
     def _sync_product(self, product: dict[str, Any]) -> None:
         product_id = product.get("id")
         if not product_id:
             return
 
+        tenant_id = product.get("tenant_id", "")
+
         with self.driver.session() as session:
             session.run(
                 """
-                MERGE (product:Product {id: $id})
+                MERGE (product:Product {id: $id, tenant_id: $tenant_id})
                 SET product += $properties
                 """,
                 id=product_id,
+                tenant_id=tenant_id,
                 properties={
                     "name": product.get("name"),
                     "gtin": product.get("gtin"),
                     "sku": product.get("sku"),
                     "ftl_category": product.get("ftl_category"),
                     "ftl_covered": product.get("ftl_covered"),
+                    "tenant_id": tenant_id,
                 },
             )
 
@@ -209,18 +325,22 @@ class FSMASyncWorker:
         if not location_id:
             return
 
+        tenant_id = location.get("tenant_id", "")
+
         with self.driver.session() as session:
             session.run(
                 """
-                MERGE (loc:Location {id: $id})
+                MERGE (loc:Location {id: $id, tenant_id: $tenant_id})
                 SET loc += $properties
                 """,
                 id=location_id,
+                tenant_id=tenant_id,
                 properties={
                     "name": location.get("name"),
                     "gln": location.get("gln"),
                     "location_type": location.get("location_type"),
                     "fda_fei": location.get("fda_fei"),
+                    "tenant_id": tenant_id,
                 },
             )
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -20,11 +20,7 @@ import {
 } from 'lucide-react';
 
 /* ── Available Integrations Catalog ── */
-// MEDIUM #10 (UI Debug Audit): These are available integrations, NOT connection
-// statuses. Previous version showed hardcoded "connected"/"pending" statuses that
-// didn't reflect actual tenant configuration. Status is now "available" for all
-// until the backend supports real integration status tracking.
-// TODO: Fetch actual integration status from GET /api/v1/integrations/{tenant_id}
+// Integration catalog — status is updated from API if available
 const INTEGRATIONS = [
     { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'available', desc: 'Cold-chain temperature monitoring' },
     { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'available', desc: 'Real-time shipment visibility' },
@@ -50,7 +46,7 @@ const TABS = [
 ];
 
 export default function SettingsPage() {
-    const { user } = useAuth();
+    const { user, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const { organizations } = useOrganizations();
     const currentOrg = organizations.find(o => o.id === tenantId);
@@ -85,13 +81,68 @@ export default function SettingsPage() {
         }
     }, [currentOrg, user]);
 
+    // Fetch real integration status from backend
+    const [integrations, setIntegrations] = useState(INTEGRATIONS);
+    useEffect(() => {
+        if (!tenantId || !apiKey) return;
+        const fetchIntegrations = async () => {
+            try {
+                const { getServiceURL } = await import('@/lib/api-config');
+                const base = getServiceURL('ingestion');
+                const res = await fetch(`${base}/api/v1/integrations/${tenantId}`, {
+                    headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.integrations && Array.isArray(data.integrations)) {
+                        // Merge real status into catalog
+                        const statusMap = new Map(data.integrations.map((i: any) => [i.id, i.status]));
+                        setIntegrations(INTEGRATIONS.map(i => ({
+                            ...i,
+                            status: (statusMap.get(i.id) as string) || i.status,
+                        })));
+                    }
+                }
+            } catch {
+                // API unavailable — keep catalog defaults
+            }
+        };
+        fetchIntegrations();
+    }, [tenantId, apiKey]);
+
     // Derive plan display from subscription data
     const planName = subscriptionData?.subscription?.tier_id
         ? subscriptionData.subscription.tier_id.charAt(0).toUpperCase() + subscriptionData.subscription.tier_id.slice(1) + ' Plan'
         : 'No Plan Selected';
     const billingCycle = subscriptionData?.subscription?.billing_cycle || '';
 
-    const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    const handleSave = useCallback(async () => {
+        if (!tenantId) return;
+        setSaving(true);
+        setSaveError(null);
+        try {
+            const { getServiceURL } = await import('@/lib/api-config');
+            const base = getServiceURL('ingestion');
+            const res = await fetch(`${base}/api/v1/settings/${tenantId}/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-RegEngine-API-Key': apiKey || '',
+                },
+                body: JSON.stringify(profile),
+            });
+            if (!res.ok) throw new Error(`Save failed: ${res.status} ${res.statusText}`);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch (err) {
+            setSaveError(err instanceof Error ? err.message : 'Failed to save settings');
+        } finally {
+            setSaving(false);
+        }
+    }, [tenantId, apiKey, profile]);
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
         setCopiedKey(id);
@@ -120,15 +171,16 @@ export default function SettingsPage() {
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">Manage your organization, API keys, and integrations</p>
                     </div>
-                    <Button onClick={handleSave} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
-                        {saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
+                    <Button onClick={handleSave} disabled={saving} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
+                        {saving ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...</> : saved ? <><CheckCircle2 className="h-4 w-4 mr-1" /> Saved</> : <><Save className="h-4 w-4 mr-1" /> Save Changes</>}
                     </Button>
                 </div>
-                {/* Alpha program notice */}
-                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 flex items-center gap-2 text-blue-800 dark:text-blue-200 text-sm">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>Founding Partner Alpha — Settings will sync with your live environment once onboarding is complete.</span>
-                </div>
+                {saveError && (
+                    <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 flex items-center gap-2 text-red-800 dark:text-red-200 text-sm">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>{saveError}</span>
+                    </div>
+                )}
 
                 {/* Plan Card */}
                 <Card className="border-[var(--re-brand)] overflow-hidden">
@@ -171,7 +223,7 @@ export default function SettingsPage() {
                                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-medium border transition-all whitespace-nowrap min-h-[44px] active:scale-[0.96] flex-shrink-0 ${activeTab === tab.id ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)]' : 'border-[var(--re-border-default)] hover:border-[var(--re-brand)]'}`}>
                                 <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {tab.label}
                                 {tab.id === 'integrations' && (
-                                    <span className="ml-1 text-[10px] bg-white/20 px-1.5 rounded-full">{INTEGRATIONS.filter(i => i.status === 'connected').length}</span>
+                                    <span className="ml-1 text-[10px] bg-white/20 px-1.5 rounded-full">{integrations.filter(i => i.status === 'connected').length}</span>
                                 )}
                             </button>
                         );
@@ -354,9 +406,9 @@ export default function SettingsPage() {
                         {/* Stats row */}
                         <div className="grid grid-cols-3 gap-2 sm:gap-3">
                             {[
-                                { label: 'Connected', value: INTEGRATIONS.filter(i => i.status === 'connected').length, color: '#10b981' },
-                                { label: 'Pending', value: INTEGRATIONS.filter(i => i.status === 'pending').length, color: '#f59e0b' },
-                                { label: 'Available', value: INTEGRATIONS.filter(i => i.status === 'disconnected').length, color: '#6b7280' },
+                                { label: 'Connected', value: integrations.filter(i => i.status === 'connected').length, color: '#10b981' },
+                                { label: 'Pending', value: integrations.filter(i => i.status === 'pending').length, color: '#f59e0b' },
+                                { label: 'Available', value: integrations.filter(i => i.status === 'available' || i.status === 'disconnected').length, color: '#6b7280' },
                             ].map((s) => (
                                 <div key={s.label} className="p-3 rounded-xl bg-[var(--re-surface-elevated)] border border-[var(--re-border-default)] text-center">
                                     <div className="text-lg sm:text-xl font-bold" style={{ color: s.color }}>{s.value}</div>
@@ -374,7 +426,7 @@ export default function SettingsPage() {
                                 <CardDescription>Connect third-party systems for automated event ingestion and data sync</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2">
-                                {INTEGRATIONS.map((int) => {
+                                {integrations.map((int) => {
                                     const cfg = STATUS_CONFIG[int.status];
                                     return (
                                         <div key={int.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2 hover:border-[var(--re-brand)] transition-colors">                                            <div className="min-w-0">

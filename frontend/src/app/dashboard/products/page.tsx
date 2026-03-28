@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,8 +57,7 @@ const FTL_CATEGORIES = [
     'Tropical Tree Fruits', 'Fresh Melons',
 ];
 
-async function apiFetchProducts(tenantId: string): Promise<ProductCatalogResponse> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+async function apiFetchProducts(tenantId: string, apiKey: string): Promise<ProductCatalogResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/products/${tenantId}`, {
@@ -68,8 +67,7 @@ async function apiFetchProducts(tenantId: string): Promise<ProductCatalogRespons
     return res.json();
 }
 
-async function apiAddProduct(tenantId: string, name: string, category: string, sku: string): Promise<void> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+async function apiAddProduct(tenantId: string, apiKey: string, name: string, category: string, sku: string): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/products/${tenantId}`, {
@@ -81,21 +79,11 @@ async function apiAddProduct(tenantId: string, name: string, category: string, s
 }
 
 export default function ProductCatalogPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
 
-    // Resolve effective auth from React state OR localStorage
-    const isLoggedIn = useMemo(() => {
-        if (isAuthenticated) return true;
-        if (typeof window === 'undefined') return false;
-        return !!localStorage.getItem('regengine_access_token') && !!localStorage.getItem('regengine_user');
-    }, [isAuthenticated]);
-
-    const effectiveTenantId = useMemo(() => {
-        if (tenantId) return tenantId;
-        if (typeof window === 'undefined') return null;
-        return localStorage.getItem('regengine_tenant_id');
-    }, [tenantId]);
+    const isLoggedIn = isAuthenticated;
+    const effectiveTenantId = tenantId;
 
     const [products, setProducts] = useState<Product[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
@@ -115,7 +103,7 @@ export default function ProductCatalogPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = await apiFetchProducts(effectiveTenantId!);
+            const data = await apiFetchProducts(effectiveTenantId!, apiKey || '');
             const fetchedProducts = data.products || [];
             if (fetchedProducts.length > 0) {
                 setProducts(fetchedProducts);
@@ -163,7 +151,7 @@ export default function ProductCatalogPage() {
         } finally {
             setLoading(false);
         }
-    }, [isLoggedIn, effectiveTenantId]);
+    }, [isLoggedIn, effectiveTenantId, apiKey]);
 
     useEffect(() => { loadProducts(); }, [loadProducts]);
 
@@ -174,7 +162,7 @@ export default function ProductCatalogPage() {
         if (!newName) return;
         setAdding(true);
         try {
-            await apiAddProduct(effectiveTenantId!, newName, newCategory, newSku);
+            await apiAddProduct(effectiveTenantId!, apiKey || '', newName, newCategory, newSku);
             setNewName(''); setNewSku(''); setShowAdd(false);
             await loadProducts();
         } catch (err) {

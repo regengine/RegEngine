@@ -3,9 +3,9 @@ import requests
 from typing import Iterable, Optional
 from datetime import datetime, timezone
 
+from shared.url_validation import validate_url
 from ...config import get_settings
 from .base import StateRegistryScraper, Source, FetchedItem
-from ...shared.url_validation import validate_url, SSRFError
 
 logger = logging.getLogger("ingestion.scrapers.google_discovery")
 
@@ -45,6 +45,7 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                     "start": start_index
                 }
                 
+                validate_url(self.base_url)
                 resp = requests.get(self.base_url, params=params, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
@@ -59,29 +60,21 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                 url = item.get("link")
                 title = item.get("title")
                 snippet = item.get("snippet")
-
+                
                 if not url:
-                    continue
-
-                # SSRF protection: validate extracted URL before using
-                try:
-                    validated_url = validate_url(url)
-                except SSRFError as e:
-                    logger.debug("ssrf_validation_failed_google_discovery", url=url, error=str(e))
-                    # Skip this URL, continue to next
                     continue
 
                 # Determine jurisdiction from domain (simple heuristic)
                 jurisdiction = "US"
-                if ".ny.gov" in validated_url:
+                if ".ny.gov" in url:
                     jurisdiction = "US-NY"
-                elif ".ca.gov" in validated_url:
+                elif ".ca.gov" in url:
                     jurisdiction = "US-CA"
-                elif ".tx.gov" in validated_url:
+                elif ".tx.gov" in url:
                     jurisdiction = "US-TX"
-
+                
                 sources.append(Source(
-                    url=validated_url,
+                    url=url,
                     title=title,
                     jurisdiction_code=jurisdiction,
                     metadata={"discovery_snippet": snippet, "discovery_date": datetime.now(timezone.utc).isoformat()}
@@ -99,16 +92,10 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
         Fetch the content of the discovered document.
         """
         try:
-            # SSRF protection: validate source URL before fetching
-            try:
-                validated_url = validate_url(source.url)
-            except SSRFError as e:
-                logger.warning("ssrf_validation_failed_google_fetch", url=source.url, error=str(e))
-                return FetchedItem(source=source, content_bytes=b"", content_type=None)
-
-            resp = requests.get(validated_url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            validate_url(source.url)
+            resp = requests.get(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
-
+            
             content_type = resp.headers.get("Content-Type", "application/pdf")
             return FetchedItem(
                 source=source,

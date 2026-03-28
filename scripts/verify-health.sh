@@ -17,7 +17,6 @@ SERVICES=(
     "http://localhost:8000/health|Ingestion|1"
     "http://localhost:8100/health|NLP|0"
     "http://localhost:8200/health|Graph|1"
-    "http://localhost:8300/health|Opportunity|1"
     "http://localhost:8500/health|Compliance|1"
     "http://localhost:8600/health|Scheduler|1"
 )

@@ -333,6 +333,88 @@ export default function TrustCenterPage() {
                     </div>
                 </div>
             </section>
+            {/* SLA Commitments */}
+            <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
+                <h2 className="text-2xl font-bold text-re-text-primary mb-4">Service level commitments</h2>
+                <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
+                    Current operational targets. We publish real numbers, not aspirational marketing SLAs.
+                </p>
+                <div className="grid gap-3 md:grid-cols-3">
+                    <div className={`${card} p-4`}>
+                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">API Uptime Target</div>
+                        <div className="mt-2 text-2xl font-bold text-re-text-primary">99.5%</div>
+                        <div className="text-sm text-re-text-muted mt-1">Measured monthly. Current actual: tracking since March 2026 launch. Enterprise SLAs negotiable.</div>
+                    </div>
+                    <div className={`${card} p-4`}>
+                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">P95 API Latency</div>
+                        <div className="mt-2 text-2xl font-bold text-re-text-primary">&lt;500ms</div>
+                        <div className="text-sm text-re-text-muted mt-1">For standard read operations. Write operations including hash computation may exceed this for large batches.</div>
+                    </div>
+                    <div className={`${card} p-4`}>
+                        <div className="text-xs uppercase tracking-widest text-re-text-disabled">RPO / RTO</div>
+                        <div className="mt-2 text-2xl font-bold text-re-text-primary">0 / 4hr</div>
+                        <div className="text-sm text-re-text-muted mt-1">Zero data loss (committed records are durable). Recovery time objective of 4 hours for full service restoration.</div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Subprocessors */}
+            <section className={`relative z-[2] ${sectionAlt}`}>
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
+                    <h2 className="text-2xl font-bold text-re-text-primary mb-4">Infrastructure and subprocessors</h2>
+                    <p className="text-sm text-re-text-muted mb-6 max-w-[720px]">
+                        Complete list of third-party services that process or store customer data. Updated when changes occur.
+                    </p>
+                    <div className="overflow-x-auto">
+                        <table className={`w-full border-collapse ${card}`}>
+                            <thead>
+                                <tr className="border-b border-[var(--re-surface-border)] text-left text-xs uppercase tracking-widest text-re-text-disabled">
+                                    <th className="p-3">Provider</th>
+                                    <th className="p-3">Purpose</th>
+                                    <th className="p-3">Data processed</th>
+                                    <th className="p-3">Location</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Supabase</td>
+                                    <td className="p-3 text-re-text-muted">Database hosting, authentication</td>
+                                    <td className="p-3 text-re-text-muted">All tenant data, user accounts</td>
+                                    <td className="p-3 text-re-text-muted">US (AWS)</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Railway</td>
+                                    <td className="p-3 text-re-text-muted">Backend service hosting</td>
+                                    <td className="p-3 text-re-text-muted">API request processing</td>
+                                    <td className="p-3 text-re-text-muted">US (GCP)</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Vercel</td>
+                                    <td className="p-3 text-re-text-muted">Frontend hosting, serverless functions</td>
+                                    <td className="p-3 text-re-text-muted">Session tokens (transit only)</td>
+                                    <td className="p-3 text-re-text-muted">US (AWS)</td>
+                                </tr>
+                                <tr className="border-b border-[var(--re-surface-border)]">
+                                    <td className="p-3 font-medium text-re-text-primary">Stripe</td>
+                                    <td className="p-3 text-re-text-muted">Payment processing</td>
+                                    <td className="p-3 text-re-text-muted">Billing info (no compliance data)</td>
+                                    <td className="p-3 text-re-text-muted">US</td>
+                                </tr>
+                                <tr>
+                                    <td className="p-3 font-medium text-re-text-primary">Redpanda</td>
+                                    <td className="p-3 text-re-text-muted">Event streaming (Kafka-compatible)</td>
+                                    <td className="p-3 text-re-text-muted">Ingestion events (transit)</td>
+                                    <td className="p-3 text-re-text-muted">US</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p className="text-xs text-re-text-disabled mt-4">
+                        Last updated: March 2026. Changes to subprocessors are communicated to customers with 30 days&apos; notice.
+                    </p>
+                </div>
+            </section>
+
             {/* ─── CAPABILITY REGISTRY (collapsible for technical diligence) ─── */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
                 <details className={`${card} overflow-hidden`}>

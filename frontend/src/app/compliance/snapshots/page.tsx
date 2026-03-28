@@ -86,6 +86,7 @@ export default function SnapshotsPage() {
     const userEmail = user?.email || `admin@tenant-${tenantId.slice(0, 8)}.regengine.io`;
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
@@ -116,11 +117,11 @@ export default function SnapshotsPage() {
     }, [tenantId]);
 
     const fetchSnapshots = async () => {
+        setFetchError(null);
         try {
             const response = await fetch(`/api/admin/v1/compliance/snapshots/${tenantId}`);
             if (response.ok) {
                 const data = await response.json();
-                // Handle both direct array and paginated {items: []} format
                 if (Array.isArray(data)) {
                     setSnapshots(data);
                 } else if (data && Array.isArray(data.items)) {
@@ -128,9 +129,12 @@ export default function SnapshotsPage() {
                 } else {
                     setSnapshots([]);
                 }
+            } else {
+                setFetchError(`Snapshot API returned ${response.status}`);
+                setSnapshots([]);
             }
         } catch (error) {
-            // TODO: Surface backend unavailability in the UI once snapshot API errors are handled.
+            setFetchError('Unable to reach snapshot service. Check your connection.');
             setSnapshots([]);
         } finally {
             setLoading(false);
@@ -320,7 +324,7 @@ export default function SnapshotsPage() {
                     });
                 }
 
-                generateBrandedPDF({
+                await generateBrandedPDF({
                     title: 'Compliance Snapshot Artifact',
                     subtitle: snapshotName,
                     reportType: 'RegEngine Compliance Snapshots',
@@ -487,10 +491,18 @@ export default function SnapshotsPage() {
                     </div>
                 </div>
 
+                {/* Error State */}
+                {fetchError && (
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-red-500/[0.06] border border-red-500/20 text-red-400 text-sm mb-4">
+                        <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                        <span>{fetchError}</span>
+                    </div>
+                )}
+
                 {/* Snapshots List */}
                 {loading ? (
                     <div className="text-center py-12 text-gray-400">Loading snapshots...</div>
-                ) : snapshots.length === 0 ? (
+                ) : snapshots.length === 0 && !fetchError ? (
                     <div className="text-center py-16 bg-white/5 rounded-xl border border-white/10">
                         <Camera className="h-16 w-16 text-gray-600 mx-auto mb-4" />
                         <h3 className="text-xl font-semibold text-gray-300 mb-2">No Snapshots Yet</h3>

@@ -7,6 +7,7 @@ import asyncio
 import os
 import uuid as uuid_module
 from sqlalchemy import text, select
+from shared.resilient_http import resilient_client
 from app.dependencies import get_current_user, get_session
 from app.sqlalchemy_models import UserModel
 from sqlalchemy.orm import Session
@@ -71,7 +72,7 @@ def _get_ingestion_base() -> str:
 async def get_system_status(current_user: UserModel = Depends(get_current_user)):
     service_urls = _get_service_urls()
 
-    async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+    async with resilient_client(timeout=10.0, circuit_name="system-health") as client:
         tasks = []
         for name, url in service_urls.items():
             tasks.append(check_service_health(client, name, url))
@@ -142,7 +143,7 @@ async def get_system_metrics(
     score_data: Dict[str, Any] = {}
     chain_data: Dict[str, Any] = {}
 
-    async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+    async with resilient_client(timeout=12.0, circuit_name="ingestion-service") as client:
         score_task = client.get(f"{base}/api/v1/compliance/score/{tenant}")
         chain_task = client.get(
             f"{base}/api/v1/webhooks/chain/verify",
@@ -205,7 +206,7 @@ async def get_system_metrics(
     open_alert_count = 0
     try:
         alert_row = db.execute(
-            text("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE tenant_id = :tid AND resolved_at IS NULL"),
+            text("SELECT COUNT(*) FROM fsma.compliance_alerts WHERE org_id = CAST(:tid AS uuid) AND resolved = false"),
             {"tid": tenant},
         ).fetchone()
         open_alert_count = alert_row[0] if alert_row else 0

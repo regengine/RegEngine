@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...fsma_metrics import record_trace_query
-from shared.subscription_guard import require_active_subscription
 from ...fsma_utils import (
     TraceResult,
     get_lot_timeline,
@@ -40,105 +39,14 @@ from pathlib import Path
 # Add shared utilities (portable path resolution)
 from shared.middleware import get_current_tenant_id
 
+from shared.rate_limit import limiter
+
 router = APIRouter(tags=["Traceability"])
 logger = structlog.get_logger("fsma-traceability")
 
 
-# Response Models
-class TraceForwardResponse(BaseModel):
-    """Response for forward traceability trace."""
-    lot_id: str
-    direction: str
-    facilities: list
-    events: list
-    downstream_lots: list
-    total_quantity: Optional[float] = None
-    query_time_ms: int
-    hop_count: int
-    time_violations: Optional[list] = None
-    risk_flags: Optional[list] = None
-
-
-class TraceBackwardResponse(BaseModel):
-    """Response for backward traceability trace."""
-    lot_id: str
-    direction: str
-    facilities: list
-    events: list
-    source_lots: list
-    total_quantity: Optional[float] = None
-    query_time_ms: int
-    hop_count: int
-
-
-class TimelineEvent(BaseModel):
-    """Event in a lot timeline."""
-    event_id: Optional[str] = None
-    event_type: Optional[str] = None
-    event_date: Optional[str] = None
-    facility: Optional[dict] = None
-
-
-class TimelineResponse(BaseModel):
-    """Response for lot timeline endpoint."""
-    lot_id: str
-    events: list[TimelineEvent]
-
-
-class RegulationsResponse(BaseModel):
-    """Response for regulations endpoint."""
-    lot_tlc: str
-    regulations: list
-
-
-class ImpactedLotsResponse(BaseModel):
-    """Response for impacted lots endpoint."""
-    obligation_id: str
-    impacted_lots: list
-
-
-class LinkResponse(BaseModel):
-    """Individual link in obligation linking response."""
-    obligation_id: str
-    lot_id: str
-    link_type: Optional[str] = None
-    confidence: Optional[float] = None
-
-
-class LinkObligationResponse(BaseModel):
-    """Response for obligation linking endpoint."""
-    status: str
-    links_created: int
-    links: list[LinkResponse]
-
-
-class EventFilter(BaseModel):
-    """Event search filters in response."""
-    start_date: str
-    end_date: str
-    product_contains: Optional[str] = None
-    facility_contains: Optional[str] = None
-    cte_type: Optional[str] = None
-
-
-class SearchEventsResponse(BaseModel):
-    """Response for event search endpoint."""
-    count: int
-    events: list
-    has_more: bool
-    next_cursor: Optional[str] = None
-    filters: EventFilter
-
-
-class LogEventResponse(BaseModel):
-    """Response for mobile event logging endpoint."""
-    status: str
-    event_id: str
-    tlc: str
-    message: str
-
-
-@router.get("/trace/forward/{tlc}", response_model=TraceForwardResponse)
+@router.get("/trace/forward/{tlc}")
+@limiter.limit("10/minute")
 async def trace_forward_endpoint(
     request: Request,
     tlc: str,
@@ -148,7 +56,6 @@ async def trace_forward_endpoint(
     ),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
-    _sub: bool = Depends(require_active_subscription),
 ):
     """
     Trace forward from a lot to find all downstream facilities and products.
@@ -203,14 +110,14 @@ async def trace_forward_endpoint(
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/trace/backward/{tlc}", response_model=TraceBackwardResponse)
+@router.get("/trace/backward/{tlc}")
+@limiter.limit("10/minute")
 async def trace_backward_endpoint(
     request: Request,
     tlc: str,
     max_depth: int = Query(10, ge=1, le=20, description="Maximum hops in trace"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
-    _sub: bool = Depends(require_active_subscription),
 ):
     """
     Trace backward from a lot to find all source materials and suppliers.
@@ -255,13 +162,13 @@ async def trace_backward_endpoint(
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/timeline/{tlc}", response_model=TimelineResponse)
+@router.get("/timeline/{tlc}")
+@limiter.limit("10/minute")
 async def lot_timeline_endpoint(
     request: Request,
     tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
-    _sub: bool = Depends(require_active_subscription),
 ):
     """
     Get chronological timeline of all events for a specific lot.
@@ -279,7 +186,7 @@ async def lot_timeline_endpoint(
     except Exception as e:
         logger.exception("timeline_error", tlc=tlc, error=str(e))
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
-@router.get("/traceability/regulations", response_model=RegulationsResponse)
+@router.get("/traceability/regulations")
 async def get_governing_regulations_endpoint(
     lot_tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -304,7 +211,7 @@ async def get_governing_regulations_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traceability/impacted-lots", response_model=ImpactedLotsResponse)
+@router.get("/traceability/impacted-lots")
 async def get_impacted_lots_endpoint(
     obligation_id: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -329,7 +236,7 @@ async def get_impacted_lots_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/traceability/link/{obligation_id}", response_model=LinkObligationResponse)
+@router.post("/traceability/link/{obligation_id}")
 async def link_obligation_endpoint(
     obligation_id: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -354,8 +261,10 @@ async def link_obligation_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/search/events", response_model=SearchEventsResponse)
+@router.get("/search/events")
+@limiter.limit("10/minute")
 async def search_traceability_events(
+    request: Request,
     start_date: Optional[str] = Query(
         default=None,
         description="Start date (YYYY-MM-DD). Defaults to 30 days ago.",
@@ -457,9 +366,11 @@ class TraceabilityEventRequest(BaseModel):
     image_data: Optional[str] = None
 
 
-@router.post("/event", response_model=LogEventResponse)
+@router.post("/event")
+@limiter.limit("10/minute")
 async def log_traceability_event(
-    request: TraceabilityEventRequest,
+    request: Request,
+    payload: TraceabilityEventRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -467,19 +378,19 @@ async def log_traceability_event(
     High-integrity endpoint for logging Critical Tracking Events from mobile dock.
     Performs real-time validation of identifiers and persists directly to Neo4j.
     """
-    logger.info("logging_mobile_event", event_type=request.event_type, tlc=request.tlc)
+    logger.info("logging_mobile_event", event_type=payload.event_type, tlc=payload.tlc)
 
     # 1. Validation Logic
-    tlc_result = validate_tlc(request.tlc)
+    tlc_result = validate_tlc(payload.tlc)
     if not tlc_result.is_valid:
         raise HTTPException(status_code=400, detail=f"Invalid TLC: {tlc_result.errors[0].message}")
 
-    gln_result = validate_gln(request.location_identifier)
+    gln_result = validate_gln(payload.location_identifier)
     if not gln_result.is_valid:
         raise HTTPException(status_code=400, detail=f"Invalid Location (GLN): {gln_result.errors[0].message}")
 
-    if request.gtin:
-        gtin_result = validate_gtin(request.gtin)
+    if payload.gtin:
+        gtin_result = validate_gtin(payload.gtin)
         if not gtin_result.is_valid:
             raise HTTPException(status_code=400, detail=f"Invalid GTIN: {gtin_result.errors[0].message}")
 
@@ -493,36 +404,36 @@ async def log_traceability_event(
             # Create TraceEvent
             trace_event = TraceEvent(
                 event_id=event_id,
-                type=request.event_type,
-                event_date=request.event_date,
+                type=payload.event_type,
+                event_date=payload.event_date,
                 tenant_id=str(tenant_id),
             )
             await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
 
             # Create/Merge Lot
             lot = Lot(
-                tlc=request.tlc,
-                gtin=request.gtin,
-                product_description=request.product_description,
-                quantity=request.quantity,
-                unit_of_measure=request.uom,
+                tlc=payload.tlc,
+                gtin=payload.gtin,
+                product_description=payload.product_description,
+                quantity=payload.quantity,
+                unit_of_measure=payload.uom,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Lot.merge_cypher(), tlc=request.tlc, properties=lot.node_properties)
+            await session.run(Lot.merge_cypher(), tlc=payload.tlc, properties=lot.node_properties)
 
             # Create/Merge Facility
             facility = Facility(
-                gln=request.location_identifier,
+                gln=payload.location_identifier,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Facility.merge_cypher(), gln=request.location_identifier, properties=facility.node_properties)
+            await session.run(Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties)
 
             # Link Relationships
-            await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=request.tlc, event_id=event_id)
-            await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=request.location_identifier)
+            await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=payload.tlc, event_id=event_id)
+            await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=payload.location_identifier)
 
             # 3. Handle Evidence (BOL Photo)
-            if request.image_data:
+            if payload.image_data:
                 doc_id = str(uuid.uuid4())
                 document = Document(
                     document_id=doc_id,
@@ -530,7 +441,7 @@ async def log_traceability_event(
                     # In a production environment, we would upload to S3. 
                     # For this pilot, we store the Base64 as the raw_content.
                     source_uri=f"base64://{doc_id}",
-                    raw_content=request.image_data,
+                    raw_content=payload.image_data,
                     extraction_timestamp=datetime.now().isoformat(),
                     tenant_id=str(tenant_id)
                 )
@@ -540,11 +451,88 @@ async def log_traceability_event(
                 logger.info("secured_evidence_payload", doc_id=doc_id, event_id=event_id)
 
         await client.close()
+
+        # Bridge to canonical pipeline so mobile events are visible to
+        # FDA export, compliance scoring, and the canonical records API.
+        try:
+            from shared.canonical_event import (
+                TraceabilityEvent as CanonicalTraceabilityEvent,
+                CTEType as CanonicalCTEType,
+                IngestionSource,
+                ProvenanceMetadata,
+            )
+            from shared.canonical_persistence import CanonicalEventStore
+            from shared.database import SessionLocal
+
+            # Map graph CTEType to canonical CTEType
+            _cte_map = {
+                "HARVESTING": "harvesting", "COOLING": "cooling",
+                "INITIAL_PACKING": "initial_packing",
+                "FIRST_LAND_BASED_RECEIVING": "first_land_based_receiving",
+                "SHIPPING": "shipping", "RECEIVING": "receiving",
+                "TRANSFORMATION": "transformation",
+            }
+            cte_val = payload.event_type.value if hasattr(payload.event_type, "value") else str(payload.event_type)
+            canonical_cte = _cte_map.get(cte_val.upper(), cte_val.lower())
+
+            kdes = {}
+            if payload.gtin:
+                kdes["gtin"] = payload.gtin
+
+            provenance = ProvenanceMetadata(
+                mapper_name="mobile_capture_bridge",
+                mapper_version="1.0.0",
+                original_format="json",
+                normalization_rules_applied=["mobile_field_capture"],
+            )
+
+            canonical_event = CanonicalTraceabilityEvent(
+                event_id=uuid.UUID(event_id),
+                tenant_id=tenant_id,
+                source_system=IngestionSource.MOBILE_CAPTURE,
+                event_type=CanonicalCTEType(canonical_cte),
+                event_timestamp=payload.event_date,
+                traceability_lot_code=payload.tlc,
+                product_reference=payload.product_description or "",
+                lot_reference=payload.tlc,
+                quantity=payload.quantity or 1.0,
+                unit_of_measure=payload.uom or "each",
+                from_facility_reference=payload.location_identifier,
+                kdes=kdes,
+                raw_payload={
+                    "event_type": cte_val,
+                    "event_date": payload.event_date,
+                    "tlc": payload.tlc,
+                    "location_identifier": payload.location_identifier,
+                    "quantity": payload.quantity,
+                    "uom": payload.uom,
+                    "product_description": payload.product_description,
+                    "gtin": payload.gtin,
+                },
+                provenance_metadata=provenance,
+            ).prepare_for_persistence()
+
+            db = SessionLocal()
+            try:
+                store = CanonicalEventStore(db, dual_write=True)
+                store.persist_event(canonical_event)
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.close()
+
+            logger.info("mobile_event_canonical_bridged", event_id=event_id, tlc=payload.tlc)
+        except Exception as bridge_err:
+            # Non-blocking: Neo4j write already succeeded
+            logger.warning("mobile_canonical_bridge_failed", event_id=event_id, error=str(bridge_err))
+
         return {
             "status": "success",
             "event_id": event_id,
-            "tlc": request.tlc,
-            "message": f"Successfully secured {request.event_type} event on the immutable ledger.",
+            "tlc": payload.tlc,
+            "message": f"Successfully secured {payload.event_type} event on the immutable ledger.",
         }
 
     except Exception as e:

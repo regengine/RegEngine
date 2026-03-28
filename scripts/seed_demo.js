@@ -13,8 +13,7 @@
  */
 
 const ADMIN_URL = 'http://localhost:8400';
-const COMPLIANCE_URL = 'http://localhost:8300';
-const OPPORTUNITY_URL = 'http://localhost:8200';
+const COMPLIANCE_URL = 'http://localhost:8500';
 
 // Load admin key from environment or .env file
 function getAdminKey() {
@@ -217,22 +216,6 @@ async function verifyCompliance() {
     return 0;
 }
 
-async function verifyOpportunities() {
-    try {
-        const res = await fetch(`${OPPORTUNITY_URL}/health`, {
-            signal: AbortSignal.timeout(5000),
-        });
-
-        if (res.ok) {
-            log('✓', 'Opportunity service ready');
-            return true;
-        }
-    } catch (e) {
-        log('✗', 'Opportunity service not responding', e.message);
-    }
-    return false;
-}
-
 async function main() {
     console.log('\n🚀 RegEngine Demo Setup\n');
     console.log('='.repeat(50));
@@ -241,7 +224,6 @@ async function main() {
     console.log('\n📡 Checking service health...\n');
     const adminOk = await checkHealth('Admin API', ADMIN_URL);
     const complianceOk = await checkHealth('Compliance API', COMPLIANCE_URL);
-    const opportunityOk = await checkHealth('Opportunity API', OPPORTUNITY_URL);
 
     if (!adminOk) {
         console.log('\n⚠️  Admin API is required. Make sure Docker services are running.');
@@ -260,7 +242,6 @@ async function main() {
     // Verify services
     console.log('\n🔍 Verifying services...\n');
     await verifyCompliance();
-    await verifyOpportunities();
 
     // Summary
     console.log('\n' + '='.repeat(50));
@@ -268,7 +249,6 @@ async function main() {
     console.log('Available features:');
     console.log('  • Review Queue: 5 DORA extractions');
     console.log('  • Compliance: 22 industry checklists');
-    console.log('  • Opportunities: Cross-jurisdiction analysis');
     console.log('\nOpen http://localhost:3000 to start the demo.\n');
 }
 

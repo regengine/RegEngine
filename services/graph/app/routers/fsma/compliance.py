@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_f
 from ...neo4j_utils import Neo4jClient
 from ...neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
+from shared.rate_limit import limiter
 
 import uuid
 import sys
@@ -41,7 +42,9 @@ logger = structlog.get_logger("fsma-compliance")
 # ============================================================================
 
 @router.get("/coverage")
+@limiter.limit("10/minute")
 async def get_coverage_card(
+    request: Request,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -69,7 +72,9 @@ async def get_coverage_card(
 
 
 @router.get("/export/fda-request")
+@limiter.limit("10/minute")
 async def export_fda_request_sheet(
+    request: Request,
     start_date: str = Query(..., description="Start Date (YYYY-MM-DD or ISO)"),
     end_date: str = Query(..., description="End Date (YYYY-MM-DD or ISO)"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -151,7 +156,9 @@ async def export_fda_request_sheet(
 
 
 @router.get("/export/epcis")
+@limiter.limit("10/minute")
 async def export_epcis(
+    request: Request,
     start_date: str = Query(..., description="Start Date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End Date (YYYY-MM-DD)"),
     format: str = Query("json-ld", regex="^(json-ld|xml)$", description="EPCIS format"),
@@ -358,7 +365,9 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
 
 
 @router.get("/export/trace/{tlc}")
+@limiter.limit("10/minute")
 async def export_trace_csv(
+    request: Request,
     tlc: str,
     direction: str = Query("forward", regex="^(forward|backward)$"),
     max_depth: int = Query(10, ge=1, le=20),
@@ -480,8 +489,9 @@ async def export_trace_csv(
 
 
 @router.get("/export/recall-contacts/{tlc}")
-@router.get("/export/recall-contacts/{tlc}")
+@limiter.limit("10/minute")
 async def export_recall_contacts(
+    request: Request,
     tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
@@ -562,8 +572,9 @@ async def export_recall_contacts(
 
 
 @router.get("/gaps")
-@router.get("/gaps")
+@limiter.limit("10/minute")
 async def get_compliance_gaps(
+    request: Request,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -598,8 +609,9 @@ async def get_compliance_gaps(
 
 
 @router.get("/gaps/orphans")
-@router.get("/gaps/orphans")
+@limiter.limit("10/minute")
 async def get_orphaned_lots(
+    request: Request,
     days_stagnant: int = Query(
         30, ge=1, le=365, description="Days without outbound activity"
     ),
@@ -656,8 +668,9 @@ async def get_orphaned_lots(
 
 
 @router.get("/export/gaps")
-@router.get("/export/gaps")
+@limiter.limit("10/minute")
 async def export_gaps_csv(
+    request: Request,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -747,8 +760,10 @@ class TraceabilityPlanRequest(BaseModel):
 
 
 @router.post("/plan/generate")
+@limiter.limit("10/minute")
 def generate_traceability_plan(
-    request: TraceabilityPlanRequest,
+    request: Request,
+    payload: TraceabilityPlanRequest,
     format: str = Query("json", regex="^(json|markdown)$"),
     api_key=Depends(require_api_key),
 ):
@@ -766,32 +781,32 @@ def generate_traceability_plan(
     Returns plan in JSON or Markdown format.
     """
     try:
-        firm_type = FirmType(request.firm_type.lower())
+        firm_type = FirmType(payload.firm_type.lower())
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid firm_type: {request.firm_type}. "
+            detail=f"Invalid firm_type: {payload.firm_type}. "
             f"Valid types: grower, manufacturer, processor, packer, "
             f"holder, distributor, retailer, restaurant",
         )
 
     # Build firm info
     firm = FirmInfo(
-        name=request.firm_name,
-        address=request.firm_address,
+        name=payload.firm_name,
+        address=payload.firm_address,
         firm_type=firm_type,
-        gln=request.gln,
-        fda_registration=request.fda_registration,
-        contact_name=request.contact_name,
-        contact_email=request.contact_email,
-        contact_phone=request.contact_phone,
+        gln=payload.gln,
+        fda_registration=payload.fda_registration,
+        contact_name=payload.contact_name,
+        contact_email=payload.contact_email,
+        contact_phone=payload.contact_phone,
     )
 
     # Build plan
     builder = TraceabilityPlanBuilder(firm)
 
     # Add commodities
-    for comm in request.commodities:
+    for comm in payload.commodities:
         builder.add_commodity(
             FTLCommodity(
                 name=comm.name,
@@ -802,7 +817,7 @@ def generate_traceability_plan(
         )
 
     # Add record locations
-    for loc in request.record_locations:
+    for loc in payload.record_locations:
         try:
             retention = RecordRetentionPeriod(loc.retention_period)
         except ValueError:
@@ -819,15 +834,15 @@ def generate_traceability_plan(
         )
 
     # Set TLC format
-    if request.tlc_format:
-        builder.set_tlc_format(request.tlc_format)
+    if payload.tlc_format:
+        builder.set_tlc_format(payload.tlc_format)
 
     plan = builder.build()
 
     logger.info(
         "traceability_plan_generated",
         plan_id=plan.plan_id,
-        firm=request.firm_name,
+        firm=payload.firm_name,
         format=format,
     )
 
@@ -886,7 +901,9 @@ class ComplianceScoreResponse(BaseModel):
 
 
 @router.get("/score", response_model=ComplianceScoreResponse)
+@limiter.limit("10/minute")
 async def get_compliance_score(
+    request: Request,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):

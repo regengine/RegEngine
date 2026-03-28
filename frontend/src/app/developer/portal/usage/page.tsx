@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, TrendingUp, Clock, AlertCircle, Activity } from 'lucide-react';
@@ -24,19 +25,19 @@ interface EndpointSummary {
 
 export default function UsagePage() {
     const supabase = createSupabaseBrowserClient();
+    const { user: authUser } = useAuth();
     const [usage, setUsage] = useState<UsageRow[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('7d');
 
     const loadUsage = useCallback(async () => {
         setIsLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!authUser) return;
 
         const { data: profile } = await supabase
             .from('developer_profiles')
             .select('id')
-            .eq('auth_user_id', user.id)
+            .eq('auth_user_id', authUser.id)
             .single();
 
         if (!profile) return;
@@ -56,7 +57,7 @@ export default function UsagePage() {
 
         setUsage(data || []);
         setIsLoading(false);
-    }, [supabase, timeRange]);
+    }, [supabase, authUser, timeRange]);
 
     useEffect(() => { loadUsage(); }, [loadUsage]);
 

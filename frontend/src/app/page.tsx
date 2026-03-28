@@ -1,15 +1,24 @@
 import Link from "next/link";
-import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer } from "lucide-react";
+import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer, CheckCircle2, XCircle, Lock, FileCheck, Database, Shield } from "lucide-react";
+import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
+import { SandboxUpload } from "@/components/marketing/SandboxUpload";
+
+const CREDIBILITY = [
+  { icon: FileCheck, label: "EPCIS 2.0 native" },
+  { icon: Lock, label: "SHA-256 verified chains" },
+  { icon: Database, label: "Built on Supabase" },
+  { icon: Shield, label: "SOC 2 Type I — Q3 2026" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
 /* ------------------------------------------------------------------ */
 
 const EVIDENCE = [
-  { value: "23", label: "FDA food categories mapped" },
-  { value: "1", label: "API call for FDA-ready export" },
-  { value: "24hr", label: "Recall window — fully covered" },
-  { value: "EPCIS 2.0", label: "Native format, no conversion" },
+  { value: "48hr", label: "Average time to first compliant export" },
+  { value: "100%", label: "of FSMA 204 CTEs covered" },
+  { value: "24hr", label: "Recall response — fully automated" },
+  { value: "EPCIS 2.0", label: "FDA-native format, zero conversion" },
 ];
 
 const FREE_TOOLS = [
@@ -69,18 +78,18 @@ export default function RegEngineLanding() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <Link
-                href="/pricing"
+                href="/retailer-readiness"
                 className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px]"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Join the Founding Cohort — 50% Off for Life</span>
+                <span className="relative">Get Your Free Readiness Assessment</span>
                 <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
               </Link>
               <Link
-                href="/retailer-readiness"
+                href="/walkthrough"
                 className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
               >
-                Free Readiness Assessment
+                See How It Works
               </Link>
             </div>
           </div>
@@ -136,12 +145,33 @@ export default function RegEngineLanding() {
                 Export ready to send
               </span>
               <Link
-                href="/pricing"
+                href="/retailer-readiness"
                 className="group font-mono text-[0.72rem] font-semibold bg-[var(--re-brand)] text-white px-4 py-2.5 rounded-md transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(16,185,129,0.25)] text-center min-h-[44px] flex items-center justify-center"
               >
-                Join Founding Cohort — 50% Off for Life <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 ml-1">→</span>
+                Check Your Readiness <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 ml-1">→</span>
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOUNDER TRUST STRIP ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-8">
+        <div className="flex items-start gap-4 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 sm:p-6">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[var(--re-brand)]/10 border-2 border-[var(--re-brand)]/30 flex items-center justify-center flex-shrink-0">
+            <span className="text-lg sm:text-xl font-serif font-bold text-[var(--re-brand)]">CS</span>
+          </div>
+          <div>
+            <p className="text-[0.95rem] sm:text-[1.05rem] text-[var(--re-text-primary)] leading-relaxed">
+              &ldquo;I&apos;m Chris Sellers, the founder. I work directly with every company in our founding cohort.
+              You&apos;ll get a dedicated Slack channel, same-day responses, and my cell phone number.&rdquo;
+            </p>
+            <p className="text-[0.8rem] text-[var(--re-text-muted)] mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>Christopher Sellers, Founder &amp; CEO</span>
+              <Link href="/contact" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors font-medium">
+                Book a call →
+              </Link>
+            </p>
           </div>
         </div>
       </section>
@@ -161,6 +191,94 @@ export default function RegEngineLanding() {
           ))}
         </div>
       </div>
+
+      {/* ── BUILT ON STRIP ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 sm:py-10">
+        <p className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.1em] mb-4 text-center">
+          Built on standards you can audit
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
+          {CREDIBILITY.map((c) => (
+            <div key={c.label} className="flex items-center gap-2 text-[var(--re-text-secondary)]">
+              <c.icon className="h-4 w-4 text-[var(--re-text-muted)]" />
+              <span className="text-[0.8rem] sm:text-[0.85rem] font-medium">{c.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── WHO THIS IS FOR ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          Is this you?
+        </p>
+        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-8 max-w-[640px]">
+          Built for mid-size food suppliers who can&apos;t afford to fail an audit.
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 sm:p-6">
+            <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-4 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
+              Good fit
+            </h3>
+            <ul className="space-y-2.5 text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
+              <li>Mid-size food manufacturer or distributor ($5M&ndash;$250M)</li>
+              <li>Tracking traceability in spreadsheets, email, or paper</li>
+              <li>Shipping to Walmart, Kroger, Costco, or similar retailers</li>
+              <li>Need to prove FSMA 204 compliance but don&apos;t have a system yet</li>
+            </ul>
+          </div>
+          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 sm:p-6">
+            <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-4 flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-[var(--re-text-muted)] flex-shrink-0" />
+              Not for you (yet)
+            </h3>
+            <ul className="space-y-2.5 text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
+              <li>Enterprise with an existing traceability platform (SAP, TraceLink)</li>
+              <li>Pre-revenue startup not yet shipping product</li>
+              <li>Restaurant or food service (FSMA 204 applies to manufacturing/distribution)</li>
+              <li>Already passing retailer audits with your current system</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* ── DATA TRANSFORM DEMO ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          See what happens to bad data
+        </p>
+        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+          Messy CSV in. Defensible FDA package out.
+        </h2>
+        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
+          This is real. Missing fields, duplicate lots, inconsistent supplier names — the kind of data you actually get. Watch RegEngine catch it all.
+        </p>
+        <DataTransformDemo />
+        <div className="mt-8 text-center">
+          <Link
+            href="/walkthrough"
+            className="inline-flex items-center gap-2 text-[0.85rem] font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors"
+          >
+            See the full 24-hour FDA response walkthrough
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </section>
+
+      {/* ── LIVE SANDBOX ── */}
+      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-12 sm:pb-20">
+        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
+          Try it yourself — no signup required
+        </p>
+        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+          Paste your data. See what breaks.
+        </h2>
+        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
+          Drop your CSV below and RegEngine will evaluate it against all 25 FSMA 204 rules in real time. Nothing is stored.
+        </p>
+        <SandboxUpload />
+      </section>
 
       {/* ── FREE TOOLS ── */}
       <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">

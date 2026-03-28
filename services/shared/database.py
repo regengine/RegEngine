@@ -77,13 +77,28 @@ def retry_with_jitter(func, max_retries=3, base_delay=0.1):
             time.sleep(delay)
 
 # Engine initialization
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://regengine:regengine@postgres:5432/regengine")
+_DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
+from shared.env import is_production
+_is_prod = is_production()
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+if not DATABASE_URL:
+    if _is_prod:
+        raise ValueError(
+            "DATABASE_URL environment variable must be set in production. "
+            "Refusing to start with default credentials."
+        )
+    logger.warning(
+        "database_url_default",
+        msg="DATABASE_URL not set — using dev default. Do NOT use in production.",
+    )
+    DATABASE_URL = _DEV_DATABASE_URL
 engine = create_engine(
     DATABASE_URL,
     pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
     max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+    pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
     pool_pre_ping=True,
-    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+    pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
 )
 
 db_pool_checkedout.set_function(lambda: engine.pool.checkedout())

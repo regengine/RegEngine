@@ -1,0 +1,5 @@
+traceability_lot_code,product_description,quantity,unit_of_measure,receive_date,receiving_location,receiving_gln,immediate_previous_source,temperature_celsius,reference_document
+LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-15,MegaMart Distribution Center,0061414100045,FreshCut Processing,3.1,RCV-WFM-2026-0314-001
+LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,795,cases,2026-03-15,Premier Grocery Warehouse,0061414100052,FreshCut Processing,3.4,RCV-WFM-2026-0314-002
+LOT-ROM-2026-0312B-PK,Chopped Romaine 12oz Bag,2780,bags,2026-03-15,MegaMart Distribution Center,0061414100045,FreshCut Processing,2.9,RCV-WFM-2026-0314-003
+LOT-ROM-2026-0311C-PK,Romaine Hearts 3-Pack Retail,1190,cases,2026-03-14,Premier Grocery Warehouse,0061414100052,Pacific Coast Growers Packhouse,3.2,RCV-WFM-2026-0314-004

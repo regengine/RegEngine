@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { useAuth } from '@/lib/auth-context';
 import {
     LayoutDashboard, Key, BarChart3, BookOpen, LogOut,
     ShieldCheck, Terminal, Code2, Webhook, Package,
     AlertCircle, ChevronDown, ChevronRight, Zap,
-    FileText, ExternalLink,
+    FileText, ExternalLink, Loader2,
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -23,13 +23,13 @@ const NAV_SECTIONS = [
     {
         label: 'Documentation',
         items: [
-            { label: 'Quickstart', href: '/developer/portal/docs', icon: Zap },
-            { label: 'API Reference', href: '/developer/portal/docs/endpoints', icon: BookOpen },
-            { label: 'Authentication', href: '/developer/portal/docs/auth', icon: ShieldCheck },
-            { label: 'Error Codes', href: '/developer/portal/docs/errors', icon: AlertCircle },
-            { label: 'Webhooks', href: '/developer/portal/docs/webhooks', icon: Webhook },
-            { label: 'SDKs & Libraries', href: '/developer/portal/docs/sdks', icon: Package },
-            { label: 'Changelog', href: '/developer/portal/docs/changelog', icon: FileText },
+            { label: 'Quickstart', href: '/docs', icon: Zap },
+            { label: 'API Reference', href: '/docs/api', icon: BookOpen },
+            { label: 'Authentication', href: '/docs/authentication', icon: ShieldCheck },
+            { label: 'Error Codes', href: '/docs/errors', icon: AlertCircle },
+            { label: 'Webhooks', href: '/docs/webhooks', icon: Webhook },
+            { label: 'SDKs & Libraries', href: '/docs/sdks', icon: Package },
+            { label: 'Changelog', href: '/docs/changelog', icon: FileText },
         ],
     },
     {
@@ -44,13 +44,29 @@ const NAV_SECTIONS = [
 export default function DeveloperPortalLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
-    const supabase = createSupabaseBrowserClient();
+    const { isAuthenticated, isHydrated, logout } = useAuth();
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-    async function handleLogout() {
-        await supabase.auth.signOut();
-        router.push('/developer/login');
+    // Redirect to main login if not authenticated
+    useEffect(() => {
+        if (isHydrated && !isAuthenticated) {
+            router.replace('/login?next=/developer/portal');
+        }
+    }, [isHydrated, isAuthenticated, router]);
+
+    function handleLogout() {
+        logout();
+        router.push('/login');
         router.refresh();
+    }
+
+    // Show loading while hydrating or redirecting
+    if (!isHydrated || !isAuthenticated) {
+        return (
+            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--re-surface-base)' }}>
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} />
+            </div>
+        );
     }
 
     function toggleSection(label: string) {

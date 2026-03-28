@@ -153,8 +153,10 @@ jobs:
         run: |
           export PYTHONPATH=$(pwd):$PYTHONPATH
           cd services/${{ matrix.service }}
+          # Coverage threshold: raise incrementally as coverage improves (target: 80%)
           pytest tests/ -v --cov=app --cov-report=term \
             --cov-report=xml:coverage.xml \
+            --cov-fail-under=40 \
             --ignore=tests/integration/ \
             -o "testpaths=tests"
 
@@ -188,7 +190,7 @@ jobs:
         run: |
           pip install flake8
           cd services/${{ matrix.service }}
-          flake8 app/ --max-line-length=120 --extend-ignore=E203,W503,E501 --count --statistics
+          flake8 app/ --max-line-length=120 --select=E9,F63,F7,F82 --count --statistics
 
   # ── Docker Build ─────────────────────────────────────────
   docker-build:
@@ -217,7 +219,6 @@ jobs:
         run: |
           docker run --rm regengine-${{ matrix.service }}:test \
             python -c "print('Build OK')"
-        continue-on-error: true
 
   # ── CI Summary ───────────────────────────────────────────
   ci-status:

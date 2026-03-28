@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 
 // force-dynamic ensures this proxy runs as a serverless function on every request.
 // CI no longer uses static export.
 export const dynamic = 'force-dynamic';
 
-const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
-const GRAPH_SERVICE_URL = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
+function guardUrl(envVar: string, fallback: string): string {
+    const url = process.env[envVar] || fallback;
+    const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+    if (onVercel && url.includes('.railway.internal')) {
+        console.warn(`[proxy/fsma] ${envVar} points to internal Railway URL — unreachable from Vercel.`);
+        return fallback;
+    }
+    return url;
+}
+const COMPLIANCE_URL = guardUrl('COMPLIANCE_SERVICE_URL', 'http://localhost:8500');
+const GRAPH_SERVICE_URL = guardUrl('GRAPH_SERVICE_URL', 'http://localhost:8200');
 
 async function proxyRequest(
     request: NextRequest,
@@ -14,6 +23,14 @@ async function proxyRequest(
     method: string
 ) {
     try {
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
+
+        // Validate Supabase session tokens (expired/revoked sessions get 401)
+        const sessionError = await validateProxySession(request);
+        if (sessionError) return sessionError;
+
         const path = sanitizePath(pathParts);
         if (!path) {
             return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
@@ -21,8 +38,14 @@ async function proxyRequest(
         const url = new URL(request.url);
         const queryString = url.search;
 
-        const apiKey = request.headers.get('X-RegEngine-API-Key') || '';
-        const tenantId = request.headers.get('X-Tenant-ID') || '';
+        // Read credentials from HTTP-only cookies first, fall back to headers
+        const apiKey = request.cookies.get('re_api_key')?.value
+            || request.headers.get('X-RegEngine-API-Key')
+            || process.env.REGENGINE_API_KEY
+            || '';
+        const tenantId = request.cookies.get('re_tenant_id')?.value
+            || request.headers.get('X-Tenant-ID')
+            || '';
 
         const fetchOptions: RequestInit = {
             method,
@@ -70,6 +93,7 @@ async function proxyRequest(
             );
         }
 
+        console.info(`[proxy/fsma] ${method} ${path} → ${response.status}`);
         return NextResponse.json(data);
 
     } catch (error: unknown) {

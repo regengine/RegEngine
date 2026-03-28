@@ -41,6 +41,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before service initialization)
+from shared.error_handling import init_sentry
+init_sentry()
+
 from app.config import get_settings
 from app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
 from app.kafka_producer import get_kafka_producer
@@ -146,7 +150,7 @@ class SchedulerService:
         try:
             self.state_manager.initialize()
             logger.info("state_manager_ready")
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError) as e:
             logger.error("state_manager_init_failed", error=str(e))
             # Continue without state management - will process duplicates
 
@@ -305,7 +309,7 @@ class SchedulerService:
                 success=success,
                 failures=failures,
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("kafka_emission_failed", error=str(e))
 
         # Transform FDA recalls to FSMA events and emit to graph consumer
@@ -321,7 +325,7 @@ class SchedulerService:
                     failures=fsma_failures,
                     topic="fsma.events.extracted",
                 )
-        except Exception as e:
+        except (ValueError, TypeError, KeyError, RuntimeError) as e:
             logger.error("fsma_transformation_failed", error=str(e))
 
         # Send webhook notifications
@@ -333,7 +337,7 @@ class SchedulerService:
                 total=len(results),
                 successful=successful,
             )
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("webhook_notification_failed", error=str(e))
 
         # Log high-priority items
@@ -420,11 +424,93 @@ class SchedulerService:
             replace_existing=True,
         )
 
+        # Deadline monitoring — check every 5 minutes for overdue/critical cases
+        self.scheduler.add_job(
+            self.check_request_deadlines,
+            trigger=IntervalTrigger(minutes=5),
+            id="deadline_monitor",
+            name="FDA Request Deadline Monitor",
+            replace_existing=True,
+        )
+        logger.info("job_scheduled", job_id="deadline_monitor", interval_minutes=5)
+
         logger.info(
             "scheduler_ready",
-            total_jobs=3,
+            total_jobs=4,
             scrapers=list(self.scrapers.keys()),
         )
+
+    def check_request_deadlines(self) -> None:
+        """Check all tenants for overdue/critical FDA request deadlines.
+
+        Queries all active request cases and logs warnings for any that are
+        overdue or approaching their deadline (<2 hours). Designed to run
+        every 5 minutes via APScheduler.
+        """
+        try:
+            from shared.database import SessionLocal
+            from shared.request_workflow import RequestWorkflow
+
+            db = SessionLocal()
+            try:
+                workflow = RequestWorkflow(db)
+
+                # Get all distinct tenant IDs with active cases
+                result = db.execute(
+                    __import__("sqlalchemy").text("""
+                        SELECT DISTINCT tenant_id
+                        FROM fsma.request_cases
+                        WHERE package_status NOT IN ('submitted', 'amended')
+                          AND response_due_at IS NOT NULL
+                    """)
+                )
+                tenant_ids = [str(r[0]) for r in result.fetchall()]
+
+                total_overdue = 0
+                total_critical = 0
+
+                for tid in tenant_ids:
+                    cases = workflow.check_deadline_status(tid)
+                    overdue = [c for c in cases if c["urgency"] == "overdue"]
+                    critical = [c for c in cases if c["urgency"] == "critical"]
+                    total_overdue += len(overdue)
+                    total_critical += len(critical)
+
+                    for case in overdue:
+                        logger.error(
+                            "deadline_overdue",
+                            tenant_id=tid,
+                            case_id=case["request_case_id"],
+                            hours_overdue=abs(case["hours_remaining"]),
+                            status=case["package_status"],
+                            requesting_party=case["requesting_party"],
+                        )
+
+                    for case in critical:
+                        logger.warning(
+                            "deadline_critical",
+                            tenant_id=tid,
+                            case_id=case["request_case_id"],
+                            hours_remaining=case["hours_remaining"],
+                            status=case["package_status"],
+                        )
+
+                if total_overdue > 0 or total_critical > 0:
+                    logger.warning(
+                        "deadline_monitor_summary",
+                        total_overdue=total_overdue,
+                        total_critical=total_critical,
+                        tenants_checked=len(tenant_ids),
+                    )
+                else:
+                    logger.debug(
+                        "deadline_monitor_ok",
+                        tenants_checked=len(tenant_ids),
+                    )
+            finally:
+                db.close()
+        except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
+            logger.error("deadline_monitor_failed", error=str(e))
 
     def run_initial_scrape(self) -> None:
         """Run all scrapers immediately on startup."""
@@ -486,7 +572,7 @@ class SchedulerService:
 
         try:
             self.kafka_producer.close()
-        except Exception as e:
+        except (RuntimeError, ConnectionError, OSError) as e:
             logger.error("kafka_close_failed", error=str(e))
 
         logger.info("scheduler_stopped")
@@ -516,7 +602,15 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(b'{"status":"healthy","service":"scheduler"}')
 
     def _handle_metrics(self) -> None:
-        """Return Prometheus metrics."""
+        """Return Prometheus metrics (requires X-Metrics-Key header)."""
+        expected = os.environ.get("METRICS_API_KEY", "")
+        provided = self.headers.get("X-Metrics-Key", "")
+        if not expected or provided != expected:
+            self.send_response(403)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"detail":"Forbidden"}')
+            return
         content = metrics.get_metrics()
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -558,7 +652,7 @@ def start_health_server(port: int) -> None:
         server = HTTPServer(("0.0.0.0", port), HealthHandler)
         logger.info("health_server_started", port=port)
         server.serve_forever()
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error("health_server_failed", error=str(e))
 
 

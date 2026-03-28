@@ -254,8 +254,10 @@ async def ingest_fsma_event(client: Neo4jClient, event: Dict[str, Any]) -> None:
                     await session.run(Lot.merge_cypher(), tlc=tlc, properties=lot.node_properties)
                     await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=tlc, event_id=event_id)
                     
-                    if lot.assigned_by_cypher():
-                        await session.run(lot.assigned_by_cypher())
+                    assigned_by = lot.assigned_by_cypher()
+                    if assigned_by:
+                        cypher, params = assigned_by
+                        await session.run(cypher, **params)
 
                 # 4. Facility
                 location_id = kdes.get("location_identifier")

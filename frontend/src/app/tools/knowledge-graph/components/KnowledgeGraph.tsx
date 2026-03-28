@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
 import { Spinner } from "@/components/ui/spinner";
+import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { getServiceURL } from "@/lib/api-config";
 import { AlertTriangle, GitBranch, Network, Search } from "lucide-react";
@@ -200,6 +201,7 @@ function collectQueryRows(intent: string, results: Array<Record<string, any>>): 
 }
 
 export function SupplyChainKnowledgeGraphBuilder() {
+    const { apiKey } = useAuth();
     const { tenantId } = useTenant();
     const { toast } = useToast();
     const [seed] = useState(204);
@@ -352,11 +354,10 @@ export function SupplyChainKnowledgeGraphBuilder() {
         const rawQuery = traceabilityQuery.trim();
         if (!rawQuery || queryLoading) return;
 
-        const apiKey = process.env.NEXT_PUBLIC_API_KEY || "";
         if (!apiKey) {
             toast({
                 title: "Missing API key",
-                description: "Set NEXT_PUBLIC_API_KEY before running traceability queries.",
+                description: "Please sign in to run traceability queries.",
                 variant: "destructive",
             });
             return;

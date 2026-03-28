@@ -101,20 +101,22 @@ def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
         return None
     try:
         rows = db.execute(
-            text("SELECT id, name, email, role, status, last_active, invited_at, avatar_initials FROM fsma.tenant_team_members WHERE tenant_id = :tid"),
+            text("SELECT id, name, email, role, status, last_active, invited_at FROM fsma.tenant_team_members WHERE tenant_id = :tid"),
             {"tid": tenant_id}
         ).fetchall()
         members = []
         for row in rows:
+            name = row[1]
+            initials = "".join(w[0].upper() for w in name.split()[:2]) if name else ""
             members.append(TeamMember(
                 id=row[0],
-                name=row[1],
+                name=name,
                 email=row[2],
                 role=row[3],
                 status=row[4],
                 last_active=row[5],
                 invited_at=row[6],
-                avatar_initials=row[7],
+                avatar_initials=initials,
                 is_sample=False,
             ))
         return members
@@ -133,12 +135,12 @@ def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
     try:
         db.execute(
             text("""
-                INSERT INTO fsma.tenant_team_members 
-                (id, tenant_id, name, email, role, status, last_active, invited_at, avatar_initials, is_sample, created_at, updated_at)
-                VALUES (:id, :tid, :name, :email, :role, :status, :active, :invited, :initials, false, now(), now())
-                ON CONFLICT (id) DO UPDATE SET 
+                INSERT INTO fsma.tenant_team_members
+                (id, tenant_id, name, email, role, status, last_active, invited_at, is_sample, created_at)
+                VALUES (:id, :tid, :name, :email, :role, :status, :active, :invited, false, now())
+                ON CONFLICT (id) DO UPDATE SET
                     name = :name, email = :email, role = :role, status = :status,
-                    last_active = :active, invited_at = :invited, avatar_initials = :initials, updated_at = now()
+                    last_active = :active, invited_at = :invited
             """),
             {
                 "id": member.id,
@@ -149,7 +151,6 @@ def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
                 "status": member.status,
                 "active": member.last_active,
                 "invited": member.invited_at,
-                "initials": member.avatar_initials,
             }
         )
         db.commit()

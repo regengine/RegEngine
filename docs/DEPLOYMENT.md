@@ -19,9 +19,9 @@ This guide walks through deploying RegEngine to AWS using Terraform and ECS/Farg
 └──────────┬──────────────┬──────────────┬────────────────┘
            │              │              │
     ┌──────▼──────┐ ┌────▼─────┐ ┌──────▼──────┐
-    │   Admin     │ │ Ingestion│ │ Opportunity │
-    │   API       │ │  Service │ │     API     │
-    │  (ECS)      │ │  (ECS)   │ │   (ECS)     │
+    │   Admin     │ │ Ingestion│ │   Graph    │
+    │   API       │ │  Service │ │  Service   │
+    │  (ECS)      │ │  (ECS)   │ │   (ECS)    │
     └─────────────┘ └────┬─────┘ └──────┬──────┘
                          │               │
             ┌────────────▼───────────────▼───────┐
@@ -109,7 +109,6 @@ aws_region   = "us-east-1"
 ingestion_service_count = 2
 nlp_service_count       = 2
 graph_service_count     = 2
-opportunity_api_count   = 2
 admin_api_count         = 1
 ```
 
@@ -190,8 +189,6 @@ ADMIN_REPO=$(terraform -chdir=infra output -raw ecr_repositories | jq -r '.admin
 INGESTION_REPO=$(terraform -chdir=infra output -raw ecr_repositories | jq -r '.ingestion')
 NLP_REPO=$(terraform -chdir=infra output -raw ecr_repositories | jq -r '.nlp')
 GRAPH_REPO=$(terraform -chdir=infra output -raw ecr_repositories | jq -r '.graph')
-OPPORTUNITY_REPO=$(terraform -chdir=infra output -raw ecr_repositories | jq -r '.opportunity')
-
 # Build and push
 docker build -t $ADMIN_REPO:latest -f services/admin/Dockerfile .
 docker push $ADMIN_REPO:latest
@@ -205,8 +202,6 @@ docker push $NLP_REPO:latest
 docker build -t $GRAPH_REPO:latest -f services/graph/dockerfile .
 docker push $GRAPH_REPO:latest
 
-docker build -t $OPPORTUNITY_REPO:latest -f services/opportunity/dockerfile .
-docker push $OPPORTUNITY_REPO:latest
 ```
 
 ### 4.3 Automated Build Script
@@ -317,7 +312,6 @@ ALB_URL=$(terraform -chdir=infra output -raw alb_url)
 
 curl $ALB_URL/admin/health
 curl $ALB_URL/ingestion/health
-curl $ALB_URL/opportunity/health
 ```
 
 ### 8.2 Functional Test

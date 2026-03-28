@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         title: "Regulatory ROI Calculator — RegEngine",
         description: "Calculate your FSMA 204 automation savings.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/roi-calculator",
+        url: "https://www.regengine.co/tools/roi-calculator",
     },
 };
 

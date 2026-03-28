@@ -4,9 +4,11 @@ Evidence Service - FastAPI Routes
 REST API endpoints for evidence verification.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict
 import logging
+
+from shared.auth import APIKey, require_api_key
 
 from .envelope import (
     EvidenceEnvelopeV3,
@@ -26,7 +28,7 @@ verifier = EvidenceVerifier(envelope_store=envelope_store)
 
 
 @router.post("/verify", response_model=VerificationResult)
-async def verify_evidence(request: VerificationRequest):
+async def verify_evidence(request: VerificationRequest, api_key: APIKey = Depends(require_api_key)):
     """
     Verify evidence envelope integrity.
     
@@ -62,7 +64,7 @@ async def verify_evidence(request: VerificationRequest):
 
 
 @router.get("/chain/{envelope_id}", response_model=VerificationResult)
-async def verify_chain(envelope_id: str):
+async def verify_chain(envelope_id: str, api_key: APIKey = Depends(require_api_key)):
     """
     Verify entire evidence chain from envelope to root.
     
@@ -83,7 +85,7 @@ async def verify_chain(envelope_id: str):
 
 
 @router.post("/envelopes", response_model=EvidenceEnvelopeV3)
-async def create_envelope(envelope: EvidenceEnvelopeV3):
+async def create_envelope(envelope: EvidenceEnvelopeV3, api_key: APIKey = Depends(require_api_key)):
     """
     Create and store a new evidence envelope.
     
