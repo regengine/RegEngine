@@ -26,8 +26,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # Port not exposed to host — services connect via Docker network
 
   admin-api:
     build:
@@ -36,9 +35,13 @@ services:
     ports:
       - "8400:8400"
     environment:
-      - DATABASE_URL=postgresql://regengine:regengine@postgres:5432/regengine
+      - REGENGINE_ENV=development
+      - DATABASE_URL=postgresql://regengine:${POSTGRES_PASSWORD:-regengine}@postgres:5432/regengine
       - REDIS_URL=redis://redis:6379/0
       - ADMIN_MASTER_KEY=${ADMIN_MASTER_KEY}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-mvp-secret-key-not-for-production}
+      - REGENGINE_API_KEY=${REGENGINE_API_KEY}
+      - REGENGINE_API_KEY_TENANT_ID=${REGENGINE_API_KEY_TENANT_ID:-00000000-0000-0000-0000-000000000001}
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,9 +54,13 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - DATABASE_URL=postgresql://regengine:regengine@postgres:5432/regengine
+      - REGENGINE_ENV=development
+      - DATABASE_URL=postgresql://regengine:${POSTGRES_PASSWORD:-regengine}@postgres:5432/regengine
       - REDIS_URL=redis://redis:6379/0
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-mvp-secret-key-not-for-production}
       - REGENGINE_API_KEY=${REGENGINE_API_KEY}
+      - API_KEY=${REGENGINE_API_KEY}
+      - REGENGINE_API_KEY_TENANT_ID=${REGENGINE_API_KEY_TENANT_ID:-00000000-0000-0000-0000-000000000001}
     depends_on:
       postgres:
         condition: service_healthy
