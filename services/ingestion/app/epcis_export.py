@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from app.disclaimers import SAMPLE_EXPORT_DISCLAIMER
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("epcis-export")
@@ -221,10 +222,7 @@ async def export_epcis(
             "dataSource": data_source,
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
-            **({"regengine:disclaimer": (
-                "This export contains illustrative sample data, not actual tenant "
-                "traceability records. Do not submit to FDA or trading partners."
-            )} if data_source == "sample" else {}),
+            **({"regengine:disclaimer": SAMPLE_EXPORT_DISCLAIMER} if data_source == "sample" else {}),
         }
     }
 

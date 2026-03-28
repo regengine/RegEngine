@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.disclaimers import DEMO_DATA_DISCLAIMER
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("recall-report")
@@ -435,10 +436,5 @@ async def generate_report(
             "FSMA Section 204 — Food Traceability Rule",
         ],
         demo_mode=use_demo_mode,
-        demo_disclaimer=(
-            "⚠ DEMO DATA: This report contains illustrative scores and findings "
-            "that are NOT derived from your tenant's actual traceability data. "
-            "Scores, findings, and recommendations are representative examples only. "
-            "Complete your onboarding to see real data."
-        ) if use_demo_mode else None,
+        demo_disclaimer=DEMO_DATA_DISCLAIMER if use_demo_mode else None,
     )
