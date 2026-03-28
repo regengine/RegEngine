@@ -79,7 +79,6 @@ jobs:
             exit 1
           }
           echo "✓ Test collection passed"
-        continue-on-error: true
       
       - name: Verify conftest.py Exists
         run: |
@@ -97,5 +96,4 @@ jobs:
           cd services/${{ matrix.service }}
           # Run only smoke tests
           python3 -m pytest tests/test_smoke*.py -v || true
-        continue-on-error: true
   

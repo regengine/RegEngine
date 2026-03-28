@@ -43,8 +43,8 @@ jobs:
           [ -z "$RAILWAY_SERVICE_ID" ] && missing+=("RAILWAY_SERVICE_ID")
 
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Railway deploy BLOCKED — missing secrets: ${missing[*]}"
-            exit 1
+            echo "::warning::Railway deploy skipped — missing secrets: ${missing[*]}. Railway deploys via its own git integration."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi

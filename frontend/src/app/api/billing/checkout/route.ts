@@ -9,8 +9,9 @@
  * Returns: { checkout_url, session_id, plan, billing_period, amount, currency }
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
-const BILLING_BACKEND_URL = process.env.INGESTION_SERVICE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+const BILLING_BACKEND_URL = process.env.INGESTION_SERVICE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('ingestion');
 
 export async function POST(request: NextRequest) {
     try {
