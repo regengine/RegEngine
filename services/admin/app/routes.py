@@ -176,7 +176,7 @@ async def health():
                 async with await psycopg.AsyncConnection.connect(conn_info) as conn:
                     await conn.execute("SELECT 1")
                 return {"status": "healthy"}
-            except Exception as e:
+            except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as e:
                 return {"status": "unhealthy", "error": str(e)}
         
         checker.add_dependency("postgresql", check_postgres)
@@ -201,7 +201,7 @@ async def health():
 
                 await asyncio.to_thread(_probe)
                 return {"status": "healthy"}
-            except Exception as e:
+            except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as e:
                 return {"status": "unhealthy", "error": str(e)}
 
         checker.add_dependency("neo4j", check_neo4j)
@@ -215,7 +215,7 @@ async def health():
                 r = redis.from_url(redis_url)
                 await r.ping()
                 return {"status": "healthy"}
-            except Exception as e:
+            except (OSError, TimeoutError, ConnectionError, ValueError, ImportError, AttributeError) as e:
                 return {"status": "unhealthy", "error": str(e)}
         
         checker.add_dependency("redis", check_redis)

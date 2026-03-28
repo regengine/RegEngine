@@ -111,7 +111,7 @@ def _get_db_session():
         from shared.database import SessionLocal
 
         db = SessionLocal()
-    except Exception as exc:
+    except (ImportError, RuntimeError, OSError) as exc:
         logger.error("alerts_db_session_init_failed error=%s", str(exc))
         raise HTTPException(status_code=503, detail="Database unavailable")
     return db
@@ -252,7 +252,10 @@ async def get_alerts(
             alerts = _fetch_alerts_from_db(db_session, tenant_id)
         finally:
             db_session.close()
-    except Exception as exc:
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except (RuntimeError, OSError, AttributeError) as exc:
         logger.warning("alerts_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
 
     if severity:

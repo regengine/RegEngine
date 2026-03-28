@@ -28,6 +28,7 @@ import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from app.authz import require_permission
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
@@ -36,6 +37,40 @@ from shared.subscription_guard import require_active_subscription
 logger = logging.getLogger("fda-export")
 
 router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
+
+
+# Response Models
+class ExportHistoryItem(BaseModel):
+    """Individual export record in audit log."""
+    id: str
+    export_type: str
+    query_tlc: Optional[str] = None
+    query_start_date: Optional[str] = None
+    query_end_date: Optional[str] = None
+    record_count: int
+    export_hash: str
+    generated_by: str
+    generated_at: Optional[str] = None
+
+
+class ExportHistoryResponse(BaseModel):
+    """Response for export history endpoint."""
+    tenant_id: str
+    exports: list[ExportHistoryItem]
+    total: int
+
+
+class ExportVerifyResponse(BaseModel):
+    """Response for export verification endpoint."""
+    export_id: str
+    original_hash: str
+    regenerated_hash: str
+    hashes_match: bool
+    original_record_count: int
+    current_record_count: int
+    data_integrity: str
+    original_generated_at: Optional[str] = None
+    verified_at: str
 
 
 # ---------------------------------------------------------------------------
@@ -649,6 +684,7 @@ async def export_all_events(
     "/export/history",
     summary="View FDA export audit log",
     description="Returns the history of all FDA exports generated for this tenant.",
+    response_model=ExportHistoryResponse,
 )
 async def export_history(
     tenant_id: str = Query(..., description="Tenant identifier"),
@@ -935,6 +971,7 @@ async def export_recall_filtered(
         "Re-generate an export with the same parameters and compare its hash "
         "to the original. Proves that the underlying data hasn't been tampered with."
     ),
+    response_model=ExportVerifyResponse,
 )
 async def verify_export(
     export_id: str = Query(..., description="Export log ID to verify"),

@@ -137,6 +137,41 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
                 // check against the backend (/auth/me) will enforce sysadmin.
                 // This is acceptable because /sysadmin page already verifies server-side.
             }
+
+            // Silent refresh: if token expires within 10 minutes, refresh proactively
+            const exp = payload.exp as number | undefined;
+            const TEN_MINUTES = 10 * 60;
+            if (exp && (exp - Math.floor(Date.now() / 1000)) < TEN_MINUTES) {
+                try {
+                    const backendUrl = process.env.ADMIN_API_URL || process.env.NEXT_PUBLIC_API_URL;
+                    if (backendUrl) {
+                        const refreshRes = await fetch(`${backendUrl}/auth/refresh`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${reToken}`,
+                                'Content-Type': 'application/json',
+                            },
+                        });
+                        if (refreshRes.ok) {
+                            const data = await refreshRes.json();
+                            if (data.access_token) {
+                                const response = NextResponse.next({ request });
+                                response.cookies.set('re_access_token', data.access_token, {
+                                    httpOnly: true,
+                                    secure: process.env.NODE_ENV === 'production',
+                                    sameSite: 'lax',
+                                    path: '/',
+                                    maxAge: 60 * 60 * 24, // 24 hours
+                                });
+                                return response;
+                            }
+                        }
+                    }
+                } catch {
+                    // Refresh failed silently — let the current (still valid) token through
+                }
+            }
+
             return NextResponse.next({ request });
         }
         // Token existed but was invalid/expired

@@ -34,7 +34,7 @@ class ReviewItemsResponse(BaseModel):
     """Response containing list of review items."""
     items: List[ReviewItem]
     total: int
-    page: int
+    offset: int
     limit: int
 
 
@@ -47,15 +47,15 @@ def _get_tracker():
 @router.get("/review/hallucinations", response_model=ReviewItemsResponse)
 async def get_review_queue(
     status_filter: Optional[str] = Query("PENDING", description="Filter by status"),
-    limit: int = Query(50, le=100, description="Max items to return"),
-    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(default=50, ge=1, le=1000, description="Max items to return"),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     api_key: APIKey = Depends(require_api_key),
 ) -> ReviewItemsResponse:
     """Get items pending curator review.
-    
+
     Returns low-confidence NLP extractions that require human validation.
     Items can be approved or rejected through the curator interface.
-    
+
     Powered by the hallucination tracker database backend.
     """
     tracker = _get_tracker()
@@ -64,9 +64,10 @@ async def get_review_queue(
             status=status_filter,
             tenant_id=api_key.tenant_id,
             limit=limit,
+            offset=offset,
             cursor=None,
         )
-        
+
         items = [
             ReviewItem(
                 review_id=item["review_id"],
@@ -79,14 +80,14 @@ async def get_review_queue(
             )
             for item in result.get("items", [])
         ]
-        
+
         return ReviewItemsResponse(
             items=items,
-            total=len(items),
-            page=page,
+            total=result.get("total", len(items)),
+            offset=offset,
             limit=limit,
         )
-    except Exception as e:
+    except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
         # If tracker is not initialized or DB is unavailable, return empty
         import structlog
         logger = structlog.get_logger("review")
@@ -94,7 +95,7 @@ async def get_review_queue(
         return ReviewItemsResponse(
             items=[],
             total=0,
-            page=page,
+            offset=offset,
             limit=limit,
         )
 

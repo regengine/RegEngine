@@ -61,7 +61,7 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
             }
         finally:
             db.close()
-    except Exception as exc:
+    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
         logger.warning("recall_scoring_query_failed error=%s", str(exc))
         return None
 

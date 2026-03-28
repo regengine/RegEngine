@@ -99,6 +99,70 @@ class ExportRequest(BaseModel):
     date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
 
 
+class QuantityListItem(BaseModel):
+    """Quantity item in EPCIS event extension."""
+    epcClass: str
+    quantity: float
+    uom: str
+
+
+class ExtensionData(BaseModel):
+    """Extension data in EPCIS event."""
+    quantityList: list[QuantityListItem]
+    sourceList: Optional[list[dict]] = None
+    destinationList: Optional[list[dict]] = None
+    ilmd: Optional[dict] = None
+
+
+class EpcisEvent(BaseModel):
+    """Single EPCIS event."""
+    type: str
+    eventTime: str
+    eventTimeZoneOffset: str
+    action: str
+    bizStep: str
+    readPoint: Optional[dict] = None
+    bizLocation: Optional[dict] = None
+    disposition: Optional[str] = None
+    epcList: Optional[list[str]] = None
+    extension: Optional[ExtensionData] = None
+
+
+class EpcisExportMetadata(BaseModel):
+    """Metadata about EPCIS export."""
+    tenantId: str
+    exportFormat: str
+    generatedAt: str
+    eventsCount: int
+    dataSource: str
+    integrityVerified: bool
+    chainHashVerified: bool
+
+
+class EpcisExportResponse(BaseModel):
+    """GS1 EPCIS 2.0 JSON-LD export response."""
+    id: str
+    type: str
+    schemaVersion: str
+    creationDate: str
+    epcisBody: dict
+    regengine_exportMetadata: Optional[EpcisExportMetadata] = None
+
+
+class ExportFormat(BaseModel):
+    """Available export format."""
+    id: str
+    name: str
+    description: str
+    content_type: str
+    retailers: list[str]
+
+
+class ExportFormatsResponse(BaseModel):
+    """Response listing available export formats."""
+    formats: list[ExportFormat]
+
+
 # Sample EPCIS 2.0 event data (in production, pulled from database)
 SAMPLE_EPCIS_EVENTS = [
     {
@@ -157,6 +221,7 @@ SAMPLE_EPCIS_EVENTS = [
         "Generates a GS1 EPCIS 2.0 compliant JSON-LD document containing all "
         "traceability events. Compatible with Walmart, Kroger, and Costco portals."
     ),
+    response_model=EpcisExportResponse,
 )
 async def export_epcis(
     request: ExportRequest,
@@ -298,6 +363,7 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
 @router.get(
     "/formats",
     summary="List available export formats",
+    response_model=ExportFormatsResponse,
 )
 async def list_export_formats():
     """List available export formats and their descriptions."""

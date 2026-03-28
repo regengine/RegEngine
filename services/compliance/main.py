@@ -27,6 +27,10 @@ app = FastAPI(
     ),
 )
 
+# Request ID correlation middleware (distributed tracing)
+from shared.middleware import RequestIDMiddleware
+app.add_middleware(RequestIDMiddleware)
+
 
 @app.get("/health")
 async def health_check() -> dict:

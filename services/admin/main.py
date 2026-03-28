@@ -157,6 +157,10 @@ app.add_middleware(
 )
 # app.add_middleware(CorrelationIdMiddleware)
 
+# Request ID correlation middleware (distributed tracing)
+from shared.middleware import RequestIDMiddleware
+app.add_middleware(RequestIDMiddleware)
+
 # Audit context middleware — captures IP, UA, request_id for tamper-evident audit trail
 from app.audit_middleware import AuditContextMiddleware
 app.add_middleware(AuditContextMiddleware)

@@ -98,7 +98,7 @@ async def check_service_health(client, name: str, url: str) -> ServiceHealth:
                 await asyncio.sleep(1)
                 continue
             return ServiceHealth(name=name, status="unhealthy", details={"error": f"Status {response.status_code}"})
-        except Exception as e:
+        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as e:
             if attempt == 0:
                 await asyncio.sleep(1)
                 continue
@@ -121,7 +121,7 @@ def _resolve_tenant(db: Session) -> str:
         tid = row[0] if row else None
         if tid:
             return tid
-    except Exception:
+    except (RuntimeError, OSError, ValueError, KeyError):
         pass
     return "5946c58f-ddf9-4db0-9baa-acb11c6fce91"  # fallback: demo tenant
 
@@ -188,7 +188,7 @@ async def get_system_metrics(
                 SupplierCTEEventModel.tenant_id == tenant_uuid,
             )
         ).scalar() or 0
-    except Exception as exc:
+    except (RuntimeError, OSError, ValueError, KeyError, ImportError, AttributeError) as exc:
         logger.warning("supplier_metrics_query_failed", error=str(exc))
 
     # Use the higher of ingestion vs supplier counts (they're separate data paths)
@@ -209,7 +209,7 @@ async def get_system_metrics(
             {"tid": tenant},
         ).fetchone()
         open_alert_count = alert_row[0] if alert_row else 0
-    except Exception as exc:
+    except (RuntimeError, OSError, ValueError, KeyError) as exc:
         logger.warning("metrics_alert_count_failed", error=str(exc))
 
     return SystemMetricsResponse(

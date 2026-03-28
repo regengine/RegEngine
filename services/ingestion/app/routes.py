@@ -88,7 +88,13 @@ def get_db_manager() -> Optional[DatabaseManager]:
         manager.connect()
         logger.info("db_connected_successfully")
         return manager
-    except Exception as e:
+    except (OSError, TimeoutError, ValueError, TypeError, RuntimeError, AttributeError) as e:
+        # OSError: network/connection errors
+        # TimeoutError: database connection timeout
+        # ValueError: invalid configuration values
+        # TypeError: invalid config types
+        # RuntimeError: database initialization failures
+        # AttributeError: missing DatabaseManager methods
         logger.error("db_init_failed", error=str(e), url=db_url)
         return None
 
@@ -231,24 +237,41 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(webhook, json={
-                        "job_id": job_id, 
-                        "status": "completed", 
+                        "job_id": job_id,
+                        "status": "completed",
                         "regulation": name,
                         "sections": count
                     })
                 logger.info("ingestion_webhook_sent", job_id=job_id, webhook=webhook)
-            except Exception as e:
+            except (OSError, TimeoutError, ValueError, TypeError, RuntimeError) as e:
+                # OSError: network errors in webhook delivery
+                # TimeoutError: webhook request timeout
+                # ValueError: invalid JSON payload
+                # TypeError: invalid parameter types
+                # RuntimeError: httpx client failures
                 logger.error("ingestion_webhook_failed", job_id=job_id, error=str(e))
 
-    except Exception as e:
+    except (OSError, TimeoutError, ValueError, TypeError, RuntimeError, AttributeError, KeyError) as e:
+        # OSError: file/network I/O errors
+        # TimeoutError: database/webhook operation timeouts
+        # ValueError: invalid data during ingestion
+        # TypeError: type mismatches in processing
+        # RuntimeError: ingestion pipeline failures
+        # AttributeError: missing method/attribute in processors
+        # KeyError: missing required fields in regulations
         logger.error("regulation_ingestion_background_failed", job_id=job_id, error=str(e))
         r.setex(f"ingest:status:{job_id}", 7200, f"failed: {str(e)}")
         if webhook:
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(e)})
-            except Exception as e:
-                logger.warning("webhook_notification_failed", error=str(e))
+            except (OSError, TimeoutError, ValueError, TypeError, RuntimeError) as webhook_error:
+                # OSError: network errors in webhook delivery
+                # TimeoutError: webhook request timeout
+                # ValueError: invalid JSON payload
+                # TypeError: invalid parameter types
+                # RuntimeError: httpx client failures
+                logger.warning("webhook_notification_failed", error=str(webhook_error))
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
@@ -352,22 +375,28 @@ async def get_document_analysis(document_id: str):
 
 
 @router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])
-async def get_discovery_queue():
-    """Retrieve all items in the manual discovery queue."""
+async def get_discovery_queue(
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of items to return"),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip"),
+):
+    """Retrieve items in the manual discovery queue with pagination."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)
-    
+
     # manual_upload_queue is a Redis list
-    items = r.lrange("manual_upload_queue", 0, -1)
+    # Get total count and slice for pagination
+    total_count = r.llen("manual_upload_queue")
+    items = r.lrange("manual_upload_queue", offset, offset + limit - 1)
+
     results = []
     for i, item in enumerate(items):
         try:
             val = item.decode("utf-8")
             if ":" in val:
                 body, url = val.split(":", 1)
-                results.append(DiscoveryQueueItem(body=body, url=url, index=i))
+                results.append(DiscoveryQueueItem(body=body, url=url, index=offset + i))
         except Exception as e:
-            logger.debug("discovery_queue_parse_skip", index=i, error=str(e))
+            logger.debug("discovery_queue_parse_skip", index=offset + i, error=str(e))
             continue
     return results
 

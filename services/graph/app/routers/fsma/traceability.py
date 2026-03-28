@@ -44,7 +44,101 @@ router = APIRouter(tags=["Traceability"])
 logger = structlog.get_logger("fsma-traceability")
 
 
-@router.get("/trace/forward/{tlc}")
+# Response Models
+class TraceForwardResponse(BaseModel):
+    """Response for forward traceability trace."""
+    lot_id: str
+    direction: str
+    facilities: list
+    events: list
+    downstream_lots: list
+    total_quantity: Optional[float] = None
+    query_time_ms: int
+    hop_count: int
+    time_violations: Optional[list] = None
+    risk_flags: Optional[list] = None
+
+
+class TraceBackwardResponse(BaseModel):
+    """Response for backward traceability trace."""
+    lot_id: str
+    direction: str
+    facilities: list
+    events: list
+    source_lots: list
+    total_quantity: Optional[float] = None
+    query_time_ms: int
+    hop_count: int
+
+
+class TimelineEvent(BaseModel):
+    """Event in a lot timeline."""
+    event_id: Optional[str] = None
+    event_type: Optional[str] = None
+    event_date: Optional[str] = None
+    facility: Optional[dict] = None
+
+
+class TimelineResponse(BaseModel):
+    """Response for lot timeline endpoint."""
+    lot_id: str
+    events: list[TimelineEvent]
+
+
+class RegulationsResponse(BaseModel):
+    """Response for regulations endpoint."""
+    lot_tlc: str
+    regulations: list
+
+
+class ImpactedLotsResponse(BaseModel):
+    """Response for impacted lots endpoint."""
+    obligation_id: str
+    impacted_lots: list
+
+
+class LinkResponse(BaseModel):
+    """Individual link in obligation linking response."""
+    obligation_id: str
+    lot_id: str
+    link_type: Optional[str] = None
+    confidence: Optional[float] = None
+
+
+class LinkObligationResponse(BaseModel):
+    """Response for obligation linking endpoint."""
+    status: str
+    links_created: int
+    links: list[LinkResponse]
+
+
+class EventFilter(BaseModel):
+    """Event search filters in response."""
+    start_date: str
+    end_date: str
+    product_contains: Optional[str] = None
+    facility_contains: Optional[str] = None
+    cte_type: Optional[str] = None
+
+
+class SearchEventsResponse(BaseModel):
+    """Response for event search endpoint."""
+    count: int
+    events: list
+    has_more: bool
+    next_cursor: Optional[str] = None
+    filters: EventFilter
+
+
+class LogEventResponse(BaseModel):
+    """Response for mobile event logging endpoint."""
+    status: str
+    event_id: str
+    tlc: str
+    message: str
+
+
+@router.get("/trace/forward/{tlc}", response_model=TraceForwardResponse)
 async def trace_forward_endpoint(
     request: Request,
     tlc: str,
@@ -109,7 +203,7 @@ async def trace_forward_endpoint(
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/trace/backward/{tlc}")
+@router.get("/trace/backward/{tlc}", response_model=TraceBackwardResponse)
 async def trace_backward_endpoint(
     request: Request,
     tlc: str,
@@ -161,7 +255,7 @@ async def trace_backward_endpoint(
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.get("/timeline/{tlc}")
+@router.get("/timeline/{tlc}", response_model=TimelineResponse)
 async def lot_timeline_endpoint(
     request: Request,
     tlc: str,
@@ -185,7 +279,7 @@ async def lot_timeline_endpoint(
     except Exception as e:
         logger.exception("timeline_error", tlc=tlc, error=str(e))
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
-@router.get("/traceability/regulations")
+@router.get("/traceability/regulations", response_model=RegulationsResponse)
 async def get_governing_regulations_endpoint(
     lot_tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -210,7 +304,7 @@ async def get_governing_regulations_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/traceability/impacted-lots")
+@router.get("/traceability/impacted-lots", response_model=ImpactedLotsResponse)
 async def get_impacted_lots_endpoint(
     obligation_id: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -235,7 +329,7 @@ async def get_impacted_lots_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/traceability/link/{obligation_id}")
+@router.post("/traceability/link/{obligation_id}", response_model=LinkObligationResponse)
 async def link_obligation_endpoint(
     obligation_id: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -260,7 +354,7 @@ async def link_obligation_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/search/events")
+@router.get("/search/events", response_model=SearchEventsResponse)
 async def search_traceability_events(
     start_date: Optional[str] = Query(
         default=None,
@@ -363,7 +457,7 @@ class TraceabilityEventRequest(BaseModel):
     image_data: Optional[str] = None
 
 
-@router.post("/event")
+@router.post("/event", response_model=LogEventResponse)
 async def log_traceability_event(
     request: TraceabilityEventRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
