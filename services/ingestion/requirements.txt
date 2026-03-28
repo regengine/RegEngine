@@ -77,8 +77,8 @@ pypdf==6.9.2
 python-docx==0.8.11
 docx2txt==0.8
 neo4j==5.15.0
-redis==5.0.0
-httpx==0.25.0
+# redis: pinned above (line 14) as ==5.0.1
+# httpx: pinned above (line 12) as httpx[http2]==0.25.0
 stripe==11.6.0
 Pillow==12.1.1
 pyzbar==0.1.9
