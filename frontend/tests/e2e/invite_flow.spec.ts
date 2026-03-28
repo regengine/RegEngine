@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 // Constants for test
 const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = 'password';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-placeholder';
 
 test.describe('User Invite Flow', () => {
 
@@ -35,7 +35,7 @@ test.describe('User Invite Flow', () => {
         await page.goto('/login');
 
         await page.fill('input[type="email"]', 'admin@example.com');
-        await page.fill('input[type="password"]', 'password');
+        await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         // Verify redirect to dashboard/sysadmin
@@ -101,9 +101,10 @@ test.describe('User Invite Flow', () => {
 
         // Fill Registration
         // Use robust selectors based on page inspection
+        const testPassword = process.env.TEST_PASSWORD || 'test-placeholder';
         await page2.fill('input[placeholder="John Doe"]', 'E2E User');
-        await page2.locator('input[type="password"]').first().fill('StrongPass123!');
-        await page2.locator('input[type="password"]').last().fill('StrongPass123!');
+        await page2.locator('input[type="password"]').first().fill(testPassword);
+        await page2.locator('input[type="password"]').last().fill(testPassword);
 
         await page2.click('button:has-text("Create Account")');
 
@@ -117,7 +118,7 @@ test.describe('User Invite Flow', () => {
 
         // Login
         await page2.fill('input[type="email"]', inviteEmail);
-        await page2.fill('input[type="password"]', 'StrongPass123!');
+        await page2.fill('input[type="password"]', testPassword);
         await page2.click('button[type="submit"]');
 
         // Verify Dashboard Access

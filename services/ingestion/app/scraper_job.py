@@ -58,7 +58,7 @@ async def run_state_scrape_job(
         if event:
             logger.info("scrape_job_success", event_id=event.event_id)
             
-    except Exception as exc:
+    except (OSError, IOError, AttributeError, TypeError, ValueError) as exc:
         logger.error("scrape_job_failed", adaptor=adaptor_name, url=url, error=str(exc))
         # Store job failure status in Redis for status tracking
         try:
@@ -78,7 +78,7 @@ async def run_state_scrape_job(
                     "failed_at": datetime.utcnow().isoformat()
                 })
             )
-        except Exception as redis_exc:
+        except (OSError, IOError, AttributeError, TypeError, ValueError) as redis_exc:
             logger.debug("job_status_store_failed", error=str(redis_exc))
 
 async def run_generic_scrape_job(
@@ -95,5 +95,5 @@ async def run_generic_scrape_job(
         # For now, we call it. It is async.
         await _GENERIC_SCRAPER.fetch_document(url, jurisdiction_code, tenant_id=tenant_id)
         logger.info("generic_scrape_job_success", url=url)
-    except Exception as exc:
+    except (OSError, IOError, AttributeError, TypeError, ValueError) as exc:
         logger.error("generic_scrape_job_failed", url=url, error=str(exc))

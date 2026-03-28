@@ -60,7 +60,11 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         except HTTPException:
             # Let the exception handler deal with it
             raise
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, KeyError) as e:
+            # ValueError: UUID parsing or header validation failures
+            # TypeError: unexpected type conversions during extraction
+            # AttributeError: missing request attributes
+            # KeyError: missing JWT claims
             logger.error(f"Error extracting tenant context: {e}")
             # Continue without tenant_id - let route handlers decide if required
             request.state.tenant_id = None

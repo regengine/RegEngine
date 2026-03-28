@@ -67,16 +67,16 @@ async def get_current_user(
                 tenant_id = sb_user.user_metadata.get("tenant_id")
                 
                 # Check if this user exists in our local DB (Hybrid approach)
-                # If not, auto-provision? Or fail? 
+                # If not, auto-provision? Or fail?
                 # For now, let's assume we map IDs 1:1.
-        except Exception as e:
+        except (OSError, TimeoutError, ConnectionError, ValueError, AttributeError) as e:
             logger.warning("supabase_auth_failed", error=str(e))
-            # Fallthrough to local JWT if Supabase fails? 
-            # Or strict fail? 
-            # For migration safety: Fallthrough only if explicitly debugging.
-            pass
-            
+            # In production, fail closed — do not fall through to local JWT
+            if os.getenv("REQUIRE_SUPABASE_AUTH", "").lower() in ("true", "1", "yes"):
+                raise credentials_exception
+
     # 2. Fallback to Local JWT (Legacy / Dev Path)
+    # Only reached if Supabase returned no user AND REQUIRE_SUPABASE_AUTH is not set
     if not user_id:       
         try:
             payload = decode_access_token(token)
@@ -123,8 +123,8 @@ async def get_current_user(
             if not membership.is_active:
                  logger.warning("deactivated_user_access_attempt", user_id=user_id, tenant_id=tenant_id)
                  raise credentials_exception
-                 
-        except Exception as e:
+
+        except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
             logger.error("tenant_context_error", error=str(e))
             raise credentials_exception
 

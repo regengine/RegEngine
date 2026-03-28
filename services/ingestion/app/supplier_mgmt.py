@@ -27,7 +27,7 @@ def _get_db():
     try:
         from shared.database import SessionLocal
         return SessionLocal()
-    except Exception as exc:
+    except (ImportError, RuntimeError, OSError) as exc:
         logger.warning("db_unavailable error=%s", str(exc))
         return None
 
@@ -101,7 +101,7 @@ def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
                 is_sample=False,
             ))
         return suppliers
-    except Exception as exc:
+    except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError) as exc:
         logger.warning("db_read_failed error=%s", str(exc))
         return None
     finally:
@@ -142,7 +142,7 @@ def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
         )
         db.commit()
         return True
-    except Exception as exc:
+    except (ValueError, TypeError, RuntimeError, OSError, AttributeError) as exc:
         logger.warning("db_write_failed error=%s", str(exc))
         if db:
             db.rollback()

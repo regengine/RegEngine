@@ -90,6 +90,6 @@ def send(topic: str, payload: dict, key: Optional[str] = None) -> None:
     except RuntimeError as exc:
         logger.warning("kafka_client_unavailable", topic=topic, error=str(exc))
         raise HTTPException(status_code=503, detail="Kafka client unavailable") from exc
-    except Exception as exc:
+    except (OSError, IOError, TypeError, ValueError, AttributeError) as exc:
         logger.error("kafka_send_failed", topic=topic, error=str(exc))
         raise HTTPException(status_code=500, detail="Kafka publish failed") from exc

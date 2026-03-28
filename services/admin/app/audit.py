@@ -152,7 +152,7 @@ class AuditLogger:
             )
             return entry.id
 
-        except Exception as e:
+        except (ValueError, RuntimeError, OSError, AttributeError, TypeError, KeyError) as e:
             logger.error(
                 "audit_logging_failed",
                 error=str(e),

@@ -25,7 +25,7 @@ def _get_db():
     try:
         from shared.database import SessionLocal
         return SessionLocal()
-    except Exception as exc:
+    except (ImportError, RuntimeError, OSError) as exc:
         logger.warning("db_unavailable error=%s", str(exc))
         return None
 
@@ -123,7 +123,7 @@ def _db_get_preferences(tenant_id: str) -> Optional[NotificationPreferences]:
         prefs_data = json.loads(row[0]) if row[0] else {}
         prefs_data["tenant_id"] = tenant_id
         return NotificationPreferences(**prefs_data)
-    except Exception as exc:
+    except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError) as exc:
         logger.warning("db_read_failed error=%s", str(exc))
         return None
     finally:
@@ -147,7 +147,7 @@ def _db_save_preferences(tenant_id: str, prefs: NotificationPreferences) -> bool
         )
         db.commit()
         return True
-    except Exception as exc:
+    except (ValueError, TypeError, RuntimeError, OSError, AttributeError) as exc:
         logger.warning("db_write_failed error=%s", str(exc))
         if db:
             db.rollback()

@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import Optional, Dict, Any
 from playwright.async_api import async_playwright
+from shared.url_validation import validate_url, SSRFError
 
 from shared.url_validation import validate_url
 
@@ -16,13 +17,20 @@ async def fetch_with_browser(url: str, timeout: int = 30000) -> Dict[str, Any]:
     Fetch content from a URL using Playwright (Chromium).
     Useful for sites with anti-bot measures or heavy JavaScript.
     """
+    # SSRF protection: validate URL before browser navigation
+    try:
+        url = validate_url(url)
+    except SSRFError as e:
+        logger.warning("ssrf_validation_failed_browser", url=url, error=str(e))
+        raise ValueError(f"URL validation failed: {str(e)}") from e
+
     logger.info("browser_fetch_start", url=url)
-    
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(user_agent=USER_AGENT)
         page = await context.new_page()
-        
+
         try:
             # SSRF validation before navigation
             validate_url(url)
@@ -53,7 +61,7 @@ async def fetch_with_browser(url: str, timeout: int = 30000) -> Dict[str, Any]:
                 "content_type": headers.get("content-type", "text/html")
             }
             
-        except Exception as e:
+        except (OSError, IOError, TimeoutError, AttributeError, TypeError) as e:
             logger.error("browser_fetch_failed", url=url, error=str(e))
             raise e
         finally:

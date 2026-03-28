@@ -14,7 +14,7 @@ import structlog
 
 try:
     from neo4j import GraphDatabase
-except Exception:  # pragma: no cover - defensive import guard
+except (ImportError, AttributeError):  # pragma: no cover - defensive import guard
     GraphDatabase = None
 
 
@@ -153,7 +153,7 @@ class SupplierGraphSync:
         try:
             driver = GraphDatabase.driver(uri, auth=(user, password))
             return cls(enabled=True, driver=driver)
-        except Exception as exc:  # pragma: no cover - runtime resilience
+        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as exc:  # pragma: no cover - runtime resilience
             logger.warning(
                 "supplier_graph_sync_disabled",
                 reason="neo4j_connection_failed",
@@ -168,7 +168,7 @@ class SupplierGraphSync:
         try:
             with self._driver.session() as session:
                 session.run(query, params)
-        except Exception as exc:  # pragma: no cover - runtime resilience
+        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as exc:  # pragma: no cover - runtime resilience
             logger.warning(
                 "supplier_graph_sync_write_failed",
                 error=str(exc),
@@ -185,7 +185,7 @@ class SupplierGraphSync:
                     FACILITY_REQUIRED_CTES_QUERY,
                     {"facility_id": facility_id},
                 ).single()
-        except Exception as exc:  # pragma: no cover - runtime resilience
+        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as exc:  # pragma: no cover - runtime resilience
             logger.warning(
                 "supplier_graph_sync_read_failed",
                 error=str(exc),

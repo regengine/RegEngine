@@ -42,7 +42,7 @@ def redact_connection_url(url: str) -> str:
             auth = f"{username}:***@"
 
         return urlunsplit((parsed.scheme, f"{auth}{host}{port}", parsed.path, "", ""))
-    except Exception:
+    except (ValueError, AttributeError):
         return "<redacted>"
 
 
@@ -499,7 +499,7 @@ class RedisSessionStore:
     
     async def health_check(self) -> bool:
         """Check if Redis is accessible.
-        
+
         Returns:
             True if Redis is responding, False otherwise
         """
@@ -507,6 +507,6 @@ class RedisSessionStore:
             client = await self._get_client()
             await client.ping()
             return True
-        except Exception as e:
+        except (OSError, TimeoutError, ConnectionError, ValueError) as e:
             logger.error("redis_health_check_failed", error=str(e))
             return False

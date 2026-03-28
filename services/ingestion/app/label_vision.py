@@ -213,6 +213,6 @@ async def analyze_label(
     except json.JSONDecodeError as exc:
         logger.error("Vision model returned invalid JSON: %s", exc)
         raise HTTPException(status_code=502, detail="Vision model returned unparseable response")
-    except Exception as exc:
+    except (ImportError, AttributeError, TypeError, ValueError, KeyError, OSError, IOError) as exc:
         logger.error("Vision analysis failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=502, detail=f"Vision analysis failed: {str(exc)}")

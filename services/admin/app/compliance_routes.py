@@ -189,7 +189,7 @@ def get_compliance_status(
         service = ComplianceServiceSync(session)
         status = service.get_status(UUID(tenant_id))
         return ComplianceStatusResponse(**status)
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("get_status_failed", tenant_id=tenant_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -198,10 +198,11 @@ def get_compliance_status(
 def list_alerts(
     tenant_id: str,
     status: Optional[str] = Query(None, description="Filter by status: ACTIVE, ACKNOWLEDGED, RESOLVED"),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of alerts to return"),
+    offset: int = Query(default=0, ge=0, description="Number of alerts to skip"),
     session=Depends(get_session),
 ) -> List[AlertResponse]:
-    """List alerts for a tenant.
+    """List alerts for a tenant with pagination.
 
     Returns alerts ordered by creation date (newest first).
     Filter by status to see only active alerts.
@@ -212,9 +213,10 @@ def list_alerts(
             UUID(tenant_id),
             status_filter=status,
             limit=limit,
+            offset=offset,
         )
         return [AlertResponse(**alert.to_dict()) for alert in alerts]
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("list_alerts_failed", tenant_id=tenant_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -236,7 +238,7 @@ def get_alert(
         return AlertResponse(**alert.to_dict())
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("get_alert_failed", alert_id=alert_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -261,7 +263,7 @@ def acknowledge_alert(
         return AlertResponse(**alert.to_dict())
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("acknowledge_alert_failed", alert_id=alert_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -290,7 +292,7 @@ def resolve_alert(
         return AlertResponse(**alert.to_dict())
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("resolve_alert_failed", alert_id=alert_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -325,7 +327,7 @@ def create_alert(
         return AlertResponse(**alert.to_dict())
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"Invalid enum value: {e}")
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("create_alert_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -353,7 +355,7 @@ def get_product_profile(
                 "retailer_relationships": [],
             }
         return profile.to_dict()
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("get_profile_failed", tenant_id=tenant_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -389,7 +391,7 @@ def update_product_profile(
             retailer_relationships=request.retailer_relationships,
         )
         return profile.to_dict()
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("update_profile_failed", tenant_id=tenant_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -421,7 +423,7 @@ def create_snapshot(
             created_by=request.created_by,
         )
         return snapshot.to_dict()
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("create_snapshot_failed", tenant_id=tenant_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -429,19 +431,20 @@ def create_snapshot(
 @router.get("/snapshots/{tenant_id}", dependencies=[Depends(PermissionChecker("audit.read"))])
 def list_snapshots(
     tenant_id: str,
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of snapshots to return"),
+    offset: int = Query(default=0, ge=0, description="Number of snapshots to skip"),
     session=Depends(get_session),
 ) -> List[Dict[str, Any]]:
-    """List compliance snapshots for a tenant.
+    """List compliance snapshots for a tenant with pagination.
 
     Returns snapshots in reverse chronological order (newest first).
     Use to view snapshot history and select one for verification/export.
     """
     try:
         service = ComplianceServiceSync(session)
-        snapshots = service.list_snapshots(UUID(tenant_id), limit=limit)
+        snapshots = service.list_snapshots(UUID(tenant_id), limit=limit, offset=offset)
         return [s.to_summary_dict() for s in snapshots]
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("list_snapshots_failed", tenant_id=tenant_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -471,7 +474,7 @@ def diff_snapshots(
         return result
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("diff_snapshots_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -496,7 +499,7 @@ def get_snapshot(
         return snapshot.to_dict()
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("get_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -526,7 +529,7 @@ def verify_snapshot(
         return result
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("verify_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -553,7 +556,7 @@ def export_snapshot(
         return result
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("export_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -575,7 +578,7 @@ def get_audit_pack(
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
+    except (AttributeError, TypeError, RuntimeError, OSError) as e:
         logger.exception("audit_pack_generation_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -610,7 +613,7 @@ def attest_snapshot(
         return result
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("attest_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -642,7 +645,7 @@ def refreeze_snapshot(
         return snapshot.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
+    except (AttributeError, TypeError, RuntimeError, OSError) as e:
         logger.exception("refreeze_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -673,6 +676,6 @@ def get_fda_response(
         return result
     except HTTPException:
         raise
-    except Exception as e:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
         logger.exception("generate_fda_response_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

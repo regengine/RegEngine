@@ -131,7 +131,7 @@ async def login(
     session_persisted = True
     try:
         await session_store.create_session(session_data)
-    except Exception as exc:
+    except (OSError, TimeoutError, ConnectionError, ValueError) as exc:
         session_persisted = False
         logger.warning(
             "session_store_unavailable",
@@ -221,7 +221,7 @@ async def signup(
             supabase_user = getattr(supabase_response, "user", None)
             if supabase_user and getattr(supabase_user, "id", None):
                 supabase_user_id = UUID(str(supabase_user.id))
-        except Exception as exc:  # pragma: no cover - external dependency behavior
+        except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError, AttributeError) as exc:  # pragma: no cover - external dependency behavior
             logger.warning("supabase_signup_provisioning_failed", email=normalized_email, error=str(exc))
 
     new_user = UserModel(
@@ -275,7 +275,7 @@ async def signup(
     session_persisted = True
     try:
         await session_store.create_session(session_data)
-    except Exception as exc:
+    except (OSError, TimeoutError, ConnectionError, ValueError) as exc:
         session_persisted = False
         logger.warning(
             "session_store_unavailable_on_signup",

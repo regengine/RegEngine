@@ -1,0 +1,102 @@
+"""Scheduler Service Management API with rate limiting."""
+
+from contextlib import asynccontextmanager
+from typing import Optional
+
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+# Production Hardening
+from shared.rate_limit import add_rate_limiting, limiter
+
+logger = structlog.get_logger("scheduler-api")
+
+# Global reference to scheduler service (set by main)
+_scheduler_service: Optional['SchedulerService'] = None
+
+def set_scheduler_service(service: 'SchedulerService') -> None:
+    """Set the global scheduler service reference."""
+    global _scheduler_service
+    _scheduler_service = service
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager."""
+    logger.info("scheduler_api_startup")
+    yield
+    logger.info("scheduler_api_shutdown")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Scheduler Service Management API",
+    description="Management and monitoring endpoints for regulatory scheduler",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:8080"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+# Rate limiting
+add_rate_limiting(app)
+
+
+@app.get("/health")
+@limiter.limit("100/minute")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "scheduler",
+        "version": "1.0.0"
+    }
+
+
+@app.get("/status")
+@limiter.limit("30/minute")
+async def status():
+    """Get detailed scheduler status with circuit breaker states.
+
+    This endpoint is rate limited to 30 requests per minute as it
+    accesses potentially expensive status collection logic.
+    """
+    if _scheduler_service is None:
+        return {"status": "starting", "service": "scheduler"}
+
+    return {
+        "status": "running",
+        "service": "scheduler",
+        "circuit_breakers": _scheduler_service.circuit_registry.get_all_status(),
+        "last_scrapes": {
+            st.value: {
+                "success": r.success,
+                "count": r.items_found,
+                "scraped_at": r.scraped_at.isoformat(),
+                "error": r.error_message if not r.success else None
+            }
+            for st, r in _scheduler_service.last_results.items()
+        },
+    }
+
+
+@app.get("/metrics")
+@limiter.limit("100/minute")
+async def metrics():
+    """Get Prometheus metrics."""
+    if _scheduler_service is None:
+        return {"metrics": "service not initialized"}
+
+    from app.metrics import metrics as metrics_instance
+    content = metrics_instance.get_metrics()
+
+    from fastapi.responses import Response
+    return Response(content=content, media_type="text/plain; charset=utf-8")
