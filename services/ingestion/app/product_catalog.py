@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.webhook_compat import _verify_api_key
 
@@ -83,7 +84,7 @@ def _get_db_session():
     try:
         from shared.database import SessionLocal
         return SessionLocal()
-    except Exception:
+    except (ImportError, OSError, SQLAlchemyError):
         return None
 
 
@@ -151,7 +152,7 @@ def _derive_products_from_events(db, tenant_id: str, category: str | None = None
             ),
             {"tid": tenant_id},
         ).fetchall()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("derive_products_from_events_failed: %s", e)
         return []
 
@@ -217,7 +218,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
             products = _derive_products_from_events(db, tenant_id, category)
 
         return products
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("db_catalog_read_failed: %s", e)
         return None
     finally:
@@ -259,7 +260,7 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
         )
         db.commit()
         return True
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("db_catalog_insert_failed: %s", e)
         db.rollback()
         return False
@@ -283,7 +284,7 @@ def _db_lookup_by_gtin(tenant_id: str, gtin: str) -> Product | None:
             {"tid": tenant_id, "gtin": gtin},
         ).fetchone()
         return _fsma_row_to_product(row) if row else None
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("db_catalog_lookup_failed: %s", e)
         return None
     finally:
@@ -324,7 +325,7 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
             },
         )
         db.commit()
-    except Exception as e:
+    except SQLAlchemyError as e:
         logger.warning("learn_from_event_db_failed: %s", e)
         db.rollback()
         _memory_learn(tenant_id, gtin, name, facility, now)

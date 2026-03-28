@@ -85,7 +85,7 @@ export function MobileNav() {
                     <Link href="/" className="flex items-center space-x-2" onClick={() => setOpen(false)}>
                         <Activity className="h-6 w-6 text-primary" />
                         <span className="font-bold text-xl">RegEngine</span>
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full ml-1">BETA</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full ml-1">FOUNDING COHORT</span>
                     </Link>
                     <div className="mt-4">
                         <TenantSwitcher />

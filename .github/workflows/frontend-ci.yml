@@ -88,7 +88,6 @@ jobs:
         run: |
           cd frontend
           npm run lint
-        continue-on-error: true
 
   # ── Tests ────────────────────────────────────────────────
   test:
@@ -114,7 +113,6 @@ jobs:
         run: |
           cd frontend
           npm run test:run
-        continue-on-error: true
 
   # ── Security ─────────────────────────────────────────────
   security:
@@ -133,7 +131,6 @@ jobs:
         run: |
           cd frontend
           npm audit --audit-level=high
-        continue-on-error: true
 
   # ── CI Summary ───────────────────────────────────────────
   ci-status:
