@@ -95,17 +95,11 @@ const nextConfig = {
                 destination: '/dashboard/compliance',
                 permanent: true,
             },
-            // Canonical path for integrations is /dashboard/integrations
-            {
-                source: '/integrations',
-                destination: '/dashboard/integrations',
-                permanent: true,
-            },
-            // /about is disabled — redirect to contact page (has founder info)
+            // /about → /contact (founder info lives on contact page)
             {
                 source: '/about',
                 destination: '/contact',
-                permanent: false,
+                permanent: true,
             },
         ];
     },
