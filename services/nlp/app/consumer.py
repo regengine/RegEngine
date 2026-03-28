@@ -6,6 +6,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import structlog
 from jsonschema import Draft7Validator, ValidationError
@@ -522,7 +523,7 @@ def run_consumer() -> None:
                             "timestamp": _now_iso(),
                             "entities": entities,
                         }
-                        validator.validate(legacy_out)
+                        _load_schema().validate(legacy_out)
                         producer.send(settings.topic_out, key=doc_id, value=legacy_out)
 
                         producer.flush(timeout=1.0)
