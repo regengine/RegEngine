@@ -290,7 +290,7 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
     JSON-LD path so downstream normalization works identically.
     """
     try:
-        from lxml import etree
+        from defusedxml.lxml import parse as _safe_parse
     except ImportError:
         logger.warning("lxml_not_available_for_epcis_xml_parsing")
         return []
@@ -299,13 +299,7 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
         raw = raw.encode("utf-8")
 
     try:
-        parser = etree.XMLParser(
-            remove_blank_text=True,
-            recover=True,
-            resolve_entities=False,
-            no_network=True,
-        )
-        tree = etree.parse(io.BytesIO(raw), parser)
+        tree = _safe_parse(io.BytesIO(raw))
         root = tree.getroot()
     except Exception as exc:
         logger.warning("epcis_xml_parse_failed error=%s", str(exc))
