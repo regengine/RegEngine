@@ -113,4 +113,38 @@ class BulkDiscoveryRequest(BaseModel):
 
     indices: List[int]
 
+
+class ExportHistoryItem(BaseModel):
+    """Individual export record in history."""
+
+    export_id: str
+    format: str
+    lot_code: Optional[str] = None
+    event_count: int
+    generated_at: str
+    file_name: str
+
+
+class ExportHistoryResponse(BaseModel):
+    """Response for export history endpoint."""
+
+    tenant_id: str
+    exports: List[ExportHistoryItem]
+    total: int
+
+
+class ExportVerifyResponse(BaseModel):
+    """Response for export verification endpoint."""
+
+    export_id: str
+    original_hash: str
+    regenerated_hash: str
+    hashes_match: bool
+    original_record_count: int
+    current_record_count: int
+    data_integrity: str
+    original_generated_at: str
+    verified_at: str
+
+
 BulkDiscoveryRequest.model_rebuild()

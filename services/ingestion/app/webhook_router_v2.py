@@ -60,11 +60,13 @@ def _get_db_session():
             yield db
             db.commit()
         except Exception:
+            # Rollback on any error from db operations (SQLAlchemy, psycopg2, etc.)
+            # We catch all exceptions here since this is a critical teardown path
             db.rollback()
             raise
         finally:
             db.close()
-    except Exception as e:
+    except (ImportError, ConnectionError, TimeoutError, RuntimeError) as e:
         logger.warning("database_unavailable, falling back to in-memory: %s", str(e))
         yield None
 
@@ -247,7 +249,8 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 """),
                 {"tid": tenant_id, "cte_type": event.cte_type.value},
             ).fetchall()
-        except Exception:
+        except (ValueError, TypeError) as e:
+            # UUID cast failure or type error in query parameters
             nested.rollback()
             return []
 
@@ -290,8 +293,9 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             {"tid": tenant_id, "tlc": event.traceability_lot_code},
                         ).scalar()
                         passed = (prior or 0) > 0
-                    except Exception:
-                        passed = True  # Don't block ingest on query failure
+                    except (ValueError, TypeError) as e:
+                        # Type error in query parameters; don't block ingest
+                        passed = True
                 else:
                     passed = True
             elif validation_rule == "downstream_transmitted":
@@ -327,8 +331,9 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     # chain entry may not exist yet). Allow it.
                     # For subsequent events, at least 1 prior chain entry should exist.
                     passed = True  # Chain is verified at scoring time; here we just check existence
-                except Exception:
-                    passed = True  # Don't block ingest on query failure
+                except (ValueError, TypeError) as e:
+                    # Type error in query parameters; don't block ingest
+                    passed = True
 
             if not passed:
                 severity = "critical" if risk == "CRITICAL" else "warning"
@@ -363,12 +368,12 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             }),
                         },
                     )
-                except Exception as alert_err:
+                except (ValueError, TypeError, json.JSONDecodeError) as alert_err:
                     logger.warning("obligation_alert_write_failed: %s", str(alert_err))
 
         return alerts
 
-    except Exception as exc:
+    except (ValueError, TypeError) as exc:
         logger.warning("obligation_check_failed: %s", str(exc))
         return []
 
@@ -416,7 +421,8 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
         }
         client.rpush("neo4j-sync", json.dumps(message, default=str))
         _graph_sync_successes += 1
-    except Exception as exc:
+    except (redis_lib.RedisError, json.JSONDecodeError, TypeError) as exc:
+        # Redis connection/operation failure or JSON serialization error
         _graph_sync_failures += 1
         logger.warning("graph_sync_publish_failed event_id=%s error=%s", event_id, str(exc))
 
@@ -458,7 +464,8 @@ async def ingest_events(
             if _row and _row[0]:
                 tenant_id = str(_row[0])
             _db.close()
-        except Exception:
+        except (ValueError, TypeError, KeyError) as e:
+            # API key lookup failed due to parameter error; skip tenant resolution
             pass
     # Fallback: use tenant from RBAC principal if available
     if not tenant_id and principal.tenant_id:
@@ -488,7 +495,7 @@ async def ingest_events(
     try:
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
-    except Exception as e:
+    except (ImportError, TypeError, AttributeError) as e:
         logger.error("db_init_failed — rejecting ingest: %s", str(e))
         raise HTTPException(
             status_code=503,
@@ -577,10 +584,10 @@ async def ingest_events(
                             gtin=event.kdes.get("gtin") if event.kdes else None,
                             kdes=event.kdes,
                         )
-                    except Exception as learn_err:
+                    except (ImportError, AttributeError, ValueError) as learn_err:
                         logger.debug("catalog_learn_skipped: %s", str(learn_err))
 
-            except Exception as e:
+            except (AttributeError, ValueError, TypeError) as e:
                 logger.error(
                     "batch_persistence_failed",
                     extra={"error": str(e), "batch_size": len(valid_events)},
@@ -620,9 +627,10 @@ async def ingest_events(
                                 gtin=event.kdes.get("gtin") if event.kdes else None,
                                 kdes=event.kdes,
                             )
-                        except Exception:
+                        except (ImportError, AttributeError, ValueError):
+                            # Product catalog learning failed; this is non-critical
                             pass
-                    except Exception as inner_e:
+                    except (AttributeError, ValueError, TypeError) as inner_e:
                         logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,
@@ -647,7 +655,8 @@ async def ingest_events(
         if db_session:
             db_session.commit()
 
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
+        # Critical parameter/data validation error in ingest batch
         if db_session:
             db_session.rollback()
         logger.error("ingest_batch_failed", extra={"error": str(e)})
@@ -708,7 +717,7 @@ async def get_recent_events(
             for r in rows
         ]
         return {"tenant_id": tenant_id, "events": events, "total": len(events)}
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
         logger.warning("recent_events_query_failed: %s", str(e))
         return {"tenant_id": tenant_id, "events": [], "total": 0}
     finally:
@@ -761,7 +770,7 @@ async def verify_chain(
             "errors": result.errors,
             "checked_at": result.checked_at,
         }
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
         logger.error("chain_verification_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Chain verification failed. Check server logs for details.")
     finally:

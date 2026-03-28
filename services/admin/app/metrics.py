@@ -124,7 +124,7 @@ class HallucinationTracker:
                 )
             yield session
             session.commit()
-        except Exception:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError):
             session.rollback()
             raise
         finally:
@@ -185,7 +185,7 @@ class HallucinationTracker:
             self._redis.set(f"hallucination:{snapshot.review_id}", payload, ex=self._redis_ttl)
             self._redis.lpush(self._recent_key, payload)
             self._redis.ltrim(self._recent_key, 0, self._recent_cache_size - 1)
-        except Exception as exc:  # pragma: no cover - depends on Redis availability
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:  # pragma: no cover - depends on Redis availability
             logger.warning("redis_cache_failed", error=str(exc))
 
     def _serialize(self, item: ReviewItemModel) -> Dict[str, Any]:
@@ -248,7 +248,7 @@ class HallucinationTracker:
                 error=str(exc),  # Log actual exception for debugging
             )
             return self._find_existing(tenant_uuid, doc_hash, resolved_text)
-        except Exception as exc:
+        except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
             # Log unexpected exceptions for debugging
             logger.error(
                 "hallucination_insert_failed",
@@ -326,7 +326,7 @@ class HallucinationTracker:
                     )
                     session.add(db_item)
                     results.append({"status": "pending", "doc_hash": db_item.doc_hash})
-                except Exception as exc:
+                except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
                     results.append({"status": "error", "error": str(exc), "input": item_data})
                     failed += 1
             
@@ -355,7 +355,7 @@ class HallucinationTracker:
                 result = self.record_hallucination(**item_data)
                 results.append({"status": "success", "data": result})
                 successful += 1
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError, LookupError) as exc:
                 results.append({"status": "error", "error": str(exc)})
                 failed += 1
         return {"successful": successful, "failed": failed, "results": results}
@@ -510,7 +510,7 @@ class HallucinationTracker:
                     resp.raise_for_status()
                 hallucination_webhook_calls_total.labels(status="success").inc()
                 logger.info("webhook_notification_sent", review_id=serialized.get("review_id"))
-            except Exception as exc:
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
                 hallucination_webhook_calls_total.labels(status="error").inc()
                 logger.warning(
                     "webhook_notification_failed",
@@ -538,7 +538,7 @@ def _build_redis_client() -> Optional[RedisType]:
         client.ping()
         logger.info("redis_cache_connected", url=url)
         return client
-    except Exception as exc:  # pragma: no cover - depends on runtime env
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:  # pragma: no cover - depends on runtime env
         logger.warning("redis_cache_unavailable", error=str(exc))
         return None
 

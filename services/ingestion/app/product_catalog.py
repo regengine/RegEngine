@@ -258,8 +258,9 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
 # In-memory fallback (dev / when DATABASE_URL is not set)
 # ---------------------------------------------------------------------------
 
-# TODO(V042): Replace with fsma.tenant_products table queries.
+# DEFERRED(Phase 4): Replace with fsma.tenant_products table queries.
 # Tables created in V042__tenant_feature_data_tables.sql — wire CRUD here.
+# Currently using in-memory fallback for dev environments.
 _catalog_store: dict[str, list[Product]] = {}
 
 

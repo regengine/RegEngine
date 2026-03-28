@@ -685,7 +685,7 @@ class AuthorityLineageService:
                 "content_type": content_types.get(suffix, "application/octet-stream"),
                 "size": path.stat().st_size
             }
-        except Exception as e:
+        except (OSError, IOError) as e:
             logger.warning("file_hash_failed", path=file_path, error=str(e))
             return None
     
