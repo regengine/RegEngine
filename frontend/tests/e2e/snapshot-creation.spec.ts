@@ -11,12 +11,14 @@
 
 import { test, expect } from '@playwright/test';
 
+const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
+
 test.describe('Energy Snapshot Creation', () => {
     test.beforeEach(async ({ page }) => {
         // Login
         await page.goto('/login');
         await page.fill('input[type="email"]', 'test@example.com');
-        await page.fill('input[type="password"]', 'password123');
+        await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
         await page.waitForURL('**/dashboard');
 
@@ -99,7 +101,7 @@ test.describe('Snapshot Verification', () => {
     test.beforeEach(async ({ page }) => {
         await page.goto('/login');
         await page.fill('input[type="email"]', 'test@example.com');
-        await page.fill('input[type="password"]', 'password123');
+        await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
         await page.waitForURL('**/dashboard');
         await page.goto('/energy');

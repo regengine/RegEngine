@@ -45,8 +45,8 @@ async def lifespan(app: FastAPI):
     logger.info("graph_service_shutdown")
 
 app = FastAPI(
-    title="Graph Service",
-    description="Knowledge graph and fact linkage service",
+    title="RegEngine Graph Service",
+    description="Knowledge graph construction, regulatory frameworks, and traceability gap analysis for FSMA 204 compliance",
     version="1.0.0",
     lifespan=lifespan,
     docs_url=None if _is_prod else "/docs",
@@ -70,7 +70,7 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-app.include_router(graph_router, prefix="/api/v1")
+app.include_router(graph_router, prefix="/api/v1", tags=["Graph Operations"])
 
 
 @app.get("/")

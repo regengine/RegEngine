@@ -1,0 +1,29 @@
+{
+  "suppliers": 3,
+  "products": 3,
+  "cte_events": {
+    "accepted": 0,
+    "rejected": 0
+  },
+  "compliance": {
+    "error": 404,
+    "body": "{\"error\":\"http_error\",\"status_code\":404,\"detail\":\"Not Found\",\"request_id\":null}"
+  },
+  "audit_log": {
+    "error": 401,
+    "body": "{\"error\":\"http_error\",\"status_code\":401,\"detail\":\"Invalid API key\",\"request_id\":null}"
+  },
+  "recall_simulation": {
+    "error": 404,
+    "body": "{\"error\":\"http_error\",\"status_code\":404,\"detail\":\"Not Found\",\"request_id\":null}"
+  },
+  "recall_report": {
+    "error": 404,
+    "body": "{\"error\":\"http_error\",\"status_code\":404,\"detail\":\"Not Found\",\"request_id\":null}"
+  },
+  "fda_export": "{'error': 401, 'body': '{\"error\":\"http_error\",\"status_code\":401,\"detail\":\"Invalid API key\",\"request_id\":null}'}",
+  "mock_drill": {
+    "error": 404,
+    "body": "{\"error\":\"http_error\",\"status_code\":404,\"detail\":\"Not Found\",\"request_id\":null}"
+  }
+}

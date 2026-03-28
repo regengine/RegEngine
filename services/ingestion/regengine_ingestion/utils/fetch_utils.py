@@ -3,6 +3,7 @@ import requests
 import asyncio
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
+from shared.url_validation import validate_url, SSRFError
 
 from shared.url_validation import validate_url
 
@@ -24,6 +25,13 @@ def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True
     """
     validate_url(url)
     try:
+        # SSRF protection: validate URL before fetching
+        try:
+            url = validate_url(url)
+        except SSRFError as e:
+            logger.warning("ssrf_validation_failed", url=url, error=str(e))
+            raise ValueError(f"URL validation failed: {str(e)}") from e
+
         response = requests.get(url, headers=STANDARD_HEADERS, timeout=timeout, allow_redirects=True)
         
         # If blocked or server error, try browser fallback
@@ -52,6 +60,13 @@ def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True
 
 def _fetch_with_browser_sync(url: str) -> Dict[str, Any]:
     """Helper to run browser fetch synchronously."""
+    # SSRF protection: validate URL before browser fetch
+    try:
+        url = validate_url(url)
+    except SSRFError as e:
+        logger.warning("ssrf_validation_failed_browser_fetch", url=url, error=str(e))
+        raise ValueError(f"URL validation failed: {str(e)}") from e
+
     # We import here to avoid circular dependencies if browser_utils imports from here
     # and to keep Playwright dependency isolated.
     try:

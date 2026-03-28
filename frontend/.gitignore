@@ -1,2 +1,3 @@
 .vercel
 frontend/.env.local
+.env.test

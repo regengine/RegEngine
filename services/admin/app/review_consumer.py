@@ -73,13 +73,13 @@ def _ensure_topic(topic: str, bootstrap_servers: str) -> None:
         logger.info("topic_created", topic=topic)
     except TopicAlreadyExistsError:
         pass
-    except Exception as exc:  # pragma: no cover - infra dependent
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:  # pragma: no cover - infra dependent
         logger.warning("topic_creation_failed", topic=topic, error=str(exc))
     finally:
         if admin is not None:
             try:
                 admin.close()
-            except Exception as cleanup_exc:  # pragma: no cover
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as cleanup_exc:  # pragma: no cover
                 logger.debug("admin_client_close_failed", error=str(cleanup_exc))
 
 
@@ -116,7 +116,7 @@ def _send_to_dlq(bootstrap: str, event: any, error: str, headers: list | None = 
         producer.send(TOPIC_DLQ, value=dlq_payload, headers=headers or [])
         producer.flush(timeout=5.0)
         logger.info("message_sent_to_dlq", error=error)
-    except Exception as exc:  # pragma: no cover - infra dependent
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:  # pragma: no cover - infra dependent
         logger.error("dlq_send_failed", error=str(exc))
 
 
@@ -151,7 +151,7 @@ def _cleanup_dlq_producer() -> None:
         if _dlq_producer is not None:
             try:
                 _dlq_producer.close(timeout=2.0)
-            except Exception as cleanup_exc:  # pragma: no cover
+            except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as cleanup_exc:  # pragma: no cover
                 logger.debug("dlq_producer_close_failed", error=str(cleanup_exc))
             _dlq_producer = None
 
@@ -240,7 +240,7 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
     # 1. Handle Deserialization (Poison Pill Detection)
     try:
         evt = json.loads(raw_value.decode("utf-8")) if raw_value else {}
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, UnicodeDecodeError) as exc:
         logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
         POISON_PILL_COUNTER.inc()
         _send_to_dlq(bootstrap, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
@@ -258,7 +258,7 @@ def _process_record(record, tracker: "HallucinationTracker", bootstrap: str, kaf
             extractor=result.get("extractor"),
             latency_ms=round(elapsed * 1000, 2),
         )
-    except Exception as exc:  # pragma: no cover - depends on data shape
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError, LookupError) as exc:  # pragma: no cover - depends on data shape
         elapsed = time.perf_counter() - start_time
         REVIEW_LATENCY_HISTOGRAM.labels(outcome="error").observe(elapsed)
         logger.exception("review_consumer_error", error=str(exc), event=evt)

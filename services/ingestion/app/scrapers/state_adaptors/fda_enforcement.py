@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 from datetime import datetime, timezone
 
 from .base import StateRegistryScraper, Source, FetchedItem
+from ...shared.url_validation import validate_url, SSRFError
 
 logger = logging.getLogger("ingestion.scrapers.fda_enforcement")
 
@@ -39,11 +40,19 @@ class FDAEnforcementScraper(StateRegistryScraper):
                 
                 if link is not None and link.text:
                     url = link.text.strip()
+                    # SSRF protection: validate extracted URL before yielding
+                    try:
+                        validated_url = validate_url(url)
+                    except SSRFError as e:
+                        logger.debug("ssrf_validation_failed_fda_rss", url=url, error=str(e))
+                        # Skip this URL, continue to next
+                        continue
+
                     title_text = title.text.strip() if title is not None else "Unknown Warning Letter"
                     date_text = pub_date.text.strip() if pub_date is not None else None
-                    
+
                     yield Source(
-                        url=url,
+                        url=validated_url,
                         title=title_text,
                         jurisdiction_code="US-FDA",
                         metadata={
@@ -67,31 +76,50 @@ class FDAEnforcementScraper(StateRegistryScraper):
         Deep Fetch: If the HTML contains a link to a PDF version, fetch that instead.
         """
         try:
+            # SSRF protection: validate source URL before fetching
+            try:
+                validated_url = validate_url(source.url)
+            except SSRFError as e:
+                logger.warning("ssrf_validation_failed_fda_fetch", url=source.url, error=str(e))
+                return FetchedItem(source=source, content_bytes=b"", content_type=None)
+
             # 1. Fetch Landing Page
-            resp = requests.get(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            resp = requests.get(validated_url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
-            
+
             content = resp.content
             content_type = resp.headers.get("Content-Type", "text/html; charset=utf-8")
-            
+
             # 2. Check for PDF Link (Deep Fetch)
             # Regex for <a href="...pdf">
             pdf_match = re.search(r'href="([^"]+\.pdf)"', resp.text, re.IGNORECASE)
-            
+
             if pdf_match:
                 pdf_rel_url = pdf_match.group(1)
-                pdf_url = urljoin(source.url, pdf_rel_url)
-                logger.info("fda_deep_fetch_pdf_found", base=source.url, pdf=pdf_url)
-                
+                pdf_url = urljoin(validated_url, pdf_rel_url)
+                logger.info("fda_deep_fetch_pdf_found", base=validated_url, pdf=pdf_url)
+
+                # SSRF protection: validate PDF URL before fetching
                 try:
-                    pdf_resp = requests.get(pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
+                    validated_pdf_url = validate_url(pdf_url)
+                except SSRFError as e:
+                    logger.debug("ssrf_validation_failed_fda_pdf", url=pdf_url, error=str(e))
+                    # Fallback to original HTML content if PDF URL fails validation
+                    return FetchedItem(
+                        source=source,
+                        content_bytes=content,
+                        content_type=content_type
+                    )
+
+                try:
+                    pdf_resp = requests.get(validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
                     pdf_resp.raise_for_status()
                     content = pdf_resp.content
                     content_type = "application/pdf"
                 except Exception as pdf_err:
                     logger.warning("fda_deep_fetch_failed", error=str(pdf_err))
                     # Fallback to original HTML content if PDF fetch fails
-            
+
             return FetchedItem(
                 source=source,
                 content_bytes=content,

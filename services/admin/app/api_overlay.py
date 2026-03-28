@@ -145,7 +145,7 @@ async def create_control(
             "framework": created.framework,
             "created_at": created.created_at.isoformat(),
         }
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("control_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -173,7 +173,7 @@ async def list_controls(
         writer = OverlayWriter(tenant_id)
         controls = writer.list_controls(framework=framework)
         return {"controls": controls, "count": len(controls)}
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("list_controls_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -207,7 +207,7 @@ async def get_control_details(
         return details
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
         logger.exception("get_control_details_failed", control_id=str(control_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -260,7 +260,7 @@ async def update_control(
         }
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("control_update_failed", control_id=str(control_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -298,7 +298,7 @@ async def delete_control(
         return None
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("control_deletion_failed", control_id=str(control_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -346,7 +346,7 @@ async def create_product(
             "jurisdictions": created.jurisdictions,
             "created_at": created.created_at.isoformat(),
         }
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("product_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -374,7 +374,7 @@ async def list_products(
         writer = OverlayWriter(tenant_id)
         products = writer.list_products(product_type=product_type)
         return {"products": products, "count": len(products)}
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("list_products_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -410,7 +410,7 @@ async def get_product_requirements(
         return requirements
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
         logger.exception("get_product_requirements_failed", product_id=str(product_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -440,7 +440,7 @@ async def get_compliance_gaps(
         resolver = OverlayResolver(tenant_id)
         gaps = resolver.get_compliance_gaps(product_id, jurisdiction)
         return gaps
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
         logger.exception(
             "get_compliance_gaps_failed",
             product_id=str(product_id),
@@ -483,7 +483,7 @@ async def delete_product(
         return None
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("product_deletion_failed", product_id=str(product_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -540,7 +540,7 @@ async def create_mapping(
     except ValueError as exc:
         logger.warning("mapping_creation_validation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    except Exception as exc:
+    except (AttributeError, TypeError, RuntimeError, OSError) as exc:
         logger.exception("mapping_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -583,7 +583,7 @@ async def link_control_to_product(
     except ValueError as exc:
         logger.warning("link_creation_validation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    except Exception as exc:
+    except (AttributeError, TypeError, RuntimeError, OSError) as exc:
         logger.exception("link_creation_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -621,7 +621,7 @@ async def delete_mapping(
         return None
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("mapping_deletion_failed", mapping_id=str(mapping_id), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -658,7 +658,7 @@ async def get_provision_overlays(
         return overlays
     except HTTPException:
         raise
-    except Exception as exc:
+    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as exc:
         logger.exception("get_provision_overlays_failed", provision_hash=provision_hash, error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
