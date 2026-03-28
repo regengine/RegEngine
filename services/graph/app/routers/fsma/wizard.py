@@ -1,9 +1,7 @@
 """
 FSMA 204 V2 Applicability & Exemption Wizard API.
 
-Public endpoints (no auth required) that power the FTL Coverage Checker wizard.
-These endpoints are intentionally unauthenticated — they serve as a free,
-lead-generation tool and mirror the client-side logic in ftl-checker/page.tsx.
+Authenticated endpoints that power the FTL Coverage Checker wizard.
 
 Routes:
   GET  /v1/fsma/wizard/ftl-categories   — All 23 FTL categories with CTE/KDE metadata
@@ -18,8 +16,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+
+from shared.auth import require_api_key
 
 # Import the engine from the kernel (portable path resolution)
 from kernel.reporting.fsma_engine import FSMAApplicabilityEngine
@@ -74,7 +74,7 @@ class ExemptionRequest(BaseModel):
 
 
 @router.get("/ftl-categories")
-def get_ftl_categories():
+def get_ftl_categories(api_key=Depends(require_api_key)):
     """
     Return all 23 FDA Food Traceability List (FTL) categories.
 
@@ -85,8 +85,6 @@ def get_ftl_categories():
     - ctes — required Critical Tracking Events
     - cfr_sections — applicable 21 CFR sections
     - kdes — required Key Data Elements
-
-    No authentication required — public tool.
     """
     categories = _engine.get_ftl_categories()
     exemptions = _engine.get_exemption_definitions()
@@ -105,7 +103,7 @@ def get_ftl_categories():
 
 
 @router.post("/applicability")
-def check_applicability(request: ApplicabilityRequest):
+def check_applicability(request: ApplicabilityRequest, api_key=Depends(require_api_key)):
     """
     Evaluate whether selected product categories are subject to FSMA 204.
 
@@ -115,8 +113,6 @@ def check_applicability(request: ApplicabilityRequest):
     - not_covered_categories — any submitted IDs not recognised by the engine
     - high_outbreak_count — number of HIGH outbreak-frequency categories selected
     - reason — human-readable summary
-
-    No authentication required — public tool.
     """
     result = _engine.evaluate_applicability(request.selections)
 
@@ -131,7 +127,7 @@ def check_applicability(request: ApplicabilityRequest):
 
 
 @router.post("/exemptions")
-def check_exemptions(request: ExemptionRequest):
+def check_exemptions(request: ExemptionRequest, api_key=Depends(require_api_key)):
     """
     Evaluate FSMA 204 exemption status based on wizard yes/no answers.
 
@@ -144,8 +140,6 @@ def check_exemptions(request: ExemptionRequest):
     Valid exemption IDs (per 21 CFR §1.1305):
       small-producer, kill-step, direct-to-consumer,
       small-retail, rarely-consumed-raw, usda-jurisdiction
-
-    No authentication required — public tool.
     """
     result = _engine.evaluate_exemptions(request.answers)
 

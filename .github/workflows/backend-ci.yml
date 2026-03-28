@@ -217,7 +217,6 @@ jobs:
         run: |
           docker run --rm regengine-${{ matrix.service }}:test \
             python -c "print('Build OK')"
-        continue-on-error: true
 
   # ── CI Summary ───────────────────────────────────────────
   ci-status:

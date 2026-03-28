@@ -598,7 +598,8 @@ export function FTLCheckerClient() {
     const handleEmailSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (email) {
-            localStorage.setItem('ftl_checker_email', email);
+            // Email no longer stored in localStorage — it was plain-text PII.
+            // The email is captured server-side via PostHog identify below.
             setEmailSubmitted(true);
 
             // Capture lead
