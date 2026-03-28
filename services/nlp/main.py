@@ -87,9 +87,6 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-from shared.auth import validate_auth_config
-validate_auth_config()
-
 app.include_router(nlp_router, prefix="/api/v1")
 
 # Standardized Health & Readiness (Phase 17)
