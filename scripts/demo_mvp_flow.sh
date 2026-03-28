@@ -21,7 +21,7 @@ ADMIN_URL="${ADMIN_URL:-http://localhost:8400}"
 INGEST_URL="${INGEST_URL:-http://localhost:8002}"  # matches docker-compose.mvp.yml port mapping
 API_KEY="${1:-}"
 ADMIN_MASTER_KEY="${ADMIN_MASTER_KEY:-}"
-TENANT_ID="${TENANT_ID:-demo-tenant}"
+TENANT_ID="${TENANT_ID:-00000000-0000-0000-0000-000000000001}"
 SAMPLE_DIR="$(cd "$(dirname "$0")/../sample_data" && pwd)"
 EXPORT_DIR="$(cd "$(dirname "$0")/.." && pwd)/demo_exports"
 
@@ -40,9 +40,9 @@ echo -e "${B}╚═════════════════════�
 # ── Step 0: Health checks ───────────────────────────────────────────────────
 header "Step 0 · Checking service health"
 
-for svc in "$ADMIN_URL/health:Admin" "$INGEST_URL/health:Ingestion"; do
-  url="${svc%%:*}"
-  name="${svc##*:}"
+for svc in "$ADMIN_URL/health|Admin" "$INGEST_URL/health|Ingestion"; do
+  url="${svc%%|*}"
+  name="${svc##*|}"
   if curl -sf "$url" > /dev/null 2>&1; then
     ok "$name service healthy"
   else
@@ -56,29 +56,34 @@ done
 header "Step 1 · Authentication"
 
 if [ -z "$API_KEY" ]; then
+  # Try REGENGINE_API_KEY env var first (matches docker-compose env)
+  API_KEY="${REGENGINE_API_KEY:-}"
+fi
+
+if [ -z "$API_KEY" ]; then
   if [ -z "$ADMIN_MASTER_KEY" ]; then
-    echo -e "  ${Y}No API_KEY or ADMIN_MASTER_KEY provided.${NC}"
+    echo -e "  ${Y}No API_KEY, REGENGINE_API_KEY, or ADMIN_MASTER_KEY provided.${NC}"
     echo -e "  ${Y}Usage: ./scripts/demo_mvp_flow.sh <your-api-key>${NC}"
-    echo -e "  ${Y}Or set ADMIN_MASTER_KEY to auto-create one.${NC}"
+    echo -e "  ${Y}Or set REGENGINE_API_KEY or ADMIN_MASTER_KEY env vars.${NC}"
     exit 1
   fi
 
   info "Creating API key via admin service..."
-  KEY_RESPONSE=$(curl -sf -X POST "$ADMIN_URL/api/keys" \
+  KEY_RESPONSE=$(curl -sf -X POST "$ADMIN_URL/v1/admin/keys" \
     -H "Content-Type: application/json" \
-    -H "X-Admin-Master-Key: $ADMIN_MASTER_KEY" \
+    -H "X-Admin-Key: $ADMIN_MASTER_KEY" \
     -d "{\"name\": \"mvp-demo\", \"tenant_id\": \"$TENANT_ID\", \"permissions\": [\"ingest.write\", \"fda.export\"]}" \
     2>/dev/null || echo "{}")
 
-  API_KEY=$(echo "$KEY_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('key', ''))" 2>/dev/null || echo "")
+  API_KEY=$(echo "$KEY_RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('api_key') or d.get('key', ''))" 2>/dev/null || echo "")
 
   if [ -z "$API_KEY" ]; then
-    fail "Could not create API key. Set API_KEY directly."
+    fail "Could not create API key. Set REGENGINE_API_KEY directly."
     exit 1
   fi
   ok "API key created: ${API_KEY:0:8}..."
 else
-  ok "Using provided API key: ${API_KEY:0:8}..."
+  ok "Using API key: ${API_KEY:0:8}..."
 fi
 
 # ── Step 2: Ingest sample supply chain data ─────────────────────────────────
@@ -90,36 +95,40 @@ INGEST_ERRORS=0
 for csv in "$SAMPLE_DIR"/*.csv; do
   filename=$(basename "$csv")
   step_name="${filename%.csv}"
+  # Map CSV filenames to FSMA 204 CTE types (strip numeric prefix)
+  step_cte="${step_name#[0-9][0-9]_}"
 
-  RESPONSE=$(curl -sf -X POST "$INGEST_URL/v1/ingest/file" \
+  RESPONSE=$(curl -sf -X POST "$INGEST_URL/api/v1/ingest/csv" \
     -H "X-RegEngine-API-Key: $API_KEY" \
-    -H "X-Tenant-ID: $TENANT_ID" \
     -F "file=@$csv" \
-    -F "source_system=mvp-demo" \
-    -F "vertical=food_safety" \
+    -F "source=mvp-demo" \
+    -F "tenant_id=$TENANT_ID" \
+    -F "cte_type=$step_cte" \
     2>/dev/null || echo '{"error": "request failed"}')
 
-  EVENT_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('event_id', ''))" 2>/dev/null || echo "")
+  # Parse batch response: {"accepted": N, "rejected": M, "total": T, "events": [...]}
+  ACCEPTED=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('accepted', 0))" 2>/dev/null || echo "0")
+  TOTAL=$(echo "$RESPONSE" | python3 -c "import sys, json; d=json.load(sys.stdin); print(d.get('total', 0))" 2>/dev/null || echo "0")
 
-  if [ -n "$EVENT_ID" ]; then
-    IS_DUP=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('is_duplicate', False))" 2>/dev/null || echo "")
-    if [ "$IS_DUP" = "True" ]; then
-      ok "$step_name — deduplicated (already ingested)"
-    else
-      ok "$step_name — ingested (event: ${EVENT_ID:0:8}...)"
+  if [ "$ACCEPTED" -gt 0 ] 2>/dev/null; then
+    ok "$step_name ($step_cte) — $ACCEPTED/$TOTAL events ingested"
+    INGEST_COUNT=$((INGEST_COUNT + ACCEPTED))
+    if [ "$ACCEPTED" -lt "$TOTAL" ]; then
+      REJECTED_N=$((TOTAL - ACCEPTED))
+      info "$REJECTED_N events rejected (missing KDEs or validation errors)"
+      INGEST_ERRORS=$((INGEST_ERRORS + REJECTED_N))
     fi
-    INGEST_COUNT=$((INGEST_COUNT + 1))
   else
-    fail "$step_name — failed"
+    fail "$step_name — 0/$TOTAL accepted"
     info "Response: $(echo "$RESPONSE" | head -c 200)"
-    INGEST_ERRORS=$((INGEST_ERRORS + 1))
+    INGEST_ERRORS=$((INGEST_ERRORS + TOTAL))
   fi
 done
 
 echo ""
 info "Ingested: $INGEST_COUNT files, Errors: $INGEST_ERRORS"
 
-if [ "$INGEST_ERRORS" -gt 0 ] && [ "$INGEST_COUNT" -eq 0 ]; then
+if [ "$INGEST_COUNT" -eq 0 ]; then
   fail "All ingestions failed. Check API key permissions and service logs."
   exit 1
 fi

@@ -152,6 +152,9 @@ async def ingest_events(
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Canonical normalization + rule evaluation
+                # Use a savepoint so failures here don't poison the
+                # DB session/transaction for subsequent batch events.
+                savepoint = db_session.begin_nested()
                 try:
                     from shared.canonical_event import normalize_webhook_event
                     from shared.canonical_persistence import CanonicalEventStore
@@ -175,12 +178,14 @@ async def ingest_events(
                         "kdes": canonical.kdes,
                     }
                     summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+                    savepoint.commit()
                     # Auto-create exceptions from failures
                     if not summary.compliant:
                         from shared.exception_queue import ExceptionQueueService
                         exc_svc = ExceptionQueueService(db_session)
                         exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
                 except Exception as canon_err:
+                    savepoint.rollback()
                     logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
             except Exception as exc:
                 logger.error("compat_persistence_failed: %s", str(exc))
