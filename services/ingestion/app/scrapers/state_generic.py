@@ -6,6 +6,8 @@ from typing import Optional
 
 import requests
 
+from shared.url_validation import validate_url
+
 
 # Stubs for S3 and Kafka integrations; replace with actual clients
 class S3Client:
@@ -42,6 +44,8 @@ class StateRegistryScraper:
         self, url: str, jurisdiction_code: str, tenant_id: Optional[str] = None
     ) -> dict:
         loop = asyncio.get_running_loop()
+
+        validate_url(url)
 
         def _fetch():
             resp = requests.get(url, timeout=15)
