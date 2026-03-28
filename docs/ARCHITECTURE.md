@@ -12,6 +12,62 @@ This document describes the architecture that is actually implemented in this re
 - Primary outcomes: CTE/KDE capture, lot traceability, and 24-hour FDA export readiness.
 - Primary workflow: supplier onboarding -> event ingestion -> tamper-evident persistence -> graph traversal -> export.
 
+## System Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Frontend"
+        FE["Next.js 15<br/>regengine.co<br/>(Vercel)"]
+    end
+
+    subgraph "Railway Services"
+        ADMIN["Admin API<br/>:8400"]
+        INGEST["Ingestion Service<br/>:8000"]
+        GRAPH["Graph Service<br/>:8200"]
+        NLP["NLP Service<br/>:8100"]
+        COMPLIANCE["Compliance Service"]
+        SCHED["Scheduler<br/>:8600"]
+    end
+
+    subgraph "Data Stores"
+        PG["PostgreSQL<br/>FSMA events, audit logs,<br/>API keys, tenants"]
+        NEO["Neo4j<br/>Lot/facility lineage,<br/>FSMA traversal"]
+        REDIS["Redis<br/>Cache, rate limits,<br/>event fan-out"]
+        RP["Redpanda / Kafka<br/>Audit events,<br/>async messaging"]
+    end
+
+    subgraph "External Services"
+        STRIPE["Stripe<br/>Billing"]
+        SUPA["Supabase Auth<br/>User authentication"]
+        AI["OpenAI / Groq<br/>NLP extraction"]
+    end
+
+    FE -->|"API calls"| ADMIN
+    FE -->|"Ingest / Export"| INGEST
+    FE -->|"Traceability queries"| GRAPH
+
+    ADMIN -->|"Tenant mgmt"| PG
+    ADMIN -->|"Billing"| STRIPE
+    ADMIN -->|"Auth"| SUPA
+
+    INGEST -->|"CTE persistence +<br/>hash chain"| PG
+    INGEST -->|"Audit events"| RP
+    INGEST -->|"Graph sync<br/>signals"| GRAPH
+
+    GRAPH -->|"Lineage queries"| NEO
+    GRAPH -->|"Cache"| REDIS
+
+    NLP -->|"Extraction"| AI
+    NLP -->|"Results"| PG
+
+    COMPLIANCE -->|"Rule evaluation"| PG
+
+    SCHED -->|"Scheduled jobs"| INGEST
+    SCHED -->|"Feed polling"| PG
+
+    RP -->|"Event stream"| GRAPH
+```
+
 ## Deployment Topology
 
 Current deployment references in this repo:
