@@ -71,6 +71,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "> 💡 Use [Conventional Commits](https://www.conventionalcommits.org/) format: \`type(scope): description\`" >> $GITHUB_STEP_SUMMARY
           fi
+        continue-on-error: false
 
   # ── Label PR ────────────────────────────────────────────
   label:
@@ -83,4 +84,4 @@ jobs:
         uses: actions/labeler@v5
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+        continue-on-error: false
