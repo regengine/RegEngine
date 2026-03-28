@@ -1,0 +1,118 @@
+"""Tests for H2: fail-closed auth — cloud startup refuses without Supabase credentials."""
+
+import os
+import subprocess
+import sys
+
+import pytest
+
+
+VALIDATE_SCRIPT = (
+    "import os, sys; "
+    "sys.path.insert(0, 'services'); "
+    "from shared.auth import validate_auth_config; "
+    "validate_auth_config(); "
+    "print('STARTED_OK')"
+)
+
+
+def _run_validate(env_overrides: dict[str, str]) -> subprocess.CompletedProcess:
+    """Run validate_auth_config() in a subprocess with the given env vars."""
+    env = {
+        # Strip cloud/production indicators from the parent env
+        k: v
+        for k, v in os.environ.items()
+        if k not in (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_SERVICE_NAME",
+            "VERCEL_ENV",
+            "NEXT_PUBLIC_SUPABASE_URL",
+            "SUPABASE_URL",
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+            "SUPABASE_ANON_KEY",
+            "AUTH_SECRET_KEY",
+            "JWT_SECRET",
+            "REGENGINE_ENV",
+        )
+    }
+    env.update(env_overrides)
+    # Ensure we don't trip the JWT validation by providing a valid secret
+    env.setdefault("AUTH_SECRET_KEY", "test-secret-key-long-enough")
+    env.setdefault("REGENGINE_ENV", "development")
+    return subprocess.run(
+        [sys.executable, "-c", VALIDATE_SCRIPT],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+class TestFailClosedAuth:
+    """H2: services must refuse to start in cloud without Supabase credentials."""
+
+    def test_local_dev_starts_without_supabase_creds(self):
+        """Local dev (no cloud env vars) should start fine without Supabase creds."""
+        result = _run_validate({})
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_cloud_exits_without_supabase_url(self):
+        """Cloud env with missing SUPABASE_URL should sys.exit(1)."""
+        result = _run_validate({
+            "RAILWAY_ENVIRONMENT": "production",
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY": "test-anon-key",
+            # No SUPABASE_URL set
+        })
+        assert result.returncode != 0
+
+    def test_cloud_exits_without_supabase_key(self):
+        """Cloud env with missing SUPABASE_ANON_KEY should sys.exit(1)."""
+        result = _run_validate({
+            "RAILWAY_ENVIRONMENT": "production",
+            "NEXT_PUBLIC_SUPABASE_URL": "https://test.supabase.co",
+            # No SUPABASE_ANON_KEY set
+        })
+        assert result.returncode != 0
+
+    def test_cloud_exits_without_both_creds(self):
+        """Cloud env with neither Supabase credential should sys.exit(1)."""
+        result = _run_validate({
+            "RAILWAY_ENVIRONMENT": "production",
+        })
+        assert result.returncode != 0
+
+    def test_cloud_starts_with_supabase_creds(self):
+        """Cloud env with both Supabase creds should start normally."""
+        result = _run_validate({
+            "RAILWAY_ENVIRONMENT": "production",
+            "NEXT_PUBLIC_SUPABASE_URL": "https://test.supabase.co",
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY": "test-anon-key",
+        })
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_cloud_starts_with_non_prefixed_creds(self):
+        """Cloud env with SUPABASE_URL/SUPABASE_ANON_KEY (no NEXT_PUBLIC_ prefix) should work."""
+        result = _run_validate({
+            "RAILWAY_SERVICE_NAME": "admin",
+            "SUPABASE_URL": "https://test.supabase.co",
+            "SUPABASE_ANON_KEY": "test-anon-key",
+        })
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
+
+    def test_vercel_env_triggers_check(self):
+        """VERCEL_ENV should also trigger the fail-closed check."""
+        result = _run_validate({
+            "VERCEL_ENV": "production",
+            # No Supabase creds
+        })
+        assert result.returncode != 0
+
+    def test_railway_service_name_triggers_check(self):
+        """RAILWAY_SERVICE_NAME alone should trigger the fail-closed check."""
+        result = _run_validate({
+            "RAILWAY_SERVICE_NAME": "ingestion",
+            # No Supabase creds
+        })
+        assert result.returncode != 0
