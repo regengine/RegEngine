@@ -13,11 +13,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from app.disclaimers import SAMPLE_EXPORT_DISCLAIMER
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("epcis-export")
@@ -84,6 +85,63 @@ def _query_tenant_events(tenant_id: str, lot_code: str | None, date_from: str | 
         return []
     finally:
         db.close()
+
+
+_CTE_TO_BIZSTEP = {
+    "receiving": "urn:epcglobal:cbv:bizstep:receiving",
+    "shipping": "urn:epcglobal:cbv:bizstep:shipping",
+    "transformation": "urn:epcglobal:cbv:bizstep:transforming",
+    "initial_packing": "urn:epcglobal:cbv:bizstep:packing",
+    "harvesting": "urn:epcglobal:cbv:bizstep:harvesting",
+    "cooling": "urn:epcglobal:cbv:bizstep:storing",
+    "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:landing",
+}
+
+def _validate_epcis_document(doc: dict) -> list[str]:
+    """Validate an EPCIS 2.0 JSON-LD document structure.
+
+    Returns a list of validation error strings (empty = valid).
+    Checks structural compliance without requiring an external JSON Schema library.
+    """
+    errors: list[str] = []
+
+    # Top-level structure
+    if "@context" not in doc:
+        errors.append("Missing required @context field")
+    if doc.get("type") != "EPCISDocument":
+        errors.append(f"Expected type 'EPCISDocument', got '{doc.get('type')}'")
+    if "schemaVersion" not in doc:
+        errors.append("Missing schemaVersion field")
+    elif doc["schemaVersion"] not in ("2.0", "2.0.0"):
+        errors.append(f"Unsupported schemaVersion '{doc['schemaVersion']}' (expected 2.0)")
+    if "creationDate" not in doc:
+        errors.append("Missing creationDate field")
+
+    # Event list
+    body = doc.get("epcisBody", {})
+    event_list = body.get("eventList", [])
+    if not event_list:
+        errors.append("epcisBody.eventList is empty or missing")
+
+    valid_event_types = {"ObjectEvent", "AggregationEvent", "TransactionEvent", "TransformationEvent", "AssociationEvent"}
+    valid_actions = {"ADD", "OBSERVE", "DELETE"}
+    bizstep_prefix = "urn:epcglobal:cbv:bizstep:"
+
+    for i, event in enumerate(event_list):
+        prefix = f"event[{i}]"
+        etype = event.get("type")
+        if etype not in valid_event_types:
+            errors.append(f"{prefix}: invalid type '{etype}'")
+        if "eventTime" not in event:
+            errors.append(f"{prefix}: missing eventTime")
+        action = event.get("action")
+        if action and action not in valid_actions:
+            errors.append(f"{prefix}: invalid action '{action}'")
+        biz_step = event.get("bizStep", "")
+        if biz_step and not biz_step.startswith(bizstep_prefix):
+            errors.append(f"{prefix}: bizStep '{biz_step}' is not a valid GS1 CBV URI")
+
+    return errors
 
 
 router = APIRouter(prefix="/api/v1/export", tags=["EPCIS & FDA Export"])
@@ -159,6 +217,7 @@ SAMPLE_EPCIS_EVENTS = [
 )
 async def export_epcis(
     request: ExportRequest,
+    validate: bool = Query(False, description="Run GS1 EPCIS 2.0 structural validation on the output"),
     _: None = Depends(_verify_api_key),
 ):
     """Export traceability data in EPCIS 2.0 JSON-LD format."""
@@ -176,7 +235,7 @@ async def export_epcis(
                 "eventTime": ts.isoformat() if ts else now.isoformat(),
                 "eventTimeZoneOffset": "-08:00",
                 "action": r["epcis_action"] or "OBSERVE",
-                "bizStep": r["epcis_biz_step"] or f"urn:epcglobal:cbv:bizstep:{(r['event_type'] or 'observing').lower()}",
+                "bizStep": r["epcis_biz_step"] or _CTE_TO_BIZSTEP.get(r["event_type"] or "", "urn:epcglobal:cbv:bizstep:observing"),
                 "readPoint": {"id": f"urn:epc:id:sgln:{r['location_gln'] or '0000000000000'}.0"},
                 "extension": {
                     "quantityList": [{
@@ -209,19 +268,32 @@ async def export_epcis(
             "generatedAt": now.isoformat(),
             "eventsCount": len(event_list),
             "dataSource": data_source,
-            "integrityVerified": True,
+            "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
+            **({"regengine:disclaimer": SAMPLE_EXPORT_DISCLAIMER} if data_source == "sample" else {}),
         }
     }
 
+    if validate:
+        validation_errors = _validate_epcis_document(epcis_document)
+        epcis_document["regengine:validation"] = {
+            "valid": len(validation_errors) == 0,
+            "errors": validation_errors,
+            "checkedAt": now.isoformat(),
+        }
+
+    response_headers = {
+        "Content-Disposition": f'attachment; filename="regengine_epcis_{request.tenant_id}_{now.strftime("%Y%m%d")}.json"',
+        "X-RegEngine-Events-Count": str(len(event_list)),
+        "X-RegEngine-Integrity-Verified": "true" if data_source == "tenant" else "false",
+        "X-RegEngine-Data-Source": data_source,
+    }
+    if validate:
+        response_headers["X-RegEngine-Schema-Valid"] = "true" if not validation_errors else "false"
+
     return JSONResponse(
         content=epcis_document,
-        headers={
-            "Content-Disposition": f'attachment; filename="regengine_epcis_{request.tenant_id}_{now.strftime("%Y%m%d")}.json"',
-            "X-RegEngine-Events-Count": str(len(event_list)),
-            "X-RegEngine-Integrity-Verified": "true" if data_source == "tenant" else "false",
-            "X-RegEngine-Data-Source": data_source,
-        }
+        headers=response_headers
     )
 
 
@@ -280,21 +352,26 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
 """
         event_count = 6
 
+    fda_headers: dict[str, str] = {
+        "Content-Disposition": f'attachment; filename="regengine_fda_export_{request.tenant_id}_{now.strftime("%Y%m%d")}.csv"',
+        "X-RegEngine-Events-Count": str(event_count),
+        "X-RegEngine-Format": "FDA_21CFR1.1455",
+        "X-RegEngine-Data-Source": data_source,
+    }
+    if data_source == "sample":
+        fda_headers["X-RegEngine-Disclaimer"] = SAMPLE_EXPORT_DISCLAIMER
+
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv",
-        headers={
-            "Content-Disposition": f'attachment; filename="regengine_fda_export_{request.tenant_id}_{now.strftime("%Y%m%d")}.csv"',
-            "X-RegEngine-Events-Count": str(event_count),
-            "X-RegEngine-Format": "FDA_21CFR1.1455",
-            "X-RegEngine-Data-Source": data_source,
-        },
+        headers=fda_headers,
     )
 
 
 @router.get(
     "/formats",
     summary="List available export formats",
+    dependencies=[Depends(_verify_api_key)],
 )
 async def list_export_formats():
     """List available export formats and their descriptions."""

@@ -15,7 +15,7 @@ import httpx
 import structlog
 from prometheus_client import Counter, Gauge, REGISTRY
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import SessionLocal
@@ -124,7 +124,7 @@ class HallucinationTracker:
                 )
             yield session
             session.commit()
-        except Exception:
+        except SQLAlchemyError:
             session.rollback()
             raise
         finally:

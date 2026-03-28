@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
-const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
+const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
 
 export const dynamic = 'force-dynamic';
 

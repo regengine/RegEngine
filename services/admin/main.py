@@ -13,6 +13,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before app creation)
+from shared.error_handling import init_sentry
+init_sentry()
+
 import structlog
 from app.api_overlay import router as overlay_router
 from app.config import get_settings
