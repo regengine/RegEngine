@@ -5,6 +5,8 @@ import logging
 from typing import Optional, Dict, Any
 from playwright.async_api import async_playwright
 
+from shared.url_validation import validate_url
+
 logger = logging.getLogger("ingestion.browser")
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -22,7 +24,8 @@ async def fetch_with_browser(url: str, timeout: int = 30000) -> Dict[str, Any]:
         page = await context.new_page()
         
         try:
-            # Navigate to URL
+            # SSRF validation before navigation
+            validate_url(url)
             response = await page.goto(url, wait_until="networkidle", timeout=timeout)
             
             if not response:
