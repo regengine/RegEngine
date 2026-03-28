@@ -125,6 +125,9 @@ _VALID_ROUTER_NAMES = {
     "notification_prefs", "team_mgmt", "settings", "integration",
     "canonical_records", "rules", "exceptions", "request_workflow", "identity",
     "auditor", "compliance_metrics", "readiness", "incidents", "sandbox",
+    "supplier_validation", "disaster_recovery",
+    "sla_tracking", "export_monitoring",
+    "chain_verification", "audit_export_log",
 }
 
 # Validate DISABLED_ROUTERS — catch typos early
@@ -397,6 +400,40 @@ if _router_enabled("readiness"):
 if _router_enabled("incidents"):
     from app.incident_router import router as incident_command_router
     app.include_router(incident_command_router)
+
+
+# Chain Verification (background hash chain integrity checks)
+if _router_enabled("chain_verification"):
+    from app.chain_verification_job import router as chain_verification_router
+    app.include_router(chain_verification_router)
+
+
+# Audit Export Log (export/verification/activity audit trail)
+if _router_enabled("audit_export_log"):
+    from app.audit_export_log import router as audit_export_log_router
+    app.include_router(audit_export_log_router)
+
+
+# FDA 24-Hour SLA Tracking (FSMA 204 — 21 CFR 1.1455)
+if _router_enabled("sla_tracking"):
+    from app.sla_tracking import router as sla_tracking_router
+    app.include_router(sla_tracking_router)
+
+# Export Monitoring & Health Checks
+if _router_enabled("export_monitoring"):
+    from app.export_monitoring import router as export_monitoring_router
+    app.include_router(export_monitoring_router)
+
+
+# Supplier Validation (compliance scoring for supplier network)
+if _router_enabled("supplier_validation"):
+    from app.supplier_validation import router as supplier_validation_router
+    app.include_router(supplier_validation_router)
+
+# Disaster Recovery (readiness assessment and recovery simulation)
+if _router_enabled("disaster_recovery"):
+    from app.disaster_recovery import router as disaster_recovery_router
+    app.include_router(disaster_recovery_router)
 
 
 # Standardized Health & Readiness (Phase 17)
