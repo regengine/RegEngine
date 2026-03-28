@@ -7,9 +7,12 @@ Provides structured table detection and row-level cell extraction from documents
 import io
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import structlog
+
+if TYPE_CHECKING:
+    from PIL import Image
 
 logger = structlog.get_logger("table-extractor")
 

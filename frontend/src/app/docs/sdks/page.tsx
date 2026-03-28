@@ -67,10 +67,10 @@ export default function SDKsDocsPage() {
 
                     <div className="grid gap-3">
                         {[
-                            { title: 'Python SDK', badge: 'pip install regengine', color: '#3776ab' },
-                            { title: 'Node.js SDK', badge: 'npm install @regengine/sdk', color: '#339933' },
-                            { title: 'Go SDK', badge: 'go get regengine.co/sdk', color: '#00add8' },
-                            { title: 'REST Client', badge: 'OpenAPI 3.0 spec', color: 'var(--re-text-muted)' },
+                            { title: 'Python SDK', badge: 'Planned', color: '#3776ab' },
+                            { title: 'Node.js SDK', badge: 'Planned', color: '#339933' },
+                            { title: 'Go SDK', badge: 'Planned', color: '#00add8' },
+                            { title: 'REST Client', badge: 'Available now — OpenAPI 3.0 spec', color: 'var(--re-text-muted)' },
                         ].map((item) => (
                             <div key={item.title} style={{
                                 padding: '20px',
@@ -80,7 +80,7 @@ export default function SDKsDocsPage() {
                                 display: 'flex',
                                 justifyContent: 'space-between',
                                 alignItems: 'center',
-                                opacity: 0.6,
+                                opacity: item.badge === 'Planned' ? 0.6 : 1,
                             }}>
                                 <div style={{ fontWeight: 600, color: 'var(--re-text-primary)' }}>{item.title}</div>
                                 <code style={{

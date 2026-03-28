@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
-const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
+const COMPLIANCE_URL = getServerServiceURL('compliance');
 
 export const dynamic = 'force-dynamic';
 
@@ -24,12 +25,9 @@ export async function GET(
         const data = await res.json();
         return NextResponse.json(data);
     } catch {
-        // Fallback for demo
-        return NextResponse.json({
-            tenant_id: tenantId,
-            status: 'COMPLIANT',
-            score: 94,
-            last_check: new Date().toISOString()
-        });
+        return NextResponse.json(
+            { error: 'compliance_service_unavailable', message: 'Unable to reach compliance service' },
+            { status: 503 }
+        );
     }
 }
