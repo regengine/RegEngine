@@ -8,7 +8,11 @@ import os
 from pathlib import Path
 import sys
 from threading import Lock
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+# Type alias – the concrete Pydantic model lives outside this package;
+# keep the annotation so call-sites stay self-documenting.
+GeneratedObligation = Any
 from uuid import uuid4
 
 from sqlalchemy import create_engine, text
