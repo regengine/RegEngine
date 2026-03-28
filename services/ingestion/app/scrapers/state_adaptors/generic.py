@@ -10,6 +10,7 @@ import requests
 import feedparser
 from typing import Iterable, Optional
 
+from shared.url_validation import validate_url
 from .base import FetchedItem, Source, StateRegistryScraper
 
 import logging
@@ -51,6 +52,7 @@ class GenericRSSScraper(StateRegistryScraper):
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch content from the source URL."""
         try:
+            validate_url(source.url)
             resp = requests.get(
                 source.url,
                 timeout=30,
@@ -107,6 +109,7 @@ class GenericListScraper(StateRegistryScraper):
             from bs4 import BeautifulSoup
             from urllib.parse import urljoin
 
+            validate_url(self.list_url)
             resp = requests.get(
                 self.list_url,
                 timeout=30,
@@ -135,6 +138,7 @@ class GenericListScraper(StateRegistryScraper):
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch content from the source URL."""
         try:
+            validate_url(source.url)
             resp = requests.get(
                 source.url,
                 timeout=30,

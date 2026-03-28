@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from shared.pagination import PaginationParams
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
 
@@ -123,6 +124,7 @@ class PostUpdateRequest(BaseModel):
 async def list_incidents(
     tenant_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    pagination: PaginationParams = Depends(),
     principal: IngestionPrincipal = Depends(require_permission("incidents.read")),
     db_session=Depends(_get_db_session),
 ):
@@ -142,12 +144,22 @@ async def list_incidents(
         where += " AND data->>'status' = :status"
         params["status"] = status
 
+    count_row = db_session.execute(
+        text(f"SELECT COUNT(*) FROM fsma.incidents WHERE {where}"),
+        params,
+    ).fetchone()
+    total = count_row[0] if count_row else 0
+
+    params["lim"] = pagination.limit
+    params["off"] = pagination.skip
+
     rows = db_session.execute(
         text(f"""
             SELECT id, data, created_at, updated_at
             FROM fsma.incidents
             WHERE {where}
             ORDER BY created_at DESC
+            LIMIT :lim OFFSET :off
         """),
         params,
     ).fetchall()
@@ -160,7 +172,7 @@ async def list_incidents(
         data["updated_at"] = r[3].isoformat() if r[3] else None
         incidents.append(data)
 
-    return {"tenant_id": tid, "incidents": incidents, "total": len(incidents)}
+    return {"tenant_id": tid, "incidents": incidents, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 
 @router.post(

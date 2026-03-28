@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...fsma_metrics import record_trace_query
@@ -39,12 +39,16 @@ from pathlib import Path
 # Add shared utilities (portable path resolution)
 from shared.middleware import get_current_tenant_id
 
+from shared.rate_limit import limiter
+
 router = APIRouter(tags=["Traceability"])
 logger = structlog.get_logger("fsma-traceability")
 
 
 @router.get("/trace/forward/{tlc}")
+@limiter.limit("10/minute")
 async def trace_forward_endpoint(
+    request: Request,
     tlc: str,
     max_depth: int = Query(10, ge=1, le=20, description="Maximum hops in trace"),
     enforce_time_arrow: bool = Query(
@@ -107,7 +111,9 @@ async def trace_forward_endpoint(
 
 
 @router.get("/trace/backward/{tlc}")
+@limiter.limit("10/minute")
 async def trace_backward_endpoint(
+    request: Request,
     tlc: str,
     max_depth: int = Query(10, ge=1, le=20, description="Maximum hops in trace"),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -157,7 +163,9 @@ async def trace_backward_endpoint(
 
 
 @router.get("/timeline/{tlc}")
+@limiter.limit("10/minute")
 async def lot_timeline_endpoint(
+    request: Request,
     tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
@@ -254,7 +262,9 @@ async def link_obligation_endpoint(
 
 
 @router.get("/search/events")
+@limiter.limit("10/minute")
 async def search_traceability_events(
+    request: Request,
     start_date: Optional[str] = Query(
         default=None,
         description="Start date (YYYY-MM-DD). Defaults to 30 days ago.",
@@ -357,8 +367,10 @@ class TraceabilityEventRequest(BaseModel):
 
 
 @router.post("/event")
+@limiter.limit("10/minute")
 async def log_traceability_event(
-    request: TraceabilityEventRequest,
+    request: Request,
+    payload: TraceabilityEventRequest,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -366,19 +378,19 @@ async def log_traceability_event(
     High-integrity endpoint for logging Critical Tracking Events from mobile dock.
     Performs real-time validation of identifiers and persists directly to Neo4j.
     """
-    logger.info("logging_mobile_event", event_type=request.event_type, tlc=request.tlc)
+    logger.info("logging_mobile_event", event_type=payload.event_type, tlc=payload.tlc)
 
     # 1. Validation Logic
-    tlc_result = validate_tlc(request.tlc)
+    tlc_result = validate_tlc(payload.tlc)
     if not tlc_result.is_valid:
         raise HTTPException(status_code=400, detail=f"Invalid TLC: {tlc_result.errors[0].message}")
 
-    gln_result = validate_gln(request.location_identifier)
+    gln_result = validate_gln(payload.location_identifier)
     if not gln_result.is_valid:
         raise HTTPException(status_code=400, detail=f"Invalid Location (GLN): {gln_result.errors[0].message}")
 
-    if request.gtin:
-        gtin_result = validate_gtin(request.gtin)
+    if payload.gtin:
+        gtin_result = validate_gtin(payload.gtin)
         if not gtin_result.is_valid:
             raise HTTPException(status_code=400, detail=f"Invalid GTIN: {gtin_result.errors[0].message}")
 
@@ -392,36 +404,36 @@ async def log_traceability_event(
             # Create TraceEvent
             trace_event = TraceEvent(
                 event_id=event_id,
-                type=request.event_type,
-                event_date=request.event_date,
+                type=payload.event_type,
+                event_date=payload.event_date,
                 tenant_id=str(tenant_id),
             )
             await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
 
             # Create/Merge Lot
             lot = Lot(
-                tlc=request.tlc,
-                gtin=request.gtin,
-                product_description=request.product_description,
-                quantity=request.quantity,
-                unit_of_measure=request.uom,
+                tlc=payload.tlc,
+                gtin=payload.gtin,
+                product_description=payload.product_description,
+                quantity=payload.quantity,
+                unit_of_measure=payload.uom,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Lot.merge_cypher(), tlc=request.tlc, properties=lot.node_properties)
+            await session.run(Lot.merge_cypher(), tlc=payload.tlc, properties=lot.node_properties)
 
             # Create/Merge Facility
             facility = Facility(
-                gln=request.location_identifier,
+                gln=payload.location_identifier,
                 tenant_id=str(tenant_id),
             )
-            await session.run(Facility.merge_cypher(), gln=request.location_identifier, properties=facility.node_properties)
+            await session.run(Facility.merge_cypher(), gln=payload.location_identifier, properties=facility.node_properties)
 
             # Link Relationships
-            await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=request.tlc, event_id=event_id)
-            await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=request.location_identifier)
+            await session.run(FSMARelationships.LOT_UNDERWENT_EVENT, tlc=payload.tlc, event_id=event_id)
+            await session.run(FSMARelationships.EVENT_OCCURRED_AT, event_id=event_id, gln=payload.location_identifier)
 
             # 3. Handle Evidence (BOL Photo)
-            if request.image_data:
+            if payload.image_data:
                 doc_id = str(uuid.uuid4())
                 document = Document(
                     document_id=doc_id,
@@ -429,7 +441,7 @@ async def log_traceability_event(
                     # In a production environment, we would upload to S3. 
                     # For this pilot, we store the Base64 as the raw_content.
                     source_uri=f"base64://{doc_id}",
-                    raw_content=request.image_data,
+                    raw_content=payload.image_data,
                     extraction_timestamp=datetime.now().isoformat(),
                     tenant_id=str(tenant_id)
                 )
@@ -460,12 +472,12 @@ async def log_traceability_event(
                 "SHIPPING": "shipping", "RECEIVING": "receiving",
                 "TRANSFORMATION": "transformation",
             }
-            cte_val = request.event_type.value if hasattr(request.event_type, "value") else str(request.event_type)
+            cte_val = payload.event_type.value if hasattr(payload.event_type, "value") else str(payload.event_type)
             canonical_cte = _cte_map.get(cte_val.upper(), cte_val.lower())
 
             kdes = {}
-            if request.gtin:
-                kdes["gtin"] = request.gtin
+            if payload.gtin:
+                kdes["gtin"] = payload.gtin
 
             provenance = ProvenanceMetadata(
                 mapper_name="mobile_capture_bridge",
@@ -479,23 +491,23 @@ async def log_traceability_event(
                 tenant_id=tenant_id,
                 source_system=IngestionSource.MOBILE_CAPTURE,
                 event_type=CanonicalCTEType(canonical_cte),
-                event_timestamp=request.event_date,
-                traceability_lot_code=request.tlc,
-                product_reference=request.product_description or "",
-                lot_reference=request.tlc,
-                quantity=request.quantity or 1.0,
-                unit_of_measure=request.uom or "each",
-                from_facility_reference=request.location_identifier,
+                event_timestamp=payload.event_date,
+                traceability_lot_code=payload.tlc,
+                product_reference=payload.product_description or "",
+                lot_reference=payload.tlc,
+                quantity=payload.quantity or 1.0,
+                unit_of_measure=payload.uom or "each",
+                from_facility_reference=payload.location_identifier,
                 kdes=kdes,
                 raw_payload={
                     "event_type": cte_val,
-                    "event_date": request.event_date,
-                    "tlc": request.tlc,
-                    "location_identifier": request.location_identifier,
-                    "quantity": request.quantity,
-                    "uom": request.uom,
-                    "product_description": request.product_description,
-                    "gtin": request.gtin,
+                    "event_date": payload.event_date,
+                    "tlc": payload.tlc,
+                    "location_identifier": payload.location_identifier,
+                    "quantity": payload.quantity,
+                    "uom": payload.uom,
+                    "product_description": payload.product_description,
+                    "gtin": payload.gtin,
                 },
                 provenance_metadata=provenance,
             ).prepare_for_persistence()
@@ -511,7 +523,7 @@ async def log_traceability_event(
             finally:
                 db.close()
 
-            logger.info("mobile_event_canonical_bridged", event_id=event_id, tlc=request.tlc)
+            logger.info("mobile_event_canonical_bridged", event_id=event_id, tlc=payload.tlc)
         except Exception as bridge_err:
             # Non-blocking: Neo4j write already succeeded
             logger.warning("mobile_canonical_bridge_failed", event_id=event_id, error=str(bridge_err))
@@ -519,8 +531,8 @@ async def log_traceability_event(
         return {
             "status": "success",
             "event_id": event_id,
-            "tlc": request.tlc,
-            "message": f"Successfully secured {request.event_type} event on the immutable ledger.",
+            "tlc": payload.tlc,
+            "message": f"Successfully secured {payload.event_type} event on the immutable ledger.",
         }
 
     except Exception as e:
