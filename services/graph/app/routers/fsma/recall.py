@@ -4,7 +4,7 @@ from typing import List, Optional
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...fsma_recall import (
@@ -17,6 +17,8 @@ from ...fsma_recall import (
 from ...fsma_utils import trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
 from shared.auth import require_api_key
+
+from shared.rate_limit import limiter
 
 router = APIRouter(tags=["Recall"])
 logger = structlog.get_logger("fsma-recall")
@@ -105,8 +107,10 @@ def get_recall_history(
 
 
 @router.post("/drill")
+@limiter.limit("10/minute")
 async def create_recall_drill(
-    request: CreateDrillRequest,
+    request: Request,
+    payload: CreateDrillRequest,
     api_key=Depends(require_api_key),
 ):
     """Initiate a new mock recall drill."""
@@ -114,16 +118,16 @@ async def create_recall_drill(
     tenant_id = api_key.get("tenant_id", "default")
 
     try:
-        drill_type = RecallType(request.type)
-        severity = RecallSeverity(request.severity)
+        drill_type = RecallType(payload.type)
+        severity = RecallSeverity(payload.severity)
 
         drill = engine.create_drill(
             tenant_id=tenant_id,
             drill_type=drill_type,
             severity=severity,
-            target_lot=request.target_tlc,
-            target_gtin=request.target_gtin,
-            reason=request.reason,
+            target_lot=payload.target_tlc,
+            target_gtin=payload.target_gtin,
+            reason=payload.reason,
             initiated_by=api_key.get("user_id", "api_user"),
         )
 
