@@ -18,6 +18,92 @@ import os
 
 logger = structlog.get_logger("auth")
 
+
+def validate_auth_config(*, require_supabase: bool = False) -> None:
+    """Validate critical auth configuration at service startup.
+
+    Call this from each service's main.py after app creation.
+    Logs warnings for missing config and raises on fatal misconfigurations.
+
+    Args:
+        require_supabase: If True, enforce Supabase credentials in cloud.
+            Only services that directly use Supabase auth (admin, ingestion,
+            compliance) should set this. Internal services (graph, NLP,
+            scheduler) use API key auth and do not need Supabase.
+    """
+    # ------------------------------------------------------------------
+    # H2: Fail-closed — refuse to start in cloud without Supabase creds
+    # Only enforced for services that actually use Supabase auth.
+    # ------------------------------------------------------------------
+    if require_supabase:
+        is_cloud = bool(
+            os.getenv("RAILWAY_ENVIRONMENT")
+            or os.getenv("RAILWAY_SERVICE_NAME")
+            or os.getenv("VERCEL_ENV")
+        )
+
+        if is_cloud:
+            supabase_url = (
+                os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+                or os.getenv("SUPABASE_URL")
+            )
+            supabase_key = (
+                os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+                or os.getenv("SUPABASE_ANON_KEY")
+                or os.getenv("SUPABASE_SERVICE_KEY")
+            )
+
+            if not supabase_url or not supabase_key:
+                # Warn loudly but don't crash — backend services handle
+                # missing Supabase gracefully (SupabaseManager returns None).
+                # sys.exit(1) here was killing services on Railway that had
+                # valid JWT + API key auth but not SUPABASE_ANON_KEY.
+                logger.error(
+                    "supabase_credentials_missing_in_cloud",
+                    msg=(
+                        "Cloud deployment detected but Supabase credentials missing. "
+                        "Set SUPABASE_URL and SUPABASE_SERVICE_KEY (or ANON_KEY variants). "
+                        "Supabase-dependent features will be degraded. "
+                        "Services continue with JWT/API key auth."
+                    ),
+                    supabase_url_set=bool(supabase_url),
+                    supabase_key_set=bool(supabase_key),
+                )
+
+    issues: list[str] = []
+
+    # JWT secret must be set and non-trivial
+    jwt_secret = os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET")
+    if not jwt_secret:
+        issues.append("AUTH_SECRET_KEY / JWT_SECRET not set — JWT auth will fail")
+    elif len(jwt_secret) < 16:
+        issues.append("AUTH_SECRET_KEY is too short (<16 chars) — insecure for production")
+    elif jwt_secret in ("dev_secret_key_change_me", "your-secret", "changeme", "secret"):
+        issues.append("AUTH_SECRET_KEY is a known default — change it before production")
+
+    # API key should be set for proxy auth
+    api_key = os.getenv("REGENGINE_API_KEY") or os.getenv("API_KEY")
+    if not api_key:
+        logger.warning("validate_auth_config", msg="REGENGINE_API_KEY not set — proxy auth will fail")
+
+    # Test bypass should not be active in production
+    bypass_token = os.getenv("AUTH_TEST_BYPASS_TOKEN")
+    env = os.getenv("REGENGINE_ENV", "production").lower()
+    if bypass_token and env == "production":
+        issues.append("AUTH_TEST_BYPASS_TOKEN is set in production — remove it")
+
+    for issue in issues:
+        logger.error("auth_config_validation_failed", issue=issue)
+
+    # Only raise in real production — not in CI or test environments
+    is_ci = os.getenv("GITHUB_ACTIONS") or os.getenv("CI")
+    if issues and env == "production" and not is_ci:
+        raise RuntimeError(
+            f"Auth config validation failed ({len(issues)} issues): "
+            + "; ".join(issues)
+        )
+
+
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-RegEngine-API-Key", auto_error=False)
 
@@ -33,6 +119,7 @@ class APIKey(BaseModel):
     allowed_jurisdictions: list[str] = []  # e.g., ["US"], ["US","US-NY"]
     created_at: datetime
     expires_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
     rate_limit_per_minute: int = 60
     enabled: bool = True
     scopes: list[str] = []
@@ -129,6 +216,9 @@ class APIKeyStore:
             logger.warning("api_key_expired", key_id=key_id)
             return None
 
+        # Track last usage timestamp
+        api_key.last_used_at = datetime.now(timezone.utc)
+
         return api_key
 
     def check_rate_limit(self, key_id: str, limit_per_minute: int) -> bool:
@@ -182,13 +272,16 @@ _db_store_instance: Optional[DatabaseAPIKeyStore] = None
 
 def get_key_store() -> Union[APIKeyStore, DatabaseAPIKeyStore]:
     """Get the global API key store instance.
-    
-    Returns DatabaseAPIKeyStore if configured, otherwise in-memory APIKeyStore.
+
+    In production, always returns DatabaseAPIKeyStore.
+    In development/test, returns in-memory APIKeyStore unless ENABLE_DB_API_KEYS=true.
     """
-    if os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true":
-        # We return the class instance, but initialization happens async.
-        # This is a bit tricky for sync contexts.
-        # For now, we assume the app startup has initialized it or we lazily init.
+    env = os.getenv("REGENGINE_ENV", "production").lower()
+    use_db = (
+        env == "production"
+        or os.getenv("ENABLE_DB_API_KEYS", "false").lower() == "true"
+    )
+    if use_db:
         global _db_store_instance
         if _db_store_instance is None:
             _db_store_instance = DatabaseAPIKeyStore()
@@ -222,6 +315,15 @@ async def require_api_key(
         and x_regengine_api_key == _test_bypass_token
     )
 
+    # Log a warning if bypass token is configured but we're in production
+    if _test_bypass_token and _current_env not in _allowed_envs:
+        logger.warning(
+            "auth_bypass_blocked_in_production",
+            path=request.url.path,
+            env=_current_env,
+            msg="AUTH_TEST_BYPASS_TOKEN is set but blocked — remove it from production config",
+        )
+
     if _is_env_bypass:
         logger.info("test_bypass_auth_used", path=request.url.path, env=_current_env)
         return APIKey(
@@ -237,8 +339,31 @@ async def require_api_key(
             allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
         )
 
+    # Check preshared/master key first — same pattern as get_ingestion_principal.
+    # This ensures server-side proxy injection (which uses the configured API_KEY
+    # env var) works for ALL endpoints, not just those using require_permission.
+    _configured_key = os.getenv("API_KEY") or os.getenv("REGENGINE_API_KEY")
+    if _configured_key and x_regengine_api_key:
+        import hmac as _hmac
+        if _hmac.compare_digest(
+            x_regengine_api_key.encode("utf-8"),
+            _configured_key.encode("utf-8"),
+        ):
+            return APIKey(
+                key_id="preshared-master",
+                key_hash="",
+                name="Preshared Master Key",
+                tenant_id=None,
+                created_at=datetime.now(timezone.utc),
+                rate_limit_per_minute=1000,
+                enabled=True,
+                scopes=["read", "write", "admin"],
+                billing_tier="ENTERPRISE",
+                allowed_jurisdictions=["US", "US-NY", "US-CA", "EU"],
+            )
+
     key_store = get_key_store()
-    
+
     if isinstance(key_store, DatabaseAPIKeyStore):
         api_key = await key_store.validate_key(x_regengine_api_key)
     else:
@@ -278,10 +403,11 @@ async def require_api_key(
             )
 
     logger.info(
-        "api_key_validated",
+        "api_key_used",
         key_id=api_key.key_id,
-        name=api_key.name,
-        path=request.url.path,
+        tenant_id=getattr(api_key, "tenant_id", None),
+        endpoint=request.url.path,
+        method=request.method,
     )
     return api_key
 

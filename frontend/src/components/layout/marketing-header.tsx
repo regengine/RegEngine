@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth-context';
 import { MARKETING_FREE_TOOLS, MARKETING_PRIMARY_NAV } from '@/components/layout/marketing-nav';
 import { RegEngineWordmark } from '@/components/layout/regengine-wordmark';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
-import { GlobalSearch } from '@/components/layout/global-search';
+// GlobalSearch removed — not ready for production
 
 export function MarketingHeader() {
     const pathname = usePathname();
@@ -16,7 +16,9 @@ export function MarketingHeader() {
     const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const toolsWrapperRef = useRef<HTMLDivElement | null>(null);
     const toolsButtonRef = useRef<HTMLButtonElement | null>(null);
-    const { user } = useAuth();
+    const { user, isAuthenticated, isHydrated } = useAuth();
+    // Only show logged-in state when auth is fully verified
+    const showLoggedIn = isHydrated && isAuthenticated && !!user;
     const hideHeader =
         pathname === '/mobile/capture' ||
         pathname === '/fsma/field-capture' ||
@@ -295,12 +297,42 @@ export function MarketingHeader() {
                             </div>
                         </div>
 
-                        <GlobalSearch />
+                        {/* Developer & Docs links — outside dropdown wrapper so they're always clickable */}
+                        <Link
+                            href="/developer/portal"
+                            style={{
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                color: "var(--re-text-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                                padding: "8px 0",
+                            }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
+                        >
+                            Developers
+                        </Link>
+                        <Link
+                            href="/docs"
+                            style={{
+                                fontSize: "13px",
+                                fontWeight: 500,
+                                color: "var(--re-text-muted)",
+                                textDecoration: "none",
+                                transition: "color 0.2s",
+                                padding: "8px 0",
+                            }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-primary)")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.color = "var(--re-text-muted)")}
+                        >
+                            Docs
+                        </Link>
 
                         <ThemeToggle />
 
                         {/* Auth-aware buttons */}
-                        {user ? (
+                        {showLoggedIn ? (
                             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                                 <Link
                                     href="/dashboard"
@@ -362,7 +394,7 @@ export function MarketingHeader() {
                                     Log In
                                 </Link>
                                 <Link
-                                    href="/onboarding"
+                                    href="/retailer-readiness"
                                     style={{
                                         fontSize: "13px",
                                         fontWeight: 600,
@@ -377,7 +409,7 @@ export function MarketingHeader() {
                                     onMouseEnter={(e) => { (e.target as HTMLElement).style.transform = "translateY(-1px)"; (e.target as HTMLElement).style.boxShadow = "0 4px 16px var(--re-brand-muted)"; }}
                                     onMouseLeave={(e) => { (e.target as HTMLElement).style.transform = "translateY(0)"; (e.target as HTMLElement).style.boxShadow = "0 2px 8px var(--re-brand-muted)"; }}
                                 >
-                                    Start Your Workspace →
+                                    Free Assessment →
                                 </Link>
                             </>
                         )}
@@ -625,7 +657,7 @@ export function MarketingHeader() {
                     gap: "10px",
                     paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
                 }}>
-                    {user ? (
+                    {showLoggedIn ? (
                         <>
                             <div style={{
                                 display: "flex",
@@ -687,7 +719,7 @@ export function MarketingHeader() {
                     ) : (
                         <>
                             <Link
-                                href="/onboarding"
+                                href="/retailer-readiness"
                                 onClick={() => setMobileOpen(false)}
                                 style={{
                                     display: "flex",

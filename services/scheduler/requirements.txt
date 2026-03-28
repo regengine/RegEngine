@@ -1,32 +1,27 @@
 # Core dependencies — pinned for reproducible builds
-# apscheduler: exact pin to prevent breaking changes on minor updates
 apscheduler==3.10.4
-# pydantic: exact pin to prevent breaking changes on minor updates
 pydantic==2.5.0
-# pydantic-settings: exact pin to prevent breaking changes on minor updates
 pydantic-settings==2.1.0
-# structlog: exact pin to prevent breaking changes on minor updates
 structlog==24.1.0
-requests~=2.32.5
+requests==2.33.0
 
 # Database
-# sqlalchemy: exact pin to prevent breaking changes on minor updates
 sqlalchemy==2.0.23
-psycopg[binary]~=3.2.4
+psycopg[binary]>=3.2.4
+
+# Timezone
+pytz>=2024.1
 
 # Kafka
-kafka-python-ng~=2.0.2
+kafka-python-ng==2.0.3
 
 # XML parsing (safe XML for FDA scrapers)
-defusedxml>=0.7.1,<1
+defusedxml>=0.7.1
 
 # Metrics (optional)
-prometheus-client~=0.19.0
-
-# Rate limiting
-slowapi~=0.1.9
+prometheus-client==0.19.0
 
 # Testing
-pytest~=7.4.3
-testcontainers[postgresql]~=4.4.1
-testcontainers[redis]~=4.4.1
+pytest==7.4.3
+testcontainers[postgresql]==4.4.1
+testcontainers[redis]==4.4.1

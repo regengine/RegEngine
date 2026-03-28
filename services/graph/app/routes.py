@@ -1,7 +1,8 @@
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 import uuid
@@ -13,6 +14,7 @@ from shared.middleware import get_current_tenant_id
 from shared.auth import require_api_key
 
 from .neo4j_utils import Neo4jClient
+from shared.rate_limit import limiter
 
 # Health/metrics router at root level (operational endpoints)
 router = APIRouter()
@@ -64,13 +66,15 @@ async def readiness():
     return {"status": "ready", "service": "graph-api"}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @v1_router.get("/provisions/by-request")
+@limiter.limit("10/minute")
 async def provisions_by_request_id(
+    request: Request,
     request_id: str = Query(..., alias="id"),
     api_key: str = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id)

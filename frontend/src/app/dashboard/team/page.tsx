@@ -52,8 +52,7 @@ const ROLE_CONFIG: Record<string, { icon: React.ElementType; color: string; labe
     viewer: { icon: Eye, color: '#6b7280', label: 'Viewer' },
 };
 
-async function apiFetchTeam(tenantId: string): Promise<TeamResponse> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+async function apiFetchTeam(tenantId: string, apiKey: string): Promise<TeamResponse> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/team/${tenantId}`, {
@@ -63,8 +62,7 @@ async function apiFetchTeam(tenantId: string): Promise<TeamResponse> {
     return res.json();
 }
 
-async function apiInviteMember(tenantId: string, name: string, email: string, role: string): Promise<void> {
-    const apiKey = typeof window !== 'undefined' ? localStorage.getItem('re-api-key') || '' : '';
+async function apiInviteMember(tenantId: string, apiKey: string, name: string, email: string, role: string): Promise<void> {
     const { getServiceURL } = await import('@/lib/api-config');
     const base = getServiceURL('ingestion');
     const res = await fetch(`${base}/api/v1/team/${tenantId}/invite`, {
@@ -76,7 +74,7 @@ async function apiInviteMember(tenantId: string, name: string, email: string, ro
 }
 
 export default function TeamPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
@@ -98,7 +96,7 @@ export default function TeamPage() {
         setLoading(true);
         setError(null);
         try {
-            const data = await apiFetchTeam(tenantId);
+            const data = await apiFetchTeam(tenantId, apiKey || '');
             setTeam(data.members || []);
             setActiveCount(data.active_members || 0);
             setPendingCount(data.pending_invites || 0);
@@ -108,7 +106,7 @@ export default function TeamPage() {
         } finally {
             setLoading(false);
         }
-    }, [isLoggedIn, tenantId]);
+    }, [isLoggedIn, tenantId, apiKey]);
 
     useEffect(() => { loadTeam(); }, [loadTeam]);
 
@@ -116,7 +114,7 @@ export default function TeamPage() {
         if (!newName || !newEmail) return;
         setInviting(true);
         try {
-            await apiInviteMember(tenantId, newName, newEmail, newRole);
+            await apiInviteMember(tenantId, apiKey || '', newName, newEmail, newRole);
             setNewName(''); setNewEmail(''); setShowInvite(false);
             await loadTeam();
         } catch (err) {

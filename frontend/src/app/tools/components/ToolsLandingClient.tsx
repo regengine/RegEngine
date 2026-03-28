@@ -36,7 +36,7 @@ const TOOLS: Tool[] = [
     {
         id: 'ftl-checker',
         title: 'FTL Coverage Checker',
-        description: 'Instantly check which of your products fall under the FDA\'s 23 Food Traceability List categories.',
+        description: 'Instantly check which of your products fall under the FDA Food Traceability List (FTL) categories.',
         icon: Leaf,
         category: 'validate',
         maturity: 'ga',

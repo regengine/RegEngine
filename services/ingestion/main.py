@@ -15,6 +15,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before app creation)
+from shared.error_handling import init_sentry
+init_sentry()
+
 # Production Hardening (Phase 18)
 from shared.logging import setup_logging
 from shared.middleware.security import add_security
@@ -45,11 +49,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("ingestion_service_shutdown")
 
-import os as _os
-_is_prod = (
-    _os.getenv("ENV", "").lower() == "production"
-    or "pooler.supabase.com" in _os.getenv("DATABASE_URL", "")
-)
+from shared.env import is_production
+_is_prod = is_production()
 
 app = FastAPI(
     title="RegEngine Ingestion API",
@@ -104,6 +105,9 @@ app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
+from shared.auth import validate_auth_config
+validate_auth_config(require_supabase=True)
+
 # ---------------------------------------------------------------------------
 # Router Feature Flags — disable non-core routers via DISABLED_ROUTERS env var
 # Comma-separated list of router names to skip, e.g.: "billing,mock_audit,recall_simulations"
@@ -116,9 +120,54 @@ _DISABLED_ROUTERS = {
 }
 
 
+# All valid router names — typos in DISABLED_ROUTERS are caught at startup
+_VALID_ROUTER_NAMES = {
+    "scraping", "discovery", "sources", "fda_export", "csv", "sensitech", "edi",
+    "score", "portal", "audit", "sop", "export", "epcis_ingestion", "qr_decoder",
+    "label_vision", "exchange", "billing", "alerts", "onboarding", "recall",
+    "recall_simulations", "supplier_mgmt", "audit_log", "product_catalog",
+    "notification_prefs", "team_mgmt", "settings", "integration",
+    "canonical_records", "rules", "exceptions", "request_workflow", "identity",
+    "auditor", "compliance_metrics", "readiness", "incidents", "sandbox",
+    "supplier_validation", "disaster_recovery",
+    "sla_tracking", "export_monitoring",
+    "chain_verification", "audit_export_log",
+}
+
+# Validate DISABLED_ROUTERS — catch typos early
+_unknown_flags = _DISABLED_ROUTERS - _VALID_ROUTER_NAMES
+if _unknown_flags:
+    import structlog as _sl
+    _sl.get_logger("router_flags").error(
+        "unknown_router_names_in_DISABLED_ROUTERS",
+        unknown=sorted(_unknown_flags),
+        valid=sorted(_VALID_ROUTER_NAMES),
+        hint="Check spelling. These flags will have no effect.",
+    )
+
+
 def _router_enabled(name: str) -> bool:
     """Check if a router should be mounted (not in DISABLED_ROUTERS)."""
-    return name.lower() not in _DISABLED_ROUTERS
+    enabled = name.lower() not in _DISABLED_ROUTERS
+    if enabled:
+        _MOUNTED_ROUTERS.append(name.lower())
+    return enabled
+
+# Track which routers are actually mounted for the /features endpoint
+_MOUNTED_ROUTERS: list[str] = []
+
+
+@app.get("/api/v1/features", tags=["system"])
+async def list_enabled_features():
+    """Return which optional routers are enabled.
+
+    Frontend can call this to know which features are available
+    instead of discovering disabled routers via 404 errors.
+    """
+    return {
+        "enabled": _MOUNTED_ROUTERS,
+        "disabled": sorted(_DISABLED_ROUTERS),
+    }
 
 
 app.include_router(ingestion_router, tags=["Document Ingestion"])
@@ -138,9 +187,23 @@ if _router_enabled("discovery"):
     from app.routes_discovery import router as discovery_router
     app.include_router(discovery_router, tags=["Discovery"])
 
+# Status, audit, and document query routes
+from app.routes_status import router as status_router
+app.include_router(status_router)
+
+# Federal source ingestion (Federal Register, eCFR, openFDA)
+if _router_enabled("sources"):
+    from app.routes_sources import router as sources_router
+    app.include_router(sources_router)
+
 # Webhook Ingestion (V2: Postgres-backed CTE persistence)
 from app.webhook_router_v2 import router as webhook_router
 app.include_router(webhook_router, tags=["Webhooks"])
+
+# Sandbox Evaluation (stateless, no auth, no persistence)
+if _router_enabled("sandbox"):
+    from app.sandbox_router import router as sandbox_router
+    app.include_router(sandbox_router)
 
 # FDA 24-Hour Export
 if _router_enabled("fda_export"):
@@ -290,6 +353,92 @@ if _router_enabled("settings"):
 if _router_enabled("integration"):
     from app.integration_router import router as integration_router
     app.include_router(integration_router, tags=["Integration Connectors"])
+
+
+# ===========================================================================
+# Compliance Control Plane — FSMA 204 operational backbone
+# ===========================================================================
+
+# Canonical Records (provenance, amendment chain, ingestion runs)
+if _router_enabled("canonical_records"):
+    from app.canonical_router import router as canonical_records_router
+    app.include_router(canonical_records_router)
+
+# Rules Engine (evaluate, inspect, seed rule definitions)
+if _router_enabled("rules"):
+    from app.rules_router import router as rules_engine_router
+    app.include_router(rules_engine_router)
+
+# Exception Queue (remediation workflow)
+if _router_enabled("exceptions"):
+    from app.exception_router import router as exception_queue_router
+    app.include_router(exception_queue_router)
+
+# Request-Response Workflow (24-hour FDA response)
+if _router_enabled("request_workflow"):
+    from app.request_workflow_router import router as request_workflow_router
+    app.include_router(request_workflow_router)
+
+# Identity Resolution (entities, aliases, merges, review queue)
+if _router_enabled("identity"):
+    from app.identity_router import router as identity_resolution_router
+    app.include_router(identity_resolution_router)
+
+# Auditor Review (read-only evidentiary chain access)
+if _router_enabled("auditor"):
+    from app.auditor_router import router as auditor_review_router
+    app.include_router(auditor_review_router)
+
+# Compliance Metrics (PRD Section 10 KPIs)
+if _router_enabled("compliance_metrics"):
+    from app.metrics_router import router as compliance_metrics_router
+    app.include_router(compliance_metrics_router)
+
+
+# Readiness Wizard (PRD P2 — guided compliance assessment)
+if _router_enabled("readiness"):
+    from app.readiness_router import router as readiness_wizard_router
+    app.include_router(readiness_wizard_router)
+
+# Incident Command (PRD P2 — real-time recall coordination)
+if _router_enabled("incidents"):
+    from app.incident_router import router as incident_command_router
+    app.include_router(incident_command_router)
+
+
+# Chain Verification (background hash chain integrity checks)
+if _router_enabled("chain_verification"):
+    from app.chain_verification_job import router as chain_verification_router
+    app.include_router(chain_verification_router)
+
+
+# Audit Export Log (export/verification/activity audit trail)
+if _router_enabled("audit_export_log"):
+    from app.audit_export_log import router as audit_export_log_router
+    app.include_router(audit_export_log_router)
+
+
+# FDA 24-Hour SLA Tracking (FSMA 204 — 21 CFR 1.1455)
+if _router_enabled("sla_tracking"):
+    from app.sla_tracking import router as sla_tracking_router
+    app.include_router(sla_tracking_router)
+
+# Export Monitoring & Health Checks
+if _router_enabled("export_monitoring"):
+    from app.export_monitoring import router as export_monitoring_router
+    app.include_router(export_monitoring_router)
+
+
+# Supplier Validation (compliance scoring for supplier network)
+if _router_enabled("supplier_validation"):
+    from app.supplier_validation import router as supplier_validation_router
+    app.include_router(supplier_validation_router)
+
+# Disaster Recovery (readiness assessment and recovery simulation)
+if _router_enabled("disaster_recovery"):
+    from app.disaster_recovery import router as disaster_recovery_router
+    app.include_router(disaster_recovery_router)
+
 
 # Standardized Health & Readiness (Phase 17)
 # NOTE: Custom /health endpoint already registered via routes_health_metrics.py

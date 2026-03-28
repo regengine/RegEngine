@@ -20,7 +20,7 @@ router = APIRouter(include_in_schema=False)
 
 
 @router.get("/v1/ingest/discovery/queue", response_model=List[DiscoveryQueueItem])
-async def get_discovery_queue():
+async def get_discovery_queue(api_key: APIKey = Depends(require_api_key)):
     """Retrieve all items in the manual discovery queue."""
     settings = get_settings()
     r = redis.from_url(settings.redis_url)

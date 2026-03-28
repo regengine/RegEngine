@@ -19,7 +19,9 @@ def get_allowed_origins() -> List[str]:
     """
     origins_str = os.getenv(
         "CORS_ALLOWED_ORIGINS",
-        "http://localhost:3000,http://localhost:8000"  # Dev defaults
+        "http://localhost:3000,http://localhost:8000,http://localhost:8002,"
+        "http://localhost:8400,http://127.0.0.1:3000,"
+        "https://regengine.co,https://www.regengine.co,https://app.regengine.co"
     )
     origins = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
     

@@ -21,7 +21,7 @@ export function RecentRisksWidget() {
                         <AlertTriangle className="h-5 w-5" />
                         Recently Detected Risks
                     </CardTitle>
-                    <Link href="/compliance/dashboard" className="text-sm text-muted-foreground hover:underline">
+                    <Link href="/compliance/status" className="text-sm text-muted-foreground hover:underline">
                         View All
                     </Link>
                 </div>

@@ -7,6 +7,8 @@ from typing import Optional
 import requests
 from shared.url_validation import validate_url, SSRFError
 
+from shared.url_validation import validate_url
+
 
 # Stubs for S3 and Kafka integrations; replace with actual clients
 class S3Client:
@@ -49,6 +51,8 @@ class StateRegistryScraper:
             raise ValueError(f"URL validation failed: {str(e)}") from e
 
         loop = asyncio.get_running_loop()
+
+        validate_url(url)
 
         def _fetch():
             resp = requests.get(url, timeout=15)

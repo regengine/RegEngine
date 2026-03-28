@@ -1,7 +1,3 @@
-# NOTE: This file contains mixed FSMA 204 and fair-lending compliance store code.
-# Fair-lending specific sections are archived as of Sprint 4 Clean Architecture.
-# FSMA 204 code remains active. See services/compliance/_archive/fair-lending/ for historical context.
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,7 +8,11 @@ import os
 from pathlib import Path
 import sys
 from threading import Lock
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+# Type alias – the concrete Pydantic model lives outside this package;
+# keep the annotation so call-sites stay self-documenting.
+GeneratedObligation = Any
 from uuid import uuid4
 
 from sqlalchemy import create_engine, text
@@ -21,13 +21,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.models import (
     AuditExportRequest,
-    DriftResult,
-    FairLendingAnalyzeRequest,
-    GeneratedObligation,
     ModelChangeRequest,
     ModelRecordResponse,
     ModelRegistrationRequest,
-    RegressionResult,
     ValidationRequest,
 )
 from app.security import utc_now
@@ -36,22 +32,6 @@ from app.security import utc_now
 logger = logging.getLogger("compliance-api")
 
 DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000"
-
-
-@dataclass
-class ComplianceResultRecord:
-    id: str
-    tenant_id: str
-    model_id: str
-    analyzed_at: datetime
-    min_dir: float
-    regression_bias_flag: bool
-    drift_flag: bool
-    risk_level: str
-    recommended_action: str
-    regression_result: Optional[RegressionResult]
-    drift_results: List[DriftResult]
-    dir_results: List[dict]
 
 
 @dataclass
@@ -89,7 +69,6 @@ class ComplianceStore:
         self.models: Dict[tuple[str, str], ModelRecordResponse] = {}
         self.validations: List[dict] = []
         self.model_changes: List[dict] = []
-        self.model_compliance_results: List[ComplianceResultRecord] = []
         self.audit_exports: List[AuditArtifactRecord] = []
 
         self.ckg_nodes: Dict[tuple[str, str, str], dict] = {}
@@ -679,173 +658,6 @@ class ComplianceStore:
                     logger.warning("compliance_store_model_change_persist_failed", extra={"error": str(error)})
 
             return row
-
-    def save_compliance_result(
-        self,
-        tenant_id: str,
-        request: FairLendingAnalyzeRequest,
-        analyzed_at: datetime,
-        min_dir: float,
-        dir_results: List[dict],
-        regression_result: Optional[RegressionResult],
-        drift_results: List[DriftResult],
-        risk_level: str,
-        recommended_action: str,
-        regression_bias_flag: bool,
-        drift_flag: bool,
-    ) -> ComplianceResultRecord:
-        with self._lock:
-            result = ComplianceResultRecord(
-                id=str(uuid4()),
-                tenant_id=tenant_id,
-                model_id=request.model_id,
-                analyzed_at=analyzed_at,
-                min_dir=min_dir,
-                regression_bias_flag=regression_bias_flag,
-                drift_flag=drift_flag,
-                risk_level=risk_level,
-                recommended_action=recommended_action,
-                regression_result=regression_result,
-                drift_results=drift_results,
-                dir_results=dir_results,
-            )
-            self.model_compliance_results.append(result)
-
-            model = self.models.get((tenant_id, request.model_id))
-            if model:
-                model.last_fairness_result_at = analyzed_at
-                if min_dir >= 0.80 and not regression_bias_flag and not drift_flag:
-                    model.deployment_locked = False
-                    model.lock_reason = None
-
-            self._upsert_node(
-                tenant_id,
-                "Model",
-                request.model_id,
-                {"protected_attribute": request.protected_attribute},
-            )
-            self._upsert_node(
-                tenant_id,
-                "Evidence",
-                result.id,
-                {
-                    "risk_level": risk_level,
-                    "analysis_type": ",".join(request.analysis_type),
-                    "analyzed_at": analyzed_at.isoformat(),
-                },
-            )
-            self._add_edge(tenant_id, "Evidence", result.id, "EVIDENCE_FOR_MODEL_VERSION", "Model", request.model_id)
-
-            if self._db_enabled and self._engine:
-                try:
-                    with self._engine.begin() as connection:
-                        internal_model_id = self._ensure_model_internal_id(connection, tenant_id, request.model_id)
-                        self._set_tenant_context(connection, tenant_id)
-                        connection.execute(
-                            text(
-                                "INSERT INTO model_compliance_results "
-                                "(id, tenant_id, model_id, protected_attribute, min_dir, dir_results, regression_result, drift_results, "
-                                "regression_bias_flag, drift_flag, risk_level, recommended_action, analyzed_at) "
-                                "VALUES (CAST(:id AS uuid), CAST(:tenant_id AS uuid), CAST(:model_id AS uuid), :protected_attribute, :min_dir, CAST(:dir_results AS jsonb), "
-                                "CAST(:regression_result AS jsonb), CAST(:drift_results AS jsonb), :regression_bias_flag, :drift_flag, :risk_level, "
-                                ":recommended_action, :analyzed_at)"
-                            ),
-                            {
-                                "id": result.id,
-                                "tenant_id": tenant_id,
-                                "model_id": internal_model_id,
-                                "protected_attribute": request.protected_attribute,
-                                "min_dir": min_dir,
-                                "dir_results": self._safe_json(dir_results),
-                                "regression_result": self._safe_json(regression_result.model_dump()) if regression_result else "null",
-                                "drift_results": self._safe_json([entry.model_dump() for entry in drift_results]),
-                                "regression_bias_flag": regression_bias_flag,
-                                "drift_flag": drift_flag,
-                                "risk_level": risk_level,
-                                "recommended_action": recommended_action,
-                                "analyzed_at": analyzed_at,
-                            },
-                        )
-                        connection.execute(
-                            text(
-                                "UPDATE models "
-                                "SET deployment_locked = :deployment_locked, lock_reason = :lock_reason "
-                                "WHERE id = CAST(:model_id AS uuid)"
-                            ),
-                            {
-                                "deployment_locked": not (min_dir >= 0.80 and not regression_bias_flag and not drift_flag),
-                                "lock_reason": None
-                                if (min_dir >= 0.80 and not regression_bias_flag and not drift_flag)
-                                else "Fair lending analysis indicates unresolved risk.",
-                                "model_id": internal_model_id,
-                            },
-                        )
-                except SQLAlchemyError as error:
-                    logger.warning("compliance_store_result_persist_failed", extra={"error": str(error)})
-
-            return result
-
-    def latest_compliance_result(self, tenant_id: str, model_id: str) -> Optional[ComplianceResultRecord]:
-        if self._db_enabled and self._engine:
-            try:
-                with self._engine.begin() as connection:
-                    self._set_tenant_context(connection, tenant_id)
-                    row = connection.execute(
-                        text(
-                            "SELECT r.id::text AS id, m.external_model_id AS model_id, r.analyzed_at, r.min_dir, "
-                            "r.regression_bias_flag, r.drift_flag, r.risk_level, r.recommended_action, "
-                            "r.regression_result, r.drift_results, r.dir_results "
-                            "FROM model_compliance_results r "
-                            "JOIN models m ON m.id = r.model_id "
-                            "WHERE m.tenant_id = CAST(:tenant_id AS uuid) AND m.external_model_id = :external_model_id "
-                            "ORDER BY r.analyzed_at DESC LIMIT 1"
-                        ),
-                        {
-                            "tenant_id": tenant_id,
-                            "external_model_id": model_id,
-                        },
-                    ).mappings().first()
-
-                if row:
-                    regression_payload = row["regression_result"]
-                    drift_payload = row["drift_results"]
-                    dir_payload = row["dir_results"]
-
-                    if isinstance(regression_payload, str):
-                        regression_payload = json.loads(regression_payload)
-                    if isinstance(drift_payload, str):
-                        drift_payload = json.loads(drift_payload)
-                    if isinstance(dir_payload, str):
-                        dir_payload = json.loads(dir_payload)
-
-                    regression_result = RegressionResult(**regression_payload) if regression_payload else None
-                    drift_results = [DriftResult(**entry) for entry in (drift_payload or [])]
-
-                    return ComplianceResultRecord(
-                        id=row["id"],
-                        tenant_id=tenant_id,
-                        model_id=row["model_id"],
-                        analyzed_at=row["analyzed_at"],
-                        min_dir=float(row["min_dir"]),
-                        regression_bias_flag=row["regression_bias_flag"],
-                        drift_flag=row["drift_flag"],
-                        risk_level=row["risk_level"],
-                        recommended_action=row["recommended_action"],
-                        regression_result=regression_result,
-                        drift_results=drift_results,
-                        dir_results=dir_payload or [],
-                    )
-            except (SQLAlchemyError, ValueError, TypeError, json.JSONDecodeError) as error:
-                logger.warning("compliance_store_latest_result_query_failed", extra={"error": str(error)})
-
-        candidates = [
-            result
-            for result in self.model_compliance_results
-            if result.tenant_id == tenant_id and result.model_id == model_id
-        ]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda item: item.analyzed_at)
 
     def save_audit_artifact(
         self,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -8,6 +9,7 @@ import structlog
 
 from ..neo4j_utils import Neo4jClient
 from shared.auth import require_api_key, APIKey
+from shared.middleware import get_current_tenant_id
 
 logger = structlog.get_logger("graph-regulations")
 router = APIRouter()
@@ -18,16 +20,19 @@ async def list_regulations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     api_key: APIKey = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """List all ingested regulations in the graph with optional filter."""
-    async with Neo4jClient() as client:
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
-            where_clause = ""
-            params = {"skip": skip, "limit": limit}
+            where_clauses = ["r.tenant_id = $tenant_id"]
+            params: Dict[str, Any] = {"skip": skip, "limit": limit, "tenant_id": str(tenant_id)}
             if jurisdiction:
-                where_clause = "WHERE r.jurisdiction = $jurisdiction "
+                where_clauses.append("r.jurisdiction = $jurisdiction")
                 params["jurisdiction"] = jurisdiction
 
+            where_clause = "WHERE " + " AND ".join(where_clauses)
             query = f"""
                 MATCH (r:Regulation)
                 {where_clause}
@@ -50,17 +55,20 @@ async def get_regulation_sections(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     api_key: APIKey = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """Retrieve all sections for a specific regulation."""
-    async with Neo4jClient() as client:
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
             try:
                 result = await session.run("""
-                    MATCH (r:Regulation {name: $name})-[:HAS_SECTION]->(s:Section)
+                    MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s:Section)
+                    WHERE s.tenant_id = $tenant_id
                     RETURN s.id as id, s.title as title, s.text as text, s.jurisdiction as jurisdiction, s.effective_date as effective_date
                     ORDER BY s.id
                     SKIP $skip LIMIT $limit
-                """, name=name, skip=skip, limit=limit)
+                """, name=name, skip=skip, limit=limit, tenant_id=str(tenant_id))
                 sections = [dict(record) async for record in result]
                 return sections
             except Exception as e:
@@ -73,17 +81,20 @@ async def get_regulation_citations(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     api_key: APIKey = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """Retrieve all citations mentioned in a regulation."""
-    async with Neo4jClient() as client:
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
             try:
                 result = await session.run("""
-                    MATCH (r:Regulation {name: $name})-[:HAS_SECTION]->(s)-[:CITES]->(c:Citation)
+                    MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s)-[:CITES]->(c:Citation)
+                    WHERE s.tenant_id = $tenant_id
                     RETURN DISTINCT c.text as citation, count(s) as mention_count
                     ORDER BY mention_count DESC
                     SKIP $skip LIMIT $limit
-                """, name=name, skip=skip, limit=limit)
+                """, name=name, skip=skip, limit=limit, tenant_id=str(tenant_id))
                 records = [dict(record) async for record in result]
                 return records
             except Exception as e:
@@ -97,19 +108,22 @@ async def search_regulations(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     api_key: APIKey = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """Full-text search across all codified regulation sections."""
-    async with Neo4jClient() as client:
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
             # Note: Requires a full-text index named 'sectionText' on (:Section {text})
             try:
                 result = await session.run("""
                     CALL db.index.fulltext.queryNodes("sectionText", $q) YIELD node, score
-                    RETURN node.id as section_id, node.title as title, node.text as text, 
+                    WHERE node.tenant_id = $tenant_id
+                    RETURN node.id as section_id, node.title as title, node.text as text,
                            node.regulation as regulation, score
                     ORDER BY score DESC
                     SKIP $skip LIMIT $limit
-                """, q=q, skip=skip, limit=limit)
+                """, q=q, skip=skip, limit=limit, tenant_id=str(tenant_id))
                 records = [dict(record) async for record in result]
                 return records
             except Exception as e:
@@ -124,22 +138,27 @@ async def get_requirement_mappings(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     api_key: APIKey = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """Retrieve semantic mappings between requirements (cross-jurisdiction)."""
-    async with Neo4jClient() as client:
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    async with Neo4jClient(database=db_name) as client:
         async with client.session() as session:
-            where_clauses = []
-            params = {"skip": skip, "limit": limit}
-            
+            where_clauses = [
+                "o1.tenant_id = $tenant_id",
+                "o2.tenant_id = $tenant_id",
+            ]
+            params: Dict[str, Any] = {"skip": skip, "limit": limit, "tenant_id": str(tenant_id)}
+
             if obligation_id:
                 where_clauses.append("o1.text = $obligation_id")
                 params["obligation_id"] = obligation_id
             if regulation:
                 where_clauses.append("s1.regulation = $regulation")
                 params["regulation"] = regulation
-                
-            where_stmt = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-            
+
+            where_stmt = "WHERE " + " AND ".join(where_clauses)
+
             query = f"""
                 MATCH (o1:Obligation)-[r:MAPPED_TO]-(o2:Obligation)
                 MATCH (o1)<-[:REQUIRES]-(s1:Section)
@@ -163,18 +182,20 @@ async def get_requirement_mappings(
 async def harmonize_requirement(
     obligation_id: str,
     api_key: APIKey = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     """Trigger LLM-based semantic mapping for a specific requirement."""
     from kernel.graph import MappingEngine
     from ..config import settings
-    
+
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     engine = MappingEngine(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
-        password=settings.neo4j_password
+        password=settings.neo4j_password,
     )
     try:
-        mappings = await engine.map_requirement(obligation_id)
+        mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
         await engine.close()
         return {
             "status": "completed",
@@ -183,5 +204,5 @@ async def harmonize_requirement(
             "mappings": mappings
         }
     except Exception as e:
-        logger.error("harmonization_api_failed", obligation_id=obligation_id, error=str(e))
+        logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=str(tenant_id), error=str(e))
         raise HTTPException(status_code=503, detail="Harmonization engine unavailable")

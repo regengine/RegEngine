@@ -46,44 +46,6 @@ def _create_engine():
     return create_engine(fallback_url, connect_args=connect_args, future=True)
 
 
-# ARCHIVED: Entertainment database engine creation
-# def _create_entertainment_engine():
-#     """Create the Entertainment database engine for PCOS tables.
-#     
-#     Following RegEngine's vertical isolation pattern, PCOS tables are now in
-#     the dedicated Entertainment database (as of V002 migration, Jan 31 2026).
-#     """
-#     database_url = os.getenv("ENTERTAINMENT_DATABASE_URL")
-#     if database_url:
-#         sqlalchemy_url = _sqlalchemy_url(database_url)
-#         logger.info("entertainment_database_configured", url=database_url.split("@")[-1])
-#         return create_engine(
-#             sqlalchemy_url,
-#             pool_pre_ping=True,
-#             future=True,
-#             pool_size=int(os.getenv("ENTERTAINMENT_DB_POOL_SIZE", "10")),
-#             max_overflow=int(os.getenv("ENTERTAINMENT_DB_MAX_OVERFLOW", "20")),
-#             pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
-#         )
-#
-#     # Fallback: construct from ADMIN_DATABASE_URL by replacing database name
-#     admin_url = os.getenv("ADMIN_DATABASE_URL", "")
-#     if admin_url and "regengine_admin" in admin_url:
-#         entertainment_url = admin_url.replace("regengine_admin", "entertainment")
-#         logger.info("entertainment_database_derived_from_admin", url=entertainment_url.split("@")[-1])
-#         return create_engine(
-#             _sqlalchemy_url(entertainment_url),
-#             pool_pre_ping=True,
-#             future=True,
-#             pool_size=int(os.getenv("ENTERTAINMENT_DB_POOL_SIZE", "10")),
-#             max_overflow=int(os.getenv("ENTERTAINMENT_DB_MAX_OVERFLOW", "20")),
-#             pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
-#         )
-#     
-#     logger.warning("entertainment_database_url_missing_pcos_operations_may_fail")
-#     # Return same engine as fallback (won't work  but prevents crash)
-#     return _create_engine()
-
 
 # Admin DB engine for core tables (users, tenants, memberships, roles)
 _engine = _create_engine()
@@ -95,15 +57,30 @@ SessionLocal = sessionmaker(
     future=True,
 )
 
-# ARCHIVED: Entertainment DB engine for PCOS tables (all 38 pcos_* tables)
-# _entertainment_engine = _create_entertainment_engine()
-# EntertainmentSessionLocal = sessionmaker(
-#     bind=_entertainment_engine,
-#     autoflush=False,
-#     autocommit=False,
-#     expire_on_commit=False,
-#     future=True,
-# )
+# PCOS tables: Entertainment DB was planned but not yet provisioned.
+# Fall back to admin DB engine until ENTERTAINMENT_DATABASE_URL is configured.
+_entertainment_url = os.getenv("ENTERTAINMENT_DATABASE_URL")
+if _entertainment_url:
+    _entertainment_engine = create_engine(
+        _sqlalchemy_url(_entertainment_url),
+        pool_pre_ping=True,
+        future=True,
+        pool_size=int(os.getenv("ENTERTAINMENT_DB_POOL_SIZE", "10")),
+        max_overflow=int(os.getenv("ENTERTAINMENT_DB_MAX_OVERFLOW", "20")),
+        pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
+    )
+    logger.info("entertainment_database_configured", url=_entertainment_url.split("@")[-1])
+else:
+    _entertainment_engine = _engine
+    logger.warning("entertainment_database_not_configured_using_admin_db")
+
+EntertainmentSessionLocal = sessionmaker(
+    bind=_entertainment_engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
+    future=True,
+)
 
 
 def init_db() -> None:
@@ -133,9 +110,16 @@ def init_db() -> None:
             END;
             $$ LANGUAGE plpgsql;
         """))
+        # SECURITY: set_admin_context sets the regengine.is_sysadmin session
+        # variable. This alone is NOT sufficient for RLS bypass — the RLS
+        # policies also require current_user = 'regengine_sysadmin'.
+        # See: migrations/V048__rls_sysadmin_defense_in_depth.sql
         conn.execute(text("""
             CREATE OR REPLACE FUNCTION set_admin_context(p_is_sysadmin boolean) RETURNS void AS $$
             BEGIN
+              IF p_is_sysadmin AND current_user != 'regengine_sysadmin' THEN
+                RAISE WARNING 'set_admin_context(true) called by non-sysadmin role';
+              END IF;
               PERFORM set_config('regengine.is_sysadmin', p_is_sysadmin::text, false);
             END;
             $$ LANGUAGE plpgsql;

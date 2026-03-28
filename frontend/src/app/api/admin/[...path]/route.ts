@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 
 const DEFAULT_ADMIN_URL = 'http://localhost:8400';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
@@ -65,10 +65,18 @@ async function proxyRequest(  request: NextRequest,
   try {
     if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
       return NextResponse.json(
-        { error: 'Admin API proxy unavailable during static build', static_mode: true },
+        { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
         { status: 503 },
       );
     }
+
+    // Defense-in-depth: reject requests with no auth credentials before proxying
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
+
+    // Validate Supabase session tokens (expired/revoked sessions get 401)
+    const sessionError = await validateProxySession(request);
+    if (sessionError) return sessionError;
 
     const path = sanitizePath(pathParts);
     if (!path) {
@@ -99,13 +107,27 @@ async function proxyRequest(  request: NextRequest,
       }
     }
 
-    // Inject server-side API key if client didn't provide one
+    // Inject API key from HTTP-only cookie (preferred) or server-side env var
     if (!headers.has('x-regengine-api-key')) {
-      const serverApiKey =
-        process.env.REGENGINE_API_KEY ||
-        process.env.NEXT_PUBLIC_API_KEY ||
-        '';
+      const cookieApiKey = request.cookies.get('re_api_key')?.value;
+      const serverApiKey = cookieApiKey || process.env.REGENGINE_API_KEY || '';
       headers.set('x-regengine-api-key', serverApiKey);
+    }
+
+    // Inject admin key from cookie if not already present
+    if (!headers.has('x-admin-key')) {
+      const cookieAdminKey = request.cookies.get('re_admin_key')?.value;
+      if (cookieAdminKey) {
+        headers.set('x-admin-key', cookieAdminKey);
+      }
+    }
+
+    // Inject tenant ID from cookie if not already present
+    if (!headers.has('x-tenant-id')) {
+      const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
+      if (cookieTenantId) {
+        headers.set('x-tenant-id', cookieTenantId);
+      }
     }
 
     const fetchOptions: RequestInit = {
@@ -147,6 +169,7 @@ async function proxyRequest(  request: NextRequest,
             outgoingHeaders.set(headerName, headerValue);
           }
         }
+        console.info(`[proxy/admin] ${method} ${path} → ${response.status}`);
         return new NextResponse(response.body, {
           status: response.status,
           headers: outgoingHeaders,
@@ -161,9 +184,11 @@ async function proxyRequest(  request: NextRequest,
       }
     }
 
+    console.error('[proxy/admin] 502 — all targets failed:', attemptErrors);
     return proxyError('Unable to reach admin service', 502, { details: attemptErrors });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Admin request failed';
+    console.error('[proxy/admin] 500 —', message);
     return proxyError(message, 500);
   }
 }

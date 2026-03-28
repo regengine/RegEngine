@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 const VERCEL_PRIVATE_DNS_ERROR = 'DNS_HOSTNAME_RESOLVED_PRIVATE';
@@ -69,6 +69,14 @@ async function proxyRequest(
       );
     }
 
+    // Defense-in-depth: reject requests with no auth credentials before proxying
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
+
+    // Validate Supabase session tokens (expired/revoked sessions get 401)
+    const sessionError = await validateProxySession(request);
+    if (sessionError) return sessionError;
+
     const path = sanitizePath(pathParts);
     if (!path) {
       return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
@@ -98,14 +106,28 @@ async function proxyRequest(
       }
     }
 
-    // Inject server-side API key if client didn't provide one.
-    // REGENGINE_API_KEY must be set on the deployment platform (Vercel).
+    // Inject API key from HTTP-only cookie (preferred) or server-side env var.
+    // The client no longer sends X-RegEngine-API-Key — credentials live in cookies.
     if (!headers.has('x-regengine-api-key')) {
-      const serverApiKey =
-        process.env.REGENGINE_API_KEY ||
-        process.env.NEXT_PUBLIC_API_KEY ||
-        '';
+      const cookieApiKey = request.cookies.get('re_api_key')?.value;
+      const serverApiKey = cookieApiKey || process.env.REGENGINE_API_KEY || '';
       headers.set('x-regengine-api-key', serverApiKey);
+    }
+
+    // Inject admin key from cookie if not already present
+    if (!headers.has('x-admin-key')) {
+      const cookieAdminKey = request.cookies.get('re_admin_key')?.value;
+      if (cookieAdminKey) {
+        headers.set('x-admin-key', cookieAdminKey);
+      }
+    }
+
+    // Inject tenant ID from cookie if not already present
+    if (!headers.has('x-tenant-id')) {
+      const cookieTenantId = request.cookies.get('re_tenant_id')?.value;
+      if (cookieTenantId) {
+        headers.set('x-tenant-id', cookieTenantId);
+      }
     }
 
     const fetchOptions: RequestInit = {
@@ -161,9 +183,11 @@ async function proxyRequest(
       }
     }
 
+    console.error('[proxy/ingestion] 502 — all targets failed:', attemptErrors);
     return proxyError('Unable to reach ingestion service', 502, { details: attemptErrors });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Ingestion request failed';
+    console.error('[proxy/ingestion] 500 —', message);
     return proxyError(message, 500);
   }
 }

@@ -15,6 +15,37 @@ const nextConfig = {
     images: {
         unoptimized: isStatic,
     },
+    async headers() {
+        return [
+            {
+                source: '/(.*)',
+                headers: [
+                    { key: 'X-Frame-Options', value: 'DENY' },
+                    { key: 'X-Content-Type-Options', value: 'nosniff' },
+                    { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+                    { key: 'X-DNS-Prefetch-Control', value: 'on' },
+                    { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+                    { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+                    // CSP in report-only mode — identifies violations without breaking the app.
+                    // Next.js uses inline scripts for hydration; enforcing mode requires nonce support.
+                    {
+                        key: 'Content-Security-Policy-Report-Only',
+                        value: [
+                            "default-src 'self'",
+                            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+                            "style-src 'self' 'unsafe-inline'",
+                            "img-src 'self' data: blob: https:",
+                            "font-src 'self'",
+                            "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.railway.app https://*.vercel.app https://*.sentry.io",
+                            "frame-ancestors 'none'",
+                            "base-uri 'self'",
+                            "form-action 'self'",
+                        ].join('; '),
+                    },
+                ],
+            },
+        ];
+    },
     async redirects() {
         return [
             // Existing redirects
@@ -64,10 +95,10 @@ const nextConfig = {
                 destination: '/dashboard/compliance',
                 permanent: true,
             },
-            // Canonical path for integrations is /dashboard/integrations
+            // /about → /contact (founder info lives on contact page)
             {
-                source: '/integrations',
-                destination: '/dashboard/integrations',
+                source: '/about',
+                destination: '/contact',
                 permanent: true,
             },
         ];
@@ -97,18 +128,24 @@ const nextConfig = {
     },
 }
 
+const isProduction = process.env.VERCEL_ENV === 'production';
+
 const sentryWebpackPluginOptions = {
     // Suppresses source map upload logs during build
     silent: true,
 
-    // Upload source maps for better stack traces
-    widenClientFileUpload: true,
+    // Only upload source maps in production builds (#25)
+    widenClientFileUpload: isProduction,
 
     // Route Sentry requests through a Next.js rewrite to bypass ad blockers
     tunnelRoute: "/monitoring",
 
-    // Automatically tree-shake Sentry logger in production
+    // Hide source maps from client bundles
     hideSourceMaps: true,
+
+    // Disable source map upload entirely for non-production builds
+    disableServerWebpackPlugin: !isProduction,
+    disableClientWebpackPlugin: !isProduction,
 };
 
 module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);

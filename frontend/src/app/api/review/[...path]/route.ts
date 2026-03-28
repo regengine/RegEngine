@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
+import { sanitizePath, proxyError, getServerApiKey, getAdminMasterKey, requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { getServerServiceURL } from '@/lib/api-config';
 
 // Proxy review API requests to the Admin backend service
 // This allows browser clients to access review endpoints without CORS issues
 
-const ADMIN_URL = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
+const ADMIN_URL = (() => {
+    const url = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
+    const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+    if (onVercel && url.includes('.railway.internal')) {
+        console.warn('[proxy/review] ADMIN_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
+        return getServerServiceURL('admin');
+    }
+    return url;
+})();
 
 export const dynamic = 'force-dynamic';
 
@@ -40,8 +49,19 @@ async function proxyRequest(
     try {
         // Guard against static export execution
         if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-            return NextResponse.json({ message: 'Dynamic proxy not available during static build' });
+            return NextResponse.json(
+                { error: 'API unavailable in static export mode. Deploy with server-side rendering for full API access.', deploy_mode: 'static' },
+                { status: 503 },
+            );
         }
+
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
+
+        // Validate Supabase session tokens (expired/revoked sessions get 401)
+        const sessionError = await validateProxySession(request);
+        if (sessionError) return sessionError;
 
         const path = sanitizePath(pathParts);
         if (!path) {
@@ -109,6 +129,7 @@ async function proxyRequest(
             );
         }
 
+        console.info(`[proxy/review] ${method} ${path} → ${response.status}`);
         return NextResponse.json(data);
 
     } catch (error: unknown) {

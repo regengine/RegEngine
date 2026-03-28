@@ -19,6 +19,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.config import get_settings
@@ -85,7 +86,7 @@ def _get_db_session():
             yield db
         finally:
             db.close()
-    except Exception as exc:
+    except (ImportError, OSError, OperationalError) as exc:
         logger.warning("compliance_score: DB unavailable (%s), using fallback", exc)
         yield None
 
@@ -193,6 +194,22 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     else:
         result["chain_gaps"] = 0
 
+    # 3b) Time precision — count events with midnight timestamps (no real time)
+    if result["event_count"] > 0:
+        midnight_row = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.cte_events
+                WHERE tenant_id = :tid
+                  AND EXTRACT(HOUR FROM event_timestamp) = 0
+                  AND EXTRACT(MINUTE FROM event_timestamp) = 0
+                  AND EXTRACT(SECOND FROM event_timestamp) = 0
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["events_missing_time"] = midnight_row[0] if midnight_row else 0
+    else:
+        result["events_missing_time"] = 0
+
     # 4) Obligation coverage — check rules against actual event KDE presence
     # Note: obligations.tenant_id is UUID, but cte_events.tenant_id may be text.
     # Use try/except to handle type mismatches gracefully.
@@ -204,7 +221,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             {"tid": tenant_id},
         ).fetchone()
         result["obligation_count"] = obl_row[0] if obl_row else 0
-    except Exception:
+    except (OperationalError, ProgrammingError) as _obl_err:
         db_session.rollback()
         result["obligation_count"] = 0
 
@@ -238,7 +255,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             ).fetchone()
             result["applicable_obligation_rules"] = obl_coverage[0] if obl_coverage else 0
             result["total_obligation_rules"] = obl_coverage[1] if obl_coverage else 0
-        except Exception:
+        except (OperationalError, ProgrammingError) as _obl_cov_err:
             db_session.rollback()
             result["applicable_obligation_rules"] = 0
             result["total_obligation_rules"] = 0
@@ -248,14 +265,14 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             alert_row = db_session.execute(
                 text("""
                     SELECT COUNT(*) FROM fsma.compliance_alerts
-                    WHERE tenant_id = :tid
-                      AND alert_type = 'obligation_gap'
+                    WHERE org_id = CAST(:tid AS uuid)
+                      AND alert_type = 'chain_break'
                       AND (resolved IS NULL OR resolved = false)
                 """),
                 {"tid": tenant_id},
             ).fetchone()
             result["open_obligation_alerts"] = alert_row[0] if alert_row else 0
-        except Exception:
+        except (OperationalError, ProgrammingError) as _alert_err:
             db_session.rollback()
             result["open_obligation_alerts"] = 0
     else:
@@ -271,7 +288,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
             """),
         ).fetchone()
         result["ftl_category_count"] = ftl_row[0] if ftl_row else 0
-    except Exception:
+    except (OperationalError, ProgrammingError) as _ftl_err:
         db_session.rollback()
         result["ftl_category_count"] = 0
 
@@ -282,7 +299,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
         chain_result = persistence.verify_chain(tenant_id)
         result["chain_verified"] = chain_result.valid
         result["chain_verification_errors"] = chain_result.errors
-    except Exception as exc:
+    except (ImportError, OperationalError, ProgrammingError) as exc:
         logger.warning("chain_verification_in_scoring_failed: %s", exc)
         result["chain_verified"] = None  # unknown
         result["chain_verification_errors"] = []
@@ -338,16 +355,24 @@ def _compute_scores(data: dict) -> dict:
     else:
         kde_ratio = data["filled_kdes"] / data["total_kdes"]
         kde_score = int(kde_ratio * 100)
+
+        # Penalize for missing event time precision (FDA requires time, not just date)
+        events_missing_time = data.get("events_missing_time", 0)
+        if events_missing_time > 0 and data["event_count"] > 0:
+            time_penalty = min(10, int((events_missing_time / data["event_count"]) * 10))
+            kde_score = max(0, kde_score - time_penalty)
+
         missing = data["total_kdes"] - data["filled_kdes"]
+        time_note = f"; {events_missing_time} events lack precise time" if events_missing_time > 0 else ""
         if missing > 0:
             scores["kde_completeness"] = (
                 kde_score,
-                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank",
+                f"{data['filled_kdes']}/{data['total_kdes']} KDE fields populated — {missing} blank{time_note}",
             )
         else:
             scores["kde_completeness"] = (
-                100,
-                f"All {data['total_kdes']} KDE fields populated",
+                kde_score if events_missing_time > 0 else 100,
+                f"All {data['total_kdes']} KDE fields populated{time_note}",
             )
 
     # --- 3) CTE Completeness (20% weight) ---
@@ -493,13 +518,13 @@ def _build_next_actions(scores: dict, data: dict) -> list[NextAction]:
             actions.append(NextAction(
                 priority="HIGH",
                 action="URGENT: Chain tampering detected — investigate immediately",
-                impact="Chain integrity is 25% of overall score; tampering = audit failure",
+                impact="Chain integrity is 10% of overall score; tampering = audit failure",
             ))
         else:
             actions.append(NextAction(
                 priority="HIGH",
                 action="Investigate chain integrity issues — possible data loss",
-                impact="Chain integrity is 25% of overall score",
+                impact="Chain integrity is 10% of overall score",
             ))
 
     if obligation_score < 80:
@@ -575,7 +600,7 @@ async def get_compliance_score(
     try:
         from shared.database import SessionLocal
         db_session = SessionLocal()
-    except Exception as exc:
+    except (ImportError, OSError, OperationalError) as exc:
         logger.warning("compliance_score: DB unavailable (%s)", exc)
 
     if db_session is None:
@@ -635,13 +660,13 @@ async def get_compliance_score(
         # Compute sub-scores
         scores = _compute_scores(data)
 
-        # Weighted overall — 6 dimensions
-        # Chain integrity:      25% (tamper-proof audit trail)
-        # KDE completeness:     20% (data quality per event)
-        # CTE completeness:     20% (supply chain coverage)
-        # Obligation coverage:  15% (regulatory requirement satisfaction)
+        # Weighted overall — 6 dimensions (aligned with FSMA 204 priorities)
+        # Export readiness:     30% (FDA 24-hour response capability — §1.1455)
+        # KDE completeness:     25% (data quality per event — §1.1325–§1.1350)
+        # CTE completeness:     15% (supply chain coverage)
+        # Chain integrity:      10% (tamper-proof audit trail)
+        # Obligation coverage:  10% (regulatory requirement satisfaction)
         # Product coverage:     10% (FTL food category mapping)
-        # Export readiness:     10% (FDA 24-hour response capability)
         chain_score = scores["chain_integrity"][0]
         kde_score = scores["kde_completeness"][0]
         cte_score = scores["cte_completeness"][0]
@@ -700,6 +725,121 @@ async def get_compliance_score(
     except Exception as exc:
         logger.error("compliance_score: scoring failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Scoring error: {str(exc)}")
+    finally:
+        if db_session:
+            db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Pending Reviews Endpoint (M11)
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/pending-reviews/{tenant_id}",
+    summary="Get count of items pending compliance review",
+    description=(
+        "Returns a count of unresolved exception cases, pending identity "
+        "reviews, and active request cases that need attention. Used by "
+        "the dashboard overview to show the pending reviews metric."
+    ),
+)
+async def get_pending_reviews(
+    tenant_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """Count all items requiring compliance review for a tenant."""
+    validate_tenant_id(tenant_id)
+
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        db_session = SessionLocal()
+    except (ImportError, OSError, OperationalError) as exc:
+        logger.warning("pending_reviews: DB unavailable (%s)", exc)
+        return {
+            "tenant_id": tenant_id,
+            "pending_reviews": 0,
+            "breakdown": {},
+            "db_available": False,
+        }
+
+    try:
+        # 1. Unresolved exception cases
+        exc_count = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.exception_cases
+                WHERE tenant_id = :tid
+                  AND status NOT IN ('resolved', 'waived')
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
+        # 2. Pending identity reviews
+        identity_count = 0
+        try:
+            identity_count = db_session.execute(
+                text("""
+                    SELECT COUNT(*) FROM fsma.identity_review_queue
+                    WHERE tenant_id = :tid AND status = 'pending'
+                """),
+                {"tid": tenant_id},
+            ).scalar() or 0
+        except (OperationalError, ProgrammingError):
+            pass  # table may not exist
+
+        # 3. Active request cases not yet submitted
+        request_count = db_session.execute(
+            text("""
+                SELECT COUNT(*) FROM fsma.request_cases
+                WHERE tenant_id = :tid
+                  AND package_status NOT IN ('submitted', 'amended')
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
+        # 4. Events with failed critical rule evaluations (unresolved)
+        critical_failures = db_session.execute(
+            text("""
+                SELECT COUNT(DISTINCT re.event_id)
+                FROM fsma.rule_evaluations re
+                JOIN fsma.rule_definitions rd
+                  ON re.rule_id = rd.rule_id AND re.rule_version = rd.rule_version
+                WHERE re.tenant_id = :tid
+                  AND re.result = 'fail'
+                  AND rd.severity = 'critical'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM fsma.exception_cases ec
+                      WHERE ec.tenant_id = re.tenant_id
+                        AND ec.linked_event_ids @> ARRAY[re.event_id]::text[]
+                        AND ec.status IN ('resolved', 'waived')
+                  )
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
+        total = exc_count + identity_count + request_count + critical_failures
+
+        return {
+            "tenant_id": tenant_id,
+            "pending_reviews": total,
+            "breakdown": {
+                "unresolved_exceptions": exc_count,
+                "identity_reviews": identity_count,
+                "active_requests": request_count,
+                "critical_failures": critical_failures,
+            },
+            "db_available": True,
+        }
+
+    except Exception as exc:
+        logger.warning("pending_reviews: query failed: %s", exc)
+        return {
+            "tenant_id": tenant_id,
+            "pending_reviews": 0,
+            "breakdown": {},
+            "db_available": False,
+            "error": str(exc),
+        }
     finally:
         if db_session:
             db_session.close()

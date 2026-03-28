@@ -33,23 +33,14 @@ async function billingFetch<T>(path: string, options?: RequestInit): Promise<T> 
     return res.json();
 }
 
-function getApiKey(): string {
-    if (typeof window === 'undefined') {
-        return process.env.NEXT_PUBLIC_API_KEY || '';
-    }
-    return (
-        localStorage.getItem('regengine_api_key') ||
-        localStorage.getItem('re-api-key') ||
-        process.env.NEXT_PUBLIC_API_KEY ||
-        ''
-    );
-}
+// getApiKey removed — callers must pass apiKey from useAuth().apiKey
 
 function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
     if (typeof window === 'undefined') {
         return {};
     }
 
+    // tenant_id and user are non-sensitive — safe to read from localStorage
     const tenantId = localStorage.getItem('regengine_tenant_id') || undefined;
     const rawUser = localStorage.getItem('regengine_user');
     if (!rawUser) {
@@ -65,15 +56,16 @@ function getCheckoutContext(): { tenantId?: string; customerEmail?: string } {
 }
 
 async function createIngestionCheckout(
-    params: { tier_id: string; billing_cycle?: string; credit_code?: string },
+    params: { tier_id: string; billing_cycle?: string; credit_code?: string; apiKey?: string },
 ): Promise<CheckoutSessionData> {
     const { tenantId, customerEmail } = getCheckoutContext();
     const billingCycle = params.billing_cycle || 'annual';
+    // Credentials are in HTTP-only cookies — proxy injects them
     const res = await fetch(`${getServiceURL('ingestion')}/api/v1/billing/checkout`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
-            'X-RegEngine-API-Key': getApiKey(),
         },
         body: JSON.stringify({
             plan_id: params.tier_id,
@@ -221,7 +213,7 @@ export function useCreateCheckout() {
     return useMutation<
         CheckoutSessionData,
         Error,
-        { tier_id: string; billing_cycle?: string; credit_code?: string }
+        { tier_id: string; billing_cycle?: string; credit_code?: string; apiKey?: string }
     >({
         mutationFn: createIngestionCheckout,
     });

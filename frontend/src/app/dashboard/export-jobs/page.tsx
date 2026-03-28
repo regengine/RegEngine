@@ -6,8 +6,12 @@ import type { ArchiveExportJob } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/lib/auth-context';
+import { useTenant } from '@/lib/tenant-context';
 
 export default function ExportJobsPage() {
+    const { apiKey } = useAuth();
+    const { tenantId } = useTenant();
     const [name, setName] = useState('Weekly FSMA archive');
     const [cadence, setCadence] = useState<ArchiveExportJob['cadence']>('Weekly');
     const [format, setFormat] = useState<ArchiveExportJob['format']>('FDA Package');
@@ -27,7 +31,9 @@ export default function ExportJobsPage() {
             setStatus('loading');
 
             try {
-                const response = await fetch('/api/fsma/customer-readiness/export-jobs');
+                const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
+                    headers: { 'X-RegEngine-API-Key': apiKey || '' },
+                });
                 if (!response.ok) {
                     throw new Error('Failed to load export jobs');
                 }
@@ -51,7 +57,7 @@ export default function ExportJobsPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [apiKey]);
 
     async function handleSaveJob() {
         setStatus('saving');
@@ -59,13 +65,13 @@ export default function ExportJobsPage() {
         try {
             const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
                 body: JSON.stringify({
                     name,
                     cadence,
                     format,
                     destination,
-                    tenantId: 'tenant_acme_001',
+                    tenantId: tenantId || '',
                 }),
             });
 

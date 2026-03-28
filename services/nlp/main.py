@@ -16,6 +16,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before app creation)
+from shared.error_handling import init_sentry
+init_sentry()
+
 # Production Hardening (Phase 18)
 from shared.logging import setup_logging
 from shared.middleware.security import add_security
@@ -53,12 +57,18 @@ async def lifespan(api_app: FastAPI):
 
 from shared.cors import get_allowed_origins, should_allow_credentials
 
+from shared.env import is_production
+_is_prod = is_production()
+
 # Naming the instance 'app' is standard for uvicorn
 app = FastAPI(
     title="RegEngine NLP Service",
     description="Regulatory text analysis, entity extraction, and semantic understanding for compliance document processing",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # Production Hardening Middleware (Phase 18)

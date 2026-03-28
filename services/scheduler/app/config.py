@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from functools import lru_cache
 from typing import List, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+_logger = logging.getLogger(__name__)
+
+_DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 
 
 class SchedulerSettings(BaseSettings):
@@ -15,7 +21,7 @@ class SchedulerSettings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="postgresql://regengine:regengine@postgres:5432/regengine",
+        default="",
         description="PostgreSQL connection URL",
     )
 
@@ -45,7 +51,7 @@ class SchedulerSettings(BaseSettings):
 
     # API Keys
     scheduler_api_key: str = Field(
-        default="dev-scheduler-key",
+        default="",
         description="API key for calling internal services",
     )
 
@@ -128,4 +134,38 @@ class SchedulerSettings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> SchedulerSettings:
     """Get cached settings instance."""
-    return SchedulerSettings()
+    settings = SchedulerSettings()
+
+    _regengine_env = os.getenv("REGENGINE_ENV", "").lower()
+    _is_prod = (
+        _regengine_env == "production"
+        or os.getenv("ENV", "").lower() == "production"
+    )
+
+    # --- C-2: database_url must not use hardcoded dev credentials in prod ---
+    if not settings.database_url or settings.database_url == _DEV_DATABASE_URL:
+        if _is_prod:
+            raise ValueError(
+                "DATABASE_URL environment variable must be set in production. "
+                "Refusing to start with default credentials."
+            )
+        _logger.warning(
+            "DATABASE_URL not set — using dev default. Do NOT use in production."
+        )
+        settings.database_url = _DEV_DATABASE_URL
+
+    # --- S-3: scheduler_api_key must not use hardcoded dev key in prod ---
+    if not settings.scheduler_api_key or settings.scheduler_api_key == "dev-scheduler-key":
+        if _is_prod:
+            raise ValueError(
+                "SCHEDULER_API_KEY must be set in production. "
+                "Refusing to start with default API key."
+            )
+        generated_key = secrets.token_urlsafe(32)
+        _logger.warning(
+            "SCHEDULER_API_KEY not set — generating random dev key. "
+            "Do NOT use in production."
+        )
+        settings.scheduler_api_key = generated_key
+
+    return settings

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
         title: "CTE Coverage Mapper — RegEngine",
         description: "Map your FSMA 204 supply chain data flow.",
         type: "website",
-        url: "https://regengine.vercel.app/tools/cte-mapper",
+        url: "https://www.regengine.co/tools/cte-mapper",
     },
 };
 

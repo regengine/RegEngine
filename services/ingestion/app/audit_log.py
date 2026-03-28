@@ -2,6 +2,10 @@
 Audit Log Router.
 
 Returns real audit data from Postgres instead of static sample rows.
+
+NOTE: The audit_logs table lives in the *admin* database while CTE/export/alert
+tables live in the *ingestion* database.  We maintain two session factories so
+queries hit the correct database.
 """
 
 from __future__ import annotations
@@ -46,6 +50,7 @@ class AuditLogResponse(BaseModel):
 
 
 def _get_db_session():
+    """Return a session connected to the ingestion/shared database (CTE, exports, alerts)."""
     try:
         from shared.database import SessionLocal
 
@@ -56,43 +61,42 @@ def _get_db_session():
     return db
 
 
-# Lazy-initialised admin DB engine (only created if ADMIN_DATABASE_URL is set)
-_admin_engine = None
-_AdminSessionLocal = None
+# Lazy-init admin DB session factory — only created when first needed.
+_admin_session_factory = None
+
+
+_admin_url_warned = False
 
 
 def _get_admin_db_session():
-    """Return a session connected to the admin database (regengine_admin).
+    """Return a session connected to the admin database (audit_logs table).
 
-    The audit_logs table lives in the admin DB, not the ingestion DB.
-    Falls back to the regular ingestion DB session if ADMIN_DATABASE_URL
-    is not configured.
+    Uses ADMIN_DATABASE_URL env var.  Returns None if not configured,
+    allowing the caller to skip the admin audit query gracefully.
     """
-    global _admin_engine, _AdminSessionLocal
-
+    global _admin_session_factory, _admin_url_warned
     admin_url = os.getenv("ADMIN_DATABASE_URL")
     if not admin_url:
-        logger.debug("ADMIN_DATABASE_URL not set, falling back to ingestion DB")
-        return _get_db_session()
-
-    if _admin_engine is None:
-        _admin_engine = create_engine(
-            admin_url,
-            pool_size=5,
-            max_overflow=10,
-            pool_pre_ping=True,
-            pool_recycle=300,
+        if not _admin_url_warned:
+            logger.warning(
+                "ADMIN_DATABASE_URL is not set — admin audit logs will be incomplete. "
+                "Set this env var to enable full audit trail."
+            )
+            _admin_url_warned = True
+        return None
+    if _admin_session_factory is None:
+        # Convert psycopg driver URL to standard psycopg2 if needed
+        conn_url = admin_url.replace("postgresql+psycopg://", "postgresql://")
+        _admin_session_factory = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=create_engine(conn_url, pool_size=3, max_overflow=5, pool_pre_ping=True),
         )
-        _AdminSessionLocal = sessionmaker(
-            autocommit=False, autoflush=False, bind=_admin_engine
-        )
-
     try:
-        db = _AdminSessionLocal()
+        return _admin_session_factory()
     except Exception as exc:
-        logger.error("admin_db_session_init_failed error=%s", str(exc))
-        raise
-    return db
+        logger.error("audit_log_admin_db_session_failed error=%s", str(exc))
+        return None
 
 
 def _to_iso(value: Any) -> str:
@@ -346,17 +350,18 @@ async def get_audit_log(
     validate_tenant_id(tenant_id)
     entries: list[AuditEntry] = []
 
-    # Query admin audit logs from the admin database
+    # Query admin audit_logs from the admin database
     try:
         admin_session = _get_admin_db_session()
-        try:
-            entries.extend(_query_admin_audit_logs(admin_session, tenant_id, limit=200))
-        finally:
-            admin_session.close()
+        if admin_session is not None:
+            try:
+                entries.extend(_query_admin_audit_logs(admin_session, tenant_id, limit=200))
+            finally:
+                admin_session.close()
     except Exception as exc:
-        logger.warning("admin_audit_log_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
+        logger.warning("audit_log_admin_db_unavailable error=%s tenant_id=%s", str(exc), tenant_id)
 
-    # Query CTE/export/alert data from the ingestion database
+    # Query CTE events, exports, and alerts from the ingestion database
     try:
         db_session = _get_db_session()
         try:

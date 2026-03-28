@@ -6,7 +6,10 @@ from uuid import UUID
 
 import httpx
 import structlog
+from shared.resilient_http import resilient_client
+from shared.circuit_breaker import CircuitOpenError
 from fastapi import APIRouter, Depends, HTTPException, Request
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -14,6 +17,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from .config import settings
 from .query_planner import QueryPlan, parse_query
 from shared.auth import APIKey, require_api_key
+from shared.rate_limit import limiter
 from shared.api_key_store import APIKeyResponse
 from shared.funnel_events import emit_funnel_event
 from shared.permissions import has_permission
@@ -50,7 +54,7 @@ def health():
     return {"status": "ok"}
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def metrics():
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
@@ -60,6 +64,7 @@ def metrics():
     response_model=TraceabilityQueryResponse,
     summary="Natural language traceability query",
 )
+@limiter.limit("5/minute")
 async def query_traceability(
     payload: TraceabilityQueryRequest,
     request: Request,
@@ -245,27 +250,38 @@ async def _graph_get(
     if request_id:
         headers["X-Request-ID"] = request_id
 
+    # Always forward tenant context for downstream isolation
+    headers["X-RegEngine-Tenant-ID"] = tenant_id
+
     internal_secret = settings.internal_service_secret
     if internal_secret:
-        headers["X-RegEngine-Tenant-ID"] = tenant_id
         headers["X-RegEngine-Internal-Secret"] = internal_secret
 
     url = f"{settings.graph_service_url.rstrip('/')}{endpoint}"
 
     try:
-        async with httpx.AsyncClient(timeout=settings.graph_request_timeout_s) as client:
+        async with resilient_client(timeout=settings.graph_request_timeout_s, circuit_name="graph-service") as client:
             response = await client.get(url, headers=headers, params=params)
+    except CircuitOpenError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Graph service circuit open — retry after {exc.retry_after:.0f}s",
+        ) from exc
     except httpx.RequestError as exc:
         raise HTTPException(
             status_code=502,
             detail=f"Graph service request failed: {exc}",
         ) from exc
 
-    if response.status_code >= 400:
-        detail = response.text[:500]
+    if response.status_code >= 500:
         raise HTTPException(
             status_code=502,
-            detail=f"Graph service error ({response.status_code}): {detail}",
+            detail=f"Graph service error ({response.status_code}): {response.text[:500]}",
+        )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Graph service rejected request: {response.text[:500]}",
         )
 
     try:

@@ -19,6 +19,12 @@ RUN adduser --disabled-password --gecos '' --uid 1001 appuser
 # Copy shared code
 COPY services/shared /app/shared
 
+# Copy Alembic migration framework
+COPY alembic.ini /app/alembic.ini
+COPY alembic /app/alembic
+COPY migrations /app/migrations
+COPY scripts/run-migrations.sh /app/scripts/run-migrations.sh
+
 # Copy service code
 COPY services/admin/app /app/app
 COPY services/admin/main.py /app/main.py
@@ -37,5 +43,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 RUN chown -R appuser:appuser /app
 USER appuser
 
-# Run application (Railway-compatible dynamic port)
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8400}"]
+# Run migrations then start application (Railway-compatible dynamic port)
+CMD ["sh", "-c", "bash /app/scripts/run-migrations.sh && uvicorn main:app --host 0.0.0.0 --port ${PORT:-8400}"]

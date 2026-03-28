@@ -19,6 +19,34 @@ from app.tenant_validation import validate_tenant_id
 
 logger = logging.getLogger("alerts")
 
+# Strict allowlist of column names permitted in dynamic SQL for compliance_alerts.
+# Any column name from information_schema is intersected with this set before
+# being interpolated into query text, preventing SQL injection.
+_ALLOWED_ALERT_COLUMNS: frozenset[str] = frozenset(
+    {
+        "id",
+        "alert_type",
+        "severity",
+        "title",
+        "message",
+        "description",
+        "created_at",
+        "resolved",
+        "acknowledged",
+        "resolved_at",
+        "acknowledged_at",
+        "resolved_by",
+        "acknowledged_by",
+        "details",
+        "metadata",
+        "tenant_id",
+        "org_id",
+        "cte_event_id",
+        "event_id",
+        "entity_id",
+    }
+)
+
 router = APIRouter(prefix="/api/v1/alerts", tags=["Alerts & Notifications"])
 
 
@@ -128,7 +156,8 @@ def _load_alert_columns(db_session) -> set[str]:
             """
         )
     ).fetchall()
-    return {row[0] for row in rows}
+    # Intersect with allowlist so only known-safe identifiers are used in SQL
+    return {row[0] for row in rows} & _ALLOWED_ALERT_COLUMNS
 
 
 def _category_for_alert_type(alert_type: str) -> str:
@@ -180,6 +209,8 @@ def _fetch_alerts_from_db(db_session, tenant_id: str) -> list[Alert]:
         None,
     )
 
+    # All column identifiers below are guaranteed to be members of
+    # _ALLOWED_ALERT_COLUMNS (via _load_alert_columns) or literal "NULL"/"false".
     sql = f"""
         SELECT
             id::text AS alert_id,
@@ -293,6 +324,7 @@ async def acknowledge_alert(
         if "resolved" not in columns:
             raise HTTPException(status_code=501, detail="Alert acknowledgement is not supported by this schema")
 
+        # tenant_col is validated against _ALLOWED_ALERT_COLUMNS via _load_alert_columns
         update_sql = f"""
             UPDATE fsma.compliance_alerts
             SET resolved = true,

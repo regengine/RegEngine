@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 import structlog
 from opentelemetry import trace, propagate
 from prometheus_client import Counter, Histogram
+from kafka import KafkaConsumer, KafkaProducer
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 try:

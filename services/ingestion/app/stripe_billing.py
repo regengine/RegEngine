@@ -15,6 +15,7 @@ from typing import Any, Optional
 import httpx
 import redis
 import stripe
+from shared.resilient_http import resilient_client
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -316,7 +317,7 @@ async def _create_tenant_via_admin(tenant_name: str) -> str:
     if not admin_master_key:
         raise RuntimeError("ADMIN_MASTER_KEY is required to create tenants from Stripe webhooks")
 
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    async with resilient_client(timeout=20.0, circuit_name="admin-service") as client:
         response = await client.post(
             f"{admin_base_url}/v1/admin/tenants",
             headers={"X-Admin-Key": admin_master_key},
@@ -428,7 +429,19 @@ def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
 
 
 def _create_portal_session(customer_id: str, return_url: str) -> Any:
-    """Create Stripe portal session across SDK variants."""
+    """Create Stripe portal session across SDK variants.
+
+    H7 Proration Note: Subscription plan changes (upgrades/downgrades)
+    happen exclusively through the Stripe Customer Portal. Stripe's portal
+    uses the proration behavior configured on the portal *configuration*
+    object (Dashboard > Settings > Customer portal > Subscriptions).
+    RegEngine's portal configuration is set to "create_prorations" so that
+    mid-cycle plan changes generate prorated line items automatically.
+
+    There are no direct ``stripe.Subscription.modify()`` calls in this
+    codebase — all subscription mutations flow through the portal, which
+    inherits the proration setting from the portal configuration.
+    """
     portal_namespace = getattr(stripe, "billing_portal", None)
     sessions_api = getattr(portal_namespace, "sessions", None)
     if sessions_api and hasattr(sessions_api, "create"):

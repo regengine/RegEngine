@@ -9,8 +9,9 @@
  * Returns: { checkout_url, session_id, plan, billing_period, amount, currency }
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerServiceURL } from '@/lib/api-config';
 
-const BILLING_BACKEND_URL = process.env.INGESTION_SERVICE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8002';
+const BILLING_BACKEND_URL = process.env.INGESTION_SERVICE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('ingestion');
 
 export async function POST(request: NextRequest) {
     try {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
         // Get API key from HTTP-only cookie (set by /api/session) or env
         const apiKey = request.cookies.get('re_api_key')?.value
             || process.env.REGENGINE_SERVICE_API_KEY
-            || process.env.NEXT_PUBLIC_API_KEY
+            || process.env.REGENGINE_API_KEY
             || '';
 
         const backendResponse = await fetch(`${BILLING_BACKEND_URL}/api/v1/billing/checkout`, {

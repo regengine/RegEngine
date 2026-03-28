@@ -32,6 +32,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { PlanCard, type PlanFeature } from '@/components/billing/PlanCard';
 import { CreditRedemption } from '@/components/billing/CreditRedemption';
+import { useAuth } from '@/lib/auth-context';
 import { useCreateCheckout, usePricingTiers, type PricingTier, type RedeemResult } from '@/hooks/use-billing';
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ const fadeUp = {
 export function CheckoutWizard() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { apiKey } = useAuth();
     const createCheckout = useCreateCheckout();
     const { data: tiersData } = usePricingTiers();
     const billingParam = searchParams?.get('billing');
@@ -159,6 +161,7 @@ export function CheckoutWizard() {
             const result = await createCheckout.mutateAsync({
                 tier_id: selectedPlan,
                 billing_cycle: isAnnual ? 'annual' : 'monthly',
+                apiKey: apiKey || undefined,
             });
             if (result.checkout_url) {
                 window.location.assign(result.checkout_url);

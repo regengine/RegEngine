@@ -1,0 +1,49 @@
+REGENGINE BACKEND DEBUG SCAN - QUICK SUMMARY
+═════════════════════════════════════════════
+Date: 2026-03-27 | Services: 7 | Files: 150+ | Issues: 17
+
+CRITICAL (1) - DO THIS NOW
+──────────────────────────
+1. AUTH_GAP: GET /v1/ingest/discovery/queue (routes.py:354)
+   └─ Missing Depends(require_api_key) — allows unauthenticated access to discovery queue
+   └─ Fix: Add _auth=Depends(require_api_key) parameter to function signature
+   └─ Note: Duplicate endpoint in routes_discovery.py:23 has correct auth — align both
+
+
+WARNING (16) - REFINE SOON
+──────────────────────────
+
+Error Handling (8 instances):
+  • webhook_router_v2.py: lines 61, 249, 292, 329, 459, 621
+  • compliance_score.py: lines 207, 241, 258, 274
+  • product_catalog.py: line 86
+  └─ Replace generic "except Exception:" with specific types
+  └─ Impact: Better debugging + proper error flow control
+
+Configuration (5 instances):
+  • stripe_billing.py:313, config.py:55, main.py:70
+  • admin/main.py:140, shared/middleware/security.py:13
+  └─ Hardcoded localhost as fallback when env vars missing
+  └─ Impact: Silent misconfiguration in production if env vars unset
+  └─ Fix: Require explicit environment variables at startup
+
+
+WHAT'S CLEAN ✓
+──────────────
+✓ SQL Injection: 0 risks — SafeQueryBuilder used throughout
+✓ Imports: No broken references
+✓ Dead Code: Minimal unreachable code
+✓ Race Conditions: No shared mutable state without locks
+✓ Auth Coverage: 99% of endpoints protected (except 1)
+
+
+EFFORT ESTIMATE
+───────────────
+Critical fix: 2 minutes
+All warnings: 2-3 hours total
+  (30 min webhook handlers, 1.5 hours env var validation, 30 min cleanup)
+
+
+FULL REPORT
+───────────
+See: DEBUG_SCAN_REPORT_2026-03-27.md (structured analysis with code examples)

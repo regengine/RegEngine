@@ -10,8 +10,8 @@ import requests
 import feedparser
 from typing import Iterable, Optional
 
+from shared.url_validation import validate_url
 from .base import FetchedItem, Source, StateRegistryScraper
-from ...shared.url_validation import validate_url, SSRFError
 
 import logging
 logger = logging.getLogger("ingestion.scraper.generic")
@@ -37,14 +37,7 @@ class GenericRSSScraper(StateRegistryScraper):
 
     def list_sources(self) -> Iterable[Source]:
         """Parse RSS feed and yield sources for each entry."""
-        # SSRF protection: validate feed URL before parsing
-        try:
-            validated_url = validate_url(self.feed_url)
-        except SSRFError as e:
-            logger.warning("ssrf_validation_failed_feed_url", url=self.feed_url, error=str(e))
-            return
-
-        feed = feedparser.parse(validated_url)
+        feed = feedparser.parse(self.feed_url)
         for entry in feed.entries:
             yield Source(
                 url=entry.link,
@@ -59,19 +52,9 @@ class GenericRSSScraper(StateRegistryScraper):
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch content from the source URL."""
         try:
-            # SSRF protection: validate source URL before fetching
-            try:
-                validated_url = validate_url(source.url)
-            except SSRFError as e:
-                logger.warning("ssrf_validation_failed_source_url", url=source.url, error=str(e))
-                return FetchedItem(
-                    source=source,
-                    content_bytes=b"",
-                    content_type="error",
-                )
-
+            validate_url(source.url)
             resp = requests.get(
-                validated_url,
+                source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
             )
@@ -126,15 +109,9 @@ class GenericListScraper(StateRegistryScraper):
             from bs4 import BeautifulSoup
             from urllib.parse import urljoin
 
-            # SSRF protection: validate list URL before fetching
-            try:
-                validated_url = validate_url(self.list_url)
-            except SSRFError as e:
-                logger.warning("ssrf_validation_failed_list_url", url=self.list_url, error=str(e))
-                return
-
+            validate_url(self.list_url)
             resp = requests.get(
-                validated_url,
+                self.list_url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
             )
@@ -147,20 +124,13 @@ class GenericListScraper(StateRegistryScraper):
                 if not href:
                     continue
                 url = urljoin(base, href)
-                # SSRF protection: validate extracted URL before yielding
-                try:
-                    validated_extracted_url = validate_url(url)
-                    title = link.get_text(strip=True) or href
-                    yield Source(
-                        url=validated_extracted_url,
-                        title=f"{self.title_prefix}: {title}",
-                        jurisdiction_code=self.jurisdiction,
-                        metadata={"source_page": self.list_url},
-                    )
-                except SSRFError as e:
-                    logger.debug("ssrf_validation_failed_extracted_url", url=url, error=str(e))
-                    # Skip this URL, continue to next
-                    continue
+                title = link.get_text(strip=True) or href
+                yield Source(
+                    url=url,
+                    title=f"{self.title_prefix}: {title}",
+                    jurisdiction_code=self.jurisdiction,
+                    metadata={"source_page": self.list_url},
+                )
         except Exception as e:
             logger.warning("generic_discover_failed", url=self.list_url, error=str(e))
             return
@@ -168,19 +138,9 @@ class GenericListScraper(StateRegistryScraper):
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch content from the source URL."""
         try:
-            # SSRF protection: validate source URL before fetching
-            try:
-                validated_url = validate_url(source.url)
-            except SSRFError as e:
-                logger.warning("ssrf_validation_failed_generic_list_fetch", url=source.url, error=str(e))
-                return FetchedItem(
-                    source=source,
-                    content_bytes=b"",
-                    content_type="error",
-                )
-
+            validate_url(source.url)
             resp = requests.get(
-                validated_url,
+                source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
             )

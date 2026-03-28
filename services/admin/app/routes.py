@@ -10,6 +10,8 @@ from uuid import uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
+from shared.pagination import PaginationParams, PaginatedResponse
+from shared.metrics_auth import require_metrics_key
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
@@ -231,7 +233,7 @@ async def readiness():
     return {"status": "ready", "service": "admin-api"}
 
 
-@router.get("/health/consumer")
+@router.get("/health/consumer", dependencies=[Depends(verify_admin_key)])
 def consumer_health():
     """Health check endpoint for the Kafka review consumer."""
     from fastapi.responses import JSONResponse
@@ -240,7 +242,7 @@ def consumer_health():
     return JSONResponse(content=health_info, status_code=status_code)
 
 
-@router.get("/metrics")
+@router.get("/metrics", dependencies=[Depends(require_metrics_key)])
 def metrics():
     """Prometheus metrics endpoint."""
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
@@ -311,37 +313,45 @@ async def create_api_key(
 
 
 
-@v1_router.get("/admin/keys", response_model=list[APIKeyInfo])
+@v1_router.get("/admin/keys", response_model=PaginatedResponse[APIKeyInfo])
 async def list_api_keys(
+    pagination: PaginationParams = Depends(),
     _: bool = Depends(verify_admin_key),
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
 ):
-    """List all API keys (requires admin authentication)."""
+    """List API keys with pagination (requires admin authentication)."""
     key_store = get_key_store()
-    
+
     if isinstance(key_store, DatabaseAPIKeyStore):
         keys = await key_store.list_keys(tenant_id=x_tenant_id)
     else:
         # Fallback for in-memory store (mostly for tests/local dev)
-        # Check if list_keys supports tenant_id in the mock/memory store
         try:
             keys = key_store.list_keys(tenant_id=x_tenant_id)
         except TypeError:
             keys = key_store.list_keys()
 
-    return [
-        APIKeyInfo(
-            key_id=key.key_id,
-            name=key.name,
-            tenant_id=key.tenant_id,
-            created_at=key.created_at,
-            expires_at=key.expires_at,
-            rate_limit_per_minute=key.rate_limit_per_minute,
-            enabled=key.enabled,
-            scopes=key.scopes,
-        )
-        for key in keys
-    ]
+    total = len(keys)
+    paged = keys[pagination.skip : pagination.skip + pagination.limit]
+
+    return PaginatedResponse(
+        items=[
+            APIKeyInfo(
+                key_id=key.key_id,
+                name=key.name,
+                tenant_id=key.tenant_id,
+                created_at=key.created_at,
+                expires_at=key.expires_at,
+                rate_limit_per_minute=key.rate_limit_per_minute,
+                enabled=key.enabled,
+                scopes=key.scopes,
+            )
+            for key in paged
+        ],
+        total=total,
+        skip=pagination.skip,
+        limit=pagination.limit,
+    )
 
 
 @v1_router.delete("/admin/keys/{key_id}")

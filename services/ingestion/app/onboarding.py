@@ -12,8 +12,9 @@ in under 5 minutes. Tracks progress through steps:
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -52,8 +53,9 @@ def _seed_obligations_if_needed(tenant_id: str):
 
 router = APIRouter(prefix="/api/v1/onboarding", tags=["Onboarding"])
 
-# In-memory onboarding state fallback
+# In-memory onboarding state fallback (thread-safe via _onboarding_lock)
 _onboarding_store: dict[str, dict] = {}
+_onboarding_lock = threading.Lock()
 
 
 def _db_get_onboarding(tenant_id: str) -> Optional[dict]:
@@ -63,7 +65,7 @@ def _db_get_onboarding(tenant_id: str) -> Optional[dict]:
         return None
     try:
         row = db.execute(
-            text("SELECT progress_json FROM fsma.tenant_onboarding WHERE tenant_id = :tid"),
+            text("SELECT state FROM fsma.tenant_onboarding WHERE tenant_id = :tid"),
             {"tid": tenant_id}
         ).fetchone()
         if not row:
@@ -86,9 +88,9 @@ def _db_save_onboarding(tenant_id: str, progress: dict) -> bool:
         progress_json = json.dumps(progress)
         db.execute(
             text("""
-                INSERT INTO fsma.tenant_onboarding (tenant_id, progress_json, created_at, updated_at)
+                INSERT INTO fsma.tenant_onboarding (tenant_id, state, created_at, updated_at)
                 VALUES (:tid, :json, now(), now())
-                ON CONFLICT (tenant_id) DO UPDATE SET progress_json = :json, updated_at = now()
+                ON CONFLICT (tenant_id) DO UPDATE SET state = :json, updated_at = now()
             """),
             {"tid": tenant_id, "json": progress_json}
         )
@@ -207,12 +209,13 @@ async def get_progress(
     state = _db_get_onboarding(tenant_id)
     if state is None:
         # Fall back to memory or default
-        state = _onboarding_store.get(tenant_id, {
-            "current_step": 1,
-            "completed_steps": [],
-            "started_at": datetime.now(timezone.utc).isoformat(),
-            "first_cte_at": None,
-        })
+        with _onboarding_lock:
+            state = _onboarding_store.get(tenant_id, {
+                "current_step": 1,
+                "completed_steps": [],
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "first_cte_at": None,
+            })
 
     completed_count = len(state["completed_steps"])
     total = len(ONBOARDING_STEPS)
@@ -254,14 +257,15 @@ async def complete_step(
     state = _db_get_onboarding(tenant_id)
     if state is None:
         # Fall back to memory or create new
-        if tenant_id not in _onboarding_store:
-            _onboarding_store[tenant_id] = {
-                "current_step": 1,
-                "completed_steps": [],
-                "started_at": now.isoformat(),
-                "first_cte_at": None,
-            }
-        state = _onboarding_store[tenant_id]
+        with _onboarding_lock:
+            if tenant_id not in _onboarding_store:
+                _onboarding_store[tenant_id] = {
+                    "current_step": 1,
+                    "completed_steps": [],
+                    "started_at": now.isoformat(),
+                    "first_cte_at": None,
+                }
+            state = _onboarding_store[tenant_id]
 
     if step_id not in state["completed_steps"]:
         state["completed_steps"].append(step_id)
@@ -286,7 +290,8 @@ async def complete_step(
     # Try DB first, fall back to memory
     db_success = _db_save_onboarding(tenant_id, state)
     if not db_success:
-        _onboarding_store[tenant_id] = state
+        with _onboarding_lock:
+            _onboarding_store[tenant_id] = state
 
     logger.info("onboarding_step_completed", extra={
         "tenant_id": tenant_id,

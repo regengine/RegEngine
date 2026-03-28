@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before app creation)
+from shared.error_handling import init_sentry
+init_sentry()
+
 # Production Hardening (Phase 18)
 from shared.logging import setup_logging
 from shared.middleware.security import add_security
@@ -27,6 +32,9 @@ logger = setup_logging()
 # Local imports (using absolute-style imports from 'app' package inside graph service)
 from app.routes import router as graph_router
 from app.config import settings
+
+from shared.env import is_production
+_is_prod = is_production()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +49,9 @@ app = FastAPI(
     description="Knowledge graph construction, regulatory frameworks, and traceability gap analysis for FSMA 204 compliance",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 # Production Hardening Middleware (Phase 18)

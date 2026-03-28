@@ -32,6 +32,7 @@ node_modules/
 /dist/
 .env
 .env.*
+.env.production
 .DS_Store
 .idea/
 .vscode/
@@ -60,6 +61,10 @@ secrets.md
 *.zip
 login_resp.json
 frontend/build_log.txt
+
+# Stress test / bulk data files (move to external storage)
+fsma_stress_test_*
+test_data/
 
 # MCP / Gemini settings (contains tokens)
 .gemini/settings.json
