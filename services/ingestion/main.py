@@ -106,7 +106,7 @@ from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
 from shared.auth import validate_auth_config
-validate_auth_config(require_supabase=True)
+validate_auth_config()
 
 # ---------------------------------------------------------------------------
 # Router Feature Flags — disable non-core routers via DISABLED_ROUTERS env var
