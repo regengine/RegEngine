@@ -10,10 +10,10 @@ Tables prefixed with 'pcos_' to isolate from core RegEngine tables.
 from __future__ import annotations
 
 import uuid as uuid_module
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import (
