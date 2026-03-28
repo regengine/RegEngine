@@ -10,6 +10,8 @@ import os
 import redis
 from fastapi import HTTPException, Request
 
+from shared.circuit_breaker import CircuitOpenError, redis_circuit
+
 logger = logging.getLogger(__name__)
 
 _redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
@@ -41,12 +43,18 @@ async def require_active_subscription(request: Request) -> bool:
         raise HTTPException(status_code=401, detail="X-Tenant-ID header required")
 
     try:
+        redis_circuit._check_state()  # raises CircuitOpenError if open
         r = _get_redis()
         sub_status = r.get(f"subscription:{tenant_id}:status")
-    except redis.RedisError:
+        redis_circuit._record_success()
+    except CircuitOpenError:
+        raise HTTPException(
+            status_code=503,
+            detail="Billing system temporarily unavailable. Please try again shortly.",
+        )
+    except redis.RedisError as exc:
+        redis_circuit._record_failure(exc)
         logger.exception("subscription_check_redis_error tenant=%s", tenant_id)
-        # Fail open on Redis errors to avoid blocking production traffic.
-        # TODO: add circuit breaker / fallback to DB check.
         return True
 
     if sub_status in ("active", "trialing"):
