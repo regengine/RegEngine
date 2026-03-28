@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ..neo4j_utils import Neo4jClient
@@ -22,6 +22,8 @@ from shared.auth import require_api_key
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from shared.middleware import get_current_tenant_id
+
+from shared.rate_limit import limiter
 
 router = APIRouter(tags=["Lineage"])
 logger = structlog.get_logger("fact-lineage")
@@ -109,7 +111,9 @@ RETURN
         "Useful for audit trails and change tracking."
     ),
 )
+@limiter.limit("10/minute")
 async def get_fact_lineage(
+    request: Request,
     tlc: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
