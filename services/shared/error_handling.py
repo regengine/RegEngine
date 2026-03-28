@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import traceback
 from typing import Optional
 
@@ -20,7 +21,46 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    _HAS_SENTRY = True
+except ImportError:
+    _HAS_SENTRY = False
+
 logger = structlog.get_logger("error_handler")
+
+
+def init_sentry() -> None:
+    """Initialize Sentry error tracking if SENTRY_DSN is configured.
+
+    Call this before creating the FastAPI app in each service's main.py.
+    No-op if sentry-sdk is not installed or SENTRY_DSN is not set.
+    """
+    if not _HAS_SENTRY:
+        logger.info("sentry_sdk not installed — skipping Sentry init")
+        return
+
+    dsn = os.getenv("SENTRY_DSN")
+    if not dsn:
+        logger.info("SENTRY_DSN not set — skipping Sentry init")
+        return
+
+    from shared.env import get_environment
+
+    sentry_sdk.init(
+        dsn=dsn,
+        environment=get_environment(),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+        integrations=[
+            FastApiIntegration(),
+            StarletteIntegration(),
+        ],
+        send_default_pii=False,
+    )
+    logger.info("sentry_initialized", environment=get_environment())
 
 
 def _get_request_id(request: Request) -> Optional[str]:
