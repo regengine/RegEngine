@@ -154,12 +154,12 @@ def _persist_verification_result(
         db.execute(
             text("""
                 INSERT INTO fsma.chain_verification_log
-                    (id, tenant_id, chain_valid, chain_length, errors, completed_at)
+                    (job_id, tenant_id, chain_valid, chain_length, errors, completed_at)
                 VALUES
-                    (:id, :tid, :valid, :length, :errors, :completed)
+                    (:job_id, :tid, :valid, :length, :errors, :completed)
             """),
             {
-                "id": job_id,
+                "job_id": job_id,
                 "tid": tenant_id,
                 "valid": chain_valid,
                 "length": chain_length,
