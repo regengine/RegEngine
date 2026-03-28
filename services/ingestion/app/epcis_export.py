@@ -295,6 +295,7 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
 @router.get(
     "/formats",
     summary="List available export formats",
+    dependencies=[Depends(_verify_api_key)],
 )
 async def list_export_formats():
     """List available export formats and their descriptions."""

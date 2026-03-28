@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireProxyAuth } from '@/lib/api-proxy';
 
 const ADMIN_URL = (() => {
     const url = process.env.ADMIN_SERVICE_URL || 'http://localhost:8400';
@@ -41,6 +42,10 @@ async function proxyRequest(
                 { status: 503 },
             );
         }
+
+        // Defense-in-depth: reject requests with no auth credentials before proxying
+        const authError = requireProxyAuth(request);
+        if (authError) return authError;
 
         const path = pathParts.join('/');
         const url = new URL(request.url);

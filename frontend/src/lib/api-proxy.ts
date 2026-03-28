@@ -6,7 +6,7 @@
  * – requireEnvApiKey: resolves the server-side API key without hardcoded fallbacks
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 // ---------------------------------------------------------------------------
 // Path sanitisation
@@ -74,6 +74,48 @@ export function getServerApiKey(): string | undefined {
  */
 export function getAdminMasterKey(): string | undefined {
   return process.env.ADMIN_MASTER_KEY || undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Proxy auth validation (defense-in-depth)
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates that the request carries at least one auth credential before
+ * proxying to the backend. Returns a 401 NextResponse if no credentials
+ * are present, or null if the request should proceed.
+ *
+ * Credentials checked (in order):
+ *   1. re_api_key cookie
+ *   2. re_admin_key cookie
+ *   3. re_access_token cookie
+ *   4. x-regengine-api-key header (direct API calls)
+ *   5. x-admin-key header (direct API calls)
+ *   6. Server-side REGENGINE_API_KEY env var (service-to-service)
+ */
+export function requireProxyAuth(request: NextRequest): NextResponse | null {
+  const hasApiKeyCookie = !!request.cookies.get('re_api_key')?.value;
+  const hasAdminKeyCookie = !!request.cookies.get('re_admin_key')?.value;
+  const hasAccessToken = !!request.cookies.get('re_access_token')?.value;
+  const hasApiKeyHeader = !!request.headers.get('x-regengine-api-key');
+  const hasAdminKeyHeader = !!request.headers.get('x-admin-key');
+  const hasServerApiKey = !!process.env.REGENGINE_API_KEY;
+
+  if (
+    hasApiKeyCookie ||
+    hasAdminKeyCookie ||
+    hasAccessToken ||
+    hasApiKeyHeader ||
+    hasAdminKeyHeader ||
+    hasServerApiKey
+  ) {
+    return null;
+  }
+
+  return NextResponse.json(
+    { error: 'Unauthorized — no valid credentials provided' },
+    { status: 401 },
+  );
 }
 
 // ---------------------------------------------------------------------------
