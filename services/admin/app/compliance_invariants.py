@@ -15,6 +15,8 @@ from decimal import Decimal
 from typing import Optional, Dict, List, Any, Tuple
 from uuid import UUID
 
+from .pcos_models import PCOSAnalysisRunModel  # noqa: F811 – needed for type annotation
+
 logger = structlog.get_logger(__name__)
 
 

@@ -19,6 +19,8 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.authz import require_permission, IngestionPrincipal
@@ -59,12 +61,12 @@ def _get_db_session():
         try:
             yield db
             db.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.rollback()
             raise
         finally:
             db.close()
-    except (ImportError, RuntimeError, ConnectionError) as e:
+    except (ImportError, RuntimeError, ConnectionError, OSError, SQLAlchemyError) as e:
         logger.warning("database_unavailable, falling back to in-memory: %s", str(e))
         yield None
 
@@ -244,7 +246,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 """),
                 {"tid": tenant_id, "cte_type": event.cte_type.value},
             ).fetchall()
-        except (ValueError, TypeError, RuntimeError) as exc:
+        except (SQLAlchemyError, ValueError, TypeError, RuntimeError) as exc:
             nested.rollback()
             logger.debug("obligation_query_rollback: %s", str(exc))
             return []
@@ -288,7 +290,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             {"tid": tenant_id, "tlc": event.traceability_lot_code},
                         ).scalar()
                         passed = (prior or 0) > 0
-                    except (ValueError, RuntimeError) as _db_err:
+                    except (SQLAlchemyError, ValueError, RuntimeError) as _db_err:
                         passed = True  # Don't block ingest on query failure
                 else:
                     passed = True
@@ -325,7 +327,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     # chain entry may not exist yet). Allow it.
                     # For subsequent events, at least 1 prior chain entry should exist.
                     passed = True  # Chain is verified at scoring time; here we just check existence
-                except (ValueError, RuntimeError) as _db_err:
+                except (SQLAlchemyError, ValueError, RuntimeError) as _db_err:
                     passed = True  # Don't block ingest on query failure
 
             if not passed:
@@ -361,12 +363,12 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                             }),
                         },
                     )
-                except (ValueError, RuntimeError) as alert_err:
+                except (SQLAlchemyError, ValueError, RuntimeError) as alert_err:
                     logger.warning("obligation_alert_write_failed: %s", str(alert_err))
 
         return alerts
 
-    except (ImportError, ValueError, TypeError, RuntimeError) as exc:
+    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as exc:
         logger.warning("obligation_check_failed: %s", str(exc))
         return []
 
@@ -375,18 +377,54 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
 # Neo4j Graph Sync
 # ---------------------------------------------------------------------------
 
-_graph_sync_failures = 0
+_SYNC_COUNTER_PREFIX = "regengine:graph_sync"
+_graph_sync_failures = 0  # Fallback when Redis unavailable
 _graph_sync_successes = 0
 
 
+def _get_redis_client():
+    """Get Redis client for counter persistence. Returns None if unavailable."""
+    try:
+        import redis
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        return redis.from_url(redis_url, decode_responses=True, socket_timeout=1)
+    except Exception:
+        return None
+
+
+def _incr_sync_counter(key: str) -> None:
+    """Increment a graph sync counter in Redis with in-memory fallback."""
+    global _graph_sync_failures, _graph_sync_successes
+    try:
+        client = _get_redis_client()
+        if client:
+            client.incr(f"{_SYNC_COUNTER_PREFIX}:{key}")
+            return
+    except Exception:
+        pass
+    # Fallback to in-memory
+    if key == "failures":
+        _graph_sync_failures += 1
+    else:
+        _graph_sync_successes += 1
+
+
 def get_graph_sync_stats() -> dict:
-    """Return graph sync health counters for the /health endpoint."""
+    """Return graph sync success/failure counts from Redis or in-memory fallback."""
+    try:
+        client = _get_redis_client()
+        if client:
+            return {
+                "successes": int(client.get(f"{_SYNC_COUNTER_PREFIX}:successes") or 0),
+                "failures": int(client.get(f"{_SYNC_COUNTER_PREFIX}:failures") or 0),
+            }
+    except Exception:
+        pass
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
 def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> None:
     """Push a CTE creation event to Redis for Neo4j graph sync."""
-    global _graph_sync_failures, _graph_sync_successes
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         return
@@ -413,9 +451,9 @@ def _publish_graph_sync(event_id: str, event: IngestEvent, tenant_id: str) -> No
             },
         }
         client.rpush("neo4j-sync", json.dumps(message, default=str))
-        _graph_sync_successes += 1
-    except (ImportError, ConnectionError, TimeoutError, OSError) as exc:
-        _graph_sync_failures += 1
+        _incr_sync_counter("successes")
+    except (ImportError, ConnectionError, TimeoutError, OSError, ValueError, TypeError) as exc:
+        _incr_sync_counter("failures")
         logger.warning("graph_sync_publish_failed event_id=%s error=%s", event_id, str(exc))
 
 
@@ -455,7 +493,7 @@ async def ingest_events(
             if _row and _row[0]:
                 tenant_id = str(_row[0])
             _db.close()
-        except (ImportError, ValueError, RuntimeError, ConnectionError):
+        except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as _tenant_err:
             pass
     # Fallback: use tenant from RBAC principal if available
     if not tenant_id and principal.tenant_id:
@@ -485,7 +523,7 @@ async def ingest_events(
     try:
         from shared.cte_persistence import CTEPersistence
         persistence = CTEPersistence(db_session)
-    except (ImportError, RuntimeError, ConnectionError) as e:
+    except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
         logger.error("db_init_failed — rejecting ingest: %s", str(e))
         raise HTTPException(
             status_code=503,
@@ -590,7 +628,7 @@ async def ingest_events(
                             from shared.exception_queue import ExceptionQueueService
                             exc_svc = ExceptionQueueService(db_session)
                             exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
-                    except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
                         logger.warning("canonical_write_skipped: %s", str(canon_err))
 
                     # Post-ingest graph sync (non-blocking)
@@ -608,7 +646,7 @@ async def ingest_events(
                                 "location_name": event.location_name,
                             },
                         )
-                    except (ImportError, ValueError, TypeError, RuntimeError) as learn_err:
+                    except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as learn_err:
                         logger.warning("catalog_learn_skipped: %s", str(learn_err))
 
             except (ValueError, TypeError, RuntimeError, AttributeError) as e:
@@ -669,7 +707,7 @@ async def ingest_events(
                                 from shared.exception_queue import ExceptionQueueService
                                 exc_svc = ExceptionQueueService(db_session)
                                 exc_svc.create_exceptions_from_evaluation(tenant_id, summary)
-                        except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+                        except (ImportError, SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError, AttributeError) as canon_err:
                             logger.warning("canonical_write_skipped_fallback: %s", str(canon_err))
 
                         _publish_graph_sync(store_result.event_id, event, tenant_id)
@@ -684,9 +722,9 @@ async def ingest_events(
                                     "location_name": event.location_name,
                                 },
                             )
-                        except Exception as learn_err:
+                        except (ImportError, SQLAlchemyError, ValueError, TypeError, KeyError) as learn_err:
                             logger.warning("catalog_learn_skipped: %s", str(learn_err))
-                    except (ValueError, TypeError, RuntimeError) as inner_e:
+                    except (SQLAlchemyError, ValueError, TypeError, RuntimeError, KeyError) as inner_e:
                         logger.error("persistence_failed", extra={"error": str(inner_e), "tlc": event.traceability_lot_code})
                         results.append(EventResult(
                             traceability_lot_code=event.traceability_lot_code,

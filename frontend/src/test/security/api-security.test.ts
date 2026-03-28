@@ -28,17 +28,17 @@ describe('API Security Tests', () => {
         it.each(sqlInjectionPayloads)(
             'should reject SQL injection payload: %s',
             async (payload) => {
-                const mockFetch = vi.fn().mockResolvedValue(mockApiResponse({
-                    results: [], // Safe empty response, not DB error
-                }));
+                const mockFetch = vi.fn().mockResolvedValue(mockApiError(
+                    'Invalid input', 400
+                ));
                 global.fetch = mockFetch;
 
                 const response = await fetch(`/api/search?q=${encodeURIComponent(payload)}`);
                 const data = await response.json();
 
-                // Should not reveal database errors
-                expect(response.status).toBe(200);
-                expect(data.results).toBeDefined();
+                // SQL injection payloads should be rejected, not accepted
+                expect(response.status).toBeGreaterThanOrEqual(400);
+                expect(response.status).toBeLessThan(500);
                 expect(JSON.stringify(data)).not.toContain('SQL');
                 expect(JSON.stringify(data)).not.toContain('syntax error');
             }

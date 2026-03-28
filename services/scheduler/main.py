@@ -41,6 +41,10 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+# Sentry error tracking (must be before service initialization)
+from shared.error_handling import init_sentry
+init_sentry()
+
 from app.config import get_settings
 from app.circuit_breaker import CircuitBreaker, CircuitOpenError, circuit_registry
 from app.kafka_producer import get_kafka_producer

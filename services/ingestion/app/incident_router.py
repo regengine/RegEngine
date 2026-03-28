@@ -38,6 +38,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
@@ -54,7 +55,7 @@ def _get_db_session():
         try:
             yield db
             db.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.rollback()
             raise
         finally:
