@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from app.database import init_db
         init_db()
         log.info("database_initialized")
-    except Exception as e:
+    except (ImportError, RuntimeError, ConnectionError, OSError) as e:
         log.error("database_init_failed", error=str(e))
         # Continue - service can still serve health checks
     
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from shared.api_key_store import get_db_key_store
             await get_db_key_store()
             log.info("api_key_store_initialized")
-        except Exception as e:
+        except (ImportError, RuntimeError, ConnectionError, OSError) as e:
             log.warning("api_key_store_init_failed", error=str(e))
             # Continue - can fall back to static keys
 
@@ -262,7 +262,7 @@ def _start_review_consumer() -> None:
         _consumer_thread = threading.Thread(target=run_consumer, daemon=True)
         _consumer_thread.start()
         structlog.get_logger("admin").info("review_consumer_thread_started")
-    except Exception as exc:  # pragma: no cover - optional feature
+    except (ImportError, RuntimeError, ConnectionError) as exc:  # pragma: no cover - optional feature
         structlog.get_logger("admin").warning("review_consumer_import_failed", error=str(exc))
 
 
