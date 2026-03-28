@@ -7,7 +7,7 @@ from typing import Iterable, Optional
 from datetime import datetime, timezone
 
 from .base import StateRegistryScraper, Source, FetchedItem
-from ...shared.url_validation import validate_url, SSRFError
+from shared.url_validation import validate_url, SSRFError
 
 logger = logging.getLogger("ingestion.scrapers.fda_enforcement")
 
