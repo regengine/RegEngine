@@ -65,30 +65,31 @@ class TestFailClosedAuth:
         assert result.returncode == 0
         assert "STARTED_OK" in result.stdout
 
-    def test_cloud_exits_without_supabase_url(self):
-        """Cloud env with missing SUPABASE_URL should sys.exit(1)."""
+    def test_cloud_warns_without_supabase_url(self):
+        """Cloud env with missing SUPABASE_URL should warn but still start."""
         result = _run_validate({
             "RAILWAY_ENVIRONMENT": "production",
             "NEXT_PUBLIC_SUPABASE_ANON_KEY": "test-anon-key",
-            # No SUPABASE_URL set
         })
-        assert result.returncode != 0
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
 
-    def test_cloud_exits_without_supabase_key(self):
-        """Cloud env with missing SUPABASE_ANON_KEY should sys.exit(1)."""
+    def test_cloud_warns_without_supabase_key(self):
+        """Cloud env with missing SUPABASE_ANON_KEY should warn but still start."""
         result = _run_validate({
             "RAILWAY_ENVIRONMENT": "production",
             "NEXT_PUBLIC_SUPABASE_URL": "https://test.supabase.co",
-            # No SUPABASE_ANON_KEY set
         })
-        assert result.returncode != 0
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
 
-    def test_cloud_exits_without_both_creds(self):
-        """Cloud env with neither Supabase credential should sys.exit(1)."""
+    def test_cloud_warns_without_both_creds(self):
+        """Cloud env with neither Supabase credential should warn but still start."""
         result = _run_validate({
             "RAILWAY_ENVIRONMENT": "production",
         })
-        assert result.returncode != 0
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
 
     def test_cloud_starts_with_supabase_creds(self):
         """Cloud env with both Supabase creds should start normally."""
@@ -110,21 +111,21 @@ class TestFailClosedAuth:
         assert result.returncode == 0
         assert "STARTED_OK" in result.stdout
 
-    def test_vercel_env_triggers_check(self):
-        """VERCEL_ENV should also trigger the fail-closed check."""
+    def test_vercel_env_triggers_warning(self):
+        """VERCEL_ENV should trigger a warning but still start."""
         result = _run_validate({
             "VERCEL_ENV": "production",
-            # No Supabase creds
         })
-        assert result.returncode != 0
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
 
-    def test_railway_service_name_triggers_check(self):
-        """RAILWAY_SERVICE_NAME alone should trigger the fail-closed check."""
+    def test_railway_service_name_triggers_warning(self):
+        """RAILWAY_SERVICE_NAME should trigger a warning but still start."""
         result = _run_validate({
             "RAILWAY_SERVICE_NAME": "ingestion",
-            # No Supabase creds
         })
-        assert result.returncode != 0
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout
 
     def test_internal_service_starts_without_supabase_in_cloud(self):
         """Internal services (graph, NLP) should start in cloud without Supabase creds.
