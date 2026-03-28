@@ -16,364 +16,29 @@ Endpoints:
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import io
 import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Literal, Optional
-from uuid import uuid4
-import zipfile
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.authz import require_permission
-from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from app.fda_export_service import (
+    _build_chain_verification_payload,
+    _build_completeness_summary,
+    _build_fda_package,
+    _generate_csv,
+    _generate_csv_v2,
+    _safe_filename_token,
+)
 
 logger = logging.getLogger("fda-export")
 
 router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
-
-
-# ---------------------------------------------------------------------------
-# FDA Spreadsheet Column Spec
-# ---------------------------------------------------------------------------
-# These columns align with FDA's expected format for FSMA 204 traceability
-# records. The column names match the FDA's IFT spreadsheet specification.
-
-FDA_COLUMNS = [
-    "Traceability Lot Code (TLC)",
-    "Product Description",
-    "Quantity",
-    "Unit of Measure",
-    "Event Type (CTE)",
-    "Event Date",
-    "Event Time",
-    "Location GLN",
-    "Location Name",
-    "Ship From GLN",
-    "Ship From Name",
-    "Ship To GLN",
-    "Ship To Name",
-    "Immediate Previous Source",
-    "TLC Source GLN",
-    "TLC Source FDA Registration",
-    "Source Document",
-    "Record Hash (SHA-256)",
-    "Chain Hash",
-    # KDE columns — FSMA 204 requires all KDEs in export
-    "Reference Document Number",
-    "Receive Date",
-    "Ship Date",
-    "Harvest Date",
-    "Cooling Date",
-    "Packing Date",
-    "Transformation Date",
-    "Landing Date",
-    "Receiving Location",
-    "Temperature (°F)",
-    "Carrier",
-    "Additional KDEs (JSON)",
-]
-
-
-# KDE keys that get their own named columns in the FDA export
-_NAMED_KDE_COLUMNS = {
-    "reference_document_number": "Reference Document Number",
-    "receive_date": "Receive Date",
-    "ship_date": "Ship Date",
-    "harvest_date": "Harvest Date",
-    "cooling_date": "Cooling Date",
-    "packing_date": "Packing Date",
-    "transformation_date": "Transformation Date",
-    "landing_date": "Landing Date",
-    "receiving_location": "Receiving Location",
-    "temperature": "Temperature (°F)",
-    "carrier": "Carrier",
-}
-
-
-def _event_to_fda_row(event: dict) -> dict:
-    """Convert a persisted CTE event to an FDA spreadsheet row."""
-    kdes = event.get("kdes", {})
-    timestamp = event.get("event_timestamp", "")
-
-    # Split timestamp into date and time
-    event_date = ""
-    event_time = ""
-    if timestamp:
-        try:
-            ts = str(timestamp)
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            event_date = dt.strftime("%Y-%m-%d")
-            event_time = dt.strftime("%H:%M:%S %Z")
-        except (ValueError, AttributeError):
-            event_date = str(timestamp)[:10]
-
-    row = {
-        "Traceability Lot Code (TLC)": event.get("traceability_lot_code", ""),
-        "Product Description": event.get("product_description", ""),
-        "Quantity": event.get("quantity", ""),
-        "Unit of Measure": event.get("unit_of_measure", ""),
-        "Event Type (CTE)": event.get("event_type", ""),
-        "Event Date": event_date,
-        "Event Time": event_time,
-        "Location GLN": event.get("location_gln", "") or "",
-        "Location Name": event.get("location_name", "") or "",
-        "Ship From GLN": kdes.get("ship_from_gln", ""),
-        "Ship From Name": kdes.get("ship_from_location", ""),
-        "Ship To GLN": kdes.get("ship_to_gln", ""),
-        "Ship To Name": kdes.get("ship_to_location", kdes.get("receiving_location", "")),
-        "Immediate Previous Source": kdes.get("immediate_previous_source", ""),
-        "TLC Source GLN": kdes.get("tlc_source_gln", ""),
-        "TLC Source FDA Registration": kdes.get("tlc_source_fda_reg", ""),
-        "Source Document": event.get("source", ""),
-        "Record Hash (SHA-256)": event.get("sha256_hash", ""),
-        "Chain Hash": event.get("chain_hash", ""),
-    }
-
-    # Map named KDE columns
-    for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
-        row[col_name] = str(kdes.get(kde_key, "")) if kdes.get(kde_key) else ""
-
-    # Remaining KDEs not in named columns → JSON blob
-    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS}
-    row["Additional KDEs (JSON)"] = json.dumps(extra_kdes) if extra_kdes else ""
-
-    return row
-
-
-def _generate_csv(events: list[dict]) -> str:
-    """Generate FDA-compliant CSV from a list of CTE events."""
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS)
-    writer.writeheader()
-
-    for event in events:
-        writer.writerow(_event_to_fda_row(event))
-
-    return output.getvalue()
-
-
-def _safe_filename_token(raw: str) -> str:
-    """Normalize user-provided identifiers for filenames."""
-    return "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in raw)[:64] or "all"
-
-
-def _event_value_for_required_field(event: dict, required_field: str) -> Any:
-    """Resolve required field values from direct event fields or KDE map."""
-    kdes = event.get("kdes", {})
-    if required_field in {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}:
-        return event.get(required_field)
-    if required_field == "location_name":
-        return event.get("location_name") or kdes.get("location_name")
-    return kdes.get(required_field)
-
-
-def _build_completeness_summary(events: list[dict]) -> dict:
-    """
-    Assess required KDE coverage across exported events.
-
-    Completeness is computed against REQUIRED_KDES_BY_CTE.
-    """
-    missing_by_field: dict[str, int] = {}
-    missing_by_event: list[dict[str, Any]] = []
-    checks_total = 0
-    checks_missing = 0
-
-    for event in events:
-        raw_event_type = str(event.get("event_type", "")).upper()
-        required_fields = []
-        if raw_event_type in WebhookCTEType.__members__:
-            required_fields = REQUIRED_KDES_BY_CTE[WebhookCTEType[raw_event_type]]
-
-        missing_fields = []
-        for required_field in required_fields:
-            checks_total += 1
-            value = _event_value_for_required_field(event, required_field)
-            missing = value is None or str(value).strip() == ""
-            if missing:
-                checks_missing += 1
-                missing_fields.append(required_field)
-                missing_by_field[required_field] = missing_by_field.get(required_field, 0) + 1
-
-        if missing_fields:
-            missing_by_event.append(
-                {
-                    "event_id": event.get("id"),
-                    "event_type": event.get("event_type"),
-                    "traceability_lot_code": event.get("traceability_lot_code"),
-                    "missing_fields": missing_fields,
-                }
-            )
-
-    checks_passed = checks_total - checks_missing
-    coverage_ratio = 1.0 if checks_total == 0 else round(checks_passed / checks_total, 4)
-
-    return {
-        "required_checks_total": checks_total,
-        "required_checks_passed": checks_passed,
-        "required_checks_missing": checks_missing,
-        "required_kde_coverage_ratio": coverage_ratio,
-        "events_with_missing_required_fields": len(missing_by_event),
-        "missing_required_by_field": missing_by_field,
-        "missing_required_events": missing_by_event[:250],
-    }
-
-
-def _build_chain_verification_payload(
-    *,
-    tenant_id: str,
-    tlc: Optional[str],
-    events: list[dict],
-    csv_hash: str,
-    chain_verification: Any,
-    completeness_summary: dict,
-) -> dict:
-    """Build JSON payload used for independent package verification."""
-    missing_record_hashes = sum(1 for event in events if not event.get("sha256_hash"))
-    missing_chain_hashes = sum(1 for event in events if not event.get("chain_hash"))
-
-    verification_status = "VERIFIED" if chain_verification.valid else "UNVERIFIED"
-    if missing_record_hashes or missing_chain_hashes:
-        verification_status = "PARTIAL"
-
-    return {
-        "version": "1.0",
-        "snapshot_id": str(uuid4()),
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-        "hash_algorithm": "SHA-256",
-        "content_hash": csv_hash,
-        "verification_status": verification_status,
-        "tenant_id": tenant_id,
-        "traceability_lot_code": tlc,
-        "record_count": len(events),
-        "chain_verification": {
-            "valid": bool(chain_verification.valid),
-            "chain_length": int(chain_verification.chain_length),
-            "errors": list(chain_verification.errors),
-            "checked_at": chain_verification.checked_at,
-        },
-        "row_hash_coverage": {
-            "records_with_hash": len(events) - missing_record_hashes,
-            "records_with_chain_hash": len(events) - missing_chain_hashes,
-            "missing_record_hashes": missing_record_hashes,
-            "missing_chain_hashes": missing_chain_hashes,
-        },
-        "completeness": {
-            "required_kde_coverage_ratio": completeness_summary["required_kde_coverage_ratio"],
-            "events_with_missing_required_fields": completeness_summary["events_with_missing_required_fields"],
-        },
-        "attestation": {
-            "attested_by": "regengine-fda-export-router",
-            "assertion": "Package generated from persisted fsma.cte_events with chain verification.",
-        },
-    }
-
-
-def _build_fda_package(
-    *,
-    events: list[dict],
-    csv_content: str,
-    csv_hash: str,
-    chain_payload: dict,
-    completeness_summary: dict,
-    tenant_id: str,
-    tlc: Optional[str],
-    query_start_date: Optional[str],
-    query_end_date: Optional[str],
-) -> tuple[bytes, dict]:
-    """Build zip package bytes and return package metadata."""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    scope = _safe_filename_token(tlc or "all")
-    csv_name = f"fda_spreadsheet_{scope}_{timestamp}.csv"
-    chain_name = f"chain_verification_{scope}_{timestamp}.json"
-    manifest_name = "manifest.json"
-    readme_name = "README.txt"
-
-    csv_bytes = csv_content.encode("utf-8")
-    chain_bytes = json.dumps(chain_payload, indent=2, sort_keys=True).encode("utf-8")
-    readme_bytes = (
-        "RegEngine FDA Traceability Package\n"
-        "=================================\n"
-        "Contents:\n"
-        "1) fda_spreadsheet_*.csv - FDA-sortable traceability rows\n"
-        "2) chain_verification_*.json - chain integrity and hash coverage metadata\n"
-        "3) manifest.json - package metadata and file checksums\n"
-        "\n"
-        "Verification:\n"
-        "- Compare manifest file hashes with local SHA-256 calculations.\n"
-        "- Validate chain_verification.verification_status == VERIFIED or PARTIAL.\n"
-    ).encode("utf-8")
-
-    file_hashes = {
-        csv_name: hashlib.sha256(csv_bytes).hexdigest(),
-        chain_name: hashlib.sha256(chain_bytes).hexdigest(),
-        readme_name: hashlib.sha256(readme_bytes).hexdigest(),
-    }
-
-    event_types: dict[str, int] = {}
-    tlc_counts: dict[str, int] = {}
-    for event in events:
-        event_type = str(event.get("event_type") or "")
-        if event_type:
-            event_types[event_type] = event_types.get(event_type, 0) + 1
-        event_tlc = str(event.get("traceability_lot_code") or "")
-        if event_tlc:
-            tlc_counts[event_tlc] = tlc_counts.get(event_tlc, 0) + 1
-
-    manifest = {
-        "version": "1.0",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "export_type": "fda_traceability_package",
-        "tenant_id": tenant_id,
-        "query": {
-            "tlc": tlc,
-            "start_date": query_start_date,
-            "end_date": query_end_date,
-        },
-        "summary": {
-            "record_count": len(events),
-            "event_type_breakdown": event_types,
-            "traceability_lot_codes": sorted(tlc_counts.keys()),
-            "traceability_lot_code_counts": tlc_counts,
-            "csv_content_hash": csv_hash,
-        },
-        "completeness": completeness_summary,
-        "verification": {
-            "status": chain_payload.get("verification_status"),
-            "chain_valid": chain_payload.get("chain_verification", {}).get("valid"),
-            "chain_length": chain_payload.get("chain_verification", {}).get("chain_length"),
-        },
-        "files": [
-            {"name": name, "sha256": digest}
-            for name, digest in file_hashes.items()
-        ],
-    }
-    # Do not include a manifest self-hash entry: self-referential hashes cannot be
-    # recomputed from final bytes without special canonicalization rules.
-    manifest_bytes = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
-
-    payload = io.BytesIO()
-    with zipfile.ZipFile(payload, mode="w", compression=zipfile.ZIP_DEFLATED) as zipf:
-        zipf.writestr(csv_name, csv_bytes)
-        zipf.writestr(chain_name, chain_bytes)
-        zipf.writestr(manifest_name, manifest_bytes)
-        zipf.writestr(readme_name, readme_bytes)
-
-    package_bytes = payload.getvalue()
-    package_hash = hashlib.sha256(package_bytes).hexdigest()
-
-    return package_bytes, {
-        "csv_name": csv_name,
-        "chain_name": chain_name,
-        "manifest_name": manifest_name,
-        "readme_name": readme_name,
-        "package_hash": package_hash,
-        "manifest": manifest,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -456,6 +121,15 @@ async def export_fda_spreadsheet(
             },
         )
 
+        kde_coverage = completeness_summary["required_kde_coverage_ratio"]
+        kde_warnings = completeness_summary["events_with_missing_required_fields"]
+        compliance_headers: dict[str, str] = {
+            "X-KDE-Coverage": str(kde_coverage),
+            "X-KDE-Warnings": str(kde_warnings),
+        }
+        if kde_coverage < 0.80:
+            compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
+
         if format == "package":
             chain_payload = _build_chain_verification_payload(
                 tenant_id=tenant_id,
@@ -486,7 +160,7 @@ async def export_fda_spreadsheet(
                     "X-Package-Hash": package_meta["package_hash"],
                     "X-Record-Count": str(len(events)),
                     "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                    "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                    **compliance_headers,
                 },
             )
 
@@ -499,7 +173,7 @@ async def export_fda_spreadsheet(
                 "X-Export-Hash": export_hash,
                 "X-Record-Count": str(len(events)),
                 "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                **compliance_headers,
             },
         )
 
@@ -584,6 +258,15 @@ async def export_all_events(
         db_session.commit()
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        kde_coverage = completeness_summary["required_kde_coverage_ratio"]
+        kde_warnings = completeness_summary["events_with_missing_required_fields"]
+        compliance_headers: dict[str, str] = {
+            "X-KDE-Coverage": str(kde_coverage),
+            "X-KDE-Warnings": str(kde_warnings),
+        }
+        if kde_coverage < 0.80:
+            compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
+
         if format == "package":
             chain_payload = _build_chain_verification_payload(
                 tenant_id=tenant_id,
@@ -614,7 +297,7 @@ async def export_all_events(
                     "X-Package-Hash": package_meta["package_hash"],
                     "X-Record-Count": str(len(deduped)),
                     "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                    "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                    **compliance_headers,
                 },
             )
 
@@ -628,7 +311,7 @@ async def export_all_events(
                 "X-Export-Hash": export_hash,
                 "X-Record-Count": str(len(deduped)),
                 "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
-                "X-KDE-Coverage": str(completeness_summary["required_kde_coverage_ratio"]),
+                **compliance_headers,
             },
         )
 
@@ -779,7 +462,8 @@ async def export_recall_filtered(
                     e.location_gln, e.location_name, e.source, e.sha256_hash,
                     h.chain_hash,
                     (SELECT jsonb_object_agg(k.kde_key, k.kde_value)
-                     FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes
+                     FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes,
+                    e.ingested_at
                 FROM fsma.cte_events e
                 LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
                 WHERE {where_clause}
@@ -811,6 +495,7 @@ async def export_recall_filtered(
             ts = r[6]
             if hasattr(ts, "isoformat"):
                 ts = ts.isoformat()
+            ingested = r[13]
             events.append({
                 "id": str(r[0]),
                 "event_type": r[1],
@@ -825,6 +510,7 @@ async def export_recall_filtered(
                 "sha256_hash": r[10],
                 "chain_hash": r[11] or "",
                 "kdes": kdes,
+                "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
             })
 
         csv_content = _generate_csv(events)
@@ -1043,58 +729,6 @@ async def verify_export(
 # V2 Export — Canonical Model (fsma.traceability_events + rule evaluations)
 # ---------------------------------------------------------------------------
 
-# Extended column spec: original FDA columns + compliance columns
-FDA_COLUMNS_V2 = FDA_COLUMNS + [
-    "Compliance Status",
-    "Rule Failures",
-]
-
-
-def _event_to_fda_row_v2(event: dict) -> dict:
-    """Convert a canonical traceability_event row (with rule results) to an FDA spreadsheet row.
-
-    Accepts the same base fields as ``_event_to_fda_row`` plus:
-    - ``rule_results``: list[dict] with keys ``rule_name``, ``passed``, ``why_failed``
-    """
-    # Reuse the legacy mapper for core FDA columns
-    base_row = _event_to_fda_row(event)
-
-    # Compute compliance columns from attached rule results
-    rule_results: list[dict] = event.get("rule_results", [])
-    if not rule_results:
-        compliance_status = "NO_RULES_EVALUATED"
-        rule_failures_text = ""
-    else:
-        failed = [r for r in rule_results if not r.get("passed")]
-        if not failed:
-            compliance_status = "PASS"
-            rule_failures_text = ""
-        else:
-            compliance_status = "FAIL"
-            failure_descriptions = []
-            for f in failed:
-                name = f.get("rule_name", "unknown_rule")
-                reason = f.get("why_failed", "no reason provided")
-                failure_descriptions.append(f"{name}: {reason}")
-            rule_failures_text = "; ".join(failure_descriptions)
-
-    base_row["Compliance Status"] = compliance_status
-    base_row["Rule Failures"] = rule_failures_text
-    return base_row
-
-
-def _generate_csv_v2(events: list[dict]) -> str:
-    """Generate FDA-compliant CSV from canonical model events (with compliance columns)."""
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=FDA_COLUMNS_V2)
-    writer.writeheader()
-
-    for event in events:
-        writer.writerow(_event_to_fda_row_v2(event))
-
-    return output.getvalue()
-
-
 @router.get(
     "/export/v2",
     summary="Generate FDA export from canonical model (v2)",
@@ -1181,7 +815,8 @@ async def export_fda_spreadsheet_v2(
                             )
                         ) FILTER (WHERE re.rule_id IS NOT NULL),
                         '[]'::jsonb
-                    ) AS rule_results
+                    ) AS rule_results,
+                    e.ingested_at
                 FROM fsma.traceability_events e
                 LEFT JOIN fsma.rule_evaluations re ON re.event_id = e.event_id
                 LEFT JOIN fsma.rule_definitions rd ON rd.rule_id = re.rule_id
@@ -1190,7 +825,8 @@ async def export_fda_spreadsheet_v2(
                     e.event_id, e.event_type, e.traceability_lot_code,
                     e.product_description, e.quantity, e.unit_of_measure,
                     e.event_timestamp, e.location_gln, e.location_name,
-                    e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance
+                    e.source, e.sha256_hash, e.chain_hash, e.kdes, e.provenance,
+                    e.ingested_at
                 ORDER BY e.event_timestamp ASC
                 LIMIT 10000
             """),
@@ -1219,6 +855,7 @@ async def export_fda_spreadsheet_v2(
             kdes = r[12] if r[12] else {}
             provenance = r[13] if r[13] else {}
             rule_results_raw = r[14] if r[14] else []
+            ingested = r[15]
             ts = r[6]
             if hasattr(ts, "isoformat"):
                 ts = ts.isoformat()
@@ -1246,6 +883,7 @@ async def export_fda_spreadsheet_v2(
                 "kdes": kdes,
                 "provenance": provenance,
                 "rule_results": rule_results_raw,
+                "ingested_at": ingested.isoformat() if hasattr(ingested, "isoformat") else str(ingested or ""),
             })
 
         # ----- Generate CSV with compliance columns -----
@@ -1391,6 +1029,113 @@ async def export_fda_spreadsheet_v2(
     except Exception as e:
         logger.error("fda_export_v2_failed", extra={"error": str(e), "tenant_id": tenant_id})
         raise HTTPException(status_code=500, detail="V2 export failed. Check server logs for details.")
+    finally:
+        if db_session:
+            db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Merkle Tree Verification Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/export/merkle-root",
+    summary="Get Merkle root for a tenant's hash chain",
+    description=(
+        "Computes a Merkle tree from all hash chain entries for the tenant "
+        "and returns the root hash. This enables O(log n) verification of "
+        "individual event inclusion without walking the entire chain."
+    ),
+)
+async def get_merkle_root(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    _auth=Depends(require_permission("fda.verify")),
+):
+    """Return the current Merkle root for a tenant's hash chain."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        result = persistence.verify_chain_merkle(tenant_id)
+
+        return {
+            "tenant_id": tenant_id,
+            "valid": result.valid,
+            "merkle_root": result.merkle_root,
+            "chain_length": result.chain_length,
+            "tree_depth": result.tree_depth,
+            "errors": result.errors,
+            "checked_at": result.checked_at,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "merkle_root_failed",
+            extra={"error": str(e), "tenant_id": tenant_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Merkle root computation failed. Check server logs.",
+        )
+    finally:
+        if db_session:
+            db_session.close()
+
+
+@router.get(
+    "/export/merkle-proof",
+    summary="Get Merkle inclusion proof for a specific event",
+    description=(
+        "Generates a Merkle inclusion proof that cryptographically demonstrates "
+        "a specific event is part of the tenant's hash chain. The proof can be "
+        "independently verified with just the event hash, proof steps, and root."
+    ),
+)
+async def get_merkle_proof(
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    event_id: str = Query(..., description="CTE event ID to prove inclusion for"),
+    _auth=Depends(require_permission("fda.verify")),
+):
+    """Return a Merkle inclusion proof for a specific event."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        proof_data = persistence.get_merkle_proof(tenant_id, event_id)
+
+        if proof_data is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Event '{event_id}' not found in hash chain for tenant '{tenant_id}'",
+            )
+
+        return {
+            "tenant_id": tenant_id,
+            **proof_data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "merkle_proof_failed",
+            extra={"error": str(e), "tenant_id": tenant_id, "event_id": event_id},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Merkle proof generation failed. Check server logs.",
+        )
     finally:
         if db_session:
             db_session.close()

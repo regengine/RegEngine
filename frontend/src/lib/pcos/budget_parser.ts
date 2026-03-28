@@ -3,7 +3,7 @@
  * Parses complex entertainment production budgets from spreadsheet data
  */
 
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import {
     ProductionBudget,
     BudgetDepartment,
@@ -21,7 +21,8 @@ import {
  */
 export async function parseBudgetFile(file: File): Promise<ProductionBudget> {
     const buffer = await file.arrayBuffer();
-    const workbook = new ExcelJS.Workbook();
+    const { default: ExcelJSLib } = await import('exceljs');
+    const workbook = new ExcelJSLib.Workbook();
     await workbook.xlsx.load(buffer);
 
     // Try to find the main budget sheet

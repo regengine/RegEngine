@@ -42,11 +42,11 @@ async function cpFetch<T>(
 
 /** Unwrap CpResult for backward compat — hooks still return the data shape pages expect */
 function unwrapCp<T>(result: CpResult<T>): T & { __isDemo?: boolean } {
-  const data = result.data as any;
+  const data = result.data;
   if (data && typeof data === 'object') {
-    data.__isDemo = result.isDemo;
+    (data as Record<string, unknown>).__isDemo = result.isDemo;
   }
-  return data;
+  return data as T & { __isDemo?: boolean };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ export function usePackageHistory(tenantId: string, requestCaseId: string) {
   const { apiKey } = useAuth();
   return useQuery({
     queryKey: ['requests', tenantId, requestCaseId, 'packages'],
-    queryFn: () => cpFetch<{ packages: any[]; total: number }>(
+    queryFn: () => cpFetch<{ packages: Record<string, unknown>[]; total: number }>(
       `/api/v1/requests/${requestCaseId}/packages?tenant_id=${tenantId}`
     ).then(unwrapCp),
     enabled: !!apiKey && !!tenantId && !!requestCaseId,
@@ -320,12 +320,12 @@ export interface CanonicalEvent {
 }
 
 export interface CanonicalEventDetail extends CanonicalEvent {
-  raw_payload: Record<string, any>;
-  normalized_payload: Record<string, any>;
-  provenance_metadata: Record<string, any>;
+  raw_payload: Record<string, unknown>;
+  normalized_payload: Record<string, unknown>;
+  provenance_metadata: Record<string, unknown>;
   rule_evaluations: RuleEvaluation[];
-  exception_cases: any[];
-  amendment_chain?: any[];
+  exception_cases: ExceptionCase[];
+  amendment_chain?: Record<string, unknown>[];
 }
 
 export function useCanonicalEvents(
@@ -371,7 +371,7 @@ export function useEntities(tenantId: string, entityType?: string) {
 
   return useQuery({
     queryKey: ['identity', tenantId, entityType],
-    queryFn: () => cpFetch<{ entities: any[]; total: number }>(
+    queryFn: () => cpFetch<{ entities: Record<string, unknown>[]; total: number }>(
       `/api/v1/identity/entities?${params}`,
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,
@@ -383,7 +383,7 @@ export function useIdentityReviews(tenantId: string) {
   const { apiKey } = useAuth();
   return useQuery({
     queryKey: ['identity', 'reviews', tenantId],
-    queryFn: () => cpFetch<{ reviews: any[]; total: number }>(
+    queryFn: () => cpFetch<{ reviews: Record<string, unknown>[]; total: number }>(
       `/api/v1/identity/reviews?tenant_id=${tenantId}`,
     ).then(unwrapCp),
     enabled: !!tenantId && !!apiKey,

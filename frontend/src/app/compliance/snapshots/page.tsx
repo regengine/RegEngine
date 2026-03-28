@@ -324,7 +324,7 @@ export default function SnapshotsPage() {
                     });
                 }
 
-                generateBrandedPDF({
+                await generateBrandedPDF({
                     title: 'Compliance Snapshot Artifact',
                     subtitle: snapshotName,
                     reportType: 'RegEngine Compliance Snapshots',

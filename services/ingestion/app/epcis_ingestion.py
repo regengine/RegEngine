@@ -522,6 +522,13 @@ def _event_idempotency_key(event: dict) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _fallback_event_type(biz_step: str) -> str:
+    """Log a warning for unmapped bizStep URIs and default to 'receiving'."""
+    if biz_step:
+        logger.warning("unmapped_epcis_bizstep uri=%s — defaulting to 'receiving'", biz_step)
+    return "receiving"
+
+
 def _normalize_epcis_to_cte(event: dict) -> dict:
     event_type_map = {
         "urn:epcglobal:cbv:bizstep:receiving": "receiving",
@@ -529,6 +536,9 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
         "urn:epcglobal:cbv:bizstep:transforming": "transformation",
         "urn:epcglobal:cbv:bizstep:commissioning": "initial_packing",
         "urn:epcglobal:cbv:bizstep:packing": "initial_packing",
+        "urn:epcglobal:cbv:bizstep:harvesting": "harvesting",
+        "urn:epcglobal:cbv:bizstep:storing": "cooling",
+        "urn:epcglobal:cbv:bizstep:landing": "first_land_based_receiving",
     }
 
     ilmd = event.get("ilmd") or event.get("extension", {}).get("ilmd") or {}
@@ -545,7 +555,7 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
         unit = quantity_list[0].get("uom")
 
     return {
-        "event_type": event_type_map.get(biz_step, "receiving"),
+        "event_type": event_type_map.get(biz_step) or _fallback_event_type(biz_step),
         "epcis_event_type": event.get("type"),
         "epcis_action": event.get("action"),
         "epcis_biz_step": event.get("bizStep"),

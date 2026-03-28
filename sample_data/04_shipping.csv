@@ -1,5 +1,5 @@
-traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,ship_from_location,ship_to_location,ship_from_gln,ship_to_gln,carrier_name,po_number
-LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-14,FreshCut Processing,MegaMart Distribution Center,0061414100030,0061414100040,FedEx Freight,PO-MM-2026-7201
-LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-14,FreshCut Processing,Premier Grocery Warehouse,0061414100030,0061414100050,Cold Express Logistics,PO-PG-2026-3388
-LOT-ROM-2026-0312B-PK,Chopped Romaine 12oz Bag,2800,bags,2026-03-14,FreshCut Processing,MegaMart Distribution Center,0061414100030,0061414100040,FedEx Freight,PO-MM-2026-7202
-LOT-ROM-2026-0311C-PK,Romaine Hearts 3-Pack Retail,1200,cases,2026-03-13,Pacific Coast Growers Packhouse,Premier Grocery Warehouse,0061414100020,0061414100050,Pacific Trucking Co,PO-PG-2026-3389
+traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,ship_from_location,ship_to_location,ship_from_gln,ship_to_gln,carrier_name,po_number,reference_document
+LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-14,FreshCut Processing,MegaMart Distribution Center,0061414100038,0061414100045,FedEx Freight,PO-MM-2026-7201,BOL-CFS-2026-0313-001
+LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-14,FreshCut Processing,Premier Grocery Warehouse,0061414100038,0061414100052,Cold Express Logistics,PO-PG-2026-3388,BOL-CFS-2026-0313-002
+LOT-ROM-2026-0312B-PK,Chopped Romaine 12oz Bag,2800,bags,2026-03-14,FreshCut Processing,MegaMart Distribution Center,0061414100038,0061414100045,FedEx Freight,PO-MM-2026-7202,BOL-CFS-2026-0313-003
+LOT-ROM-2026-0311C-PK,Romaine Hearts 3-Pack Retail,1200,cases,2026-03-13,Pacific Coast Growers Packhouse,Premier Grocery Warehouse,0061414100021,0061414100052,Pacific Trucking Co,PO-PG-2026-3389,BOL-CFS-2026-0313-004

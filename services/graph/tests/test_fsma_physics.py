@@ -186,13 +186,48 @@ class TestTimeArrowInTraceForward:
 # ============================================================================
 
 
-@pytest.mark.xfail(reason="pip-installed 'kernel' package shadows repo kernel/ in CI", strict=False)
 class TestCryptoChainIntegrity:
-    """Tests for Merkle hash-chain integrity of SupplierCTEEvent records."""
+    """Tests for Merkle hash-chain integrity of SupplierCTEEvent records.
+
+    Uses importlib to load kernel.evidence.merkle from the repo root,
+    avoiding collision with the pip-installed 'kernel' package in CI.
+    """
+
+    @staticmethod
+    def _load_merkle():
+        """Import kernel.evidence.merkle from the repo root explicitly."""
+        import importlib.util
+        repo_root = Path(__file__).resolve().parents[3]
+        spec = importlib.util.spec_from_file_location(
+            "kernel.evidence.merkle",
+            repo_root / "kernel" / "evidence" / "merkle.py",
+            submodule_search_locations=[],
+        )
+        # We also need the envelope module loaded first
+        envelope_spec = importlib.util.spec_from_file_location(
+            "kernel.evidence.envelope",
+            repo_root / "kernel" / "evidence" / "envelope.py",
+            submodule_search_locations=[],
+        )
+        envelope_mod = importlib.util.module_from_spec(envelope_spec)
+        sys.modules["kernel.evidence.envelope"] = envelope_mod
+        envelope_spec.loader.exec_module(envelope_mod)
+
+        # Ensure parent packages exist in sys.modules
+        if "kernel" not in sys.modules:
+            import types
+            sys.modules["kernel"] = types.ModuleType("kernel")
+            sys.modules["kernel"].evidence = types.ModuleType("kernel.evidence")
+            sys.modules["kernel.evidence"] = sys.modules["kernel"].evidence
+
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["kernel.evidence.merkle"] = mod
+        spec.loader.exec_module(mod)
+        return mod
 
     def test_compute_event_hash_deterministic(self):
         """compute_event_hash must produce the same hash for the same input."""
-        from kernel.evidence.merkle import compute_event_hash
+        merkle = self._load_merkle()
 
         event = {
             "event_id": "evt-001",
@@ -201,20 +236,20 @@ class TestCryptoChainIntegrity:
             "timestamp": "2025-01-01T00:00:00Z",
             "previous_hash": None,
         }
-        h1 = compute_event_hash(event)
-        h2 = compute_event_hash(event)
+        h1 = merkle.compute_event_hash(event)
+        h2 = merkle.compute_event_hash(event)
         assert h1 == h2, "Hash must be deterministic"
         assert len(h1) == 64, "SHA-256 hex digest must be 64 chars"
 
     def test_append_to_chain_links_events(self):
         """append_to_chain must set previous_hash and _next_merkle_hash."""
-        from kernel.evidence.merkle import append_to_chain
+        merkle = self._load_merkle()
 
-        e1 = append_to_chain({
+        e1 = merkle.append_to_chain({
             "event_id": "e1", "event_type": "CREATION",
             "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
         })
-        e2 = append_to_chain({
+        e2 = merkle.append_to_chain({
             "event_id": "e2", "event_type": "SHIPPING",
             "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
         }, previous_hash=e1["_next_merkle_hash"])
@@ -224,31 +259,31 @@ class TestCryptoChainIntegrity:
 
     def test_verify_chain_integrity_valid(self):
         """A correctly chained sequence must verify as valid."""
-        from kernel.evidence.merkle import append_to_chain, verify_chain_integrity
+        merkle = self._load_merkle()
 
-        e1 = append_to_chain({
+        e1 = merkle.append_to_chain({
             "event_id": "e1", "event_type": "CREATION",
             "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
         })
-        e2 = append_to_chain({
+        e2 = merkle.append_to_chain({
             "event_id": "e2", "event_type": "SHIPPING",
             "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
         }, previous_hash=e1["_next_merkle_hash"])
 
-        result = verify_chain_integrity([e1, e2])
+        result = merkle.verify_chain_integrity([e1, e2])
         assert result["valid"] is True
         assert result["length"] == 2
         assert result["errors"] == []
 
     def test_verify_chain_integrity_detects_tamper(self):
         """Modifying any field after chaining must be detected."""
-        from kernel.evidence.merkle import append_to_chain, verify_chain_integrity
+        merkle = self._load_merkle()
 
-        e1 = append_to_chain({
+        e1 = merkle.append_to_chain({
             "event_id": "e1", "event_type": "CREATION",
             "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
         })
-        e2 = append_to_chain({
+        e2 = merkle.append_to_chain({
             "event_id": "e2", "event_type": "SHIPPING",
             "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
         }, previous_hash=e1["_next_merkle_hash"])
@@ -256,32 +291,32 @@ class TestCryptoChainIntegrity:
         # Tamper with e2
         e2["event_type"] = "RECEIVING"
 
-        result = verify_chain_integrity([e1, e2])
+        result = merkle.verify_chain_integrity([e1, e2])
         assert result["valid"] is False
         assert any(e["issue"] == "hash_mismatch" for e in result["errors"])
 
     def test_verify_chain_integrity_detects_broken_link(self):
         """A broken previous_hash link must be detected."""
-        from kernel.evidence.merkle import append_to_chain, verify_chain_integrity
+        merkle = self._load_merkle()
 
-        e1 = append_to_chain({
+        e1 = merkle.append_to_chain({
             "event_id": "e1", "event_type": "CREATION",
             "tlc": "TLC-001", "timestamp": "2025-01-01T00:00:00Z",
         })
-        e2 = append_to_chain({
+        e2 = merkle.append_to_chain({
             "event_id": "e2", "event_type": "SHIPPING",
             "tlc": "TLC-001", "timestamp": "2025-01-02T00:00:00Z",
         }, previous_hash="0000000000000000000000000000000000000000000000000000000000000000")
 
-        result = verify_chain_integrity([e1, e2])
+        result = merkle.verify_chain_integrity([e1, e2])
         assert result["valid"] is False
         assert any(e["issue"] == "chain_link_broken" for e in result["errors"])
 
     def test_verify_chain_integrity_empty_chain(self):
         """An empty chain must be valid."""
-        from kernel.evidence.merkle import verify_chain_integrity
+        merkle = self._load_merkle()
 
-        result = verify_chain_integrity([])
+        result = merkle.verify_chain_integrity([])
         assert result["valid"] is True
         assert result["length"] == 0
 
