@@ -143,13 +143,10 @@ describe('DashboardPage', () => {
         it('displays user information', async () => {
             render(<DashboardPage />);
 
-            // Dashboard should render when user is authenticated
+            // Dashboard should render content when user is authenticated
             await waitFor(() => {
-                expect(
-                    screen.queryByText(/dashboard/i) ||
-                    screen.queryByText(/welcome/i) ||
-                    screen.queryByText(/compliance/i)
-                ).toBeTruthy();
+                const matches = screen.queryAllByText(/dashboard/i);
+                expect(matches.length).toBeGreaterThan(0);
             });
         });
 
@@ -171,11 +168,8 @@ describe('DashboardPage', () => {
 
             // Dashboard should render with tenant context active
             await waitFor(() => {
-                expect(
-                    screen.queryByText(/dashboard/i) ||
-                    screen.queryByText(/compliance/i) ||
-                    screen.queryByText(/acme corp/i)
-                ).toBeTruthy();
+                const matches = screen.queryAllByText(/dashboard/i);
+                expect(matches.length).toBeGreaterThan(0);
             });
         });
 
