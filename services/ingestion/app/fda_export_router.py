@@ -30,6 +30,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.authz import require_permission
+from app.export_models import ExportHistoryResponse, ExportVerifyResponse
+from app.subscription_gate import require_active_subscription
 from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
 
 logger = logging.getLogger("fda-export")
@@ -389,6 +391,15 @@ def _build_fda_package(
         "and return the file. This is the endpoint that fulfills the 24-hour "
         "FDA response requirement."
     ),
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+            },
+            "description": "FDA-compliant CSV or ZIP package",
+        },
+    },
 )
 async def export_fda_spreadsheet(
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
@@ -400,6 +411,7 @@ async def export_fda_spreadsheet(
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Generate and return an FDA-compliant traceability export."""
     db_session = None
@@ -517,6 +529,15 @@ async def export_fda_spreadsheet(
     "/export/all",
     summary="Export all CTE events",
     description="Export all traceability events for a tenant within an optional date range.",
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+            },
+            "description": "FDA-compliant CSV or ZIP package",
+        },
+    },
 )
 async def export_all_events(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
@@ -528,6 +549,7 @@ async def export_all_events(
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Export all events as FDA-format CSV."""
     db_session = None
@@ -642,6 +664,7 @@ async def export_all_events(
 
 @router.get(
     "/export/history",
+    response_model=ExportHistoryResponse,
     summary="View FDA export audit log",
     description="Returns the history of all FDA exports generated for this tenant.",
 )
@@ -649,6 +672,7 @@ async def export_history(
     tenant_id: str = Query(..., description="Tenant identifier"),
     limit: int = Query(50, ge=1, le=200),
     _auth=Depends(require_permission("fda.read")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Return export audit log."""
     db_session = None
@@ -705,6 +729,15 @@ async def export_history(
         "'Show me everything from [location] on [date] for [product].' "
         "Supports any combination of filters."
     ),
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+            },
+            "description": "FDA-compliant CSV or ZIP package",
+        },
+    },
 )
 async def export_recall_filtered(
     tenant_id: str = Query(..., description="Tenant identifier"),
@@ -719,6 +752,7 @@ async def export_recall_filtered(
         description="Export format: package (zip bundle) or csv",
     ),
     _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Generate recall-filtered FDA export with flexible search criteria."""
     # Require at least one filter to prevent full-table dumps
@@ -925,6 +959,7 @@ async def export_recall_filtered(
 
 @router.post(
     "/export/verify",
+    response_model=ExportVerifyResponse,
     summary="Verify a previous export's integrity",
     description=(
         "Re-generate an export with the same parameters and compare its hash "
@@ -935,6 +970,7 @@ async def verify_export(
     export_id: str = Query(..., description="Export log ID to verify"),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.verify")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Verify that an export can be reproduced with the same hash."""
     db_session = None
@@ -1105,6 +1141,15 @@ def _generate_csv_v2(events: list[dict]) -> str:
         "columns appended. Backward-compatible with v1 column layout — new columns are "
         "appended at the end."
     ),
+    responses={
+        200: {
+            "content": {
+                "text/csv": {},
+                "application/zip": {},
+            },
+            "description": "FDA-compliant CSV or ZIP package with compliance columns",
+        },
+    },
 )
 async def export_fda_spreadsheet_v2(
     tenant_id: str = Query(..., description="Tenant identifier"),
@@ -1117,6 +1162,7 @@ async def export_fda_spreadsheet_v2(
         description="Export format: package (zip bundle) or csv",
     ),
     _auth=Depends(require_permission("fda.export")),
+    _subscription=Depends(require_active_subscription),
 ):
     """Generate FDA-compliant traceability export from the canonical model with rule evaluation results."""
     db_session = None

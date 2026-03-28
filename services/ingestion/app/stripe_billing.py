@@ -429,7 +429,19 @@ def _extract_paid_at(invoice_payload: dict[str, Any]) -> Optional[str]:
 
 
 def _create_portal_session(customer_id: str, return_url: str) -> Any:
-    """Create Stripe portal session across SDK variants."""
+    """Create Stripe portal session across SDK variants.
+
+    H7 Proration Note: Subscription plan changes (upgrades/downgrades)
+    happen exclusively through the Stripe Customer Portal. Stripe's portal
+    uses the proration behavior configured on the portal *configuration*
+    object (Dashboard > Settings > Customer portal > Subscriptions).
+    RegEngine's portal configuration is set to "create_prorations" so that
+    mid-cycle plan changes generate prorated line items automatically.
+
+    There are no direct ``stripe.Subscription.modify()`` calls in this
+    codebase — all subscription mutations flow through the portal, which
+    inherits the proration setting from the portal configuration.
+    """
     portal_namespace = getattr(stripe, "billing_portal", None)
     sessions_api = getattr(portal_namespace, "sessions", None)
     if sessions_api and hasattr(sessions_api, "create"):
