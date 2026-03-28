@@ -11,6 +11,15 @@ VALIDATE_SCRIPT = (
     "import os, sys; "
     "sys.path.insert(0, 'services'); "
     "from shared.auth import validate_auth_config; "
+    "validate_auth_config(require_supabase=True); "
+    "print('STARTED_OK')"
+)
+
+# Script WITHOUT require_supabase — simulates graph/NLP services
+VALIDATE_SCRIPT_NO_SUPABASE = (
+    "import os, sys; "
+    "sys.path.insert(0, 'services'); "
+    "from shared.auth import validate_auth_config; "
     "validate_auth_config(); "
     "print('STARTED_OK')"
 )
@@ -116,3 +125,29 @@ class TestFailClosedAuth:
             # No Supabase creds
         })
         assert result.returncode != 0
+
+    def test_internal_service_starts_without_supabase_in_cloud(self):
+        """Internal services (graph, NLP) should start in cloud without Supabase creds.
+
+        Only services that pass require_supabase=True should be gated.
+        """
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in (
+                "RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME", "VERCEL_ENV",
+                "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL",
+                "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY",
+                "AUTH_SECRET_KEY", "JWT_SECRET", "REGENGINE_ENV",
+            )
+        }
+        env["RAILWAY_ENVIRONMENT"] = "production"
+        env["AUTH_SECRET_KEY"] = "test-secret-key-long-enough"
+        env["REGENGINE_ENV"] = "development"
+        # No Supabase creds — but require_supabase=False (default)
+        result = subprocess.run(
+            [sys.executable, "-c", VALIDATE_SCRIPT_NO_SUPABASE],
+            capture_output=True, text=True, env=env,
+        )
+        assert result.returncode == 0
+        assert "STARTED_OK" in result.stdout

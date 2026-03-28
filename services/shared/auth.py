@@ -20,38 +20,43 @@ import os
 logger = structlog.get_logger("auth")
 
 
-def validate_auth_config() -> None:
+def validate_auth_config(*, require_supabase: bool = False) -> None:
     """Validate critical auth configuration at service startup.
 
     Call this from each service's main.py after app creation.
     Logs warnings for missing config and raises on fatal misconfigurations.
 
-    Fail-closed (H2): In cloud environments (Railway, Vercel), refuses to
-    start if Supabase auth credentials are missing — prevents silent auth bypass.
+    Args:
+        require_supabase: If True, enforce Supabase credentials in cloud.
+            Only services that directly use Supabase auth (admin, ingestion,
+            compliance) should set this. Internal services (graph, NLP,
+            scheduler) use API key auth and do not need Supabase.
     """
     # ------------------------------------------------------------------
     # H2: Fail-closed — refuse to start in cloud without Supabase creds
+    # Only enforced for services that actually use Supabase auth.
     # ------------------------------------------------------------------
-    is_cloud = bool(
-        os.getenv("RAILWAY_ENVIRONMENT")
-        or os.getenv("RAILWAY_SERVICE_NAME")
-        or os.getenv("VERCEL_ENV")
-    )
+    if require_supabase:
+        is_cloud = bool(
+            os.getenv("RAILWAY_ENVIRONMENT")
+            or os.getenv("RAILWAY_SERVICE_NAME")
+            or os.getenv("VERCEL_ENV")
+        )
 
-    if is_cloud:
-        supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        if is_cloud:
+            supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY") or os.getenv("SUPABASE_ANON_KEY")
 
-        if not supabase_url or not supabase_key:
-            logger.critical(
-                "fail_closed_auth",
-                msg=(
-                    "FATAL: Cloud deployment detected but Supabase auth credentials missing. "
-                    "Set SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_ variants). "
-                    "Refusing to start without authentication — this prevents silent auth bypass."
-                ),
-            )
-            sys.exit(1)
+            if not supabase_url or not supabase_key:
+                logger.critical(
+                    "fail_closed_auth",
+                    msg=(
+                        "FATAL: Cloud deployment detected but Supabase auth credentials missing. "
+                        "Set SUPABASE_URL and SUPABASE_ANON_KEY (or NEXT_PUBLIC_ variants). "
+                        "Refusing to start without authentication — this prevents silent auth bypass."
+                    ),
+                )
+                sys.exit(1)
 
     issues: list[str] = []
 
