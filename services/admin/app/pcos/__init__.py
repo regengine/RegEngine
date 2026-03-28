@@ -1,34 +1,172 @@
 """
-PCOS Router Package — Production Compliance OS
+PCOS (Production Compliance OS) Package
 
-Barrel module that aggregates all PCOS sub-routers into a single router.
-The monolithic pcos_routes.py is being decomposed into domain-specific modules.
+Domain models, schemas, and enums for the Production Compliance OS add-on module.
+Designed for small film/TV production companies in California/LA.
 
-Import pattern (backward-compatible):
-    from app.pcos import router
-    # or via the shim:
-    from app.pcos_routes import router
+This package re-exports everything from submodules for backward compatibility.
 """
 
-from fastapi import APIRouter
+# Re-export enums
+from .enums import (
+    LocationType,
+    ClassificationType,
+    TaskStatus,
+    GateState,
+    EntityType,
+    OwnerPayMode,
+    RegistrationType,
+    InsuranceType,
+    EvidenceType,
+    ProjectType,
+    Jurisdiction,
+)
 
-from .governance import router as governance_router
-from .authority import router as authority_router
-from .dashboard import router as dashboard_router
-from .gate import router as gate_router
-from .entities import router as entities_router
-from .evidence import router as evidence_router
-from .budget import router as budget_router
-from .compliance import router as compliance_router
+# Re-export ORM models
+from .orm import (
+    PCOSCompanyModel,
+    PCOSCompanyRegistrationModel,
+    PCOSInsurancePolicyModel,
+    PCOSSafetyPolicyModel,
+    PCOSProjectModel,
+    PCOSLocationModel,
+    PCOSPermitPacketModel,
+    PCOSPersonModel,
+    PCOSEngagementModel,
+    PCOSTimecardModel,
+    PCOSTaskModel,
+    PCOSTaskEventModel,
+    PCOSEvidenceModel,
+    PCOSGateEvaluationModel,
+    PCOSBudgetModel,
+    PCOSBudgetLineItemModel,
+    PCOSUnionRateCheckModel,
+    PCOSTaxCreditApplicationModel,
+    PCOSQualifiedSpendCategoryModel,
+    PCOSTaxCreditRuleModel,
+    PCOSFormTemplateModel,
+    PCOSGeneratedFormModel,
+    PCOSClassificationAnalysisModel,
+    PCOSQuestionnaireResponseModel,
+    PCOSClassificationExemptionModel,
+    PCOSDocumentRequirementModel,
+    PCOSEngagementDocumentModel,
+    PCOSVisaCategoryModel,
+    PCOSPersonVisaStatusModel,
+    PCOSRuleEvaluationModel,
+    PCOSComplianceSnapshotModel,
+    PCOSAuditEventModel,
+)
 
-# Unified router — all sub-routers merge here
-router = APIRouter(prefix="/pcos", tags=["Production Compliance OS"])
+# Re-export Pydantic schemas
+from .schemas import (
+    AddressSchema,
+    CompanyCreateSchema,
+    CompanyUpdateSchema,
+    CompanyResponseSchema,
+    ProjectCreateSchema,
+    ProjectUpdateSchema,
+    ProjectResponseSchema,
+    LocationCreateSchema,
+    LocationResponseSchema,
+    EngagementCreateSchema,
+    EngagementResponseSchema,
+    TimecardCreateSchema,
+    TimecardResponseSchema,
+    TaskResponseSchema,
+    TaskUpdateSchema,
+    GateEvaluationResponseSchema,
+    EvidenceCreateSchema,
+    EvidenceResponseSchema,
+    PersonCreateSchema,
+    PersonResponseSchema,
+)
 
-router.include_router(governance_router)
-router.include_router(authority_router)
-router.include_router(dashboard_router)
-router.include_router(gate_router)
-router.include_router(entities_router)
-router.include_router(evidence_router)
-router.include_router(budget_router)
-router.include_router(compliance_router)
+# Re-export authority & fact lineage models
+from .authority import (
+    PCOSAuthorityDocumentModel,
+    PCOSExtractedFactModel,
+    PCOSFactCitationModel,
+)
+
+# Re-export schema governance models
+from .schema_governance import (
+    SchemaVersionModel,
+    PCOSAnalysisRunModel,
+)
+
+__all__ = [
+    # Enums
+    "LocationType",
+    "ClassificationType",
+    "TaskStatus",
+    "GateState",
+    "EntityType",
+    "OwnerPayMode",
+    "RegistrationType",
+    "InsuranceType",
+    "EvidenceType",
+    "ProjectType",
+    "Jurisdiction",
+    # ORM Models
+    "PCOSCompanyModel",
+    "PCOSCompanyRegistrationModel",
+    "PCOSInsurancePolicyModel",
+    "PCOSSafetyPolicyModel",
+    "PCOSProjectModel",
+    "PCOSLocationModel",
+    "PCOSPermitPacketModel",
+    "PCOSPersonModel",
+    "PCOSEngagementModel",
+    "PCOSTimecardModel",
+    "PCOSTaskModel",
+    "PCOSTaskEventModel",
+    "PCOSEvidenceModel",
+    "PCOSGateEvaluationModel",
+    "PCOSBudgetModel",
+    "PCOSBudgetLineItemModel",
+    "PCOSUnionRateCheckModel",
+    "PCOSTaxCreditApplicationModel",
+    "PCOSQualifiedSpendCategoryModel",
+    "PCOSTaxCreditRuleModel",
+    "PCOSFormTemplateModel",
+    "PCOSGeneratedFormModel",
+    "PCOSClassificationAnalysisModel",
+    "PCOSQuestionnaireResponseModel",
+    "PCOSClassificationExemptionModel",
+    "PCOSDocumentRequirementModel",
+    "PCOSEngagementDocumentModel",
+    "PCOSVisaCategoryModel",
+    "PCOSPersonVisaStatusModel",
+    "PCOSRuleEvaluationModel",
+    "PCOSComplianceSnapshotModel",
+    "PCOSAuditEventModel",
+    # Pydantic Schemas
+    "AddressSchema",
+    "CompanyCreateSchema",
+    "CompanyUpdateSchema",
+    "CompanyResponseSchema",
+    "ProjectCreateSchema",
+    "ProjectUpdateSchema",
+    "ProjectResponseSchema",
+    "LocationCreateSchema",
+    "LocationResponseSchema",
+    "EngagementCreateSchema",
+    "EngagementResponseSchema",
+    "TimecardCreateSchema",
+    "TimecardResponseSchema",
+    "TaskResponseSchema",
+    "TaskUpdateSchema",
+    "GateEvaluationResponseSchema",
+    "EvidenceCreateSchema",
+    "EvidenceResponseSchema",
+    "PersonCreateSchema",
+    "PersonResponseSchema",
+    # Authority & Fact Lineage
+    "PCOSAuthorityDocumentModel",
+    "PCOSExtractedFactModel",
+    "PCOSFactCitationModel",
+    # Schema Governance
+    "SchemaVersionModel",
+    "PCOSAnalysisRunModel",
+]

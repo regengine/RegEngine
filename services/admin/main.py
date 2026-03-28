@@ -183,44 +183,44 @@ async def add_compliance_header(request, call_next):
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-app.include_router(router)
-app.include_router(v1_router)
-app.include_router(overlay_router)
-app.include_router(compliance_router)
+app.include_router(router, tags=["Core Admin"])
+app.include_router(v1_router, tags=["API v1"])
+app.include_router(overlay_router, tags=["Content Graph Overlay"])
+app.include_router(compliance_router, tags=["Compliance"])
 
 from app.system_routes import router as system_router
-app.include_router(system_router, prefix="/v1")
+app.include_router(system_router, prefix="/v1", tags=["System"])
 
 
 from app.auth_routes import router as auth_router
-app.include_router(auth_router)
+app.include_router(auth_router, tags=["Authentication"])
 
 from app.invite_routes import router as invite_router
-app.include_router(invite_router, prefix="/v1")
+app.include_router(invite_router, prefix="/v1", tags=["Invitations"])
 
 from app.user_routes import router as user_router
-app.include_router(user_router, prefix="/v1")
+app.include_router(user_router, prefix="/v1", tags=["Users"])
 
 from app.supplier_onboarding_routes import router as supplier_onboarding_router
-app.include_router(supplier_onboarding_router, prefix="/v1")
+app.include_router(supplier_onboarding_router, prefix="/v1", tags=["Supplier Onboarding"])
 
 from app.bulk_upload.routes import router as bulk_upload_router
-app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
+app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Bulk Upload"])
 
 # Production Compliance OS (CA/LA) — gated behind ENABLE_PCOS to keep FSMA 204 focused
 if os.getenv("ENABLE_PCOS", "false").lower() == "true":
     from app.pcos import router as pcos_router
-    app.include_router(pcos_router)
+    app.include_router(pcos_router, tags=["Production Compliance"])
 
 # Legacy verticals router removed — non-FSMA verticals pruned
 
 # Review Queue for curator workflow
 from app.review_routes import router as review_router
-app.include_router(review_router)
+app.include_router(review_router, tags=["Review Queue"])
 
 # Audit log export (tamper-evident) — ISO 27001 12.4.1
 from app.audit_routes import router as audit_router
-app.include_router(audit_router)
+app.include_router(audit_router, tags=["Audit Logs"])
 
 
 

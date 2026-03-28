@@ -55,8 +55,8 @@ from shared.cors import get_allowed_origins, should_allow_credentials
 
 # Naming the instance 'app' is standard for uvicorn
 app = FastAPI(
-    title="NLP Service",
-    description="Regulatory text analysis and entity extraction",
+    title="RegEngine NLP Service",
+    description="Regulatory text analysis, entity extraction, and semantic understanding for compliance document processing",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -77,7 +77,7 @@ app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)
 
-app.include_router(nlp_router, prefix="/api/v1")
+app.include_router(nlp_router, prefix="/api/v1", tags=["Text Analysis"])
 
 # Standardized Health & Readiness (Phase 17)
 from shared.health import HealthCheck, install_health_router

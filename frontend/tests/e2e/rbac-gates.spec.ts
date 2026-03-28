@@ -10,7 +10,7 @@ import { test, expect, Page } from '@playwright/test';
  */
 
 const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = 'password';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-placeholder';
 
 test.describe('RBAC Gates', () => {
 
