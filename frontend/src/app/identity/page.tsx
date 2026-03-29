@@ -24,6 +24,7 @@ import {
   GitMerge,
   HelpCircle,
   Link2,
+  type LucideIcon,
   MapPin,
   Package,
   Search,
@@ -31,7 +32,28 @@ import {
   XCircle,
 } from 'lucide-react';
 
-const ENTITY_TYPE_CONFIG: Record<string, { icon: any; label: string; color: string }> = {
+interface Entity {
+  entity_id: string;
+  entity_type: string;
+  canonical_name: string;
+  gln?: string;
+  gtin?: string;
+  verification_status: string;
+  confidence_score: number;
+}
+
+interface IdentityReview {
+  review_id: string;
+  match_type: string;
+  match_confidence: number;
+  status: string;
+  entity_a_id?: string;
+  entity_a_name?: string;
+  entity_b_id?: string;
+  entity_b_name?: string;
+}
+
+const ENTITY_TYPE_CONFIG: Record<string, { icon: LucideIcon; label: string; color: string }> = {
   firm: { icon: Users, label: 'Firm', color: 'text-blue-500' },
   facility: { icon: Building2, label: 'Facility', color: 'text-green-500' },
   product: { icon: Package, label: 'Product', color: 'text-purple-500' },
@@ -57,9 +79,9 @@ export default function IdentityResolutionPage() {
   const entities = useEntities(tid, entityTypeFilter);
   const reviews = useIdentityReviews(tid);
 
-  const entityList = entities.data?.entities ?? [];
-  const reviewList = reviews.data?.reviews ?? [];
-  const pendingReviewCount = reviewList.filter((r: any) => r.status === 'pending').length;
+  const entityList = (entities.data?.entities ?? []) as unknown as Entity[];
+  const reviewList = (reviews.data?.reviews ?? []) as unknown as IdentityReview[];
+  const pendingReviewCount = reviewList.filter((r: IdentityReview) => r.status === 'pending').length;
 
   if (entities.error || reviews.error) {
     const err = (entities.error || reviews.error) as Error;
@@ -145,7 +167,7 @@ export default function IdentityResolutionPage() {
           {/* Entity Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {Object.entries(ENTITY_TYPE_CONFIG).filter(([k]) => k !== 'trading_relationship').map(([type, config]) => {
-              const count = entityList.filter((e: any) => e.entity_type === type).length;
+              const count = entityList.filter((e: Entity) => e.entity_type === type).length;
               const Icon = config.icon;
               return (
                 <Card key={type} className="cursor-pointer hover:border-primary/50 transition-colors"
@@ -196,12 +218,12 @@ export default function IdentityResolutionPage() {
                   </TableHeader>
                   <TableBody>
                     {entityList
-                      .filter((e: any) => !searchQuery ||
+                      .filter((e: Entity) => !searchQuery ||
                         e.canonical_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                         e.gln?.includes(searchQuery) ||
                         e.gtin?.includes(searchQuery)
                       )
-                      .map((entity: any) => {
+                      .map((entity: Entity) => {
                         const config = ENTITY_TYPE_CONFIG[entity.entity_type] || ENTITY_TYPE_CONFIG.firm;
                         const Icon = config.icon;
                         return (
@@ -262,7 +284,7 @@ export default function IdentityResolutionPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {reviewList.map((review: any) => {
+                  {reviewList.map((review: IdentityReview) => {
                     const matchBadge = MATCH_TYPE_BADGE[review.match_type] || MATCH_TYPE_BADGE.ambiguous;
                     const isPending = review.status === 'pending';
                     return (

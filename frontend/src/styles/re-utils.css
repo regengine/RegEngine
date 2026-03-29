@@ -111,7 +111,7 @@
 }
 
 .re-heading-sm {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: var(--re-text-primary);
     margin-bottom: 8px;
@@ -318,7 +318,7 @@
     }
 
     .re-heading-sm {
-        font-size: 1.1rem;
+        font-size: 0.95rem;
     }
 
     .re-code-block {

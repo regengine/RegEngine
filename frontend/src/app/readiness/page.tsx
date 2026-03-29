@@ -15,6 +15,7 @@ import {
   CheckCircle,
   Circle,
   Flag,
+  type LucideIcon,
   Rocket,
   Shield,
   Target,
@@ -24,7 +25,29 @@ import {
 
 const INGESTION_API = '/api/ingestion';
 
-const LEVEL_CONFIG: Record<number, { icon: any; color: string; bgColor: string }> = {
+interface ReadinessNextStep {
+  id: string;
+  level: number;
+  title: string;
+  description: string;
+  category: string;
+  passed: boolean;
+}
+
+interface ChecklistItem {
+  id: string;
+  title: string;
+  passed: boolean;
+}
+
+interface ChecklistLevel {
+  level_info: { name: string };
+  items: ChecklistItem[];
+  completed: number;
+  total: number;
+}
+
+const LEVEL_CONFIG: Record<number, { icon: LucideIcon; color: string; bgColor: string }> = {
   0: { icon: Circle, color: 'text-gray-400', bgColor: 'bg-gray-100' },
   1: { icon: Rocket, color: 'text-blue-500', bgColor: 'bg-blue-50' },
   2: { icon: Shield, color: 'text-amber-500', bgColor: 'bg-amber-50' },
@@ -203,7 +226,7 @@ export default function ReadinessWizardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {a.next_steps.map((step: any) => (
+                  {a.next_steps.map((step: ReadinessNextStep) => (
                     <div key={step.id} className="flex items-start gap-3 p-2 rounded border">
                       <XCircle className="h-5 w-5 text-red-400 mt-0.5 shrink-0" />
                       <div>
@@ -221,7 +244,7 @@ export default function ReadinessWizardPage() {
           {cl && (
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Full Compliance Checklist</h2>
-              {Object.entries(cl).map(([levelStr, levelData]: [string, any]) => {
+              {Object.entries(cl as Record<string, ChecklistLevel>).map(([levelStr, levelData]) => {
                 const level = parseInt(levelStr);
                 const config = LEVEL_CONFIG[level];
                 const Icon = config?.icon || Circle;
@@ -240,7 +263,7 @@ export default function ReadinessWizardPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-1">
-                        {levelData.items.map((item: any) => (
+                        {levelData.items.map((item: ChecklistItem) => (
                           <div key={item.id} className="flex items-center gap-2 py-1 text-sm">
                             {item.passed ? (
                               <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />

@@ -42,8 +42,8 @@ function clamp(n: number, min: number, max: number) { return Math.max(min, Math.
 // ── Types ──
 type NodeType = "Supplier" | "Facility" | "Product" | "Lot" | "CTE" | "Location";
 type EdgeType = "Supplies" | "Contains" | "Transforms" | "ShipsTo" | "TracedFrom" | "LocatedAt";
-type GraphNode = { id: string; type: NodeType; label: string; meta?: Record<string, any>; x: number; y: number };
-type GraphEdge = { id: string; type: EdgeType; from: string; to: string; meta?: Record<string, any> };
+type GraphNode = { id: string; type: NodeType; label: string; meta?: Record<string, unknown>; x: number; y: number };
+type GraphEdge = { id: string; type: EdgeType; from: string; to: string; meta?: Record<string, unknown> };
 type TraceMode = "forward" | "backward" | "bidirectional";
 type Viewport = { scale: number; panX: number; panY: number };
 type TraceabilityQueryEvidence = {
@@ -56,7 +56,7 @@ type TraceabilityQueryResponse = {
     intent: string;
     filters?: Record<string, unknown>;
     answer: string;
-    results: Array<Record<string, any>>;
+    results: Array<Record<string, unknown>>;
     evidence: TraceabilityQueryEvidence[];
     confidence: number;
     warnings: string[];
@@ -156,39 +156,42 @@ function getConfidenceDescriptor(confidence: number) {
     };
 }
 
-function toRow(candidate: Record<string, any>, fallbackTlc = ""): TraceabilityTableRow {
+function toRow(candidate: Record<string, unknown>, fallbackTlc = ""): TraceabilityTableRow {
+    const str = (v: unknown): string => (typeof v === "string" ? v : "");
     const facilityValue = candidate.facility;
     const facilityName =
-        (typeof facilityValue === "string" ? facilityValue : facilityValue?.name) ||
-        candidate.facility_name ||
-        candidate.location_description ||
-        candidate.location_gln ||
+        (typeof facilityValue === "string" ? facilityValue : str((facilityValue as Record<string, unknown> | undefined)?.name)) ||
+        str(candidate.facility_name) ||
+        str(candidate.location_description) ||
+        str(candidate.location_gln) ||
         "";
     return {
-        tlc: candidate.tlc || candidate.lot_id || candidate.traceability_lot_code || fallbackTlc || "",
-        product: candidate.product_description || candidate.product || candidate.description || "",
+        tlc: str(candidate.tlc) || str(candidate.lot_id) || str(candidate.traceability_lot_code) || fallbackTlc || "",
+        product: str(candidate.product_description) || str(candidate.product) || str(candidate.description) || "",
         facility: facilityName,
-        date: candidate.event_date || candidate.last_event_date || "",
-        eventType: candidate.type || candidate.event_type || candidate.last_event_type || "",
+        date: str(candidate.event_date) || str(candidate.last_event_date) || "",
+        eventType: str(candidate.type) || str(candidate.event_type) || str(candidate.last_event_type) || "",
     };
 }
 
-function collectQueryRows(intent: string, results: Array<Record<string, any>>): TraceabilityTableRow[] {
+function collectQueryRows(intent: string, results: Array<Record<string, unknown>>): TraceabilityTableRow[] {
     const rows: TraceabilityTableRow[] = [];
 
     for (const item of results) {
         if (intent === "trace_forward" || intent === "trace_backward") {
-            const nestedEvents = Array.isArray(item.events) ? item.events : [];
+            const nestedEvents = Array.isArray(item.events) ? (item.events as Record<string, unknown>[]) : [];
             if (nestedEvents.length > 0) {
+                const facilities = Array.isArray(item.facilities) ? item.facilities : [];
+                const lotId = typeof item.lot_id === "string" ? item.lot_id : "";
                 for (const event of nestedEvents) {
-                    rows.push(toRow({ ...event, facility: item.facilities?.[0], lot_id: item.lot_id }, item.lot_id || ""));
+                    rows.push(toRow({ ...event, facility: facilities[0] as unknown, lot_id: item.lot_id }, lotId));
                 }
                 continue;
             }
         }
 
         if (Array.isArray(item.events)) {
-            for (const nested of item.events) {
+            for (const nested of item.events as Record<string, unknown>[]) {
                 rows.push(toRow(nested));
             }
             continue;
@@ -379,15 +382,15 @@ export function SupplyChainKnowledgeGraphBuilder() {
                 }),
             });
 
-            let payload: any = null;
+            let payload: TraceabilityQueryResponse | null = null;
             try {
-                payload = await response.json();
+                payload = await response.json() as TraceabilityQueryResponse;
             } catch {
                 payload = null;
             }
 
             if (!response.ok) {
-                const detail = payload?.detail || `Request failed with status ${response.status}`;
+                const detail = (payload as Record<string, unknown> | null)?.detail as string | undefined || `Request failed with status ${response.status}`;
                 throw new Error(detail);
             }
 
@@ -531,7 +534,7 @@ export function SupplyChainKnowledgeGraphBuilder() {
 
                         <div className="flex flex-wrap items-center gap-2 mb-4">
                             <div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="w-[240px] rounded-2xl pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-                            <Select value={trMode} onValueChange={v => setTrMode(v as any)}><SelectTrigger className="w-[160px] rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="forward">→ Forward</SelectItem><SelectItem value="backward">← Backward</SelectItem><SelectItem value="bidirectional">↔ Both</SelectItem></SelectContent></Select>
+                            <Select value={trMode} onValueChange={v => setTrMode(v as TraceMode)}><SelectTrigger className="w-[160px] rounded-2xl"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="forward">→ Forward</SelectItem><SelectItem value="backward">← Backward</SelectItem><SelectItem value="bidirectional">↔ Both</SelectItem></SelectContent></Select>
                         </div>
                         <div ref={containerRef} className="h-[520px] w-full overflow-hidden rounded-3xl border bg-[var(--re-surface-base)] relative">
                             <canvas
