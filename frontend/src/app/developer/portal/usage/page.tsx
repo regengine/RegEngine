@@ -38,7 +38,7 @@ export default function UsagePage() {
             .from('developer_profiles')
             .select('id')
             .eq('auth_user_id', authUser.id)
-            .single();
+            .maybeSingle();
 
         if (!profile) return;
 

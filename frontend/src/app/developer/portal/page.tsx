@@ -38,7 +38,7 @@ export default function DeveloperPortalDashboard() {
                 .from('developer_profiles')
                 .select('*')
                 .eq('auth_user_id', authUser.id)
-                .single();
+                .maybeSingle();
 
             if (prof) {
                 setProfile(prof);
