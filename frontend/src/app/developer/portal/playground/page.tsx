@@ -1,9 +1,154 @@
 'use client';
 
-import { useState } from 'react';
-import { Terminal, Play, Loader2, Copy, Check, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Terminal, Play, Loader2, Copy, Check, AlertTriangle, FlaskConical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+
+// ---------------------------------------------------------------------------
+// Demo / sandbox mock responses
+// ---------------------------------------------------------------------------
+const DEMO_RESPONSES: Record<string, { status: number; statusText: string; body: unknown }> = {
+  'webhook-ingest': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      success: true,
+      event_id: 'evt_demo_a1b2c3d4e5f6',
+      hash: 'sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      received_at: new Date().toISOString(),
+      message: 'Event ingested successfully (demo)',
+    },
+  },
+  'fda-export': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      events: [
+        {
+          event_id: 'evt_demo_001',
+          cte_type: 'receiving',
+          traceability_lot_code: 'LOT-2026-001',
+          product_description: 'Romaine Lettuce',
+          quantity: 500,
+          unit_of_measure: 'cases',
+          location: 'Distribution Center A',
+          timestamp: '2026-03-27T14:30:00Z',
+        },
+        {
+          event_id: 'evt_demo_002',
+          cte_type: 'shipping',
+          traceability_lot_code: 'LOT-2026-002',
+          product_description: 'Baby Spinach',
+          quantity: 250,
+          unit_of_measure: 'cases',
+          location: 'Farm B',
+          timestamp: '2026-03-26T09:15:00Z',
+        },
+        {
+          event_id: 'evt_demo_003',
+          cte_type: 'transformation',
+          traceability_lot_code: 'LOT-2026-003',
+          product_description: 'Mixed Salad Kit',
+          quantity: 1000,
+          unit_of_measure: 'units',
+          location: 'Processing Facility C',
+          timestamp: '2026-03-25T16:45:00Z',
+        },
+      ],
+      total: 3,
+      tenant_id: 'demo-tenant',
+    },
+  },
+  'fda-export-all': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      export_job_id: 'exp_demo_7g8h9i0j',
+      status: 'completed',
+      format: 'json',
+      record_count: 3,
+      tenant_id: 'demo-tenant',
+      created_at: new Date().toISOString(),
+    },
+  },
+  'compliance-score': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      tenant_id: 'demo-tenant',
+      compliance_score: 87.5,
+      grade: 'B+',
+      breakdown: {
+        data_completeness: 92,
+        traceability_coverage: 85,
+        timeliness: 88,
+        data_quality: 84,
+      },
+      last_evaluated: new Date().toISOString(),
+      recommendation: 'Improve traceability coverage for shipping CTEs to reach A grade.',
+    },
+  },
+  'chain-verify': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      verified: true,
+      chain_length: 142,
+      merkle_root: 'sha256:3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b',
+      last_block_hash: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      verified_at: new Date().toISOString(),
+    },
+  },
+  'sla-dashboard': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      tenant_id: 'demo-tenant',
+      uptime_percent: 99.95,
+      avg_response_ms: 142,
+      p99_response_ms: 480,
+      events_ingested_24h: 1247,
+      active_alerts: 0,
+    },
+  },
+  'health': {
+    status: 200,
+    statusText: 'OK',
+    body: { status: 'healthy', service: 'regengine-ingestion', version: '2.4.0', tenant_id: 'demo-tenant' },
+  },
+  'csv-template': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      template_url: '/templates/receiving.csv',
+      cte_type: 'receiving',
+      columns: ['traceability_lot_code', 'product_description', 'quantity', 'unit_of_measure', 'location', 'timestamp'],
+    },
+  },
+  'portal-link': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      link_id: 'lnk_demo_x1y2z3',
+      url: 'https://app.regengine.com/portal/lnk_demo_x1y2z3',
+      supplier_name: 'Acme Farms',
+      cte_types: ['receiving', 'shipping'],
+      expires_at: '2026-04-27T00:00:00Z',
+    },
+  },
+  'merkle-root': {
+    status: 200,
+    statusText: 'OK',
+    body: {
+      merkle_root: 'sha256:3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b',
+      record_count: 142,
+      tenant_id: 'demo-tenant',
+      computed_at: new Date().toISOString(),
+    },
+  },
+};
 
 interface Endpoint {
   id: string;
@@ -125,6 +270,10 @@ interface ApiResponse {
 }
 
 export default function APIPlayground() {
+  const { isAuthenticated } = useAuth();
+  const isGuest = !isAuthenticated;
+
+  const [demoMode, setDemoMode] = useState(false);
   const [selectedEndpoint, setSelectedEndpoint] = useState(ENDPOINTS[0]);
   const [apiKey, setApiKey] = useState('rge_dev_');
   const [tenantId, setTenantId] = useState('');
@@ -138,6 +287,28 @@ export default function APIPlayground() {
   const [duration, setDuration] = useState(0);
   const [copiedResponse, setCopiedResponse] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-enable demo mode for unauthenticated users
+  useEffect(() => {
+    if (isGuest) {
+      setDemoMode(true);
+      setApiKey('demo-key-sandbox');
+      setTenantId('demo-tenant');
+    }
+  }, [isGuest]);
+
+  const handleDemoToggle = (enabled: boolean) => {
+    setDemoMode(enabled);
+    if (enabled) {
+      setApiKey('demo-key-sandbox');
+      setTenantId('demo-tenant');
+    } else {
+      setApiKey('rge_dev_');
+      setTenantId('');
+    }
+    setResponse(null);
+    setError(null);
+  };
 
   const handleEndpointChange = (endpoint: Endpoint) => {
     setSelectedEndpoint(endpoint);
@@ -178,7 +349,33 @@ export default function APIPlayground() {
     return qs ? `${url}?${qs}` : url;
   };
 
+  const sendDemoRequest = async () => {
+    setLoading(true);
+    setError(null);
+    setResponse(null);
+
+    // Simulate network latency
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const mock = DEMO_RESPONSES[selectedEndpoint.id];
+    setDuration(500);
+    if (mock) {
+      setResponse({ ...mock });
+    } else {
+      setResponse({
+        status: 200,
+        statusText: 'OK',
+        body: { message: 'Demo response — no mock configured for this endpoint.' },
+      });
+    }
+    setLoading(false);
+  };
+
   const sendRequest = async () => {
+    if (demoMode) {
+      return sendDemoRequest();
+    }
+
     setLoading(true);
     setError(null);
     setResponse(null);
@@ -274,6 +471,83 @@ export default function APIPlayground() {
             Test live endpoints with your API key — responses are real.
           </p>
         </div>
+
+        {/* Demo Mode Toggle */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '16px',
+          padding: '10px 16px',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: '8px',
+        }}>
+          <FlaskConical size={16} style={{ color: demoMode ? '#3b82f6' : 'var(--re-text-muted)' }} />
+          <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--re-text-primary)' }}>
+            Demo Mode
+          </span>
+          <button
+            onClick={() => handleDemoToggle(!demoMode)}
+            disabled={isGuest}
+            title={isGuest ? 'Sign up for a real API key to disable demo mode' : (demoMode ? 'Switch to live API' : 'Switch to demo sandbox')}
+            style={{
+              position: 'relative',
+              width: '44px',
+              height: '24px',
+              borderRadius: '12px',
+              border: 'none',
+              background: demoMode ? '#3b82f6' : 'rgba(255,255,255,0.1)',
+              cursor: isGuest ? 'not-allowed' : 'pointer',
+              transition: 'background 0.2s',
+              opacity: isGuest ? 0.7 : 1,
+              padding: 0,
+            }}
+          >
+            <span style={{
+              position: 'absolute',
+              top: '2px',
+              left: demoMode ? '22px' : '2px',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              background: '#fff',
+              transition: 'left 0.2s',
+            }} />
+          </button>
+          {isGuest && (
+            <span style={{ fontSize: '12px', color: 'var(--re-text-muted)', fontStyle: 'italic' }}>
+              Sign up to use live API
+            </span>
+          )}
+        </div>
+
+        {/* Demo Mode Banner */}
+        {demoMode && (
+          <div style={{
+            padding: '10px 16px',
+            marginBottom: '16px',
+            background: 'rgba(59,130,246,0.08)',
+            border: '1px solid rgba(59,130,246,0.25)',
+            borderRadius: '8px',
+            color: '#60a5fa',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <FlaskConical size={14} />
+            <span>
+              <strong>Demo Mode</strong> — responses are simulated.{' '}
+              {isGuest && (
+                <a href="/signup" style={{ color: '#93bbfc', textDecoration: 'underline' }}>
+                  Sign up for a real API key.
+                </a>
+              )}
+              {!isGuest && 'Toggle off to send live requests.'}
+            </span>
+          </div>
+        )}
 
         {/* Main Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -479,7 +753,7 @@ export default function APIPlayground() {
               }}
             >
               {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={16} />}
-              {loading ? 'Sending...' : 'Send Request'}
+              {loading ? 'Sending...' : (demoMode ? 'Send Demo Request' : 'Send Request')}
             </Button>
           </div>
 
