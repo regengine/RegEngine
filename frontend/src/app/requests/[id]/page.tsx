@@ -18,6 +18,7 @@ import {
   usePackageHistory,
   useAssemblePackage,
   useSubmitPackage,
+  type RequestCase,
 } from '@/hooks/use-control-plane';
 
 import {
@@ -33,6 +34,15 @@ import {
   Timer,
   User,
 } from 'lucide-react';
+
+interface ResponsePackage {
+  package_id: string;
+  version_number: number;
+  generated_at: string;
+  generated_by?: string;
+  package_hash?: string;
+  diff_from_previous?: Record<string, unknown>;
+}
 
 const STAGE_ORDER = [
   'intake', 'scoping', 'collecting', 'gap_analysis',
@@ -65,9 +75,9 @@ export default function RequestCaseDetailPage() {
   const submitPackage = useSubmitPackage(tid);
 
   const requestCase = requests.data?.cases?.find(
-    (c: any) => c.request_case_id === requestCaseId
+    (c: RequestCase) => c.request_case_id === requestCaseId
   );
-  const packageList = packages.data?.packages ?? [];
+  const packageList = (packages.data?.packages ?? []) as unknown as ResponsePackage[];
 
   if (requests.isLoading) {
     return (
@@ -229,7 +239,7 @@ export default function RequestCaseDetailPage() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {packageList.map((pkg: any) => (
+                  {packageList.map((pkg: ResponsePackage) => (
                     <div key={pkg.package_id} className="border rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">

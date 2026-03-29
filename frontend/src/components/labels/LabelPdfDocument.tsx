@@ -15,7 +15,6 @@ import React from 'react';
 import type { LabelData } from '@/types/labels';
 
 import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
-import QRCode from 'qrcode';
 
 interface LabelPdfDocumentProps {
   labels: LabelData[];
@@ -79,6 +78,7 @@ const styles = StyleSheet.create({
  * Generate QR code data URL from payload
  */
 async function generateQRDataURL(payload: string): Promise<string> {
+  const { default: QRCode } = await import('qrcode');
   return await QRCode.toDataURL(payload, { width: 200, margin: 1 });
 }
 

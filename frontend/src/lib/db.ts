@@ -78,8 +78,5 @@ export async function cleanupSyncedRecords(maxAgeMs: number = 7 * 24 * 60 * 60 *
         .where('synced').equals(1)
         .filter((p) => p.timestamp < cutoff)
         .delete();
-    if (deletedScans > 0 || deletedPhotos > 0) {
-        console.log(`[DB Cleanup] Removed ${deletedScans} scans, ${deletedPhotos} photos older than 7d`);
-    }
     return { deletedScans, deletedPhotos };
 }

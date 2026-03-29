@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 
 import { useAuth } from '@/lib/auth-context';
-import { useRules, useSeedRules } from '@/hooks/use-control-plane';
+import { useRules, useSeedRules, type RuleDefinition } from '@/hooks/use-control-plane';
 import { DemoBanner } from '@/components/control-plane/demo-banner';
 
 import {
@@ -18,13 +18,14 @@ import {
   BookOpen,
   CheckCircle,
   Filter,
+  type LucideIcon,
   Scale,
   Shield,
   XCircle,
   Zap,
 } from 'lucide-react';
 
-const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: LucideIcon }> = {
   kde_presence: { label: 'KDE Presence', color: 'text-red-500', icon: AlertTriangle },
   temporal_ordering: { label: 'Temporal Ordering', color: 'text-blue-500', icon: Zap },
   lot_linkage: { label: 'Lot Linkage', color: 'text-purple-500', icon: Scale },
@@ -64,20 +65,20 @@ export default function RulesDashboardPage() {
   }
 
   // Apply filters
-  const filtered = ruleList.filter((r: any) => {
+  const filtered = ruleList.filter((r: RuleDefinition) => {
     if (categoryFilter && r.category !== categoryFilter) return false;
     if (severityFilter && r.severity !== severityFilter) return false;
     return true;
-  }).sort((a: any, b: any) => {
+  }).sort((a: RuleDefinition, b: RuleDefinition) => {
     const sa = SEVERITY_ORDER[a.severity as keyof typeof SEVERITY_ORDER] ?? 9;
     const sb = SEVERITY_ORDER[b.severity as keyof typeof SEVERITY_ORDER] ?? 9;
     return sa - sb;
   });
 
   // Stats
-  const criticalCount = ruleList.filter((r: any) => r.severity === 'critical').length;
-  const warningCount = ruleList.filter((r: any) => r.severity === 'warning').length;
-  const categories = [...new Set(ruleList.map((r: any) => r.category))];
+  const criticalCount = ruleList.filter((r: RuleDefinition) => r.severity === 'critical').length;
+  const warningCount = ruleList.filter((r: RuleDefinition) => r.severity === 'warning').length;
+  const categories = [...new Set(ruleList.map((r: RuleDefinition) => r.category))];
 
   return (
     <PageContainer>
@@ -185,7 +186,7 @@ export default function RulesDashboardPage() {
             </CardContent>
           </Card>
         ) : (
-          filtered.map((rule: any) => {
+          filtered.map((rule: RuleDefinition) => {
             const catConfig = CATEGORY_CONFIG[rule.category] || CATEGORY_CONFIG.kde_presence;
             const CatIcon = catConfig.icon;
 

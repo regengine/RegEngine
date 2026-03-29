@@ -19,6 +19,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 
 import { PageContainer } from '@/components/layout/page-container';
+import { CodeBlock } from '@/components/ui/code-block';
 
 interface Endpoint {
     method: string;
@@ -398,9 +399,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
                                 <h4 className="text-xs font-semibold uppercase text-muted-foreground">Request Body</h4>
                                 <CopyButton text={endpoint.body} />
                             </div>
-                            <pre className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto">
-                                {endpoint.body}
-                            </pre>
+                            <CodeBlock code={endpoint.body} language="json" />
                         </div>
                     )}
 
@@ -409,9 +408,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
                             <h4 className="text-xs font-semibold uppercase text-muted-foreground">Response</h4>
                             <CopyButton text={endpoint.response} />
                         </div>
-                        <pre className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto">
-                            {endpoint.response}
-                        </pre>
+                        <CodeBlock code={endpoint.response} language="json" />
                     </div>
                 </div>
             )}
@@ -560,23 +557,19 @@ export default function ApiReferencePage() {
                                 </div>
                                 <div>
                                     <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Response Format</h4>
-                                    <pre className="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto">
-                                        {`{
+                                    <CodeBlock code={`{
   "items": [...],        // Array of results
   "next_cursor": "abc",  // Use this for next page (null if no more)
   "has_more": true       // Boolean indicating more pages exist
-}`}
-                                    </pre>
+}`} language="json" />
                                 </div>
                                 <div className="bg-white dark:bg-gray-900 rounded p-3">
                                     <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-1">Example: Paginating Compliance Checklists</h4>
-                                    <pre className="text-xs font-mono text-blue-700 dark:text-blue-400 whitespace-pre-wrap">
-                                        {`# First page
+                                    <CodeBlock code={`# First page
 GET /checklists?industry=food?limit=20
 
 # Next page
-GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`}
-                                    </pre>
+GET /checklists?industry=food?limit=20&cursor=eyJpZCI6IjEyMyJ9`} language="http" />
                                 </div>
                             </div>
                         </CardContent>
