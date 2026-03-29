@@ -87,6 +87,7 @@ class PCOSCompanyModel(Base):
     __table_args__ = (
         Index("idx_pcos_companies_tenant", "tenant_id"),
         Index("idx_pcos_companies_status", "status"),
+            {'extend_existing': True},
     )
 
 
@@ -120,6 +121,7 @@ class PCOSCompanyRegistrationModel(Base):
         Index("idx_pcos_registrations_tenant", "tenant_id"),
         Index("idx_pcos_registrations_company", "company_id"),
         Index("idx_pcos_registrations_expiry", "expiration_date"),
+            {'extend_existing': True},
     )
 
 
@@ -155,6 +157,7 @@ class PCOSInsurancePolicyModel(Base):
         Index("idx_pcos_insurance_tenant", "tenant_id"),
         Index("idx_pcos_insurance_company", "company_id"),
         Index("idx_pcos_insurance_expiry", "expiration_date"),
+            {'extend_existing': True},
     )
 
 
@@ -185,6 +188,7 @@ class PCOSSafetyPolicyModel(Base):
     __table_args__ = (
         Index("idx_pcos_safety_tenant", "tenant_id"),
         Index("idx_pcos_safety_company", "company_id"),
+            {'extend_existing': True},
     )
 
 
@@ -241,6 +245,7 @@ class PCOSProjectModel(Base):
         Index("idx_pcos_projects_company", "company_id"),
         Index("idx_pcos_projects_gate", "gate_state"),
         Index("idx_pcos_projects_dates", "first_shoot_date", "start_date"),
+            {'extend_existing': True},
     )
 
 
@@ -288,6 +293,7 @@ class PCOSLocationModel(Base):
         Index("idx_pcos_locations_tenant", "tenant_id"),
         Index("idx_pcos_locations_project", "project_id"),
         Index("idx_pcos_locations_type", "location_type"),
+            {'extend_existing': True},
     )
 
 
@@ -329,6 +335,7 @@ class PCOSPermitPacketModel(Base):
         Index("idx_pcos_permits_tenant", "tenant_id"),
         Index("idx_pcos_permits_project", "project_id"),
         Index("idx_pcos_permits_status", "status"),
+            {'extend_existing': True},
     )
 
 
@@ -382,6 +389,7 @@ class PCOSPersonModel(Base):
         Index("idx_pcos_people_tenant", "tenant_id"),
         Index("idx_pcos_people_name", "last_name", "first_name"),
         Index("idx_pcos_people_email", "email"),
+            {'extend_existing': True},
     )
 
 
@@ -437,6 +445,7 @@ class PCOSEngagementModel(Base):
         Index("idx_pcos_engagements_project", "project_id"),
         Index("idx_pcos_engagements_person", "person_id"),
         Index("idx_pcos_engagements_classification", "classification"),
+            {'extend_existing': True},
     )
 
 
@@ -494,6 +503,7 @@ class PCOSTimecardModel(Base):
         Index("idx_pcos_timecards_engagement", "engagement_id"),
         Index("idx_pcos_timecards_date", "work_date"),
         Index("idx_pcos_timecards_status", "status"),
+            {'extend_existing': True},
     )
 
 
@@ -555,6 +565,7 @@ class PCOSTaskModel(Base):
         Index("idx_pcos_tasks_source", "source_type", "source_id"),
         Index("idx_pcos_tasks_status", "status"),
         Index("idx_pcos_tasks_due", "due_date"),
+            {'extend_existing': True},
     )
 
 
@@ -583,6 +594,7 @@ class PCOSTaskEventModel(Base):
         Index("idx_pcos_task_events_tenant", "tenant_id"),
         Index("idx_pcos_task_events_task", "task_id"),
         Index("idx_pcos_task_events_created", "created_at"),
+            {'extend_existing': True},
     )
 
 
@@ -634,6 +646,7 @@ class PCOSEvidenceModel(Base):
         Index("idx_pcos_evidence_entity", "entity_type", "entity_id"),
         Index("idx_pcos_evidence_type", "evidence_type"),
         Index("idx_pcos_evidence_validity", "valid_until"),
+            {'extend_existing': True},
     )
 
 
@@ -669,6 +682,7 @@ class PCOSGateEvaluationModel(Base):
         Index("idx_pcos_gate_evals_tenant", "tenant_id"),
         Index("idx_pcos_gate_evals_project", "project_id"),
         Index("idx_pcos_gate_evals_date", "evaluated_at"),
+            {'extend_existing': True},
     )
 
 
@@ -722,6 +736,7 @@ class PCOSBudgetModel(Base):
     __table_args__ = (
         Index("idx_pcos_budgets_tenant", "tenant_id"),
         Index("idx_pcos_budgets_project", "project_id"),
+            {'extend_existing': True},
     )
 
 
@@ -771,6 +786,7 @@ class PCOSBudgetLineItemModel(Base):
         Index("idx_pcos_budget_items_tenant", "tenant_id"),
         Index("idx_pcos_budget_items_budget", "budget_id"),
         Index("idx_pcos_budget_items_dept", "department"),
+            {'extend_existing': True},
     )
 
 
@@ -813,6 +829,7 @@ class PCOSUnionRateCheckModel(Base):
         Index("idx_pcos_rate_checks_tenant", "tenant_id"),
         Index("idx_pcos_rate_checks_line_item", "line_item_id"),
         Index("idx_pcos_rate_checks_engagement", "engagement_id"),
+            {'extend_existing': True},
     )
 
 
@@ -868,6 +885,7 @@ class PCOSTaxCreditApplicationModel(Base):
         Index("idx_tax_credit_apps_tenant", "tenant_id"),
         Index("idx_tax_credit_apps_project", "project_id"),
         Index("idx_tax_credit_apps_program", "program_code", "program_year"),
+            {'extend_existing': True},
     )
 
 
@@ -911,6 +929,7 @@ class PCOSQualifiedSpendCategoryModel(Base):
     __table_args__ = (
         Index("idx_qualified_spend_tenant", "tenant_id"),
         Index("idx_qualified_spend_app", "application_id"),
+            {'extend_existing': True},
     )
 
 
@@ -949,6 +968,7 @@ class PCOSTaxCreditRuleModel(Base):
     __table_args__ = (
         UniqueConstraint("program_code", "program_year", "rule_code", name="uq_tax_rule_program_code"),
         Index("idx_tax_rules_program", "program_code", "program_year"),
+            {'extend_existing': True},
     )
 
 
@@ -998,6 +1018,7 @@ class PCOSFormTemplateModel(Base):
     __table_args__ = (
         Index("idx_form_templates_code", "template_code"),
         Index("idx_form_templates_type", "form_type"),
+            {'extend_existing': True},
     )
 
 
@@ -1053,6 +1074,7 @@ class PCOSGeneratedFormModel(Base):
         Index("idx_generated_forms_tenant", "tenant_id"),
         Index("idx_generated_forms_project", "project_id"),
         Index("idx_generated_forms_status", "status"),
+            {'extend_existing': True},
     )
 
 
@@ -1119,6 +1141,7 @@ class PCOSClassificationAnalysisModel(Base):
         Index("idx_classification_tenant", "tenant_id"),
         Index("idx_classification_engagement", "engagement_id"),
         Index("idx_classification_result", "overall_result"),
+            {'extend_existing': True},
     )
 
 
@@ -1149,6 +1172,7 @@ class PCOSQuestionnaireResponseModel(Base):
     __table_args__ = (
         Index("idx_questionnaire_analysis", "analysis_id"),
         Index("idx_questionnaire_tenant", "tenant_id"),
+            {'extend_existing': True},
     )
 
 
@@ -1175,6 +1199,7 @@ class PCOSClassificationExemptionModel(Base):
     __table_args__ = (
         Index("idx_exemptions_code", "exemption_code"),
         Index("idx_exemptions_category", "exemption_category"),
+            {'extend_existing': True},
     )
 
 
@@ -1210,6 +1235,7 @@ class PCOSDocumentRequirementModel(Base):
 
     __table_args__ = (
         Index("idx_doc_requirements_type", "document_type"),
+            {'extend_existing': True},
     )
 
 
@@ -1251,6 +1277,7 @@ class PCOSEngagementDocumentModel(Base):
         Index("idx_engagement_docs_engagement", "engagement_id"),
         Index("idx_engagement_docs_status", "status"),
         UniqueConstraint("engagement_id", "requirement_id", name="uq_engagement_doc"),
+            {'extend_existing': True},
     )
 
 
@@ -1284,6 +1311,7 @@ class PCOSVisaCategoryModel(Base):
 
     __table_args__ = (
         Index("idx_visa_categories_code", "visa_code"),
+            {'extend_existing': True},
     )
 
 
@@ -1326,6 +1354,7 @@ class PCOSPersonVisaStatusModel(Base):
         Index("idx_person_visa_tenant", "tenant_id"),
         Index("idx_person_visa_person", "person_id"),
         Index("idx_person_visa_expiration", "expiration_date"),
+            {'extend_existing': True},
     )
 
 
@@ -1382,6 +1411,7 @@ class PCOSRuleEvaluationModel(Base):
         Index("idx_rule_evals_rule", "rule_code"),
         Index("idx_rule_evals_result", "result"),
         Index("idx_rule_evals_run", "analysis_run_id"),
+            {'extend_existing': True},
     )
 
 
@@ -1439,6 +1469,7 @@ class PCOSComplianceSnapshotModel(Base):
         Index("idx_snapshots_tenant", "tenant_id"),
         Index("idx_snapshots_project", "project_id"),
         Index("idx_snapshots_type", "snapshot_type"),
+            {'extend_existing': True},
     )
 
     @classmethod
@@ -1511,6 +1542,7 @@ class PCOSAuditEventModel(Base):
         Index("idx_audit_events_tenant", "tenant_id"),
         Index("idx_audit_events_project", "project_id"),
         Index("idx_audit_events_type", "event_type"),
+            {'extend_existing': True},
     )
 
 
