@@ -390,6 +390,7 @@ def _get_redis_client():
         redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
         return redis.from_url(redis_url, decode_responses=True, socket_timeout=1)
     except Exception:
+        logger.debug("redis_client_unavailable", exc_info=True)
         return None
 
 
@@ -402,7 +403,7 @@ def _incr_sync_counter(key: str) -> None:
             client.incr(f"{_SYNC_COUNTER_PREFIX}:{key}")
             return
     except Exception:
-        pass
+        logger.debug("redis_sync_counter_failed", key=key, exc_info=True)
     # Fallback to in-memory
     if key == "failures":
         _graph_sync_failures += 1
@@ -420,7 +421,7 @@ def get_graph_sync_stats() -> dict:
                 "failures": int(client.get(f"{_SYNC_COUNTER_PREFIX}:failures") or 0),
             }
     except Exception:
-        pass
+        logger.debug("redis_sync_stats_unavailable", exc_info=True)
     return {"successes": _graph_sync_successes, "failures": _graph_sync_failures}
 
 
@@ -496,7 +497,7 @@ async def ingest_events(
                 tenant_id = str(_row[0])
             _db.close()
         except (ImportError, SQLAlchemyError, ValueError, RuntimeError, ConnectionError, OSError) as _tenant_err:
-            pass
+            logger.debug("tenant_key_lookup_failed", error=str(_tenant_err))
     # Fallback: use tenant from RBAC principal if available
     if not tenant_id and principal.tenant_id:
         tenant_id = principal.tenant_id
