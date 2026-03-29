@@ -208,7 +208,7 @@ export interface ClassificationResult {
 export interface ProngResult {
     passed: boolean;
     score: number;
-    factors: Record<string, any>;
+    factors: Record<string, unknown>;
     reasoning: string;
 }
 

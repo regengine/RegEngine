@@ -13,7 +13,7 @@ export interface TimelineEvent {
     title: string;
     description?: string;
     type: 'success' | 'warning' | 'error' | 'info';
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     userName?: string;
 }
 
