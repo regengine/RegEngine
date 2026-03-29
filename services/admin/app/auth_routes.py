@@ -18,6 +18,7 @@ from app.password_policy import validate_password, PasswordPolicyError
 from app.session_store import RedisSessionStore, SessionData
 from shared.supabase_client import get_supabase
 from shared.funnel_events import emit_funnel_event
+from shared.rate_limit import limiter
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -75,6 +76,7 @@ def check_perm(
     return {"message": "Permission granted", "user": user.email}
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def login(
     payload: LoginRequest,
     request: Request,
@@ -476,7 +478,8 @@ async def revoke_all_sessions(
 
 
 @router.post("/register")
-def register_initial_admin(payload: RegisterRequest, db: Session = Depends(get_session)):
+@limiter.limit("3/minute")
+def register_initial_admin(payload: RegisterRequest, request: Request, db: Session = Depends(get_session)):
     """Bootstrapping endpoint to create the first admin and tenant."""
     # Check if any users exist to prevent abuse
     if db.execute(select(UserModel)).first():
