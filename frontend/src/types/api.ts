@@ -458,6 +458,26 @@ export interface AnalysisSummary {
     critical_risks: AnalysisRisk[];
 }
 
+// Discovery Queue
+export interface DiscoveryQueueItem {
+    body: string;
+    url: string;
+    index: number;
+}
+
+export interface DiscoveryActionResponse {
+    status: 'approved' | 'rejected';
+    body?: string;
+    url?: string;
+    index?: number;
+}
+
+export interface BulkDiscoveryResponse {
+    status: 'approved' | 'rejected';
+    count: number;
+    items?: Array<{ body: string; url: string }>;
+}
+
 // Traceability
 export interface TraceabilityEventRequest {
     event_type: string;

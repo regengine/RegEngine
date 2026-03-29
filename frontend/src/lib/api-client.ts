@@ -35,6 +35,9 @@ import type {
   SupplierTLC,
   SupplierTLCUpsertRequest,
   AnalysisSummary,
+  DiscoveryQueueItem,
+  DiscoveryActionResponse,
+  BulkDiscoveryResponse,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -257,32 +260,32 @@ class APIClient {
   }
 
   // Discovery Queue (Phase 31)
-  async getDiscoveryQueue(): Promise<any[]> {
-    const { data } = await this.ingestionClient.get('/v1/ingest/discovery/queue');
+  async getDiscoveryQueue(): Promise<DiscoveryQueueItem[]> {
+    const { data } = await this.ingestionClient.get<DiscoveryQueueItem[]>('/v1/ingest/discovery/queue');
     return data;
   }
 
-  async approveDiscovery(index: number): Promise<any> {
-    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/approve', null, {
+  async approveDiscovery(index: number): Promise<DiscoveryActionResponse> {
+    const { data } = await this.ingestionClient.post<DiscoveryActionResponse>('/v1/ingest/discovery/approve', null, {
       params: { index }
     });
     return data;
   }
 
-  async rejectDiscovery(index: number): Promise<any> {
-    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/reject', null, {
+  async rejectDiscovery(index: number): Promise<DiscoveryActionResponse> {
+    const { data } = await this.ingestionClient.post<DiscoveryActionResponse>('/v1/ingest/discovery/reject', null, {
       params: { index }
     });
     return data;
   }
 
-  async bulkApproveDiscovery(indices: number[]): Promise<any> {
-    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/bulk-approve', { indices });
+  async bulkApproveDiscovery(indices: number[]): Promise<BulkDiscoveryResponse> {
+    const { data } = await this.ingestionClient.post<BulkDiscoveryResponse>('/v1/ingest/discovery/bulk-approve', { indices });
     return data;
   }
 
-  async bulkRejectDiscovery(indices: number[]): Promise<any> {
-    const { data } = await this.ingestionClient.post('/v1/ingest/discovery/bulk-reject', { indices });
+  async bulkRejectDiscovery(indices: number[]): Promise<BulkDiscoveryResponse> {
+    const { data } = await this.ingestionClient.post<BulkDiscoveryResponse>('/v1/ingest/discovery/bulk-reject', { indices });
     return data;
   }
 
