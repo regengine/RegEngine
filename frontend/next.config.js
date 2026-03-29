@@ -101,6 +101,17 @@ const nextConfig = {
                 destination: '/contact',
                 permanent: true,
             },
+            // /developer and /developers → /developer/portal (fix 404s)
+            {
+                source: '/developer',
+                destination: '/developer/portal',
+                permanent: true,
+            },
+            {
+                source: '/developers',
+                destination: '/developer/portal',
+                permanent: true,
+            },
         ];
     },
     async rewrites() {
