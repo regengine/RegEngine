@@ -9,8 +9,8 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from .sqlalchemy_models import Base
-# Import PCOS models to register them with Base.metadata
+# PCOS models are registered with Base.metadata at import time.
+# Keep this import so Alembic --autogenerate can see them.
 from . import pcos_models  # noqa: F401
 
 logger = structlog.get_logger("admin-db")
@@ -84,8 +84,11 @@ EntertainmentSessionLocal = sessionmaker(
 
 
 def init_db() -> None:
-    """Create tables and functions if they do not exist. Call explicitly on startup."""
-    Base.metadata.create_all(bind=_engine)
+    """Create RLS helper functions on startup. Schema is managed by Alembic.
+
+    NOTE: Base.metadata.create_all() was removed intentionally — Alembic owns
+    all DDL. If you need a new table, create an Alembic migration.
+    """
     
     # Create RLS helper functions in Admin DB (use CREATE OR REPLACE to
     # avoid DROP errors when columns have DEFAULT dependencies on these fns)

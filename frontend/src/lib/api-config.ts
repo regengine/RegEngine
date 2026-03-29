@@ -23,14 +23,9 @@ export function getServerServiceURL(service: ServiceName): string {
     return envMap[service] || `http://localhost:${SERVICE_PORTS[service]}`;
 }
 
-/** Detect Capacitor window global without triggering TS errors */
-function hasCapacitor(): boolean {
-    return typeof window !== 'undefined' && 'Capacitor' in window;
-}
-
 export function isStaticExport(): boolean {
     return typeof window !== 'undefined' &&
-        (hasCapacitor() || process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export');
+        process.env.NEXT_PUBLIC_OUTPUT_MODE === 'export';
 }
 
 function localFallback(service: ServiceName): string {
@@ -39,7 +34,6 @@ function localFallback(service: ServiceName): string {
 
 export function getServiceURL(service: ServiceName): string {
     const isClient = typeof window !== 'undefined';
-    const isCapacitorClient = isClient && hasCapacitor();
 
     const gatewayUrl = isClient ? process.env.NEXT_PUBLIC_API_BASE_URL : null;
 
@@ -48,12 +42,10 @@ export function getServiceURL(service: ServiceName): string {
     }
 
     if (service === 'admin') {
-        if (!isCapacitorClient) return '/api/admin';
-        if (gatewayUrl) return `${gatewayUrl}/admin`;
-        return process.env.NEXT_PUBLIC_ADMIN_URL || localFallback('admin');
+        return gatewayUrl ? `${gatewayUrl}/admin` : '/api/admin';
     }
 
-    if (service === 'ingestion' && !isCapacitorClient) {
+    if (service === 'ingestion') {
         return '/api/ingestion';
     }
 

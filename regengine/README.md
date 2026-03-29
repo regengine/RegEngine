@@ -2,10 +2,13 @@
 
 Official Python SDK for RegEngine FSMA 204 Compliance Platform.
 
+> **Status:** Not yet published to PyPI. Install from source for now.
+
 ## Installation
 
 ```bash
-pip install regengine
+# Install from the repository root
+pip install -e ./regengine
 ```
 
 ## Quick Start
@@ -83,8 +86,8 @@ Get your FSMA 204 recall readiness score.
 The SDK includes a CLI tool for independent hash verification:
 
 ```bash
-# Install with CLI
-pip install regengine
+# Install from source (not yet on PyPI)
+pip install -e ./regengine
 
 # Verify a lot online
 regengine-verify --tlc LOT-2026-001 --api-key rge_live_xxx
@@ -97,6 +100,6 @@ The `regengine-verify` tool implements the "Verify, Don't Trust" principle — y
 
 ---
 
-**Version**: 1.0.0  
-**License**: MIT  
+**Version**: 0.1.0-dev
+**License**: MIT
 **Documentation**: https://docs.regengine.co/sdks/python
