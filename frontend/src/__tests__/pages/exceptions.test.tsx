@@ -12,7 +12,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ExceptionQueuePage from '@/app/exceptions/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // Mock auth context
 vi.mock('@/lib/auth-context', () => ({
@@ -111,7 +121,7 @@ describe('ExceptionQueuePage', () => {
 
   it('renders exception list with supplier names', () => {
     setupExceptions();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Acme Foods')).toBeInTheDocument();
     expect(screen.getByText('Beta Corp')).toBeInTheDocument();
@@ -119,7 +129,7 @@ describe('ExceptionQueuePage', () => {
 
   it('shows severity badges in the table', () => {
     setupExceptions();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     // Severity labels appear in both filter dropdowns and table badges
     const table = screen.getByRole('table');
@@ -130,7 +140,7 @@ describe('ExceptionQueuePage', () => {
 
   it('shows status badges in the table', () => {
     setupExceptions();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     // Status labels appear in stat cards, filter dropdowns, AND table
     const table = screen.getByRole('table');
@@ -142,7 +152,7 @@ describe('ExceptionQueuePage', () => {
   it('calls resolve mutation when Resolve button is clicked', async () => {
     setupExceptions();
     const user = userEvent.setup();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     const resolveButtons = screen.getAllByRole('button', { name: /resolve/i });
     await user.click(resolveButtons[0]);
@@ -157,7 +167,7 @@ describe('ExceptionQueuePage', () => {
   it('calls waive mutation when Waive button is clicked', async () => {
     setupExceptions();
     const user = userEvent.setup();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     const waiveButtons = screen.getAllByRole('button', { name: /waive/i });
     await user.click(waiveButtons[0]);
@@ -171,7 +181,7 @@ describe('ExceptionQueuePage', () => {
 
   it('displays blocking count badge', () => {
     setupExceptions();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/2 Blocking/)).toBeInTheDocument();
   });
@@ -182,14 +192,14 @@ describe('ExceptionQueuePage', () => {
       data: { blocking_count: 0 },
       isLoading: false,
     });
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('No Blockers')).toBeInTheDocument();
   });
 
   it('renders page heading and description', () => {
     setupExceptions();
-    render(<ExceptionQueuePage />);
+    render(<ExceptionQueuePage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Exception Queue')).toBeInTheDocument();
     expect(screen.getByText(/compliance exceptions/i)).toBeInTheDocument();

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -78,50 +79,38 @@ export default function TeamPage() {
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
-    const [team, setTeam] = useState<TeamMember[]>([]);
-    const [activeCount, setActiveCount] = useState(0);
-    const [pendingCount, setPendingCount] = useState(0);
-    const [rolesBreakdown, setRolesBreakdown] = useState<Record<string, number>>({});
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const teamQueryClient = useQueryClient();
+
+    const { data: teamData, isLoading: loading, error: teamError, refetch: loadTeam } = useQuery({
+        queryKey: ['team', tenantId],
+        queryFn: () => apiFetchTeam(tenantId, apiKey || ''),
+        enabled: isLoggedIn && !!tenantId,
+    });
+
+    const team = teamData?.members ?? [];
+    const activeCount = teamData?.active_members ?? 0;
+    const pendingCount = teamData?.pending_invites ?? 0;
+    const rolesBreakdown = teamData?.roles_breakdown ?? {};
+    const error = teamError?.message ?? null;
 
     const [showInvite, setShowInvite] = useState(false);
     const [newName, setNewName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [newRole, setNewRole] = useState('viewer');
-    const [inviting, setInviting] = useState(false);
 
-    const loadTeam = useCallback(async () => {
-        if (!isLoggedIn || !tenantId) return;
-        setLoading(true);
-        setError(null);
-        try {
-            const data = await apiFetchTeam(tenantId, apiKey || '');
-            setTeam(data.members || []);
-            setActiveCount(data.active_members || 0);
-            setPendingCount(data.pending_invites || 0);
-            setRolesBreakdown(data.roles_breakdown || {});
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load team');
-        } finally {
-            setLoading(false);
-        }
-    }, [isLoggedIn, tenantId, apiKey]);
-
-    useEffect(() => { loadTeam(); }, [loadTeam]);
-
-    const handleInvite = async () => {
-        if (!newName || !newEmail) return;
-        setInviting(true);
-        try {
-            await apiInviteMember(tenantId, apiKey || '', newName, newEmail, newRole);
+    const inviteMutation = useMutation({
+        mutationFn: () => apiInviteMember(tenantId, apiKey || '', newName, newEmail, newRole),
+        onSuccess: () => {
             setNewName(''); setNewEmail(''); setShowInvite(false);
-            await loadTeam();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to invite team member');
-        } finally {
-            setInviting(false);
-        }
+            teamQueryClient.invalidateQueries({ queryKey: ['team', tenantId] });
+        },
+    });
+
+    const inviting = inviteMutation.isPending;
+
+    const handleInvite = () => {
+        if (!newName || !newEmail) return;
+        inviteMutation.mutate();
     };
 
     return (
@@ -139,7 +128,7 @@ export default function TeamPage() {
                         </p>
                     </div>
                     <div className="flex gap-2 w-full sm:w-auto">
-                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] min-w-[44px] active:scale-[0.97]" onClick={loadTeam} disabled={loading}>
+                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px] min-w-[44px] active:scale-[0.97]" onClick={() => loadTeam()} disabled={loading}>
                             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                         <Button onClick={() => setShowInvite(!showInvite)} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] flex-1 sm:flex-initial active:scale-[0.97]">

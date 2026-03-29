@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -199,19 +200,21 @@ export default function DashboardPage() {
     }, [tenantType]);
 
     // Fetch pending reviews count from backend via proxy
-    const [pendingReviews, setPendingReviews] = useState(0);
-    useEffect(() => {
-        if (!effectiveTenantId || !apiKey) return;
-        fetch(`/api/ingestion/api/v1/compliance/pending-reviews/${effectiveTenantId}`, {
-            headers: {
-                'Content-Type': 'application/json',
-                'X-RegEngine-API-Key': apiKey,
-            },
-        })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => { if (data?.pending_reviews != null) setPendingReviews(data.pending_reviews); })
-            .catch(() => {}); // Graceful — dashboard works without this
-    }, [effectiveTenantId, apiKey]);
+    const { data: pendingReviewsData } = useQuery({
+        queryKey: ['pending-reviews', effectiveTenantId],
+        queryFn: async () => {
+            const res = await fetch(`/api/ingestion/api/v1/compliance/pending-reviews/${effectiveTenantId}`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-RegEngine-API-Key': apiKey!,
+                },
+            });
+            if (!res.ok) return null;
+            return res.json();
+        },
+        enabled: !!effectiveTenantId && !!apiKey,
+    });
+    const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
 
     // Use real metrics from backend when available, show honest zeros otherwise
     const metrics = useMemo(() => {

@@ -163,7 +163,7 @@ export default function TermsClient() {
     }, []);
 
     return (
-        <div className="re-page">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* ═══ HERO ═══ */}
             <section className="relative z-[2] max-w-[960px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-10">
                 <span className="text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">

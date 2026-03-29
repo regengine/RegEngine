@@ -129,13 +129,8 @@ function CopyButton({ text }: { text: string }) {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             }}
-            style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: copied ? T.accent : T.textDim,
-                padding: '4px',
-            }}
+            className="bg-transparent border-none cursor-pointer p-1"
+            style={{ color: copied ? T.accent : T.textDim }}
             title="Copy to clipboard"
         >
             {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -145,59 +140,33 @@ function CopyButton({ text }: { text: string }) {
 
 export default function VerifyPage() {
     return (
-        <div style={{ background: T.bg, minHeight: '100vh', color: T.text }}>
+        <div className="min-h-screen" style={{ background: T.bg, color: T.text }}>
             {/* ─── Hero ──────────────────────────────────────────────── */}
-            <section
-                style={{
-                    maxWidth: 960,
-                    margin: '0 auto',
-                    padding: '80px 24px 60px',
-                    textAlign: 'center',
-                }}
-            >
+            <section className="max-w-[960px] mx-auto text-center px-6 pt-20 pb-[60px]">
+
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
                 >
                     <div
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 16px',
-                            background: T.accentDim,
-                            borderRadius: 20,
-                            fontSize: 13,
-                            color: T.accent,
-                            fontWeight: 500,
-                            marginBottom: 24,
-                        }}
+                        className="inline-flex items-center gap-2 px-4 py-1.5 rounded-[20px] text-[13px] font-medium mb-6"
+                        style={{ background: T.accentDim, color: T.accent }}
                     >
                         <ShieldCheck size={14} />
                         Open Source • MIT License
                     </div>
 
                     <h1
-                        style={{
-                            fontSize: 'clamp(32px, 5vw, 56px)',
-                            fontWeight: 700,
-                            fontFamily: T.brand,
-                            lineHeight: 1.1,
-                            margin: '0 0 16px',
-                        }}
+                        className="text-[clamp(32px,5vw,56px)] font-bold leading-[1.1] mb-4"
+                        style={{ fontFamily: T.brand }}
                     >
                         Verify, Don&apos;t Trust
                     </h1>
 
                     <p
-                        style={{
-                            fontSize: 18,
-                            color: T.textDim,
-                            maxWidth: 640,
-                            margin: '0 auto 32px',
-                            lineHeight: 1.6,
-                        }}
+                        className="text-lg max-w-[640px] mx-auto mb-8 leading-relaxed"
+                        style={{ color: T.textDim }}
                     >
                         Every RegEngine traceability record is protected by a{' '}
                         <strong className="text-re-text-secondary">SHA-256 cryptographic hash</strong>.
@@ -209,37 +178,16 @@ export default function VerifyPage() {
                         <a
                             href="/sdk/verify_chain.py"
                             download
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                padding: '12px 24px',
-                                background: T.accent,
-                                color: '#000',
-                                borderRadius: 8,
-                                fontSize: 15,
-                                fontWeight: 600,
-                                textDecoration: 'none',
-                            }}
+                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold no-underline text-black"
+                            style={{ background: T.accent }}
                         >
                             <Download size={16} />
                             Download verify_chain.py
                         </a>
                         <a
                             href="#how-it-works"
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                padding: '12px 24px',
-                                background: T.elevated,
-                                border: `1px solid ${T.border}`,
-                                color: T.text,
-                                borderRadius: 8,
-                                fontSize: 15,
-                                fontWeight: 500,
-                                textDecoration: 'none',
-                            }}
+                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-medium no-underline"
+                            style={{ background: T.elevated, border: `1px solid ${T.border}`, color: T.text }}
                         >
                             <Terminal size={16} />
                             See How It Works
@@ -249,14 +197,9 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Trust Model ───────────────────────────────────────── */}
-            <section className="re-page-content">
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                        gap: 20,
-                    }}
-                >
+            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
+
                     {[
                         {
                             icon: <Lock size={20} />,
@@ -279,24 +222,14 @@ export default function VerifyPage() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: i * 0.1 + 0.3 }}
-                            style={{
-                                background: T.surface,
-                                border: `1px solid ${T.border}`,
-                                borderRadius: 12,
-                                padding: 24,
-                            }}
+                            className="rounded-xl p-6"
+                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
                         >
-                            <div style={{ color: T.accent, marginBottom: 12 }}>{card.icon}</div>
-                            <h3
-                                style={{
-                                    fontSize: 16,
-                                    fontWeight: 600,
-                                    marginBottom: 8,
-                                }}
-                            >
+                            <div className="mb-3" style={{ color: T.accent }}>{card.icon}</div>
+                            <h3 className="text-base font-semibold mb-2">
                                 {card.title}
                             </h3>
-                            <p style={{ fontSize: 14, color: T.textDim, lineHeight: 1.5, margin: 0 }}>
+                            <p className="text-sm leading-normal m-0" style={{ color: T.textDim }}>
                                 {card.desc}
                             </p>
                         </motion.div>
@@ -307,63 +240,35 @@ export default function VerifyPage() {
             {/* ─── Terminal Output ───────────────────────────────────── */}
             <section
                 id="how-it-works"
-                style={{
-                    maxWidth: 960,
-                    margin: '0 auto',
-                    padding: '0 24px 60px',
-                }}
+                className="max-w-[960px] mx-auto px-6 pb-[60px]"
             >
-                <h2
-                    style={{
-                        fontSize: 28,
-                        fontWeight: 600,
-                        marginBottom: 8,
-                        textAlign: 'center',
-                    }}
-                >
+                <h2 className="text-[28px] font-semibold mb-2 text-center">
+
                     What It Looks Like
                 </h2>
                 <p
-                    style={{
-                        textAlign: 'center',
-                        color: T.textDim,
-                        fontSize: 15,
-                        marginBottom: 32,
-                    }}
+                    className="text-center text-[15px] mb-8"
+                    style={{ color: T.textDim }}
                 >
                     Run the script against an exported JSON file. Every record is independently
                     re-hashed and compared.
                 </p>
 
                 <div
-                    style={{
-                        background: 'var(--re-surface-base)',
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                    }}
+                    className="rounded-xl overflow-hidden bg-[var(--re-surface-base)]"
+                    style={{ border: `1px solid ${T.border}` }}
                 >
                     {/* Terminal header bar */}
                     <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '10px 16px',
-                            background: 'rgba(255,255,255,0.03)',
-                            borderBottom: `1px solid ${T.border}`,
-                        }}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03]"
+                        style={{ borderBottom: `1px solid ${T.border}` }}
                     >
-                        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f56' }} />
-                        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#ffbd2e' }} />
-                        <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#27c93f' }} />
+                        <div className="w-3 h-3 rounded-full bg-[#ff5f56]" />
+                        <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
+                        <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
                         <span
-                            style={{
-                                marginLeft: 12,
-                                fontSize: 12,
-                                color: T.textMuted,
-                                fontFamily: T.mono,
-                            }}
+                            className="ml-3 text-xs"
+                            style={{ color: T.textMuted, fontFamily: T.mono }}
                         >
                             verify_chain.py — bash
                         </span>
@@ -371,16 +276,8 @@ export default function VerifyPage() {
 
                     {/* Terminal content */}
                     <pre
-                        style={{
-                            margin: 0,
-                            padding: 20,
-                            fontFamily: T.mono,
-                            fontSize: 12,
-                            lineHeight: 1.6,
-                            color: 'var(--re-text-secondary)',
-                            overflow: 'auto',
-                            maxHeight: 480,
-                        }}
+                        className="m-0 p-5 text-xs leading-relaxed overflow-auto max-h-[480px] text-[var(--re-text-secondary)]"
+                        style={{ fontFamily: T.mono }}
                     >
                         {TERMINAL_OUTPUT.split('\n').map((line, i) => {
                             let color = 'var(--re-text-secondary)';
@@ -402,15 +299,9 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Installation ──────────────────────────────────────── */}
-            <section className="re-page-content">
-                <h2
-                    style={{
-                        fontSize: 28,
-                        fontWeight: 600,
-                        marginBottom: 32,
-                        textAlign: 'center',
-                    }}
-                >
+            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+                <h2 className="text-[28px] font-semibold mb-8 text-center">
+
                     Get Started in 30 Seconds
                 </h2>
 
@@ -418,61 +309,29 @@ export default function VerifyPage() {
                     {INSTALL_STEPS.map((step, i) => (
                         <div
                             key={i}
-                            style={{
-                                background: T.surface,
-                                border: `1px solid ${T.border}`,
-                                borderRadius: 12,
-                                padding: 20,
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 16,
-                            }}
+                            className="rounded-xl p-5 flex items-start gap-4"
+                            style={{ background: T.surface, border: `1px solid ${T.border}` }}
                         >
                             <div
-                                style={{
-                                    width: 28,
-                                    height: 28,
-                                    borderRadius: '50%',
-                                    background: T.accentDim,
-                                    color: T.accent,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: 14,
-                                    fontWeight: 700,
-                                    flexShrink: 0,
-                                }}
+                                className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                                style={{ background: T.accentDim, color: T.accent }}
                             >
                                 {i + 1}
                             </div>
                             <div className="flex-1">
-                                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
+                                <div className="text-[15px] font-semibold mb-1.5">
                                     {step.title}
                                 </div>
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
-                                        background: 'var(--re-surface-base)',
-                                        borderRadius: 6,
-                                        padding: '8px 12px',
-                                        marginBottom: 6,
-                                    }}
-                                >
+                                <div className="flex items-center gap-2 bg-[var(--re-surface-base)] rounded-md px-3 py-2 mb-1.5">
                                     <code
-                                        style={{
-                                            fontFamily: T.mono,
-                                            fontSize: 13,
-                                            color: 'var(--re-success)',
-                                            flex: 1,
-                                        }}
+                                        className="text-[13px] text-[var(--re-success)] flex-1"
+                                        style={{ fontFamily: T.mono }}
                                     >
                                         {step.code}
                                     </code>
                                     <CopyButton text={step.code} />
                                 </div>
-                                <p style={{ fontSize: 13, color: T.textDim, margin: 0 }}>{step.desc}</p>
+                                <p className="text-[13px] m-0" style={{ color: T.textDim }}>{step.desc}</p>
                             </div>
                         </div>
                     ))}
@@ -480,61 +339,33 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Code Sample ──────────────────────────────────────── */}
-            <section className="re-page-content">
-                <h2
-                    style={{
-                        fontSize: 28,
-                        fontWeight: 600,
-                        marginBottom: 8,
-                        textAlign: 'center',
-                    }}
-                >
+            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+                <h2 className="text-[28px] font-semibold mb-2 text-center">
                     Usage Examples
                 </h2>
                 <p
-                    style={{
-                        textAlign: 'center',
-                        color: T.textDim,
-                        fontSize: 15,
-                        marginBottom: 32,
-                    }}
+                    className="text-center text-[15px] mb-8"
+                    style={{ color: T.textDim }}
                 >
                     Three verification modes: offline file, online API, and manual hash computation.
                 </p>
 
                 <div
-                    style={{
-                        background: 'var(--re-surface-base)',
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                    }}
+                    className="rounded-xl overflow-hidden bg-[var(--re-surface-base)]"
+                    style={{ border: `1px solid ${T.border}` }}
                 >
                     <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '10px 16px',
-                            background: 'rgba(255,255,255,0.03)',
-                            borderBottom: `1px solid ${T.border}`,
-                        }}
+                        className="flex items-center justify-between px-4 py-2.5 bg-white/[0.03]"
+                        style={{ borderBottom: `1px solid ${T.border}` }}
                     >
-                        <span style={{ fontSize: 12, color: T.textMuted, fontFamily: T.mono }}>
+                        <span className="text-xs" style={{ color: T.textMuted, fontFamily: T.mono }}>
                             example_usage.py
                         </span>
                         <CopyButton text={CODE_SAMPLE} />
                     </div>
                     <pre
-                        style={{
-                            margin: 0,
-                            padding: 20,
-                            fontFamily: T.mono,
-                            fontSize: 12.5,
-                            lineHeight: 1.6,
-                            color: 'var(--re-text-secondary)',
-                            overflow: 'auto',
-                        }}
+                        className="m-0 p-5 text-[12.5px] leading-relaxed text-[var(--re-text-secondary)] overflow-auto"
+                        style={{ fontFamily: T.mono }}
                     >
                         {CODE_SAMPLE.split('\n').map((line, i) => {
                             let color = 'var(--re-text-secondary)';
@@ -559,34 +390,17 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Hash Algorithm ────────────────────────────────────── */}
-            <section className="re-page-content">
-                <h2
-                    style={{
-                        fontSize: 28,
-                        fontWeight: 600,
-                        marginBottom: 32,
-                        textAlign: 'center',
-                    }}
-                >
+            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+                <h2 className="text-[28px] font-semibold mb-8 text-center">
                     How the Hash Works
                 </h2>
 
                 <div
-                    style={{
-                        background: T.surface,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 12,
-                        padding: 32,
-                    }}
+                    className="rounded-xl p-8"
+                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
                 >
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                            gap: 24,
-                            textAlign: 'center',
-                        }}
-                    >
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6 text-center">
+
                         {[
                             { step: '1', label: 'Extract Immutable Fields', detail: 'TLC, CTE type, location, quantity, UOM, product, timestamp, input TLCs' },
                             { step: '2', label: 'Canonicalize', detail: 'Sort keys, remove whitespace, deterministic JSON' },
@@ -595,24 +409,13 @@ export default function VerifyPage() {
                         ].map((s, i) => (
                             <div key={i}>
                                 <div
-                                    style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: '50%',
-                                        background: T.accentDim,
-                                        color: T.accent,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: 16,
-                                        fontWeight: 700,
-                                        margin: '0 auto 12px',
-                                    }}
+                                    className="w-9 h-9 rounded-full flex items-center justify-center text-base font-bold mx-auto mb-3"
+                                    style={{ background: T.accentDim, color: T.accent }}
                                 >
                                     {s.step}
                                 </div>
-                                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{s.label}</div>
-                                <div style={{ fontSize: 13, color: T.textDim, lineHeight: 1.4 }}>{s.detail}</div>
+                                <div className="text-[15px] font-semibold mb-1.5">{s.label}</div>
+                                <div className="text-[13px] leading-snug" style={{ color: T.textDim }}>{s.detail}</div>
                             </div>
                         ))}
                     </div>
@@ -620,38 +423,22 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── Canonical Fields Table ────────────────────────────── */}
-            <section className="re-page-content">
-                <h2
-                    style={{
-                        fontSize: 24,
-                        fontWeight: 600,
-                        marginBottom: 20,
-                        textAlign: 'center',
-                    }}
-                >
+            <section className="max-w-[960px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+                <h2 className="text-2xl font-semibold mb-5 text-center">
                     Immutable Fields (Hash Inputs)
                 </h2>
 
                 <div
-                    style={{
-                        background: T.surface,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 12,
-                        overflow: 'hidden',
-                    }}
+                    className="rounded-xl overflow-hidden"
+                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
                 >
-                    <table
-                        style={{
-                            width: '100%',
-                            borderCollapse: 'collapse',
-                            fontSize: 14,
-                        }}
-                    >
+                    <table className="w-full border-collapse text-sm">
+
                         <thead>
                             <tr style={{ background: T.elevated }}>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>Field</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>Source</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>Example</th>
+                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Field</th>
+                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Source</th>
+                                <th className="px-4 py-3 text-left font-semibold" style={{ borderBottom: `1px solid ${T.border}` }}>Example</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -666,9 +453,9 @@ export default function VerifyPage() {
                                 ['input_tlcs', 'Upstream lots (sorted)', '[]'],
                             ].map(([field, source, example], i) => (
                                 <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
-                                    <td style={{ padding: '10px 16px', fontFamily: T.mono, fontSize: 13, color: T.accent }}>{field}</td>
-                                    <td style={{ padding: '10px 16px', color: T.textDim }}>{source}</td>
-                                    <td style={{ padding: '10px 16px', fontFamily: T.mono, fontSize: 12, color: T.textMuted }}>{example}</td>
+                                    <td className="px-4 py-2.5 text-[13px]" style={{ fontFamily: T.mono, color: T.accent }}>{field}</td>
+                                    <td className="px-4 py-2.5" style={{ color: T.textDim }}>{source}</td>
+                                    <td className="px-4 py-2.5 text-xs" style={{ fontFamily: T.mono, color: T.textMuted }}>{example}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -677,34 +464,18 @@ export default function VerifyPage() {
             </section>
 
             {/* ─── CTA Footer ────────────────────────────────────────── */}
-            <section
-                style={{
-                    maxWidth: 960,
-                    margin: '0 auto',
-                    padding: '0 24px 80px',
-                    textAlign: 'center',
-                }}
-            >
+            <section className="max-w-[960px] mx-auto px-6 pb-20 text-center">
                 <div
-                    style={{
-                        background: T.surface,
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 16,
-                        padding: '48px 32px',
-                    }}
+                    className="rounded-2xl px-8 py-12"
+                    style={{ background: T.surface, border: `1px solid ${T.border}` }}
                 >
-                    <ShieldCheck size={40} style={{ color: T.accent, marginBottom: 16 }} />
-                    <h2 style={{ fontSize: 28, fontWeight: 600, marginBottom: 12 }}>
+                    <ShieldCheck size={40} className="mb-4" style={{ color: T.accent }} />
+                    <h2 className="text-[28px] font-semibold mb-3">
                         Math Trust &gt; Process Trust
                     </h2>
                     <p
-                        style={{
-                            fontSize: 15,
-                            color: T.textDim,
-                            maxWidth: 560,
-                            margin: '0 auto 28px',
-                            lineHeight: 1.6,
-                        }}
+                        className="text-[15px] max-w-[560px] mx-auto mb-7 leading-relaxed"
+                        style={{ color: T.textDim }}
                     >
                         RegEngine adds cryptographic verification on top of standard compliance controls.
                         SHA-256 hashing lets you verify record integrity independently —
@@ -715,37 +486,16 @@ export default function VerifyPage() {
                         <a
                             href="/sdk/verify_chain.py"
                             download
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                padding: '12px 24px',
-                                background: T.accent,
-                                color: '#000',
-                                borderRadius: 8,
-                                fontSize: 15,
-                                fontWeight: 600,
-                                textDecoration: 'none',
-                            }}
+                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-semibold no-underline text-black"
+                            style={{ background: T.accent }}
                         >
                             <Download size={16} />
                             Download Script
                         </a>
                         <a
                             href="/ftl-checker"
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                padding: '12px 24px',
-                                background: T.elevated,
-                                border: `1px solid ${T.border}`,
-                                color: T.text,
-                                borderRadius: 8,
-                                fontSize: 15,
-                                fontWeight: 500,
-                                textDecoration: 'none',
-                            }}
+                            className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-[15px] font-medium no-underline"
+                            style={{ background: T.elevated, border: `1px solid ${T.border}`, color: T.text }}
                         >
                             Check Your FTL Coverage
                             <ExternalLink size={14} />
@@ -754,7 +504,7 @@ export default function VerifyPage() {
                 </div>
 
                 {/* Fine print */}
-                <p style={{ marginTop: 24, fontSize: 12, color: T.textMuted }}>
+                <p className="mt-6 text-xs" style={{ color: T.textMuted }}>
                     verify_chain.py v1.0.0 • MIT License • Python 3.8+ • Zero dependencies for offline mode
                 </p>
             </section>

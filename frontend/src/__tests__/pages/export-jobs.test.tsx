@@ -12,7 +12,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ExportJobsPage from '@/app/dashboard/export-jobs/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // ── Mocks ──
 
@@ -94,14 +104,14 @@ describe('ExportJobsPage', () => {
     it('renders loading state initially', () => {
         // Fetch never resolves during this tick
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-        render(<ExportJobsPage />);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Loading export jobs...')).toBeInTheDocument();
     });
 
     it('renders jobs when fetch succeeds', async () => {
         mockFetchSuccess();
-        render(<ExportJobsPage />);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('Weekly FDA Export')).toBeInTheDocument();
@@ -112,7 +122,7 @@ describe('ExportJobsPage', () => {
 
     it('renders empty state when no jobs exist', async () => {
         mockFetchSuccess([]);
-        render(<ExportJobsPage />);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('No export jobs yet')).toBeInTheDocument();
@@ -121,7 +131,7 @@ describe('ExportJobsPage', () => {
 
     it('renders page heading', async () => {
         mockFetchSuccess([]);
-        render(<ExportJobsPage />);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Archive & Export Jobs')).toBeInTheDocument();
     });
@@ -134,7 +144,7 @@ describe('ExportJobsPage', () => {
             .mockResolvedValueOnce({ ok: false, status: 500 });
 
         const user = userEvent.setup();
-        render(<ExportJobsPage />);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         // Wait for initial load
         await waitFor(() => {
@@ -152,7 +162,7 @@ describe('ExportJobsPage', () => {
 
     it('shows active jobs count', async () => {
         mockFetchSuccess();
-        render(<ExportJobsPage />);
+        render(<ExportJobsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             // 1 active job out of 2

@@ -107,7 +107,7 @@ const TIMELINE = [
 
 export default function WalkthroughPage() {
   return (
-    <div className="re-page">
+    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
       {/* Hero */}
       <section className="relative z-[2] max-w-[800px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-8 sm:pb-12">
         <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
