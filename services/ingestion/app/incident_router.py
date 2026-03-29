@@ -48,6 +48,14 @@ logger = logging.getLogger("incident-command")
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["Incident Command"])
 
+# Defense-in-depth: whitelist of columns allowed in dynamic WHERE clauses.
+# All filter columns are hardcoded in endpoint logic below — this assertion
+# catches regressions if a future change introduces an unsafe column reference.
+_ALLOWED_WHERE_FRAGMENTS = frozenset({
+    "tenant_id = :tid",
+    "data->>'status' = :status",
+})
+
 
 def _get_db_session():
     try:
@@ -138,11 +146,16 @@ async def list_incidents(
     # in a lightweight incidents table (created on first use)
     _ensure_incidents_table(db_session)
 
-    where = "tenant_id = :tid"
+    where_parts = ["tenant_id = :tid"]
     params: Dict[str, Any] = {"tid": tid}
     if status:
-        where += " AND data->>'status' = :status"
+        where_parts.append("data->>'status' = :status")
         params["status"] = status
+
+    assert all(p in _ALLOWED_WHERE_FRAGMENTS for p in where_parts), (
+        f"Unexpected WHERE fragment in incident query: {where_parts}"
+    )
+    where = " AND ".join(where_parts)
 
     count_row = db_session.execute(
         text(f"SELECT COUNT(*) FROM fsma.incidents WHERE {where}"),
@@ -426,6 +439,8 @@ async def impact_assessment(
     # Count affected records
     record_count = 0
     if affected_lots:
+        if len(affected_lots) > 1000:
+            raise HTTPException(status_code=400, detail="Too many affected lots for impact query")
         placeholders = ", ".join(f":lot_{i}" for i in range(len(affected_lots)))
         params = {f"lot_{i}": lot for i, lot in enumerate(affected_lots)}
         params["tid"] = tid

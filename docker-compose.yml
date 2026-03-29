@@ -27,7 +27,9 @@ x-env-common:
   # Per-tenant rate limiting (Sprint 13)
   RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-100/minute}
   RATE_LIMIT_STORAGE_URI: ${RATE_LIMIT_STORAGE_URI:-redis://redis:6379/2}
-  # Test API key bypass — only set in local dev. Omit in production to disable bypass entirely.
+  # SECURITY: Auth test bypass — empty default means bypass is disabled.
+  # Never set a value in production. Runtime enforcement in services/shared/auth.py
+  # blocks bypass when REGENGINE_ENV=production regardless of this value.
   AUTH_TEST_BYPASS_TOKEN: ${AUTH_TEST_BYPASS_TOKEN:-}
   AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
   ENABLE_OTEL: ${ENABLE_OTEL:-true}
