@@ -94,8 +94,8 @@ function CodeBlock({ code }: { code: string }) {
 
 export default function ComplianceVerticalsPage() {
     return (
-        <div className="re-page overflow-x-hidden">
-            <div className="re-noise" />
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)] overflow-x-hidden">
+            <div className="fixed inset-0 pointer-events-none z-[1] opacity-[0.015]" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")" }} />
 
             <section className="relative z-[2] max-w-[1120px] mx-auto pt-[96px] pb-[72px] px-6">
                 <div className="absolute top-[-80px] left-1/2 -translate-x-1/2 w-[640px] h-[420px] bg-[radial-gradient(ellipse,rgba(16,185,129,0.08)_0%,transparent_72%)] pointer-events-none" />
@@ -106,8 +106,8 @@ export default function ComplianceVerticalsPage() {
                 </Link>
 
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                    <div className="re-badge-brand mb-6 w-fit">
-                        <span className="re-dot bg-[var(--re-brand)] animate-pulse" />
+                    <div className="inline-flex items-center gap-1.5 bg-[var(--re-brand-muted)] border border-[var(--re-brand)] rounded-full py-1 px-3 text-xs text-[var(--re-brand)] font-semibold mb-6 w-fit">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--re-brand)] animate-pulse" />
                         FSMA 204 Profiles
                     </div>
                     <h1 className="text-[clamp(36px,5vw,52px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-4 tracking-[-0.02em]">

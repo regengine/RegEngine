@@ -224,7 +224,7 @@ export default function LabelScannerPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imageFile]);
     return (
-        <div className="re-page min-h-screen">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Header */}
             <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-8">
                 <Link

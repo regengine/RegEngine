@@ -18,19 +18,6 @@ export const metadata: Metadata = {
     },
 };
 
-const T = {
-    bg: 'var(--re-surface-base)',
-    surface: 'var(--re-surface-card)',
-    border: 'var(--re-surface-border)',
-    borderSubtle: 'var(--re-surface-border)',
-    text: 'var(--re-text-secondary)',
-    textMuted: 'var(--re-text-muted)',
-    textDim: 'var(--re-text-disabled)',
-    heading: 'var(--re-text-primary)',
-    accent: 'var(--re-brand)',
-    accentBg: 'var(--re-brand-muted)',
-};
-
 const PRICING_TIERS = [
     {
         id: 'base',
@@ -118,78 +105,78 @@ const FAQ = [
 
 export default function PricingPage() {
     return (
-        <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
+        <div className="re-page min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Hero */}
             <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
-                <Badge style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.border}`, marginBottom: '20px' }}>
+                <Badge className="bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-surface-border)] mb-5">
                     Founding Design Partners — 50% Off for Life
                 </Badge>
-                <h1 style={{ fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 700, color: T.heading, lineHeight: 1.1, margin: '0 0 16px' }}>
+                <h1 className="text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] mb-4">
                     FSMA 204 Compliance,<br />
                     <span className="text-re-brand">Priced for Mid-Market</span>
                 </h1>
-                <p style={{ fontSize: '18px', color: T.textMuted, maxWidth: '600px', margin: '0 auto 16px', lineHeight: 1.6 }}>
+                <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-4 leading-relaxed">
                     Three plans sized by facility count. Founding Design Partners lock in 50% off for the life of their account — white-glove onboarding and direct founder support included.
                 </p>
-                <p style={{ fontSize: '14px', color: T.textDim }}>
+                <p className="text-sm text-[var(--re-text-disabled)]">
                     Annual billing saves ~15%. Monthly billing also available.
                 </p>
             </section>
 
             {/* Pricing Cards */}
             <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
                     {PRICING_TIERS.map((tier) => {
                         const Icon = tier.Icon;
                         return (
                             <div
                                 key={tier.id}
-                                style={{
-                                    background: T.surface,
-                                    border: tier.highlighted ? `2px solid ${T.accent}` : `1px solid ${T.border}`,
-                                    borderRadius: '16px', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                                    boxShadow: tier.highlighted
-                                        ? `0 8px 32px rgba(16,185,129,0.12), 0 0 0 1px ${T.border}`
-                                        : `0 2px 12px rgba(0,0,0,0.06)`,
-                                    transition: 'all 0.3s',
-                                }}
+                                className={`bg-[var(--re-surface-card)] rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${
+                                    tier.highlighted
+                                        ? 'border-2 border-[var(--re-brand)] shadow-[0_8px_32px_rgba(16,185,129,0.12),0_0_0_1px_var(--re-surface-border)]'
+                                        : 'border border-[var(--re-surface-border)] shadow-[0_2px_12px_rgba(0,0,0,0.06)]'
+                                }`}
                             >
                                 {tier.highlighted && (
-                                    <div style={{ background: T.accent, color: '#fff', textAlign: 'center', padding: '8px', fontSize: '12px', fontWeight: 700, letterSpacing: '0.03em' }}>
+                                    <div className="bg-[var(--re-brand)] text-white text-center p-2 text-xs font-bold tracking-[0.03em]">
                                         Most Popular
                                     </div>
                                 )}
-                                <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <div className="p-6 flex-1 flex flex-col">
                                     <div className="flex items-center gap-2.5 mb-2">
-                                        <div style={{ background: tier.highlighted ? T.accentBg : 'var(--re-surface-elevated)', border: `1px solid ${T.border}`, borderRadius: '10px', padding: '8px' }}>
-                                            <Icon style={{ width: 18, height: 18, color: tier.highlighted ? T.accent : T.textMuted }} />
+                                        <div className={`border border-[var(--re-surface-border)] rounded-[10px] p-2 ${
+                                            tier.highlighted ? 'bg-[var(--re-brand-muted)]' : 'bg-[var(--re-surface-elevated)]'
+                                        }`}>
+                                            <Icon className={`w-[18px] h-[18px] ${
+                                                tier.highlighted ? 'text-[var(--re-brand)]' : 'text-[var(--re-text-muted)]'
+                                            }`} />
                                         </div>
-                                        <span style={{ fontSize: '18px', fontWeight: 600, color: T.heading }}>{tier.name}</span>
+                                        <span className="text-lg font-semibold text-[var(--re-text-primary)]">{tier.name}</span>
                                     </div>
-                                    <p style={{ fontSize: '13px', color: T.textDim, marginBottom: '12px' }}>{tier.description}</p>
-                                    <span style={{ display: 'inline-block', fontSize: '11px', fontWeight: 600, background: 'rgba(16,185,129,0.1)', color: T.accent, padding: '3px 8px', borderRadius: '6px', marginBottom: '16px' }}>
+                                    <p className="text-[13px] text-[var(--re-text-disabled)] mb-3">{tier.description}</p>
+                                    <span className="inline-block text-[11px] font-semibold bg-[rgba(16,185,129,0.1)] text-[var(--re-brand)] px-2 py-[3px] rounded-md mb-4">
                                         50% Off — Founding Design Partner
                                     </span>
 
-                                    <div style={{ marginBottom: '20px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                                            <span style={{ fontSize: '36px', fontWeight: 700, color: T.heading }}>${tier.partnerAnnual}</span>
-                                            <span style={{ color: T.textMuted, fontSize: '14px' }}>/mo</span>
+                                    <div className="mb-5">
+                                        <div className="flex items-baseline gap-1.5">
+                                            <span className="text-4xl font-bold text-[var(--re-text-primary)]">${tier.partnerAnnual}</span>
+                                            <span className="text-[var(--re-text-muted)] text-sm">/mo</span>
                                         </div>
-                                        <p style={{ fontSize: '12px', color: T.textDim, marginTop: '4px' }}>
-                                            <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>${tier.gaAnnual}/mo</span>
+                                        <p className="text-xs text-[var(--re-text-disabled)] mt-1">
+                                            <span className="line-through opacity-60">${tier.gaAnnual}/mo</span>
                                             {' '}GA price · billed annually
                                         </p>
-                                        <p style={{ fontSize: '11px', color: T.textDim, marginTop: '2px' }}>
+                                        <p className="text-[11px] text-[var(--re-text-disabled)] mt-0.5">
                                             ${tier.partnerMonthly}/mo if billed monthly
                                         </p>
                                     </div>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
+                                    <div className="flex flex-col gap-2.5 flex-1">
                                         {tier.features.map((f, i) => (
-                                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                                                <Check style={{ width: 14, height: 14, color: T.accent, marginTop: 3, flexShrink: 0 }} />
-                                                <span style={{ fontSize: '13px', color: T.text }}>{f}</span>
+                                            <div key={i} className="flex items-start gap-2">
+                                                <Check className="w-3.5 h-3.5 text-[var(--re-brand)] mt-[3px] shrink-0" />
+                                                <span className="text-[13px] text-[var(--re-text-secondary)]">{f}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -199,9 +186,9 @@ export default function PricingPage() {
                                         label={tier.cta}
                                         highlighted={tier.highlighted}
                                         style={{
-                                            background: tier.highlighted ? T.accent : 'var(--re-surface-elevated)',
-                                            color: tier.highlighted ? '#fff' : T.heading,
-                                            border: tier.highlighted ? 'none' : `1px solid ${T.border}`,
+                                            background: tier.highlighted ? 'var(--re-brand)' : 'var(--re-surface-elevated)',
+                                            color: tier.highlighted ? '#fff' : 'var(--re-text-primary)',
+                                            border: tier.highlighted ? 'none' : '1px solid var(--re-surface-border)',
                                             boxShadow: tier.highlighted ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
                                         }}
                                     />
@@ -210,32 +197,24 @@ export default function PricingPage() {
                         );
                     })}
                 </div>
-                <p style={{ textAlign: 'center', fontSize: '12px', color: T.textDim, marginTop: '20px' }}>
+                <p className="text-center text-xs text-[var(--re-text-disabled)] mt-5">
                     Base plan includes 500 CTEs/month. Standard and Premium are unlimited. Need more on Base? Add CTEs at $0.002 each.{' '}
-                    <Link href="/terms" style={{ color: T.accent, textDecoration: 'underline' }}>See Terms</Link> for full details.
+                    <Link href="/terms" className="text-[var(--re-brand)] underline">See Terms</Link> for full details.
                 </p>
 
                 {/* Founding Design Partner callout */}
-                <div style={{
-                    maxWidth: '680px', margin: '40px auto 0',
-                    borderRadius: '16px', border: `2px solid var(--re-brand-muted)`,
-                    background: T.accentBg, padding: '28px 32px', textAlign: 'center',
-                }}>
-                    <p style={{ fontSize: '16px', fontWeight: 700, color: T.accent, marginBottom: '8px' }}>
+                <div className="max-w-[680px] mx-auto mt-10 rounded-2xl border-2 border-[var(--re-brand-muted)] bg-[var(--re-brand-muted)] px-8 py-7 text-center">
+                    <p className="text-base font-bold text-[var(--re-brand)] mb-2">
                         Founding Design Partner Program
                     </p>
-                    <p style={{ fontSize: '14px', color: T.textMuted, lineHeight: 1.7, marginBottom: '8px', maxWidth: '520px', margin: '0 auto 8px' }}>
+                    <p className="text-sm text-[var(--re-text-muted)] leading-[1.7] max-w-[520px] mx-auto mb-2">
                         50% off GA pricing for the life of your account. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
                     </p>
-                    <p style={{ fontSize: '13px', color: T.textDim, lineHeight: 1.6, marginBottom: '20px', maxWidth: '480px', margin: '0 auto 20px' }}>
+                    <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
                         We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
                     </p>
                     <Link href="/onboarding">
-                        <Button style={{
-                            background: T.accent, color: '#fff', fontWeight: 600,
-                            borderRadius: '10px', padding: '12px 28px',
-                            boxShadow: '0 4px 16px rgba(16,185,129,0.25)',
-                        }}>
+                        <Button className="bg-[var(--re-brand)] text-white font-semibold rounded-[10px] px-7 py-3 shadow-[0_4px_16px_rgba(16,185,129,0.25)]">
                             Apply as Founding Design Partner <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
@@ -243,46 +222,46 @@ export default function PricingPage() {
             </section>
 
             {/* Competitor Comparison */}
-            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: T.surface, borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-surface-card)] border-t border-b border-[var(--re-surface-border)]">
                 <div className="max-w-[1000px] mx-auto">
-                    <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '12px' }}>
+                    <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] text-center mb-3">
                         See How We Compare
                     </h2>
-                    <p style={{ textAlign: 'center', color: T.textMuted, marginBottom: '16px', maxWidth: '500px', margin: '0 auto 16px' }}>
+                    <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
                         The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
                     </p>
-                    <p style={{ textAlign: 'center', fontSize: '14px', color: T.textDim, maxWidth: '520px', margin: '0 auto 40px', lineHeight: 1.6 }}>
+                    <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
                         Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo for Founding Design Partners.
                     </p>
-                    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse">
                                 <thead>
-                                    <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-                                        <th style={{ textAlign: 'left', padding: '16px', fontSize: '12px', color: T.heading, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feature</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', background: T.accentBg }}>
-                                            <span style={{ color: T.accent, fontWeight: 700 }}>RegEngine</span>
+                                    <tr className="border-b border-[var(--re-surface-border)]">
+                                        <th className="text-left p-4 text-xs text-[var(--re-text-primary)] font-semibold uppercase tracking-[0.04em]">Feature</th>
+                                        <th className="text-center p-4 text-xs bg-[var(--re-brand-muted)]">
+                                            <span className="text-[var(--re-brand)] font-bold">RegEngine</span>
                                         </th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: T.textDim, fontWeight: 600 }}>FoodLogiQ</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: T.textDim, fontWeight: 600 }}>ReposiTrak</th>
-                                        <th style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: T.textDim, fontWeight: 600 }}>TraceGains</th>
+                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">FoodLogiQ</th>
+                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">ReposiTrak</th>
+                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">TraceGains</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {COMPETITOR_COMPARISON.map((row, i) => (
-                                        <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 1 ? 'var(--re-surface-elevated)' : 'transparent' }}>
-                                            <td style={{ padding: '14px 16px', fontSize: '13px', color: T.text, fontWeight: 500 }}>{row.feature}</td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', background: T.accentBg, color: T.accent, fontWeight: 600 }}>{row.regengine}</td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.foodlogiq}</td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.repositrak}</td>
-                                            <td style={{ textAlign: 'center', padding: '14px 16px', fontSize: '13px', color: T.textDim }}>{row.tracegains}</td>
+                                        <tr key={i} className={`border-b border-[var(--re-surface-border)] ${i % 2 === 1 ? 'bg-[var(--re-surface-elevated)]' : 'bg-transparent'}`}>
+                                            <td className="px-4 py-3.5 text-[13px] text-[var(--re-text-secondary)] font-medium">{row.feature}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] bg-[var(--re-brand-muted)] text-[var(--re-brand)] font-semibold">{row.regengine}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.foodlogiq}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.repositrak}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.tracegains}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <p style={{ fontSize: '11px', color: T.textDim, textAlign: 'center', marginTop: '16px' }}>
+                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
                         * ReposiTrak publicly lists supplier plans from $59/mo (basic) to $179/mo (unlimited). Competitor data from public sources as of Jan 2026.
                     </p>
                 </div>
@@ -290,39 +269,39 @@ export default function PricingPage() {
 
             {/* FAQ */}
             <section className="relative z-[2] max-w-[700px] mx-auto py-10 sm:py-[60px] px-4 sm:px-6">
-                <h2 style={{ fontSize: '28px', fontWeight: 700, color: T.heading, textAlign: 'center', marginBottom: '40px' }}>
+                <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] text-center mb-10">
                     Frequently Asked Questions
                 </h2>
                 <div className="flex flex-col gap-4">
                     {FAQ.map((item, i) => (
-                        <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: '12px', padding: '20px' }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
-                                <HelpCircle style={{ width: 18, height: 18, color: T.accent, marginTop: 2, flexShrink: 0 }} />
-                                <span style={{ fontSize: '15px', fontWeight: 600, color: T.heading }}>{item.q}</span>
+                        <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
+                            <div className="flex items-start gap-3 mb-3">
+                                <HelpCircle className="w-[18px] h-[18px] text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                <span className="text-[15px] font-semibold text-[var(--re-text-primary)]">{item.q}</span>
                             </div>
-                            <p style={{ fontSize: '14px', color: T.textMuted, paddingLeft: '30px', lineHeight: 1.6 }}>{item.a}</p>
+                            <p className="text-sm text-[var(--re-text-muted)] pl-[30px] leading-relaxed">{item.a}</p>
                         </div>
                     ))}
                 </div>
             </section>
 
             {/* CTA */}
-            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6" style={{ background: 'linear-gradient(135deg, var(--re-brand) 0%, #0ea5e9 100%)' }}>
-                <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-                    <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginBottom: '12px' }}>
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
+                <div className="max-w-[600px] mx-auto text-center">
+                    <h2 className="text-[28px] font-bold text-white mb-3">
                         Lock In 50% Off Before GA Launch
                     </h2>
-                    <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.9)', marginBottom: '32px' }}>
+                    <p className="text-base text-white/90 mb-8">
                         Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">
-                            <Button style={{ background: '#fff', color: T.accent, fontWeight: 600, padding: '14px 24px' }}>
+                            <Button className="bg-white text-[var(--re-brand)] font-semibold px-6 py-3.5">
                                 Apply Now <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
                         <Link href="/trust">
-                            <Button variant="outline" style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', padding: '14px 24px' }}>
+                            <Button variant="outline" className="bg-transparent text-white border border-white/30 px-6 py-3.5">
                                 Review Trust Center
                             </Button>
                         </Link>

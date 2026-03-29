@@ -16,10 +16,10 @@ export default function DeveloperLoginPage() {
     }, [router]);
 
     return (
-        <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--re-surface-base)' }}>
+        <div className="min-h-screen flex items-center justify-center bg-[var(--re-surface-base)]">
             <div className="text-center">
-                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" style={{ color: 'var(--re-text-muted)' }} />
-                <p className="text-sm" style={{ color: 'var(--re-text-muted)' }}>Redirecting to login...</p>
+                <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3 text-[var(--re-text-muted)]" />
+                <p className="text-sm text-[var(--re-text-muted)]">Redirecting to login...</p>
             </div>
         </div>
     );

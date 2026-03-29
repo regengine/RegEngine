@@ -11,7 +11,17 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import IssuesPage from '@/app/dashboard/issues/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // ── Mocks ──
 
@@ -127,21 +137,21 @@ describe('IssuesPage', () => {
     it('renders loading spinner initially', () => {
         // Fetch never resolves
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-        render(<IssuesPage />);
+        render(<IssuesPage />, { wrapper: createWrapper() });
 
         expect(screen.getByRole('status', { name: /loading/i })).toBeInTheDocument();
     });
 
     it('renders page heading', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-        render(<IssuesPage />);
+        render(<IssuesPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Issues & Blockers')).toBeInTheDocument();
     });
 
     it('renders data when fetches succeed', async () => {
         mockDeadlinesAndBlockers();
-        render(<IssuesPage />);
+        render(<IssuesPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText(/FDA Region 4/)).toBeInTheDocument();
@@ -157,7 +167,7 @@ describe('IssuesPage', () => {
             throw new Error('Service unavailable');
         });
 
-        render(<IssuesPage />);
+        render(<IssuesPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('Service unavailable')).toBeInTheDocument();
@@ -173,7 +183,7 @@ describe('IssuesPage', () => {
             blockerCheck: { blockers: [], warnings: [], blocker_count: 0, warning_count: 0 },
             pendingReviews: {},
         });
-        render(<IssuesPage />);
+        render(<IssuesPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('No Issues Found')).toBeInTheDocument();
@@ -185,7 +195,7 @@ describe('IssuesPage', () => {
         mockUseTenant.mockReturnValue({ tenantId: null, isSystemTenant: true });
         global.fetch = vi.fn();
 
-        render(<IssuesPage />);
+        render(<IssuesPage />, { wrapper: createWrapper() });
 
         expect(global.fetch).not.toHaveBeenCalled();
     });

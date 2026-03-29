@@ -88,19 +88,19 @@ export default function UsagePage() {
         .sort((a, b) => b.count - a.count);
 
     if (isLoading) {
-        return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} /></div>;
+        return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[var(--re-text-muted)]" /></div>;
     }
 
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>API Usage</h1>
-                    <p className="text-sm mt-1" style={{ color: 'var(--re-text-muted)' }}>
+                    <h1 className="text-2xl font-bold text-[var(--re-text-primary)]">API Usage</h1>
+                    <p className="text-sm mt-1 text-[var(--re-text-muted)]">
                         Monitor your API request volume, latency, and error rates.
                     </p>
                 </div>
-                <div className="flex gap-1 p-1 rounded-md" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex gap-1 p-1 rounded-md bg-white/[0.03] border border-white/[0.06]">
                     {(['24h', '7d', '30d'] as const).map(range => (
                         <button
                             key={range}
@@ -119,58 +119,58 @@ export default function UsagePage() {
 
             {/* Summary cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <Activity className="w-4 h-4" style={{ color: 'var(--re-brand)' }} />
-                            <span className="text-xs font-medium" style={{ color: 'var(--re-text-muted)' }}>Requests</span>
+                            <Activity className="w-4 h-4 text-[var(--re-brand)]" />
+                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Requests</span>
                         </div>
-                        <p className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>{totalRequests.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{totalRequests.toLocaleString()}</p>
                     </CardContent>
                 </Card>
-                <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <Clock className="w-4 h-4" style={{ color: '#60a5fa' }} />
-                            <span className="text-xs font-medium" style={{ color: 'var(--re-text-muted)' }}>Avg Latency</span>
+                            <Clock className="w-4 h-4 text-[#60a5fa]" />
+                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Avg Latency</span>
                         </div>
-                        <p className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>{avgLatency}ms</p>
+                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{avgLatency}ms</p>
                     </CardContent>
                 </Card>
-                <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <AlertCircle className="w-4 h-4" style={{ color: '#f87171' }} />
-                            <span className="text-xs font-medium" style={{ color: 'var(--re-text-muted)' }}>Error Rate</span>
+                            <AlertCircle className="w-4 h-4 text-[#f87171]" />
+                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Error Rate</span>
                         </div>
-                        <p className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>{errorRate}%</p>
+                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{errorRate}%</p>
                     </CardContent>
                 </Card>
-                <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="w-4 h-4" style={{ color: '#a78bfa' }} />
-                            <span className="text-xs font-medium" style={{ color: 'var(--re-text-muted)' }}>Endpoints Hit</span>
+                            <TrendingUp className="w-4 h-4 text-[#a78bfa]" />
+                            <span className="text-xs font-medium text-[var(--re-text-muted)]">Endpoints Hit</span>
                         </div>
-                        <p className="text-2xl font-bold" style={{ color: 'var(--re-text-primary)' }}>{endpoints.length}</p>
+                        <p className="text-2xl font-bold text-[var(--re-text-primary)]">{endpoints.length}</p>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Endpoint breakdown */}
-            <Card style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Card className="bg-white/[0.02] border-white/[0.06]">
                 <CardHeader>
-                    <CardTitle className="text-sm" style={{ color: 'var(--re-text-primary)' }}>Endpoint Breakdown</CardTitle>
+                    <CardTitle className="text-sm text-[var(--re-text-primary)]">Endpoint Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {endpoints.length === 0 ? (
-                        <p className="text-sm text-center py-8" style={{ color: 'var(--re-text-muted)' }}>
+                        <p className="text-sm text-center py-8 text-[var(--re-text-muted)]">
                             No API activity in this time period. Make your first request to see usage data.
                         </p>
                     ) : (
                         <div className="space-y-2">
                             {endpoints.map((ep, i) => (
-                                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                                <div key={i} className="flex items-center gap-3 py-2 px-3 rounded bg-black/[0.15]">
                                     <Badge
                                         variant="outline"
                                         className="font-mono text-xs w-14 justify-center"
@@ -181,9 +181,9 @@ export default function UsagePage() {
                                     >
                                         {ep.method}
                                     </Badge>
-                                    <code className="text-xs font-mono flex-1 truncate" style={{ color: 'var(--re-text-primary)' }}>{ep.endpoint}</code>
-                                    <span className="text-xs tabular-nums" style={{ color: 'var(--re-text-muted)' }}>{ep.count.toLocaleString()} req</span>
-                                    <span className="text-xs tabular-nums w-16 text-right" style={{ color: 'var(--re-text-disabled)' }}>{ep.avgLatency}ms</span>
+                                    <code className="text-xs font-mono flex-1 truncate text-[var(--re-text-primary)]">{ep.endpoint}</code>
+                                    <span className="text-xs tabular-nums text-[var(--re-text-muted)]">{ep.count.toLocaleString()} req</span>
+                                    <span className="text-xs tabular-nums w-16 text-right text-[var(--re-text-disabled)]">{ep.avgLatency}ms</span>
                                     <span className="text-xs tabular-nums w-12 text-right" style={{ color: ep.errorRate > 5 ? '#f87171' : 'var(--re-text-disabled)' }}>
                                         {ep.errorRate.toFixed(1)}%
                                     </span>

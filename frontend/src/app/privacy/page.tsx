@@ -140,7 +140,7 @@ const rightsItems = [
 
 export default function PrivacyPage() {
   return (
-    <div className="re-page">
+    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
       {/* ── Hero ───────────────────────────────────────────── */}
       <section className="relative z-[2] max-w-[720px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-6">
         <div className="flex items-center gap-2.5 mb-5">
