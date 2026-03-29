@@ -478,17 +478,19 @@ class DatabaseAPIKeyStore:
             results = await pipe.execute()
             current_count = results[0]
         else:
-            # Fallback: log warning and allow (rate limiting disabled)
-            logger.warning(
-                "rate_limit_disabled",
-                message="Redis not configured, rate limiting disabled",
+            # Fail closed: no Redis means no distributed rate limiting.
+            # Deny requests to prevent unbounded access when Redis is down.
+            logger.error(
+                "rate_limit_fail_closed",
+                message="Redis unavailable — denying request to enforce rate limits",
                 key_id=key_id,
             )
             return RateLimitInfo(
-                allowed=True,
+                allowed=False,
                 limit=limit,
-                remaining=limit,
+                remaining=0,
                 reset_at=now,
+                retry_after=window_seconds,
             )
 
         allowed = current_count <= limit
