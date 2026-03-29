@@ -48,8 +48,9 @@ function loadOpenDyslexicFont() {
   link.id = linkId;
   link.rel = 'stylesheet';
   link.href = 'https://fonts.cdnfonts.com/css/opendyslexic';
+  link.onload = () => { dyslexicFontLoaded = true; };
+  link.onerror = () => { link.remove(); };
   document.head.appendChild(link);
-  dyslexicFontLoaded = true;
 }
 
 function applySettings(s: A11ySettings) {

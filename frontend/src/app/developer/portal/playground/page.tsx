@@ -459,7 +459,7 @@ export default function APIPlayground() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--re-bg-primary)] text-[var(--re-text-primary)]">
+    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-primary)]">
       <div className="max-w-[1400px] mx-auto px-[clamp(1rem,4vw,32px)] py-[clamp(1.5rem,5vw,40px)]">
         {/* Header */}
         <div className="mb-[clamp(1rem,4vw,32px)]">
