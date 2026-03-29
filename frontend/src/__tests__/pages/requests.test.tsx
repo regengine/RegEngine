@@ -11,7 +11,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import RequestWorkflowPage from '@/app/requests/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // Mock auth context
 vi.mock('@/lib/auth-context', () => ({
@@ -118,7 +128,7 @@ describe('RequestWorkflowPage', () => {
 
   it('renders active cases section with case details', () => {
     setupCases();
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/Active Cases/)).toBeInTheDocument();
     expect(screen.getByText('FDA')).toBeInTheDocument();
@@ -127,7 +137,7 @@ describe('RequestWorkflowPage', () => {
 
   it('renders completed cases section', () => {
     setupCases();
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/Completed/)).toBeInTheDocument();
     expect(screen.getByText('Submitted')).toBeInTheDocument();
@@ -136,7 +146,7 @@ describe('RequestWorkflowPage', () => {
 
   it('shows status badge and progress info for active case', () => {
     setupCases();
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Collecting')).toBeInTheDocument();
     expect(screen.getByText('42 records collected')).toBeInTheDocument();
@@ -145,7 +155,7 @@ describe('RequestWorkflowPage', () => {
 
   it('shows lot badges for active case', () => {
     setupCases();
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('TLC-001')).toBeInTheDocument();
     expect(screen.getByText('TLC-002')).toBeInTheDocument();
@@ -154,7 +164,7 @@ describe('RequestWorkflowPage', () => {
   it('opens create form and submits a new case', async () => {
     setupCases();
     const user = userEvent.setup();
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     // Click "New Request Case" button
     const newButton = screen.getByRole('button', { name: /new request case/i });
@@ -181,7 +191,7 @@ describe('RequestWorkflowPage', () => {
 
   it('shows Submit button for ready cases and Assemble for non-ready', () => {
     setupCases();
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     // Submit button for the ready case
     const submitButtons = screen.getAllByRole('button', { name: /submit/i });
@@ -194,7 +204,7 @@ describe('RequestWorkflowPage', () => {
 
   it('shows loading skeletons while loading', () => {
     setupCases([], { isLoading: true, data: undefined });
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Request-Response Workflow')).toBeInTheDocument();
     expect(screen.queryByText('FDA')).not.toBeInTheDocument();
@@ -202,7 +212,7 @@ describe('RequestWorkflowPage', () => {
 
   it('shows empty state when no active cases', () => {
     setupCases([COMPLETED_CASE]);
-    render(<RequestWorkflowPage />);
+    render(<RequestWorkflowPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('No active request cases')).toBeInTheDocument();
   });

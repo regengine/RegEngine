@@ -126,28 +126,16 @@ export function MarketingHeader() {
         <>
             <nav
                 aria-label="Main navigation"
+                className="sticky top-0 z-50 backdrop-blur-[16px]"
                 style={{
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 50,
                     borderBottom: "1px solid var(--re-nav-border)",
-                    backdropFilter: "blur(16px)",
                     WebkitBackdropFilter: "blur(16px)",
                     background: "var(--re-nav-bg)",
                 }}
             >
-                <div
-                    style={{
-                        maxWidth: "1120px",
-                        margin: "0 auto",
-                        padding: "0 clamp(16px, 4vw, 24px)",
-                        height: "56px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                    }}
-                >
-                    <Link href="/" style={{ display: "flex", alignItems: "center", gap: "10px", textDecoration: "none", marginRight: "24px", flexShrink: 0 }}>
+                <div className="max-w-[1120px] mx-auto px-[clamp(16px,4vw,24px)] h-14 flex items-center justify-between">
+
+                    <Link href="/" className="flex items-center gap-2.5 no-underline mr-6 shrink-0">
                         <RegEngineWordmark size="md" />
                     </Link>
 

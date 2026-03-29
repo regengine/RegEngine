@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -110,58 +111,52 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 export default function NotificationPrefsPage() {
     const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
+    const queryClient = useQueryClient();
     const isLoggedIn = isAuthenticated;
 
-    const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const { data: prefs = null, isLoading: loading, error: prefsError } = useQuery({
+        queryKey: ['notification-prefs', tenantId],
+        queryFn: () => apiFetchPrefs(tenantId, apiKey || ''),
+        enabled: isLoggedIn && !!tenantId,
+    });
+
+    const [localPrefs, setLocalPrefs] = useState<NotificationPreferences | null>(null);
     const [saved, setSaved] = useState(false);
 
-    const loadPrefs = useCallback(async () => {
-        if (!isLoggedIn || !tenantId) return;
-        setLoading(true);
-        setError(null);
-        try {
-            const data = await apiFetchPrefs(tenantId, apiKey || '');
-            setPrefs(data);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load preferences');
-        } finally {
-            setLoading(false);
-        }
-    }, [isLoggedIn, tenantId, apiKey]);
-
-    useEffect(() => { loadPrefs(); }, [loadPrefs]);
+    // Use local state for editing, initialize from query data
+    const effectivePrefs = localPrefs ?? prefs;
+    const error = prefsError?.message ?? null;
 
     const toggleChannel = (channelName: string) => {
-        if (!prefs) return;
-        setPrefs({
-            ...prefs,
-            channels: prefs.channels.map(c => c.channel === channelName ? { ...c, enabled: !c.enabled } : c),
+        if (!effectivePrefs) return;
+        setLocalPrefs({
+            ...effectivePrefs,
+            channels: effectivePrefs.channels.map(c => c.channel === channelName ? { ...c, enabled: !c.enabled } : c),
         });
     };
 
     const toggleAlert = (ruleId: string) => {
-        if (!prefs) return;
-        setPrefs({
-            ...prefs,
-            alert_preferences: prefs.alert_preferences.map(a => a.rule_id === ruleId ? { ...a, enabled: !a.enabled } : a),
+        if (!effectivePrefs) return;
+        setLocalPrefs({
+            ...effectivePrefs,
+            alert_preferences: effectivePrefs.alert_preferences.map(a => a.rule_id === ruleId ? { ...a, enabled: !a.enabled } : a),
         });
     };
 
-    const handleSave = async () => {
-        if (!prefs || !tenantId) return;
-        setSaving(true);
-        try {
-            await apiSavePrefs(tenantId, apiKey || '', prefs);
+    const savePrefsMutation = useMutation({
+        mutationFn: () => apiSavePrefs(tenantId, apiKey || '', effectivePrefs!),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notification-prefs', tenantId] });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save preferences');
-        } finally {
-            setSaving(false);
-        }
+        },
+    });
+
+    const saving = savePrefsMutation.isPending;
+
+    const handleSave = () => {
+        if (!effectivePrefs || !tenantId) return;
+        savePrefsMutation.mutate();
     };
 
     return (
@@ -178,7 +173,7 @@ export default function NotificationPrefsPage() {
                             Configure how and when you receive compliance alerts
                         </p>
                     </div>
-                    <Button onClick={handleSave} disabled={saving || !prefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
+                    <Button onClick={handleSave} disabled={saving || !effectivePrefs} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]">
                         {saving ? <Spinner size="sm" /> : saved ? '✓ Saved' : 'Save Changes'}
                     </Button>
                 </div>
@@ -206,7 +201,7 @@ export default function NotificationPrefsPage() {
                     </Card>
                 )}
 
-                {prefs && !loading && (
+                {effectivePrefs && !loading && (
                     <>
                         {/* Channels */}
                         <Card className="border-[var(--re-border-default)]">
@@ -218,7 +213,7 @@ export default function NotificationPrefsPage() {
                                 <CardDescription>Choose how alerts reach you</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2 sm:space-y-3">
-                                {prefs.channels.map((ch) => {
+                                {effectivePrefs.channels.map((ch) => {
                                     const Icon = CHANNEL_ICONS[ch.channel] || Bell;
                                     return (
                                         <div key={ch.channel} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
@@ -246,7 +241,7 @@ export default function NotificationPrefsPage() {
                                 <CardDescription>Enable or disable notifications for each rule</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-2">
-                                {prefs.alert_preferences.map((alert) => (
+                                {effectivePrefs.alert_preferences.map((alert) => (
                                     <div key={alert.rule_id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--re-border-default)] min-h-[48px] gap-2">
                                         <div className="min-w-0">
                                             <div className="text-xs sm:text-sm font-medium truncate">{alert.rule_name}</div>
@@ -276,13 +271,13 @@ export default function NotificationPrefsPage() {
                                     <div className="min-w-0">
                                         <div className="text-xs sm:text-sm font-medium">Quiet Hours</div>
                                         <div className="text-[11px] sm:text-xs text-muted-foreground">
-                                            Suppress non-critical {prefs.quiet_hours.start_hour}:00 – {prefs.quiet_hours.end_hour}:00
-                                            {prefs.quiet_hours.override_critical && ' (critical bypass)'}
+                                            Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 – {effectivePrefs.quiet_hours.end_hour}:00
+                                            {effectivePrefs.quiet_hours.override_critical && ' (critical bypass)'}
                                         </div>
                                     </div>
                                     <Toggle
-                                        enabled={prefs.quiet_hours.enabled}
-                                        onToggle={() => setPrefs({ ...prefs, quiet_hours: { ...prefs.quiet_hours, enabled: !prefs.quiet_hours.enabled } })}
+                                        enabled={effectivePrefs.quiet_hours.enabled}
+                                        onToggle={() => setLocalPrefs({ ...effectivePrefs, quiet_hours: { ...effectivePrefs.quiet_hours, enabled: !effectivePrefs.quiet_hours.enabled } })}
                                     />
                                 </div>
 
@@ -290,21 +285,21 @@ export default function NotificationPrefsPage() {
                                     <div className="min-w-0">
                                         <div className="text-xs sm:text-sm font-medium">Digest</div>
                                         <div className="text-[11px] sm:text-xs text-muted-foreground">
-                                            {prefs.digest_frequency} summary at {prefs.digest_time}
+                                            {effectivePrefs.digest_frequency} summary at {effectivePrefs.digest_time}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                                         <select
-                                            value={prefs.digest_frequency}
-                                            onChange={e => setPrefs({ ...prefs, digest_frequency: e.target.value })}
+                                            value={effectivePrefs.digest_frequency}
+                                            onChange={e => setLocalPrefs({ ...effectivePrefs, digest_frequency: e.target.value })}
                                             className="text-xs rounded-lg border border-[var(--re-border-default)] bg-background px-2 py-1.5 min-h-[44px]"
                                         >
                                             <option value="daily">Daily</option>
                                             <option value="weekly">Weekly</option>
                                         </select>
                                         <Toggle
-                                            enabled={prefs.digest_enabled}
-                                            onToggle={() => setPrefs({ ...prefs, digest_enabled: !prefs.digest_enabled })}
+                                            enabled={effectivePrefs.digest_enabled}
+                                            onToggle={() => setLocalPrefs({ ...effectivePrefs, digest_enabled: !effectivePrefs.digest_enabled })}
                                         />
                                     </div>
                                 </div>
@@ -324,13 +319,13 @@ export default function NotificationPrefsPage() {
                                     <div className="min-w-0">
                                         <div className="text-xs sm:text-sm font-medium">Auto-escalate unacknowledged alerts</div>
                                         <div className="text-[11px] sm:text-xs text-muted-foreground mt-1">
-                                            If critical alert not acknowledged within {prefs.escalation.escalate_after_minutes} min
-                                            {prefs.escalation.escalate_to && `, escalate to ${prefs.escalation.escalate_to}`}
+                                            If critical alert not acknowledged within {effectivePrefs.escalation.escalate_after_minutes} min
+                                            {effectivePrefs.escalation.escalate_to && `, escalate to ${effectivePrefs.escalation.escalate_to}`}
                                         </div>
                                     </div>
                                     <Toggle
-                                        enabled={prefs.escalation.enabled}
-                                        onToggle={() => setPrefs({ ...prefs, escalation: { ...prefs.escalation, enabled: !prefs.escalation.enabled } })}
+                                        enabled={effectivePrefs.escalation.enabled}
+                                        onToggle={() => setLocalPrefs({ ...effectivePrefs, escalation: { ...effectivePrefs.escalation, enabled: !effectivePrefs.escalation.enabled } })}
                                     />
                                 </div>
                             </CardContent>

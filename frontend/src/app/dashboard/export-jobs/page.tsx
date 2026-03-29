@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, Download, ShieldCheck, Clock, PlusCircle } from 'lucide-react';
 import type { ArchiveExportJob } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,53 +17,27 @@ export default function ExportJobsPage() {
     const [cadence, setCadence] = useState<ArchiveExportJob['cadence']>('Weekly');
     const [format, setFormat] = useState<ArchiveExportJob['format']>('FDA Package');
     const [destination, setDestination] = useState<ArchiveExportJob['destination']>('Object storage archive');
-    const [jobs, setJobs] = useState<ArchiveExportJob[]>([]);
-    const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'error'>('loading');
+    const queryClient = useQueryClient();
+
+    const { data: jobs = [], isLoading: jobsLoading } = useQuery({
+        queryKey: ['export-jobs'],
+        queryFn: async () => {
+            const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
+                headers: { 'X-RegEngine-API-Key': apiKey || '' },
+            });
+            if (!response.ok) return [];
+            const data = (await response.json()) as { jobs: ArchiveExportJob[] };
+            return data.jobs;
+        },
+    });
 
     const activeJobs = useMemo(
         () => jobs.filter((job) => job.status === 'active').length,
         [jobs]
     );
 
-    useEffect(() => {
-        let cancelled = false;
-
-        async function loadJobs() {
-            setStatus('loading');
-
-            try {
-                const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
-                    headers: { 'X-RegEngine-API-Key': apiKey || '' },
-                });
-                if (!response.ok) {
-                    throw new Error('Failed to load export jobs');
-                }
-
-                const data = (await response.json()) as { jobs: ArchiveExportJob[] };
-                if (!cancelled) {
-                    setJobs(data.jobs);
-                    setStatus('idle');
-                }
-            } catch {
-                // Preview route not wired yet — degrade gracefully to empty state
-                if (!cancelled) {
-                    setJobs([]);
-                    setStatus('idle');
-                }
-            }
-        }
-
-        void loadJobs();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [apiKey]);
-
-    async function handleSaveJob() {
-        setStatus('saving');
-
-        try {
+    const createJobMutation = useMutation({
+        mutationFn: async () => {
             const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
@@ -74,21 +49,28 @@ export default function ExportJobsPage() {
                     tenantId: tenantId || '',
                 }),
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to create export job');
-            }
-
-            const data = (await response.json()) as { job: ArchiveExportJob };
-            setJobs((current) => [data.job, ...current]);
+            if (!response.ok) throw new Error('Failed to create export job');
+            return (await response.json()) as { job: ArchiveExportJob };
+        },
+        onSuccess: (data) => {
+            queryClient.setQueryData<ArchiveExportJob[]>(['export-jobs'], (old) => [data.job, ...(old ?? [])]);
             setName('Weekly FSMA archive');
             setCadence('Weekly');
             setFormat('FDA Package');
             setDestination('Object storage archive');
-            setStatus('idle');
-        } catch {
-            setStatus('error');
-        }
+        },
+    });
+
+    const status: 'idle' | 'loading' | 'saving' | 'error' = jobsLoading
+        ? 'loading'
+        : createJobMutation.isPending
+            ? 'saving'
+            : createJobMutation.isError
+                ? 'error'
+                : 'idle';
+
+    function handleSaveJob() {
+        createJobMutation.mutate();
     }
 
     return (

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PlayCircle, ShieldAlert, TimerReset, FileText } from 'lucide-react';
 import type { RecallDrillRun } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,48 +14,22 @@ export default function RecallDrillsPage() {
     const [scenario, setScenario] = useState('Weekend retailer trace-back');
     const [lots, setLots] = useState('TOM-0226-F3-001, LET-0310-WH-21');
     const [dateRange, setDateRange] = useState('2026-03-01 to 2026-03-12');
-    const [runs, setRuns] = useState<RecallDrillRun[]>([]);
-    const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'error'>('loading');
+    const queryClient = useQueryClient();
 
-    useEffect(() => {
-        let cancelled = false;
+    const { data: runs = [], isLoading: runsLoading } = useQuery({
+        queryKey: ['recall-drills'],
+        queryFn: async () => {
+            const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
+                headers: { 'X-RegEngine-API-Key': apiKey || '' },
+            });
+            if (!response.ok) return [];
+            const data = (await response.json()) as { drills: RecallDrillRun[] };
+            return data.drills;
+        },
+    });
 
-        async function loadRuns() {
-            setStatus('loading');
-
-            try {
-                const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
-                    headers: { 'X-RegEngine-API-Key': apiKey || '' },
-                });
-                if (!response.ok) {
-                    throw new Error('Failed to load drills');
-                }
-
-                const data = (await response.json()) as { drills: RecallDrillRun[] };
-                if (!cancelled) {
-                    setRuns(data.drills);
-                    setStatus('idle');
-                }
-            } catch {
-                // Preview route not wired yet — degrade gracefully to empty state
-                if (!cancelled) {
-                    setRuns([]);
-                    setStatus('idle');
-                }
-            }
-        }
-
-        void loadRuns();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [apiKey]);
-
-    async function handleStartDrill() {
-        setStatus('saving');
-
-        try {
+    const startDrillMutation = useMutation({
+        mutationFn: async () => {
             const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey || '' },
@@ -64,17 +39,24 @@ export default function RecallDrillsPage() {
                     dateRange,
                 }),
             });
+            if (!response.ok) throw new Error('Failed to start drill');
+            return (await response.json()) as { drill: RecallDrillRun };
+        },
+        onSuccess: (data) => {
+            queryClient.setQueryData<RecallDrillRun[]>(['recall-drills'], (old) => [data.drill, ...(old ?? [])]);
+        },
+    });
 
-            if (!response.ok) {
-                throw new Error('Failed to start drill');
-            }
+    const status: 'idle' | 'loading' | 'saving' | 'error' = runsLoading
+        ? 'loading'
+        : startDrillMutation.isPending
+            ? 'saving'
+            : startDrillMutation.isError
+                ? 'error'
+                : 'idle';
 
-            const data = (await response.json()) as { drill: RecallDrillRun };
-            setRuns((current) => [data.drill, ...current]);
-            setStatus('idle');
-        } catch {
-            setStatus('error');
-        }
+    function handleStartDrill() {
+        startDrillMutation.mutate();
     }
 
     return (

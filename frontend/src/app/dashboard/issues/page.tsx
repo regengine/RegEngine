@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,38 +94,28 @@ export default function IssuesPage() {
     const { apiKey } = useAuth();
     const { tenantId } = useTenant();
 
-    const [deadlines, setDeadlines] = useState<DeadlineCase[]>([]);
-    const [blockers, setBlockers] = useState<Blocker[]>([]);
-    const [warnings, setWarnings] = useState<Warning[]>([]);
-    const [pendingReviews, setPendingReviews] = useState<Record<string, number>>({});
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const loadIssues = useCallback(async () => {
-        if (!tenantId || !apiKey) return;
-        setLoading(true);
-        setError(null);
-
-        try {
+    const { data: issuesData, isLoading: loading, error: issuesError, refetch: loadIssues } = useQuery({
+        queryKey: ['issues', tenantId],
+        queryFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
-            const headers = { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey };
+            const headers = { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey! };
 
-            // Fetch all issue sources in parallel
             const [deadlineRes, pendingRes] = await Promise.allSettled([
                 fetch(`${base}/api/v1/requests/deadlines?tenant_id=${tenantId}`, { headers }),
                 fetch(`${base}/api/v1/compliance/pending-reviews/${tenantId}`, { headers }),
             ]);
 
-            // Deadlines
+            let deadlines: DeadlineCase[] = [];
+            const allBlockers: Blocker[] = [];
+            const allWarnings: Warning[] = [];
+            let pendingReviews: Record<string, number> = {};
+
             if (deadlineRes.status === 'fulfilled' && deadlineRes.value.ok) {
                 const data = await deadlineRes.value.json();
-                setDeadlines(data.cases || []);
+                deadlines = data.cases || [];
 
-                // For each active case, fetch blockers
-                const allBlockers: Blocker[] = [];
-                const allWarnings: Warning[] = [];
-                for (const c of (data.cases || []).slice(0, 5)) {
+                for (const c of deadlines.slice(0, 5)) {
                     try {
                         const bRes = await fetch(
                             `${base}/api/v1/requests/${c.request_case_id}/blockers?tenant_id=${tenantId}`,
@@ -135,25 +126,25 @@ export default function IssuesPage() {
                             allBlockers.push(...bData.blockers);
                             allWarnings.push(...bData.warnings);
                         }
-                    } catch { /* individual case blocker fetch failed — continue */ }
+                    } catch { /* individual case blocker fetch failed -- continue */ }
                 }
-                setBlockers(allBlockers);
-                setWarnings(allWarnings);
             }
 
-            // Pending reviews
             if (pendingRes.status === 'fulfilled' && pendingRes.value.ok) {
                 const data = await pendingRes.value.json();
-                setPendingReviews(data.breakdown || {});
+                pendingReviews = data.breakdown || {};
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load issues');
-        } finally {
-            setLoading(false);
-        }
-    }, [tenantId, apiKey]);
 
-    useEffect(() => { loadIssues(); }, [loadIssues]);
+            return { deadlines, blockers: allBlockers, warnings: allWarnings, pendingReviews };
+        },
+        enabled: !!tenantId && !!apiKey,
+    });
+
+    const deadlines = issuesData?.deadlines ?? [];
+    const blockers = issuesData?.blockers ?? [];
+    const warnings = issuesData?.warnings ?? [];
+    const pendingReviews = issuesData?.pendingReviews ?? {};
+    const error = issuesError?.message ?? null;
 
     const totalIssues = blockers.length + deadlines.filter(d => d.urgency === 'overdue' || d.urgency === 'critical').length;
     const overdueCount = deadlines.filter(d => d.urgency === 'overdue').length;
@@ -178,7 +169,7 @@ export default function IssuesPage() {
                             Everything preventing compliant submission — fix these first.
                         </p>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={loadIssues} disabled={loading} className="h-8 w-8 p-0">
+                    <Button variant="ghost" size="sm" onClick={() => loadIssues()} disabled={loading} className="h-8 w-8 p-0">
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
                 </div>

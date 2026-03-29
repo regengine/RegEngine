@@ -11,8 +11,8 @@ export interface AuthNavProps {
 export interface ToolsDropdownProps {
     toolsOpen: boolean;
     setToolsOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-    toolsWrapperRef: React.RefObject<HTMLDivElement | null>;
-    toolsButtonRef: React.RefObject<HTMLButtonElement | null>;
+    toolsWrapperRef: React.RefObject<HTMLDivElement>;
+    toolsButtonRef: React.RefObject<HTMLButtonElement>;
     handleToolsEnter: () => void;
     handleToolsLeave: () => void;
     handleToolsKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,91 +86,82 @@ export default function ProductCatalogPage() {
     const isLoggedIn = isAuthenticated;
     const effectiveTenantId = tenantId;
 
-    const [products, setProducts] = useState<Product[]>([]);
-    const [categories, setCategories] = useState<string[]>([]);
-    const [totalFtl, setTotalFtl] = useState(0);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const productsQueryClient = useQueryClient();
 
     const [showAdd, setShowAdd] = useState(false);
     const [newName, setNewName] = useState('');
     const [newCategory, setNewCategory] = useState(FTL_CATEGORIES[0]);
     const [newSku, setNewSku] = useState('');
-    const [adding, setAdding] = useState(false);
     const [filterCategory, setFilterCategory] = useState<string>('all');
 
-    const loadProducts = useCallback(async () => {
-        if (!isLoggedIn || !effectiveTenantId) return;
-        setLoading(true);
-        setError(null);
-        try {
+    const { data: productsData, isLoading: loading, error: productsError, refetch: loadProducts } = useQuery({
+        queryKey: ['products', effectiveTenantId],
+        queryFn: async () => {
             const data = await apiFetchProducts(effectiveTenantId!, apiKey || '');
             const fetchedProducts = data.products || [];
             if (fetchedProducts.length > 0) {
-                setProducts(fetchedProducts);
-                setCategories(data.categories || []);
-                setTotalFtl(data.ftl_covered || 0);
-            } else {
-                // Fallback: extract unique products from supplier TLCs (bulk upload data)
-                try {
-                    const { apiClient } = await import('@/lib/api-client');
-                    const tlcs = await apiClient.listSupplierTLCs();
-                    if (tlcs && tlcs.length > 0) {
-                        const productMap = new Map<string, Product>();
-                        for (const tlc of tlcs) {
-                            const name = tlc.product_description || tlc.tlc_code;
-                            if (!productMap.has(name)) {
-                                productMap.set(name, {
-                                    id: tlc.id || name,
-                                    name,
-                                    category: 'Uncategorized',
-                                    sku: tlc.tlc_code,
-                                    gtin: '',
-                                    description: tlc.product_description || '',
-                                    suppliers: [],
-                                    facilities: [],
-                                    cte_count: 1,
-                                    ftl_covered: false,
-                                    last_cte: null,
-                                    created_at: new Date().toISOString(),
-                                });
-                            } else {
-                                const existing = productMap.get(name)!;
-                                existing.cte_count += 1;
-                            }
-                        }
-                        setProducts(Array.from(productMap.values()));
-                        setCategories(['Uncategorized']);
-                        setTotalFtl(0);
-                    }
-                } catch {
-                    // Supplier fallback failed — show empty state
-                }
+                return { products: fetchedProducts, categories: data.categories || [], totalFtl: data.ftl_covered || 0 };
             }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load products');
-        } finally {
-            setLoading(false);
-        }
-    }, [isLoggedIn, effectiveTenantId, apiKey]);
 
-    useEffect(() => { loadProducts(); }, [loadProducts]);
+            // Fallback: extract unique products from supplier TLCs (bulk upload data)
+            try {
+                const { apiClient } = await import('@/lib/api-client');
+                const tlcs = await apiClient.listSupplierTLCs();
+                if (tlcs && tlcs.length > 0) {
+                    const productMap = new Map<string, Product>();
+                    for (const tlc of tlcs) {
+                        const name = tlc.product_description || tlc.tlc_code;
+                        if (!productMap.has(name)) {
+                            productMap.set(name, {
+                                id: tlc.id || name,
+                                name,
+                                category: 'Uncategorized',
+                                sku: tlc.tlc_code,
+                                gtin: '',
+                                description: tlc.product_description || '',
+                                suppliers: [],
+                                facilities: [],
+                                cte_count: 1,
+                                ftl_covered: false,
+                                last_cte: null,
+                                created_at: new Date().toISOString(),
+                            });
+                        } else {
+                            const existing = productMap.get(name)!;
+                            existing.cte_count += 1;
+                        }
+                    }
+                    return { products: Array.from(productMap.values()), categories: ['Uncategorized'], totalFtl: 0 };
+                }
+            } catch {
+                // Supplier fallback failed -- show empty state
+            }
+            return { products: [], categories: [], totalFtl: 0 };
+        },
+        enabled: isLoggedIn && !!effectiveTenantId,
+    });
+
+    const products = productsData?.products ?? [];
+    const categories = productsData?.categories ?? [];
+    const totalFtl = productsData?.totalFtl ?? 0;
+    const error = productsError?.message ?? null;
 
     // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
-    useDashboardRefresh(loadProducts);
+    useDashboardRefresh(() => { loadProducts(); });
 
-    const handleAdd = async () => {
-        if (!newName) return;
-        setAdding(true);
-        try {
-            await apiAddProduct(effectiveTenantId!, apiKey || '', newName, newCategory, newSku);
+    const addProductMutation = useMutation({
+        mutationFn: () => apiAddProduct(effectiveTenantId!, apiKey || '', newName, newCategory, newSku),
+        onSuccess: () => {
             setNewName(''); setNewSku(''); setShowAdd(false);
-            await loadProducts();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to add product');
-        } finally {
-            setAdding(false);
-        }
+            productsQueryClient.invalidateQueries({ queryKey: ['products', effectiveTenantId] });
+        },
+    });
+
+    const adding = addProductMutation.isPending;
+
+    const handleAdd = () => {
+        if (!newName) return;
+        addProductMutation.mutate();
     };
 
     const filtered = filterCategory === 'all' ? products : products.filter(p => p.category === filterCategory);
@@ -191,7 +183,7 @@ export default function ProductCatalogPage() {
                         </p>
                     </div>
                     <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={loadProducts} disabled={loading}>
+                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={() => loadProducts()} disabled={loading}>
                             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                         <Button onClick={() => setShowAdd(!showAdd)} className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[44px] active:scale-[0.97]">

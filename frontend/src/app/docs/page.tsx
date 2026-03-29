@@ -10,68 +10,32 @@ import { T } from '@/lib/design-tokens';
 
 export default function DocsHomePage() {
   return (
-    <div className="re-page">
+    <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
       {/* Code-First Hero - Drop into code within 10 seconds */}
-      <div style={{
-        background: 'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(6,182,212,0.05) 100%)',
-        borderBottom: `1px solid ${T.border}`,
-        padding: '48px 24px',
-      }}>
+      <div className="bg-gradient-to-br from-[rgba(16,185,129,0.08)] to-[rgba(6,182,212,0.05)] px-6 py-12" style={{ borderBottom: `1px solid ${T.border}` }}>
         <div className="max-w-[1000px] mx-auto">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div style={{
-              background: 'rgba(16,185,129,0.2)',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: T.accent,
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-            }}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-[rgba(16,185,129,0.2)] px-3 py-1.5 rounded text-xs font-semibold uppercase tracking-wide" style={{ color: T.accent }}>
               Quickstart
             </div>
           </div>
 
-          <h1 style={{
-            fontSize: '2rem',
-            fontWeight: 700,
-            color: 'var(--re-text-primary)',
-            marginBottom: '8px',
-            lineHeight: 1.2,
-          }}>
+          <h1 className="text-[2rem] font-bold text-[var(--re-text-primary)] mb-2 leading-tight">
             Create a compliance record
           </h1>
-          <p style={{ color: T.textMuted, marginBottom: '24px', fontSize: '15px' }}>
+          <p className="mb-6 text-[15px]" style={{ color: T.textMuted }}>
             Your first tamper-evident record in under 60 seconds
           </p>
 
           {/* Code Block - The star of the show */}
-          <div style={{
-            background: 'rgba(0,0,0,0.6)',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            border: `1px solid ${T.border}`,
-          }}>
-            <div style={{
-              background: 'rgba(255,255,255,0.05)',
-              padding: '8px 16px',
-              borderBottom: `1px solid ${T.border}`,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}>
+          <div className="bg-black/60 rounded-lg overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+            <div className="bg-white/5 px-4 py-2 flex justify-between items-center" style={{ borderBottom: `1px solid ${T.border}` }}>
+
               <span className="text-xs text-re-text-muted">POST /api/v1/webhooks/ingest</span>
               <span className="text-xs text-re-brand">bash</span>
             </div>
-            <pre style={{
-              padding: '20px',
-              margin: 0,
-              fontSize: '13px',
-              lineHeight: 1.6,
-              overflowX: 'auto',
-              color: 'var(--re-text-primary)',
-            }}>
+            <pre className="p-5 m-0 text-[13px] leading-relaxed overflow-x-auto text-[var(--re-text-primary)]">
+
               <code>{`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
   -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
@@ -96,31 +60,14 @@ export default function DocsHomePage() {
           </div>
 
           {/* Response Preview */}
-          <div style={{
-            background: 'rgba(0,0,0,0.4)',
-            borderRadius: '8px',
-            marginTop: '12px',
-            border: `1px solid ${T.border}`,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              background: 'rgba(16,185,129,0.1)',
-              padding: '8px 16px',
-              borderBottom: `1px solid ${T.border}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
+          <div className="bg-black/40 rounded-lg mt-3 overflow-hidden" style={{ border: `1px solid ${T.border}` }}>
+            <div className="bg-[rgba(16,185,129,0.1)] px-4 py-2 flex items-center gap-2" style={{ borderBottom: `1px solid ${T.border}` }}>
+
               <div className="w-2 h-2 rounded-full bg-re-brand" />
               <span className="text-xs text-re-brand">201 Created</span>
             </div>
-            <pre style={{
-              padding: '16px 20px',
-              margin: 0,
-              fontSize: '12px',
-              lineHeight: 1.5,
-              color: 'var(--re-text-tertiary)',
-            }}>
+            <pre className="px-5 py-4 m-0 text-xs leading-normal text-[var(--re-text-tertiary)]">
+
               <code>{`{
   "accepted": 1,
   "rejected": 0,
@@ -138,40 +85,19 @@ export default function DocsHomePage() {
           </div>
 
           {/* Get API Key CTA */}
-          <div style={{ marginTop: '24px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="mt-6 flex gap-3 flex-wrap">
             <Link
               href="/developer/register"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: T.accent,
-                color: 'white',
-                padding: '12px 24px',
-                borderRadius: '6px',
-                fontWeight: 600,
-                fontSize: '14px',
-                textDecoration: 'none',
-              }}
+              className="inline-flex items-center gap-2 text-white px-6 py-3 rounded-md font-semibold text-sm no-underline"
+              style={{ background: T.accent }}
             >
               <Key className="w-4 h-4" />
               Get Developer Access
             </Link>
             <Link
               href="/docs/fsma-204"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: 'rgba(255,255,255,0.1)',
-                color: 'var(--re-text-primary)',
-                padding: '12px 24px',
-                borderRadius: '6px',
-                fontWeight: 600,
-                fontSize: '14px',
-                textDecoration: 'none',
-                border: `1px solid ${T.border}`,
-              }}
+              className="inline-flex items-center gap-2 bg-white/10 text-[var(--re-text-primary)] px-6 py-3 rounded-md font-semibold text-sm no-underline"
+              style={{ border: `1px solid ${T.border}` }}
             >
               FSMA 204 Guide
               <ArrowRight className="w-4 h-4" />
@@ -180,95 +106,59 @@ export default function DocsHomePage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '48px 24px' }}>
+      <div className="max-w-[1000px] mx-auto px-6 py-12">
 
         {/* Developer Portal CTA */}
         <section className="mb-12">
-          <h2 style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: T.textMuted,
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            marginBottom: '16px',
-          }}>
+          <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: T.textMuted }}>
             Developer Resources
           </h2>
           <Link
             href="/developer/register"
-            style={{
-              display: 'block', padding: '24px', borderRadius: '8px',
-              background: T.surface, border: `1px solid ${T.border}`,
-              textDecoration: 'none', maxWidth: '100%',
-            }}
+            className="block p-6 rounded-lg no-underline max-w-full"
+            style={{ background: T.surface, border: `1px solid ${T.border}` }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              <div style={{
-                background: 'rgba(16,185,129,0.15)',
-                borderRadius: '8px',
-                padding: '12px',
-              }}>
-                <Code style={{ width: 24, height: 24, color: T.accent }} />
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="bg-[rgba(16,185,129,0.15)] rounded-lg p-3">
+                <Code className="w-6 h-6" style={{ color: T.accent }} />
               </div>
               <div>
-                <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '16px', marginBottom: '4px' }}>
+                <div className="font-semibold text-[var(--re-text-primary)] text-base mb-1">
                   Developer Portal
                 </div>
-                <div style={{ color: T.textMuted, fontSize: '13px' }}>
+                <div className="text-[13px]" style={{ color: T.textMuted }}>
                   API reference, SDKs, quickstart guides, webhooks, and API key management. Request access to get started.
                 </div>
               </div>
-              <ArrowRight style={{ width: 20, height: 20, color: T.textMuted, marginLeft: 'auto' }} />
+              <ArrowRight className="w-5 h-5 ml-auto" style={{ color: T.textMuted }} />
             </div>
           </Link>
         </section>
 
         {/* Row 3: FSMA Guide */}
         <section className="mb-12">
-          <h2 style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: T.textMuted,
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            marginBottom: '16px',
-          }}>
+          <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: T.textMuted }}>
             FSMA Guide
           </h2>
           <Link
             href="/docs/fsma-204"
-            style={{
-              display: 'block', padding: '20px', borderRadius: '8px', position: 'relative',
-              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-              textDecoration: 'none', maxWidth: '320px',
-            }}
+            className="block p-5 rounded-lg relative bg-[rgba(16,185,129,0.1)] border border-[rgba(16,185,129,0.3)] no-underline max-w-xs"
           >
-            <div style={{
-              position: 'absolute', top: '12px', right: '12px',
-              background: T.accent, color: 'white', fontSize: '10px', fontWeight: 600,
-              padding: '2px 8px', borderRadius: '4px', textTransform: 'uppercase',
-            }}>
+            <div className="absolute top-3 right-3 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase" style={{ background: T.accent }}>
               Current
             </div>
-            <UtensilsCrossed style={{ width: 20, height: 20, color: T.accent, marginBottom: '12px' }} />
-            <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', fontSize: '15px', marginBottom: '4px' }}>Food &amp; Beverage</div>
-            <div style={{ color: T.textMuted, fontSize: '13px' }}>FSMA 204</div>
+            <UtensilsCrossed className="w-5 h-5 mb-3" style={{ color: T.accent }} />
+            <div className="font-semibold text-[var(--re-text-primary)] text-[15px] mb-1">Food &amp; Beverage</div>
+            <div className="text-[13px]" style={{ color: T.textMuted }}>FSMA 204</div>
           </Link>
         </section>
 
         {/* Popular Pages - only public docs */}
         <section className="mb-12">
-          <h2 style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: T.textMuted,
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            marginBottom: '16px',
-          }}>
+          <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: T.textMuted }}>
             Resources
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+          <div className="grid grid-cols-3 gap-3">
             {[
               { name: 'FSMA 204 Guide', href: '/docs/fsma-204', icon: UtensilsCrossed },
               { name: 'Developer Portal', href: '/developer/register', icon: Code },
@@ -277,50 +167,27 @@ export default function DocsHomePage() {
               <Link
                 key={item.name}
                 href={item.href}
-                style={{
-                  padding: '16px 20px',
-                  background: 'transparent',
-                  borderRadius: '8px',
-                  border: `1px solid ${T.border}`,
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                }}
+                className="px-5 py-4 bg-transparent rounded-lg no-underline flex items-center gap-3"
+                style={{ border: `1px solid ${T.border}` }}
               >
                 <item.icon className="w-4 h-4 text-re-text-muted" />
-                <span style={{ color: 'var(--re-text-primary)', fontSize: '14px' }}>{item.name}</span>
+                <span className="text-[var(--re-text-primary)] text-sm">{item.name}</span>
               </Link>
             ))}
           </div>
         </section>
 
         {/* Footer: verify_chain.py tagline */}
-        <footer style={{
-          borderTop: `1px solid ${T.border}`,
-          paddingTop: '32px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-        }}>
+        <footer className="pt-8 flex justify-between items-center flex-wrap gap-4" style={{ borderTop: `1px solid ${T.border}` }}>
           <div>
-            <code style={{
-              background: 'rgba(255,255,255,0.05)',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              color: T.textMuted,
-              fontFamily: T.fontMono,
-            }}>
+            <code className="bg-white/5 px-4 py-2 rounded-md text-[13px]" style={{ color: T.textMuted, fontFamily: T.fontMono }}>
               python verify_chain.py --audit
             </code>
-            <span style={{ marginLeft: '16px', color: T.textMuted, fontSize: '14px' }}>
+            <span className="ml-4 text-sm" style={{ color: T.textMuted }}>
               Don&apos;t trust, verify.
             </span>
           </div>
-          <div style={{ display: 'flex', gap: '24px' }}>
+          <div className="flex gap-6">
             <Link href="/developer/register" className="text-re-text-muted text-[13px] no-underline">
               Developer Portal
             </Link>
