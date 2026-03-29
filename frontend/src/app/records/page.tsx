@@ -19,6 +19,7 @@ import {
   useCanonicalEvent,
   type CanonicalEventDetail,
   type RuleEvaluation,
+  type ExceptionCase,
 } from '@/hooks/use-control-plane';
 import { DemoBanner } from '@/components/control-plane/demo-banner';
 
@@ -330,7 +331,7 @@ export default function CanonicalRecordsPage() {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
-                          {detail.exception_cases.map((exc: any) => (
+                          {detail.exception_cases.map((exc: ExceptionCase) => (
                             <div key={exc.case_id} className="flex items-center justify-between border rounded p-2 text-sm">
                               <div className="flex items-center gap-2">
                                 <Badge variant={exc.severity === 'critical' ? 'destructive' : 'warning'}>

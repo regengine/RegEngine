@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 };
 import { ArrowLeft, Zap, Terminal, CheckCircle, Key, FileText, Code, ArrowRight } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
+import { CodeBlock } from '@/components/ui/code-block';
 
 export default function QuickstartPage() {
     return (
@@ -127,24 +128,11 @@ export default function QuickstartPage() {
                             <p className="re-body">
                                 Store your API key securely. Never commit it to version control.
                             </p>
-                            <div style={{
-                                background: 'rgba(0,0,0,0.6)',
-                                borderRadius: '8px',
-                                overflow: 'hidden',
-                                border: `1px solid ${T.border}`,
-                            }}>
-                                <div style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    padding: '8px 16px',
-                                    borderBottom: `1px solid ${T.border}`,
-                                }}>
-                                    <span className="text-xs text-re-text-muted">Terminal</span>
-                                </div>
-                                <pre className="re-code-block">
-                                    <code>{`export REGENGINE_API_KEY="rge_your_key_here"
-export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}</code>
-                                </pre>
-                            </div>
+                            <CodeBlock
+                                code={`export REGENGINE_API_KEY="rge_your_key_here"
+export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
+                                language="bash"
+                            />
                         </div>
                     </div>
                 </section>
@@ -174,32 +162,9 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}</code>
                                 to create a compliant traceability event:
                             </p>
 
-                            <div style={{
-                                background: 'rgba(0,0,0,0.6)',
-                                borderRadius: '8px',
-                                overflow: 'hidden',
-                                border: `1px solid ${T.border}`,
-                                marginBottom: '16px',
-                            }}>
-                                <div style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    padding: '8px 16px',
-                                    borderBottom: `1px solid ${T.border}`,
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                }}>
-                                    <span className="text-xs text-re-text-muted">POST /api/v1/webhooks/ingest</span>
-                                    <span className="text-xs text-re-brand">bash</span>
-                                </div>
-                                <pre style={{
-                                    padding: '20px',
-                                    margin: 0,
-                                    fontSize: '13px',
-                                    lineHeight: 1.6,
-                                    overflowX: 'auto',
-                                    color: 'var(--re-text-primary)',
-                                }}>
-                                    <code>{`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
+                            <div style={{ marginBottom: '16px' }}>
+                                <CodeBlock
+                                    code={`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
   -H "Content-Type: application/json" \\
@@ -220,30 +185,14 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}</code>
         }
       }
     ]
-  }'`}</code>
-                                </pre>
+  }'`}
+                                    language="curl"
+                                />
                             </div>
 
                             {/* Response */}
-                            <div style={{
-                                background: 'rgba(0,0,0,0.4)',
-                                borderRadius: '8px',
-                                overflow: 'hidden',
-                                border: `1px solid ${T.border}`,
-                            }}>
-                                <div style={{
-                                    background: 'rgba(16,185,129,0.15)',
-                                    padding: '8px 16px',
-                                    borderBottom: `1px solid ${T.border}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                }}>
-                                    <div className="w-2 h-2 rounded-full bg-re-brand" />
-                                    <span className="text-xs text-re-brand">201 Created</span>
-                                </div>
-                                <pre className="re-code-block">
-                                    <code>{`{
+                            <CodeBlock
+                                code={`{
   "accepted": 1,
   "rejected": 0,
   "total": 1,
@@ -257,9 +206,9 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}</code>
       "chain_hash": "7f6e5d4c3b2a1908..."
     }
   ]
-}`}</code>
-                                </pre>
-                            </div>
+}`}
+                                language="json"
+                            />
                         </div>
                     </div>
                 </section>
@@ -288,28 +237,15 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}</code>
                                 Every ingested event is cryptographically hashed. Verify integrity independently from an export file:
                             </p>
 
-                            <div style={{
-                                background: 'rgba(0,0,0,0.6)',
-                                borderRadius: '8px',
-                                overflow: 'hidden',
-                                border: `1px solid ${T.border}`,
-                            }}>
-                                <div style={{
-                                    background: 'rgba(255,255,255,0.05)',
-                                    padding: '8px 16px',
-                                    borderBottom: `1px solid ${T.border}`,
-                                }}>
-                                    <span className="text-xs text-re-text-muted">Terminal</span>
-                                </div>
-                                <pre className="re-code-block">
-                                    <code>{`python verify_chain.py --file export_2026_02.json --offline
+                            <CodeBlock
+                                code={`python verify_chain.py --file export_2026_02.json --offline
 
 # Output:
 # ✓ Chain integrity verified
 # ✓ 1847 records validated
-# ✓ No hash mismatches detected`}</code>
-                                </pre>
-                            </div>
+# ✓ No hash mismatches detected`}
+                                language="bash"
+                            />
                         </div>
                     </div>
                 </section>

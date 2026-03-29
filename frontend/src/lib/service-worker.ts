@@ -14,8 +14,6 @@ export function registerServiceWorker() {
             try {
                 const registration = await navigator.serviceWorker.register('/sw.js');
 
-                console.log('Service Worker registered:', registration.scope);
-
                 // Check for updates
                 registration.addEventListener('updatefound', () => {
                     const newWorker = registration.installing;
@@ -24,8 +22,6 @@ export function registerServiceWorker() {
                         newWorker.addEventListener('statechange', () => {
                             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                                 // New service worker available, prompt user to reload
-                                console.log('New version available! Please reload.');
-
                                 // Optional: Show update notification
                                 if (window.confirm('A new version is available. Reload to update?')) {
                                     window.location.reload();
@@ -33,11 +29,6 @@ export function registerServiceWorker() {
                             }
                         });
                     }
-                });
-
-                // Handle controller change (new service worker activated)
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    console.log('Service Worker updated');
                 });
 
             } catch (error) {
@@ -56,7 +47,6 @@ export function unregisterServiceWorker() {
         navigator.serviceWorker.ready
             .then((registration) => {
                 registration.unregister();
-                console.log('Service Worker unregistered');
             })
             .catch((error) => {
                 console.error('Service Worker unregistration failed:', error);
@@ -84,7 +74,6 @@ export async function requestPersistentStorage() {
 
     try {
         const isPersisted = await navigator.storage.persist();
-        console.log(`Persistent storage: ${isPersisted ? 'granted' : 'denied'}`);
         return isPersisted;
     } catch (error) {
         console.error('Failed to request persistent storage:', error);

@@ -41,6 +41,17 @@ async function auditFetch<T>(endpoint: string, apiKey: string): Promise<T> {
   return response.json();
 }
 
+interface AuditRule {
+  rule_id: string;
+  title: string;
+  severity: string;
+  citation_reference?: string;
+  evaluation_stats: {
+    total: number;
+    pass_rate_percent: number;
+  };
+}
+
 interface AuditSummary {
   records: { total_canonical_events: number; ingestion_sources: Record<string, number> };
   compliance: { total_evaluations: number; pass_rate_percent: number; passed: number; failed: number; warned: number };
@@ -65,7 +76,7 @@ export default function AuditReviewPage() {
 
   const rules = useQuery({
     queryKey: ['audit', 'rules', tid],
-    queryFn: () => auditFetch<{ rules: any[] }>(
+    queryFn: () => auditFetch<{ rules: AuditRule[] }>(
       `/api/v1/audit/rules?tenant_id=${tid}`, apiKey || ''
     ),
     enabled: !!apiKey && !!tid,
@@ -248,7 +259,7 @@ export default function AuditReviewPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {(rules.data?.rules ?? []).map((rule: any) => (
+                  {(rules.data?.rules ?? []).map((rule: AuditRule) => (
                     <div key={rule.rule_id} className="border rounded-lg p-3 text-sm">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
