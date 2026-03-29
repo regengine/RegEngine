@@ -134,24 +134,25 @@ async def list_records(
     )
     where = " AND ".join(where_clauses)
 
+    # WHERE clause is built from _ALLOWED_WHERE_FRAGMENTS only (asserted above)
     count_row = db_session.execute(
-        text(f"SELECT COUNT(*) FROM fsma.traceability_events WHERE {where}"),
+        text("SELECT COUNT(*) FROM fsma.traceability_events WHERE " + where),
         params,
     ).fetchone()
     total = count_row[0] if count_row else 0
 
     rows = db_session.execute(
-        text(f"""
-            SELECT event_id, event_type, traceability_lot_code,
-                   product_reference, quantity, unit_of_measure,
-                   from_facility_reference, to_facility_reference,
-                   event_timestamp, source_system, status,
-                   confidence_score, schema_version, created_at
-            FROM fsma.traceability_events
-            WHERE {where}
-            ORDER BY event_timestamp DESC
-            LIMIT :lim OFFSET :off
-        """),
+        text(
+            "SELECT event_id, event_type, traceability_lot_code,"
+            " product_reference, quantity, unit_of_measure,"
+            " from_facility_reference, to_facility_reference,"
+            " event_timestamp, source_system, status,"
+            " confidence_score, schema_version, created_at"
+            " FROM fsma.traceability_events"
+            " WHERE " + where +
+            " ORDER BY event_timestamp DESC"
+            " LIMIT :lim OFFSET :off"
+        ),
         params,
     ).fetchall()
 
@@ -206,15 +207,15 @@ async def list_ingestion_runs(
     where = " AND ".join(where_parts)
 
     rows = db_session.execute(
-        text(f"""
-            SELECT id, source_system, source_file_name, record_count,
-                   accepted_count, rejected_count, status, mapper_version,
-                   initiated_by, started_at, completed_at
-            FROM fsma.ingestion_runs
-            WHERE {where}
-            ORDER BY started_at DESC
-            LIMIT :lim
-        """),
+        text(
+            "SELECT id, source_system, source_file_name, record_count,"
+            " accepted_count, rejected_count, status, mapper_version,"
+            " initiated_by, started_at, completed_at"
+            " FROM fsma.ingestion_runs"
+            " WHERE " + where +
+            " ORDER BY started_at DESC"
+            " LIMIT :lim"
+        ),
         params,
     ).fetchall()
 

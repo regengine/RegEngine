@@ -95,7 +95,29 @@ from .schema_governance import (
     PCOSAnalysisRunModel,
 )
 
+# Unified router — includes all PCOS sub-routers
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/v1/pcos")
+
+from .dashboard import router as _dashboard
+from .entities import router as _entities
+from .gate import router as _gate
+from .evidence import router as _evidence
+from .budget import router as _budget
+from .compliance import router as _compliance
+from .governance import router as _governance
+
+router.include_router(_dashboard)
+router.include_router(_entities)
+router.include_router(_gate)
+router.include_router(_evidence)
+router.include_router(_budget)
+router.include_router(_compliance)
+router.include_router(_governance)
+
 __all__ = [
+    "router",
     # Enums
     "LocationType",
     "ClassificationType",
