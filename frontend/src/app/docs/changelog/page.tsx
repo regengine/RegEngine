@@ -4,24 +4,14 @@ import { T } from '@/lib/design-tokens';
 
 export default function ChangelogPage() {
     return (
-        <div className="re-page">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Header */}
-            <div style={{
-                borderBottom: `1px solid ${T.border}`,
-                padding: '24px',
-            }}>
+            <div className="p-6" style={{ borderBottom: `1px solid ${T.border}` }}>
                 <div className="max-w-[700px] mx-auto">
                     <Link
                         href="/docs"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            color: T.accent,
-                            fontSize: '14px',
-                            textDecoration: 'none',
-                            marginBottom: '16px',
-                        }}
+                        className="inline-flex items-center gap-2 text-sm no-underline mb-4"
+                        style={{ color: T.accent }}
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Docs
@@ -31,7 +21,7 @@ export default function ChangelogPage() {
                         <FileText className="w-7 h-7 text-re-brand" />
                     </div>
 
-                    <h1 className="re-heading-xl">
+                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
                         Changelog
                     </h1>
                     <p className="text-re-text-muted text-base">
@@ -41,57 +31,29 @@ export default function ChangelogPage() {
             </div>
 
             {/* Content */}
-            <div className="re-page-narrow">
+            <div className="max-w-[700px] mx-auto py-12 px-6">
 
                 {/* v1.2.0 — Phase 4: Accessibility Polish */}
                 <section className="mb-12">
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        marginBottom: '20px',
-                        paddingBottom: '16px',
-                        borderBottom: `1px solid ${T.border}`,
-                    }}>
-                        <span style={{
-                            background: T.accent,
-                            color: 'white',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                        }}>
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
                             v1.2.0
                         </span>
-                        <span style={{ color: T.textMuted, fontSize: '14px' }}>March 4, 2026</span>
-                        <span style={{
-                            background: 'rgba(16,185,129,0.2)',
-                            color: T.accent,
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                        }}>
+                        <span className="text-sm" style={{ color: T.textMuted }}>March 4, 2026</span>
+                        <span className="bg-[rgba(16,185,129,0.2)] text-[11px] font-semibold px-2 py-0.5 rounded" style={{ color: T.accent }}>
                             Latest
                         </span>
                     </div>
 
-                    <h2 className="re-heading-md">
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
                         Accessibility Polish — WCAG 2.1 AA
                     </h2>
 
                     <div className="mb-6">
-                        <h4 style={{
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: T.textMuted,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            marginBottom: '12px',
-                        }}>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
                             ♿ Accessibility
                         </h4>
-                        <ul style={{ margin: 0, paddingLeft: '20px', color: T.text, lineHeight: 1.8 }}>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
                             <li>Skip-to-content link and ARIA landmark labels on all pages</li>
                             <li>Keyboard-accessible Free Tools dropdown with Escape/ArrowDown navigation</li>
                             <li>Pricing cards now use radio-group semantics with full keyboard support</li>
@@ -105,43 +67,22 @@ export default function ChangelogPage() {
 
                 {/* v1.1.0 — Phase 3: Onboarding UX Redesign */}
                 <section className="mb-12">
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        marginBottom: '20px',
-                        paddingBottom: '16px',
-                        borderBottom: `1px solid ${T.border}`,
-                    }}>
-                        <span style={{
-                            background: T.accent,
-                            color: 'white',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                        }}>
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
                             v1.1.0
                         </span>
-                        <span style={{ color: T.textMuted, fontSize: '14px' }}>March 4, 2026</span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>March 4, 2026</span>
                     </div>
 
-                    <h2 className="re-heading-md">
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
                         Onboarding UX Redesign
                     </h2>
 
                     <div className="mb-6">
-                        <h4 style={{
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: T.textMuted,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            marginBottom: '12px',
-                        }}>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
                             ✨ Features
                         </h4>
-                        <ul style={{ margin: 0, paddingLeft: '20px', color: T.text, lineHeight: 1.8 }}>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
                             <li>New onboarding hub with two-path entry: guided wizard and bulk CSV upload</li>
                             <li>Supplier wizard migrated to dark theme using design tokens</li>
                             <li>Bulk upload page migrated to dark theme for site-wide consistency</li>
@@ -153,43 +94,22 @@ export default function ChangelogPage() {
 
                 {/* v1.0.0 — Initial Public Release */}
                 <section className="mb-12">
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        marginBottom: '20px',
-                        paddingBottom: '16px',
-                        borderBottom: `1px solid ${T.border}`,
-                    }}>
-                        <span style={{
-                            background: T.accent,
-                            color: 'white',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                        }}>
+                    <div className="flex items-center gap-3 mb-5 pb-4" style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <span className="text-white text-xs font-semibold px-2.5 py-1 rounded" style={{ background: T.accent }}>
                             v1.0.0
                         </span>
-                        <span style={{ color: T.textMuted, fontSize: '14px' }}>February 5, 2026</span>
+                        <span className="text-sm" style={{ color: T.textMuted }}>February 5, 2026</span>
                     </div>
 
-                    <h2 className="re-heading-md">
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
                         Initial Public Release
                     </h2>
 
                     <div className="mb-6">
-                        <h4 style={{
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: T.textMuted,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            marginBottom: '12px',
-                        }}>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
                             ✨ Features
                         </h4>
-                        <ul style={{ margin: 0, paddingLeft: '20px', color: T.text, lineHeight: 1.8 }}>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
                             <li>FSMA 204 compliance module with CTEs and KDEs</li>
                             <li>FDA Request Mode for 24-hour export compliance</li>
                             <li>Graph-based supply chain tracing (forward/backward)</li>
@@ -199,17 +119,10 @@ export default function ChangelogPage() {
                     </div>
 
                     <div className="mb-6">
-                        <h4 style={{
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: T.textMuted,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            marginBottom: '12px',
-                        }}>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: T.textMuted }}>
                             📚 Documentation
                         </h4>
-                        <ul style={{ margin: 0, paddingLeft: '20px', color: T.text, lineHeight: 1.8 }}>
+                        <ul className="m-0 pl-5 leading-[1.8]" style={{ color: T.text }}>
                             <li>API Reference with all endpoints</li>
                             <li>FSMA 204 Integration Guide</li>
                             <li>Quickstart tutorial</li>

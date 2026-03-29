@@ -49,10 +49,7 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
-        <link
-          href="https://fonts.cdnfonts.com/css/opendyslexic"
-          rel="stylesheet"
-        />
+        {/* OpenDyslexic font is lazy-loaded by AccessibilityWidget when needed */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

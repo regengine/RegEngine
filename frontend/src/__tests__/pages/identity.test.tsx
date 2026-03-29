@@ -12,7 +12,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import IdentityResolutionPage from '@/app/identity/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // Mock auth context
 vi.mock('@/lib/auth-context', () => ({
@@ -129,7 +139,7 @@ describe('IdentityResolutionPage', () => {
 
   it('renders entity list with canonical names', () => {
     setupEntities();
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Acme Foods Inc')).toBeInTheDocument();
     expect(screen.getByText('Distribution Center Alpha')).toBeInTheDocument();
@@ -138,7 +148,7 @@ describe('IdentityResolutionPage', () => {
 
   it('shows entity type labels in the table', () => {
     setupEntities();
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Firm')).toBeInTheDocument();
     expect(screen.getByText('Facility')).toBeInTheDocument();
@@ -147,7 +157,7 @@ describe('IdentityResolutionPage', () => {
 
   it('displays tabs for entities and reviews', () => {
     setupEntities();
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     expect(screen.getByRole('tab', { name: /entities/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /review queue/i })).toBeInTheDocument();
@@ -156,7 +166,7 @@ describe('IdentityResolutionPage', () => {
   it('switches to review queue tab and shows reviews', async () => {
     setupEntities();
     const user = userEvent.setup();
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     const reviewTab = screen.getByRole('tab', { name: /review queue/i });
     await user.click(reviewTab);
@@ -169,7 +179,7 @@ describe('IdentityResolutionPage', () => {
   it('filters entities by search query', async () => {
     setupEntities();
     const user = userEvent.setup();
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     const searchInput = screen.getByPlaceholderText(/search entities/i);
     await user.type(searchInput, 'Romaine');
@@ -184,7 +194,7 @@ describe('IdentityResolutionPage', () => {
 
   it('shows pending review count badge', () => {
     setupEntities();
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText(/1 Pending Reviews/)).toBeInTheDocument();
   });
@@ -194,7 +204,7 @@ describe('IdentityResolutionPage', () => {
       data: { entities: [], __isDemo: false },
       isLoading: false,
     });
-    render(<IdentityResolutionPage />);
+    render(<IdentityResolutionPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('No entities registered')).toBeInTheDocument();
   });

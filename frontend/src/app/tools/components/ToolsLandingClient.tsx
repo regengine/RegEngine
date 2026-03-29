@@ -220,7 +220,7 @@ export function ToolsLandingClient() {
         : TOOLS.filter(t => t.category === activeCategory);
 
     return (
-        <div className="re-page min-h-screen">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* ═══ HERO ═══ */}
             <section className="relative z-[2] max-w-[1120px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-12 px-4 sm:px-6 text-center">
                 <motion.div

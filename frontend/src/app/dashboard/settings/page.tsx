@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -82,33 +83,28 @@ export default function SettingsPage() {
     }, [currentOrg, user]);
 
     // Fetch real integration status from backend
-    const [integrations, setIntegrations] = useState(INTEGRATIONS);
-    useEffect(() => {
-        if (!tenantId || !apiKey) return;
-        const fetchIntegrations = async () => {
-            try {
-                const { getServiceURL } = await import('@/lib/api-config');
-                const base = getServiceURL('ingestion');
-                const res = await fetch(`${base}/api/v1/integrations/${tenantId}`, {
-                    headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey },
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data?.integrations && Array.isArray(data.integrations)) {
-                        // Merge real status into catalog
-                        const statusMap = new Map(data.integrations.map((i: { id: string; status: string }) => [i.id, i.status]));
-                        setIntegrations(INTEGRATIONS.map(i => ({
-                            ...i,
-                            status: (statusMap.get(i.id) as string) || i.status,
-                        })));
-                    }
-                }
-            } catch {
-                // API unavailable — keep catalog defaults
+    const { data: integrationsData } = useQuery({
+        queryKey: ['integrations', tenantId],
+        queryFn: async () => {
+            const { getServiceURL } = await import('@/lib/api-config');
+            const base = getServiceURL('ingestion');
+            const res = await fetch(`${base}/api/v1/integrations/${tenantId}`, {
+                headers: { 'Content-Type': 'application/json', 'X-RegEngine-API-Key': apiKey! },
+            });
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data?.integrations && Array.isArray(data.integrations)) {
+                const statusMap = new Map(data.integrations.map((i: { id: string; status: string }) => [i.id, i.status]));
+                return INTEGRATIONS.map(i => ({
+                    ...i,
+                    status: (statusMap.get(i.id) as string) || i.status,
+                }));
             }
-        };
-        fetchIntegrations();
-    }, [tenantId, apiKey]);
+            return null;
+        },
+        enabled: !!tenantId && !!apiKey,
+    });
+    const integrations = integrationsData ?? INTEGRATIONS;
 
     // Derive plan display from subscription data
     const planName = subscriptionData?.subscription?.tier_id
@@ -116,14 +112,8 @@ export default function SettingsPage() {
         : 'No Plan Selected';
     const billingCycle = subscriptionData?.subscription?.billing_cycle || '';
 
-    const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState<string | null>(null);
-
-    const handleSave = useCallback(async () => {
-        if (!tenantId) return;
-        setSaving(true);
-        setSaveError(null);
-        try {
+    const saveProfileMutation = useMutation({
+        mutationFn: async () => {
             const { getServiceURL } = await import('@/lib/api-config');
             const base = getServiceURL('ingestion');
             const res = await fetch(`${base}/api/v1/settings/${tenantId}/profile`, {
@@ -135,14 +125,20 @@ export default function SettingsPage() {
                 body: JSON.stringify(profile),
             });
             if (!res.ok) throw new Error(`Save failed: ${res.status} ${res.statusText}`);
+            return res.json();
+        },
+        onSuccess: () => {
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
-        } catch (err) {
-            setSaveError(err instanceof Error ? err.message : 'Failed to save settings');
-        } finally {
-            setSaving(false);
-        }
-    }, [tenantId, apiKey, profile]);
+        },
+    });
+
+    const saving = saveProfileMutation.isPending;
+    const saveError = saveProfileMutation.error?.message ?? null;
+    const handleSave = useCallback(() => {
+        if (!tenantId) return;
+        saveProfileMutation.mutate();
+    }, [tenantId, saveProfileMutation]);
     const handleCopy = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
         setCopiedKey(id);

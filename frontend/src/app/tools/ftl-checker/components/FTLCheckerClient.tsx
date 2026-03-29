@@ -1144,31 +1144,31 @@ export function FTLCheckerClient() {
                                 </h4>
                                 <div className="ftl-sources-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                                     <a href="https://www.ecfr.gov/current/title-21/part-1/subpart-S" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         21 CFR Part 1 Subpart S — Full Rule Text
                                     </a>
                                     <a href="https://www.federalregister.gov/documents/2022/11/21/2022-24417/requirements-for-additional-traceability-records-for-certain-foods" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         Final Rule — 87 FR 70910 (Nov 21, 2022)
                                     </a>
                                     <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         FDA Food Traceability List (Official)
                                     </a>
                                     <a href="https://www.federalregister.gov/documents/2025/08/07/2025-14967/requirements-for-additional-traceability-records-for-certain-foods-compliance-date-extension" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         Compliance Date Extension — 90 FR 38084
                                     </a>
                                     <a href="https://www.fda.gov/files/food/published/FSMA%20Rule%20for%20Food%20Traceability%20-%202024-0520-CTEs-KDEs.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         FDA CTE/KDE Reference Chart (PDF)
                                     </a>
                                     <a href="https://www.fda.gov/regulatory-information/search-fda-guidance-documents/small-entity-compliance-guide-requirements-additional-traceability-records-certain-foods-what-you" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         Small Entity Compliance Guide
                                     </a>
                                     <a href="https://collaboration.fda.gov/tefcv13" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[13px] text-re-brand no-underline">
-                                        <span className="re-dot bg-re-brand" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-re-brand" />
                                         FDA Exemptions & Exclusions Tool
                                     </a>
                                 </div>
