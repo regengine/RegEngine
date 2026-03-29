@@ -130,6 +130,11 @@ const nextConfig = {
                 source: '/api/compliance/:path*',
                 destination: `${complianceUrl}/:path*`,
             },
+            // Proxy webhook ingestion to backend (bypasses Next.js CSRF)
+            {
+                source: '/api/v1/webhooks/:path*',
+                destination: `${ingestionUrl}/v1/webhooks/:path*`,
+            },
             // API-03: Proxy admin health endpoint for external monitoring
             {
                 source: '/api/v1/health',
