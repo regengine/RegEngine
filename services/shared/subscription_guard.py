@@ -55,7 +55,13 @@ async def require_active_subscription(request: Request) -> bool:
     except redis.RedisError as exc:
         redis_circuit._record_failure(exc)
         logger.exception("subscription_check_redis_error tenant=%s", tenant_id)
-        return True
+        if os.getenv("SUBSCRIPTION_GUARD_FAIL_OPEN", "").lower() == "true":
+            logger.warning("subscription_guard_fail_open tenant=%s (explicit override)", tenant_id)
+            return True
+        raise HTTPException(
+            status_code=503,
+            detail="Billing system temporarily unavailable. Please try again shortly.",
+        )
 
     if sub_status in ("active", "trialing"):
         return True
