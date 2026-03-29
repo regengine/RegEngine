@@ -82,7 +82,7 @@ const endpoints: Endpoint[] = [
 
 ];
 
-const categoryIcons: Record<string, any> = {
+const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
     'Health & Metrics': Activity,
     'Authentication': Lock,
     'API Keys': Key,

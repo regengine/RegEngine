@@ -21,8 +21,8 @@ export interface AssessmentFormData {
   // Tool context — captured passively
   quizScore?: number;
   quizGrade?: string;
-  quizAnswers?: Record<string, any>;
-  source?: string;  toolInputs?: Record<string, any>;
+  quizAnswers?: Record<string, unknown>;
+  source?: string;  toolInputs?: Record<string, unknown>;
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;

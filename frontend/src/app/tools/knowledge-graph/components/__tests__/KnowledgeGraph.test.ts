@@ -7,8 +7,8 @@ import { describe, it, expect } from 'vitest';
 // ── Types ──
 type NodeType = "Supplier" | "Facility" | "Product" | "Lot" | "CTE" | "Location";
 type EdgeType = "Supplies" | "Contains" | "Transforms" | "ShipsTo" | "TracedFrom" | "LocatedAt";
-type GraphNode = { id: string; type: NodeType; label: string; meta?: Record<string, any>; x: number; y: number };
-type GraphEdge = { id: string; type: EdgeType; from: string; to: string; meta?: Record<string, any> };
+type GraphNode = { id: string; type: NodeType; label: string; meta?: Record<string, unknown>; x: number; y: number };
+type GraphEdge = { id: string; type: EdgeType; from: string; to: string; meta?: Record<string, unknown> };
 type TraceMode = "forward" | "backward" | "bidirectional";
 
 // ── Pure Functions from KnowledgeGraph.tsx ──

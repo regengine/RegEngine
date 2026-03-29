@@ -32,8 +32,8 @@ class DemoBootstrapper:
         """
         logger.info(f"Provisioning Demo Tenant: {self.tenant_id} for vertical: {self.vertical}")
         
-        # In production, this would trigger SQL migrations or API calls
-        # TODO: Generate real JWT via Supabase auth when provisioning is wired
+        # In production, this would trigger SQL migrations or API calls.
+        # JWT generation deferred until Supabase auth provisioning is integrated.
         return {
             "tenant_id": self.tenant_id,
             "status": "PROVISIONED",

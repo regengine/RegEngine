@@ -1,5 +1,11 @@
 export type ToolStatus = 'START' | 'QUESTIONS' | 'RESULTS';
 
+/** A single answer value from a tool question (scalar or multi-select array). */
+export type AnswerValue = string | number | boolean | (string | number | boolean)[];
+
+/** Map of question ID to answer value. */
+export type ToolAnswers = Record<string, AnswerValue>;
+
 export interface ToolQuestion {
     id: string;
     text: string;
@@ -23,7 +29,7 @@ export interface ToolConfig {
             cta: string;
         };
     };
-    scoring?: (answers: Record<string, any>) => any;
+    scoring?: (answers: ToolAnswers) => unknown;
 }
 
 export interface LeadData {
@@ -33,5 +39,5 @@ export interface LeadData {
     intentScore: number;
     toolId: string;
     resultsSummary: string;
-    answers?: Record<string, any>;
+    answers?: ToolAnswers;
 }
