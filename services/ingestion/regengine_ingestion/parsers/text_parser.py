@@ -38,7 +38,7 @@ class TextParser(DocumentParser):
         try:
             return content.decode("latin-1")
         except Exception:
-            pass
+            pass  # latin-1 decode should never fail; fall through to ignore-mode
         
         # Last resort: ignore errors
         return content.decode("utf-8", errors="ignore")

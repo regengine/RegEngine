@@ -72,8 +72,8 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
     }
     
     response = client.post("/event", json=payload)
-    
-    assert response.status_code == 200
+
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.json()}"
     data = response.json()
     assert data["status"] == "success"
     assert "event_id" in data
@@ -110,8 +110,8 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
     }
     
     response = client.post("/event", json=payload)
-    
-    assert response.status_code == 400
+
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}: {response.json()}"
     assert "Invalid TLC" in response.json()["detail"]
     assert "Format violation" in response.json()["detail"]
     

@@ -645,7 +645,7 @@ def _parse_pdf_bytes(
                     _parse_json_bytes(blob.encode("utf-8"), parsed, warnings)
                     extracted_rows = 1
                 except Exception:
-                    pass
+                    warnings.append("PDF contained JSON-like text but parsing failed")
 
     if extracted_rows == 0:
         warnings.append(
