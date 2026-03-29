@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -344,61 +345,43 @@ export default function HeartbeatPage() {
     const effectiveUser = user;
     const effectiveTenantId = tenantId;
 
-    const [compliance, setCompliance] = useState<ComplianceData | null>(null);
-    const [alerts, setAlerts] = useState<Alert[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-    const [isRefreshing, setIsRefreshing] = useState(false);
-
     useEffect(() => {
         if (isHydrated && !effectiveUser) {
             router.push(`/login?next=${encodeURIComponent('/dashboard/heartbeat')}`);
         }
     }, [isHydrated, effectiveUser, router]);
 
-    const loadData = useCallback(async (isManualRefresh = false) => {
-        if (!effectiveTenantId) return;
-        if (isManualRefresh) {
-            setIsRefreshing(true);
-        } else {
-            setLoading(true);
-        }
-        setError(null);
-        try {
+    const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
+
+    const { data: heartbeatData, isLoading: loading, error: heartbeatError, isFetching: isRefreshing, refetch: loadData, dataUpdatedAt } = useQuery({
+        queryKey: ['heartbeat', effectiveTenantId],
+        queryFn: async () => {
             const [scoreData, alertsData] = await Promise.allSettled([
-                fetchComplianceScore(effectiveTenantId, apiKey || ''),
-                fetchAlerts(effectiveTenantId, apiKey || '', { acknowledged: false }),
+                fetchComplianceScore(effectiveTenantId!, apiKey || ''),
+                fetchAlerts(effectiveTenantId!, apiKey || '', { acknowledged: false }),
             ]);
 
+            let compliance: ComplianceData | null = null;
+            let alerts: Alert[] = [];
+
             if (scoreData.status === 'fulfilled') {
-                setCompliance(scoreData.value as ComplianceData);
+                compliance = scoreData.value as ComplianceData;
             }
             if (alertsData.status === 'fulfilled') {
                 const raw = alertsData.value as Alert[] | { alerts: Alert[] };
-                setAlerts(Array.isArray(raw) ? raw : raw?.alerts ?? []);
+                alerts = Array.isArray(raw) ? raw : raw?.alerts ?? [];
             }
-            setLastRefresh(new Date());
-        } catch {
-            setError('Failed to load compliance data');
-        } finally {
-            setLoading(false);
-            setIsRefreshing(false);
-        }
-    }, [effectiveTenantId]);
 
-    useEffect(() => {
-        if (effectiveTenantId) {
-            loadData();
-        }
-    }, [effectiveTenantId, loadData]);
+            return { compliance, alerts };
+        },
+        enabled: !!effectiveTenantId,
+        refetchInterval: POLL_MS,
+    });
 
-    // Auto-refresh every 60s
-    useEffect(() => {
-        const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
-        const interval = setInterval(() => loadData(true), POLL_MS);
-        return () => clearInterval(interval);
-    }, [loadData]);
+    const compliance = heartbeatData?.compliance ?? null;
+    const alerts = heartbeatData?.alerts ?? [];
+    const error = heartbeatError?.message ?? null;
+    const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt) : new Date();
 
     const criticalAlerts = useMemo(() =>
         alerts.filter(a => a.severity === 'critical' || a.severity === 'high').slice(0, 5),
@@ -457,7 +440,7 @@ export default function HeartbeatPage() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => loadData(true)}
+                                        onClick={() => loadData()}
                                         disabled={isRefreshing}
                                         className="gap-1.5 h-8 px-3 text-xs rounded-lg border-[var(--re-border-default)] hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] transition-all"
                                     >

@@ -262,15 +262,15 @@ export default function APIPlayground() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--re-bg-primary)', color: 'var(--re-text-primary)' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto', padding: 'clamp(1.5rem, 5vw, 40px) clamp(1rem, 4vw, 32px)' }}>
+    <div className="min-h-screen bg-[var(--re-bg-primary)] text-[var(--re-text-primary)]">
+      <div className="max-w-[1400px] mx-auto px-[clamp(1rem,4vw,32px)] py-[clamp(1.5rem,5vw,40px)]">
         {/* Header */}
-        <div style={{ marginBottom: 'clamp(1rem, 4vw, 32px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-            <Terminal size={28} style={{ color: 'var(--re-brand)' }} />
-            <h1 style={{ fontSize: '28px', fontWeight: '600', margin: 0 }}>API Playground</h1>
+        <div className="mb-[clamp(1rem,4vw,32px)]">
+          <div className="flex items-center gap-3 mb-2">
+            <Terminal size={28} className="text-[var(--re-brand)]" />
+            <h1 className="text-[28px] font-semibold m-0">API Playground</h1>
           </div>
-          <p style={{ color: 'var(--re-text-muted)', margin: '0', fontSize: '14px' }}>
+          <p className="text-[var(--re-text-muted)] m-0 text-sm">
             Test live endpoints with your API key — responses are real.
           </p>
         </div>
@@ -278,10 +278,10 @@ export default function APIPlayground() {
         {/* Main Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left Panel: Request */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="flex flex-col gap-4">
             {/* Endpoint Selector */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+              <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 Select Endpoint
               </label>
               <select
@@ -290,29 +290,20 @@ export default function APIPlayground() {
                   const ep = ENDPOINTS.find(x => x.id === e.target.value);
                   if (ep) handleEndpointChange(ep);
                 }}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'var(--re-text-primary)',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace'
-                }}
+                className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
               >
                 {ENDPOINTS.map(ep => (
                   <option key={ep.id} value={ep.id}>{ep.method} {ep.path}</option>
                 ))}
               </select>
-              <p style={{ fontSize: '12px', color: 'var(--re-text-muted)', marginTop: '6px', margin: '6px 0 0 0' }}>
+              <p className="text-xs text-[var(--re-text-muted)] mt-1.5 mb-0">
                 {selectedEndpoint.description}
               </p>
             </div>
 
             {/* API Key Input */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+              <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 API Key
               </label>
               <input
@@ -320,22 +311,13 @@ export default function APIPlayground() {
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="rge_dev_..."
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'var(--re-text-primary)',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace'
-                }}
+                className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
               />
             </div>
 
             {/* Tenant ID */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+              <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 Tenant ID
               </label>
               <input
@@ -343,28 +325,19 @@ export default function APIPlayground() {
                 value={tenantId}
                 onChange={(e) => setTenantId(e.target.value)}
                 placeholder="your-tenant-uuid"
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  fontSize: '14px',
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'var(--re-text-primary)',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace'
-                }}
+                className="w-full px-3 py-2.5 text-sm bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
               />
             </div>
 
             {/* Path Params */}
             {selectedEndpoint.pathParams && selectedEndpoint.pathParams.filter(p => p !== 'tenant_id').length > 0 && (
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+                <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                   Path Parameters
                 </label>
                 {selectedEndpoint.pathParams.filter(p => p !== 'tenant_id').map(param => (
-                  <div key={param} style={{ marginBottom: '8px' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--re-text-muted)', marginBottom: '4px', fontFamily: 'monospace' }}>
+                  <div key={param} className="mb-2">
+                    <label className="block text-[11px] text-[var(--re-text-muted)] mb-1 font-mono">
                       {'{' + param + '}'}
                     </label>
                     <input
@@ -372,16 +345,7 @@ export default function APIPlayground() {
                       value={pathParamValues[param] || ''}
                       onChange={(e) => setPathParamValues(prev => ({ ...prev, [param]: e.target.value }))}
                       placeholder={param === 'cte_type' ? 'receiving' : param}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        fontSize: '13px',
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                        color: 'var(--re-text-primary)',
-                        borderRadius: '6px',
-                        fontFamily: 'monospace'
-                      }}
+                      className="w-full px-3 py-2 text-[13px] bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
                     />
                   </div>
                 ))}
@@ -391,12 +355,12 @@ export default function APIPlayground() {
             {/* Query Params */}
             {selectedEndpoint.queryParams && selectedEndpoint.queryParams.filter(p => p.key !== 'tenant_id').length > 0 && (
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+                <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                   Query Parameters
                 </label>
                 {selectedEndpoint.queryParams.filter(p => p.key !== 'tenant_id').map(param => (
-                  <div key={param.key} style={{ marginBottom: '8px' }}>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--re-text-muted)', marginBottom: '4px', fontFamily: 'monospace' }}>
+                  <div key={param.key} className="mb-2">
+                    <label className="block text-[11px] text-[var(--re-text-muted)] mb-1 font-mono">
                       {param.key}
                     </label>
                     <input
@@ -404,16 +368,7 @@ export default function APIPlayground() {
                       value={queryParamValues[param.key] || ''}
                       onChange={(e) => setQueryParamValues(prev => ({ ...prev, [param.key]: e.target.value }))}
                       placeholder={param.placeholder}
-                      style={{
-                        width: '100%',
-                        padding: '8px 12px',
-                        fontSize: '13px',
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                        color: 'var(--re-text-primary)',
-                        borderRadius: '6px',
-                        fontFamily: 'monospace'
-                      }}
+                      className="w-full px-3 py-2 text-[13px] bg-white/[0.02] border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono"
                     />
                   </div>
                 ))}
@@ -422,10 +377,10 @@ export default function APIPlayground() {
 
             {/* Request Headers */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+              <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 Request Headers
               </label>
-              <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', padding: '12px', fontSize: '12px', fontFamily: 'monospace', color: 'var(--re-text-muted)' }}>
+              <div className="bg-black/30 border border-white/[0.06] rounded-md p-3 text-xs font-mono text-[var(--re-text-muted)]">
                 <div>X-RegEngine-API-Key: {apiKey}</div>
                 {tenantId && <div>X-Tenant-ID: {tenantId}</div>}
                 {selectedEndpoint.method === 'POST' && <div>Content-Type: application/json</div>}
@@ -434,26 +389,15 @@ export default function APIPlayground() {
 
             {/* Request Body */}
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+              <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 Request Body
               </label>
               <textarea
                 value={requestBody}
                 onChange={(e) => setRequestBody(e.target.value)}
                 disabled={selectedEndpoint.method === 'GET'}
-                style={{
-                  width: '100%',
-                  minHeight: '200px',
-                  padding: '12px',
-                  fontSize: '12px',
-                  background: 'rgba(0,0,0,0.3)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'var(--re-text-primary)',
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  resize: 'vertical',
-                  opacity: selectedEndpoint.method === 'GET' ? 0.5 : 1
-                }}
+                className="w-full min-h-[200px] p-3 text-xs bg-black/30 border border-white/[0.06] text-[var(--re-text-primary)] rounded-md font-mono resize-y"
+                style={{ opacity: selectedEndpoint.method === 'GET' ? 0.5 : 1 }}
               />
             </div>
 
@@ -461,21 +405,10 @@ export default function APIPlayground() {
             <Button
               onClick={sendRequest}
               disabled={loading || !apiKey}
+              className="w-full p-3 bg-[var(--re-brand)] text-white flex items-center justify-center gap-2 text-sm font-semibold rounded-md border-none"
               style={{
-                width: '100%',
-                padding: '12px',
-                background: 'var(--re-brand)',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontSize: '14px',
-                fontWeight: '600',
-                borderRadius: '6px',
-                border: 'none',
                 cursor: loading ? 'wait' : 'pointer',
-                opacity: loading || !apiKey ? 0.6 : 1
+                opacity: loading || !apiKey ? 0.6 : 1,
               }}
             >
               {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Play size={16} />}
@@ -484,14 +417,14 @@ export default function APIPlayground() {
           </div>
 
           {/* Right Panel: Response */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="flex flex-col gap-4">
             <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase', color: 'var(--re-text-muted)', marginBottom: '8px' }}>
+              <label className="block text-xs font-semibold uppercase text-[var(--re-text-muted)] mb-2">
                 Response
               </label>
 
               {!response && !loading && !error && (
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px', padding: '24px', textAlign: 'center', color: 'var(--re-text-disabled)' }}>
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-md p-6 text-center text-[var(--re-text-disabled)]">
                   <p>Send a request to see the response</p>
                 </div>
               )}
@@ -504,17 +437,17 @@ export default function APIPlayground() {
               )}
 
               {error && !loading && (
-                <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', padding: '16px', color: '#ef4444' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div className="bg-red-500/5 border border-red-500/20 rounded-md p-4 text-[#ef4444]">
+                  <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle size={16} />
-                    <span style={{ fontWeight: '600', fontSize: '13px' }}>Request Failed</span>
+                    <span className="font-semibold text-[13px]">Request Failed</span>
                     {duration > 0 && (
-                      <span style={{ fontSize: '12px', color: 'var(--re-text-muted)', marginLeft: 'auto' }}>
+                      <span className="text-xs text-[var(--re-text-muted)] ml-auto">
                         {duration}ms
                       </span>
                     )}
                   </div>
-                  <p style={{ fontSize: '12px', fontFamily: 'monospace', margin: 0, color: '#fca5a5' }}>
+                  <p className="text-xs font-mono m-0 text-[#fca5a5]">
                     {error}
                   </p>
                 </div>
@@ -522,41 +455,27 @@ export default function APIPlayground() {
 
               {response && !loading && (
                 <>
-                  <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '6px 6px 0 0', padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Badge style={{
+                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-t-md p-3 flex items-center justify-between border-b border-b-white/[0.06]">
+                    <div className="flex items-center gap-2">
+                      <Badge className="text-[11px] font-semibold px-2 py-1" style={{
                         background: statusColor(response.status).bg,
                         color: statusColor(response.status).text,
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        padding: '4px 8px',
                       }}>
                         {response.status} {response.statusText}
                       </Badge>
-                      <span style={{ fontSize: '12px', color: 'var(--re-text-muted)' }}>
+                      <span className="text-xs text-[var(--re-text-muted)]">
                         {duration}ms
                       </span>
                     </div>
                     <Button
                       onClick={copyResponse}
-                      style={{
-                        padding: '6px 12px',
-                        background: 'rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                        color: 'var(--re-text-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
+                      className="px-3 py-1.5 bg-white/[0.06] border border-white/[0.06] text-[var(--re-text-primary)] flex items-center gap-1.5 text-xs rounded cursor-pointer"
                     >
                       {copiedResponse ? <Check size={14} /> : <Copy size={14} />}
                       {copiedResponse ? 'Copied' : 'Copy'}
                     </Button>
                   </div>
-                  <div style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0 0 6px 6px', padding: '16px', minHeight: '300px', maxHeight: '500px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '12px', color: 'var(--re-text-muted)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  <div className="bg-black/30 border border-white/[0.06] rounded-b-md p-4 min-h-[300px] max-h-[500px] overflow-y-auto font-mono text-xs text-[var(--re-text-muted)] whitespace-pre-wrap break-words">
                     {JSON.stringify(response.body, null, 2)}
                   </div>
                 </>

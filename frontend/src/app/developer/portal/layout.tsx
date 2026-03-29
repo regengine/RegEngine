@@ -63,8 +63,8 @@ export default function DeveloperPortalLayout({ children }: { children: React.Re
     // Show loading while hydrating or redirecting
     if (!isHydrated || !isAuthenticated) {
         return (
-            <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--re-surface-base)' }}>
-                <Loader2 className="w-6 h-6 animate-spin" style={{ color: 'var(--re-text-muted)' }} />
+            <div className="min-h-screen flex items-center justify-center bg-[var(--re-surface-base)]">
+                <Loader2 className="w-6 h-6 animate-spin text-[var(--re-text-muted)]" />
             </div>
         );
     }
@@ -79,24 +79,17 @@ export default function DeveloperPortalLayout({ children }: { children: React.Re
     }
 
     return (
-        <div className="min-h-screen flex" style={{ background: 'var(--re-surface-base)' }}>
+        <div className="min-h-screen flex bg-[var(--re-surface-base)]">
             {/* Stripe-style sidebar */}
-            <aside className="w-60 flex-shrink-0 flex flex-col" style={{
-                borderRight: '1px solid rgba(255,255,255,0.06)',
-                background: 'rgba(0,0,0,0.15)',
-            }}>
+            <aside className="w-60 flex-shrink-0 flex flex-col border-r border-white/[0.06] bg-black/[0.15]">
                 {/* Logo / Brand */}
-                <Link href="/developer/portal" className="p-4 flex items-center gap-2.5 no-underline" style={{
-                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                }}>
-                    <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{
-                        background: 'linear-gradient(135deg, rgba(16,185,129,0.3), rgba(6,182,212,0.2))',
-                    }}>
-                        <ShieldCheck className="w-4 h-4" style={{ color: 'var(--re-brand)' }} />
+                <Link href="/developer/portal" className="p-4 flex items-center gap-2.5 no-underline border-b border-white/[0.06]">
+                    <div className="w-7 h-7 rounded-md flex items-center justify-center bg-gradient-to-br from-[rgba(16,185,129,0.3)] to-[rgba(6,182,212,0.2)]">
+                        <ShieldCheck className="w-4 h-4 text-[var(--re-brand)]" />
                     </div>
                     <div>
-                        <span className="font-semibold text-sm block" style={{ color: 'var(--re-text-primary)' }}>RegEngine</span>
-                        <span className="text-[10px] font-medium" style={{ color: 'var(--re-text-disabled)' }}>Developer Portal</span>
+                        <span className="font-semibold text-sm block text-[var(--re-text-primary)]">RegEngine</span>
+                        <span className="text-[10px] font-medium text-[var(--re-text-disabled)]">Developer Portal</span>
                     </div>
                 </Link>
 
@@ -148,7 +141,7 @@ export default function DeveloperPortalLayout({ children }: { children: React.Re
                 </nav>
 
                 {/* Footer */}
-                <div className="p-2 space-y-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="p-2 space-y-0.5 border-t border-white/[0.06]">
                     <a
                         href="https://status.regengine.co"
                         target="_blank"
@@ -156,7 +149,7 @@ export default function DeveloperPortalLayout({ children }: { children: React.Re
                         className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] no-underline transition-colors"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e' }} />
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
                         API Status
                         <ExternalLink className="w-3 h-3 ml-auto" />
                     </a>

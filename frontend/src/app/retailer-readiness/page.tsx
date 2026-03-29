@@ -517,10 +517,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-12">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         Compliance Timeline
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         The Clock Is Already Running
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 500, margin: '0 auto' }}>
@@ -633,10 +633,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-12">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         Trace Demo
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         {traceDirection === 'forward' ? '5-Second Trace. Farm to Store.' : '5-Second Trace. Store to Farm.'}
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted, maxWidth: 520, margin: '0 auto', marginBottom: 24 }}>
@@ -836,10 +836,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-12">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         Why Switch?
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         Your Current Setup vs. RegEngine
                     </h2>
                 </div>
@@ -922,10 +922,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-10">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         Risk Calculator
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         What Does Losing a Major Retailer Cost You?
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted }}>
@@ -1051,10 +1051,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-10">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         Pricing
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         Simple, Transparent Pricing
                     </h2>
                     <p style={{ fontSize: 15, color: T.textMuted }}>
@@ -1298,10 +1298,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-10">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         How We Compare
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         RegEngine vs. Legacy Platforms
                     </h2>
                 </div>
@@ -1349,10 +1349,10 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div className="text-center mb-10">
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         FAQ
                     </p>
-                    <h2 className="re-section-title">
+                    <h2 className="text-[clamp(24px,4vw,36px)] font-bold text-[var(--re-text-primary)] mb-3">
                         Common Questions
                     </h2>
                 </div>
@@ -1407,7 +1407,7 @@ export default function RetailerSuppliersPage() {
                 transition: 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)',
             }}>
                 <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                    <p className="re-section-label">
+                    <p className="text-xs text-[var(--re-brand)] uppercase tracking-[0.1em] mb-2 font-semibold">
                         Works With Your Stack
                     </p>
                     <h2 style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 700, color: T.heading }}>

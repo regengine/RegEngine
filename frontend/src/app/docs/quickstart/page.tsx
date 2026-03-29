@@ -11,24 +11,14 @@ import { CodeBlock } from '@/components/ui/code-block';
 
 export default function QuickstartPage() {
     return (
-        <div className="re-page">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Header */}
-            <div style={{
-                borderBottom: `1px solid ${T.border}`,
-                padding: '24px',
-            }}>
-                <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <div className="p-6" style={{ borderBottom: `1px solid ${T.border}` }}>
+                <div className="max-w-[800px] mx-auto">
                     <Link
                         href="/docs"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            color: T.accent,
-                            fontSize: '14px',
-                            textDecoration: 'none',
-                            marginBottom: '16px',
-                        }}
+                        className="inline-flex items-center gap-2 text-sm no-underline mb-4"
+                        style={{ color: T.accent }}
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Back to Docs
@@ -36,19 +26,12 @@ export default function QuickstartPage() {
 
                     <div className="flex items-center gap-3 mb-3">
                         <Zap className="w-7 h-7 text-re-brand" />
-                        <span style={{
-                            background: 'rgba(16,185,129,0.2)',
-                            color: T.accent,
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            padding: '4px 10px',
-                            borderRadius: '4px',
-                        }}>
+                        <span className="bg-[rgba(16,185,129,0.2)] text-[11px] font-semibold px-2.5 py-1 rounded" style={{ color: T.accent }}>
                             5 min setup
                         </span>
                     </div>
 
-                    <h1 className="re-heading-xl">
+                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
                         Quickstart
                     </h1>
                     <p className="text-re-text-muted text-base">
@@ -58,45 +41,23 @@ export default function QuickstartPage() {
             </div>
 
             {/* Content */}
-            <div style={{ maxWidth: '800px', margin: '0 auto', padding: '48px 24px' }}>
+            <div className="max-w-[800px] mx-auto px-6 py-12">
 
                 {/* Step 1: Get API Key */}
                 <section className="mb-12">
                     <div className="flex items-start gap-4">
-                        <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            background: T.accent,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            color: 'white',
-                            flexShrink: 0,
-                        }}>1</div>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>1</div>
                         <div className="flex-1">
-                            <h2 className="re-heading-sm">
+                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
                                 Get your API key
                             </h2>
-                            <p className="re-body">
+                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                                 Sign up for a RegEngine account and generate an API key from your dashboard.
                             </p>
                             <Link
                                 href="/api-keys"
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                    background: T.accent,
-                                    color: 'white',
-                                    padding: '10px 20px',
-                                    borderRadius: '6px',
-                                    fontWeight: 600,
-                                    fontSize: '14px',
-                                    textDecoration: 'none',
-                                }}
+                                className="inline-flex items-center gap-2 text-white px-5 py-2.5 rounded-md font-semibold text-sm no-underline"
+                                style={{ background: T.accent }}
                             >
                                 <Key className="w-4 h-4" />
                                 Get API Key
@@ -108,24 +69,12 @@ export default function QuickstartPage() {
                 {/* Step 2: Set Environment */}
                 <section className="mb-12">
                     <div className="flex items-start gap-4">
-                        <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            background: T.accent,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            color: 'white',
-                            flexShrink: 0,
-                        }}>2</div>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>2</div>
                         <div className="flex-1">
-                            <h2 className="re-heading-sm">
+                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
                                 Set your environment variable
                             </h2>
-                            <p className="re-body">
+                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                                 Store your API key securely. Never commit it to version control.
                             </p>
                             <CodeBlock
@@ -140,29 +89,17 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                 {/* Step 3: Create Record */}
                 <section className="mb-12">
                     <div className="flex items-start gap-4">
-                        <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            background: T.accent,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            color: 'white',
-                            flexShrink: 0,
-                        }}>3</div>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>3</div>
                         <div className="flex-1">
-                            <h2 className="re-heading-sm">
+                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
                                 Create your first compliance record
                             </h2>
-                            <p className="re-body">
-                                Use the <code style={{ background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: '4px' }}>/api/v1/webhooks/ingest</code> endpoint
+                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
+                                Use the <code className="bg-black/30 px-1.5 py-0.5 rounded">/api/v1/webhooks/ingest</code> endpoint
                                 to create a compliant traceability event:
                             </p>
 
-                            <div style={{ marginBottom: '16px' }}>
+                            <div className="mb-4">
                                 <CodeBlock
                                     code={`curl -X POST https://www.regengine.co/api/v1/webhooks/ingest \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
@@ -216,24 +153,12 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                 {/* Step 4: Verify */}
                 <section className="mb-12">
                     <div className="flex items-start gap-4">
-                        <div style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            background: T.accent,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '14px',
-                            color: 'white',
-                            flexShrink: 0,
-                        }}>4</div>
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0" style={{ background: T.accent }}>4</div>
                         <div className="flex-1">
-                            <h2 className="re-heading-sm">
+                            <h2 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
                                 Verify your record
                             </h2>
-                            <p className="re-body">
+                            <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                                 Every ingested event is cryptographically hashed. Verify integrity independently from an export file:
                             </p>
 
@@ -274,7 +199,7 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
 
                 {/* Next Steps */}
                 <section>
-                    <h2 className="re-heading-md">
+                    <h2 className="text-[1.1rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
                         Next Steps
                     </h2>
 
@@ -284,19 +209,11 @@ export REGENGINE_TENANT_ID="11111111-1111-1111-1111-111111111111"`}
                             { title: 'API Reference', desc: 'Explore all available endpoints', href: '/docs/api', icon: Code },
                             { title: 'Authentication', desc: 'Learn about API key management', href: '/docs/authentication', icon: Key },
                         ].map((item) => (
-                            <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
-                                <div style={{
-                                    padding: '16px 20px',
-                                    background: T.surface,
-                                    borderRadius: '8px',
-                                    border: `1px solid ${T.border}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '16px',
-                                }}>
+                            <Link key={item.href} href={item.href} className="no-underline">
+                                <div className="px-5 py-4 rounded-lg flex items-center gap-4" style={{ background: T.surface, border: `1px solid ${T.border}` }}>
                                     <item.icon className="w-5 h-5 text-re-brand" />
                                     <div className="flex-1">
-                                        <div style={{ fontWeight: 600, color: 'var(--re-text-primary)', marginBottom: '2px' }}>{item.title}</div>
+                                        <div className="font-semibold text-[var(--re-text-primary)] mb-0.5">{item.title}</div>
                                         <div className="text-[13px] text-re-text-muted">{item.desc}</div>
                                     </div>
                                     <ArrowRight className="w-4 h-4 text-re-text-muted" />

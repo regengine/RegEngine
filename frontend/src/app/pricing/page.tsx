@@ -118,7 +118,7 @@ const FAQ = [
 
 export default function PricingPage() {
     return (
-        <div className="re-page" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]" style={{ minHeight: '100vh', background: T.bg, color: T.text }}>
             {/* Hero */}
             <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
                 <Badge style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.border}`, marginBottom: '20px' }}>

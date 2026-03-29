@@ -10,7 +10,7 @@ import { T } from '@/lib/design-tokens';
 
 export default function WebhooksDocsPage() {
     return (
-        <div className="re-page">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
@@ -47,7 +47,7 @@ export default function WebhooksDocsPage() {
                         </span>
                     </div>
 
-                    <h1 className="re-heading-xl">
+                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
                         Webhooks
                     </h1>
                     <p className="text-re-text-muted text-base">
@@ -57,11 +57,11 @@ export default function WebhooksDocsPage() {
             </div>
 
             {/* Content */}
-            <div className="re-page-narrow">
+            <div className="max-w-[700px] mx-auto py-12 px-6">
 
                 {/* Event Types Preview */}
                 <section className="mb-12">
-                    <h2 className="re-heading-md">
+                    <h2 className="text-[1.3rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
                         <Zap className="w-5 h-5 inline align-middle mr-2" />
                         Planned Event Types
                     </h2>
@@ -99,7 +99,7 @@ export default function WebhooksDocsPage() {
 
                 {/* Payload Preview */}
                 <section className="mb-12">
-                    <h2 className="re-heading-md">
+                    <h2 className="text-[1.3rem] sm:text-[1.3rem] font-semibold text-[var(--re-text-primary)] mb-4">
                         Sample Payload
                     </h2>
 
@@ -149,7 +149,7 @@ export default function WebhooksDocsPage() {
                     textAlign: 'center',
                 }}>
                     <Webhook className="w-8 h-8 text-re-brand mx-auto mb-4" />
-                    <h3 className="re-heading-sm">
+                    <h3 className="text-[1.1rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
                         Get Notified on Release
                     </h3>
                     <p className="text-re-text-secondary text-sm mb-5 max-w-[400px] mx-auto">
