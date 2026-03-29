@@ -22,6 +22,7 @@ Usage:
         return await db.query(Item).filter(Item.tenant_id == tenant_id).all()
 """
 
+import hmac
 import os
 import uuid
 import logging
@@ -100,7 +101,9 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             internal_secret = request.headers.get("X-RegEngine-Internal-Secret")
             configured_secret = os.getenv("REGENGINE_INTERNAL_SECRET")
             is_internal = bool(
-                configured_secret and internal_secret == configured_secret
+                configured_secret
+                and internal_secret
+                and hmac.compare_digest(internal_secret, configured_secret)
             )
             
             if is_internal:

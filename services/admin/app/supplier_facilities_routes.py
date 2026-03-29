@@ -44,7 +44,10 @@ router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
 
 
 @router.get("/ftl-categories")
-async def get_ftl_categories() -> dict[str, list[dict[str, Any]]]:
+async def get_ftl_categories(
+    current_user: UserModel = Depends(get_current_user),
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the FTL category catalog. Requires authentication."""
     return {"categories": FTL_CATEGORY_CATALOG}
 
 

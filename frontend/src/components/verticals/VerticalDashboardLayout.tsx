@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { LucideIcon, ChevronRight, Home, LayoutDashboard, Upload } from 'lucide-react';
 import { IngestionModal } from '@/components/ingestion/IngestionModal';
 import { useState } from 'react';
-import { Header } from '@/components/layout/header';
+import { Header } from '@/components/layout/dashboard-header';
 import { PageContainer } from '@/components/layout/page-container';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

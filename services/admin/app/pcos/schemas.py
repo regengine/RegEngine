@@ -4,12 +4,15 @@ PCOS Pydantic Schemas
 Request/Response models for API endpoints.
 """
 
+import uuid as uuid_module
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict
+
+from .enums import ClassificationType, EvidenceType
 
 # Pydantic Schemas (API Request/Response Models)
 # =============================================================================

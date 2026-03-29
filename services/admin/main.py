@@ -178,6 +178,10 @@ app.add_middleware(
 from app.audit_middleware import AuditContextMiddleware
 app.add_middleware(AuditContextMiddleware)
 
+# Per-IP rate limiting on auth endpoints (SlowAPI)
+from shared.rate_limit import add_rate_limiting
+add_rate_limiting(app)
+
 # Per-tenant rate limiting (Sprint 14)
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=200)
