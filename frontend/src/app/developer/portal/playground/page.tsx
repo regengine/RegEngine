@@ -468,7 +468,9 @@ export default function APIPlayground() {
             <h1 className="text-[28px] font-semibold m-0">API Playground</h1>
           </div>
           <p className="text-[var(--re-text-muted)] m-0 text-sm">
-            Test live endpoints with your API key — responses are real.
+            {demoMode
+              ? 'Explore API endpoints with simulated responses — no API key required.'
+              : 'Test live endpoints with your API key — responses are real.'}
           </p>
         </div>
 
