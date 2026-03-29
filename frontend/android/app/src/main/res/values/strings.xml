@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">RegEngine</string>
-    <string name="title_activity_main">RegEngine</string>
-    <string name="package_name">com.regengine.app</string>
-    <string name="custom_url_scheme">com.regengine.app</string>
-</resources>

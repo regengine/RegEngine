@@ -55,11 +55,12 @@ You've been selected to participate in our 8-week design partner evaluation prog
    }
    ```
 
-2. **Install Client Library** (optional but recommended)
+2. **API Client Setup** (REST API — SDKs coming later)
    ```bash
-   pip install regengine-sdk  # Python
-   # or
-   npm install @regengine/sdk  # Node.js
+   # Use the REST API directly with curl, httpx, or your preferred HTTP client.
+   # Python and Node.js SDKs are planned — see /docs/sdks for status.
+   curl -H "Authorization: Bearer $REGENGINE_API_KEY" \
+     https://api.regengine.co/api/v1/records
    ```
 
 3. **Review Sample Data**

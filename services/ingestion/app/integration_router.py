@@ -51,6 +51,7 @@ class SyncRequest(BaseModel):
 @router.get(
     "/available",
     summary="List all available integrations",
+    dependencies=[Depends(_verify_api_key)],
 )
 async def list_available_integrations():
     """List all registered integration connectors with their metadata."""

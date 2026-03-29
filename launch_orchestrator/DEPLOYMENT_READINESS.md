@@ -410,8 +410,8 @@ Before executing `python orchestrator.py --mode full_launch`, ensure:
    - Database query optimization (add indexes for common queries)
 
 3. **Developer Experience**
-   - Create Python SDK (`pip install regengine`)
-   - Create Node.js SDK (`npm install @regengine/sdk`)
+   - Publish Python SDK to PyPI (code exists in `regengine/`, not yet published)
+   - Create Node.js SDK
    - Add Postman collection for API exploration
    - Create Zapier/Make integrations (no-code access)
 
