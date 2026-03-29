@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
         logger.warning("connector_registration_skipped", error=str(exc))
 
     # Start background task worker (replaces Kafka consumers)
-    from app.workers.task_processor import start_task_worker, stop_task_worker
+    from server.workers.task_processor import start_task_worker, stop_task_worker
     start_task_worker()
 
     yield
