@@ -9,8 +9,8 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from .sqlalchemy_models import Base
-# Import PCOS models to register them with Base.metadata
+# PCOS models are registered with Base.metadata at import time.
+# Keep this import so Alembic --autogenerate can see them.
 from . import pcos_models  # noqa: F401
 
 logger = structlog.get_logger("admin-db")
