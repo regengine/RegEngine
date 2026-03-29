@@ -10,7 +10,17 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import RecallReportPage from '@/app/dashboard/recall-report/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // ── Mocks ──
 
@@ -103,13 +113,13 @@ describe('RecallReportPage', () => {
     });
 
     it('renders page heading', async () => {
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Recall Investigation')).toBeInTheDocument();
     });
 
     it('renders demo investigation scenario data', async () => {
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText(/Romaine Lettuce/)).toBeInTheDocument();
@@ -117,7 +127,7 @@ describe('RecallReportPage', () => {
     });
 
     it('renders readiness dimension scores', async () => {
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('Trace Speed')).toBeInTheDocument();
@@ -128,7 +138,7 @@ describe('RecallReportPage', () => {
     });
 
     it('renders affected lots table', async () => {
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText(/LOT-ROM-2026-0312A/)).toBeInTheDocument();
@@ -137,7 +147,7 @@ describe('RecallReportPage', () => {
 
     it('falls back to demo when API returns empty data', async () => {
         mockFetchRecallReport.mockResolvedValue({});
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         // Should still show the demo scenario since empty object triggers demo fallback
         await waitFor(() => {
@@ -147,7 +157,7 @@ describe('RecallReportPage', () => {
 
     it('falls back to demo when API call fails', async () => {
         mockFetchRecallReport.mockRejectedValue(new Error('API unavailable'));
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         // Should still show the demo scenario
         await waitFor(() => {
@@ -159,7 +169,7 @@ describe('RecallReportPage', () => {
         mockUseAuth.mockReturnValue({ apiKey: null, isAuthenticated: false });
         mockUseTenant.mockReturnValue({ tenantId: null, isSystemTenant: true });
 
-        render(<RecallReportPage />);
+        render(<RecallReportPage />, { wrapper: createWrapper() });
 
         expect(mockFetchRecallReport).not.toHaveBeenCalled();
     });

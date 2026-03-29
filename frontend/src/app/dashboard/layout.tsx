@@ -206,7 +206,6 @@ function CollapsibleNavSection({
             <div
                 className="overflow-hidden transition-all duration-200"
                 style={{ maxHeight: expanded ? (height ?? 1000) : 0, opacity: expanded ? 1 : 0 }}
-                {...(!expanded && { inert: '' as unknown as string })}
             >
                 <div ref={contentRef} className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
                     {section.items.map((item) => {
