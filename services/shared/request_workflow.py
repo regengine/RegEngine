@@ -97,6 +97,14 @@ class RequestWorkflow:
     def __init__(self, db: Session):
         self.db = db
 
+    def _safe_commit(self) -> None:
+        """Commit the current transaction, rolling back on failure."""
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
     # ------------------------------------------------------------------
     # 1. Create Request Case
     # ------------------------------------------------------------------
@@ -185,7 +193,7 @@ class RequestWorkflow:
                 "now": now,
             },
         )
-        self.db.commit()
+        self._safe_commit()
         row = result.mappings().fetchone()
         logger.info(
             "request_case_created",
@@ -257,7 +265,7 @@ class RequestWorkflow:
             """),
             params,
         )
-        self.db.commit()
+        self._safe_commit()
         row = result.mappings().fetchone()
         logger.info("scope_updated", case_id=request_case_id, tenant_id=tenant_id)
         return dict(row)
@@ -343,7 +351,7 @@ class RequestWorkflow:
                 "tenant_id": tenant_id,
             },
         )
-        self.db.commit()
+        self._safe_commit()
 
         logger.info(
             "records_collected",
@@ -479,7 +487,7 @@ class RequestWorkflow:
                 "tenant_id": tenant_id,
             },
         )
-        self.db.commit()
+        self._safe_commit()
 
         logger.info(
             "gap_analysis_complete",
@@ -625,7 +633,7 @@ class RequestWorkflow:
                     "category": rv.get("category"),
                 }
         except Exception:
-            pass
+            logger.debug("rule_versions_snapshot_skipped", exc_info=True)
 
         # Snapshot identity state at assembly time
         identity_state = {}
@@ -648,7 +656,7 @@ class RequestWorkflow:
                     )
                     aliases = [{"value": a["alias_value"], "type": a["alias_type"]} for a in al_result.mappings().fetchall()]
                 except Exception:
-                    pass
+                    logger.debug("entity_aliases_snapshot_skipped", exc_info=True)
                 identity_state[eid] = {
                     "name": ent.get("canonical_name"),
                     "type": ent.get("entity_type"),
@@ -656,7 +664,7 @@ class RequestWorkflow:
                     "aliases": aliases,
                 }
         except Exception:
-            pass
+            logger.debug("identity_state_snapshot_skipped", exc_info=True)
 
         # Snapshot signoff state
         signoff_state = []
@@ -672,7 +680,7 @@ class RequestWorkflow:
             )
             signoff_state = [_row_to_serializable(s) for s in sig_result.mappings().fetchall()]
         except Exception:
-            pass
+            logger.debug("signoff_state_snapshot_skipped", exc_info=True)
 
         # Waiver state — waived exception IDs
         waiver_state = [
@@ -800,7 +808,7 @@ class RequestWorkflow:
                 "tenant_id": tenant_id,
             },
         )
-        self.db.commit()
+        self._safe_commit()
 
         row = pkg_result.mappings().fetchone()
         logger.info(
@@ -905,7 +913,7 @@ class RequestWorkflow:
             """),
             update_params,
         )
-        self.db.commit()
+        self._safe_commit()
 
         logger.info(
             "signoff_added",
@@ -1414,7 +1422,7 @@ class RequestWorkflow:
                 "tenant_id": tenant_id,
             },
         )
-        self.db.commit()
+        self._safe_commit()
 
         logger.info(
             "package_submitted",
@@ -1476,7 +1484,7 @@ class RequestWorkflow:
                 "tenant_id": tenant_id,
             },
         )
-        self.db.commit()
+        self._safe_commit()
 
         package = self.assemble_response_package(
             tenant_id, request_case_id, generated_by=generated_by
@@ -1498,7 +1506,7 @@ class RequestWorkflow:
                 "tenant_id": tenant_id,
             },
         )
-        self.db.commit()
+        self._safe_commit()
 
         logger.info(
             "amendment_created",

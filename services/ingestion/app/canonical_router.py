@@ -36,6 +36,19 @@ logger = logging.getLogger("canonical-records")
 
 router = APIRouter(prefix="/api/v1/records", tags=["Canonical Records"])
 
+# Defense-in-depth: whitelist of fragments allowed in dynamic WHERE clauses.
+# All filter columns are hardcoded in endpoint logic — this assertion catches
+# regressions if a future change introduces an unsafe column reference.
+_ALLOWED_WHERE_FRAGMENTS = frozenset({
+    "tenant_id = :tid",
+    "traceability_lot_code = :tlc",
+    "event_type = :event_type",
+    "status = :status",
+    "source_system = :source_system",
+    "event_timestamp >= :start_date",
+    "event_timestamp <= :end_date",
+})
+
 
 # ---------------------------------------------------------------------------
 # DB Session
@@ -116,6 +129,9 @@ async def list_records(
         where_clauses.append("event_timestamp <= :end_date")
         params["end_date"] = end_date
 
+    assert all(c in _ALLOWED_WHERE_FRAGMENTS for c in where_clauses), (
+        f"Unexpected WHERE fragment in canonical query: {where_clauses}"
+    )
     where = " AND ".join(where_clauses)
 
     count_row = db_session.execute(
@@ -178,11 +194,16 @@ async def list_ingestion_runs(
     tid = _resolve_tenant(tenant_id, principal)
     from sqlalchemy import text
 
-    where = "tenant_id = :tid"
+    where_parts = ["tenant_id = :tid"]
     params: Dict[str, Any] = {"tid": tid, "lim": limit}
     if status:
-        where += " AND status = :status"
+        where_parts.append("status = :status")
         params["status"] = status
+
+    assert all(c in _ALLOWED_WHERE_FRAGMENTS for c in where_parts), (
+        f"Unexpected WHERE fragment in ingestion-runs query: {where_parts}"
+    )
+    where = " AND ".join(where_parts)
 
     rows = db_session.execute(
         text(f"""
