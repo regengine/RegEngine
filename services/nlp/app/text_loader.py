@@ -43,7 +43,7 @@ def load_artifact(url_or_s3: str) -> str:
             try:
                 return pdfminer.extract_text(bio) or ""
             except Exception:
-                pass
+                logger.debug("pdf_text_extraction_failed", exc_info=True)
     if "text/html" in ctype:
         # naive HTML to text
         from html.parser import HTMLParser

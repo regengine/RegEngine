@@ -176,7 +176,7 @@ def _persist_verification_result(
         try:
             db.rollback()
         except Exception:
-            pass
+            logger.debug("chain_verification_rollback_failed", exc_info=True)
 
 
 def _log_verification_audit(

@@ -5,14 +5,23 @@ Request/Response models for API endpoints.
 """
 
 import uuid as uuid_module
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from .enums import ClassificationType, EvidenceType
+from .enums import (
+    ClassificationType,
+    EntityType,
+    EvidenceType,
+    Jurisdiction,
+    LocationType,
+    OwnerPayMode,
+    ProjectType,
+    TaskStatus,
+)
 
 # Pydantic Schemas (API Request/Response Models)
 # =============================================================================
