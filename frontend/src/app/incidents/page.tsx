@@ -29,6 +29,39 @@ import {
 
 const INGESTION_API = '/api/ingestion';
 
+interface IncidentAction {
+  id: string;
+  title: string;
+  assigned_to: string;
+  priority: string;
+  status: string;
+}
+
+interface IncidentUpdate {
+  id: string;
+  timestamp: string;
+  author: string;
+  message: string;
+  update_type: string;
+}
+
+interface Incident {
+  incident_id: string;
+  title: string;
+  severity: string;
+  incident_type: string;
+  status: string;
+  commander: string;
+  description: string;
+  affected_products: string[];
+  affected_lots: string[];
+  affected_facilities: string[];
+  opened_at: string;
+  actions: IncidentAction[];
+  updates: IncidentUpdate[];
+  created_at: string;
+}
+
 const SEVERITY_CONFIG: Record<string, { color: string; bgColor: string }> = {
   critical: { color: 'text-red-600', bgColor: 'bg-red-50' },
   major: { color: 'text-orange-600', bgColor: 'bg-orange-50' },
@@ -120,7 +153,7 @@ export default function IncidentCommandPage() {
   });
 
   const incidentList = incidents.data?.incidents ?? [];
-  const selected = incidentList.find((i: any) => i.incident_id === selectedId);
+  const selected = (incidentList as Incident[]).find((i: Incident) => i.incident_id === selectedId);
 
   return (
     <PageContainer>
@@ -145,11 +178,11 @@ export default function IncidentCommandPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Incident List */}
         <div className="space-y-3">
-          {incidentList.map((inc: any) => {
+          {(incidentList as Incident[]).map((inc: Incident) => {
             const sevConfig = SEVERITY_CONFIG[inc.severity] || SEVERITY_CONFIG.minor;
             const statConfig = STATUS_CONFIG[inc.status] || STATUS_CONFIG.active;
             const isSelected = selectedId === inc.incident_id;
-            const activeActions = inc.actions?.filter((a: any) => a.status !== 'completed').length || 0;
+            const activeActions = inc.actions?.filter((a: IncidentAction) => a.status !== 'completed').length || 0;
 
             return (
               <Card
@@ -204,7 +237,7 @@ export default function IncidentCommandPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {(selected.actions || []).map((action: any) => (
+                  {(selected.actions || []).map((action: IncidentAction) => (
                     <div key={action.id} className={`flex items-center gap-3 p-2 rounded border text-sm ${action.status === 'completed' ? 'bg-green-50/50 border-green-200' : action.status === 'in_progress' ? 'bg-blue-50/50 border-blue-200' : ''}`}>
                       {action.status === 'completed' ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0" /> :
                        action.status === 'in_progress' ? <Radio className="h-4 w-4 text-blue-500 shrink-0 animate-pulse" /> :
@@ -230,7 +263,7 @@ export default function IncidentCommandPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {(selected.updates || []).reverse().map((update: any) => (
+                  {(selected.updates || []).reverse().map((update: IncidentUpdate) => (
                     <div key={update.id} className="flex gap-3 text-sm">
                       <div className="w-1 bg-muted rounded shrink-0" />
                       <div>

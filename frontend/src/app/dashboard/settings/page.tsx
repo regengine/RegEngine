@@ -96,7 +96,7 @@ export default function SettingsPage() {
                     const data = await res.json();
                     if (data?.integrations && Array.isArray(data.integrations)) {
                         // Merge real status into catalog
-                        const statusMap = new Map(data.integrations.map((i: any) => [i.id, i.status]));
+                        const statusMap = new Map(data.integrations.map((i: { id: string; status: string }) => [i.id, i.status]));
                         setIntegrations(INTEGRATIONS.map(i => ({
                             ...i,
                             status: (statusMap.get(i.id) as string) || i.status,

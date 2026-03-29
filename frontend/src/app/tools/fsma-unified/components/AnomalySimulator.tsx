@@ -1,10 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from "react";
-import {
-    LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-    ScatterChart, Scatter, ZAxis, Legend, BarChart, Bar, Cell, ComposedChart, Area, ReferenceLine,
-} from "recharts";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +22,20 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
+
+// ── Lazy-loaded recharts ──
+type RechartsModule = typeof import("recharts");
+
+function useRecharts() {
+    const [mod, setMod] = useState<RechartsModule | null>(null);
+    useEffect(() => {
+        let cancelled = false;
+        import("recharts").then(m => { if (!cancelled) setMod(m); });
+        return () => { cancelled = true; };
+    }, []);
+    return mod;
+}
 
 // ── Types ──
 type RNG = () => number;
@@ -162,6 +171,7 @@ function aggregateDaily(points: TempPoint[], flagged: Set<string>): DailyAggrega
 }
 
 export function AnomalyDetectionSimulator() {
+    const recharts = useRecharts();
     const [seed, setSeed] = useState(204);
     const [mode, setMode] = useState<AlgoMode>("ensemble");
     const [sensitivity, setSensitivity] = useState(55);
@@ -199,6 +209,20 @@ export function AnomalyDetectionSimulator() {
 
     const topFlags = useMemo(() => dataset.points.filter(p => det.flaggedHours.has(p.hour)).slice(-12).reverse(), [dataset.points, det.flaggedHours]);
     const sevColor = (s: number) => s > 0.7 ? "#ef4444" : s > 0.4 ? "#f59e0b" : s > 0.1 ? "#f59e0b88" : "#10b98133";
+
+    if (!recharts) {
+        return (
+            <div className="flex items-center justify-center p-12">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading charts...</span>
+            </div>
+        );
+    }
+
+    const {
+        LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+        ScatterChart, Scatter, ZAxis, Legend, BarChart, Bar, Cell, ComposedChart, Area, ReferenceLine,
+    } = recharts;
 
     return (
         <div className="space-y-4">

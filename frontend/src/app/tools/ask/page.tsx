@@ -10,7 +10,7 @@ interface QueryResult {
   intent: string;
   confidence: number;
   filters: Record<string, string>;
-  results: any[];
+  results: unknown[];
   apiEndpoints: Array<{ path: string; params: Record<string, string>; resultType: string }>;
 }
 
@@ -113,6 +113,20 @@ function parseQuery(query: string): QueryResult {
 }
 
 // Generate realistic demo results
+interface TraceResult {
+  type: string;
+  nodes: TraceNode[];
+  lotId?: string;
+  product?: string;
+}
+
+interface OrphanLot {
+  lot: string;
+  product: string;
+  origin: string;
+  firstSeen: string;
+}
+
 function generateResults(intent: string, filters: Record<string, string>): unknown[] {
   switch (intent) {
     case 'trace_forward': {
@@ -471,14 +485,14 @@ export default function AskPage() {
                 {result.intent === 'trace_forward' || result.intent === 'trace_backward' ? (
                   <div className="bg-white border border-slate-300 rounded-lg p-6">
                     <div className="space-y-4">
-                      {result.results[0]?.nodes?.map((node: TraceNode, idx: number) => (
+                      {(result.results[0] as TraceResult | undefined)?.nodes?.map((node: TraceNode, idx: number) => (
                         <div key={idx} className="flex items-center gap-4">
                           <div className="flex-1 bg-slate-50 rounded-lg p-4 border border-slate-200">
                             <p className="font-medium text-slate-900">{node.facility}</p>
                             <p className="text-sm text-slate-600">GLN: {node.gln}</p>
                             <p className="text-xs text-slate-500 mt-2">{node.date}</p>
                           </div>
-                          {idx < (result.results[0]?.nodes?.length || 0) - 1 && (
+                          {idx < ((result.results[0] as TraceResult | undefined)?.nodes?.length || 0) - 1 && (
                             <ArrowRight className="text-slate-400" size={24} />
                           )}
                         </div>
@@ -561,7 +575,7 @@ export default function AskPage() {
                   </div>
                 ) : result.intent === 'orphan_lots' ? (
                   <div className="space-y-3">
-                    {(result.results as any[]).map((orphan, idx) => (
+                    {(result.results as OrphanLot[]).map((orphan, idx) => (
                       <div key={idx} className="bg-red-50 border border-red-300 rounded-lg p-4">
                         <div className="flex items-start justify-between mb-2">
                           <p className="font-mono font-semibold text-red-900">{orphan.lot}</p>

@@ -142,12 +142,14 @@ export function DataImportClient() {
         try {
             const effectiveKey = apiKey || '';
             const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'fsma');
-            const jobId = (result as any).job_id || (result as any).id || (result as any).task_id;
+            const resultRecord = result as unknown as Record<string, unknown>;
+            const jobId = (resultRecord.job_id as string | undefined) || (resultRecord.id as string | undefined) || (resultRecord.task_id as string | undefined);
             setUploadResult({ jobId, status: 200 });
             setUploadState('success');
-        } catch (err: any) {
-            const status = err?.response?.status;
-            const msg = err?.response?.data?.detail || err?.message || 'Upload failed';
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { status?: number; data?: { detail?: string } }; message?: string };
+            const status = axiosErr?.response?.status;
+            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Upload failed';
             setUploadResult({ status, error: msg });
             setUploadState('error');
         }
@@ -210,8 +212,9 @@ export function DataImportClient() {
             );
 
             setSampleState(result.accepted > 0 ? 'done' : 'error');
-        } catch (err: any) {
-            const msg = err?.response?.data?.detail || err?.message || 'Webhook ingest failed';
+        } catch (err: unknown) {
+            const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
+            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Webhook ingest failed';
             addStep('Batch ingest', false, msg);
             setSampleState('error');
         }

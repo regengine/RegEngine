@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import type { Html5Qrcode as Html5QrcodeType } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Camera, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -17,7 +17,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     const [scanCount, setScanCount] = useState(0);
     const [lastCode, setLastCode] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const scannerRef = useRef<Html5Qrcode | null>(null);
+    const scannerRef = useRef<Html5QrcodeType | null>(null);
     const cooldownRef = useRef(false);
     const scannerRegionId = 'html5qr-code-full-region';
 
@@ -33,6 +33,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     const startScanning = async () => {
         setError(null);
         try {
+            const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
             const devices = await Html5Qrcode.getCameras();
             if (!devices || devices.length === 0) {
                 throw new Error('No cameras found.');

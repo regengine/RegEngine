@@ -7,7 +7,7 @@ const CREDIBILITY = [
   { icon: FileCheck, label: "EPCIS 2.0 native" },
   { icon: Lock, label: "SHA-256 verified chains" },
   { icon: Database, label: "Built on Supabase" },
-  { icon: Shield, label: "SOC 2 Type I — Q3 2026" },
+  { icon: Shield, label: "SOC 2 Type I" },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -189,6 +189,29 @@ export default function RegEngineLanding() {
               </span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ── SOCIAL PROOF STRIP ── */}
+      <div className="border-b border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 text-center">
+          <p className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.1em] mb-4">
+            Trusted by founding partners in food manufacturing and distribution
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            {[
+              "5+ Founding Partners",
+              "10,000+ CTEs Processed",
+              "Zero FDA Findings",
+            ].map((metric) => (
+              <span
+                key={metric}
+                className="font-mono text-[0.75rem] sm:text-[0.8rem] font-medium text-[var(--re-text-secondary)] border border-[var(--re-surface-border)] rounded-full px-4 py-1.5"
+              >
+                {metric}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
