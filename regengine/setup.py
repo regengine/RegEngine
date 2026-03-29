@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="regengine",
-    version="1.0.0",
+    version="0.1.0.dev0",
     author="RegEngine",
     author_email="sdk@regengine.co",
     description="Official Python SDK for RegEngine FSMA 204 Compliance Platform",
@@ -23,7 +23,7 @@ setup(
         "Changelog": "https://github.com/regengine/python-sdk/blob/main/CHANGELOG.md",
     },
     classifiers=[
-        "Development Status :: 5 - Production/Stable",
+        "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "License :: Other/Proprietary License",
         "Operating System :: OS Independent",

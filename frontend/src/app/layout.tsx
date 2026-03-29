@@ -4,7 +4,6 @@ import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
-import { PWAElements } from '@/components/mobile/PWAElements'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
 import type { Metadata, Viewport } from 'next'
 
@@ -94,7 +93,6 @@ export default function RootLayout({
           <AuthAwareFooter />
         </Providers>
         <AccessibilityWidget />
-        <PWAElements />
         {enableVercelAnalytics ? <Analytics /> : null}
         {enableVercelAnalytics ? <SpeedInsights /> : null}
       </body>
