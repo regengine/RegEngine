@@ -13,7 +13,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import RulesDashboardPage from '@/app/rules/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // Mock auth context
 vi.mock('@/lib/auth-context', () => ({
@@ -105,7 +115,7 @@ describe('RulesDashboardPage', () => {
 
   it('renders the rule list with titles', () => {
     setupRules();
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('KDE Ship-From must be present')).toBeInTheDocument();
     expect(screen.getByText('Lot code format ISO check')).toBeInTheDocument();
@@ -114,7 +124,7 @@ describe('RulesDashboardPage', () => {
 
   it('shows severity badges for each rule', () => {
     setupRules();
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('critical')).toBeInTheDocument();
     expect(screen.getByText('warning')).toBeInTheDocument();
@@ -123,7 +133,7 @@ describe('RulesDashboardPage', () => {
 
   it('displays summary counts', () => {
     setupRules();
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('Total Rules')).toBeInTheDocument();
     // Critical appears in both summary card and filter dropdown; verify both exist
@@ -134,7 +144,7 @@ describe('RulesDashboardPage', () => {
   it('filters by category when dropdown changes', async () => {
     setupRules();
     const user = userEvent.setup();
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     // Native <select> elements have role 'combobox' in testing-library
     const selects = screen.getAllByRole('combobox');
@@ -150,7 +160,7 @@ describe('RulesDashboardPage', () => {
   it('calls seedRules.mutate when seed button is clicked', async () => {
     setupRules();
     const user = userEvent.setup();
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     const seedButton = screen.getByRole('button', { name: /seed rules/i });
     await user.click(seedButton);
@@ -163,7 +173,7 @@ describe('RulesDashboardPage', () => {
       data: undefined,
       isLoading: true,
     });
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.queryByText('KDE Ship-From must be present')).not.toBeInTheDocument();
     expect(screen.getByText('Compliance Rules')).toBeInTheDocument();
@@ -176,7 +186,7 @@ describe('RulesDashboardPage', () => {
       data: { rules: SAMPLE_RULES, __isDemo: true },
       isLoading: false,
     });
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     // The page renders rules successfully with __isDemo flag
     expect(screen.getByText('KDE Ship-From must be present')).toBeInTheDocument();
@@ -189,7 +199,7 @@ describe('RulesDashboardPage', () => {
       data: { rules: [], __isDemo: false },
       isLoading: false,
     });
-    render(<RulesDashboardPage />);
+    render(<RulesDashboardPage />, { wrapper: createWrapper() });
 
     expect(screen.getByText('No rules found')).toBeInTheDocument();
     expect(screen.getByText(/Click.*Seed Rules.*to load/)).toBeInTheDocument();

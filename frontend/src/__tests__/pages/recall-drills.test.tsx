@@ -11,7 +11,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import RecallDrillsPage from '@/app/dashboard/recall-drills/page';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // ── Mocks ──
 
@@ -76,14 +86,14 @@ describe('RecallDrillsPage', () => {
 
     it('renders loading state initially', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-        render(<RecallDrillsPage />);
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Loading drill preview data...')).toBeInTheDocument();
     });
 
     it('renders drill runs when fetch succeeds', async () => {
         mockFetchSuccess();
-        render(<RecallDrillsPage />);
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('Weekend retailer trace-back')).toBeInTheDocument();
@@ -94,7 +104,7 @@ describe('RecallDrillsPage', () => {
 
     it('renders empty state when no drills exist', async () => {
         mockFetchSuccess([]);
-        render(<RecallDrillsPage />);
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('No drills yet')).toBeInTheDocument();
@@ -103,14 +113,14 @@ describe('RecallDrillsPage', () => {
 
     it('renders page heading', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
-        render(<RecallDrillsPage />);
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         expect(screen.getByText('Recall Drill Workspace')).toBeInTheDocument();
     });
 
     it('renders warnings for drills that have them', async () => {
         mockFetchSuccess();
-        render(<RecallDrillsPage />);
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('2 lots had partial CTE data')).toBeInTheDocument();
@@ -125,7 +135,7 @@ describe('RecallDrillsPage', () => {
             .mockResolvedValueOnce({ ok: false, status: 500 });
 
         const user = userEvent.setup();
-        render(<RecallDrillsPage />);
+        render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
         await waitFor(() => {
             expect(screen.getByText('Weekend retailer trace-back')).toBeInTheDocument();
