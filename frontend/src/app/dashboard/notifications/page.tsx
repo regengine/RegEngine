@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -111,6 +111,7 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 export default function NotificationPrefsPage() {
     const { isAuthenticated, apiKey } = useAuth();
     const { tenantId } = useTenant();
+    const queryClient = useQueryClient();
     const isLoggedIn = isAuthenticated;
 
     const { data: prefs = null, isLoading: loading, error: prefsError } = useQuery({
@@ -145,6 +146,7 @@ export default function NotificationPrefsPage() {
     const savePrefsMutation = useMutation({
         mutationFn: () => apiSavePrefs(tenantId, apiKey || '', effectivePrefs!),
         onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notification-prefs', tenantId] });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         },

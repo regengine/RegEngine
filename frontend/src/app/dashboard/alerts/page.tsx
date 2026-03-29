@@ -100,12 +100,18 @@ export default function AlertsDashboardPage() {
     const alerts = alertsData ?? [];
     const error = alertsError?.message ?? null;
 
+    const [ackError, setAckError] = useState<string | null>(null);
+
     const acknowledgeMutation = useMutation({
         mutationFn: (alertId: string) => acknowledgeAlert(tenantId, apiKey || '', alertId),
         onSuccess: (_data, alertId) => {
+            setAckError(null);
             alertsQueryClient.setQueryData<Alert[]>(['alerts', tenantId], (old) =>
                 (old ?? []).map(a => a.id === alertId ? { ...a, acknowledged: true } : a)
             );
+        },
+        onError: (err: Error) => {
+            setAckError(err.message || 'Failed to acknowledge alert');
         },
     });
 
