@@ -35,10 +35,28 @@ function loadSettings(): A11ySettings {
   return defaultSettings;
 }
 
+let dyslexicFontLoaded = false;
+
+function loadOpenDyslexicFont() {
+  if (dyslexicFontLoaded) return;
+  const linkId = 're-opendyslexic-font';
+  if (document.getElementById(linkId)) {
+    dyslexicFontLoaded = true;
+    return;
+  }
+  const link = document.createElement('link');
+  link.id = linkId;
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.cdnfonts.com/css/opendyslexic';
+  document.head.appendChild(link);
+  dyslexicFontLoaded = true;
+}
+
 function applySettings(s: A11ySettings) {
   const html = document.documentElement;
   html.classList.toggle('a11y-font-large', s.fontSize === 'large');
   html.classList.toggle('a11y-font-xl', s.fontSize === 'xl');
+  if (s.dyslexicFont) loadOpenDyslexicFont();
   html.classList.toggle('a11y-dyslexic', s.dyslexicFont);
   html.classList.toggle('a11y-high-contrast', s.highContrast);
   html.classList.toggle('a11y-reduced-motion', s.reducedMotion);

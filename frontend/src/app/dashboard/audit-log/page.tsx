@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -117,68 +118,56 @@ export default function AuditLogPage() {
 
     const [filter, setFilter] = useState<EventFilter>('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [entries, setEntries] = useState<AuditEntry[]>([]);
-    const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [pageSize] = useState(50);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
-    const loadLog = useCallback(async () => {
-        if (!isLoggedIn || !effectiveTenantId) return;
-        setLoading(true);
-        setError(null);
-        try {
+    const { data: auditData, isLoading: loading, error: auditError, refetch: loadLog, dataUpdatedAt } = useQuery({
+        queryKey: ['audit-log', effectiveTenantId, page, pageSize],
+        queryFn: async () => {
             const data = await fetchAuditLog(effectiveTenantId!, apiKey || '', page, pageSize);
             const fetchedEntries = data.entries || [];
 
             if (fetchedEntries.length > 1 || page > 1) {
-                setEntries(fetchedEntries);
-                setTotal(data.total || 0);
-            } else {
-                // Supplement with supplier facility events from bulk upload
-                try {
-                    const { apiClient } = await import('@/lib/api-client');
-                    const facilities = await apiClient.listSupplierFacilities();
-                    const supplemental: AuditEntry[] = [...fetchedEntries];
-
-                    for (const f of facilities) {
-                        supplemental.push({
-                            id: `facility-${f.id}`,
-                            event_type: 'facility_created',
-                            action: 'facility_created',
-                            category: 'cte',
-                            actor: 'bulk_upload',
-                            resource: f.name,
-                            timestamp: new Date().toISOString(),
-                            details: { source: 'bulk_upload', facility_id: f.id },
-                            ip_address: '',
-                            hash: '',
-                        });
-                    }
-
-                    setEntries(supplemental);
-                    setTotal(supplemental.length);
-                } catch {
-                    setEntries(fetchedEntries);
-                    setTotal(data.total || 0);
-                }
+                return { entries: fetchedEntries, total: data.total || 0 };
             }
 
-            setLastFetched(new Date());
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load audit log');
-        } finally {
-            setLoading(false);
-        }
-    }, [isLoggedIn, effectiveTenantId, apiKey, page, pageSize]);
+            // Supplement with supplier facility events from bulk upload
+            try {
+                const { apiClient } = await import('@/lib/api-client');
+                const facilities = await apiClient.listSupplierFacilities();
+                const supplemental: AuditEntry[] = [...fetchedEntries];
 
-    useEffect(() => { loadLog(); }, [loadLog]);
+                for (const f of facilities) {
+                    supplemental.push({
+                        id: `facility-${f.id}`,
+                        event_type: 'facility_created',
+                        action: 'facility_created',
+                        category: 'cte',
+                        actor: 'bulk_upload',
+                        resource: f.name,
+                        timestamp: new Date().toISOString(),
+                        details: { source: 'bulk_upload', facility_id: f.id },
+                        ip_address: '',
+                        hash: '',
+                    });
+                }
+
+                return { entries: supplemental, total: supplemental.length };
+            } catch {
+                return { entries: fetchedEntries, total: data.total || 0 };
+            }
+        },
+        enabled: isLoggedIn && !!effectiveTenantId,
+    });
+
+    const entries = auditData?.entries ?? [];
+    const total = auditData?.total ?? 0;
+    const error = auditError?.message ?? null;
+    const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
     // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
-    useDashboardRefresh(loadLog);
+    useDashboardRefresh(() => { loadLog(); });
 
     // Client-side filtering + search
     const filtered = useMemo(() => {
@@ -230,7 +219,7 @@ export default function AuditLogPage() {
                                 Updated {lastFetched.toLocaleTimeString()}
                             </span>
                         )}
-                        <Button variant="ghost" size="sm" onClick={loadLog} disabled={loading} className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => loadLog()} disabled={loading} className="h-8 w-8 p-0">
                             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
                         </Button>
                         <Button variant="outline" size="sm" className="rounded-xl min-h-[36px] text-xs active:scale-[0.97]" disabled title="Coming in v1.1">

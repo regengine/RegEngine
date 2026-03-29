@@ -23,19 +23,21 @@ import {
     UserCog,
     Activity,
     ChevronRight,
+    ChevronDown,
     LogOut,
     Zap,
     AlertTriangle,
     FileCheck,
     Scale,
-    GitBranch,
     Fingerprint,
     ClipboardList,
     Eye,
-    Wrench,
     Code2,
-    BookOpen,
 } from 'lucide-react';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface NavItem {
     label: string;
@@ -43,90 +45,252 @@ interface NavItem {
     icon: React.ComponentType<{ className?: string }>;
 }
 
-interface NavSection {
-    title?: string;
+interface CollapsibleSection {
+    key: string;
+    title: string;
     items: NavItem[];
 }
 
-const NAV_SECTIONS: NavSection[] = [
+// ---------------------------------------------------------------------------
+// Navigation data
+// ---------------------------------------------------------------------------
+
+/** Always-visible top-level items (max 5) */
+const TOP_ITEMS: NavItem[] = [
+    { label: 'Overview', href: '/dashboard', icon: Activity },
+    { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
+    { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
+    { label: 'Import Data', href: '/tools/data-import', icon: FileSpreadsheet },
+    { label: 'Export', href: '/dashboard/export-jobs', icon: Archive },
+];
+
+/** Collapsible sections (closed by default) */
+const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     {
-        title: 'Overview',
-        items: [
-            { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
-            { label: 'Compliance Score', href: '/dashboard/compliance', icon: BarChart3 },
-            { label: 'Alerts', href: '/dashboard/alerts', icon: Bell },
-            { label: 'Issues', href: '/dashboard/issues', icon: AlertTriangle },
-        ],
-    },
-    {
+        key: 'fda-response',
         title: 'FDA Response',
         items: [
-            { label: 'Requests', href: '/requests', icon: ClipboardList },
-            { label: 'Recall Report', href: '/dashboard/recall-report', icon: ShieldCheck },
+            { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
             { label: 'Recall Drills', href: '/dashboard/recall-drills', icon: Zap },
-            { label: 'Export Jobs', href: '/dashboard/export-jobs', icon: Archive },
+            { label: 'Recall Report', href: '/dashboard/recall-report', icon: ShieldCheck },
         ],
     },
     {
+        key: 'supply-chain',
+        title: 'Supply Chain',
+        items: [
+            { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
+            { label: 'Products', href: '/dashboard/products', icon: Package },
+            { label: 'Receiving', href: '/dashboard/receiving', icon: Truck },
+            { label: 'Scan', href: '/dashboard/scan', icon: Scan },
+        ],
+    },
+    {
+        key: 'control-plane',
         title: 'Control Plane',
         items: [
             { label: 'Rules', href: '/rules', icon: Scale },
             { label: 'Records', href: '/records', icon: FileCheck },
             { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle },
+            { label: 'Requests', href: '/requests', icon: ClipboardList },
             { label: 'Identity', href: '/identity', icon: Fingerprint },
-            { label: 'Review Queue', href: '/review', icon: Eye },
+            { label: 'Review', href: '/review', icon: Eye },
+            { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
+            { label: 'Readiness', href: '/fsma', icon: ShieldCheck },
+            { label: 'Incidents', href: '/dashboard/issues', icon: AlertTriangle },
+            { label: 'Controls', href: '/compliance/profile', icon: FileText },
         ],
     },
     {
-        title: 'Supply Chain',
-        items: [
-            { label: 'Data Import', href: '/tools/data-import', icon: FileSpreadsheet },
-            { label: 'Field Capture', href: '/dashboard/scan', icon: Scan },
-            { label: 'Receiving Dock', href: '/dashboard/receiving', icon: Truck },
-            { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
-            { label: 'Products', href: '/dashboard/products', icon: Package },
-            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
-        ],
-    },
-    {
-        title: 'Compliance',
-        items: [
-            { label: 'FSMA Dashboard', href: '/fsma', icon: ShieldCheck },
-            { label: 'Compliance Profile', href: '/compliance/profile', icon: FileText },
-            { label: 'Snapshots', href: '/compliance/snapshots', icon: Archive },
-            { label: 'Labels', href: '/compliance/labels', icon: GitBranch },
-            { label: 'Audit Trail', href: '/dashboard/audit-log', icon: ScrollText },
-        ],
-    },
-    {
-        title: 'Tools',
-        items: [
-            { label: 'FTL Checker', href: '/tools/ftl-checker', icon: ShieldCheck },
-            { label: 'KDE Checker', href: '/tools/kde-checker', icon: FileCheck },
-            { label: 'Drill Simulator', href: '/tools/drill-simulator', icon: Zap },
-            { label: 'SOP Generator', href: '/tools/sop-generator', icon: BookOpen },
-            { label: 'All Tools', href: '/tools', icon: Wrench },
-        ],
-    },
-    {
+        key: 'settings',
         title: 'Settings',
         items: [
-            { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-            { label: 'Team', href: '/dashboard/team', icon: UserCog },
             { label: 'Settings', href: '/dashboard/settings', icon: Settings },
-            { label: 'Developer Portal', href: '/developer/portal', icon: Code2 },
+            { label: 'Team', href: '/dashboard/team', icon: UserCog },
+            { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
+            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
+            { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity },
+            { label: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText },
         ],
     },
 ];
 
-const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap(s => s.items);
+/** Mobile nav — the 5 always-visible items only */
+const MOBILE_NAV_ITEMS = TOP_ITEMS;
+
+// ---------------------------------------------------------------------------
+// localStorage helpers for expansion state
+// ---------------------------------------------------------------------------
+
+const STORAGE_KEY = 're-nav-sections';
+
+function loadExpandedSections(): Record<string, boolean> {
+    if (typeof window === 'undefined') return {};
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveExpandedSections(state: Record<string, boolean>) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+        // silent – quota exceeded, private browsing, etc.
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Determine which sections should auto-expand based on the current route
+// ---------------------------------------------------------------------------
+
+function sectionsWithActiveRoute(pathname: string): Set<string> {
+    const active = new Set<string>();
+    for (const section of COLLAPSIBLE_SECTIONS) {
+        for (const item of section.items) {
+            if (pathname === item.href || pathname.startsWith(item.href + '/')) {
+                active.add(section.key);
+            }
+        }
+    }
+    return active;
+}
+
+// ---------------------------------------------------------------------------
+// CollapsibleNavSection component
+// ---------------------------------------------------------------------------
+
+function CollapsibleNavSection({
+    section,
+    expanded,
+    onToggle,
+    pathname,
+}: {
+    section: CollapsibleSection;
+    expanded: boolean;
+    onToggle: () => void;
+    pathname: string;
+}) {
+    const contentRef = React.useRef<HTMLDivElement>(null);
+    const [height, setHeight] = React.useState<number | undefined>(undefined);
+
+    // Measure content height for smooth animation
+    React.useEffect(() => {
+        if (contentRef.current) {
+            setHeight(contentRef.current.scrollHeight);
+        }
+    }, [expanded, section.items.length]);
+
+    return (
+        <div className="mt-1">
+            {/* Section header — clickable toggle */}
+            <button
+                type="button"
+                onClick={onToggle}
+                className="flex w-full items-center gap-1.5 px-5 py-1.5 group cursor-pointer select-none"
+                aria-expanded={expanded}
+            >
+                {expanded ? (
+                    <ChevronDown className="h-3 w-3 text-[var(--re-text-disabled)] transition-transform duration-200" />
+                ) : (
+                    <ChevronRight className="h-3 w-3 text-[var(--re-text-disabled)] transition-transform duration-200" />
+                )}
+                <span className="text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--re-text-muted)]">
+                    {section.title}
+                </span>
+            </button>
+
+            {/* Collapsible items */}
+            <div
+                className="overflow-hidden transition-all duration-200"
+                style={{ maxHeight: expanded ? (height ?? 1000) : 0, opacity: expanded ? 1 : 0 }}
+            >
+                <div ref={contentRef} className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
+                    {section.items.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = pathname === item.href;
+                        return (
+                            <Link
+                                key={item.href + item.label}
+                                href={item.href}
+                                role="listitem"
+                                aria-current={isActive ? 'page' : undefined}
+                                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all min-h-[36px] ${
+                                    isActive
+                                        ? 'bg-[var(--re-brand)]/10 text-[var(--re-brand)] font-medium shadow-[inset_2px_0_0_var(--re-brand)]'
+                                        : 'text-[var(--re-text-muted)] hover:bg-white/[0.03] hover:text-foreground'
+                                }`}
+                            >
+                                <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-[var(--re-brand)]' : ''}`} />
+                                <span className="flex-1">{item.label}</span>
+                                {isActive && <ChevronRight className="h-3 w-3 opacity-50" />}
+                            </Link>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Layout
+// ---------------------------------------------------------------------------
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const { clearCredentials, demoMode, isAuthenticated, isHydrated } = useAuth();
 
-    // Route-level auth guard: redirect unauthenticated users to login
+    // ------ Collapsible section state with localStorage persistence ------
+    const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({});
+    const initializedRef = React.useRef(false);
+
+    // Hydrate from localStorage + auto-expand sections containing the active route
+    React.useEffect(() => {
+        if (!initializedRef.current) {
+            const stored = loadExpandedSections();
+            const active = sectionsWithActiveRoute(pathname);
+            // Merge: stored state wins, but active sections always open
+            const merged: Record<string, boolean> = { ...stored };
+            active.forEach((key) => {
+                merged[key] = true;
+            });
+            setExpandedSections(merged);
+            initializedRef.current = true;
+        } else {
+            // On subsequent route changes, auto-expand sections with active items
+            const active = sectionsWithActiveRoute(pathname);
+            if (active.size > 0) {
+                setExpandedSections((prev) => {
+                    const next = { ...prev };
+                    let changed = false;
+                    active.forEach((key) => {
+                        if (!next[key]) {
+                            next[key] = true;
+                            changed = true;
+                        }
+                    });
+                    return changed ? next : prev;
+                });
+            }
+        }
+    }, [pathname]);
+
+    // Persist to localStorage when expansion state changes
+    React.useEffect(() => {
+        if (initializedRef.current) {
+            saveExpandedSections(expandedSections);
+        }
+    }, [expandedSections]);
+
+    const toggleSection = React.useCallback((key: string) => {
+        setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+    }, []);
+
+    // ------ Route-level auth guard ------
     React.useEffect(() => {
         if (isHydrated && !isAuthenticated) {
             router.push(`/login?next=${encodeURIComponent(pathname)}`);
@@ -184,38 +348,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         links[next]?.focus();
                     }}
                 >
-                    {NAV_SECTIONS.map((section, si) => (
-                        <div key={si} className={si > 0 ? 'mt-4' : ''}>
-                            {section.title && (
-                                <div className="px-5 mb-1.5">
-                                    <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--re-text-disabled)]">
-                                        {section.title}
-                                    </span>
-                                </div>
-                            )}
-                            <div className="px-2.5 space-y-0.5" role="list">
-                                {section.items.map((item) => {
-                                    const Icon = item.icon;
-                                    const isActive = pathname === item.href;
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            role="listitem"
-                                            aria-current={isActive ? 'page' : undefined}
-                                            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all min-h-[36px] ${isActive
-                                                    ? 'bg-[var(--re-brand)]/10 text-[var(--re-brand)] font-medium shadow-[inset_2px_0_0_var(--re-brand)]'
-                                                    : 'text-[var(--re-text-muted)] hover:bg-white/[0.03] hover:text-foreground'
-                                                }`}
-                                        >
-                                            <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-[var(--re-brand)]' : ''}`} />
-                                            <span className="flex-1">{item.label}</span>
-                                            {isActive && <ChevronRight className="h-3 w-3 opacity-50" />}
-                                        </Link>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                    {/* Always-visible top items */}
+                    <div className="px-2.5 space-y-0.5" role="list">
+                        {TOP_ITEMS.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = pathname === item.href;
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    role="listitem"
+                                    aria-current={isActive ? 'page' : undefined}
+                                    className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all min-h-[36px] ${
+                                        isActive
+                                            ? 'bg-[var(--re-brand)]/10 text-[var(--re-brand)] font-medium shadow-[inset_2px_0_0_var(--re-brand)]'
+                                            : 'text-[var(--re-text-muted)] hover:bg-white/[0.03] hover:text-foreground'
+                                    }`}
+                                >
+                                    <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? 'text-[var(--re-brand)]' : ''}`} />
+                                    <span className="flex-1">{item.label}</span>
+                                    {isActive && <ChevronRight className="h-3 w-3 opacity-50" />}
+                                </Link>
+                            );
+                        })}
+                    </div>
+
+                    {/* Divider between top items and collapsible sections */}
+                    <div className="mx-4 my-3 border-t border-[var(--re-border-default)]" />
+
+                    {/* Collapsible sections */}
+                    {COLLAPSIBLE_SECTIONS.map((section) => (
+                        <CollapsibleNavSection
+                            key={section.key}
+                            section={section}
+                            expanded={!!expandedSections[section.key]}
+                            onToggle={() => toggleSection(section.key)}
+                            pathname={pathname}
+                        />
                     ))}
                 </nav>
 
@@ -251,20 +420,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </aside>
 
-            {/* Mobile top nav */}
+            {/* Mobile top nav — limited to 5 always-visible items */}
             <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60 border-b border-[var(--re-border-default)]" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
                 <nav aria-label="Dashboard quick navigation" className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto no-scrollbar scrollbar-none">
-                    {ALL_NAV_ITEMS.slice(0, 10).map((item) => {
+                    {MOBILE_NAV_ITEMS.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-full text-xs font-medium whitespace-nowrap border transition-all active:scale-[0.96] ${isActive
+                                className={`flex items-center gap-1.5 px-3 min-h-[36px] rounded-full text-xs font-medium whitespace-nowrap border transition-all active:scale-[0.96] ${
+                                    isActive
                                         ? 'bg-[var(--re-brand)] text-white border-[var(--re-brand)] shadow-[0_0_12px_rgba(16,185,129,0.3)]'
                                         : 'border-[var(--re-border-default)] text-[var(--re-text-muted)]'
-                                    }`}
+                                }`}
                             >
                                 <Icon className="h-3.5 w-3.5" />
                                 {item.label}

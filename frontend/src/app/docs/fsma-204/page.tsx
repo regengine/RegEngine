@@ -10,7 +10,7 @@ import { T } from '@/lib/design-tokens';
 
 export default function FSMA204GuidePage() {
     return (
-        <div className="re-page">
+        <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Header */}
             <div style={{
                 borderBottom: `1px solid ${T.border}`,
@@ -49,7 +49,7 @@ export default function FSMA204GuidePage() {
                         </span>
                     </div>
 
-                    <h1 className="re-heading-xl">
+                    <h1 className="text-[1.75rem] sm:text-[2.5rem] font-bold text-[var(--re-text-primary)] mb-2">
                         FSMA 204 Integration Guide
                     </h1>
                     <p style={{ color: T.textMuted, fontSize: '16px', maxWidth: '600px' }}>
@@ -110,10 +110,10 @@ export default function FSMA204GuidePage() {
 
                 {/* What is FSMA 204? */}
                 <section className="mb-14">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         What is FSMA 204?
                     </h2>
-                    <p className="re-body">
+                    <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                         The FDA Food Safety Modernization Act Section 204 (FSMA 204) requires companies handling foods on
                         the <strong className="text-re-text-primary">Food Traceability List (FTL)</strong> <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="FDA Food Traceability List">[FDA]</a> to maintain standardized
                         traceability records <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1320" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="21 CFR § 1.1320-1.1350 Requirement">[FDA]</a>. In a recall, you must provide the FDA with a sortable spreadsheet within
@@ -141,10 +141,10 @@ export default function FSMA204GuidePage() {
 
                 {/* Quick Start */}
                 <section className="mb-14">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         Quick Start: Record a CTE
                     </h2>
-                    <p className="re-body">
+                    <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                         Critical Tracking Events (CTEs) are the building blocks of FSMA 204 compliance.
                         Here&apos;s how to record a receiving event:
                     </p>
@@ -220,7 +220,7 @@ export default function FSMA204GuidePage() {
                             <div className="w-2 h-2 rounded-full bg-re-brand" />
                             <span className="text-xs text-re-brand">201 Created</span>
                         </div>
-                        <pre className="re-code-block">
+                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`{
   "accepted": 1,
   "rejected": 0,
@@ -243,7 +243,7 @@ export default function FSMA204GuidePage() {
 
                 {/* CTEs and KDEs */}
                 <section className="mb-14">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         Critical Tracking Events (CTEs)
                     </h2>
                     <p style={{ color: T.text, lineHeight: 1.7, marginBottom: '24px' }}>
@@ -256,7 +256,7 @@ export default function FSMA204GuidePage() {
                         borderRadius: '8px',
                         overflow: 'hidden',
                     }}>
-                        <table className="re-table">
+                        <table className="w-full border-collapse">
                             <thead>
                                 <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                                     <th className="text-left px-4 py-3 text-re-text-muted text-xs font-semibold">CTE</th>
@@ -294,10 +294,10 @@ export default function FSMA204GuidePage() {
 
                 {/* FDA Request Mode */}
                 <section className="mb-14">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         FDA Request Mode
                     </h2>
-                    <p className="re-body">
+                    <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                         When the FDA requests traceability data during a recall, you have <strong className="text-re-text-primary">24 hours</strong> <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className="text-xs text-re-text-muted hover:text-re-brand transition-colors align-super" title="21 CFR § 1.1455(c) Requirement">[FDA]</a> to
                         provide an electronic sortable spreadsheet per 21 CFR 1.1455(c). RegEngine generates this with one API call:
                     </p>
@@ -334,7 +334,7 @@ export default function FSMA204GuidePage() {
                         </pre>
                     </div>
 
-                    <p className="re-body">
+                    <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                         The export contains the FDA-mandated 11-column format:
                     </p>
 
@@ -354,10 +354,10 @@ export default function FSMA204GuidePage() {
 
                 {/* Supply Chain Tracing */}
                 <section className="mb-14">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         Supply Chain Tracing
                     </h2>
-                    <p className="re-body">
+                    <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                         RegEngine uses a graph database to trace products forward and backward through your supply chain:
                     </p>
 
@@ -376,7 +376,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span className="text-xs text-re-text-muted">Forward Trace (where did this lot go?)</span>
                         </div>
-                        <pre className="re-code-block">
+                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`GET /v1/fsma/trace/forward/LOT-2026-001`}</code>
                         </pre>
                     </div>
@@ -395,7 +395,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span className="text-xs text-re-text-muted">Backward Trace (where did this lot come from?)</span>
                         </div>
-                        <pre className="re-code-block">
+                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`GET /v1/fsma/trace/backward/LOT-2026-001`}</code>
                         </pre>
                     </div>
@@ -403,10 +403,10 @@ export default function FSMA204GuidePage() {
 
                 {/* Verify Don't Trust */}
                 <section className="mb-14">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         Verify, Don&apos;t Trust
                     </h2>
-                    <p className="re-body">
+                    <p className="text-[var(--re-text-secondary)] leading-[1.7] mb-4">
                         Every compliance record is cryptographically hashed. You can independently verify the integrity
                         of your data without database access:
                     </p>
@@ -424,7 +424,7 @@ export default function FSMA204GuidePage() {
                         }}>
                             <span className="text-xs text-re-text-muted">Independent Verification</span>
                         </div>
-                        <pre className="re-code-block">
+                        <pre className="p-3 sm:p-[16px_20px] m-0 text-[12px] sm:text-[13px] leading-[1.5] text-[var(--re-text-tertiary)]">
                             <code>{`python verify_chain.py --audit
 # ✓ Chain integrity verified
 # ✓ 1847 records validated
@@ -435,7 +435,7 @@ export default function FSMA204GuidePage() {
 
                 {/* API Reference Links */}
                 <section className="mb-12">
-                    <h2 className="re-heading-lg">
+                    <h2 className="text-[1.25rem] sm:text-2xl font-semibold text-[var(--re-text-primary)] mb-4">
                         Related Endpoints
                     </h2>
 

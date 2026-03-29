@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,34 +84,33 @@ export default function AlertsDashboardPage() {
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
+    const alertsQueryClient = useQueryClient();
+
     const [filter, setFilter] = useState<SeverityFilter>('all');
-    const [alerts, setAlerts] = useState<Alert[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
-    const loadAlerts = useCallback(async () => {
-        if (!isLoggedIn || !tenantId) return;
-        setLoading(true);
-        setError(null);
-        try {
+    const { data: alertsData, isLoading: loading, error: alertsError, refetch: loadAlerts } = useQuery({
+        queryKey: ['alerts', tenantId],
+        queryFn: async () => {
             const data = (await fetchAlerts(tenantId, apiKey || '')) as AlertsResponse;
-            setAlerts(data.alerts || []);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load alerts');
-        } finally {
-            setLoading(false);
-        }
-    }, [isLoggedIn, tenantId]);
+            return data.alerts || [];
+        },
+        enabled: isLoggedIn && !!tenantId,
+    });
 
-    useEffect(() => { loadAlerts(); }, [loadAlerts]);
+    const alerts = alertsData ?? [];
+    const error = alertsError?.message ?? null;
 
-    const handleAcknowledge = async (alertId: string) => {
-        try {
-            await acknowledgeAlert(tenantId, apiKey || '', alertId);
-            setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a));
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to acknowledge alert');
-        }
+    const acknowledgeMutation = useMutation({
+        mutationFn: (alertId: string) => acknowledgeAlert(tenantId, apiKey || '', alertId),
+        onSuccess: (_data, alertId) => {
+            alertsQueryClient.setQueryData<Alert[]>(['alerts', tenantId], (old) =>
+                (old ?? []).map(a => a.id === alertId ? { ...a, acknowledged: true } : a)
+            );
+        },
+    });
+
+    const handleAcknowledge = (alertId: string) => {
+        acknowledgeMutation.mutate(alertId);
     };
 
     const filtered = filter === 'all' ? alerts : alerts.filter(a => a.severity === filter);
@@ -134,7 +134,7 @@ export default function AlertsDashboardPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={loadAlerts} disabled={loading}>
+                        <Button variant="outline" size="sm" className="rounded-xl min-h-[44px]" onClick={() => loadAlerts()} disabled={loading}>
                             <RefreshCw className={`h-3.5 w-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
                         </Button>
                         <Badge variant="outline" className="text-xs py-1.5 min-h-[44px] flex items-center">

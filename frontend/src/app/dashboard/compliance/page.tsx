@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -206,35 +207,20 @@ export default function ComplianceDashboardPage() {
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
 
-    const [score, setScore] = useState<ComplianceScore | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [lastFetched, setLastFetched] = useState<Date | null>(null);
+    const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
 
-    const fetchScore = React.useCallback(() => {
-        if (!isLoggedIn || !tenantId) return;
-        setLoading(true);
-        setError(null);
-        fetchComplianceScore(tenantId, apiKey || '')
-            .then((data) => {
-                setScore(data as ComplianceScore);
-                setLastFetched(new Date());
-            })
-            .catch((err) => {
-                setError(err instanceof Error ? err.message : 'Failed to load compliance score');
-            })
-            .finally(() => setLoading(false));
-    }, [isLoggedIn, tenantId]);
+    const { data: score = null, isLoading: loading, error: scoreError, dataUpdatedAt, refetch: fetchScore } = useQuery({
+        queryKey: ['compliance-score', tenantId],
+        queryFn: async () => {
+            const data = await fetchComplianceScore(tenantId, apiKey || '');
+            return data as ComplianceScore;
+        },
+        enabled: isLoggedIn && !!tenantId,
+        refetchInterval: POLL_MS,
+    });
 
-    useEffect(() => { fetchScore(); }, [fetchScore]);
-
-    // Auto-refresh every 60s
-    useEffect(() => {
-        if (!isLoggedIn || !tenantId) return;
-        const POLL_MS = Number(process.env.NEXT_PUBLIC_POLL_SLOW_MS) || 60_000;
-        const interval = setInterval(fetchScore, POLL_MS);
-        return () => clearInterval(interval);
-    }, [isLoggedIn, tenantId, fetchScore]);
+    const error = scoreError?.message ?? null;
+    const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
     // Ordered breakdown keys by weight (highest first)
     const breakdownKeys = useMemo(() => {
@@ -292,7 +278,7 @@ export default function ComplianceDashboardPage() {
                         {score && (
                             <Button
                                 variant="ghost" size="sm"
-                                onClick={fetchScore}
+                                onClick={() => fetchScore()}
                                 disabled={loading}
                                 className="h-8 w-8 p-0"
                             >
