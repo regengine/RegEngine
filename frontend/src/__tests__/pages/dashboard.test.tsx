@@ -12,11 +12,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardPage from '@/app/dashboard/page';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { getTenantDashboard } from '@/lib/mock-dashboard-data';
 import { useRouter } from 'next/navigation';
+
+function createWrapper() {
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+    });
+    return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+}
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
@@ -83,7 +93,7 @@ describe('DashboardPage', () => {
                 tenantId: null,
             });
 
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Should show loading or not render content yet
             expect(screen.queryByRole('main')).not.toBeInTheDocument();
@@ -98,7 +108,7 @@ describe('DashboardPage', () => {
                 tenantId: null,
             });
 
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             await waitFor(() => {
                 expect(mockPush).toHaveBeenCalledWith('/login?next=%2Fdashboard');
@@ -118,7 +128,7 @@ describe('DashboardPage', () => {
                 tenantId: 'tenant-123',
             });
 
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Dashboard should render (even if showing loading for data)
             expect(screen.queryByText(/welcome/i) || screen.queryByText(/dashboard/i)).toBeTruthy();
@@ -141,7 +151,7 @@ describe('DashboardPage', () => {
         });
 
         it('displays user information', async () => {
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Dashboard should render content when user is authenticated
             await waitFor(() => {
@@ -164,7 +174,7 @@ describe('DashboardPage', () => {
                 },
             });
 
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Dashboard should render with tenant context active
             await waitFor(() => {
@@ -174,7 +184,7 @@ describe('DashboardPage', () => {
         });
 
         it('renders navigation links', async () => {
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Common dashboard links
             const commonLinks = [
@@ -215,7 +225,7 @@ describe('DashboardPage', () => {
                 json: () => dataPromise,
             });
 
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Should show loading indicator
             await waitFor(() => {
@@ -234,7 +244,7 @@ describe('DashboardPage', () => {
         it.skip('displays error when data fetch fails', async () => {
             mockFetch.mockRejectedValueOnce(new Error('API Error'));
 
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             await waitFor(() => {
                 expect(
@@ -259,7 +269,7 @@ describe('DashboardPage', () => {
 
         it('allows navigation to sub-pages', async () => {
             const user = userEvent.setup();
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Try to find and click a navigation link
             await waitFor(async () => {
@@ -286,7 +296,7 @@ describe('DashboardPage', () => {
         });
 
         it('has proper document structure', async () => {
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             // Should have main landmark or heading
             await waitFor(() => {
@@ -298,7 +308,7 @@ describe('DashboardPage', () => {
         });
 
         it('all interactive elements are keyboard accessible', async () => {
-            render(<DashboardPage />);
+            render(<DashboardPage />, { wrapper: createWrapper() });
 
             await waitFor(() => {
                 const buttons = screen.queryAllByRole('button');

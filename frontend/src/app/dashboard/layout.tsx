@@ -206,6 +206,7 @@ function CollapsibleNavSection({
             <div
                 className="overflow-hidden transition-all duration-200"
                 style={{ maxHeight: expanded ? (height ?? 1000) : 0, opacity: expanded ? 1 : 0 }}
+                {...(!expanded && { inert: '' as unknown as string })}
             >
                 <div ref={contentRef} className="px-2.5 pl-5 space-y-0.5 pb-1" role="list">
                     {section.items.map((item) => {
@@ -216,6 +217,7 @@ function CollapsibleNavSection({
                                 key={item.href + item.label}
                                 href={item.href}
                                 role="listitem"
+                                tabIndex={expanded ? 0 : -1}
                                 aria-current={isActive ? 'page' : undefined}
                                 className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] transition-all min-h-[36px] ${
                                     isActive
