@@ -1,0 +1,204 @@
+name: Review Gates
+
+on:
+  pull_request:
+    branches: [main]
+
+# Complements existing CI (security.yml, frontend-ci.yml, backend-ci.yml).
+# These checks enforce the code review checklist items that aren't covered
+# by linters or SAST — Supabase patterns, audit trail immutability, etc.
+
+permissions:
+  contents: read
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Supabase Query Patterns (Checklist §2, §3)
+  # ──────────────────────────────────────────────
+  supabase-patterns:
+    name: Supabase Query Patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit .single() usage
+        run: |
+          MATCHES=$(grep -rn '\.single()' frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::warning::Found .single() — verify each should not be .maybeSingle()"
+            echo "  .single() throws on 0 or 2+ rows. Use .maybeSingle() when the row might not exist."
+          fi
+
+      - name: Audit getSession vs getUser
+        run: |
+          # Flag getSession in middleware or server components — should use getUser
+          MATCHES=$(grep -rn 'getSession\b' frontend/src/middleware.ts frontend/src/app/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::warning::Found getSession() in server code — use getUser() for auth validation"
+            echo "  getSession() reads from the cookie and can be spoofed. getUser() validates against the auth server."
+          fi
+
+      - name: Check for select('*')
+        run: |
+          COUNT=$(grep -rn "select('\*')\|select(\"\*\")" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null | wc -l)
+          if [ "$COUNT" -gt 0 ]; then
+            grep -rn "select('\*')\|select(\"\*\")" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null
+            echo "::warning::Found $COUNT select('*') calls — consider selecting only needed columns"
+          fi
+
+      - name: Check for missing error handling on Supabase calls
+        run: |
+          MATCHES=$(grep -rn 'const { data } = await supabase\|const {data} = await supabase' \
+            frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found Supabase calls that don't destructure { error } — always check for errors"
+            exit 1
+          fi
+
+  # ──────────────────────────────────────────────
+  # Source Code Hygiene (Checklist §1, §5)
+  # ──────────────────────────────────────────────
+  source-hygiene:
+    name: Source Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No secrets or placeholders in source
+        run: |
+          FOUND=0
+          # Check frontend source
+          if grep -rn 'sk_test_\|sk_live_\|your-api-key\|your_password' \
+            frontend/src/ --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" 2>/dev/null; then
+            echo "::error::Found potential secrets or placeholder values in frontend source"
+            FOUND=1
+          fi
+          # Check backend source
+          if grep -rn 'sk_test_\|sk_live_\|your-api-key\|your_password' \
+            services/ --include="*.py" 2>/dev/null; then
+            echo "::error::Found potential secrets or placeholder values in backend source"
+            FOUND=1
+          fi
+          # Check for NEXT_PUBLIC_ env vars that shouldn't be public
+          if grep -rn 'NEXT_PUBLIC_.*SERVICE_ROLE\|NEXT_PUBLIC_.*SECRET' \
+            frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null; then
+            echo "::error::Found service_role or secret key exposed via NEXT_PUBLIC_"
+            FOUND=1
+          fi
+          exit $FOUND
+
+      - name: dangerouslySetInnerHTML audit
+        run: |
+          MATCHES=$(grep -rn "dangerouslySetInnerHTML" frontend/src/ --include="*.tsx" --include="*.jsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::warning::Found dangerouslySetInnerHTML usage — verify XSS safety (JSON.stringify is OK, user content is not)"
+          fi
+
+      - name: Check TODO/FIXME count
+        run: |
+          COUNT=$(grep -rn 'TODO\|FIXME' frontend/src/ services/ --include="*.ts" --include="*.tsx" --include="*.py" 2>/dev/null | wc -l)
+          echo "Found $COUNT TODO/FIXME comments"
+          if [ "$COUNT" -gt 20 ]; then
+            echo "::warning::$COUNT unresolved TODOs across frontend + backend"
+          fi
+
+  # ──────────────────────────────────────────────
+  # Audit Trail Protection (Checklist §6)
+  # ──────────────────────────────────────────────
+  audit-trail:
+    name: Audit Trail Protection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No mutations on append-only tables (frontend)
+        run: |
+          AUDIT_TABLES="audit_logs\|pcos_audit_events\|pcos_task_events\|compliance_status_log\|evidence_logs"
+          MATCHES=$(grep -rn '\.update(\|\.delete(\|\.upsert(' frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -i "$AUDIT_TABLES" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found UPDATE/DELETE/UPSERT on audit trail table in frontend — audit tables must be append-only"
+            exit 1
+          fi
+
+      - name: No mutations on append-only tables (backend)
+        run: |
+          # Check Python services for UPDATE/DELETE on audit tables
+          AUDIT_TABLES="audit_logs\|pcos_audit_events\|pcos_task_events\|compliance_status_log\|evidence_logs"
+          MATCHES=$(grep -rn '\.update(\|\.delete(\|DELETE FROM\|UPDATE.*SET' services/ --include="*.py" 2>/dev/null | grep -i "$AUDIT_TABLES" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found UPDATE/DELETE on audit trail table in backend — audit tables must be append-only"
+            exit 1
+          fi
+
+      - name: No compliance snapshot mutations
+        run: |
+          SNAPSHOT_TABLES="compliance_snapshot\|pcos_compliance_snapshot"
+          # Frontend
+          FE=$(grep -rn '\.update(\|\.delete(\|\.upsert(' frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -i "$SNAPSHOT_TABLES" || true)
+          # Backend
+          BE=$(grep -rn '\.update(\|\.delete(\|UPDATE.*SET\|DELETE FROM' services/ --include="*.py" 2>/dev/null | grep -i "$SNAPSHOT_TABLES" || true)
+          if [ -n "$FE" ] || [ -n "$BE" ]; then
+            echo "${FE}${BE}"
+            echo "::error::Found mutation on compliance snapshot table — snapshots must be immutable (new snapshot = new row)"
+            exit 1
+          fi
+
+      - name: No destructive migrations on audit tables
+        run: |
+          MATCHES=$(grep -rli 'DROP\|TRUNCATE' migrations/*.sql 2>/dev/null | xargs grep -li 'audit\|evidence_log\|compliance_status_log\|task_event' 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found destructive migration on audit tables — requires manual review"
+            exit 1
+          fi
+
+  # ──────────────────────────────────────────────
+  # SQL Injection Defense (Checklist §5 — backend)
+  # ──────────────────────────────────────────────
+  sql-safety:
+    name: SQL Injection Defense
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No f-string SQL in Python services
+        run: |
+          # Flag f-strings containing SQL keywords — high-confidence pattern for SQL injection
+          MATCHES=$(grep -rn 'f".*SELECT\|f".*INSERT\|f".*UPDATE\|f".*DELETE\|f".*DROP' \
+            services/ --include="*.py" 2>/dev/null || true)
+          # Filter out comments and test files
+          FILTERED=$(echo "$MATCHES" | grep -v '^\s*#\|test_\|_test\.py\|conftest' || true)
+          if [ -n "$FILTERED" ]; then
+            echo "$FILTERED"
+            echo "::error::Found f-string SQL in Python services — use parameterized queries via text() with bound params"
+            exit 1
+          fi
+
+  # ──────────────────────────────────────────────
+  # React Patterns (Checklist §4)
+  # ──────────────────────────────────────────────
+  react-patterns:
+    name: React Patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for useEffect async patterns
+        run: |
+          # Rough heuristic: useEffect with [] and await inside (potential stale closure)
+          if grep -rn -A8 'useEffect.*\[\]' frontend/src/ --include="*.tsx" --include="*.ts" 2>/dev/null | grep -q 'await\|\.then('; then
+            echo "::warning::Found useEffect with empty deps [] containing async calls — verify no stale data issues"
+          fi
+
+      - name: Check for setState during render
+        run: |
+          # Flag obvious cases: setState outside useEffect/callbacks at component top level
+          # This is a rough heuristic — manual review still needed
+          MATCHES=$(grep -rn 'useState\|setState' frontend/src/ --include="*.tsx" 2>/dev/null | wc -l)
+          echo "Found $MATCHES state-related patterns (manual review for render-phase setState)"

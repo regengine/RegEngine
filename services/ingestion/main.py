@@ -112,6 +112,8 @@ validate_auth_config()
 # Router Feature Flags — disable non-core routers via DISABLED_ROUTERS env var
 # Comma-separated list of router names to skip, e.g.: "billing,mock_audit,recall_simulations"
 # ---------------------------------------------------------------------------
+from shared.auth import APIKey, require_api_key
+
 import os as _os
 _DISABLED_ROUTERS = {
     r.strip().lower()
@@ -158,11 +160,12 @@ _MOUNTED_ROUTERS: list[str] = []
 
 
 @app.get("/api/v1/features", tags=["system"])
-async def list_enabled_features():
+async def list_enabled_features(api_key: APIKey = Depends(require_api_key)):
     """Return which optional routers are enabled.
 
     Frontend can call this to know which features are available
     instead of discovering disabled routers via 404 errors.
+    Requires a valid API key — exposes internal router configuration.
     """
     return {
         "enabled": _MOUNTED_ROUTERS,

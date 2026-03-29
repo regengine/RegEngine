@@ -27,21 +27,14 @@ import type {
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
   SupplierComplianceScore,
-  SupplierDemoResetResponse,
-  SupplierFunnelEventRequest,
-  SupplierFunnelEventResponse,
-  SupplierFunnelSummaryResponse,
   SupplierBulkUploadCommitResponse,
   SupplierBulkUploadParseResponse,
   SupplierBulkUploadStatusResponse,
   SupplierBulkUploadValidateResponse,
   SupplierFDAExportPreviewResponse,
-  SupplierSocialProofResponse,
   SupplierTLC,
   SupplierTLCUpsertRequest,
   AnalysisSummary,
-  TraceabilityEventRequest,
-  TraceabilityEventResponse,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -345,12 +338,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
-  async logTraceabilityEvent(request: TraceabilityEventRequest): Promise<TraceabilityEventResponse> {
-    const { data } = await this.graphClient.post('/api/v1/fsma/traceability/event', request);
-    return data;
-  }
-
   /**
    * Ingest CTE events via the webhook endpoint — persists to fsma.cte_events + hash chain.
    * Use this for sample data loading and programmatic event ingestion.
@@ -383,30 +370,6 @@ class APIClient {
         timeout: 120000,
       },
     );
-    return data;
-  }
-
-  /** @deprecated Unused — no frontend consumer. Use useApiMutate + graph service directly. */
-  async createRecallDrill(request: {
-    type?: string;
-    target_tlc?: string;
-    target_gtin?: string;
-    severity?: string;
-    reason?: string;
-  }): Promise<any> {
-    const { data } = await this.graphClient.post('/api/v1/fsma/recall/drill', request);
-    return data;
-  }
-
-  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
-  async traceForward(tlc: string): Promise<any> {
-    const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/forward/${encodeURIComponent(tlc)}`);
-    return data;
-  }
-
-  /** @deprecated Unused — no frontend consumer. Use useApiQuery + graph service directly. */
-  async traceBackward(tlc: string): Promise<any> {
-    const { data } = await this.graphClient.get(`/api/v1/fsma/traceability/trace/backward/${encodeURIComponent(tlc)}`);
     return data;
   }
 
@@ -486,23 +449,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async getMe(): Promise<User> {
-    const { data } = await this.adminClient.get('/auth/me');
-    return data;
-  }
-
-
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async checkPermission(permission: string, authorized: boolean = true): Promise<boolean> {
-    try {
-      await this.adminClient.get(`/auth/check-permission?authorized=${authorized}`);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // --- User Management ---
 
   async getUsers(): Promise<User[]> {
@@ -516,11 +462,6 @@ class APIClient {
 
   async deactivateUser(userId: string): Promise<void> {
     await this.adminClient.post(`/v1/admin/users/${userId}/deactivate`);
-  }
-
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async reactivateUser(userId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/users/${userId}/reactivate`);
   }
 
   async getRoles(): Promise<Role[]> {
@@ -664,30 +605,6 @@ class APIClient {
       filename: parsedFilename || fallbackFilename,
       recordCount: Number.isFinite(parsedRecordCount) ? parsedRecordCount : 0,
     };
-  }
-
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async resetSupplierDemoData(): Promise<SupplierDemoResetResponse> {
-    const { data } = await this.adminClient.post<SupplierDemoResetResponse>('/v1/supplier/demo/reset', {});
-    return data;
-  }
-
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async trackSupplierFunnelEvent(request: SupplierFunnelEventRequest): Promise<SupplierFunnelEventResponse> {
-    const { data } = await this.adminClient.post<SupplierFunnelEventResponse>('/v1/supplier/funnel-events', request);
-    return data;
-  }
-
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async getSupplierSocialProof(): Promise<SupplierSocialProofResponse> {
-    const { data } = await this.adminClient.get<SupplierSocialProofResponse>('/v1/supplier/social-proof');
-    return data;
-  }
-
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
-  async getSupplierFunnelSummary(): Promise<SupplierFunnelSummaryResponse> {
-    const { data } = await this.adminClient.get<SupplierFunnelSummaryResponse>('/v1/supplier/funnel-summary');
-    return data;
   }
 
   // Bulk upload — uses adminClient (Vercel Pro proxy with maxDuration=300s)

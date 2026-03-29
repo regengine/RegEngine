@@ -50,10 +50,12 @@ def test_log_traceability_event_success(mock_neo4j_client, mock_validation):
     from services.graph.app.routers.fsma.traceability import router
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
+    from shared.rate_limit import add_rate_limiting
 
     app = FastAPI()
+    add_rate_limiting(app)
     app.include_router(router)
-    
+
     # Mock dependencies
     app.dependency_overrides[require_api_key] = lambda: {"tenant_id": "test-tenant"}
     app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -85,14 +87,16 @@ def test_log_traceability_event_invalid_tlc(mock_neo4j_client, mock_validation):
     """Verify that identity validation failures are handled with 400 Bad Request."""
     mock_tlc, _, _ = mock_validation
     mock_tlc.return_value = MagicMock(is_valid=False, errors=[MagicMock(message="Format violation: TLC must be alphanumeric")])
-    
+
     from services.graph.app.routers.fsma.traceability import router
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
+    from shared.rate_limit import add_rate_limiting
 
     app = FastAPI()
+    add_rate_limiting(app)
     app.include_router(router)
-    
+
     app.dependency_overrides[require_api_key] = lambda: {"tenant_id": "test-tenant"}
     app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
