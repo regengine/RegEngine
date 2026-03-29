@@ -20,8 +20,8 @@ export interface LeadGateProps {
     toolContext?: {
         quizScore?: number;
         quizGrade?: string;
-        quizAnswers?: Record<string, any>;
-        toolInputs?: Record<string, any>;
+        quizAnswers?: Record<string, unknown>;
+        toolInputs?: Record<string, unknown>;
     };
     /** Content shown BEFORE unlock (teaser) */
     teaser?: ReactNode;

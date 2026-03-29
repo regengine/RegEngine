@@ -306,7 +306,14 @@ async def run_consumer() -> None:
                             # Use string for storage/passing
                             tenant_id = str(tid_obj)
                         except ValueError:
-                            pass
+                            logger.error(
+                                "invalid_tenant_id_in_message",
+                                tenant_id=tenant_id,
+                                doc_id=doc_id,
+                            )
+                            raise ValueError(
+                                f"Invalid tenant_id '{tenant_id}' — refusing to fall back to global database"
+                            )
 
                     def _run_legacy_upsert():
                         # Use correct database
