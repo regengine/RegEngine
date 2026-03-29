@@ -16,6 +16,9 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
+import string
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -289,6 +292,39 @@ def _normalize_for_rules(event: Dict[str, Any]) -> Dict[str, Any]:
 # KDE Validation (reused from webhook_router_v2 logic)
 # ---------------------------------------------------------------------------
 
+def _detect_duplicate_lots(events: List[Dict[str, Any]]) -> Dict[int, List[str]]:
+    """
+    Detect duplicate traceability lot codes within the same CTE type.
+
+    Returns a mapping of event_index -> list of warning strings for the second
+    and subsequent occurrences of each (traceability_lot_code, cte_type) pair.
+    """
+    seen: Dict[tuple, int] = {}
+    warnings: Dict[int, List[str]] = {}
+
+    for i, event in enumerate(events):
+        tlc = (event.get("traceability_lot_code") or "").strip().lower()
+        cte = (event.get("cte_type") or "").strip().lower()
+        if not tlc or not cte:
+            continue
+
+        key = (tlc, cte)
+        if key in seen:
+            first_index = seen[key]
+            original_tlc = (event.get("traceability_lot_code") or "").strip()
+            original_cte = (event.get("cte_type") or "").strip()
+            msg = (
+                f"Duplicate lot code '{original_tlc}' for CTE type "
+                f"'{original_cte}' \u2014 row may be redundant "
+                f"(see event {first_index})"
+            )
+            warnings.setdefault(i, []).append(msg)
+        else:
+            seen[key] = i
+
+    return warnings
+
+
 def _validate_kdes(event: Dict[str, Any]) -> List[str]:
     """Validate required KDEs for a raw event dict."""
     errors: List[str] = []
@@ -319,6 +355,90 @@ def _validate_kdes(event: Dict[str, Any]) -> List[str]:
             errors.append(f"Missing required KDE '{kde_name}' for {cte_type_str} CTE")
 
     return errors
+
+
+# ---------------------------------------------------------------------------
+# Entity Resolution Warnings
+# ---------------------------------------------------------------------------
+
+# Suffixes to strip during normalization (longer/more specific first)
+_ENTITY_SUFFIXES = [
+    "incorporated", "corporation", "limited", "company",
+    "l.l.c.", "l.l.p.", "l.p.", "corp.", "inc.", "ltd.", "co.",
+    "llc", "llp", "corp", "inc", "ltd", "co", "lp",
+]
+
+# Compiled pattern: match any suffix at end of string (preceded by whitespace or comma)
+_SUFFIX_PATTERN = re.compile(
+    r"[,\s]+(?:" + "|".join(re.escape(s) for s in _ENTITY_SUFFIXES) + r")\s*$",
+    re.IGNORECASE,
+)
+
+# Fields to inspect explicitly
+_ENTITY_FIELDS_EXPLICIT = {
+    "location_name", "ship_from_location", "ship_to_location",
+    "receiving_location", "from_entity_reference", "immediate_previous_source",
+}
+
+# Substrings that mark a field as entity-like
+_ENTITY_FIELD_MARKERS = {"location", "entity", "source", "facility"}
+
+
+def _is_entity_field(field_name: str) -> bool:
+    """Return True if *field_name* is an entity-like field."""
+    lower = field_name.lower()
+    if lower in _ENTITY_FIELDS_EXPLICIT:
+        return True
+    return any(marker in lower for marker in _ENTITY_FIELD_MARKERS)
+
+
+def _normalize_entity_name(name: str) -> str:
+    """Normalize an entity name for comparison."""
+    norm = name.lower().strip()
+    # Strip common business-entity suffixes
+    norm = _SUFFIX_PATTERN.sub("", norm)
+    # Strip punctuation
+    norm = norm.translate(str.maketrans("", "", string.punctuation))
+    # Collapse internal whitespace
+    norm = re.sub(r"\s+", " ", norm).strip()
+    return norm
+
+
+def _detect_entity_mismatches(events: List[Dict[str, Any]]) -> List[str]:
+    """
+    Scan all events for entity-like field values that normalize to the same
+    string but differ in their original form.  Returns a list of warning
+    strings, one per mismatched pair.
+    """
+    # normalized_form -> set of original values
+    groups: Dict[str, set] = defaultdict(set)
+
+    for event in events:
+        # Top-level fields
+        for field, value in event.items():
+            if _is_entity_field(field) and isinstance(value, str) and value.strip():
+                groups[_normalize_entity_name(value)].add(value.strip())
+
+        # Nested kdes dict
+        kdes = event.get("kdes", {})
+        if isinstance(kdes, dict):
+            for field, value in kdes.items():
+                if _is_entity_field(field) and isinstance(value, str) and value.strip():
+                    groups[_normalize_entity_name(value)].add(value.strip())
+
+    warnings: List[str] = []
+    for _norm, originals in sorted(groups.items()):
+        if len(originals) < 2:
+            continue
+        sorted_originals = sorted(originals)
+        for i in range(len(sorted_originals)):
+            for j in range(i + 1, len(sorted_originals)):
+                warnings.append(
+                    f"Possible entity mismatch: '{sorted_originals[i]}' and "
+                    f"'{sorted_originals[j]}' may refer to the same entity "
+                    f"\u2014 consider standardizing"
+                )
+    return warnings
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +503,8 @@ class SandboxResponse(BaseModel):
     total_rule_failures: int
     submission_blocked: bool
     blocking_reasons: List[str]
+    duplicate_warnings: List[str] = Field(default_factory=list, description="Warnings about duplicate lot codes within same CTE type")
+    entity_warnings: List[str] = Field(default_factory=list, description="Warnings about possible entity name mismatches that may need standardization")
     events: List[EventEvaluationResponse]
 
 
@@ -427,6 +549,12 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     if len(raw_events) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 events per sandbox request")
 
+    # Detect duplicate lot codes within same CTE type
+    dup_warnings_by_index = _detect_duplicate_lots(raw_events)
+    all_duplicate_warnings: List[str] = []
+    for idx in sorted(dup_warnings_by_index):
+        all_duplicate_warnings.extend(dup_warnings_by_index[idx])
+
     # Evaluate each event
     event_results: List[EventEvaluationResponse] = []
     total_kde_errors = 0
@@ -462,6 +590,11 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                 ))
                 all_blocking_reasons.append(f"Event {i+1} ({raw_event.get('cte_type', '?')}): {reason}")
 
+        # Inject duplicate lot warnings into kde_errors
+        if i in dup_warnings_by_index:
+            kde_errors.extend(dup_warnings_by_index[i])
+            total_kde_errors += len(dup_warnings_by_index[i])
+
         is_compliant = len(kde_errors) == 0 and summary.compliant
         if is_compliant:
             compliant_count += 1
@@ -495,6 +628,9 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     # Deduplicate blocking reasons
     unique_blocking = list(dict.fromkeys(all_blocking_reasons))
 
+    # Detect entity name mismatches across all events
+    entity_warnings = _detect_entity_mismatches(raw_events)
+
     return SandboxResponse(
         total_events=len(raw_events),
         compliant_events=compliant_count,
@@ -503,5 +639,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
         total_rule_failures=total_rule_failures,
         submission_blocked=len(unique_blocking) > 0,
         blocking_reasons=unique_blocking,
+        duplicate_warnings=all_duplicate_warnings,
+        entity_warnings=entity_warnings,
         events=event_results,
     )
