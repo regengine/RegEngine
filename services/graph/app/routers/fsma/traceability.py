@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...fsma_metrics import record_trace_query
@@ -370,7 +370,7 @@ class TraceabilityEventRequest(BaseModel):
 @limiter.limit("10/minute")
 async def log_traceability_event(
     request: Request,
-    payload: TraceabilityEventRequest,
+    payload: TraceabilityEventRequest = Body(...),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
