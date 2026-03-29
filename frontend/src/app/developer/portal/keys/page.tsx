@@ -60,12 +60,15 @@ export default function ApiKeysPage() {
         if (!profile) return;
         setDeveloperId(profile.id);
 
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('developer_api_keys')
             .select('*')
             .eq('developer_id', profile.id)
             .order('created_at', { ascending: false });
 
+        if (error) {
+            console.error('Failed to fetch API keys:', error.message);
+        }
         setKeys(data || []);
         setIsLoading(false);
     }, [supabase, authUser]);

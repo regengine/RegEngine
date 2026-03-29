@@ -157,8 +157,9 @@ async def list_incidents(
     )
     where = " AND ".join(where_parts)
 
+    # WHERE clause is built from _ALLOWED_WHERE_FRAGMENTS only (asserted above)
     count_row = db_session.execute(
-        text(f"SELECT COUNT(*) FROM fsma.incidents WHERE {where}"),
+        text("SELECT COUNT(*) FROM fsma.incidents WHERE " + where),
         params,
     ).fetchone()
     total = count_row[0] if count_row else 0
@@ -167,13 +168,13 @@ async def list_incidents(
     params["off"] = pagination.skip
 
     rows = db_session.execute(
-        text(f"""
-            SELECT id, data, created_at, updated_at
-            FROM fsma.incidents
-            WHERE {where}
-            ORDER BY created_at DESC
-            LIMIT :lim OFFSET :off
-        """),
+        text(
+            "SELECT id, data, created_at, updated_at"
+            " FROM fsma.incidents"
+            " WHERE " + where +
+            " ORDER BY created_at DESC"
+            " LIMIT :lim OFFSET :off"
+        ),
         params,
     ).fetchall()
 
@@ -444,11 +445,12 @@ async def impact_assessment(
         placeholders = ", ".join(f":lot_{i}" for i in range(len(affected_lots)))
         params = {f"lot_{i}": lot for i, lot in enumerate(affected_lots)}
         params["tid"] = tid
+        # placeholders are ":lot_0, :lot_1, ..." — parameterized, not user input
         record_count = db_session.execute(
-            text(f"""
-                SELECT COUNT(*) FROM fsma.traceability_events
-                WHERE tenant_id = :tid AND traceability_lot_code IN ({placeholders})
-            """),
+            text(
+                "SELECT COUNT(*) FROM fsma.traceability_events"
+                " WHERE tenant_id = :tid AND traceability_lot_code IN (" + placeholders + ")"
+            ),
             params,
         ).scalar() or 0
 
