@@ -24,7 +24,7 @@ def test_health_and_root() -> None:
 
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["service"] == "compliance-api"
+    assert health.json()["service"] == "compliance-service"
 
     root = client.get("/")
     assert root.status_code == 200
