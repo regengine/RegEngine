@@ -62,7 +62,7 @@ export async function submitAssessment(
 
     if (existing && existing.length > 0) {
       // Update enrichment fields if this is a returning lead adding more info
-      await supabase
+      const { error: updateError } = await supabase
         .from('assessment_submissions')
         .update({
           facility_count: data.facilityCount || undefined,
@@ -75,6 +75,11 @@ export async function submitAssessment(
           product_categories: data.productCategories || undefined,
         })
         .eq('id', existing[0].id);
+
+      if (updateError) {
+        console.error('Assessment enrichment update error:', updateError);
+        return { success: false, error: 'Something went wrong. Please try again.' };
+      }
 
       return { success: true };
     }
