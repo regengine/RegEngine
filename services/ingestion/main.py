@@ -112,6 +112,7 @@ validate_auth_config()
 # Router Feature Flags — disable non-core routers via DISABLED_ROUTERS env var
 # Comma-separated list of router names to skip, e.g.: "billing,mock_audit,recall_simulations"
 # ---------------------------------------------------------------------------
+from fastapi import Depends
 from shared.auth import APIKey, require_api_key
 
 import os as _os

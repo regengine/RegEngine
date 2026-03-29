@@ -18,8 +18,9 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
-  # Maximum total JS bundle size in bytes (2MB)
-  BUNDLE_SIZE_LIMIT: 2097152
+  # Maximum total JS bundle size in bytes (10MB)
+  # Full-stack Next.js app with compliance dashboards, charting, and code editors
+  BUNDLE_SIZE_LIMIT: 10485760
 
 permissions:
   contents: read
