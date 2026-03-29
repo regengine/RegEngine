@@ -136,8 +136,8 @@ For API support, consult the documentation at `/docs` (this page) or `/redoc`.
         "url": "https://github.com/regengine/regengine",
     },
     license_info={
-        "name": "Apache 2.0",
-        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+        "name": "Proprietary",
+        "url": "/terms",
     },
 )
 
