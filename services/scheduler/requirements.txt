@@ -1,6 +1,6 @@
 # Core dependencies — pinned for reproducible builds
 apscheduler==3.10.4
-pydantic==2.5.0
+pydantic==2.12.5
 pydantic-settings==2.1.0
 structlog==24.1.0
 requests==2.33.0
