@@ -103,13 +103,14 @@ Steps:
 
 The Calendly link includes context so Chris knows who he's talking to:
 
-| Param | Value | Example |
-|-------|-------|---------|
-| `a1` | Mode that triggered the CTA | `failures`, `all_clear`, `trace_complete` |
-| `a2` | Defect count at time of click | `7` |
-| `a3` | Event count in their CSV | `12` |
+| Param | Value (failures / all_clear) | Value (trace_complete) | Example |
+|-------|-------------------------------|------------------------|---------|
+| `a1` | Mode that triggered the CTA | Mode that triggered the CTA | `failures`, `all_clear`, `trace_complete` |
+| `a2` | Defect count at time of click | Lot count in the trace | `7` |
+| `a3` | Event count in their CSV | Facility count in the trace | `12` |
 
 These show up in Calendly's "Additional Info" section on the booking page.
+In trace mode, `a2`/`a3` carry lot and facility counts instead of defect/event counts since those are not available.
 
 ---
 
