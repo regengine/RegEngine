@@ -13,7 +13,7 @@ prometheus-client==0.19.0
 httpx==0.25.2
 redis==5.0.1
 python-multipart~=0.0.22
-anyio==3.7.1
+anyio==4.13.0
 kafka-python-ng==2.0.3
 tenacity==8.2.3
 slowapi~=0.1.9
