@@ -43,11 +43,16 @@ export function SandboxResultsCTA({
       facility_count: facilityCount,
     });
     // Pass context into Calendly URL so Chris knows the caller's compliance state
-    const params = new URLSearchParams({
-      a1: mode,                          // "failures" | "all_clear" | "trace_complete"
-      a2: String(defectCount),           // defect count
-      a3: String(eventCount),            // event count
-    });
+    const params = new URLSearchParams({ a1: mode });
+    if (mode === 'trace_complete') {
+      // Trace mode: pass lot/facility counts (defect/event are 0 here)
+      params.set('a2', String(lotCount));
+      params.set('a3', String(facilityCount));
+    } else {
+      // Failures / all_clear: pass defect + event counts
+      params.set('a2', String(defectCount));
+      params.set('a3', String(eventCount));
+    }
     window.open(`${CALENDLY_LINK}?${params.toString()}`, '_blank');
   }
 
