@@ -457,6 +457,118 @@ def _evaluate_relational_in_memory(
                         category=mass_rule.category,
                     ))
 
+    # -----------------------------------------------------------------------
+    # Cross-TLC Mass Balance for Transformations
+    # A transformation event consumes input TLCs and produces an output TLC.
+    # Sum input TLC quantities, compare against transformation output quantity.
+    # -----------------------------------------------------------------------
+    mass_rule = relational_rules.get("mass_balance")
+    if mass_rule:
+        tolerance = mass_rule.evaluation_logic.get("params", {}).get("tolerance_percent", 1.0)
+
+        for evt in all_canonical:
+            if evt.get("event_type") != "transformation":
+                continue
+
+            input_tlcs = evt.get("kdes", {}).get("input_traceability_lot_codes", [])
+            if isinstance(input_tlcs, str):
+                input_tlcs = [t.strip() for t in input_tlcs.split(",") if t.strip()]
+            if not input_tlcs:
+                continue
+
+            output_qty = evt.get("quantity")
+            output_uom = evt.get("unit_of_measure", "")
+            if output_qty is None:
+                continue
+            output_qty = float(output_qty)
+
+            # Sum input quantities from events matching input TLCs
+            total_input = 0.0
+            input_units: set = set()
+            for input_tlc in input_tlcs:
+                for other in tlc_groups.get(input_tlc, []):
+                    oq = other.get("quantity")
+                    ou = other.get("unit_of_measure", "")
+                    if oq is not None:
+                        total_input += float(oq)
+                        if ou:
+                            input_units.add(ou.lower().strip())
+
+            if total_input == 0:
+                continue  # No input quantities found — skip
+
+            # Check UOM compatibility
+            all_units = set(input_units)
+            if output_uom:
+                all_units.add(output_uom.lower().strip())
+
+            use_converted = False
+            if len(all_units) > 1:
+                # Try UOM conversion
+                converted_input = 0.0
+                all_ok = True
+                for input_tlc in input_tlcs:
+                    for other in tlc_groups.get(input_tlc, []):
+                        oq = other.get("quantity")
+                        ou = other.get("unit_of_measure", "")
+                        if oq is not None and ou:
+                            lbs = _normalize_to_lbs(float(oq), ou)
+                            if lbs is None:
+                                all_ok = False
+                                break
+                            converted_input += lbs
+                    if not all_ok:
+                        break
+
+                converted_output = _normalize_to_lbs(output_qty, output_uom) if output_uom else None
+                if all_ok and converted_output is not None:
+                    use_converted = True
+                    total_input = converted_input
+                    output_qty = converted_output
+
+            evidence = [{
+                "tlc": evt.get("traceability_lot_code", ""),
+                "input_tlcs": input_tlcs,
+                "total_input": total_input,
+                "total_output": output_qty,
+                "tolerance_percent": tolerance,
+                "units_seen": list(all_units),
+                "uom_converted": use_converted,
+                "check_type": "cross_tlc_transformation",
+            }]
+
+            if output_qty > total_input * (1 + tolerance / 100):
+                max_allowed = total_input * (1 + tolerance / 100)
+                results[evt["event_id"]].append(RuleEvaluationResult(
+                    rule_id=mass_rule.rule_id,
+                    rule_version=mass_rule.rule_version,
+                    rule_title=mass_rule.title,
+                    severity=mass_rule.severity,
+                    result="fail",
+                    why_failed=(
+                        f"Mass balance violation for transformation "
+                        f"'{evt.get('traceability_lot_code', '')}': "
+                        f"output ({output_qty}) exceeds combined input from "
+                        f"{', '.join(input_tlcs)} ({total_input}) "
+                        f"by more than {tolerance}% (max: {max_allowed:.2f}) "
+                        f"({mass_rule.citation_reference})."
+                    ),
+                    evidence_fields_inspected=evidence,
+                    citation_reference=mass_rule.citation_reference,
+                    remediation_suggestion=mass_rule.remediation_suggestion,
+                    category=mass_rule.category,
+                ))
+            else:
+                results[evt["event_id"]].append(RuleEvaluationResult(
+                    rule_id=mass_rule.rule_id,
+                    rule_version=mass_rule.rule_version,
+                    rule_title=mass_rule.title,
+                    severity=mass_rule.severity,
+                    result="pass",
+                    evidence_fields_inspected=evidence,
+                    category=mass_rule.category,
+                ))
+
     return dict(results)
 
 
@@ -975,6 +1087,7 @@ class RuleResultResponse(BaseModel):
     citation: Optional[str] = None
     remediation: Optional[str] = None
     category: str
+    evidence: Optional[List[Dict[str, Any]]] = None
 
 
 class EventEvaluationResponse(BaseModel):
@@ -1111,6 +1224,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                     citation=r.citation_reference,
                     remediation=r.remediation_suggestion,
                     category=r.category,
+                    evidence=r.evidence_fields_inspected or None,
                 ))
                 all_blocking_reasons.append(f"Event {i+1} ({raw_event.get('cte_type', '?')}): {reason}")
 
@@ -1144,6 +1258,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                     citation=r.citation_reference,
                     remediation=r.remediation_suggestion,
                     category=r.category,
+                    evidence=r.evidence_fields_inspected or None,
                 )
                 for r in summary.results
             ],

@@ -20,6 +20,7 @@ interface EventEvaluation {
     citation: string | null;
     remediation: string | null;
     category: string;
+    evidence?: Record<string, unknown>[] | null;
   }[];
 }
 
@@ -172,6 +173,7 @@ export function buildCellErrorMap(
           remediation: r.remediation,
           category: r.category,
           isKdeError: false,
+          evidence: r.evidence || undefined,
         });
         map.set(key, existing);
       }
