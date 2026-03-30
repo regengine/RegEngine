@@ -141,8 +141,10 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   // Mass fill dialog
   const [massFillOpen, setMassFillOpen] = useState(false);
 
-  // Debounce re-evaluation
+  // Debounce re-evaluation + abort stale requests
   const debounceRef = useRef<NodeJS.Timeout>();
+  const abortRef = useRef<AbortController | null>(null);
+  const evalGenRef = useRef(0); // generation counter to discard stale responses
 
   // Build cell error map from current evaluation result
   const cellErrors: CellErrorMap = useMemo(
@@ -168,13 +170,24 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   // ---------------------------------------------------------------------------
 
   const evaluateCsv = useCallback(async (csv: string) => {
+    // Abort any in-flight request so stale responses can't overwrite fresh state
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const gen = ++evalGenRef.current;
+
     setIsEvaluating(true);
     try {
       const res = await fetch('/api/ingestion/api/v1/sandbox/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csv }),
+        signal: controller.signal,
       });
+
+      // Discard if a newer evaluation has already been launched
+      if (gen !== evalGenRef.current) return;
+
       if (res.ok) {
         const data: SandboxResult = await res.json();
         setResult(data);
@@ -191,10 +204,13 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
           return next;
         });
       }
-    } catch {
-      // Silently fail — keep existing results
+    } catch (err: unknown) {
+      // Ignore aborted requests; silently fail on network errors
+      if (err instanceof DOMException && err.name === 'AbortError') return;
     } finally {
-      setIsEvaluating(false);
+      if (gen === evalGenRef.current) {
+        setIsEvaluating(false);
+      }
     }
   }, [headers]);
 
@@ -206,10 +222,11 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
     }, 800);
   }, [headers, evaluateCsv]);
 
-  // Cleanup debounce on unmount
+  // Cleanup debounce + abort on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (abortRef.current) abortRef.current.abort();
     };
   }, []);
 
