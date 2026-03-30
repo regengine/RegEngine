@@ -6,6 +6,8 @@ import {
   Loader2, Download, MapPin, Package, Clock, X,
   ChevronRight,
 } from 'lucide-react';
+import { usePostHog } from 'posthog-js/react';
+import { SandboxResultsCTA } from './SandboxResultsCTA';
 
 // ---------------------------------------------------------------------------
 // Types (mirrors backend TraceGraphResponse)
@@ -81,6 +83,14 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
   const [error, setError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const posthog = usePostHog();
+
+  function trackSandbox(event: string, metadata: Record<string, unknown> = {}) {
+    posthog.capture(`SANDBOX_${event}`, {
+      ...metadata,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   const filteredTlcs = availableTlcs.filter(
     (t) => t.toLowerCase().includes(tlcInput.toLowerCase()) && t !== tlcInput
@@ -113,6 +123,14 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
 
       const data: TraceGraphResponse = await res.json();
       setTraceResult(data);
+      trackSandbox('TRACE_RUN', {
+        direction,
+        seed_tlc: code,
+        node_count: data.nodes.length,
+        lot_count: data.lots_touched.length,
+        facility_count: data.facilities.length,
+        max_depth: data.max_depth,
+      });
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Trace failed');
@@ -156,6 +174,11 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
 
   const handleExportFdaFormat = useCallback(() => {
     if (!traceResult) return;
+    trackSandbox('FDA_EXPORT', {
+      seed_tlc: traceResult.seed_tlc,
+      node_count: traceResult.nodes.length,
+      lot_count: traceResult.lots_touched.length,
+    });
 
     // FDA 204 sortable spreadsheet format
     const headers = [
@@ -448,6 +471,18 @@ export function TracePanel({ csv, availableTlcs, onHighlightEvent }: TracePanelP
                 })}
             </div>
           </div>
+
+          {/* Conversion CTA — after successful trace */}
+          {traceResult.nodes.length > 0 && (
+            <div className="px-4 py-3">
+              <SandboxResultsCTA
+                mode="trace_complete"
+                lotCount={traceResult.lots_touched.length}
+                facilityCount={traceResult.facilities.length}
+                onTrack={trackSandbox}
+              />
+            </div>
+          )}
 
           {/* Empty state */}
           {traceResult.nodes.length === 0 && (
