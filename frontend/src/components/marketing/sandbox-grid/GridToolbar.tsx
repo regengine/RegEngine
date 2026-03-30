@@ -1,0 +1,123 @@
+'use client';
+
+import {
+  Undo2, Redo2, Paintbrush, Download, ShieldCheck, ShieldAlert,
+  ArrowLeft, Loader2,
+} from 'lucide-react';
+
+interface GridToolbarProps {
+  criticalDefects: number;
+  totalDefects: number;
+  canUndo: boolean;
+  canRedo: boolean;
+  isEvaluating: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  onMassFill: () => void;
+  onExportCsv: () => void;
+  onBack: () => void;
+}
+
+export function GridToolbar({
+  criticalDefects,
+  totalDefects,
+  canUndo,
+  canRedo,
+  isEvaluating,
+  onUndo,
+  onRedo,
+  onMassFill,
+  onExportCsv,
+  onBack,
+}: GridToolbarProps) {
+  const allClear = criticalDefects === 0 && totalDefects === 0;
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[var(--re-surface-elevated)] border-b border-[var(--re-surface-border)]">
+      {/* Left: back + defect counter */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-[0.7rem] text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] transition-colors"
+          title="Back to summary"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Summary
+        </button>
+
+        <div className="w-px h-5 bg-[var(--re-surface-border)]" />
+
+        {/* Defect counter */}
+        <div className="flex items-center gap-2">
+          {allClear ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[0.7rem] font-bold text-emerald-400">All Clear</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/15">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+              <span className="text-[0.7rem] font-bold text-red-400">
+                {criticalDefects} critical
+              </span>
+              {totalDefects > criticalDefects && (
+                <span className="text-[0.6rem] text-amber-400">
+                  + {totalDefects - criticalDefects} warning{totalDefects - criticalDefects !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          )}
+
+          {isEvaluating && (
+            <Loader2 className="w-3.5 h-3.5 text-[var(--re-brand)] animate-spin" />
+          )}
+        </div>
+      </div>
+
+      {/* Right: actions */}
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="p-1.5 rounded-md text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] hover:bg-[var(--re-surface-base)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="p-1.5 rounded-md text-[var(--re-text-muted)] hover:text-[var(--re-text-primary)] hover:bg-[var(--re-surface-base)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <Redo2 className="w-3.5 h-3.5" />
+        </button>
+
+        <div className="w-px h-5 bg-[var(--re-surface-border)]" />
+
+        <button
+          onClick={onMassFill}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[0.65rem] font-medium text-[var(--re-text-secondary)] hover:text-[var(--re-text-primary)] hover:bg-[var(--re-surface-base)] transition-all"
+          title="Fill empty cells in bulk"
+        >
+          <Paintbrush className="w-3.5 h-3.5" />
+          Mass Fill
+        </button>
+
+        <button
+          onClick={onExportCsv}
+          disabled={criticalDefects > 0}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[0.65rem] font-semibold transition-all ${
+            criticalDefects === 0
+              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+              : 'bg-[var(--re-surface-base)] text-[var(--re-text-disabled)] cursor-not-allowed'
+          }`}
+          title={criticalDefects > 0 ? 'Fix all critical defects to enable export' : 'Download corrected CSV'}
+        >
+          <Download className="w-3.5 h-3.5" />
+          Export CSV
+        </button>
+      </div>
+    </div>
+  );
+}
