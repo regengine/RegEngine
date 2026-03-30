@@ -507,6 +507,6 @@ class RedisSessionStore:
             client = await self._get_client()
             await client.ping()
             return True
-        except (OSError, TimeoutError, ConnectionError, ValueError) as e:
+        except Exception as e:
             logger.error("redis_health_check_failed", error=str(e))
             return False
