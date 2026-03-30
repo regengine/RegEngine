@@ -35,6 +35,7 @@ from shared.rules_engine import (
     RuleDefinition,
     RuleEvaluationResult,
     EvaluationSummary,
+    _CTE_LIFECYCLE_ORDER,
     _EVALUATORS,
     _get_nested_value,
 )
@@ -159,6 +160,265 @@ def _evaluate_event_stateless(event_data: Dict[str, Any]) -> EvaluationSummary:
             summary.skipped += 1
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# In-Memory Relational Evaluation (cross-event, no DB)
+# ---------------------------------------------------------------------------
+
+def _get_relational_rules() -> Dict[str, RuleDefinition]:
+    """Get the 3 relational rules from sandbox rules by evaluation type."""
+    relational = {}
+    for rule in _SANDBOX_RULES:
+        eval_type = rule.evaluation_logic.get("type", "")
+        if eval_type in ("temporal_order", "identity_consistency", "mass_balance"):
+            relational[eval_type] = rule
+    return relational
+
+
+def _evaluate_relational_in_memory(
+    all_canonical: List[Dict[str, Any]],
+) -> Dict[str, List[RuleEvaluationResult]]:
+    """Run relational validation across events in memory (no DB needed).
+
+    Groups events by TLC, then for each event checks:
+    - Temporal order: lifecycle-earlier events should have earlier timestamps
+    - Identity consistency: product_reference must match across same TLC
+    - Mass balance: output quantity can't exceed input quantity
+
+    Returns: {event_id: [RuleEvaluationResult, ...]}
+    """
+    relational_rules = _get_relational_rules()
+    if not relational_rules:
+        return {}
+
+    # Group by TLC
+    tlc_groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for evt in all_canonical:
+        tlc = evt.get("traceability_lot_code", "")
+        if tlc:
+            tlc_groups[tlc].append(evt)
+
+    results: Dict[str, List[RuleEvaluationResult]] = defaultdict(list)
+
+    for tlc, events in tlc_groups.items():
+        if len(events) < 2:
+            continue  # Single event — no cross-event checks possible
+
+        # --- Temporal Order ---
+        temporal_rule = relational_rules.get("temporal_order")
+        if temporal_rule:
+            for evt in events:
+                event_type = evt.get("event_type", "")
+                cte_types = temporal_rule.applicability_conditions.get("cte_types", [])
+                if cte_types and event_type not in cte_types and "all" not in cte_types:
+                    continue
+
+                current_stage = _CTE_LIFECYCLE_ORDER.get(event_type)
+                if current_stage is None:
+                    continue
+
+                current_ts = evt.get("event_timestamp", "")
+                if isinstance(current_ts, str) and current_ts:
+                    current_ts = datetime.fromisoformat(current_ts.replace("Z", "+00:00"))
+
+                violations = []
+                for other in events:
+                    if other.get("event_id") == evt.get("event_id"):
+                        continue
+                    other_type = other.get("event_type", "")
+                    other_stage = _CTE_LIFECYCLE_ORDER.get(other_type)
+                    if other_stage is None:
+                        continue
+
+                    other_ts = other.get("event_timestamp", "")
+                    if isinstance(other_ts, str) and other_ts:
+                        other_ts = datetime.fromisoformat(other_ts.replace("Z", "+00:00"))
+
+                    if other_stage < current_stage and other_ts > current_ts:
+                        violations.append({
+                            "earlier_stage": other_type,
+                            "earlier_timestamp": str(other_ts),
+                            "later_stage": event_type,
+                            "later_timestamp": str(current_ts),
+                        })
+                    elif other_stage > current_stage and other_ts < current_ts:
+                        violations.append({
+                            "earlier_stage": event_type,
+                            "earlier_timestamp": str(current_ts),
+                            "later_stage": other_type,
+                            "later_timestamp": str(other_ts),
+                        })
+
+                if violations:
+                    v = violations[0]
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=temporal_rule.rule_id,
+                        rule_version=temporal_rule.rule_version,
+                        rule_title=temporal_rule.title,
+                        severity=temporal_rule.severity,
+                        result="fail",
+                        why_failed=(
+                            f"Chronology paradox for TLC '{tlc}': {v['later_stage']} "
+                            f"(at {v['later_timestamp']}) occurs before {v['earlier_stage']} "
+                            f"(at {v['earlier_timestamp']}). "
+                            f"CTE events must follow the supply chain lifecycle order "
+                            f"({temporal_rule.citation_reference})."
+                        ),
+                        evidence_fields_inspected=violations,
+                        citation_reference=temporal_rule.citation_reference,
+                        remediation_suggestion=temporal_rule.remediation_suggestion,
+                        category=temporal_rule.category,
+                    ))
+                else:
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=temporal_rule.rule_id,
+                        rule_version=temporal_rule.rule_version,
+                        rule_title=temporal_rule.title,
+                        severity=temporal_rule.severity,
+                        result="pass",
+                        category=temporal_rule.category,
+                    ))
+
+        # --- Identity Consistency ---
+        identity_rule = relational_rules.get("identity_consistency")
+        if identity_rule:
+            # Collect all products for this TLC
+            products: Dict[str, str] = {}  # normalized -> original
+            for evt in events:
+                pr = evt.get("product_reference", "")
+                if pr:
+                    products[" ".join(pr.strip().lower().split())] = pr
+
+            for evt in events:
+                event_type = evt.get("event_type", "")
+                cte_types = identity_rule.applicability_conditions.get("cte_types", [])
+                if cte_types and event_type not in cte_types and "all" not in cte_types:
+                    continue
+
+                current_product = evt.get("product_reference", "")
+                if not current_product:
+                    continue
+
+                normalized_current = " ".join(current_product.strip().lower().split())
+                mismatches = []
+                for norm, orig in products.items():
+                    if norm != normalized_current:
+                        mismatches.append({"product": orig, "current": current_product})
+
+                if mismatches:
+                    m = mismatches[0]
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=identity_rule.rule_id,
+                        rule_version=identity_rule.rule_version,
+                        rule_title=identity_rule.title,
+                        severity=identity_rule.severity,
+                        result="fail",
+                        why_failed=(
+                            f"Product identity changed for TLC '{tlc}': "
+                            f"'{m['product']}' vs '{current_product}'. "
+                            f"The same TLC must refer to the same product "
+                            f"({identity_rule.citation_reference})."
+                        ),
+                        evidence_fields_inspected=mismatches,
+                        citation_reference=identity_rule.citation_reference,
+                        remediation_suggestion=identity_rule.remediation_suggestion,
+                        category=identity_rule.category,
+                    ))
+                else:
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=identity_rule.rule_id,
+                        rule_version=identity_rule.rule_version,
+                        rule_title=identity_rule.title,
+                        severity=identity_rule.severity,
+                        result="pass",
+                        category=identity_rule.category,
+                    ))
+
+        # --- Mass Balance ---
+        mass_rule = relational_rules.get("mass_balance")
+        if mass_rule:
+            input_types = {"harvesting", "receiving", "first_land_based_receiving"}
+            output_types = {"shipping"}
+            tolerance = mass_rule.evaluation_logic.get("params", {}).get("tolerance_percent", 1.0)
+
+            total_input = 0.0
+            total_output = 0.0
+            units_seen: set = set()
+
+            for evt in events:
+                qty = evt.get("quantity")
+                uom = evt.get("unit_of_measure", "")
+                if qty is None:
+                    continue
+                if uom:
+                    units_seen.add(uom.lower().strip())
+                et = evt.get("event_type", "")
+                if et in input_types:
+                    total_input += float(qty)
+                elif et in output_types:
+                    total_output += float(qty)
+
+            for evt in events:
+                event_type = evt.get("event_type", "")
+                cte_types = mass_rule.applicability_conditions.get("cte_types", [])
+                if cte_types and event_type not in cte_types and "all" not in cte_types:
+                    continue
+
+                evidence = [{
+                    "tlc": tlc,
+                    "total_input": total_input,
+                    "total_output": total_output,
+                    "tolerance_percent": tolerance,
+                    "units_seen": list(units_seen),
+                }]
+
+                if len(units_seen) > 1:
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=mass_rule.rule_id,
+                        rule_version=mass_rule.rule_version,
+                        rule_title=mass_rule.title,
+                        severity=mass_rule.severity,
+                        result="warn",
+                        why_failed=(
+                            f"Mass balance check inconclusive for TLC '{tlc}': "
+                            f"mixed units ({', '.join(sorted(units_seen))})."
+                        ),
+                        evidence_fields_inspected=evidence,
+                        citation_reference=mass_rule.citation_reference,
+                        category=mass_rule.category,
+                    ))
+                elif total_input > 0 and total_output > total_input * (1 + tolerance / 100):
+                    max_allowed = total_input * (1 + tolerance / 100)
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=mass_rule.rule_id,
+                        rule_version=mass_rule.rule_version,
+                        rule_title=mass_rule.title,
+                        severity=mass_rule.severity,
+                        result="fail",
+                        why_failed=(
+                            f"Mass balance violation for TLC '{tlc}': "
+                            f"total output ({total_output}) exceeds total input ({total_input}) "
+                            f"by more than {tolerance}% (max: {max_allowed:.2f}) "
+                            f"({mass_rule.citation_reference})."
+                        ),
+                        evidence_fields_inspected=evidence,
+                        citation_reference=mass_rule.citation_reference,
+                        remediation_suggestion=mass_rule.remediation_suggestion,
+                        category=mass_rule.category,
+                    ))
+                else:
+                    results[evt["event_id"]].append(RuleEvaluationResult(
+                        rule_id=mass_rule.rule_id,
+                        rule_version=mass_rule.rule_version,
+                        rule_title=mass_rule.title,
+                        severity=mass_rule.severity,
+                        result="pass",
+                        evidence_fields_inspected=evidence,
+                        category=mass_rule.category,
+                    ))
+
+    return dict(results)
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +815,14 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     for idx in sorted(dup_warnings_by_index):
         all_duplicate_warnings.extend(dup_warnings_by_index[idx])
 
+    # Normalize all events first (needed for relational checks)
+    all_canonical: List[Dict[str, Any]] = []
+    for raw_event in raw_events:
+        all_canonical.append(_normalize_for_rules(raw_event))
+
+    # Run cross-event relational validation (temporal order, identity, mass balance)
+    relational_results = _evaluate_relational_in_memory(all_canonical)
+
     # Evaluate each event
     event_results: List[EventEvaluationResponse] = []
     total_kde_errors = 0
@@ -563,15 +831,32 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
     all_blocking_reasons: List[str] = []
 
     for i, raw_event in enumerate(raw_events):
+        canonical = all_canonical[i]
+
         # Step 1: KDE validation
         kde_errors = _validate_kdes(raw_event)
         total_kde_errors += len(kde_errors)
 
-        # Step 2: Normalize for rules engine
-        canonical = _normalize_for_rules(raw_event)
-
-        # Step 3: Rules evaluation
+        # Step 2: Stateless per-event rules evaluation
         summary = _evaluate_event_stateless(canonical)
+
+        # Step 3: Merge relational results for this event
+        event_id = canonical.get("event_id", "")
+        rel_results = relational_results.get(event_id, [])
+        for rr in rel_results:
+            summary.results.append(rr)
+            summary.total_rules += 1
+            if rr.result == "pass":
+                summary.passed += 1
+            elif rr.result == "fail":
+                summary.failed += 1
+                if rr.severity == "critical":
+                    summary.critical_failures.append(rr)
+            elif rr.result == "warn":
+                summary.warned += 1
+            else:
+                summary.skipped += 1
+
         total_rule_failures += summary.failed
 
         # Build blocking defects list
