@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import {
   AlertTriangle, CheckCircle2, Loader2, Upload, XCircle,
-  ShieldAlert, ChevronDown, ChevronUp, Download, Info,
+  ShieldAlert, ChevronDown, ChevronUp, Download, Info, Pencil,
 } from 'lucide-react';
+import { SandboxGrid } from './sandbox-grid';
 
 const SAMPLE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,harvest_date,reference_document,cooling_date,ship_date,ship_from_location,ship_to_location,tlc_source_reference,receive_date,receiving_location,immediate_previous_source
 harvesting,LOT-2026-001,Romaine Lettuce,2000,lbs,Valley Fresh Farms,2026-03-12T08:00:00Z,2026-03-12,,,,,,,,,
@@ -55,6 +56,7 @@ export function SandboxUpload() {
   const [result, setResult] = useState<SandboxResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set());
+  const [showGrid, setShowGrid] = useState(false);
 
   function loadSample() {
     setCsvText(SAMPLE_CSV);
@@ -251,8 +253,19 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
           </div>
         )}
 
+        {/* Grid Editor Mode */}
+        {result && showGrid && (
+          <div className="border-t border-[var(--re-surface-border)]">
+            <SandboxGrid
+              initialCsv={csvText}
+              initialResult={result}
+              onBack={() => setShowGrid(false)}
+            />
+          </div>
+        )}
+
         {/* Results */}
-        {result && (
+        {result && !showGrid && (
           <div className="border-t border-[var(--re-surface-border)] p-4 space-y-4">
             {/* Summary Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -269,15 +282,26 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
               ))}
             </div>
 
-            {/* Download Report */}
-            <div className="flex justify-end">
-              <button
-                onClick={handleDownloadReport}
-                className="inline-flex items-center gap-2 bg-white border border-gray-700 text-gray-700 px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-gray-50 cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                Download Compliance Report
-              </button>
+            {/* Actions Row */}
+            <div className="flex items-center justify-between">
+              {result.non_compliant_events > 0 && (
+                <button
+                  onClick={() => setShowGrid(true)}
+                  className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-4 py-2 rounded-lg text-[0.75rem] font-semibold transition-all hover:bg-[var(--re-brand-dark)] cursor-pointer"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Fix Issues in Spreadsheet
+                </button>
+              )}
+              <div className="ml-auto">
+                <button
+                  onClick={handleDownloadReport}
+                  className="inline-flex items-center gap-2 bg-white border border-gray-700 text-gray-700 px-4 py-2 rounded-lg text-[0.75rem] font-medium transition-all hover:bg-gray-50 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Compliance Report
+                </button>
+              </div>
             </div>
 
             {/* Blocking Banner */}
