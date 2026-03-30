@@ -786,7 +786,24 @@ class TestEvaluateMassBalance:
         assert result.result == "pass"
 
     def test_mixed_units_warns(self, mock_session):
-        """Different units of measure — warn instead of hard fail."""
+        """Truly unrecognizable units — warn instead of hard fail."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "bushels"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 500,
+            "unit_of_measure": "hogsheads",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "warn"
+        assert "mixed units" in result.why_failed.lower() or "convert" in result.why_failed.lower()
+
+    def test_convertible_units_compares_correctly(self, mock_session):
+        """Known units (lbs vs cases) are converted and compared."""
         mock_session.execute.return_value.fetchall.return_value = [
             ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "lbs"),
         ]
@@ -798,9 +815,9 @@ class TestEvaluateMassBalance:
             "quantity": 2100,
             "unit_of_measure": "cases",
         }
+        # 2100 cases = 50,400 lbs >> 1000 lbs input → fail
         result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
-        assert result.result == "warn"
-        assert "mixed units" in result.why_failed
+        assert result.result == "fail"
 
     def test_no_prior_events_passes(self, mock_session):
         """No related events — pass (nothing to compare)."""
