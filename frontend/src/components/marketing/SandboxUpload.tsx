@@ -232,7 +232,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                   Evaluating...
                 </>
               ) : (
-                <>Evaluate Against 25 FSMA Rules</>
+                <>Evaluate Against FSMA 204 Rules</>
               )}
             </button>
             <span className="text-[0.65rem] text-[var(--re-text-disabled)]">
