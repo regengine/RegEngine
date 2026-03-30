@@ -82,7 +82,7 @@ pyzbar>=0.1.9,<1
 numpy~=1.26.4
 pandas~=2.0.0
 openpyxl~=3.1.0
-xlrd~=2.0.0
+xlrd~=2.0.2
 
 # XML parsing (included with lxml above)
 defusedxml>=0.7.1
