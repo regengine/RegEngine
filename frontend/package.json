@@ -83,6 +83,10 @@
     "vite": "5.4.21",
     "vitest": "1.6.1"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.59.0",
+    "@rollup/rollup-linux-x64-musl": "4.59.0"
+  },
   "overrides": {
     "tar": ">=7.5.10",
     "rollup": "4.59.0",
