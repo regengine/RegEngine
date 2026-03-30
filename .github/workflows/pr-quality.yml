@@ -83,5 +83,5 @@ jobs:
       - name: Label by files changed
         uses: actions/labeler@v6
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: false
