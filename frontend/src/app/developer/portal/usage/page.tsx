@@ -34,12 +34,15 @@ export default function UsagePage() {
         setIsLoading(true);
         if (!authUser) return;
 
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
             .from('developer_profiles')
             .select('id')
             .eq('auth_user_id', authUser.id)
             .maybeSingle();
 
+        if (profileError) {
+            console.error('Failed to fetch developer profile:', profileError.message);
+        }
         if (!profile) return;
 
         const since = new Date();
