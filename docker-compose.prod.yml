@@ -1,31 +1,18 @@
-version: '3.8'
-
-# Production Docker Compose configuration for RegEngine
-# SEC-004: All secrets MUST be provided via environment variables
-# CRITICAL: Never use default values for sensitive credentials in production
-# DEPLOY: Set IMAGE_TAG env var to pin images (e.g., IMAGE_TAG=sha-80ef59d)
+# Production Docker Compose — RegEngine on Railway + Supabase
+#
+# NOTE: Production runs on Vercel (frontend) + Railway (backend) + Supabase (database).
+# This file is provided for self-hosted or on-prem deployments.
+# It does NOT include Neo4j, Kafka, or Redis — those are legacy services
+# from the original distributed design and are not in the production critical path.
+#
+# For the full local dev stack (including legacy services), use docker-compose.yml.
 
 x-env-prod: &env_prod
   REGENGINE_ENV: production
-  RAW_DATA_BUCKET: ${RAW_DATA_BUCKET:?error}
-  PROCESSED_DATA_BUCKET: ${PROCESSED_DATA_BUCKET:?error}
-  OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_ACCESS_KEY_ID:?error}
-  OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_SECRET_ACCESS_KEY:?error}
-  OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-us-east-1}
-  KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?error}
-  KAFKA_TOPIC_NORMALIZED: ${KAFKA_TOPIC_NORMALIZED:-ingest.normalized}
-  KAFKA_TOPIC_NLP: ${KAFKA_TOPIC_NLP:-nlp.extracted}
-  LOG_LEVEL: ${LOG_LEVEL:-WARNING}
-  NEO4J_URI: ${NEO4J_URI:?error}
-  NEO4J_USER: ${NEO4J_USER:?error}
-  NEO4J_PASSWORD: ${NEO4J_PASSWORD:?error}
   DATABASE_URL: ${DATABASE_URL:?error}
   ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:?error}
-  REDIS_URL: ${REDIS_URL:?error}
-  OLLAMA_HOST: ${OLLAMA_HOST:?error}
+  LOG_LEVEL: ${LOG_LEVEL:-WARNING}
   ENABLE_DB_API_KEYS: "true"
-  RATE_LIMIT_BACKEND: redis
-  CIRCUIT_BREAKER_BACKEND: redis
 
 x-deploy-defaults: &deploy_defaults
   restart_policy:
@@ -34,26 +21,6 @@ x-deploy-defaults: &deploy_defaults
     max_attempts: 3
 
 services:
-  gateway:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./infra/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./infra/gateway/ssl:/etc/nginx/ssl:ro
-    environment:
-      REGENGINE_ENV: production
-    depends_on:
-      - admin-api
-      - ingestion-service
-    deploy:
-      <<: *deploy_defaults
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-
   admin-api:
     build:
       context: .
@@ -95,47 +62,6 @@ services:
           cpus: '2.0'
           memory: 2G
 
-  nlp-service:
-    build:
-      context: .
-      dockerfile: ./services/nlp/Dockerfile
-    image: ghcr.io/regengine/nlp-service:${IMAGE_TAG:-latest}
-    environment:
-      <<: *env_prod
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8100/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      <<: *deploy_defaults
-      resources:
-        limits:
-          cpus: '4.0'
-          memory: 8G
-
-  graph-service:
-    build:
-      context: .
-      dockerfile: ./services/graph/Dockerfile
-    image: ghcr.io/regengine/graph-service:${IMAGE_TAG:-latest}
-    environment:
-      <<: *env_prod
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8200/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      <<: *deploy_defaults
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
-
-
   compliance-api:
     build:
       context: .
@@ -155,20 +81,3 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
-
-  scheduler:
-    build:
-      context: ./services/scheduler
-    image: ghcr.io/regengine/scheduler:${IMAGE_TAG:-latest}
-    environment:
-      INGESTION_SERVICE_URL: http://ingestion-service:8000
-      SCHEDULER_API_KEY: ${ADMIN_MASTER_KEY:?error}
-      REGENGINE_ENV: production
-    depends_on:
-      - ingestion-service
-    deploy:
-      <<: *deploy_defaults
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
