@@ -34,12 +34,15 @@ export default function UsagePage() {
         setIsLoading(true);
         if (!authUser) return;
 
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
             .from('developer_profiles')
             .select('id')
             .eq('auth_user_id', authUser.id)
-            .single();
+            .maybeSingle();
 
+        if (profileError) {
+            console.error('Failed to fetch developer profile:', profileError.message);
+        }
         if (!profile) return;
 
         const since = new Date();
@@ -47,7 +50,7 @@ export default function UsagePage() {
         else if (timeRange === '7d') since.setDate(since.getDate() - 7);
         else since.setDate(since.getDate() - 30);
 
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('developer_api_usage')
             .select('endpoint, method, status_code, response_time_ms, created_at')
             .eq('developer_id', profile.id)
@@ -55,6 +58,9 @@ export default function UsagePage() {
             .order('created_at', { ascending: false })
             .limit(1000);
 
+        if (error) {
+            console.error('Failed to fetch usage data:', error.message);
+        }
         setUsage(data || []);
         setIsLoading(false);
     }, [supabase, authUser, timeRange]);

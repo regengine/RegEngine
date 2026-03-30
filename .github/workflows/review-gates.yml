@@ -76,9 +76,12 @@ jobs:
             echo "::error::Found potential secrets or placeholder values in frontend source"
             FOUND=1
           fi
-          # Check backend source
-          if grep -rn 'sk_test_\|sk_live_\|your-api-key\|your_password' \
-            services/ --include="*.py" 2>/dev/null; then
+          # Check backend source (exclude test files — they use fake keys for mocking)
+          BACKEND_MATCHES=$(grep -rn 'sk_test_\|sk_live_\|your-api-key\|your_password' \
+            services/ --include="*.py" 2>/dev/null \
+            | grep -v '/tests/\|test_\|conftest\|_test\.py' || true)
+          if [ -n "$BACKEND_MATCHES" ]; then
+            echo "$BACKEND_MATCHES"
             echo "::error::Found potential secrets or placeholder values in backend source"
             FOUND=1
           fi
@@ -151,7 +154,13 @@ jobs:
 
       - name: No destructive migrations on audit tables
         run: |
-          MATCHES=$(grep -rli 'DROP\|TRUNCATE' migrations/*.sql 2>/dev/null | xargs grep -li 'audit\|evidence_log\|compliance_status_log\|task_event' 2>/dev/null || true)
+          # Only check migration files changed in this PR (not all historical migrations)
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null || true)
+          if [ -z "$CHANGED_MIGRATIONS" ]; then
+            echo "No migration files changed — skipping"
+            exit 0
+          fi
+          MATCHES=$(echo "$CHANGED_MIGRATIONS" | xargs grep -li 'DROP\|TRUNCATE' 2>/dev/null | xargs grep -li 'audit\|evidence_log\|compliance_status_log\|task_event' 2>/dev/null || true)
           if [ -n "$MATCHES" ]; then
             echo "$MATCHES"
             echo "::error::Found destructive migration on audit tables — requires manual review"
@@ -178,6 +187,45 @@ jobs:
             echo "$FILTERED"
             echo "::error::Found f-string SQL in Python services — use parameterized queries via text() with bound params"
             exit 1
+          fi
+
+  # ──────────────────────────────────────────────
+  # Tenant Isolation (Checklist §7)
+  # ──────────────────────────────────────────────
+  tenant-isolation:
+    name: Tenant Isolation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: New migrations include tenant_id where expected
+        run: |
+          for f in $(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null); do
+            if grep -qi "CREATE TABLE.*pcos_\|CREATE TABLE.*compliance\|CREATE TABLE.*evidence" "$f" 2>/dev/null; then
+              if ! grep -qi "tenant_id" "$f" 2>/dev/null; then
+                echo "::error::Migration $f creates a compliance/pcos table without tenant_id column"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: New migrations enable RLS on new tables
+        run: |
+          for f in $(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null); do
+            if grep -qi "CREATE TABLE" "$f" 2>/dev/null; then
+              if ! grep -qi "ENABLE ROW LEVEL SECURITY" "$f" 2>/dev/null; then
+                echo "::error::Migration $f creates a table without enabling RLS"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Flag direct pcos table access without tenant filter
+        run: |
+          PCOS_CALLS=$(grep -rn "\.from(['\"]pcos_" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$PCOS_CALLS" ]; then
+            echo "$PCOS_CALLS"
+            echo "::warning::Found direct pcos_* table access — verify tenant_id filtering is applied (via RLS or explicit .eq())"
           fi
 
   # ──────────────────────────────────────────────

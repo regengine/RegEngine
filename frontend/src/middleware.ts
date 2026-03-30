@@ -263,7 +263,7 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
                     .from('developer_profiles')
                     .select('is_sysadmin')
                     .eq('auth_user_id', userId)
-                    .single();
+                    .maybeSingle();
 
                 isSysadmin = !!profile?.is_sysadmin;
                 setSysadminCached(userId, isSysadmin);

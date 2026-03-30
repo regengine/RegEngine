@@ -232,7 +232,7 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                   Evaluating...
                 </>
               ) : (
-                <>Evaluate Against 25 FSMA Rules</>
+                <>Evaluate Against FSMA 204 Rules</>
               )}
             </button>
             <span className="text-[0.65rem] text-[var(--re-text-disabled)]">
@@ -300,12 +300,23 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
               </div>
             )}
 
-            {!result.submission_blocked && (
+            {!result.submission_blocked && result.non_compliant_events === 0 && (
               <div className="rounded-lg border-2 border-emerald-500/30 bg-emerald-500/10 p-4">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                   <span className="text-[0.8rem] font-semibold text-emerald-400">
                     ALL EVENTS COMPLIANT — Ready for FDA submission
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {!result.submission_blocked && result.non_compliant_events > 0 && (
+              <div className="rounded-lg border-2 border-amber-500/30 bg-amber-500/10 p-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                  <span className="text-[0.8rem] font-semibold text-amber-400">
+                    {result.non_compliant_events} event{result.non_compliant_events !== 1 ? 's' : ''} need{result.non_compliant_events === 1 ? 's' : ''} attention — review issues below
                   </span>
                 </div>
               </div>
@@ -363,38 +374,52 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                         </div>
                       )}
 
-                      {/* Rule Results */}
-                      <div className="space-y-1">
-                        {ev.all_results.map((rule, j) => (
-                          <div
-                            key={j}
-                            className={`flex items-start gap-2 text-[0.65rem] ${
-                              rule.result === 'pass' ? 'text-emerald-400' :
-                              rule.result === 'fail' ? 'text-red-400' :
-                              rule.result === 'warn' ? 'text-amber-400' :
-                              'text-[var(--re-text-disabled)]'
-                            }`}
-                          >
-                            {rule.result === 'pass'
-                              ? <CheckCircle2 className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                              : rule.result === 'fail'
-                              ? <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                              : <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
-                            <div>
-                              <span className="font-medium">{rule.rule_title}</span>
-                              {rule.citation && (
-                                <span className="text-[var(--re-text-disabled)] ml-1">({rule.citation})</span>
-                              )}
-                              {rule.why_failed && (
-                                <div className="text-[0.6rem] opacity-80 mt-0.5">{rule.why_failed}</div>
-                              )}
-                              {rule.remediation && rule.result === 'fail' && (
-                                <div className="text-[0.6rem] text-[var(--re-text-muted)] mt-0.5 italic">{rule.remediation}</div>
-                              )}
-                            </div>
+                      {/* Rule Results — failures and warnings first, then passed */}
+                      {(() => {
+                        const failed = ev.all_results.filter((r) => r.result === 'fail');
+                        const warned = ev.all_results.filter((r) => r.result === 'warn');
+                        const passed = ev.all_results.filter((r) => r.result === 'pass');
+                        const skipped = ev.all_results.filter((r) => r.result === 'skip');
+                        const sorted = [...failed, ...warned, ...skipped, ...passed];
+                        return (
+                          <div className="space-y-1">
+                            {failed.length > 0 && (
+                              <span className="text-[0.65rem] font-medium text-red-400">
+                                Rule Failures ({failed.length}):
+                              </span>
+                            )}
+                            {sorted.map((rule, j) => (
+                              <div
+                                key={j}
+                                className={`flex items-start gap-2 text-[0.65rem] ${
+                                  rule.result === 'pass' ? 'text-emerald-400' :
+                                  rule.result === 'fail' ? 'text-red-400' :
+                                  rule.result === 'warn' ? 'text-amber-400' :
+                                  'text-[var(--re-text-disabled)]'
+                                }`}
+                              >
+                                {rule.result === 'pass'
+                                  ? <CheckCircle2 className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                  : rule.result === 'fail'
+                                  ? <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                                  : <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
+                                <div>
+                                  <span className="font-medium">{rule.rule_title}</span>
+                                  {rule.citation && (
+                                    <span className="text-[var(--re-text-disabled)] ml-1">({rule.citation})</span>
+                                  )}
+                                  {rule.why_failed && (
+                                    <div className="text-[0.6rem] opacity-80 mt-0.5">{rule.why_failed}</div>
+                                  )}
+                                  {rule.remediation && rule.result === 'fail' && (
+                                    <div className="text-[0.6rem] text-[var(--re-text-muted)] mt-0.5 italic">{rule.remediation}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
