@@ -11,6 +11,7 @@ import { useGridHistory } from './use-grid-history';
 import { buildCellErrorMap } from './cell-error-map';
 import { FixItTooltip } from './FixItTooltip';
 import { MassFillDialog } from './MassFillDialog';
+import { AddEventModal } from './AddEventModal';
 import { GridToolbar } from './GridToolbar';
 import { cellKey } from './types';
 import type { CellErrorMap, CellFixedSet } from './types';
@@ -46,6 +47,7 @@ interface SandboxResult {
       citation: string | null;
       remediation: string | null;
       category: string;
+      evidence?: Record<string, unknown>[] | null;
     }[];
     all_results: {
       rule_title: string;
@@ -55,6 +57,7 @@ interface SandboxResult {
       citation: string | null;
       remediation: string | null;
       category: string;
+      evidence?: Record<string, unknown>[] | null;
     }[];
   }[];
   duplicate_warnings?: string[];
@@ -140,6 +143,13 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
 
   // Mass fill dialog
   const [massFillOpen, setMassFillOpen] = useState(false);
+
+  // Add event modal (guided resolution)
+  const [addEventModal, setAddEventModal] = useState<{
+    open: boolean;
+    cteType: string;
+    prefill: Record<string, string>;
+  } | null>(null);
 
   // Debounce re-evaluation + abort stale requests
   const debounceRef = useRef<NodeJS.Timeout>();
@@ -284,6 +294,54 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   }
 
   // ---------------------------------------------------------------------------
+  // Guided Resolution handlers
+  // ---------------------------------------------------------------------------
+
+  function handleAddRow(cteType: string, prefill: Record<string, string>) {
+    setAddEventModal({ open: true, cteType, prefill });
+  }
+
+  function handleAddRowConfirm(values: Record<string, string>) {
+    // Map values to a row array matching our headers
+    const newRow = headers.map((h) => {
+      const lowerH = h.toLowerCase().replace(/\s+/g, '_');
+      // Try exact match, then check values keys
+      return values[h] || values[lowerH] || '';
+    });
+
+    const newData = [...history.data.map((r) => [...r]), newRow];
+    history.push(newData);
+    scheduleReEval(newData);
+    setAddEventModal(null);
+  }
+
+  function handleEditCellFromTooltip(row: number, column: string) {
+    const colIdx = headers.findIndex(
+      (h) => h.toLowerCase().replace(/\s+/g, '_') === column.toLowerCase().replace(/\s+/g, '_')
+    );
+    if (colIdx >= 0) {
+      startEditing(row, colIdx);
+    }
+  }
+
+  function handleMassFillFromTooltip(column: string, value: string) {
+    const colIdx = headers.findIndex(
+      (h) => h.toLowerCase().replace(/\s+/g, '_') === column.toLowerCase().replace(/\s+/g, '_')
+    );
+    if (colIdx < 0) return;
+
+    const newData = history.data.map((row, rowIdx) => {
+      const newRow = [...row];
+      newRow[colIdx] = value;
+      setFixedCells((prev) => new Set(prev).add(cellKey(rowIdx, headers[colIdx])));
+      return newRow;
+    });
+
+    history.push(newData);
+    scheduleReEval(newData);
+  }
+
+  // ---------------------------------------------------------------------------
   // Undo/redo with keyboard
   // ---------------------------------------------------------------------------
 
@@ -409,7 +467,17 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
             );
 
             if (hasError) {
-              return <FixItTooltip errors={errors}>{cellContent}</FixItTooltip>;
+              return (
+                <FixItTooltip
+                  errors={errors}
+                  rowIndex={rowIdx}
+                  onAddRow={handleAddRow}
+                  onEditCell={handleEditCellFromTooltip}
+                  onMassFill={handleMassFillFromTooltip}
+                >
+                  {cellContent}
+                </FixItTooltip>
+              );
             }
 
             return cellContent;
@@ -512,6 +580,16 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
         headers={headers}
         onApply={handleMassFill}
       />
+
+      {addEventModal && (
+        <AddEventModal
+          open={addEventModal.open}
+          onClose={() => setAddEventModal(null)}
+          onConfirm={handleAddRowConfirm}
+          cteType={addEventModal.cteType}
+          prefill={addEventModal.prefill}
+        />
+      )}
     </div>
   );
 }
