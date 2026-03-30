@@ -101,10 +101,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -117,7 +117,7 @@ jobs:
           psql -h localhost -U postgres -c "CREATE DATABASE test_db;"
 
       - name: Cache pip packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/pip
           key: pip-${{ matrix.service }}-${{ hashFiles(format('services/{0}/requirements.txt', matrix.service)) }}
@@ -167,7 +167,7 @@ jobs:
 
       - name: Upload coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.service }}
           path: services/${{ matrix.service }}/coverage.xml
@@ -184,10 +184,10 @@ jobs:
       matrix:
         service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -208,10 +208,10 @@ jobs:
         # context is repo root so Dockerfiles can COPY shared/, kernel/, plugins/, etc.
         service: [admin, compliance, graph, ingestion, nlp, scheduler]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build Docker image
         # Use repo root as build context so absolute COPY paths resolve correctly.
