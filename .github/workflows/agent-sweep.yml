@@ -30,7 +30,7 @@ jobs:
       github.event.inputs.sweep_type == 'security' ||
       github.event.inputs.sweep_type == 'full-audit'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -125,7 +125,7 @@ jobs:
       github.event.inputs.sweep_type == 'ui-drift' ||
       github.event.inputs.sweep_type == 'full-audit'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Scan for inline styles
         run: |
@@ -195,7 +195,7 @@ jobs:
       (github.event.inputs.sweep_type == 'infra-health' ||
        github.event.inputs.sweep_type == 'full-audit')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check Dockerfile best practices
         run: |
