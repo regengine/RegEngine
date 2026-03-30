@@ -190,6 +190,45 @@ jobs:
           fi
 
   # ──────────────────────────────────────────────
+  # Tenant Isolation (Checklist §7)
+  # ──────────────────────────────────────────────
+  tenant-isolation:
+    name: Tenant Isolation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: New migrations include tenant_id where expected
+        run: |
+          for f in $(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null); do
+            if grep -qi "CREATE TABLE.*pcos_\|CREATE TABLE.*compliance\|CREATE TABLE.*evidence" "$f" 2>/dev/null; then
+              if ! grep -qi "tenant_id" "$f" 2>/dev/null; then
+                echo "::error::Migration $f creates a compliance/pcos table without tenant_id column"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: New migrations enable RLS on new tables
+        run: |
+          for f in $(git diff --name-only origin/main...HEAD -- 'migrations/*.sql' 2>/dev/null); do
+            if grep -qi "CREATE TABLE" "$f" 2>/dev/null; then
+              if ! grep -qi "ENABLE ROW LEVEL SECURITY" "$f" 2>/dev/null; then
+                echo "::error::Migration $f creates a table without enabling RLS"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Flag direct pcos table access without tenant filter
+        run: |
+          PCOS_CALLS=$(grep -rn "\.from(['\"]pcos_" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$PCOS_CALLS" ]; then
+            echo "$PCOS_CALLS"
+            echo "::warning::Found direct pcos_* table access — verify tenant_id filtering is applied (via RLS or explicit .eq())"
+          fi
+
+  # ──────────────────────────────────────────────
   # React Patterns (Checklist §4)
   # ──────────────────────────────────────────────
   react-patterns:
