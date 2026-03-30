@@ -20,6 +20,7 @@ interface RuleResult {
   citation: string | null;
   remediation: string | null;
   category: string;
+  evidence?: Record<string, unknown>[] | null;
 }
 
 interface EventEvaluation {
