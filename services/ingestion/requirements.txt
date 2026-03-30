@@ -79,7 +79,7 @@ Pillow>=12.1.1,<13
 pyzbar>=0.1.9,<1
 
 # CSV/Excel parsing
-numpy~=1.26.4
+numpy~=2.4.4
 pandas~=2.0.0
 openpyxl~=3.1.0
 xlrd~=2.0.0
