@@ -275,11 +275,390 @@ def _evaluate_multi_field_presence(
     )
 
 
-# Evaluator dispatch
+# Evaluator dispatch — stateless (3-arg: event_data, logic, rule)
 _EVALUATORS = {
     "field_presence": _evaluate_field_presence,
     "field_format": _evaluate_field_format,
     "multi_field_presence": _evaluate_multi_field_presence,
+}
+
+
+# ---------------------------------------------------------------------------
+# Relational Evaluators — cross-event validation (4-arg: + session)
+# ---------------------------------------------------------------------------
+
+# CTE lifecycle ordering per FSMA 204 supply chain flow
+_CTE_LIFECYCLE_ORDER = {
+    "harvesting": 0,
+    "cooling": 1,
+    "initial_packing": 2,
+    "first_land_based_receiving": 3,
+    "transformation": 4,
+    "shipping": 5,
+    "receiving": 6,
+}
+
+
+def _fetch_related_events(
+    session: Session,
+    traceability_lot_code: str,
+    tenant_id: str,
+    exclude_event_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Fetch all ACTIVE events for the same TLC + tenant.
+
+    Returns list of dicts with event_id, event_type, event_timestamp,
+    product_reference, quantity, unit_of_measure.
+    """
+    query = text("""
+        SELECT event_id, event_type, event_timestamp,
+               product_reference, quantity, unit_of_measure
+        FROM fsma.traceability_events
+        WHERE traceability_lot_code = :tlc
+          AND tenant_id = :tenant_id
+          AND status = 'active'
+          AND (:exclude_id IS NULL OR event_id != CAST(:exclude_id AS uuid))
+        ORDER BY event_timestamp ASC
+    """)
+    rows = session.execute(query, {
+        "tlc": traceability_lot_code,
+        "tenant_id": tenant_id,
+        "exclude_id": exclude_event_id,
+    }).fetchall()
+
+    return [
+        {
+            "event_id": str(r[0]),
+            "event_type": r[1],
+            "event_timestamp": r[2],
+            "product_reference": r[3],
+            "quantity": float(r[4]) if r[4] is not None else None,
+            "unit_of_measure": r[5],
+        }
+        for r in rows
+    ]
+
+
+def _evaluate_temporal_order(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+    session: Session,
+) -> RuleEvaluationResult:
+    """Detect chronology paradoxes — e.g. shipping before harvesting."""
+    tlc = event_data.get("traceability_lot_code", "")
+    tenant_id = event_data.get("tenant_id", "")
+    event_id = event_data.get("event_id", "")
+
+    if not tlc or not tenant_id:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="skip", why_failed="Missing TLC or tenant_id for temporal check",
+            category=rule.category,
+        )
+
+    related = _fetch_related_events(session, tlc, str(tenant_id), str(event_id))
+    if not related:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="pass", category=rule.category,
+            evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
+        )
+
+    # Build timeline: current event + related events
+    current_type = event_data.get("event_type", "")
+    current_ts = event_data.get("event_timestamp")
+    if isinstance(current_ts, str):
+        current_ts = datetime.fromisoformat(current_ts.replace("Z", "+00:00"))
+
+    current_stage = _CTE_LIFECYCLE_ORDER.get(current_type)
+    if current_stage is None:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="skip", why_failed=f"Unknown CTE type: {current_type}",
+            category=rule.category,
+        )
+
+    # Check each related event for chronology violations
+    violations = []
+    for evt in related:
+        other_type = evt["event_type"]
+        other_stage = _CTE_LIFECYCLE_ORDER.get(other_type)
+        if other_stage is None:
+            continue
+
+        other_ts = evt["event_timestamp"]
+        if isinstance(other_ts, str):
+            other_ts = datetime.fromisoformat(other_ts.replace("Z", "+00:00"))
+
+        # Lifecycle-earlier stage should have an earlier-or-equal timestamp
+        if other_stage < current_stage and other_ts > current_ts:
+            violations.append({
+                "earlier_stage": other_type,
+                "earlier_timestamp": str(other_ts),
+                "later_stage": current_type,
+                "later_timestamp": str(current_ts),
+                "event_id": evt["event_id"],
+            })
+        elif other_stage > current_stage and other_ts < current_ts:
+            violations.append({
+                "earlier_stage": current_type,
+                "earlier_timestamp": str(current_ts),
+                "later_stage": other_type,
+                "later_timestamp": str(other_ts),
+                "event_id": evt["event_id"],
+            })
+
+    if violations:
+        v = violations[0]
+        why = (
+            f"Chronology paradox for TLC '{tlc}': {v['later_stage']} "
+            f"(at {v['later_timestamp']}) occurs before {v['earlier_stage']} "
+            f"(at {v['earlier_timestamp']}). "
+            f"CTE events must follow the supply chain lifecycle order "
+            f"({rule.citation_reference or '21 CFR §1.1310'})."
+        )
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail", why_failed=why,
+            evidence_fields_inspected=violations,
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=rule.remediation_suggestion,
+            category=rule.category,
+        )
+
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        rule_title=rule.title, severity=rule.severity,
+        result="pass", category=rule.category,
+        evidence_fields_inspected=[{
+            "tlc": tlc, "events_checked": len(related),
+            "current_stage": current_type,
+        }],
+    )
+
+
+def _evaluate_identity_consistency(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+    session: Session,
+) -> RuleEvaluationResult:
+    """Detect product identity drift — same TLC changing product mid-chain."""
+    tlc = event_data.get("traceability_lot_code", "")
+    tenant_id = event_data.get("tenant_id", "")
+    event_id = event_data.get("event_id", "")
+    current_product = event_data.get("product_reference")
+
+    if not current_product or not tlc or not tenant_id:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="skip",
+            why_failed="Missing product_reference, TLC, or tenant_id for identity check",
+            category=rule.category,
+        )
+
+    related = _fetch_related_events(session, tlc, str(tenant_id), str(event_id))
+    if not related:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="pass", category=rule.category,
+            evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
+        )
+
+    normalized_current = " ".join(current_product.strip().lower().split())
+    mismatches = []
+
+    for evt in related:
+        other_product = evt.get("product_reference")
+        if not other_product:
+            continue
+        normalized_other = " ".join(other_product.strip().lower().split())
+        if normalized_other != normalized_current:
+            mismatches.append({
+                "event_id": evt["event_id"],
+                "event_type": evt["event_type"],
+                "product_reference": other_product,
+                "current_product": current_product,
+            })
+
+    if mismatches:
+        m = mismatches[0]
+        why = (
+            f"Product identity changed for TLC '{tlc}': "
+            f"'{m['product_reference']}' (at {m['event_type']}) vs "
+            f"'{current_product}' (current event). "
+            f"The same TLC must refer to the same product throughout the supply chain "
+            f"({rule.citation_reference or '21 CFR §1.1310(a)'})."
+        )
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail", why_failed=why,
+            evidence_fields_inspected=mismatches,
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=rule.remediation_suggestion,
+            category=rule.category,
+        )
+
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        rule_title=rule.title, severity=rule.severity,
+        result="pass", category=rule.category,
+        evidence_fields_inspected=[{
+            "tlc": tlc, "events_checked": len(related),
+            "product": current_product,
+        }],
+    )
+
+
+def _evaluate_mass_balance(
+    event_data: Dict[str, Any],
+    logic: Dict[str, Any],
+    rule: RuleDefinition,
+    session: Session,
+) -> RuleEvaluationResult:
+    """Detect mass balance violations — output exceeding input for same TLC."""
+    tlc = event_data.get("traceability_lot_code", "")
+    tenant_id = event_data.get("tenant_id", "")
+    event_id = event_data.get("event_id", "")
+    current_quantity = event_data.get("quantity")
+    current_uom = event_data.get("unit_of_measure", "")
+    current_type = event_data.get("event_type", "")
+
+    if not tlc or not tenant_id or current_quantity is None:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="skip",
+            why_failed="Missing TLC, tenant_id, or quantity for mass balance check",
+            category=rule.category,
+        )
+
+    related = _fetch_related_events(session, tlc, str(tenant_id), str(event_id))
+    if not related:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="pass", category=rule.category,
+            evidence_fields_inspected=[{"note": "No related events for TLC", "tlc": tlc}],
+        )
+
+    tolerance_percent = logic.get("params", {}).get("tolerance_percent", 1.0)
+
+    # Classify event types
+    input_types = {"harvesting", "receiving", "first_land_based_receiving"}
+    output_types = {"shipping"}
+
+    total_input = 0.0
+    total_output = 0.0
+    units_seen = set()
+    if current_uom:
+        units_seen.add(current_uom.lower().strip())
+
+    # Include current event in totals
+    current_qty = float(current_quantity)
+    if current_type in input_types:
+        total_input += current_qty
+    elif current_type in output_types:
+        total_output += current_qty
+
+    for evt in related:
+        evt_type = evt["event_type"]
+        evt_qty = evt.get("quantity")
+        evt_uom = evt.get("unit_of_measure", "")
+
+        if evt_qty is None:
+            continue
+
+        if evt_uom:
+            units_seen.add(evt_uom.lower().strip())
+
+        if evt_type in input_types:
+            total_input += float(evt_qty)
+        elif evt_type in output_types:
+            total_output += float(evt_qty)
+
+    evidence = [{
+        "tlc": tlc,
+        "total_input": total_input,
+        "total_output": total_output,
+        "tolerance_percent": tolerance_percent,
+        "units_seen": list(units_seen),
+        "events_checked": len(related) + 1,
+    }]
+
+    # Mixed units — warn instead of hard fail
+    if len(units_seen) > 1:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="warn",
+            why_failed=(
+                f"Mass balance check inconclusive for TLC '{tlc}': "
+                f"mixed units of measure detected ({', '.join(sorted(units_seen))}). "
+                f"Cannot reliably compare input ({total_input}) vs output ({total_output})."
+            ),
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            category=rule.category,
+        )
+
+    # No input events yet — can't validate
+    if total_input == 0 and total_output > 0:
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="warn",
+            why_failed=(
+                f"Mass balance check for TLC '{tlc}': "
+                f"output quantity ({total_output}) recorded but no input events found. "
+                f"Input events (harvesting/receiving) may not yet be recorded."
+            ),
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            category=rule.category,
+        )
+
+    # Check: output must not exceed input + tolerance
+    max_allowed = total_input * (1 + tolerance_percent / 100)
+    if total_output > max_allowed:
+        why = (
+            f"Mass balance violation for TLC '{tlc}': "
+            f"total output ({total_output}) exceeds total input ({total_input}) "
+            f"by more than {tolerance_percent}% tolerance "
+            f"(max allowed: {max_allowed:.2f}). "
+            f"({rule.citation_reference or '21 CFR §1.1310'})."
+        )
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id, rule_version=rule.rule_version,
+            rule_title=rule.title, severity=rule.severity,
+            result="fail", why_failed=why,
+            evidence_fields_inspected=evidence,
+            citation_reference=rule.citation_reference,
+            remediation_suggestion=rule.remediation_suggestion,
+            category=rule.category,
+        )
+
+    return RuleEvaluationResult(
+        rule_id=rule.rule_id, rule_version=rule.rule_version,
+        rule_title=rule.title, severity=rule.severity,
+        result="pass", category=rule.category,
+        evidence_fields_inspected=evidence,
+    )
+
+
+# Relational evaluator dispatch — 4-arg (event_data, logic, rule, session)
+_RELATIONAL_EVALUATORS = {
+    "temporal_order": _evaluate_temporal_order,
+    "identity_consistency": _evaluate_identity_consistency,
+    "mass_balance": _evaluate_mass_balance,
 }
 
 
@@ -460,34 +839,65 @@ class RulesEngine:
         logic = rule.evaluation_logic
         eval_type = logic.get("type", "field_presence")
 
+        # Try stateless evaluators first
         evaluator = _EVALUATORS.get(eval_type)
-        if not evaluator:
-            return RuleEvaluationResult(
-                rule_id=rule.rule_id,
-                rule_version=rule.rule_version,
-                rule_title=rule.title,
-                severity=rule.severity,
-                result="skip",
-                why_failed=f"Unknown evaluation type: {eval_type}",
-                category=rule.category,
-            )
+        if evaluator:
+            try:
+                return evaluator(event_data, logic, rule)
+            except Exception as e:
+                logger.warning(
+                    "rule_evaluation_error",
+                    extra={"rule_id": rule.rule_id, "error": str(e)},
+                )
+                return RuleEvaluationResult(
+                    rule_id=rule.rule_id,
+                    rule_version=rule.rule_version,
+                    rule_title=rule.title,
+                    severity=rule.severity,
+                    result="skip",
+                    why_failed=f"Evaluation error: {str(e)}",
+                    category=rule.category,
+                )
 
-        try:
-            return evaluator(event_data, logic, rule)
-        except Exception as e:
-            logger.warning(
-                "rule_evaluation_error",
-                extra={"rule_id": rule.rule_id, "error": str(e)},
-            )
-            return RuleEvaluationResult(
-                rule_id=rule.rule_id,
-                rule_version=rule.rule_version,
-                rule_title=rule.title,
-                severity=rule.severity,
-                result="skip",
-                why_failed=f"Evaluation error: {str(e)}",
-                category=rule.category,
-            )
+        # Try relational evaluators (require DB session)
+        relational_evaluator = _RELATIONAL_EVALUATORS.get(eval_type)
+        if relational_evaluator:
+            if self.session is None:
+                return RuleEvaluationResult(
+                    rule_id=rule.rule_id,
+                    rule_version=rule.rule_version,
+                    rule_title=rule.title,
+                    severity=rule.severity,
+                    result="skip",
+                    why_failed=f"Relational rule '{eval_type}' requires DB session",
+                    category=rule.category,
+                )
+            try:
+                return relational_evaluator(event_data, logic, rule, self.session)
+            except Exception as e:
+                logger.warning(
+                    "relational_rule_evaluation_error",
+                    extra={"rule_id": rule.rule_id, "error": str(e)},
+                )
+                return RuleEvaluationResult(
+                    rule_id=rule.rule_id,
+                    rule_version=rule.rule_version,
+                    rule_title=rule.title,
+                    severity=rule.severity,
+                    result="skip",
+                    why_failed=f"Evaluation error: {str(e)}",
+                    category=rule.category,
+                )
+
+        return RuleEvaluationResult(
+            rule_id=rule.rule_id,
+            rule_version=rule.rule_version,
+            rule_title=rule.title,
+            severity=rule.severity,
+            result="skip",
+            why_failed=f"Unknown evaluation type: {eval_type}",
+            category=rule.category,
+        )
 
     def _persist_evaluations(
         self,
@@ -942,6 +1352,43 @@ FSMA_RULE_SEEDS: List[Dict[str, Any]] = [
         },
         "failure_reason_template": "Initial packing event missing harvester business name ({citation})",
         "remediation_suggestion": "Record the harvester's business name and phone number",
+    },
+    # --- Relational Rules (cross-event validation) ---
+    {
+        "title": "Temporal Order: CTE Chronology Must Be Causal",
+        "description": "CTE events for the same TLC must follow supply chain lifecycle order — harvesting before cooling before packing before shipping before receiving",
+        "severity": "critical",
+        "category": "temporal_ordering",
+        "applicability_conditions": {"cte_types": ["shipping", "receiving", "transformation", "initial_packing", "cooling"]},
+        "citation_reference": "21 CFR §1.1310",
+        "evaluation_logic": {"type": "temporal_order"},
+        "failure_reason_template": "Chronology paradox: {event_type} event timestamp violates supply chain lifecycle order for this TLC ({citation})",
+        "remediation_suggestion": "Verify event timestamps — a later-stage CTE cannot occur before an earlier-stage CTE for the same traceability lot code",
+    },
+    {
+        "title": "Identity Consistency: Product Must Not Change for Same TLC",
+        "description": "The product description must remain consistent across all CTEs for the same traceability lot code (excluding transformation, which legitimately creates new products)",
+        "severity": "warning",
+        "category": "lot_linkage",
+        "applicability_conditions": {"cte_types": ["harvesting", "cooling", "initial_packing", "first_land_based_receiving", "shipping", "receiving"]},
+        "citation_reference": "21 CFR §1.1310(a)",
+        "evaluation_logic": {"type": "identity_consistency"},
+        "failure_reason_template": "Product identity changed for TLC: {event_type} event has a different product than prior events ({citation})",
+        "remediation_suggestion": "Verify the product description matches across all events for this traceability lot code. If the product was legitimately transformed, use a transformation event",
+    },
+    {
+        "title": "Mass Balance: Output Cannot Exceed Input for Same TLC",
+        "description": "Total shipped/output quantity for a TLC cannot exceed total received/input quantity (within tolerance)",
+        "severity": "critical",
+        "category": "quantity_consistency",
+        "applicability_conditions": {"cte_types": ["shipping", "transformation"]},
+        "citation_reference": "21 CFR §1.1310",
+        "evaluation_logic": {
+            "type": "mass_balance",
+            "params": {"tolerance_percent": 1.0},
+        },
+        "failure_reason_template": "Mass balance violation: output quantity exceeds input quantity for this TLC ({citation})",
+        "remediation_suggestion": "Verify quantities — you cannot ship more than was received/harvested for the same traceability lot code. Check for data entry errors or missing input events",
     },
 ]
 
