@@ -13,6 +13,7 @@ import { FixItTooltip } from './FixItTooltip';
 import { MassFillDialog } from './MassFillDialog';
 import { AddEventModal } from './AddEventModal';
 import { GridToolbar } from './GridToolbar';
+import { TracePanel } from './TracePanel';
 import { cellKey } from './types';
 import type { CellErrorMap, CellFixedSet } from './types';
 
@@ -144,6 +145,9 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   // Mass fill dialog
   const [massFillOpen, setMassFillOpen] = useState(false);
 
+  // Trace panel
+  const [showTrace, setShowTrace] = useState(false);
+
   // Add event modal (guided resolution)
   const [addEventModal, setAddEventModal] = useState<{
     open: boolean;
@@ -174,6 +178,20 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   const totalDefects = useMemo(() => {
     return result.total_rule_failures + result.total_kde_errors;
   }, [result]);
+
+  // Extract unique TLCs from grid data for trace autocomplete
+  const availableTlcs = useMemo(() => {
+    const tlcColIdx = headers.findIndex(
+      (h) => h.toLowerCase().replace(/\s+/g, '_') === 'traceability_lot_code'
+    );
+    if (tlcColIdx < 0) return [];
+    const seen = new Set<string>();
+    for (const row of history.data) {
+      const val = row[tlcColIdx]?.trim();
+      if (val) seen.add(val);
+    }
+    return Array.from(seen).sort();
+  }, [headers, history.data]);
 
   // ---------------------------------------------------------------------------
   // Re-evaluation
@@ -510,11 +528,13 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
         canUndo={history.canUndo}
         canRedo={history.canRedo}
         isEvaluating={isEvaluating}
+        showTrace={showTrace}
         onUndo={history.undo}
         onRedo={history.redo}
         onMassFill={() => setMassFillOpen(true)}
         onExportCsv={handleExportCsv}
         onBack={onBack}
+        onToggleTrace={() => setShowTrace((v) => !v)}
       />
 
       {/* Grid */}
@@ -546,7 +566,8 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
               return (
                 <tr
                   key={row.id}
-                  className={`border-b border-[var(--re-surface-border)]/50 transition-colors ${
+                  data-row-index={row.index}
+                  className={`border-b border-[var(--re-surface-border)]/50 transition-all ${
                     rowHasIssues ? 'bg-red-500/[0.03]' : ''
                   } hover:bg-[var(--re-surface-elevated)]/30`}
                 >
@@ -573,6 +594,25 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
           Ctrl+Z to undo.
         </span>
       </div>
+
+      {/* Trace Panel */}
+      {showTrace && (
+        <div className="border-t border-[var(--re-surface-border)]">
+          <TracePanel
+            csv={gridToCsv(headers, history.data)}
+            availableTlcs={availableTlcs}
+            onHighlightEvent={(eventIndex) => {
+              // Scroll the row into view and briefly highlight it
+              const row = document.querySelector(`[data-row-index="${eventIndex}"]`);
+              if (row) {
+                row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                row.classList.add('ring-2', 'ring-[var(--re-brand)]');
+                setTimeout(() => row.classList.remove('ring-2', 'ring-[var(--re-brand)]'), 2000);
+              }
+            }}
+          />
+        </div>
+      )}
 
       <MassFillDialog
         open={massFillOpen}
