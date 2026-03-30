@@ -374,49 +374,92 @@ ${nonCompliantEvents.length > 0 ? `<h2 style="font-size:16px;margin-bottom:12px;
                         </div>
                       )}
 
-                      {/* Rule Results — failures and warnings first, then passed */}
+                      {/* Rule Results — grouped by Structural vs Relational, failures first */}
                       {(() => {
+                        const relationalCategories = new Set(['temporal_ordering', 'quantity_consistency']);
+                        const isRelational = (r: RuleResult) => relationalCategories.has(r.category) ||
+                          r.category === 'lot_linkage' && (r.rule_title.includes('Identity') || r.rule_title.includes('Mass'));
+
                         const failed = ev.all_results.filter((r) => r.result === 'fail');
                         const warned = ev.all_results.filter((r) => r.result === 'warn');
                         const passed = ev.all_results.filter((r) => r.result === 'pass');
                         const skipped = ev.all_results.filter((r) => r.result === 'skip');
-                        const sorted = [...failed, ...warned, ...skipped, ...passed];
+
+                        const structuralFailed = failed.filter((r) => !isRelational(r));
+                        const relationalFailed = failed.filter((r) => isRelational(r));
+                        const structuralWarned = warned.filter((r) => !isRelational(r));
+                        const relationalWarned = warned.filter((r) => isRelational(r));
+
+                        const renderRule = (rule: RuleResult, j: number) => (
+                          <div
+                            key={j}
+                            className={`flex items-start gap-2 text-[0.65rem] ${
+                              rule.result === 'pass' ? 'text-emerald-400' :
+                              rule.result === 'fail' ? 'text-red-400' :
+                              rule.result === 'warn' ? 'text-amber-400' :
+                              'text-[var(--re-text-disabled)]'
+                            }`}
+                          >
+                            {rule.result === 'pass'
+                              ? <CheckCircle2 className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              : rule.result === 'fail'
+                              ? <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              : <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
+                            <div>
+                              <span className="font-medium">{rule.rule_title}</span>
+                              {rule.citation && (
+                                <span className="text-[var(--re-text-disabled)] ml-1">({rule.citation})</span>
+                              )}
+                              {rule.why_failed && (
+                                <div className="text-[0.6rem] opacity-80 mt-0.5">{rule.why_failed}</div>
+                              )}
+                              {rule.remediation && rule.result === 'fail' && (
+                                <div className="text-[0.6rem] text-[var(--re-text-muted)] mt-0.5 italic">{rule.remediation}</div>
+                              )}
+                            </div>
+                          </div>
+                        );
+
                         return (
-                          <div className="space-y-1">
-                            {failed.length > 0 && (
-                              <span className="text-[0.65rem] font-medium text-red-400">
-                                Rule Failures ({failed.length}):
-                              </span>
-                            )}
-                            {sorted.map((rule, j) => (
-                              <div
-                                key={j}
-                                className={`flex items-start gap-2 text-[0.65rem] ${
-                                  rule.result === 'pass' ? 'text-emerald-400' :
-                                  rule.result === 'fail' ? 'text-red-400' :
-                                  rule.result === 'warn' ? 'text-amber-400' :
-                                  'text-[var(--re-text-disabled)]'
-                                }`}
-                              >
-                                {rule.result === 'pass'
-                                  ? <CheckCircle2 className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                  : rule.result === 'fail'
-                                  ? <XCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                                  : <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />}
-                                <div>
-                                  <span className="font-medium">{rule.rule_title}</span>
-                                  {rule.citation && (
-                                    <span className="text-[var(--re-text-disabled)] ml-1">({rule.citation})</span>
-                                  )}
-                                  {rule.why_failed && (
-                                    <div className="text-[0.6rem] opacity-80 mt-0.5">{rule.why_failed}</div>
-                                  )}
-                                  {rule.remediation && rule.result === 'fail' && (
-                                    <div className="text-[0.6rem] text-[var(--re-text-muted)] mt-0.5 italic">{rule.remediation}</div>
-                                  )}
-                                </div>
+                          <div className="space-y-2">
+                            {/* Relational integrity failures (cross-event logic) */}
+                            {(relationalFailed.length > 0 || relationalWarned.length > 0) && (
+                              <div className="space-y-1">
+                                <span className="text-[0.65rem] font-medium text-red-400 flex items-center gap-1">
+                                  <ShieldAlert className="w-3 h-3" />
+                                  Supply Chain Integrity ({relationalFailed.length + relationalWarned.length}):
+                                </span>
+                                {[...relationalFailed, ...relationalWarned].map(renderRule)}
                               </div>
-                            ))}
+                            )}
+
+                            {/* Structural failures (missing/malformed data) */}
+                            {(structuralFailed.length > 0 || structuralWarned.length > 0) && (
+                              <div className="space-y-1">
+                                <span className="text-[0.65rem] font-medium text-amber-400 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Missing Data ({structuralFailed.length + structuralWarned.length}):
+                                </span>
+                                {[...structuralFailed, ...structuralWarned].map(renderRule)}
+                              </div>
+                            )}
+
+                            {/* Passed rules */}
+                            {passed.length > 0 && (
+                              <div className="space-y-1">
+                                <span className="text-[0.65rem] font-medium text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Passed ({passed.length}):
+                                </span>
+                                {passed.map(renderRule)}
+                              </div>
+                            )}
+
+                            {skipped.length > 0 && (
+                              <div className="space-y-1">
+                                {skipped.map(renderRule)}
+                              </div>
+                            )}
                           </div>
                         );
                       })()}

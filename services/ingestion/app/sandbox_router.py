@@ -38,6 +38,7 @@ from shared.rules_engine import (
     _CTE_LIFECYCLE_ORDER,
     _EVALUATORS,
     _get_nested_value,
+    _normalize_to_lbs,
 )
 
 logger = logging.getLogger("sandbox")
@@ -357,7 +358,10 @@ def _evaluate_relational_in_memory(
             total_input = 0.0
             total_output = 0.0
             units_seen: set = set()
+            use_converted = False
 
+            # Collect all entries
+            all_entries = []
             for evt in events:
                 qty = evt.get("quantity")
                 uom = evt.get("unit_of_measure", "")
@@ -365,11 +369,32 @@ def _evaluate_relational_in_memory(
                     continue
                 if uom:
                     units_seen.add(uom.lower().strip())
-                et = evt.get("event_type", "")
-                if et in input_types:
-                    total_input += float(qty)
-                elif et in output_types:
-                    total_output += float(qty)
+                all_entries.append((float(qty), uom, evt.get("event_type", "")))
+
+            # Try UOM conversion if units differ
+            if len(units_seen) > 1:
+                converted = []
+                all_ok = True
+                for qty, uom, etype in all_entries:
+                    lbs = _normalize_to_lbs(qty, uom) if uom else None
+                    if lbs is None:
+                        all_ok = False
+                        break
+                    converted.append((lbs, etype))
+                if all_ok:
+                    use_converted = True
+                    for lbs, etype in converted:
+                        if etype in input_types:
+                            total_input += lbs
+                        elif etype in output_types:
+                            total_output += lbs
+
+            if not use_converted:
+                for qty, uom, etype in all_entries:
+                    if etype in input_types:
+                        total_input += qty
+                    elif etype in output_types:
+                        total_output += qty
 
             for evt in events:
                 event_type = evt.get("event_type", "")
@@ -383,9 +408,10 @@ def _evaluate_relational_in_memory(
                     "total_output": total_output,
                     "tolerance_percent": tolerance,
                     "units_seen": list(units_seen),
+                    "uom_converted": use_converted,
                 }]
 
-                if len(units_seen) > 1:
+                if len(units_seen) > 1 and not use_converted:
                     results[evt["event_id"]].append(RuleEvaluationResult(
                         rule_id=mass_rule.rule_id,
                         rule_version=mass_rule.rule_version,
@@ -394,7 +420,8 @@ def _evaluate_relational_in_memory(
                         result="warn",
                         why_failed=(
                             f"Mass balance check inconclusive for TLC '{tlc}': "
-                            f"mixed units ({', '.join(sorted(units_seen))})."
+                            f"mixed units ({', '.join(sorted(units_seen))}) "
+                            f"could not all be converted."
                         ),
                         evidence_fields_inspected=evidence,
                         citation_reference=mass_rule.citation_reference,
@@ -679,7 +706,11 @@ def _parse_csv_to_events(csv_text: str) -> List[Dict[str, Any]]:
             # 2. Check KDE alias map → store under canonical KDE name
             kde_canonical = _KDE_FIELD_ALIASES.get(col_lower)
             if kde_canonical:
-                event["kdes"][kde_canonical] = value.strip()
+                val = value.strip()
+                # Parse comma-separated input TLCs into a list
+                if kde_canonical == "input_traceability_lot_codes" and "," in val:
+                    val = [t.strip() for t in val.split(",") if t.strip()]
+                event["kdes"][kde_canonical] = val
                 continue
 
             # 3. Unknown columns go into kdes as-is
@@ -750,8 +781,12 @@ def _detect_duplicate_lots(events: List[Dict[str, Any]]) -> Dict[int, List[str]]
     """
     Detect duplicate traceability lot codes within the same CTE type.
 
+    Uses (TLC, CTE type, reference_document) as the uniqueness key so that
+    split shipments with different BOL/invoice numbers are NOT flagged as
+    duplicates. Only flags when both TLC + CTE + ref_doc match exactly.
+
     Returns a mapping of event_index -> list of warning strings for the second
-    and subsequent occurrences of each (traceability_lot_code, cte_type) pair.
+    and subsequent occurrences.
     """
     seen: Dict[tuple, int] = {}
     warnings: Dict[int, List[str]] = {}
@@ -762,16 +797,26 @@ def _detect_duplicate_lots(events: List[Dict[str, Any]]) -> Dict[int, List[str]]
         if not tlc or not cte:
             continue
 
-        key = (tlc, cte)
+        # Include reference_document in key to allow split shipments
+        kdes = event.get("kdes", {})
+        ref_doc = (
+            kdes.get("reference_document")
+            or event.get("reference_document")
+            or ""
+        ).strip().lower()
+
+        key = (tlc, cte, ref_doc)
         if key in seen:
             first_index = seen[key]
             original_tlc = (event.get("traceability_lot_code") or "").strip()
             original_cte = (event.get("cte_type") or "").strip()
             msg = (
                 f"Duplicate lot code '{original_tlc}' for CTE type "
-                f"'{original_cte}' \u2014 row may be redundant "
-                f"(see event {first_index})"
+                f"'{original_cte}'"
             )
+            if ref_doc:
+                msg += f" with same reference document"
+            msg += f" \u2014 row may be redundant (see event {first_index})"
             warnings.setdefault(i, []).append(msg)
         else:
             seen[key] = i
