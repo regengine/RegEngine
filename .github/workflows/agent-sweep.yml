@@ -30,12 +30,12 @@ jobs:
       github.event.inputs.sweep_type == 'security' ||
       github.event.inputs.sweep_type == 'full-audit'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -95,7 +95,7 @@ jobs:
           fi
 
       - name: Upload security report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-sweep-report
           path: security-report.md
@@ -125,7 +125,7 @@ jobs:
       github.event.inputs.sweep_type == 'ui-drift' ||
       github.event.inputs.sweep_type == 'full-audit'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Scan for inline styles
         run: |
@@ -165,7 +165,7 @@ jobs:
           fi
 
       - name: Upload UI report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ui-drift-report
           path: ui-report.md
@@ -195,7 +195,7 @@ jobs:
       (github.event.inputs.sweep_type == 'infra-health' ||
        github.event.inputs.sweep_type == 'full-audit')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check Dockerfile best practices
         run: |
@@ -229,7 +229,7 @@ jobs:
           done
 
       - name: Upload infra report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: infra-health-report
           path: infra-report.md

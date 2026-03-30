@@ -10,7 +10,6 @@ import {
     CheckCircle2,
     Lock,
     FileCode,
-    Github,
     Copy,
     Check,
 } from 'lucide-react';

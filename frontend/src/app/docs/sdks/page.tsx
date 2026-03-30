@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: 'SDKs & Libraries | RegEngine',
   description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
 };
-import { ArrowLeft, Package, Mail, Github, FileText } from 'lucide-react';
+import { ArrowLeft, Package, Mail, GitBranch, FileText } from 'lucide-react';
 import { T } from '@/lib/design-tokens';
 
 export default function SDKsDocsPage() {
@@ -86,7 +86,7 @@ export default function SDKsDocsPage() {
 
                 {/* Notify CTA */}
                 <section className="bg-gradient-to-br from-[rgba(16,185,129,0.1)] to-transparent border border-[rgba(16,185,129,0.3)] rounded-xl p-8 text-center">
-                    <Github className="w-8 h-8 text-re-brand mx-auto mb-4" />
+                    <GitBranch className="w-8 h-8 text-re-brand mx-auto mb-4" />
                     <h3 className="text-[0.95rem] sm:text-[1.1rem] font-semibold text-[var(--re-text-primary)] mb-2">
                         Get Notified on Release
                     </h3>
