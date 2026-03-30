@@ -7,6 +7,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { usePostHog } from 'posthog-js/react';
 import { useGridHistory } from './use-grid-history';
 import { buildCellErrorMap } from './cell-error-map';
 import { FixItTooltip } from './FixItTooltip';
@@ -14,6 +15,8 @@ import { MassFillDialog } from './MassFillDialog';
 import { AddEventModal } from './AddEventModal';
 import { GridToolbar } from './GridToolbar';
 import { TracePanel } from './TracePanel';
+import { SandboxResultsCTA } from './SandboxResultsCTA';
+import { ExportLeadGate } from './ExportLeadGate';
 import { cellKey } from './types';
 import type { CellErrorMap, CellFixedSet } from './types';
 
@@ -148,6 +151,22 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   // Trace panel
   const [showTrace, setShowTrace] = useState(false);
 
+  // Lead gate for export
+  const [leadGateOpen, setLeadGateOpen] = useState(false);
+  const pendingExportRef = useRef<(() => void) | null>(null);
+
+  // PostHog tracking
+  const posthog = usePostHog();
+  const hasTrackedFirstEdit = useRef(false);
+  const hasTrackedAllClear = useRef(false);
+
+  function trackSandbox(event: string, metadata: Record<string, unknown> = {}) {
+    posthog.capture(`SANDBOX_${event}`, {
+      ...metadata,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // Add event modal (guided resolution)
   const [addEventModal, setAddEventModal] = useState<{
     open: boolean;
@@ -178,6 +197,14 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   const totalDefects = useMemo(() => {
     return result.total_rule_failures + result.total_kde_errors;
   }, [result]);
+
+  // Track "all clear" milestone
+  useEffect(() => {
+    if (totalDefects === 0 && result.total_events > 0 && !hasTrackedAllClear.current) {
+      hasTrackedAllClear.current = true;
+      trackSandbox('ALL_CLEAR', { event_count: result.total_events });
+    }
+  }, [totalDefects, result.total_events]);
 
   // Extract unique TLCs from grid data for trace autocomplete
   const availableTlcs = useMemo(() => {
@@ -275,6 +302,10 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
     const oldValue = history.data[row]?.[col] || '';
 
     if (editValue !== oldValue) {
+      if (!hasTrackedFirstEdit.current) {
+        hasTrackedFirstEdit.current = true;
+        trackSandbox('GRID_EDIT', { row, column: headers[col] });
+      }
       const newData = history.data.map((r, ri) =>
         ri === row ? r.map((c, ci) => (ci === col ? editValue : c)) : [...r]
       );
@@ -392,7 +423,8 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
   // Export
   // ---------------------------------------------------------------------------
 
-  function handleExportCsv() {
+  function doExportCsv() {
+    trackSandbox('EXPORT_CSV', { event_count: result.total_events, defect_count: totalDefects });
     const csv = gridToCsv(headers, history.data);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -401,6 +433,12 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
     a.download = `regengine-corrected-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function handleExportCsv() {
+    // Show lead gate before export
+    pendingExportRef.current = doExportCsv;
+    setLeadGateOpen(true);
   }
 
   // ---------------------------------------------------------------------------
@@ -621,6 +659,17 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
         onApply={handleMassFill}
       />
 
+      {/* Conversion CTA — appears when all defects are fixed */}
+      {totalDefects === 0 && result.total_events > 0 && (
+        <div className="px-4 py-3 border-t border-[var(--re-surface-border)]">
+          <SandboxResultsCTA
+            mode="all_clear"
+            eventCount={result.total_events}
+            onTrack={trackSandbox}
+          />
+        </div>
+      )}
+
       {addEventModal && (
         <AddEventModal
           open={addEventModal.open}
@@ -630,6 +679,15 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
           prefill={addEventModal.prefill}
         />
       )}
+
+      <ExportLeadGate
+        open={leadGateOpen}
+        onOpenChange={setLeadGateOpen}
+        onExport={() => { pendingExportRef.current?.(); pendingExportRef.current = null; }}
+        onTrack={trackSandbox}
+        defectCount={totalDefects}
+        eventCount={result.total_events}
+      />
     </div>
   );
 }
