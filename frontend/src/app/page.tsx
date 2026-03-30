@@ -298,7 +298,7 @@ export default function RegEngineLanding() {
           Paste your data. See what breaks.
         </h2>
         <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
-          Drop your CSV below and RegEngine will evaluate it against all 25 FSMA 204 rules in real time. Nothing is stored.
+          Drop your CSV below and RegEngine will evaluate it against all 28 FSMA 204 rules in real time. Nothing is stored.
         </p>
         <SandboxUpload />
       </section>

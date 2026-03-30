@@ -26,7 +26,11 @@ from services.shared.rules_engine import (
     RulesEngine,
     _evaluate_field_format,
     _evaluate_field_presence,
+    _evaluate_identity_consistency,
+    _evaluate_mass_balance,
     _evaluate_multi_field_presence,
+    _evaluate_temporal_order,
+    _fetch_related_events,
     _get_nested_value,
 )
 
@@ -527,3 +531,350 @@ class TestWhyFailedExplanation:
         event = _make_event()  # harvest_date = "2026-01-10"
         result = _evaluate_field_format(event, rule.evaluation_logic, rule)
         assert "2026-01-10" in result.why_failed
+
+
+# ---------------------------------------------------------------------------
+# 11. _fetch_related_events
+# ---------------------------------------------------------------------------
+
+class TestFetchRelatedEvents:
+    def test_returns_related_events(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Romaine Lettuce", 500, "cases"),
+            ("evt-101", "shipping", "2026-01-05T00:00:00+00:00", "Romaine Lettuce", 500, "cases"),
+        ]
+
+        results = _fetch_related_events(mock_session, "TLC-001", "tenant-1", "evt-999")
+        assert len(results) == 2
+        assert results[0]["event_type"] == "harvesting"
+        assert results[1]["event_type"] == "shipping"
+
+    def test_returns_empty_when_no_related(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = []
+        results = _fetch_related_events(mock_session, "TLC-NONE", "tenant-1")
+        assert results == []
+
+    def test_excludes_specified_event(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = []
+        _fetch_related_events(mock_session, "TLC-001", "tenant-1", "evt-to-exclude")
+        call_args = mock_session.execute.call_args
+        params = call_args[0][1]
+        assert params["exclude_id"] == "evt-to-exclude"
+
+
+# ---------------------------------------------------------------------------
+# 12. _evaluate_temporal_order
+# ---------------------------------------------------------------------------
+
+class TestEvaluateTemporalOrder:
+    def _temporal_rule(self):
+        return _make_rule(
+            rule_id="rule-temporal",
+            title="Temporal Order Check",
+            severity="critical",
+            category="temporal_ordering",
+            evaluation_logic={"type": "temporal_order"},
+        )
+
+    def test_harvest_before_ship_passes(self, mock_session):
+        """Harvest at T=1, then ship at T=5 — correct order."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 500, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "event_timestamp": "2026-01-05T00:00:00+00:00",
+        }
+        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_ship_before_harvest_fails(self, mock_session):
+        """Ship at T=1, harvest at T=5 — chronology paradox."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-10T00:00:00+00:00", "Lettuce", 500, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "event_timestamp": "2026-01-01T00:00:00+00:00",
+        }
+        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        assert result.result == "fail"
+        assert "Chronology paradox" in result.why_failed
+
+    def test_no_related_events_passes(self, mock_session):
+        """Single event with no related events — always valid."""
+        mock_session.execute.return_value.fetchall.return_value = []
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "event_timestamp": "2026-01-05T00:00:00+00:00",
+        }
+        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_same_stage_different_times_passes(self, mock_session):
+        """Two receiving events at different times — no violation."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "receiving", "2026-01-01T00:00:00+00:00", "Lettuce", 500, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "receiving",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "event_timestamp": "2026-01-05T00:00:00+00:00",
+        }
+        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_missing_tlc_skips(self, mock_session):
+        event = {"event_id": "evt-1", "event_type": "shipping", "tenant_id": "t1"}
+        result = _evaluate_temporal_order(event, {"type": "temporal_order"}, self._temporal_rule(), mock_session)
+        assert result.result == "skip"
+
+
+# ---------------------------------------------------------------------------
+# 13. _evaluate_identity_consistency
+# ---------------------------------------------------------------------------
+
+class TestEvaluateIdentityConsistency:
+    def _identity_rule(self):
+        return _make_rule(
+            rule_id="rule-identity",
+            title="Identity Consistency Check",
+            severity="warning",
+            category="lot_linkage",
+            evaluation_logic={"type": "identity_consistency"},
+        )
+
+    def test_same_product_passes(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Romaine Lettuce", 500, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "product_reference": "Romaine Lettuce",
+        }
+        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_different_product_fails(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Romaine Lettuce", 500, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "product_reference": "Baby Spinach",
+        }
+        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        assert result.result == "fail"
+        assert "Product identity changed" in result.why_failed
+
+    def test_null_product_skips(self, mock_session):
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "product_reference": None,
+        }
+        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        assert result.result == "skip"
+
+    def test_case_insensitive_match_passes(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "romaine lettuce", 500, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "product_reference": "Romaine  Lettuce",  # extra space + different case
+        }
+        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_no_related_events_passes(self, mock_session):
+        mock_session.execute.return_value.fetchall.return_value = []
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "product_reference": "Romaine Lettuce",
+        }
+        result = _evaluate_identity_consistency(event, {"type": "identity_consistency"}, self._identity_rule(), mock_session)
+        assert result.result == "pass"
+
+
+# ---------------------------------------------------------------------------
+# 14. _evaluate_mass_balance
+# ---------------------------------------------------------------------------
+
+class TestEvaluateMassBalance:
+    def _mass_rule(self):
+        return _make_rule(
+            rule_id="rule-mass",
+            title="Mass Balance Check",
+            severity="critical",
+            category="quantity_consistency",
+            evaluation_logic={"type": "mass_balance", "params": {"tolerance_percent": 1.0}},
+        )
+
+    def test_output_within_input_passes(self, mock_session):
+        """Harvested 1000, shipping 900 — within balance."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 900,
+            "unit_of_measure": "cases",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_output_exceeds_input_fails(self, mock_session):
+        """Harvested 1000, shipping 2100 — violation."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 2100,
+            "unit_of_measure": "cases",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "fail"
+        assert "Mass balance violation" in result.why_failed
+
+    def test_tolerance_allows_small_excess(self, mock_session):
+        """Harvested 1000, shipping 1005 with 1% tolerance — passes."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "cases"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 1005,
+            "unit_of_measure": "cases",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_mixed_units_warns(self, mock_session):
+        """Different units of measure — warn instead of hard fail."""
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "lbs"),
+        ]
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 2100,
+            "unit_of_measure": "cases",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "warn"
+        assert "mixed units" in result.why_failed
+
+    def test_no_prior_events_passes(self, mock_session):
+        """No related events — pass (nothing to compare)."""
+        mock_session.execute.return_value.fetchall.return_value = []
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 500,
+            "unit_of_measure": "cases",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "pass"
+
+    def test_current_event_included_in_totals(self, mock_session):
+        """Current shipping event should be included in output total."""
+        # Prior: harvested 1000, already shipped 800
+        mock_session.execute.return_value.fetchall.return_value = [
+            ("evt-100", "harvesting", "2026-01-01T00:00:00+00:00", "Lettuce", 1000, "cases"),
+            ("evt-101", "shipping", "2026-01-03T00:00:00+00:00", "Lettuce", 800, "cases"),
+        ]
+        # Current: shipping another 300 → total output = 1100, exceeds 1010 (1000 * 1.01)
+        event = {
+            "event_id": "evt-200",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "quantity": 300,
+            "unit_of_measure": "cases",
+        }
+        result = _evaluate_mass_balance(event, self._mass_rule().evaluation_logic, self._mass_rule(), mock_session)
+        assert result.result == "fail"
+        assert "1100" in result.why_failed or "1100.0" in result.why_failed
+
+
+# ---------------------------------------------------------------------------
+# 15. Relational rules dispatch via RulesEngine
+# ---------------------------------------------------------------------------
+
+class TestRelationalRuleDispatch:
+    def test_temporal_order_dispatched_through_engine(self, mock_session):
+        """Relational evaluators should be dispatched via _evaluate_single_rule."""
+        mock_session.execute.return_value.fetchall.return_value = []
+        rule = _make_rule(
+            rule_id="r-temporal",
+            severity="critical",
+            category="temporal_ordering",
+            applicability_conditions={"cte_types": ["shipping"]},
+            evaluation_logic={"type": "temporal_order"},
+        )
+        engine = RulesEngine(mock_session)
+        engine._rules_cache = [rule]
+        event = {
+            "event_id": "evt-1",
+            "event_type": "shipping",
+            "tenant_id": "tenant-1",
+            "traceability_lot_code": "TLC-001",
+            "event_timestamp": "2026-01-05T00:00:00+00:00",
+        }
+        summary = engine.evaluate_event(event, persist=False)
+        assert summary.total_rules == 1
+        assert summary.passed == 1  # No related events → pass
+
+    def test_relational_rule_skipped_without_session(self):
+        """Relational rules should skip gracefully when session is None."""
+        rule = _make_rule(
+            rule_id="r-temporal",
+            applicability_conditions={"cte_types": ["shipping"]},
+            evaluation_logic={"type": "temporal_order"},
+        )
+        engine = RulesEngine(None)
+        engine._rules_cache = [rule]
+        event = _make_event(event_type="shipping")
+        summary = engine.evaluate_event(event, persist=False)
+        assert summary.skipped == 1
+        assert "requires DB session" in summary.results[0].why_failed

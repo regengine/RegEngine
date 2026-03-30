@@ -231,29 +231,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const supabase = createSupabaseBrowserClient();
 
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.access_token && session.user && !accessToken) {
+      // Use getUser() instead of getSession() — getUser() validates the JWT
+      // against the Supabase auth server, while getSession() only reads the
+      // local cookie/storage (which can be spoofed).
+      supabase.auth.getUser().then(({ data: { user: validatedUser } }) => {
+        if (validatedUser && !accessToken) {
           const appUser: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+            id: validatedUser.id,
+            email: validatedUser.email || '',
+            is_sysadmin: validatedUser.user_metadata?.is_sysadmin || false,
             status: 'active',
-            role_name: session.user.user_metadata?.role || 'member',
+            role_name: validatedUser.user_metadata?.role || 'member',
           };
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           setUserState(appUser);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setUser(appUser);
-          if (session.user.user_metadata?.tenant_id) {
-            setTenantIdState(session.user.user_metadata.tenant_id);
-            apiClient.setCurrentTenant(session.user.user_metadata.tenant_id);
-            localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.user.user_metadata.tenant_id);
+          if (validatedUser.user_metadata?.tenant_id) {
+            setTenantIdState(validatedUser.user_metadata.tenant_id);
+            apiClient.setCurrentTenant(validatedUser.user_metadata.tenant_id);
+            localStorage.setItem(STORAGE_KEYS.TENANT_ID, validatedUser.user_metadata.tenant_id);
           }
           localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
           setSessionCookies({
-            accessToken: session.access_token,
+            accessToken: COOKIE_MANAGED_PLACEHOLDER,
             user: appUser,
-            tenantId: session.user.user_metadata?.tenant_id || null,
+            tenantId: validatedUser.user_metadata?.tenant_id || null,
           });
         }
       });

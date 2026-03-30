@@ -34,18 +34,25 @@ export default function DeveloperPortalDashboard() {
         async function load() {
             if (!authUser) return;
 
-            const { data: prof } = await supabase
+            const { data: prof, error: profError } = await supabase
                 .from('developer_profiles')
                 .select('*')
                 .eq('auth_user_id', authUser.id)
-                .single();
+                .maybeSingle();
 
+            if (profError) {
+                console.error('Failed to fetch developer profile:', profError.message);
+            }
             if (prof) {
                 setProfile(prof);
-                const { data: keys } = await supabase
+                const { data: keys, error: keysError } = await supabase
                     .from('developer_api_keys')
                     .select('id, enabled, total_requests')
                     .eq('developer_id', prof.id);
+
+                if (keysError) {
+                    console.error('Failed to fetch API keys:', keysError.message);
+                }
 
                 if (keys) {
                     setStats({

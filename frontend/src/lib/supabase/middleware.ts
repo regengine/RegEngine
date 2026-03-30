@@ -62,7 +62,7 @@ export async function updateSession(request: NextRequest) {
             .from('developer_profiles')
             .select('status')
             .eq('auth_user_id', user.id)
-            .single()
+            .maybeSingle()
 
         if (!profile || profile.status !== 'active') {
             const url = request.nextUrl.clone()

@@ -95,7 +95,7 @@ except ImportError:
 
 if not os.environ.get("NEO4J_PASSWORD"):
     logger.warning("NEO4J_PASSWORD not set. Provide via environment variable or secrets manager.")
-    logger.warning("  export NEO4J_PASSWORD=your_password")
+    logger.warning("  export NEO4J_PASSWORD=<value-from-secrets-manager>")
 
 def check_async(name, func):
     if not func:
