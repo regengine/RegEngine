@@ -975,6 +975,7 @@ class RuleResultResponse(BaseModel):
     citation: Optional[str] = None
     remediation: Optional[str] = None
     category: str
+    evidence: Optional[List[Dict[str, Any]]] = None
 
 
 class EventEvaluationResponse(BaseModel):
@@ -1111,6 +1112,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                     citation=r.citation_reference,
                     remediation=r.remediation_suggestion,
                     category=r.category,
+                    evidence=r.evidence_fields_inspected or None,
                 ))
                 all_blocking_reasons.append(f"Event {i+1} ({raw_event.get('cte_type', '?')}): {reason}")
 
@@ -1144,6 +1146,7 @@ async def sandbox_evaluate(payload: SandboxRequest, request: Request) -> Sandbox
                     citation=r.citation_reference,
                     remediation=r.remediation_suggestion,
                     category=r.category,
+                    evidence=r.evidence_fields_inspected or None,
                 )
                 for r in summary.results
             ],
