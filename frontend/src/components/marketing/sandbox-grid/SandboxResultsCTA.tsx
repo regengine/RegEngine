@@ -42,7 +42,13 @@ export function SandboxResultsCTA({
       lot_count: lotCount,
       facility_count: facilityCount,
     });
-    window.open(CALENDLY_LINK, '_blank');
+    // Pass context into Calendly URL so Chris knows the caller's compliance state
+    const params = new URLSearchParams({
+      a1: mode,                          // "failures" | "all_clear" | "trace_complete"
+      a2: String(defectCount),           // defect count
+      a3: String(eventCount),            // event count
+    });
+    window.open(`${CALENDLY_LINK}?${params.toString()}`, '_blank');
   }
 
   function handleSecondary(ctaType: string, href: string) {
