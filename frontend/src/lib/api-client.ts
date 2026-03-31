@@ -497,7 +497,6 @@ class APIClient {
     await this.adminClient.post('/v1/auth/accept-invite', data);
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFTLCategories(): Promise<FTLCategory[]> {
     const { data } = await this.adminClient.get<{ categories: FTLCategory[] }>('/v1/supplier/ftl-categories');
     return data.categories || [];
@@ -513,7 +512,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async setFacilityFTLCategories(
     facilityId: string,
     request: FacilityFTLScopingRequest,
@@ -525,7 +523,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
       `/v1/supplier/facilities/${facilityId}/required-ctes`,
@@ -533,7 +530,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async submitSupplierCTEEvent(
     facilityId: string,
     request: SupplierCTEEventCreateRequest,
@@ -545,7 +541,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async createSupplierTLC(request: SupplierTLCUpsertRequest): Promise<SupplierTLC> {
     const { data } = await this.adminClient.post<SupplierTLC>('/v1/supplier/tlcs', request);
     return data;

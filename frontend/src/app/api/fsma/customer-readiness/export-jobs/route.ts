@@ -1,31 +1,38 @@
 import { NextResponse } from 'next/server';
-import { ARCHIVE_EXPORT_JOBS } from '@/lib/customer-readiness';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+    const backendUrl = process.env.INGESTION_SERVICE_URL;
+    if (backendUrl) {
+        try {
+            const res = await fetch(`${backendUrl}/api/v1/fsma/export-jobs`, {
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return NextResponse.json(data);
+            }
+        } catch {
+            // Backend unreachable — fall through to not_connected response
+        }
+    }
+
     return NextResponse.json({
-        jobs: ARCHIVE_EXPORT_JOBS,
+        jobs: [],
+        meta: {
+            status: 'not_connected',
+            message: 'Export job scheduling is not yet configured for this account.',
+        },
     });
 }
 
-export async function POST(request: Request) {
-    const body = await request.json().catch(() => ({}));
-
+export async function POST() {
     return NextResponse.json(
         {
-            job: {
-                id: 'job_created_preview',
-                name: body.name ?? 'New recurring archive job',
-                format: body.format ?? 'FDA Package',
-                cadence: body.cadence ?? 'Weekly',
-                destination: body.destination ?? 'Object storage archive',
-                status: 'active',
-                lastRun: 'Not yet run',
-                nextRun: 'Scheduled after save',
-                manifestHash: 'sha256:pending-first-run',
-                tenantId: body.tenantId ?? 'tenant_preview',
-            },
+            error: 'Not Implemented',
+            message: 'Export job scheduling is not yet available. Connect your supply chain data to enable this feature.',
         },
-        { status: 201 }
+        { status: 501 }
     );
 }
