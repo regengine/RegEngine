@@ -318,7 +318,7 @@ export function FieldCaptureClient() {
                             },
                         }],
                     };
-                    await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
+                    const ingestRes = await fetch(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -327,6 +327,10 @@ export function FieldCaptureClient() {
                         },
                         body: JSON.stringify(payload),
                     });
+                    if (!ingestRes.ok) {
+                        const detail = await ingestRes.text().catch(() => '');
+                        throw new Error(detail || `Event persistence failed with status ${ingestRes.status}`);
+                    }
                 }
 
                 toast({

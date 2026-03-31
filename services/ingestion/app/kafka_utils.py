@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from functools import lru_cache
 from typing import Optional
 
@@ -11,58 +10,33 @@ import structlog
 from fastapi import HTTPException
 
 from .config import get_settings
-import os
 
 try:
     from confluent_kafka import SerializingProducer
-    from confluent_kafka.schema_registry import SchemaRegistryClient
-    from confluent_kafka.schema_registry.avro import AvroSerializer
 except ModuleNotFoundError:  # pragma: no cover - optional in local/test environments
     SerializingProducer = None  # type: ignore[assignment]
-    SchemaRegistryClient = None  # type: ignore[assignment]
-    AvroSerializer = None  # type: ignore[assignment]
+
+# NOTE: confluent_kafka.schema_registry (SchemaRegistryClient, AvroSerializer) is not
+# imported because Kafka Avro schema validation is deferred until a Confluent Schema
+# Registry instance is provisioned. See get_producer() below for details.
 
 logger = structlog.get_logger("kafka_utils")
 
-
-@lru_cache(maxsize=1)
-def get_schema_registry_client() -> SchemaRegistryClient:
-    if SchemaRegistryClient is None:
-        raise RuntimeError("confluent_kafka schema registry client is not installed")
-    settings = get_settings()
-    return SchemaRegistryClient({'url': 'http://schema-registry:8081'}) # Make configurable
-
-def load_schema(schema_name: str) -> str:
-    """Load Avro schema using standardized project path discovery."""
-    from shared.paths import project_root, ensure_shared_importable
-    ensure_shared_importable()
-    
-    repo_root = project_root()
-    # Support both Docker (/app/schemas) and local development
-    schema_paths = [
-        repo_root / "schemas" / schema_name,
-        Path("/app/schemas") / schema_name
-    ]
-
-    for path in schema_paths:
-        if path.exists():
-            return path.read_text()
-
-    logger.error("schema_file_not_found", schema_name=schema_name, attempted=[str(p) for p in schema_paths])
-    raise FileNotFoundError(f"Schema file not found: {schema_name}")
-
 @lru_cache(maxsize=1)
 def get_producer() -> SerializingProducer:
-    """Return a configured Kafka producer with Avro support."""
+    """Return a configured Kafka producer using JSON serialization.
+
+    NOTE: Kafka Avro validation via a schema registry is deferred until a
+    Confluent Schema Registry instance is provisioned in the deployment.
+    The task_queue V050 migration (alembic/versions/20260329_task_queue_v050.py)
+    serves as the interim durable-queue replacement for Kafka-based workflows.
+    When a schema registry is available, re-enable by configuring
+    SCHEMA_REGISTRY_URL and wiring get_schema_registry_client() +
+    AvroSerializer here in place of the json.dumps fallback.
+    """
     if SerializingProducer is None:
         raise RuntimeError("confluent_kafka producer is not installed")
     settings = get_settings()
-    
-    # schema_registry = get_schema_registry_client()
-    # avro_serializer = AvroSerializer(
-    #     schema_registry,
-    #     load_schema("normalized_document.avsc"),
-    # )
 
     return SerializingProducer({
         'bootstrap.servers': settings.kafka_bootstrap_servers,
