@@ -43,12 +43,14 @@ class InternalDiscoveryScraper:
         """Execute the discovery job synchronously."""
         import asyncio
         asyncio.run(run_regulatory_discovery())
-        # Return a dummy ScrapeResult to satisfy the scheduler
+        # items[] is empty because internal discovery delegates to the ingestion
+        # service and does not collect individual items locally.
         from app.models import ScrapeResult, SourceType
+        items: list = []
         return ScrapeResult(
             source_type=SourceType.REGULATORY_DISCOVERY,
             success=True,
-            items_found=2, # Mock value for status reporting
-            items=[],
+            items_found=len(items),
+            items=items,
             error_message=None
         )
