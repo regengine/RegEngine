@@ -69,6 +69,9 @@ describe('DashboardPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockFetch.mockReset();
+        // Default: all fetch calls resolve with ok:true so health badge and other
+        // fetch() calls in the component don't crash with "Cannot read .then of undefined"
+        mockFetch.mockResolvedValue({ ok: true, json: async () => ({ status: 'ok' }) });
         (useRouter as any).mockReturnValue({ push: mockPush });
 
         // Ensure localStorage is available in jsdom

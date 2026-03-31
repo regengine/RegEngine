@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, ShieldCheck, Clock, PlusCircle } from 'lucide-react';
+import { Archive, Download, ShieldCheck, Clock, PlusCircle, Link2Off } from 'lucide-react';
 import type { ArchiveExportJob } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,17 +19,22 @@ export default function ExportJobsPage() {
     const [destination, setDestination] = useState<ArchiveExportJob['destination']>('Object storage archive');
     const queryClient = useQueryClient();
 
-    const { data: jobs = [], isLoading: jobsLoading } = useQuery({
+    const { data: exportResponse, isLoading: jobsLoading } = useQuery({
         queryKey: ['export-jobs'],
         queryFn: async () => {
             const response = await fetch('/api/fsma/customer-readiness/export-jobs', {
                 headers: { 'X-RegEngine-API-Key': apiKey || '' },
             });
-            if (!response.ok) return [];
-            const data = (await response.json()) as { jobs: ArchiveExportJob[] };
-            return data.jobs;
+            if (!response.ok) return { jobs: [], meta: { status: 'error' } };
+            return response.json() as Promise<{
+                jobs?: ArchiveExportJob[];
+                meta?: { status?: string; message?: string };
+            }>;
         },
     });
+
+    const notConnected = exportResponse?.meta?.status === 'not_connected';
+    const jobs: ArchiveExportJob[] = exportResponse?.jobs ?? [];
 
     const activeJobs = useMemo(
         () => jobs.filter((job) => job.status === 'active').length,
@@ -49,6 +54,9 @@ export default function ExportJobsPage() {
                     tenantId: tenantId || '',
                 }),
             });
+            if (response.status === 501) {
+                throw new Error('Export job scheduling is not yet available. Connect your supply chain data to enable this feature.');
+            }
             if (!response.ok) throw new Error('Failed to create export job');
             return (await response.json()) as { job: ArchiveExportJob };
         },
@@ -80,7 +88,7 @@ export default function ExportJobsPage() {
                     <div>
                         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2 sm:gap-3">
                             <Archive className="h-5 w-5 sm:h-6 sm:w-6 text-[var(--re-brand)]" />
-                            Archive & Export Jobs
+                            Archive &amp; Export Jobs
                         </h1>
                         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                             Configure recurring FDA, EPCIS, and audit bundles against the current customer-readiness API contract so statutory retention does not depend on a live subscription.
@@ -89,16 +97,25 @@ export default function ExportJobsPage() {
                     <Button
                         className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]"
                         onClick={() => void handleSaveJob()}
-                        disabled={status === 'saving' || status === 'loading'}
+                        disabled={status === 'saving' || status === 'loading' || notConnected}
                     >
                         <PlusCircle className="h-4 w-4 mr-1" />
                         {status === 'saving' ? 'Saving...' : 'Save Export Job'}
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/[0.04] p-4 text-sm text-muted-foreground">
-                    Schedule automated FDA exports, EPCIS packages, and compliance reports. Configure cadence, format, and delivery destination below.
-                </div>
+                {notConnected ? (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm text-amber-200 flex items-start gap-3">
+                        <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
+                        <span>
+                            No export jobs have been configured yet. Export job scheduling activates once your supply chain data is connected.
+                        </span>
+                    </div>
+                ) : (
+                    <div className="rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand)]/[0.04] p-4 text-sm text-muted-foreground">
+                        Schedule automated FDA exports, EPCIS packages, and compliance reports. Configure cadence, format, and delivery destination below.
+                    </div>
+                )}
 
                 <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
                     <Card>
@@ -176,7 +193,7 @@ export default function ExportJobsPage() {
                 <div className="space-y-4">
                     {status === 'error' && (
                         <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                            Could not create the export job. Please check your inputs and try again.
+                            {createJobMutation.error?.message ?? 'Could not create the export job. Please check your inputs and try again.'}
                         </div>
                     )}
                     {jobs.map((job) => (
@@ -220,7 +237,7 @@ export default function ExportJobsPage() {
                             Loading export jobs...
                         </div>
                     )}
-                    {status !== 'loading' && jobs.length === 0 && (
+                    {status !== 'loading' && jobs.length === 0 && !notConnected && (
                         <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-8 text-center">
                             <Archive className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
                             <p className="text-sm font-medium mb-1">No export jobs yet</p>

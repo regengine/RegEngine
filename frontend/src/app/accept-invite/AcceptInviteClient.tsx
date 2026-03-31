@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api-client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function AcceptInvitePage() {
@@ -14,6 +15,7 @@ export default function AcceptInvitePage() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const token = searchParams.get('token');
+    const emailParam = searchParams.get('email');
 
     const [isLoading, setIsLoading] = useState(false);
     const [step, setStep] = useState<'verify' | 'form' | 'success'>('form');
@@ -50,6 +52,21 @@ export default function AcceptInvitePage() {
                 password,
                 name
             });
+
+            // Automatically sign the user in so they don't have to re-enter credentials
+            if (emailParam) {
+                const supabase = createSupabaseBrowserClient();
+                const { error: signInError } = await supabase.auth.signInWithPassword({
+                    email: emailParam,
+                    password,
+                });
+                if (!signInError) {
+                    router.push('/dashboard');
+                    return;
+                }
+            }
+
+            // Fallback to success screen if auto-login is not possible
             setStep('success');
         } catch (err: unknown) {
             console.error(err);
@@ -76,8 +93,8 @@ export default function AcceptInvitePage() {
                         <CardDescription>Your account has been created successfully.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Button className="w-full" onClick={() => router.push('/login')}>
-                            Go to Login
+                        <Button className="w-full" onClick={() => router.push('/dashboard')}>
+                            Go to Dashboard
                         </Button>
                     </CardContent>
                 </Card>
