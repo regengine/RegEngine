@@ -8,10 +8,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getServiceURL } from '@/lib/api-config';
 
-const BILLING_API_BASE =
-    typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-        ? 'http://localhost:8800'
-        : '/api/billing';
+// Billing queries are proxied through the admin Next.js API route to avoid
+// CORS issues and to keep credentials server-side. The dead port 8800 is
+// NOT used — all billing reads go through /api/admin which proxies to the
+// admin service.
+const BILLING_API_BASE = '/api/admin';
 
 // ── API Client Functions ──────────────────────────────────────────
 

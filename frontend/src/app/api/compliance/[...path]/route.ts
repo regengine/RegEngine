@@ -35,6 +35,30 @@ export async function POST(
     return proxyRequest(request, path, 'POST');
 }
 
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Promise<{ path: string[] }> }
+) {
+    const { path } = await params;
+    return proxyRequest(request, path, 'PUT');
+}
+
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ path: string[] }> }
+) {
+    const { path } = await params;
+    return proxyRequest(request, path, 'PATCH');
+}
+
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ path: string[] }> }
+) {
+    const { path } = await params;
+    return proxyRequest(request, path, 'DELETE');
+}
+
 async function proxyRequest(
     request: NextRequest,
     pathParts: string[],
@@ -77,7 +101,7 @@ async function proxyRequest(
             headers,
         };
 
-        if (method === 'POST') {
+        if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
             try {
                 const body = await request.json();
                 fetchOptions.body = JSON.stringify(body);

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { PlayCircle, ShieldAlert, TimerReset, FileText } from 'lucide-react';
+import { PlayCircle, ShieldAlert, TimerReset, FileText, Link2Off } from 'lucide-react';
 import type { RecallDrillRun } from '@/lib/customer-readiness';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,21 +12,27 @@ import { useAuth } from '@/lib/auth-context';
 export default function RecallDrillsPage() {
     const { apiKey } = useAuth();
     const [scenario, setScenario] = useState('Weekend retailer trace-back');
-    const [lots, setLots] = useState('TOM-0226-F3-001, LET-0310-WH-21');
-    const [dateRange, setDateRange] = useState('2026-03-01 to 2026-03-12');
+    const [lots, setLots] = useState('');
+    const [dateRange, setDateRange] = useState('');
     const queryClient = useQueryClient();
 
-    const { data: runs = [], isLoading: runsLoading } = useQuery({
+    const { data: drillsResponse, isLoading: runsLoading } = useQuery({
         queryKey: ['recall-drills'],
         queryFn: async () => {
             const response = await fetch('/api/fsma/customer-readiness/recall-drills', {
                 headers: { 'X-RegEngine-API-Key': apiKey || '' },
             });
-            if (!response.ok) return [];
-            const data = (await response.json()) as { drills: RecallDrillRun[] };
-            return data.drills;
+            if (!response.ok) return { items: [], meta: { status: 'error' } };
+            return response.json() as Promise<{
+                items?: RecallDrillRun[];
+                drills?: RecallDrillRun[];
+                meta?: { status?: string; message?: string };
+            }>;
         },
     });
+
+    const notConnected = drillsResponse?.meta?.status === 'not_connected';
+    const runs: RecallDrillRun[] = drillsResponse?.items ?? drillsResponse?.drills ?? [];
 
     const startDrillMutation = useMutation({
         mutationFn: async () => {
@@ -39,6 +45,9 @@ export default function RecallDrillsPage() {
                     dateRange,
                 }),
             });
+            if (response.status === 501) {
+                throw new Error('Recall drill automation is not yet available. Connect your supply chain data to enable this feature.');
+            }
             if (!response.ok) throw new Error('Failed to start drill');
             return (await response.json()) as { drill: RecallDrillRun };
         },
@@ -75,22 +84,27 @@ export default function RecallDrillsPage() {
                     <Button
                         className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[48px] w-full sm:w-auto active:scale-[0.97]"
                         onClick={() => void handleStartDrill()}
-                        disabled={status === 'saving' || status === 'loading'}
+                        disabled={status === 'saving' || status === 'loading' || notConnected}
                     >
                         <PlayCircle className="h-4 w-4 mr-1" />
                         {status === 'saving' ? 'Starting...' : 'Start drill'}
                     </Button>
                 </div>
 
-                <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] p-4 text-sm text-muted-foreground">
-                    Alpha release — Run practice drills to test your recall readiness. Full automation and audit artifacts activate once your account is connected.
-                </div>
+                {notConnected && (
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 text-sm text-amber-200 flex items-start gap-3">
+                        <Link2Off className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-400" />
+                        <span>
+                            No recall drills have been run yet. Recall drill automation activates once your supply chain data is connected.
+                        </span>
+                    </div>
+                )}
 
                 <Card>
                     <CardHeader>
                         <CardTitle>Launch a drill</CardTitle>
                         <CardDescription>
-                            Choose the lots, date range, and scenario you want to test. The current route returns a drill workspace contract so teams can validate the flow before backend automation is wired.
+                            Choose the lots, date range, and scenario you want to test. Drills run against your connected supply chain data and generate a timestamped audit artifact.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
@@ -99,12 +113,12 @@ export default function RecallDrillsPage() {
                             <Input value={scenario} onChange={(e) => setScenario(e.target.value)} className="rounded-xl min-h-[44px]" />
                         </div>
                         <div>
-                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Lots</label>
-                            <Input value={lots} onChange={(e) => setLots(e.target.value)} className="rounded-xl min-h-[44px]" />
+                            <label className="text-xs font-medium text-muted-foreground mb-1 block">Lots (comma-separated)</label>
+                            <Input value={lots} onChange={(e) => setLots(e.target.value)} placeholder="LOT-001, LOT-002" className="rounded-xl min-h-[44px]" />
                         </div>
                         <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Date range</label>
-                            <Input value={dateRange} onChange={(e) => setDateRange(e.target.value)} className="rounded-xl min-h-[44px]" />
+                            <Input value={dateRange} onChange={(e) => setDateRange(e.target.value)} placeholder="2026-03-01 to 2026-03-12" className="rounded-xl min-h-[44px]" />
                         </div>
                         <div>
                             <label className="text-xs font-medium text-muted-foreground mb-1 block">Output package</label>
@@ -171,21 +185,21 @@ export default function RecallDrillsPage() {
                         ))}
                         {status === 'loading' && runs.length === 0 && (
                             <div className="rounded-xl border border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-4 text-sm text-muted-foreground">
-                                Loading drill preview data...
+                                Loading drill history...
                             </div>
                         )}
-                        {status !== 'loading' && runs.length === 0 && (
+                        {status !== 'loading' && runs.length === 0 && !notConnected && (
                             <div className="rounded-xl border border-dashed border-[var(--re-border-default)] bg-[var(--re-surface-elevated)] p-8 text-center">
                                 <ShieldAlert className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
                                 <p className="text-sm font-medium mb-1">No drills yet</p>
                                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                                    Configure a scenario above and click &ldquo;Start drill&rdquo; to run your first mock recall. Results will appear here.
+                                    Configure a scenario above and click &ldquo;Start drill&rdquo; to run your first recall drill. Results will appear here.
                                 </p>
                             </div>
                         )}
-                        {status === 'error' && runs.length > 0 && (
+                        {status === 'error' && (
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                                Could not start the drill. Please check your inputs and try again.
+                                {startDrillMutation.error?.message ?? 'Could not start the drill. Please check your inputs and try again.'}
                             </div>
                         )}
                     </CardContent>

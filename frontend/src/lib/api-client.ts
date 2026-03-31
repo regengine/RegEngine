@@ -412,13 +412,17 @@ class APIClient {
   }
 
   async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/approve`, {}, {
+    // Route through the Next.js proxy at /api/review/[...path] which maps
+    // /api/review/{id}/approve → /v1/admin/review/flagged-extractions/{id}/approve
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
 
   async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/reject`, {}, {
+    // Route through the Next.js proxy at /api/review/[...path] which maps
+    // /api/review/{id}/reject → /v1/admin/review/flagged-extractions/{id}/reject
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
@@ -493,7 +497,6 @@ class APIClient {
     await this.adminClient.post('/v1/auth/accept-invite', data);
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFTLCategories(): Promise<FTLCategory[]> {
     const { data } = await this.adminClient.get<{ categories: FTLCategory[] }>('/v1/supplier/ftl-categories');
     return data.categories || [];
@@ -509,7 +512,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async setFacilityFTLCategories(
     facilityId: string,
     request: FacilityFTLScopingRequest,
@@ -521,7 +523,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
       `/v1/supplier/facilities/${facilityId}/required-ctes`,
@@ -529,7 +530,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async submitSupplierCTEEvent(
     facilityId: string,
     request: SupplierCTEEventCreateRequest,
@@ -541,7 +541,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async createSupplierTLC(request: SupplierTLCUpsertRequest): Promise<SupplierTLC> {
     const { data } = await this.adminClient.post<SupplierTLC>('/v1/supplier/tlcs', request);
     return data;
