@@ -53,6 +53,7 @@ vi.mock('lucide-react', () => {
         ShieldCheck: stub,
         Clock: stub,
         PlusCircle: stub,
+        Link2Off: stub,
     };
 });
 

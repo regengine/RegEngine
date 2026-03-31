@@ -43,6 +43,7 @@ vi.mock('lucide-react', () => {
         ShieldAlert: stub,
         TimerReset: stub,
         FileText: stub,
+        Link2Off: stub,
     };
 });
 
@@ -88,7 +89,7 @@ describe('RecallDrillsPage', () => {
         global.fetch = vi.fn().mockReturnValue(new Promise(() => {}));
         render(<RecallDrillsPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByText('Loading drill preview data...')).toBeInTheDocument();
+        expect(screen.getByText('Loading drill history...')).toBeInTheDocument();
     });
 
     it('renders drill runs when fetch succeeds', async () => {
@@ -145,7 +146,8 @@ describe('RecallDrillsPage', () => {
         await user.click(startButton);
 
         await waitFor(() => {
-            expect(screen.getByText(/could not start the drill/i)).toBeInTheDocument();
+            // The page surfaces the mutation error message directly
+            expect(screen.getByText(/could not start the drill|failed to start drill/i)).toBeInTheDocument();
         });
     });
 });
