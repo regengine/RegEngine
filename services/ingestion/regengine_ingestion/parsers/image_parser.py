@@ -58,16 +58,12 @@ class ImageParser(DocumentParser):
         """
         
         client = LLMClient()
-        
-        # Run async LLM call in sync context (since parse is sync)
+
+        # Run async LLM call in sync context (since parse is sync).
+        # asyncio.run() creates a fresh event loop, avoiding the deprecated
+        # asyncio.get_event_loop() pattern which fails in Python 3.12+.
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        try:
-            result = loop.run_until_complete(client.analyze_image_structured(image_b64, prompt))
+            result = asyncio.run(client.analyze_image_structured(image_b64, prompt))
             
             # Augment with metadata
             result["_metadata"] = {

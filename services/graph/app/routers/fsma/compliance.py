@@ -62,7 +62,8 @@ async def get_coverage_card(
         ],
         "check_interval": "24 hours",
         "enforcement_status": "FDA not enforcing before July 20, 2028 (Congressional directive)",
-        "last_verified": datetime.utcnow().isoformat(),
+        # last_request_at reflects the time of this API call, not an actual verification event
+        "last_request_at": datetime.utcnow().isoformat(),
         "compliance_deadline": "2028-07-20"
     }
 

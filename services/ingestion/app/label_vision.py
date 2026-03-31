@@ -132,8 +132,8 @@ async def analyze_label(
     # Determine content type for the data URI
     content_type = file.content_type or "image/jpeg"
     # Try GPT-4o vision
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
         logger.warning("OPENAI_API_KEY not set — returning empty analysis")
         return LabelVisionResponse(
             analysis_engine="unavailable",
@@ -143,7 +143,7 @@ async def analyze_label(
     try:
         from openai import AsyncOpenAI
 
-        client = AsyncOpenAI(api_key=api_key)
+        client = AsyncOpenAI(api_key=openai_api_key)
         response = await client.chat.completions.create(
             model="gpt-4o",
             messages=[
