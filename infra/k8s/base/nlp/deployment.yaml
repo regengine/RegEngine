@@ -1,58 +1,58 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: compliance-service
+  name: nlp-service
   labels:
-    app: compliance
+    app: nlp
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: compliance
+      app: nlp
   template:
     metadata:
       labels:
-        app: compliance
+        app: nlp
     spec:
       containers:
-      - name: compliance
-        image: regengine/compliance-service:$(IMAGE_TAG)
+      - name: nlp
+        image: regengine/nlp-service:$(IMAGE_TAG)
         ports:
-        - containerPort: 8000
+        - containerPort: 8100
         envFrom:
         - configMapRef:
-            name: compliance-config
+            name: nlp-config
         - secretRef:
-            name: compliance-secrets
+            name: nlp-secrets
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
         livenessProbe:
           httpGet:
             path: /health
-            port: 8000
+            port: 8100
           initialDelaySeconds: 5
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /ready
-            port: 8000
+            path: /health
+            port: 8100
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources:
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-          requests:
-            cpu: "250m"
-            memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: compliance-service
+  name: nlp-service
 spec:
   selector:
-    app: compliance
+    app: nlp
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 8000
+      targetPort: 8100
   type: ClusterIP

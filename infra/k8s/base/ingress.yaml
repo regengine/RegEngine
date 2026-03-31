@@ -25,3 +25,31 @@ spec:
             name: compliance-service
             port:
               number: 80
+      - path: /api/admin
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+      - path: /api/ingestion
+        pathType: Prefix
+        backend:
+          service:
+            name: ingestion-service
+            port:
+              number: 80
+      - path: /api/graph
+        pathType: Prefix
+        backend:
+          service:
+            name: graph-service
+            port:
+              number: 80
+      - path: /api/nlp
+        pathType: Prefix
+        backend:
+          service:
+            name: nlp-service
+            port:
+              number: 80

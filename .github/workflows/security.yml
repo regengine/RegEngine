@@ -50,9 +50,18 @@ jobs:
           semgrep \
             --config p/owasp-top-ten \
             --config p/security-audit \
-            --json --output semgrep-results.json \
-            || true
-          # Findings are uploaded as artifacts for triage, not hard-gated
+            --json --output semgrep-results.json
+
+          # Results are uploaded as artifacts AND also checked for critical/high findings below
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Semgrep OWASP hard gate (fail on critical/high)
+        run: |
+          pip install semgrep
+          semgrep --config=p/owasp-top-ten --error .
+          # --error causes semgrep to exit non-zero if any findings are found.
+          # This step intentionally fails CI on security findings.
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 

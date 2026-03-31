@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: ingestion
-        image: regengine/ingestion-service:latest
+        image: regengine/ingestion-service:$(IMAGE_TAG)
         ports:
         - containerPort: 8000
         envFrom:
@@ -31,7 +31,7 @@ spec:
             memory: "1Gi"
         readinessProbe:
           httpGet:
-            path: /ready
+            path: /health
             port: 8000
 ---
 apiVersion: v1
