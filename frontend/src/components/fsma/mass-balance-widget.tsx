@@ -19,10 +19,33 @@ import {
 interface MassBalanceWidgetProps {
   result?: MassBalanceResult;
   isLoading?: boolean;
+  notImplemented?: boolean;
   className?: string;
 }
 
-export function MassBalanceWidget({ result, isLoading, className }: MassBalanceWidgetProps) {
+export function MassBalanceWidget({ result, isLoading, notImplemented, className }: MassBalanceWidgetProps) {
+  if (notImplemented) {
+    return (
+      <Card className={className}>
+        <CardContent className="pt-6">
+          <div className="text-center py-8 text-muted-foreground space-y-3">
+            <Scale className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p className="text-sm font-medium">Mass balance validation is not yet available.</p>
+            <p className="text-xs text-muted-foreground">
+              Use chain integrity verification instead to validate your traceability records.
+            </p>
+            <a
+              href="/tools/knowledge-graph"
+              className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2"
+            >
+              Go to Chain Integrity View →
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (isLoading) {
     return (
       <Card className={className}>

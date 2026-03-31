@@ -1,27 +1,38 @@
 import { NextResponse } from 'next/server';
-import { MAPPING_REVIEW_ITEMS } from '@/lib/customer-readiness';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+    const backendUrl = process.env.INGESTION_SERVICE_URL;
+    if (backendUrl) {
+        try {
+            const res = await fetch(`${backendUrl}/api/v1/fsma/mappings`, {
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return NextResponse.json(data);
+            }
+        } catch {
+            // Backend unreachable — fall through to not_connected response
+        }
+    }
+
     return NextResponse.json({
-        items: MAPPING_REVIEW_ITEMS,
+        items: [],
+        meta: {
+            status: 'not_connected',
+            message: 'Field mapping review is not yet configured for this account.',
+        },
     });
 }
 
-export async function POST(request: Request) {
-    const body = await request.json().catch(() => ({}));
-
+export async function POST() {
     return NextResponse.json(
         {
-            item: {
-                id: 'mapping_preview_submission',
-                source: body.source ?? 'Uploaded source schema',
-                sourceField: body.sourceField ?? 'unknown_field',
-                mappedField: body.mappedField ?? null,
-                status: body.mappedField ? 'needs_review' : 'missing_required_kde',
-                detail: 'Preview response from the frontend mock API route.',
-            },
+            error: 'Not Implemented',
+            message: 'Field mapping submission is not yet available. Connect your supply chain data to enable this feature.',
         },
-        { status: 201 }
+        { status: 501 }
     );
 }
