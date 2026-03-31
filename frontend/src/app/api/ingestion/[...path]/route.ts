@@ -106,6 +106,12 @@ async function proxyRequest(
       }
     }
 
+    // Inject access token from HTTP-only cookie as Bearer token
+    const cookieAccessToken = request.cookies.get('re_access_token')?.value;
+    if (cookieAccessToken) {
+      headers.set('authorization', `Bearer ${cookieAccessToken}`);
+    }
+
     // Inject API key from HTTP-only cookie (preferred) or server-side env var.
     // The client no longer sends X-RegEngine-API-Key — credentials live in cookies.
     if (!headers.has('x-regengine-api-key')) {
