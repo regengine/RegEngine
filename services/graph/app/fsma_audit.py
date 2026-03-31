@@ -27,15 +27,41 @@ import structlog
 logger = structlog.get_logger("fsma-audit")
 
 
+_db_engine = None
+_db_engine_lock = threading.Lock()
+
+
+def _get_audit_db_engine():
+    """Return a shared SQLAlchemy engine for the audit DB, or None if unconfigured."""
+    global _db_engine
+    with _db_engine_lock:
+        if _db_engine is not None:
+            return _db_engine
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            return None
+        try:
+            from sqlalchemy import create_engine
+            url = (
+                db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+                if db_url.startswith("postgresql://")
+                else db_url
+            )
+            _db_engine = create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
+            return _db_engine
+        except Exception as e:
+            logging.getLogger("fsma_audit").warning("Failed to create audit DB engine: %s", e)
+            return None
+
+
 def _persist_audit_entry(entry) -> None:
     """Persist an audit entry to Postgres. Best-effort — failures logged, not raised."""
-    db_url = os.getenv("DATABASE_URL")
-    if not db_url:
+    engine = _get_audit_db_engine()
+    if engine is None:
         return
 
     try:
-        from sqlalchemy import create_engine, text
-        engine = create_engine(db_url, pool_pre_ping=True, pool_size=1, max_overflow=0)
+        from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(
                 text("""
@@ -47,6 +73,7 @@ def _persist_audit_entry(entry) -> None:
                     (:event_id, :actor, :actor_type, :action, :target_type, :target_id,
                      :tenant_id, :correlation_id, :confidence, :evidence_link,
                      :checksum, :previous_checksum, :diff_json, :created_at)
+                    ON CONFLICT DO NOTHING
                 """),
                 {
                     "event_id": entry.event_id,
@@ -71,7 +98,76 @@ def _persist_audit_entry(entry) -> None:
         logging.getLogger("fsma_audit").warning("Failed to persist audit entry: %s", e)
 
 
-# Thread-safe audit log storage
+def _row_to_audit_entry(row) -> "FSMAAuditEntry":
+    """Reconstruct an FSMAAuditEntry from a DB row (keyed by column name)."""
+    diff_raw = row._mapping.get("diff_json") if hasattr(row, "_mapping") else row[12]
+    diff_list: List[FSMAAuditDiff] = []
+    if diff_raw:
+        items = diff_raw if isinstance(diff_raw, list) else json.loads(diff_raw)
+        diff_list = [
+            FSMAAuditDiff(
+                field_name=item.get("field", ""),
+                previous_value=item.get("previous"),
+                new_value=item.get("new"),
+            )
+            for item in items
+        ]
+
+    def _safe(col, default=None):
+        try:
+            return row._mapping[col]
+        except (KeyError, AttributeError):
+            return default
+
+    entry = FSMAAuditEntry(
+        event_id=_safe("event_id", str(uuid.uuid4())),
+        actor=_safe("actor", "System/AI"),
+        actor_type=FSMAAuditActorType(_safe("actor_type", "System")),
+        action=FSMAAuditAction(_safe("action", "CREATED")),
+        diff=diff_list,
+        evidence_link=_safe("evidence_link"),
+        target_type=_safe("target_type", ""),
+        target_id=_safe("target_id", ""),
+        tenant_id=_safe("tenant_id"),
+        correlation_id=_safe("correlation_id"),
+        confidence=_safe("confidence"),
+        previous_checksum=_safe("previous_checksum"),
+    )
+    # Restore persisted timestamp and checksum rather than regenerating them
+    persisted_ts = _safe("created_at")
+    if persisted_ts is not None:
+        entry.timestamp = persisted_ts.isoformat() if hasattr(persisted_ts, "isoformat") else str(persisted_ts)
+    persisted_cs = _safe("checksum")
+    if persisted_cs:
+        entry.checksum = persisted_cs
+    return entry
+
+
+def _query_audit_trail(where_clause: str, params: dict, limit: int = 200) -> List["FSMAAuditEntry"]:
+    """Execute a SELECT against fsma.fsma_audit_trail and return FSMAAuditEntry list."""
+    engine = _get_audit_db_engine()
+    if engine is None:
+        return []
+    try:
+        from sqlalchemy import text
+        sql = f"""
+            SELECT event_id, actor, actor_type, action, target_type, target_id,
+                   tenant_id, correlation_id, confidence, evidence_link,
+                   checksum, previous_checksum, diff_json, created_at
+            FROM fsma.fsma_audit_trail
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT :_limit
+        """
+        with engine.connect() as conn:
+            rows = conn.execute(text(sql), {**params, "_limit": limit}).fetchall()
+        return [_row_to_audit_entry(r) for r in rows]
+    except Exception as e:
+        logging.getLogger("fsma_audit").warning("Failed to query audit trail: %s", e)
+        return []
+
+
+# Thread-safe in-memory fallback list (used when DB is unavailable)
 _audit_lock = threading.RLock()
 _audit_log: List["FSMAAuditEntry"] = []
 
@@ -327,24 +423,59 @@ class FSMAAuditLog:
             return entry
 
     def get_by_target(self, target_id: str) -> List[FSMAAuditEntry]:
-        """Get all audit entries for a specific target (lot, event, etc.)."""
+        """Get all audit entries for a specific target (lot, event, etc.).
+
+        Reads from PostgreSQL when available so entries survive restarts.
+        Falls back to the in-process cache when the DB is unreachable.
+        """
+        db_entries = _query_audit_trail("WHERE target_id = :target_id", {"target_id": target_id})
+        if db_entries:
+            return db_entries
+        # Fallback to in-memory
         with self._lock:
             event_ids = self._by_target.get(target_id, [])
             return [e for e in self._entries if e.event_id in event_ids]
 
     def get_by_tenant(self, tenant_id: str) -> List[FSMAAuditEntry]:
-        """Get all audit entries for a tenant."""
+        """Get all audit entries for a tenant.
+
+        Reads from PostgreSQL when available so entries survive restarts.
+        Falls back to the in-process cache when the DB is unreachable.
+        """
+        db_entries = _query_audit_trail("WHERE tenant_id = :tenant_id", {"tenant_id": tenant_id})
+        if db_entries:
+            return db_entries
+        # Fallback to in-memory
         with self._lock:
             event_ids = self._by_tenant.get(tenant_id, [])
             return [e for e in self._entries if e.event_id in event_ids]
 
     def get_by_action(self, action: FSMAAuditAction) -> List[FSMAAuditEntry]:
-        """Get all audit entries for a specific action type."""
+        """Get all audit entries for a specific action type.
+
+        Reads from PostgreSQL when available so entries survive restarts.
+        Falls back to the in-process cache when the DB is unreachable.
+        """
+        db_entries = _query_audit_trail("WHERE action = :action", {"action": action.value})
+        if db_entries:
+            return db_entries
+        # Fallback to in-memory
         with self._lock:
             return [e for e in self._entries if e.action == action]
 
     def get_by_time_range(self, start: datetime, end: datetime) -> List[FSMAAuditEntry]:
-        """Get audit entries within a time range."""
+        """Get audit entries within a time range.
+
+        Reads from PostgreSQL when available so entries survive restarts.
+        Falls back to the in-process cache when the DB is unreachable.
+        """
+        db_entries = _query_audit_trail(
+            "WHERE created_at >= :start AND created_at <= :end",
+            {"start": start, "end": end},
+        )
+        if db_entries:
+            return db_entries
+        # Fallback to in-memory
         with self._lock:
             result = []
             for entry in self._entries:
@@ -356,7 +487,15 @@ class FSMAAuditLog:
             return result
 
     def get_all(self) -> List[FSMAAuditEntry]:
-        """Get all audit entries."""
+        """Get all audit entries (most recent 200).
+
+        Reads from PostgreSQL when available so entries survive restarts.
+        Falls back to the in-process cache when the DB is unreachable.
+        """
+        db_entries = _query_audit_trail("", {})
+        if db_entries:
+            return db_entries
+        # Fallback to in-memory
         with self._lock:
             return list(self._entries)
 
@@ -364,42 +503,68 @@ class FSMAAuditLog:
         """
         Verify the integrity of the entire audit chain.
 
+        When PostgreSQL is available, verifies entries from the DB (ordered by
+        created_at ASC) so the check is durable across restarts.
+
         Returns:
             Dict with integrity status and any violations found
         """
-        with self._lock:
-            violations = []
+        # Prefer DB entries; fall back to in-memory
+        engine = _get_audit_db_engine()
+        if engine is not None:
+            try:
+                from sqlalchemy import text
+                with engine.connect() as conn:
+                    rows = conn.execute(
+                        text("""
+                            SELECT event_id, actor, actor_type, action, target_type,
+                                   target_id, tenant_id, correlation_id, confidence,
+                                   evidence_link, checksum, previous_checksum,
+                                   diff_json, created_at
+                            FROM fsma.fsma_audit_trail
+                            ORDER BY created_at ASC
+                        """)
+                    ).fetchall()
+                entries = [_row_to_audit_entry(r) for r in rows]
+            except Exception as e:
+                logging.getLogger("fsma_audit").warning("Chain integrity DB query failed: %s", e)
+                with self._lock:
+                    entries = list(self._entries)
+        else:
+            with self._lock:
+                entries = list(self._entries)
 
-            for i, entry in enumerate(self._entries):
-                # Verify checksum
-                if not entry.verify_integrity():
+        violations = []
+        for i, entry in enumerate(entries):
+            # Verify checksum
+            if not entry.verify_integrity():
+                violations.append(
+                    {
+                        "event_id": entry.event_id,
+                        "index": i,
+                        "issue": "checksum_mismatch",
+                    }
+                )
+
+            # Verify chain linkage
+            if i > 0:
+                expected_previous = entries[i - 1].checksum
+                if entry.previous_checksum != expected_previous:
                     violations.append(
                         {
                             "event_id": entry.event_id,
                             "index": i,
-                            "issue": "checksum_mismatch",
+                            "issue": "chain_break",
+                            "expected": expected_previous,
+                            "found": entry.previous_checksum,
                         }
                     )
 
-                # Verify chain linkage
-                if i > 0:
-                    expected_previous = self._entries[i - 1].checksum
-                    if entry.previous_checksum != expected_previous:
-                        violations.append(
-                            {
-                                "event_id": entry.event_id,
-                                "index": i,
-                                "issue": "chain_break",
-                                "expected": expected_previous,
-                                "found": entry.previous_checksum,
-                            }
-                        )
-
-            return {
-                "total_entries": len(self._entries),
-                "is_valid": len(violations) == 0,
-                "violations": violations,
-            }
+        return {
+            "total_entries": len(entries),
+            "is_valid": len(violations) == 0,
+            "violations": violations,
+        }
 
     def export_for_fda(
         self,
