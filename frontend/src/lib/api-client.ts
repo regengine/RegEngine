@@ -412,13 +412,17 @@ class APIClient {
   }
 
   async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/approve`, {}, {
+    // Route through the Next.js proxy at /api/review/[...path] which maps
+    // /api/review/{id}/approve → /v1/admin/review/flagged-extractions/{id}/approve
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
 
   async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/reject`, {}, {
+    // Route through the Next.js proxy at /api/review/[...path] which maps
+    // /api/review/{id}/reject → /v1/admin/review/flagged-extractions/{id}/reject
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
