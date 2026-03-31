@@ -1,58 +1,58 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: compliance-service
+  name: graph-service
   labels:
-    app: compliance
+    app: graph
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: compliance
+      app: graph
   template:
     metadata:
       labels:
-        app: compliance
+        app: graph
     spec:
       containers:
-      - name: compliance
-        image: regengine/compliance-service:$(IMAGE_TAG)
+      - name: graph
+        image: regengine/graph-service:$(IMAGE_TAG)
         ports:
-        - containerPort: 8000
+        - containerPort: 8200
         envFrom:
         - configMapRef:
-            name: compliance-config
+            name: graph-config
         - secretRef:
-            name: compliance-secrets
+            name: graph-secrets
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
         livenessProbe:
           httpGet:
             path: /health
-            port: 8000
+            port: 8200
           initialDelaySeconds: 5
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /ready
-            port: 8000
+            path: /health
+            port: 8200
           initialDelaySeconds: 5
           periodSeconds: 10
-        resources:
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-          requests:
-            cpu: "250m"
-            memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: compliance-service
+  name: graph-service
 spec:
   selector:
-    app: compliance
+    app: graph
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 8000
+      targetPort: 8200
   type: ClusterIP
