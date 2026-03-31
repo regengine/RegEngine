@@ -99,10 +99,23 @@ async def configure_connector(
             detail=f"Unknown connector: {config_req.connector_id}",
         )
 
+    # Derive the category from the connector class metadata if available,
+    # falling back to the connector's class name rather than hardcoding "unknown".
+    _category = "unknown"
+    try:
+        _info = cls(ConnectorConfig(
+            connector_id=config_req.connector_id,
+            display_name=config_req.connector_id,
+            category="unknown",
+        )).get_connector_info()
+        _category = _info.get("category", cls.__name__.lower())
+    except Exception:
+        _category = cls.__name__.lower()
+
     config = ConnectorConfig(
         connector_id=config_req.connector_id,
         display_name=config_req.connector_id,
-        category="unknown",
+        category=_category,
         api_key=config_req.api_key or "",
         api_secret=config_req.api_secret or "",
         oauth_client_id=config_req.oauth_client_id or "",
