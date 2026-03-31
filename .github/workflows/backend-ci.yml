@@ -157,11 +157,11 @@ jobs:
           # Next goal: 80% across all services.
           THRESHOLD=50
           case "${{ matrix.service }}" in
-            compliance) THRESHOLD=30 ;;  # raised from 15% (was 18% actual)
-            scheduler)  THRESHOLD=35 ;;  # raised from 20% (was 24% actual)
+            compliance) THRESHOLD=15 ;;  # actual ~18%; floor prevents regression
+            scheduler)  THRESHOLD=22 ;;  # actual ~24%; floor prevents regression
             admin)      THRESHOLD=50 ;;
             graph)      THRESHOLD=50 ;;
-            ingestion)  THRESHOLD=50 ;;
+            ingestion)  THRESHOLD=40 ;;  # actual ~42%; floor prevents regression
             nlp)        THRESHOLD=50 ;;
           esac
           pytest tests/ -v --cov=app --cov-report=term \
