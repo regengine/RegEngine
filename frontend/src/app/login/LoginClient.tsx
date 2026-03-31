@@ -25,9 +25,17 @@ const LOGIN_PRESETS = [
     },
 ];
 
+// QA presets are shown only in non-production environments, or when
+// explicitly enabled via a public env var on staging/preview builds.
+// The preset email values are example placeholders only — actual
+// credentials are never stored in client source.
 const showQaPresets =
     process.env.NODE_ENV !== 'production' ||
     process.env.NEXT_PUBLIC_ENABLE_QA_LOGIN_PRESETS === '1';
+
+// Hard-block: in production without the explicit opt-in flag, always false.
+const qaPresetsEnabled =
+    showQaPresets && process.env.NEXT_PUBLIC_ENABLE_QA_LOGIN_PRESETS !== '0';
 
 type LoginPreset = (typeof LOGIN_PRESETS)[number]['id'];
 
@@ -341,7 +349,7 @@ export default function LoginPage() {
                                     )}
                                 </Button>
 
-                                {showQaPresets && (
+                                {qaPresetsEnabled && (
                                     <div className="space-y-2 rounded-md border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800/50">
                                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
                                             QA Login Presets

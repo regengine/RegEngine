@@ -18,6 +18,53 @@ export const metadata: Metadata = {
     },
 };
 
+// Cache pricing for 1 hour server-side so the page stays fast even when
+// the billing service is slow. Falls back to hardcoded data on error.
+export const revalidate = 3600;
+
+interface BillingPlan {
+    id: string;
+    name: string;
+    description?: string;
+    ga_monthly?: number;
+    ga_annual?: number;
+    partner_monthly?: number;
+    partner_annual?: number;
+    features?: string[];
+}
+
+async function fetchBillingPlans(): Promise<BillingPlan[] | null> {
+    const adminServiceUrl =
+        process.env.ADMIN_SERVICE_URL ||
+        process.env.NEXT_PUBLIC_ADMIN_URL ||
+        process.env.NEXT_PUBLIC_API_BASE_URL;
+
+    if (!adminServiceUrl) return null;
+
+    try {
+        const base = adminServiceUrl.replace(/\/+$/, '');
+        const apiKey = process.env.REGENGINE_API_KEY || '';
+        const res = await fetch(`${base}/billing/plans`, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { 'X-RegEngine-API-Key': apiKey } : {}),
+            },
+            // next.js fetch cache: honour the page-level revalidate
+            next: { revalidate: 3600 },
+        });
+
+        if (!res.ok) return null;
+
+        const data = await res.json() as { plans?: BillingPlan[] } | BillingPlan[];
+        const plans = Array.isArray(data) ? data : data.plans;
+        if (!Array.isArray(plans) || plans.length === 0) return null;
+        return plans;
+    } catch {
+        // Billing service unreachable — graceful degradation to hardcoded data.
+        return null;
+    }
+}
+
 const PRICING_TIERS = [
     {
         id: 'base',
@@ -103,7 +150,28 @@ const FAQ = [
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+    // Attempt to load live pricing from the billing service.
+    // On failure (service down, network error, bad payload) we silently fall
+    // back to the statically-defined PRICING_TIERS above.
+    const livePlans = await fetchBillingPlans();
+
+    const pricingTiers = livePlans
+        ? PRICING_TIERS.map((tier) => {
+              const live = livePlans.find((p) => p.id === tier.id);
+              if (!live) return tier;
+              return {
+                  ...tier,
+                  ...(live.ga_monthly !== undefined && { gaMonthly: live.ga_monthly }),
+                  ...(live.ga_annual !== undefined && { gaAnnual: live.ga_annual }),
+                  ...(live.partner_monthly !== undefined && { partnerMonthly: live.partner_monthly }),
+                  ...(live.partner_annual !== undefined && { partnerAnnual: live.partner_annual }),
+                  ...(live.description !== undefined && { description: live.description }),
+                  ...(Array.isArray(live.features) && live.features.length > 0 && { features: live.features }),
+              };
+          })
+        : PRICING_TIERS;
+
     return (
         <div className="re-page min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Hero */}
@@ -126,7 +194,7 @@ export default function PricingPage() {
             {/* Pricing Cards */}
             <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
-                    {PRICING_TIERS.map((tier) => {
+                    {pricingTiers.map((tier) => {
                         const Icon = tier.Icon;
                         return (
                             <div
