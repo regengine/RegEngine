@@ -113,8 +113,31 @@ export default function LoginPage() {
         }
 
         const safeNextPath = resolveSafeNextPath(nextParam);
-        const fallbackPath = user.is_sysadmin ? '/sysadmin' : '/dashboard';
-        router.push(safeNextPath || fallbackPath);
+        if (safeNextPath) {
+            router.push(safeNextPath);
+            return;
+        }
+
+        if (user.is_sysadmin) {
+            router.push('/sysadmin');
+            return;
+        }
+
+        // Check onboarding status — redirect to setup if incomplete
+        const tid = typeof window !== 'undefined' ? localStorage.getItem('regengine_tenant_id') : null;
+        if (tid) {
+            apiClient.getOnboardingStatus(tid).then((status) => {
+                if (!status.is_complete) {
+                    router.push('/onboarding/setup/welcome');
+                } else {
+                    router.push('/dashboard');
+                }
+            }).catch(() => {
+                router.push('/dashboard');
+            });
+        } else {
+            router.push('/dashboard');
+        }
     }, [isHydrated, user, nextParam, router, searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {

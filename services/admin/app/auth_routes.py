@@ -240,6 +240,16 @@ async def signup(
         name=tenant_name,
         slug=_ensure_unique_tenant_slug(db, tenant_name),
         status="active",
+        settings={
+            "onboarding": {
+                "workspace_setup_completed": False,
+                "facility_created": False,
+                "ftl_check_completed": False,
+                "first_document_imported": False,
+                "team_member_invited": False,
+                "mock_drill_run": False,
+            }
+        },
     )
     db.add(new_tenant)
     db.flush()
