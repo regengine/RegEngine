@@ -34,7 +34,7 @@ opentelemetry-api==1.30.0
 opentelemetry-sdk==1.30.0
 opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-exporter-otlp==1.30.0
-tenacity~=8.2.0
+backoff~=2.2.1
 
 # Database (for auth and framework)
 psycopg[binary]>=3.2.4
