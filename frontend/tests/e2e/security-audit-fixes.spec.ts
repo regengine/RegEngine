@@ -159,10 +159,10 @@ test.describe('Security Audit Fixes', () => {
 
             // Verify session cookie still present
             const finalCookies = await context.cookies();
-            const finalSessionCookie = finalCookies.find(c => c.name === sessionCookie.name);
+            const finalSessionCookie = finalCookies.find(c => c.name === sessionCookie!.name);
 
             expect(finalSessionCookie).toBeDefined();
-            expect(finalSessionCookie?.value).toBe(sessionCookie.value);
+            expect(finalSessionCookie?.value).toBe(sessionCookie!.value);
         });
 
         test('Logout clears HTTP-only cookies', async ({ page, context }) => {
@@ -644,7 +644,7 @@ test.describe('Security Audit Fixes', () => {
             test.setTimeout(120000);
 
             // Test as admin
-            const adminContext = await browser?.newContext() ?? await test.elementError;
+            const adminContext = await browser.newContext();
             const adminPage = await adminContext.newPage();
 
             await loginAsAdmin(adminPage);
@@ -658,7 +658,7 @@ test.describe('Security Audit Fixes', () => {
             await adminContext.close();
 
             // Test as regular user
-            const userContext = await browser?.newContext() ?? await test.elementError;
+            const userContext = await browser.newContext();
             const userPage = await userContext.newPage();
 
             await loginAsRegularUser(userPage);
