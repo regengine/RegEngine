@@ -12,6 +12,7 @@ RegEngine gives food safety and compliance teams a single system to manage regul
 
 - **Obligation Tracking** — 78+ FDA/FSMA obligations mapped, with automated status monitoring and deadline alerts
 - **Supply Chain Traceability** — Forward and backward lot tracing across your supply chain, built on recursive CTEs for sub-second query performance
+- **FTL Coverage Analysis** — Instant check of your products against the FDA Food Traceability List (26 categories), with CTE and KDE breakdowns
 - **Compliance Assessments** — Guided self-assessments with evidence collection and submission workflows
 - **Audit Trail** — Immutable, hash-chained records with tenant isolation for multi-org deployments
 - **Developer API** — REST API with key-based auth, rate limiting, and a built-in developer portal with interactive playground
@@ -25,9 +26,9 @@ RegEngine runs as a **consolidated FastAPI monolith** backed by **PostgreSQL** (
 ```
 ┌──────────────────────────────────────────────┐
 │  Next.js Frontend (Vercel)                   │
-│  Dashboards · Assessments · API Console      │
+│  Dashboards · Onboarding · API Console       │
 ├──────────────────────────────────────────────┤
-│  FastAPI Monolith                            │
+│  FastAPI Backend Services                    │
 │  ┌──────────┬──────────┬──────────────────┐  │
 │  │ Admin    │ Graph    │ Compliance       │  │
 │  │ Ingest   │ NLP      │ Scheduler        │  │
@@ -47,39 +48,57 @@ RegEngine runs as a **consolidated FastAPI monolith** backed by **PostgreSQL** (
 - **Recursive CTEs replace Neo4j** — Forward/backward supply chain tracing runs entirely in PostgreSQL. One fewer database to manage.
 - **Row-Level Security everywhere** — Every tenant-scoped table enforces RLS policies. Multi-tenancy is enforced at the database layer, not just application code.
 - **Fail-closed auth** — Rate limiting fails closed when Redis is unavailable. API key validation uses constant-time comparison. Brute-force protection on all auth endpoints.
+- **Tenant settings as JSONB** — Onboarding state, workspace profiles, and feature flags stored in `tenants.settings` column. No migrations needed for new configuration.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js, TypeScript, Tailwind CSS |
-| Backend | FastAPI (Python), Pydantic v2 |
-| Database | PostgreSQL via Supabase (RLS, pg_notify) |
-| Auth | Supabase Auth + API key store with rate limiting |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui, React Query, Framer Motion |
+| Backend | FastAPI (Python), Pydantic v2, SQLAlchemy 2.0 |
+| Database | PostgreSQL via Supabase (RLS, pg_notify, recursive CTEs) |
+| Auth | HTTP-only cookie JWT + Supabase Auth fallback, API key store with rate limiting |
 | Hosting | Vercel (frontend), Supabase (database + edge functions) |
-| CI/CD | GitHub Actions (backend CI, frontend CI, review gates, bundle analysis, test health checks) |
-| Code Review | CodeRabbit AI, Codex, Vercel bot |
+| CI/CD | GitHub Actions — 54 checks across lint, test, security, bundle analysis, review gates |
+| Code Review | CodeRabbit AI, Copilot, Vercel bot |
 
 ## Project Structure
 
 ```
-├── server/              # FastAPI monolith entry point
+├── frontend/              # Next.js frontend
+│   └── src/
+│       ├── app/           # App router (dashboard, onboarding, tools, API console)
+│       ├── components/    # UI components (shadcn/ui based)
+│       ├── hooks/         # React Query hooks
+│       └── lib/           # API client, auth context, utilities
 ├── services/
-│   ├── admin/           # Tenant management, PCOS, user admin
-│   ├── compliance/      # Obligation tracking, assessments
-│   ├── graph/           # Supply chain traceability, lot tracing
-│   ├── ingestion/       # Document upload, NLP extraction
-│   ├── nlp/             # Regulatory text analysis
-│   └── scheduler/       # Background jobs, deadline monitoring
-├── src/                 # Next.js frontend
-│   ├── app/             # App router pages
-│   ├── components/      # UI components
-│   └── lib/             # API client, utilities
-├── supabase/
-│   └── migrations/      # Versioned schema migrations (V001–V050)
+│   ├── admin/             # Tenant management, auth, onboarding, user admin
+│   ├── compliance/        # Obligation tracking, assessments
+│   ├── graph/             # Supply chain traceability, lot tracing
+│   ├── ingestion/         # Document upload, NLP extraction, format parsers
+│   ├── nlp/               # Regulatory text analysis
+│   ├── scheduler/         # Background jobs, deadline monitoring, FDA scrapers
+│   └── shared/            # Cross-service auth and utilities
+├── kernel/                # Core compliance engine and discovery
+├── regengine/             # Python SDK package
+├── migrations/            # Database migrations
+├── scripts/               # Operational and dev utility scripts
+├── docs/                  # Internal documentation
+├── qa/                    # QA pipeline and test fixtures
+├── security/              # Security policies and audit configs
 └── .github/
-    └── workflows/       # CI/CD pipelines + review gates
+    └── workflows/         # CI/CD pipelines + review gates (54 checks)
 ```
+
+## Onboarding Flow
+
+New users go through a streamlined 3-step workspace setup:
+
+1. **Profile** — Role, company type, and compliance maturity
+2. **Facility** — Register your first facility with supply chain role
+3. **FTL Quick Check** — Select products handled to see FDA traceability coverage instantly
+
+After setup, the dashboard shows a **Getting Started checklist** that tracks progress through first document import, team invites, and mock audit drills. State is persisted server-side in tenant settings.
 
 ## Security
 
@@ -102,6 +121,7 @@ RegEngine is built for regulated industries. Security is not an afterthought:
 ### Frontend
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -109,10 +129,12 @@ npm run dev
 ### Backend
 
 ```bash
-cd services/<service>
+cd services/admin
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn main:app --reload --port 8400
 ```
+
+For local development without PostgreSQL, the admin service falls back to SQLite automatically. Set `ADMIN_MASTER_KEY` to any value for local dev.
 
 ### Database
 
@@ -126,9 +148,9 @@ supabase db push
 
 RegEngine is in **active development** — shipping weekly. Current focus areas:
 
-- Stabilizing CI pipelines across all services
-- Expanding FSMA 204 obligation coverage
-- Developer API documentation and onboarding
+- Onboarding experience and first-run value delivery
+- FSMA 204 obligation coverage expansion
+- Developer API documentation and playground
 - Waitlist and early access program
 
 ## License
