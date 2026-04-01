@@ -1,15 +1,11 @@
 from functools import lru_cache
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.base_config import BaseServiceSettings
 
 
-class Settings(BaseSettings):
+class Settings(BaseServiceSettings):
     """Environment-driven configuration values."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
 
     kafka_bootstrap: str = Field(
         default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS"
@@ -29,7 +25,6 @@ class Settings(BaseSettings):
     neo4j_pool_size: int = Field(default=50, alias="NEO4J_POOL_SIZE")
     neo4j_pool_timeout: float = Field(default=60.0, alias="NEO4J_POOL_TIMEOUT")
     neo4j_max_lifetime: int = Field(default=3600, alias="NEO4J_MAX_LIFETIME")
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     # Security & Compliance Patterns
     redaction_patterns: list[str] = Field(

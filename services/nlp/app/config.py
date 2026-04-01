@@ -1,19 +1,13 @@
 from functools import lru_cache
-
 from typing import Optional
+
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.base_config import BaseServiceSettings, ObjectStorageMixin
 
 
-class Settings(BaseSettings):
+class Settings(ObjectStorageMixin, BaseServiceSettings):
     """Environment-driven configuration values."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
-    object_storage_endpoint_url: Optional[str] = Field(
-        default=None,
-        alias="OBJECT_STORAGE_ENDPOINT_URL",
-    )
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
     processed_bucket: str = Field(
         default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET"
@@ -23,17 +17,16 @@ class Settings(BaseSettings):
     )
     topic_in: str = Field(default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED")
     topic_out: str = Field(default="nlp.extracted", alias="KAFKA_TOPIC_NLP")
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
     # Extraction Thresholds (SR 11-7 validation)
     extraction_confidence_high: float = Field(
-        default=0.95, 
-        ge=0.0, le=1.0, 
+        default=0.95,
+        ge=0.0, le=1.0,
         alias="EXTRACTION_CONFIDENCE_HIGH"
     )
     extraction_confidence_medium: float = Field(
-        default=0.85, 
-        ge=0.0, le=1.0, 
+        default=0.85,
+        ge=0.0, le=1.0,
         alias="EXTRACTION_CONFIDENCE_MEDIUM"
     )
     graph_service_url: str = Field(
