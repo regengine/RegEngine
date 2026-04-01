@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-import requests
+import httpx
 import structlog
 
 from .base import FetchedItem, Source, StateRegistryScraper
@@ -23,7 +23,7 @@ class CPPAScraper(StateRegistryScraper):
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch actual HTML content from CPPA website."""
         try:
-            response = requests.get(
+            response = httpx.get(
                 source.url,
                 headers={"User-Agent": "RegEngine/1.0 (Compliance Monitoring)"},
                 timeout=30
@@ -35,7 +35,7 @@ class CPPAScraper(StateRegistryScraper):
                 content_bytes=response.content,
                 content_type=content_type
             )
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             # Log error but return empty content to allow graceful degradation
             logger.warning("fetch_failed", url=source.url, error=str(e))
             return FetchedItem(source=source, content_bytes=b"", content_type="text/html")

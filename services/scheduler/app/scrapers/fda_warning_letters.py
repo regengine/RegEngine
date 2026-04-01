@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from defusedxml import ElementTree
 
-import requests
+import httpx
 import structlog
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
@@ -38,7 +38,7 @@ class FDAWarningLettersScraper(BaseScraper):
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update(
             {
                 "User-Agent": "RegEngine/1.0 (Regulatory Compliance Platform)",
@@ -80,7 +80,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     count=len(items),
                 )
 
-        except (requests.RequestException, ConnectionError, TimeoutError, ValueError, KeyError) as scrap_error:
+        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as scrap_error:
             logger.warning(
                 "scrape_attempt_failed",
                 error=str(scrap_error),
@@ -114,7 +114,7 @@ class FDAWarningLettersScraper(BaseScraper):
                 return []
                 
             response.raise_for_status()
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             # Re-raise for fallback logic in scrape()
             raise e
 

@@ -154,10 +154,10 @@ jobs:
           export PYTHONPATH=$(pwd):$PYTHONPATH
           cd services/${{ matrix.service }}
           # Per-service coverage thresholds (raise incrementally, target: 80%)
-          THRESHOLD=40
+          THRESHOLD=45
           case "${{ matrix.service }}" in
-            compliance) THRESHOLD=15 ;;  # 18% actual — minimal test surface
-            scheduler)  THRESHOLD=20 ;;  # 24% actual — models/metrics only
+            compliance) THRESHOLD=18 ;;  # 18% actual — raising floor to match
+            scheduler)  THRESHOLD=24 ;;  # 24% actual — raising floor to match
           esac
           pytest tests/ -v --cov=app --cov-report=term \
             --cov-report=xml:coverage.xml \
