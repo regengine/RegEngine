@@ -3,7 +3,7 @@ import re
 import sys
 from pathlib import Path
 
-import requests
+import httpx
 import structlog
 
 # Import shared utilities
@@ -33,7 +33,7 @@ def load_artifact(url_or_s3: str) -> str:
     # Validate URL against SSRF attacks
     validate_url(url_or_s3)
 
-    resp = requests.get(url_or_s3, timeout=20)
+    resp = httpx.get(url_or_s3, timeout=20)
     resp.raise_for_status()
     ctype = resp.headers.get("Content-Type", "application/octet-stream")
     data = resp.content

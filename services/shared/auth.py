@@ -55,9 +55,11 @@ def validate_auth_config() -> None:
     for issue in issues:
         logger.error("auth_config_validation_failed", issue=issue)
 
-    # Only raise in real production — not in CI or test environments
+    # Only raise when REGENGINE_ENV is explicitly set to "production".
+    # If unset, we assume local development — warn but don't crash.
     is_ci = os.getenv("GITHUB_ACTIONS") or os.getenv("CI")
-    if issues and env == "production" and not is_ci:
+    is_explicit_production = os.getenv("REGENGINE_ENV", "").lower() == "production"
+    if issues and is_explicit_production and not is_ci:
         raise RuntimeError(
             f"Auth config validation failed ({len(issues)} issues): "
             + "; ".join(issues)

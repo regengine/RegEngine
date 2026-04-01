@@ -705,6 +705,21 @@ class APIClient {
       filename: parsedFilename || fallbackFilename,
     };
   }
+
+  // --- Tenant Settings & Onboarding ---
+
+  async updateTenantSettings(tenantId: string, settings: Record<string, unknown>): Promise<void> {
+    await this.adminClient.patch(`/v1/tenants/${tenantId}/settings`, settings);
+  }
+
+  async getOnboardingStatus(tenantId: string): Promise<{
+    workspace_profile: Record<string, string>;
+    onboarding: Record<string, boolean | string | null>;
+    is_complete: boolean;
+  }> {
+    const { data } = await this.adminClient.get(`/v1/tenants/${tenantId}/onboarding`);
+    return data;
+  }
 }
 
 export const apiClient = new APIClient();

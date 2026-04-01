@@ -1,6 +1,6 @@
 import logging
 import re
-import requests
+import httpx
 import defusedxml.ElementTree as ET
 from urllib.parse import urljoin
 from typing import Iterable, Optional
@@ -24,7 +24,7 @@ class FDAEnforcementScraper(StateRegistryScraper):
         Fetch RSS feed, parse items, and return Source objects for each Warning Letter.
         """
         try:
-            resp = requests.get(self.RSS_URL, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            resp = httpx.get(self.RSS_URL, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
             
             # Parse XML
@@ -84,7 +84,7 @@ class FDAEnforcementScraper(StateRegistryScraper):
                 return FetchedItem(source=source, content_bytes=b"", content_type=None)
 
             # 1. Fetch Landing Page
-            resp = requests.get(validated_url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            resp = httpx.get(validated_url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
 
             content = resp.content
@@ -112,7 +112,7 @@ class FDAEnforcementScraper(StateRegistryScraper):
                     )
 
                 try:
-                    pdf_resp = requests.get(validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
+                    pdf_resp = httpx.get(validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"})
                     pdf_resp.raise_for_status()
                     content = pdf_resp.content
                     content_type = "application/pdf"

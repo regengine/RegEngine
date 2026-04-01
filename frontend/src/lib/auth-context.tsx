@@ -340,6 +340,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsOnboarded(true);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEYS.ONBOARDED, 'true');
+      // Best-effort persist to backend so state survives across devices
+      const tid = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
+      if (tid) {
+        fetch(`/api/admin/v1/tenants/${tid}/settings`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ onboarding: { workspace_setup_completed: true } }),
+        }).catch(() => {});
+      }
     }
   }, []);
 

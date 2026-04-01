@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.webhook_compat import _verify_api_key
 
@@ -25,7 +26,7 @@ def _get_db():
     try:
         from shared.database import SessionLocal
         return SessionLocal()
-    except Exception as exc:
+    except Exception as exc:  # broad catch intentional: covers ImportError and connection failures
         logger.warning("db_unavailable error=%s", str(exc))
         return None
 
@@ -91,7 +92,7 @@ def _check_db_connectivity() -> DRCheck:
                         details=f"Database connected, replication state: {rep[0]}",
                         checked_at=now,
                     )
-            except Exception:
+            except SQLAlchemyError:
                 pass  # no replication info available — still a pass for connectivity
             return DRCheck(
                 name="database_connectivity",
@@ -105,7 +106,7 @@ def _check_db_connectivity() -> DRCheck:
             details="Database query returned unexpected result",
             checked_at=now,
         )
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         return DRCheck(
             name="database_connectivity",
             status="fail",
@@ -159,7 +160,7 @@ def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
             details=f"Hash chain has {gaps} gap(s) in {total} entries",
             checked_at=now,
         )
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.debug("hash_chain_check_failed error=%s", str(exc))
         return DRCheck(
             name="hash_chain_integrity",
@@ -204,7 +205,7 @@ def _check_export_completeness(tenant_id: str) -> DRCheck:
             details=f"{row[0]} export(s) in last 7 days, latest: {row[1]}",
             checked_at=now,
         )
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.debug("export_check_failed error=%s", str(exc))
         return DRCheck(
             name="export_completeness",
@@ -267,7 +268,7 @@ def _check_data_volume(tenant_id: str) -> tuple[DRCheck, dict]:
             ),
             volume_info,
         )
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.debug("data_volume_check_failed error=%s", str(exc))
         return (
             DRCheck(
@@ -321,7 +322,7 @@ def _check_supplier_health(tenant_id: str) -> DRCheck:
             details=f"{active}/{total} suppliers active ({pct}%)",
             checked_at=now,
         )
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         logger.debug("supplier_health_check_failed error=%s", str(exc))
         return DRCheck(
             name="supplier_network_health",
@@ -514,7 +515,7 @@ async def test_recovery(
                 kde_details = f"Average KDE completeness: {avg:.1f}%"
             else:
                 kde_details = "No KDE completeness data available"
-        except Exception as exc:
+        except SQLAlchemyError as exc:
             logger.debug("kde_recovery_check_failed error=%s", str(exc))
             kde_details = f"KDE check error: {exc}"
         finally:
