@@ -6,7 +6,7 @@
 #   CSV upload → ingestion → normalization → rule evaluation → FDA export
 #
 # Prerequisites:
-#   docker compose -f docker-compose.mvp.yml up -d
+#   docker compose up -d postgres redis admin-api ingestion-service
 #   Wait for health checks to pass
 #
 # Usage:
@@ -18,7 +18,7 @@ set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
 ADMIN_URL="${ADMIN_URL:-http://localhost:8400}"
-INGEST_URL="${INGEST_URL:-http://localhost:8002}"  # matches docker-compose.mvp.yml port mapping
+INGEST_URL="${INGEST_URL:-http://localhost:8002}"  # matches docker-compose.yml port mapping
 API_KEY="${1:-}"
 ADMIN_MASTER_KEY="${ADMIN_MASTER_KEY:-}"
 TENANT_ID="${TENANT_ID:-00000000-0000-0000-0000-000000000001}"
@@ -47,7 +47,7 @@ for svc in "$ADMIN_URL/health|Admin" "$INGEST_URL/health|Ingestion"; do
     ok "$name service healthy"
   else
     fail "$name service not responding at $url"
-    echo -e "  ${Y}Start services first: docker compose -f docker-compose.mvp.yml up -d${NC}"
+    echo -e "  ${Y}Start services first: docker compose up -d postgres redis admin-api ingestion-service${NC}"
     exit 1
   fi
 done
@@ -173,7 +173,7 @@ else
     LINES=$(wc -l < "$EXPORT_FILE" | tr -d ' ')
     ok "FDA export (all events): $EXPORT_FILE ($((LINES - 1)) records)"
   else
-    fail "Export failed. Check service logs: docker compose -f docker-compose.mvp.yml logs ingestion-service"
+    fail "Export failed. Check service logs: docker compose logs ingestion-service"
   fi
 fi
 

@@ -417,7 +417,7 @@ Implement production-grade security hardening including secrets management, audi
   - 15-second scrape interval
   - 30-day retention
 
-- `docker-compose.monitoring.yml` - Monitoring stack
+- Monitoring stack (activate via `docker compose --profile monitoring up -d`)
   - Prometheus (port 9090)
   - Grafana (port 3001)
   - Kafka exporter (port 9308)
@@ -553,7 +553,7 @@ If allowed: Add rate limit headers + process request
 
 4. **Start Monitoring Stack**:
    ```bash
-   docker-compose -f docker-compose.monitoring.yml up -d
+   docker compose --profile monitoring up -d
    ```
 
 5. **Access Dashboards**:
