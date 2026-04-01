@@ -38,6 +38,7 @@ import type {
   DiscoveryQueueItem,
   DiscoveryActionResponse,
   BulkDiscoveryResponse,
+  PortalLink,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -653,6 +654,36 @@ class APIClient {
       `/v1/supplier/bulk-upload/status/${sessionId}`,
     );
     return data;
+  }
+
+  // Portal Links — supplier portal link management
+  async listPortalLinks(): Promise<{ links: PortalLink[]; total: number }> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.get('/api/v1/portal/links/list', {
+      params: { tenant_id: tenantId },
+    });
+    return data;
+  }
+
+  async createPortalLink(request: {
+    supplier_name: string;
+    supplier_email?: string;
+    expires_days?: number;
+  }): Promise<PortalLink> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.post('/api/v1/portal/links', {
+      tenant_id: tenantId,
+      supplier_name: request.supplier_name,
+      supplier_email: request.supplier_email,
+      expires_days: request.expires_days || 90,
+    });
+    return data;
+  }
+
+  async revokePortalLink(portalId: string): Promise<void> {
+    await this.ingestionClient.patch(`/api/v1/portal/links/${portalId}/revoke`);
   }
 
   async downloadSupplierBulkUploadTemplate(

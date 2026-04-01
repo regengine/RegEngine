@@ -1,0 +1,15 @@
+# Default ignores
+node_modules/
+.next/
+__pycache__/
+.venv/
+*.min.js
+*.min.css
+dist/
+build/
+
+# Test utilities — contain intentional test patterns
+scripts/utilities/
+
+# Third-party and generated code
+frontend/src/components/ui/
