@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid as uuid_module
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.types import TypeDecorator, CHAR, JSON
 from sqlalchemy.orm import declarative_base
 
@@ -129,7 +129,7 @@ class AuditLogModel(Base):
     """
     __tablename__ = "audit_logs"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     tenant_id = Column(GUID(), nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

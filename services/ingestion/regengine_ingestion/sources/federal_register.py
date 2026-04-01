@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 from urllib.parse import urlencode
 
-import requests
+import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 from ..models import SourceMetadata
@@ -25,7 +25,7 @@ class FederalRegisterAdapter(SourceAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rate_limiter = RateLimiter(requests_per_minute=60)
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update({"User-Agent": self.user_agent})
     
     def get_source_name(self) -> str:
@@ -77,7 +77,7 @@ class FederalRegisterAdapter(SourceAdapter):
         @retry(
             wait=wait_exponential(multiplier=1, min=4, max=10),
             stop=stop_after_attempt(3),
-            retry=retry_if_exception_type(requests.RequestException),
+            retry=retry_if_exception_type(httpx.HTTPError),
             reraise=True
         )
         def _get_with_retry(url, params=None):
@@ -122,7 +122,7 @@ class FederalRegisterAdapter(SourceAdapter):
                 content = doc_response.content
                 self.rate_limiter.record_success("federalregister.gov")
                 self.log_fetch(full_text_url, "success", doc_response.status_code)
-            except requests.RequestException as e:
+            except httpx.HTTPError as e:
                 self.log_fetch(full_text_url, "failure", error=str(e))
                 backoff = self.rate_limiter.record_error("federalregister.gov")
                 if backoff:

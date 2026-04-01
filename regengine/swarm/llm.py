@@ -9,7 +9,7 @@ import json
 import os
 from typing import Optional
 
-import requests
+import httpx
 import structlog
 
 from regengine.swarm.sse import collect_openai_stream_text
@@ -86,17 +86,17 @@ class OpenAIClient(BaseLLMClient):
             "Content-Type": "application/json",
         }
 
-        with requests.post(
+        with httpx.stream(
+            "POST",
             "https://api.openai.com/v1/responses",
             headers=headers,
             json=payload,
-            stream=True,
             timeout=self.timeout,
         ) as response:
             response.raise_for_status()
 
             def chunk_iter():
-                for chunk in response.iter_content(chunk_size=2048, decode_unicode=True):
+                for chunk in response.iter_text():
                     if chunk:
                         yield chunk
 
@@ -113,7 +113,7 @@ class OpenAIClient(BaseLLMClient):
         if system_prompt:
             fallback_payload["instructions"] = system_prompt
 
-        fallback_response = requests.post(
+        fallback_response = httpx.post(
             "https://api.openai.com/v1/responses",
             headers=headers,
             json=fallback_payload,
@@ -181,9 +181,8 @@ class OllamaClient(BaseLLMClient):
         self.host = host
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
-        import requests
         full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-        resp = requests.post(
+        resp = httpx.post(
             f"{self.host}/api/generate",
             json={
                 "model": self.model,

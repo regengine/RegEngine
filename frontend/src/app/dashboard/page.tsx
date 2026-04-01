@@ -34,6 +34,7 @@ import {
     CheckCircle2,
     WifiOff,
 } from 'lucide-react';
+import { GettingStartedCard } from '@/components/dashboard/getting-started-card';
 
 // Base quick actions (overridden by tenant type)
 const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
@@ -308,6 +309,9 @@ export default function DashboardPage() {
                             )}
                         </div>
                     </div>
+
+                    {/* Getting Started (new users) */}
+                    <GettingStartedCard />
 
                     {/* Operational Widgets */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

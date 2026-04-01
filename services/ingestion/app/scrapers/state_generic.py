@@ -4,7 +4,7 @@ import os
 import uuid
 from typing import Optional
 
-import requests
+import httpx
 from shared.url_validation import validate_url, SSRFError
 
 from shared.url_validation import validate_url
@@ -55,7 +55,7 @@ class StateRegistryScraper:
         validate_url(url)
 
         def _fetch():
-            resp = requests.get(url, timeout=15)
+            resp = httpx.get(url, timeout=15)
             resp.raise_for_status()
             return resp
 

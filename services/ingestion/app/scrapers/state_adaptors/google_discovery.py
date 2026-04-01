@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 from typing import Iterable, Optional
 from datetime import datetime, timezone
 
@@ -46,7 +46,7 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                 }
                 
                 validate_url(self.base_url)
-                resp = requests.get(self.base_url, params=params, timeout=10)
+                resp = httpx.get(self.base_url, params=params, timeout=10)
                 resp.raise_for_status()
                 data = resp.json()
                 
@@ -93,7 +93,7 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
         """
         try:
             validate_url(source.url)
-            resp = requests.get(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            resp = httpx.get(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
             resp.raise_for_status()
             
             content_type = resp.headers.get("Content-Type", "application/pdf")
