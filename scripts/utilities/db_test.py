@@ -1,11 +1,18 @@
 import asyncio
+import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine
 import sys
 
-# DSNs
-SYNC_DSN = "postgresql://postgres:trj.qxe_wxh6QGB%40auq@db.magbeerafyxmyuqmbfgv.supabase.co:5432/postgres?sslmode=require"
-ASYNC_DSN = "postgresql+asyncpg://postgres:trj.qxe_wxh6QGB%40auq@db.magbeerafyxmyuqmbfgv.supabase.co:5432/postgres"
+# DSNs — loaded from environment variables
+SYNC_DSN = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://postgres:password@localhost:5432/postgres?sslmode=require",
+)
+ASYNC_DSN = os.environ.get(
+    "DATABASE_URL_ASYNC",
+    SYNC_DSN.replace("postgresql://", "postgresql+asyncpg://").replace("?sslmode=require", ""),
+)
 
 def test_sync():
     print(f"Testing SYNC connection to: {SYNC_DSN.split('@')[-1]}")

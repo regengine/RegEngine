@@ -50,8 +50,12 @@ jobs:
           semgrep \
             --config p/owasp-top-ten \
             --config p/security-audit \
+            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
             --json --output semgrep-results.json \
             || true
+          # The avoid-sqlalchemy-text rule is excluded because all text() usage
+          # in this codebase uses parameterized :param syntax, not f-string
+          # interpolation. Semgrep cannot distinguish the two patterns.
           # Findings are uploaded as artifacts for triage, not hard-gated
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}

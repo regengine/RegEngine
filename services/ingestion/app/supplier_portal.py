@@ -50,6 +50,7 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
         return False
     try:
         db.execute(
+            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
             text("""
                 INSERT INTO fsma.tenant_portal_links
                 (id, tenant_id, supplier_name, link_token, status, created_at, expires_at)
@@ -85,6 +86,7 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
         return None
     try:
         row = db.execute(
+            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
             text("""
                 SELECT tenant_id, supplier_name, link_token, status, created_at, expires_at
                 FROM fsma.tenant_portal_links
@@ -116,6 +118,7 @@ def _db_update_portal_link_status(portal_id: str, status: str) -> bool:
         return False
     try:
         db.execute(
+            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
             text("UPDATE fsma.tenant_portal_links SET status = :status WHERE link_token = :link_token"),
             {"status": status, "link_token": portal_id},
         )
@@ -271,6 +274,7 @@ async def list_portal_links(
     if db:
         try:
             rows = db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
                 text("""
                     SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at
                     FROM fsma.tenant_portal_links
