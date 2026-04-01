@@ -60,11 +60,9 @@ sentry-sdk = "~=1.40.0"
 httpx = ">=0.26.0"
 requests = ">=2.31.0"
 tenacity = ">=8.2.3"
-backoff = ">=2.2.1"
 
 # Messaging / Kafka
 kafka-python = ">=2.0.2"
-aiokafka = ">=0.10.0"
 
 # NLP & ML
 spacy = ">=3.7.2"
