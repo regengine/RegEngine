@@ -11,6 +11,12 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
+  workflow_dispatch:
+    inputs:
+      run_e2e:
+        description: 'Run E2E tests (requires running backend + auth)'
+        type: boolean
+        default: true
 
 # Cancel in-progress runs for the same branch/PR
 concurrency:
@@ -136,7 +142,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [build, lint, test, security, e2e]
+    needs: [build, lint, test, security]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -152,10 +158,15 @@ jobs:
           echo "✅ All checks passed"
 
   # ── E2E Tests (Playwright) ───────────────────────────────
+  # Non-blocking: requires a running backend + frontend + auth system that CI
+  # doesn't provide today. All 46 tests time out at page.goto('/login').
+  # Run manually via workflow_dispatch to validate when infra is available.
   e2e:
     name: E2E Tests (Playwright)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
 

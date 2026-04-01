@@ -236,7 +236,9 @@ app.include_router(supplier_funnel_router, prefix="/v1")
 from app.bulk_upload.routes import router as bulk_upload_router
 app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
 
-# Production Compliance OS (CA/LA) — gated behind ENABLE_PCOS to keep FSMA 204 focused
+# Production Compliance OS (film/TV CA/LA) — disabled by default.
+# Non-FSMA vertical creates scope dilution; gated behind ENABLE_PCOS=true.
+# In consolidated mode (server/main.py) this is also controlled via _router_enabled("pcos").
 if os.getenv("ENABLE_PCOS", "false").lower() == "true":
     from app.pcos import router as pcos_router
     app.include_router(pcos_router)

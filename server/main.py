@@ -163,11 +163,27 @@ validate_auth_config()
 
 
 # ── Router feature flags ─────────────────────────────────────────
-_DISABLED_ROUTERS = {
+# Routers disabled by default (scope control — non-FSMA verticals).
+# Override with ENABLE_PCOS=true or by removing from this set via ENABLED_ROUTERS.
+_DEFAULT_DISABLED = {"pcos"}
+
+_DISABLED_ROUTERS = _DEFAULT_DISABLED | {
     r.strip().lower()
     for r in os.getenv("DISABLED_ROUTERS", "").split(",")
     if r.strip()
 }
+
+# Allow explicit re-enabling (e.g. ENABLED_ROUTERS=pcos)
+_FORCE_ENABLED = {
+    r.strip().lower()
+    for r in os.getenv("ENABLED_ROUTERS", "").split(",")
+    if r.strip()
+}
+# ENABLE_PCOS=true is a legacy alias for ENABLED_ROUTERS=pcos
+if os.getenv("ENABLE_PCOS", "false").lower() == "true":
+    _FORCE_ENABLED.add("pcos")
+_DISABLED_ROUTERS -= _FORCE_ENABLED
+
 _MOUNTED_ROUTERS: list[str] = []
 
 
@@ -424,7 +440,7 @@ if _router_enabled("admin"):
     from services.admin.app.audit_routes import router as admin_audit_router
     app.include_router(admin_audit_router, tags=["Admin Audit"])
 
-    if os.getenv("ENABLE_PCOS", "false").lower() == "true":
+    if _router_enabled("pcos"):
         from services.admin.app.pcos import router as pcos_router
         app.include_router(pcos_router, tags=["PCOS"])
 
