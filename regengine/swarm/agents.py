@@ -148,14 +148,20 @@ class CoderAgent(BaseAgent):
             content = file_spec.get("content", "")
             action = file_spec.get("action", "create")
 
-            # Safety: don't write outside the repo
-            if ".." in path or path.startswith("/"):
+            # Safety: canonicalize the path and verify it stays within cwd
+            base_dir = Path.cwd().resolve()
+            try:
+                resolved = (base_dir / path).resolve()
+            except (OSError, ValueError):
+                self.log.warning("unsafe_path_skipped", path=path)
+                continue
+            if not str(resolved).startswith(str(base_dir) + os.sep) and resolved != base_dir:
                 self.log.warning("unsafe_path_skipped", path=path)
                 continue
 
             # Actual file writing
             try:
-                full_path = Path(path)
+                full_path = resolved
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)

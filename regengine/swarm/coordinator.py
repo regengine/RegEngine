@@ -11,6 +11,7 @@ The coordinator manages:
 import asyncio
 import json
 import os
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -123,22 +124,26 @@ class AgentSwarm:
 
             gh = GitHubClient()
             branch_name = f"auto-fix/{int(time.time())}"
-            
+
+            # Sanitize task string to prevent injection in commit messages and PR content
+            safe_task = re.sub(r'[^\w\s\-.]', '', task[:50]).strip()
+            safe_task_full = re.sub(r'[^\w\s\-.]', '', task).strip()
+
             # Use git CLI for local operations (CI environment has git)
             subprocess.run(["git", "config", "user.name", "RegEngine Bot"], check=True)
             subprocess.run(["git", "config", "user.email", "bot@regengine.co"], check=True)
             subprocess.run(["git", "checkout", "-b", branch_name], check=True)
-            
+
             # Assuming coder_output contains file changes that need to be staged
             # This part might need more specific logic based on coder_output structure
             # For now, a simple 'git add .'
             subprocess.run(["git", "add", "."], check=True)
-            subprocess.run(["git", "commit", "-m", f"🤖 Autonomous Fix: {task[:50]}"], check=True)
+            subprocess.run(["git", "commit", "-m", f"🤖 Autonomous Fix: {safe_task}"], check=True)
             subprocess.run(["git", "push", "origin", branch_name], check=True)
 
             pr_body = (
                 f"## 🤖 Autonomous CI Self-Healing\n\n"
-                f"**Task:** {task}\n"
+                f"**Task:** {safe_task_full}\n"
                 f"**Status:** completed\n" # Always completed if this is called
                 f"**Agents Used:** PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent\n\n" # Simplified for now
                 f"### Code Changes\n"
@@ -146,7 +151,7 @@ class AgentSwarm:
             )
             
             gh.create_pr(
-                title=f"🤖 Fix: {task[:50]}",
+                title=f"🤖 Fix: {safe_task}",
                 body=pr_body,
                 head=branch_name,
                 labels=["agent:self-healing"]
