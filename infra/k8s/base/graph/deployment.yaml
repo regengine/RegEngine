@@ -17,6 +17,8 @@ spec:
       containers:
       - name: graph
         image: regengine/graph-service:$(IMAGE_TAG)
+        securityContext:
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 8200
         envFrom:
