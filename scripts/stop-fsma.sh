@@ -2,4 +2,4 @@
 set -euo pipefail
 
 # Shut down FSMA-only runtime.
-docker compose -f docker-compose.fsma.yml down
+docker compose down
