@@ -1,5 +1,5 @@
 import os
-from tenacity import retry, stop_after_attempt, wait_exponential
+import backoff
 from typing import Dict, Any, Optional
 import openai
 from openai import AsyncOpenAI
