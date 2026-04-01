@@ -47,7 +47,6 @@ python-dateutil~=2.8.2
 
 # LLM / AI
 openai~=1.10.0
-backoff~=2.2.1
 
 # ============================================
 # Document Format Extraction Dependencies

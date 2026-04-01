@@ -1,9 +1,9 @@
 import os
-import backoff
 from typing import Dict, Any, Optional
 import openai
 from openai import AsyncOpenAI
 import json
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 class LLMClient:
     def __init__(self, api_key: Optional[str] = None):
@@ -15,10 +15,10 @@ class LLMClient:
             )
         self.client = AsyncOpenAI(api_key=self.api_key)
 
-    @backoff.on_exception(
-        backoff.expo,
-        (IOError, ConnectionError, TimeoutError, openai.APIConnectionError, openai.RateLimitError),
-        max_tries=3,
+    @retry(
+        wait=wait_exponential(),
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception_type((IOError, ConnectionError, TimeoutError, openai.APIConnectionError, openai.RateLimitError)),
     )
     async def analyze_image_structured(self, image_b64: str, prompt: str) -> Dict[str, Any]:
         """

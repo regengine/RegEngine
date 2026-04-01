@@ -30,7 +30,6 @@ testcontainers[postgresql]==4.4.1
 testcontainers[redis]==4.4.1
 
 # Kafka (existing FSMA functionality)
-aiokafka==0.8.1
 kafka-python-ng==2.0.3
 confluent-kafka~=2.2.0
 authlib~=1.6.6
