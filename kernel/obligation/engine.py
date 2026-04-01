@@ -81,7 +81,7 @@ class RegulatoryEngine:
         decision_id: str,
         decision_type: str,
         decision_data: Dict[str, Any],
-        vertical: str = "finance",
+        vertical: str = "food_beverage",
         tenant_id: str = "",
     ) -> ObligationEvaluationResult:
         """
@@ -91,7 +91,7 @@ class RegulatoryEngine:
             decision_id: Unique decision ID
             decision_type: Type of decision
             decision_data: Decision payload
-            vertical: Vertical name
+            vertical: Vertical name (e.g. "food_beverage")
             tenant_id: Tenant identifier for cross-tenant isolation
 
         Returns:
@@ -203,7 +203,7 @@ class RegulatoryEngine:
         except Exception as e:
             logger.error(f"Failed to persist evaluation to graph: {e}")
     
-    def get_coverage_report(self, vertical: str = "finance", tenant_id: str = "") -> Dict[str, Any]:
+    def get_coverage_report(self, vertical: str = "food_beverage", tenant_id: str = "") -> Dict[str, Any]:
         """
         Generate aggregate coverage report for a vertical.
 
@@ -261,7 +261,7 @@ class RegulatoryEngine:
                     RETURN
                         count(oe) as recent_evaluations,
                         avg(CASE WHEN oe.met THEN 1.0 ELSE 0.0 END) as recent_compliance_rate,
-                        avg(oe.confidence) as avg_confidence
+                        avg(oe.risk_score) as avg_confidence
                     """,
                     vertical=vertical,
                     tenant_id=tenant_id,

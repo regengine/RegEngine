@@ -33,6 +33,22 @@ export async function POST(
     return proxyRequest(request, resolvedParams.path, 'POST');
 }
 
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Promise<{ path: string[] }> }
+) {
+    const resolvedParams = await params;
+    return proxyRequest(request, resolvedParams.path, 'PUT');
+}
+
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ path: string[] }> }
+) {
+    const resolvedParams = await params;
+    return proxyRequest(request, resolvedParams.path, 'PATCH');
+}
+
 export async function DELETE(
     request: NextRequest,
     { params }: { params: Promise<{ path: string[] }> }
@@ -87,8 +103,8 @@ async function proxyRequest(
             headers,
         };
 
-        // Include body for POST requests
-        if (method === 'POST') {
+        // Include body for POST/PUT/PATCH requests
+        if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
             try {
                 const body = await request.json();
                 // Add default reviewer info if not provided

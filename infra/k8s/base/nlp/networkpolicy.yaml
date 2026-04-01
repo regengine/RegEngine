@@ -1,18 +1,18 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: ingestion-service
+  name: nlp-service
   labels:
-    app: ingestion
+    app: nlp
 spec:
   podSelector:
     matchLabels:
-      app: ingestion
+      app: nlp
   policyTypes:
     - Ingress
     - Egress
 
-  # Allow ingress only from the NGINX ingress controller and the admin service
+  # Allow ingress only from the NGINX ingress controller and the ingestion service
   ingress:
     - from:
         - podSelector:
@@ -20,12 +20,12 @@ spec:
               app.kubernetes.io/name: ingress-nginx
         - podSelector:
             matchLabels:
-              app: admin
+              app: ingestion
       ports:
         - protocol: TCP
-          port: 8000
+          port: 8100
 
-  # Allow egress to PostgreSQL, Redis, Kafka, Neo4j, and external HTTPS
+  # Allow egress to PostgreSQL, Redis, Kafka, and external HTTPS
   egress:
     # PostgreSQL
     - to: []
@@ -44,13 +44,6 @@ spec:
           port: 9092  # Kafka
         - protocol: TCP
           port: 9644  # Redpanda admin
-    # Neo4j
-    - to: []
-      ports:
-        - protocol: TCP
-          port: 7687  # Neo4j Bolt
-        - protocol: TCP
-          port: 7474  # Neo4j HTTP
     # External HTTPS (webhooks, third-party APIs)
     - to: []
       ports:

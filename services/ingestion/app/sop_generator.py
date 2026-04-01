@@ -303,7 +303,7 @@ Example: `ROM-0226-F3-001` (Romaine Lettuce, Feb 26, Facility 3, Lot 001)
 
 ### 5.3 Supplier Data Collection
 - Suppliers submit shipping data via **RegEngine Supplier Portal** (link-based, no account required)
-- Supplier portal link: `https://regengine.co/portal/[PORTAL_ID]`
+- Supplier portal link: `https://regengine.co/portal`
 - Suppliers must include TLC, product description, quantity, ship-from, and ship-to
 
 ## 6. Corrective Actions

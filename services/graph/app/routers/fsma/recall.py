@@ -187,39 +187,94 @@ def cancel_recall_drill(
 
 
 @router.get("/readiness")
-def get_recall_readiness(
+async def get_recall_readiness(
     api_key=Depends(require_api_key),
 ):
     """
     Get FSMA 204 Recall Readiness Score.
-    
-    Calculates operational readiness based on:
-    - Recent successful drills
-    - Data completeness
-    - Contact info availability
+
+    Calculates operational readiness based on CTE record quality over the
+    last 90 days.  A CTE is considered *complete* when all three required
+    KDEs are present: quantity, unit_of_measure, and product_description.
+
+    Score = complete_ctes / total_ctes * 100  (0 when no CTEs exist).
     """
     engine = get_recall_engine()
     tenant_id = api_key.get("tenant_id", "default")
-    sla_metrics = engine.get_sla_metrics(tenant_id)
-    
-    # Calculate synthetic readiness score (0-100)
-    score = 100
-    
-    # Penalize for no recent drills
-    if not sla_metrics.get("last_drill_at"):
-        score -= 50
-    
-    # Penalize for SLA breaches
-    compliance_rate = sla_metrics.get("sla_compliance_rate", 100)
-    if compliance_rate < 90:
-        score -= (90 - compliance_rate) * 2
-        
-    return {
-        "readiness_score": max(0, min(100, score)),
+
+    # Query CTE quality from Neo4j for this tenant over the last 90 days.
+    cte_count = 0
+    complete_cte_count = 0
+    incomplete_kde_count = 0
+    neo4j_error: Optional[str] = None
+    try:
+        db_name = Neo4jClient.get_global_database_name()
+        try:
+            tid = uuid.UUID(str(tenant_id))
+            db_name = Neo4jClient.get_tenant_database_name(tid)
+        except (ValueError, TypeError):
+            pass
+
+        client = Neo4jClient(database=db_name)
+        try:
+            async with client.session() as session:
+                result = await session.run(
+                    """
+                    MATCH (e:TraceEvent)
+                    WHERE e.tenant_id = $tenant_id
+                      AND e.timestamp >= datetime() - duration('P90D')
+                    RETURN
+                        count(e) AS total,
+                        sum(CASE
+                            WHEN e.quantity IS NOT NULL
+                             AND e.unit_of_measure IS NOT NULL
+                             AND e.product_description IS NOT NULL
+                            THEN 1 ELSE 0
+                        END) AS complete,
+                        sum(CASE
+                            WHEN e.quantity IS NULL
+                              OR e.unit_of_measure IS NULL
+                              OR e.product_description IS NULL
+                            THEN 1 ELSE 0
+                        END) AS incomplete
+                    """,
+                    tenant_id=str(tenant_id),
+                )
+                record = await result.single()
+                if record:
+                    cte_count = int(record["total"] or 0)
+                    complete_cte_count = int(record["complete"] or 0)
+                    incomplete_kde_count = int(record["incomplete"] or 0)
+        finally:
+            await client.close()
+    except Exception as exc:
+        logger.warning("recall_readiness_cte_query_failed", error=str(exc))
+        neo4j_error = str(exc)
+
+    # Derive score from CTE completeness; fall back to drill-based heuristic
+    # when Neo4j is unavailable (so the endpoint always returns a useful value).
+    if neo4j_error is None:
+        score = int(complete_cte_count / cte_count * 100) if cte_count > 0 else 0
+    else:
+        sla_metrics = engine.get_sla_metrics(tenant_id)
+        score = 100
+        if not sla_metrics.get("last_drill_at"):
+            score -= 50
+        compliance_rate = sla_metrics.get("sla_compliance_rate", 100)
+        if compliance_rate < 90:
+            score -= int((90 - compliance_rate) * 2)
+        score = max(0, min(100, score))
+
+    response: dict = {
+        "readiness_score": score,
         "status": "READY" if score > 80 else "AT_RISK",
-        "last_drill": sla_metrics.get("last_drill_at"),
-        "24h_sla_compliance": compliance_rate
+        "cte_count": cte_count,
+        "complete_cte_count": complete_cte_count,
+        "incomplete_kde_count": incomplete_kde_count,
     }
+    if neo4j_error:
+        response["warning"] = f"CTE quality data unavailable ({neo4j_error}); score derived from drill history"
+    return response
 
 
 @router.get("/sla")

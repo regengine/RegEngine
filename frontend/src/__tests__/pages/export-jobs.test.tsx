@@ -53,6 +53,7 @@ vi.mock('lucide-react', () => {
         ShieldCheck: stub,
         Clock: stub,
         PlusCircle: stub,
+        Link2Off: stub,
     };
 });
 
@@ -156,7 +157,8 @@ describe('ExportJobsPage', () => {
         await user.click(saveButton);
 
         await waitFor(() => {
-            expect(screen.getByText(/could not create the export job/i)).toBeInTheDocument();
+            // The page surfaces the mutation error message directly
+            expect(screen.getByText(/could not create the export job|failed to create export job/i)).toBeInTheDocument();
         });
     });
 

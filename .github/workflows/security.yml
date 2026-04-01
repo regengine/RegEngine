@@ -51,12 +51,23 @@ jobs:
             --config p/owasp-top-ten \
             --config p/security-audit \
             --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
-            --json --output semgrep-results.json \
-            || true
+            --json --output semgrep-results.json
+
+          # Results are uploaded as artifacts AND also checked for critical/high findings below
           # The avoid-sqlalchemy-text rule is excluded because all text() usage
           # in this codebase uses parameterized :param syntax, not f-string
           # interpolation. Semgrep cannot distinguish the two patterns.
-          # Findings are uploaded as artifacts for triage, not hard-gated
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Semgrep OWASP hard gate (fail on critical/high)
+        run: |
+          pip install semgrep
+          semgrep --config=p/owasp-top-ten \
+            --exclude-rule python.sqlalchemy.security.audit.avoid-sqlalchemy-text.avoid-sqlalchemy-text \
+            --error .
+          # --error causes semgrep to exit non-zero if any findings are found.
+          # This step intentionally fails CI on security findings.
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 

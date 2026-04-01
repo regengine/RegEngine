@@ -139,23 +139,29 @@ class TestCrossTenantAccess:
 
     def test_cannot_access_review_items_across_tenants(self, admin_client):
         """Review items should be tenant-isolated."""
+        # Use a fixed random tenant ID for the entire test so we can check
+        # that returned items belong only to THIS tenant, not any other.
+        requesting_tenant_id = str(uuid4())
         response = admin_client.get(
             "/v1/admin/review/flagged-extractions",
             headers={
                 "X-Admin-Key": "admin-master-key-dev",
-                "X-Tenant-ID": str(uuid4())  # Random tenant
+                "X-Tenant-ID": requesting_tenant_id
             }
         )
 
         if response.status_code == 200:
             data = response.json()
-            # Should be empty or contain only this tenant's items
+            # Every item with a tenant_id field MUST belong to the requesting tenant.
+            # Previously this compared against a fresh uuid4() per iteration, which
+            # was always False — vacuously passing. Now we compare against the real ID.
             if isinstance(data, list):
-                assert len(data) == 0 or all(
-                    item.get("tenant_id") == str(uuid4())
-                    for item in data
-                    if "tenant_id" in item
-                )
+                for item in data:
+                    if "tenant_id" in item:
+                        assert item["tenant_id"] == requesting_tenant_id, (
+                            f"Cross-tenant data leak: got tenant_id {item['tenant_id']!r}, "
+                            f"expected {requesting_tenant_id!r}"
+                        )
 
 
 class TestInputValidation:

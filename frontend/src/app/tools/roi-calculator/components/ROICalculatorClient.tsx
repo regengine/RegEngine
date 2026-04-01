@@ -74,7 +74,7 @@ export function ROICalculatorClient() {
                     <ResultCard
                         title="Risk Mitigation"
                         value={`$${(results.riskReduction / 1000).toFixed(1)}k`}
-                        description="REduction in potential violation fines and recall impacts."
+                        description="Reduction in potential violation fines and recall impacts."
                         icon={ShieldAlert}
                         color="text-red-400 bg-red-400"
                     />

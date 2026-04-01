@@ -61,7 +61,7 @@ def _query_scoring_data(tenant_id: str) -> dict | None:
             chain_gap_count = 0
             if chain_length > 0:
                 max_seq = db.execute(text(
-                    "SELECT MAX(sequence_number) FROM fsma.hash_chain WHERE tenant_id = :tid"
+                    "SELECT MAX(sequence_num) FROM fsma.hash_chain WHERE tenant_id = :tid"
                 ), {"tid": tenant_id}).scalar() or 0
                 # Gaps = expected entries minus actual entries
                 chain_gap_count = max(0, max_seq - chain_length)
@@ -166,17 +166,17 @@ async def generate_report(
         # Traceability depth: based on CTE types (max 7 types) out of 100
         trace_depth_score = min(100, int((cte_types / 7) * 100))
 
-        # Data completeness: assume 85% base + scale with supplier engagement
-        data_completeness_score = min(100, 70 + (supplier_count * 3))
+        # Data completeness: scale with supplier count, can reach 0
+        data_completeness_score = min(100, supplier_count * 10) if supplier_count > 0 else 0
 
         # Response time: based on export readiness
         response_time_score = 90 if has_export else 65
 
-        # Supply chain: based on supplier count (assume 10+ is excellent)
-        supply_chain_score = min(100, supplier_count * 10)
+        # Supply chain: proportional to supplier count (20+ suppliers = 100%)
+        supply_chain_score = min(100, (supplier_count / max(supplier_count, 20)) * 100) if supplier_count > 0 else 0
 
-        # Team readiness: conservative estimate based on data maturity
-        team_readiness_score = min(100, 60 + (cte_count // 100))
+        # Team readiness: scale with event volume, can reach 0
+        team_readiness_score = min(100, cte_count // 10) if cte_count > 0 else 0
 
         # Chain integrity: compute from actual hash chain data
         chain_length = scoring_data.get("chain_length", 0)
@@ -399,14 +399,19 @@ async def generate_report(
 
     overall = int(sum(d.score for d in dimensions) / len(dimensions))
 
+    # Build executive summary from computed dimension scores
+    _dim_scores = {d.id: d.score for d in dimensions}
+    _chain_score = _dim_scores.get("chain_integrity", overall)
+    _supplier_score = _dim_scores.get("supplier_coverage", overall)
+    _team_score = _dim_scores.get("team_readiness", overall)
     executive_summary = (
         f"This recall readiness assessment evaluates {tenant_id}'s preparedness "
         f"to respond to an FDA traceability records request under 21 CFR 1.1455. "
         f"The overall readiness score is {overall}/100 (Grade {_grade(overall)}). "
-        f"Chain integrity is excellent (95/100), demonstrating strong cryptographic "
-        f"verification practices. The primary areas for improvement are supplier "
-        f"coverage (65/100) and team readiness (72/100). Addressing these gaps "
-        f"would raise the overall score above 80 (Grade B)."
+        f"Chain integrity score: {_chain_score}/100. "
+        f"Supplier coverage score: {_supplier_score}/100. "
+        f"Team readiness score: {_team_score}/100. "
+        f"Addressing any gaps below 80 would raise the overall grade to B or above."
     )
 
     action_items = [

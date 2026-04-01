@@ -91,16 +91,28 @@ class _RedisBucket:
             return self._fallback_bucket.is_allowed(key, limit, window)
 
 
-redis_url = os.getenv("RATE_LIMIT_STORAGE_URI") or os.getenv("REDIS_URL", "redis://localhost:6379/2")
-try:
-    _bucket = _RedisBucket(redis_url)
-except Exception as exc:  # pragma: no cover - defensive fallback
+_explicit_redis_url = os.getenv("RATE_LIMIT_STORAGE_URI") or os.getenv("REDIS_URL")
+if _explicit_redis_url:
+    redis_url = _explicit_redis_url
+    try:
+        _bucket = _RedisBucket(redis_url)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        logger.warning(
+            "rate_limit_backend_init_failed",
+            backend="redis",
+            redis_url=_redact_connection_url(redis_url),
+            error=str(exc),
+            fallback="in_memory",
+        )
+        _bucket = _InMemoryBucket()
+else:
     logger.warning(
-        "rate_limit_backend_init_failed",
-        backend="redis",
-        redis_url=_redact_connection_url(redis_url),
-        error=str(exc),
-        fallback="in_memory",
+        "rate_limit_redis_not_configured",
+        message=(
+            "REDIS_URL not set — rate limiter is per-process only, "
+            "not suitable for multi-replica deployments. "
+            "Set REDIS_URL or RATE_LIMIT_STORAGE_URI to enable a shared Redis backend."
+        ),
     )
     _bucket = _InMemoryBucket()
 

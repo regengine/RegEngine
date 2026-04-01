@@ -424,7 +424,7 @@ def _compute_scores(data: dict) -> dict:
     open_alerts = data.get("open_obligation_alerts", 0)
 
     if data["event_count"] == 0:
-        scores["obligation_coverage"] = (0, "No events — 0 of 82 obligations assessed")
+        scores["obligation_coverage"] = (0, "No events — obligations not yet assessed")
     elif total_rules == 0:
         scores["obligation_coverage"] = (50, "Obligation rules not loaded — seed regulatory data")
     else:

@@ -81,3 +81,72 @@ services:
         limits:
           cpus: '1.0'
           memory: 1G
+
+  graph-service:
+    build:
+      context: .
+      dockerfile: ./services/graph/Dockerfile
+    image: ghcr.io/regengine/graph-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *env_prod
+      DATABASE_URL: ${GRAPH_DATABASE_URL:?GRAPH_DATABASE_URL must be set}
+      NEO4J_URI: ${NEO4J_URI:?NEO4J_URI must be set}
+      NEO4J_USER: ${NEO4J_USER:?NEO4J_USER must be set}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8200/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  nlp-service:
+    build:
+      context: .
+      dockerfile: ./services/nlp/Dockerfile
+    image: ghcr.io/regengine/nlp-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *env_prod
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS must be set}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8100/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: ./services/scheduler/Dockerfile
+    image: ghcr.io/regengine/scheduler:${IMAGE_TAG:-latest}
+    environment:
+      <<: *env_prod
+      SCHEDULER_API_KEY: ${SCHEDULER_API_KEY:?SCHEDULER_API_KEY must be set}
+      INGESTION_SERVICE_URL: ${INGESTION_SERVICE_URL:?INGESTION_SERVICE_URL must be set}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS must be set}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL must be set}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8600/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      <<: *deploy_defaults
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
