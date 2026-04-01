@@ -20,6 +20,10 @@ import {
     Mail,
     RefreshCw,
     Download,
+    Send,
+    Copy,
+    ExternalLink,
+    Trash2,
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -30,6 +34,7 @@ import type {
     SupplierComplianceScore,
     SupplierComplianceGapsResponse,
     SupplierTLC,
+    PortalLink,
 } from '@/types/api';
 
 /* ------------------------------------------------------------------ */
@@ -66,6 +71,15 @@ export default function SupplierDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Portal link state
+    const [portalLinks, setPortalLinks] = useState<PortalLink[]>([]);
+    const [showInviteForm, setShowInviteForm] = useState(false);
+    const [inviteSupplierName, setInviteSupplierName] = useState('');
+    const [inviteSupplierEmail, setInviteSupplierEmail] = useState('');
+    const [inviteExpiresDays, setInviteExpiresDays] = useState(90);
+    const [creatingLink, setCreatingLink] = useState(false);
+    const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
     // Add-facility form state
     const [showAddForm, setShowAddForm] = useState(false);
     const [newName, setNewName] = useState('');
@@ -90,6 +104,11 @@ export default function SupplierDashboardPage() {
         setError(null);
 
         try {
+            // Load portal links in parallel with facilities
+            apiClient.listPortalLinks()
+                .then((res) => setPortalLinks(res.links || []))
+                .catch(() => { /* portal links are optional */ });
+
             // Phase 1: Show facilities immediately
             const rawFacilities = await apiClient.listSupplierFacilities();
             const initial: FacilityRow[] = rawFacilities.map(f => ({
@@ -178,6 +197,49 @@ export default function SupplierDashboardPage() {
             setError(message);
         } finally {
             setAdding(false);
+        }
+    };
+
+    /* ---------- Portal Link Management ----------------------------- */
+    const handleCreatePortalLink = async () => {
+        if (!inviteSupplierName.trim() || creatingLink) return;
+        setCreatingLink(true);
+        try {
+            const newLink = await apiClient.createPortalLink({
+                supplier_name: inviteSupplierName.trim(),
+                supplier_email: inviteSupplierEmail.trim() || undefined,
+                expires_days: inviteExpiresDays,
+            });
+            setPortalLinks((prev) => [newLink, ...prev]);
+            setInviteSupplierName('');
+            setInviteSupplierEmail('');
+            setShowInviteForm(false);
+            // Auto-copy the link
+            await navigator.clipboard.writeText(newLink.portal_url);
+            setCopiedLinkId(newLink.portal_id);
+            setTimeout(() => setCopiedLinkId(null), 3000);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to create portal link';
+            setError(message);
+        } finally {
+            setCreatingLink(false);
+        }
+    };
+
+    const handleCopyLink = async (link: PortalLink) => {
+        await navigator.clipboard.writeText(link.portal_url);
+        setCopiedLinkId(link.portal_id);
+        setTimeout(() => setCopiedLinkId(null), 3000);
+    };
+
+    const handleRevokeLink = async (portalId: string) => {
+        try {
+            await apiClient.revokePortalLink(portalId);
+            setPortalLinks((prev) =>
+                prev.map((l) => l.portal_id === portalId ? { ...l, status: 'revoked' } : l)
+            );
+        } catch {
+            setError('Failed to revoke portal link');
         }
     };
 
@@ -276,6 +338,165 @@ export default function SupplierDashboardPage() {
                         </Card>
                     ))}
                 </div>
+
+                {/* Portal Links — Invite Suppliers */}
+                <Card className="border-[var(--re-border-default)]">
+                    <CardContent className="py-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <Link2 className="h-4 w-4 text-[var(--re-brand)]" />
+                                <h2 className="text-sm font-semibold">Supplier Portal Links</h2>
+                                <Badge variant="outline" className="text-[10px] py-0">
+                                    {portalLinks.filter(l => l.status === 'active').length} active
+                                </Badge>
+                            </div>
+                            <Button
+                                onClick={() => setShowInviteForm(!showInviteForm)}
+                                size="sm"
+                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[36px] text-xs active:scale-[0.97]"
+                                disabled={!isLoggedIn}
+                            >
+                                <Send className="h-3.5 w-3.5 mr-1" /> Invite Supplier
+                            </Button>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground mb-3">
+                            Generate portal links for your suppliers to submit shipment data directly — no account needed.
+                        </p>
+
+                        {/* Invite Form */}
+                        {showInviteForm && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                className="mb-3"
+                            >
+                                <div className="bg-[var(--re-surface-elevated)] rounded-xl p-4 border border-[var(--re-brand)] space-y-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <Input
+                                            value={inviteSupplierName}
+                                            onChange={(e) => setInviteSupplierName(e.target.value)}
+                                            placeholder="Supplier name *"
+                                            className="rounded-xl min-h-[40px] text-sm"
+                                        />
+                                        <Input
+                                            value={inviteSupplierEmail}
+                                            onChange={(e) => setInviteSupplierEmail(e.target.value)}
+                                            placeholder="Contact email (optional)"
+                                            type="email"
+                                            className="rounded-xl min-h-[40px] text-sm"
+                                        />
+                                        <div className="flex gap-2">
+                                            <select
+                                                value={inviteExpiresDays}
+                                                onChange={(e) => setInviteExpiresDays(Number(e.target.value))}
+                                                className="flex-1 px-3 py-2 rounded-xl border border-input bg-background text-sm"
+                                            >
+                                                <option value={30}>30 days</option>
+                                                <option value={90}>90 days</option>
+                                                <option value={180}>180 days</option>
+                                                <option value={365}>1 year</option>
+                                            </select>
+                                            <Button
+                                                onClick={handleCreatePortalLink}
+                                                disabled={creatingLink || !inviteSupplierName.trim()}
+                                                className="bg-[var(--re-brand)] hover:brightness-110 text-white rounded-xl min-h-[40px] text-xs active:scale-[0.97]"
+                                            >
+                                                {creatingLink ? <Spinner size="sm" /> : 'Generate Link'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* Portal Links List */}
+                        {portalLinks.length > 0 && (
+                            <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                                {portalLinks.map((link) => {
+                                    const isActive = link.status === 'active';
+                                    const isCopied = copiedLinkId === link.portal_id;
+                                    const expiresDate = link.expires_at
+                                        ? new Date(link.expires_at).toLocaleDateString()
+                                        : 'N/A';
+
+                                    return (
+                                        <div
+                                            key={link.portal_id}
+                                            className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${
+                                                isActive
+                                                    ? 'bg-[var(--re-surface-elevated)]'
+                                                    : 'bg-[var(--re-surface-base)] opacity-60'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                                    isActive ? 'bg-[var(--re-brand)]' : 'bg-gray-400'
+                                                }`} />
+                                                <span className="font-medium text-[var(--re-text-primary)] truncate">
+                                                    {link.supplier_name}
+                                                </span>
+                                                <span className="text-[var(--re-text-disabled)] flex-shrink-0">
+                                                    expires {expiresDate}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                                                {isActive && (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0"
+                                                            onClick={() => handleCopyLink(link)}
+                                                            title="Copy link"
+                                                        >
+                                                            {isCopied ? (
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" />
+                                                            ) : (
+                                                                <Copy className="h-3.5 w-3.5" />
+                                                            )}
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0"
+                                                            onClick={() => window.open(link.portal_url, '_blank')}
+                                                            title="Open portal"
+                                                        >
+                                                            <ExternalLink className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0 text-red-500 hover:text-red-600"
+                                                            onClick={() => handleRevokeLink(link.portal_id)}
+                                                            title="Revoke link"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                                {!isActive && (
+                                                    <Badge variant="outline" className="text-[9px] py-0 text-[var(--re-text-disabled)]">
+                                                        {link.status}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {portalLinks.length === 0 && !showInviteForm && (
+                            <div className="text-center py-3">
+                                <p className="text-xs text-muted-foreground">
+                                    No portal links yet. Invite a supplier to start collecting traceability data.
+                                </p>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Add Facility Form */}
                 {showAddForm && (

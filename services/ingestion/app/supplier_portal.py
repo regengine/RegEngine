@@ -255,6 +255,98 @@ async def create_portal_link(
 
 
 @router.get(
+    "/links/list",
+    summary="List portal links for a tenant",
+    description="Returns all portal links for the authenticated tenant.",
+)
+async def list_portal_links(
+    tenant_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """List all portal links for a tenant."""
+    links: list[dict] = []
+
+    # Try DB first
+    db = _get_db()
+    if db:
+        try:
+            rows = db.execute(
+                text("""
+                    SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at
+                    FROM fsma.tenant_portal_links
+                    WHERE tenant_id = :tenant_id
+                    ORDER BY created_at DESC
+                """),
+                {"tenant_id": tenant_id},
+            ).fetchall()
+            for row in rows:
+                expires_at = row[6]
+                status = row[4]
+                # Auto-expire links past their expiry
+                if status == "active" and expires_at and expires_at <= datetime.now(timezone.utc):
+                    status = "expired"
+                links.append({
+                    "portal_id": row[3],
+                    "portal_url": f"https://regengine.co/portal/{row[3]}",
+                    "supplier_name": row[2],
+                    "tenant_id": str(row[1]),
+                    "status": status,
+                    "created_at": row[5].isoformat() if row[5] else None,
+                    "expires_at": expires_at.isoformat() if expires_at else None,
+                })
+        except Exception as exc:
+            logger.warning("list_portal_links_db_failed error=%s", str(exc))
+        finally:
+            db.close()
+
+    # Supplement with in-memory links not in DB results
+    db_tokens = {link["portal_id"] for link in links}
+    for token, data in _portal_links.items():
+        if data.get("tenant_id") == tenant_id and token not in db_tokens:
+            expires_at_raw = data.get("expires_at")
+            status = "active"
+            if expires_at_raw:
+                try:
+                    exp = datetime.fromisoformat(str(expires_at_raw).replace("Z", "+00:00"))
+                    if exp <= datetime.now(timezone.utc):
+                        status = "expired"
+                except ValueError:
+                    pass
+            links.append({
+                "portal_id": token,
+                "portal_url": f"https://regengine.co/portal/{token}",
+                "supplier_name": data.get("supplier_name", "Unknown"),
+                "tenant_id": tenant_id,
+                "status": status,
+                "created_at": data.get("created_at"),
+                "expires_at": expires_at_raw,
+            })
+
+    return {"links": links, "total": len(links)}
+
+
+@router.patch(
+    "/links/{portal_id}/revoke",
+    summary="Revoke a portal link",
+    description="Deactivate a portal link so it can no longer be used for submissions.",
+)
+async def revoke_portal_link(
+    portal_id: str,
+    _: None = Depends(_verify_api_key),
+):
+    """Revoke a portal link."""
+    # Update DB
+    db_updated = _db_update_portal_link_status(portal_id, "revoked")
+    # Remove from in-memory
+    _portal_links.pop(portal_id, None)
+
+    if not db_updated:
+        logger.warning("revoke_portal_link portal_id=%s db_update_failed", portal_id)
+
+    return {"status": "revoked", "portal_id": portal_id}
+
+
+@router.get(
     "/{portal_id}",
     summary="Get portal link details",
     description="Retrieve portal link metadata (supplier name, allowed CTE types, etc.)",
