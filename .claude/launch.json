@@ -9,9 +9,10 @@
     },
     {
       "name": "admin-api",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8400"],
-      "port": 8400
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["ADMIN_MASTER_KEY=dev-master-key", "AUTH_SECRET_KEY=dev-secret-key-for-local-only", "REGENGINE_ENV=development", "python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8400"],
+      "port": 8400,
+      "cwd": "services/admin"
     },
     {
       "name": "ingestion-service",

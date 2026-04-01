@@ -70,17 +70,21 @@ async function proxyRequest(  request: NextRequest,
       );
     }
 
-    // Defense-in-depth: reject requests with no auth credentials before proxying
-    const authError = requireProxyAuth(request);
-    if (authError) return authError;
-
-    // Validate Supabase session tokens (expired/revoked sessions get 401)
-    const sessionError = await validateProxySession(request);
-    if (sessionError) return sessionError;
-
     const path = sanitizePath(pathParts);
     if (!path) {
       return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
+    }
+
+    // Auth routes must be reachable without credentials (login creates the session)
+    const isAuthRoute = path.startsWith('auth/');
+    if (!isAuthRoute) {
+      // Defense-in-depth: reject requests with no auth credentials before proxying
+      const authError = requireProxyAuth(request);
+      if (authError) return authError;
+
+      // Validate Supabase session tokens (expired/revoked sessions get 401)
+      const sessionError = await validateProxySession(request);
+      if (sessionError) return sessionError;
     }
     const queryString = new URL(request.url).search;
     const targetBases = getAdminTargets();

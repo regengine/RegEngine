@@ -86,10 +86,29 @@ EntertainmentSessionLocal = sessionmaker(
 def init_db() -> None:
     """Create RLS helper functions on startup. Schema is managed by Alembic.
 
-    NOTE: Base.metadata.create_all() was removed intentionally — Alembic owns
-    all DDL. If you need a new table, create an Alembic migration.
+    NOTE: Base.metadata.create_all() was removed intentionally for PostgreSQL
+    — Alembic owns all DDL. For SQLite (local dev fallback), we create tables
+    directly since Alembic migrations are PostgreSQL-specific.
     """
-    
+    dialect = _engine.dialect.name
+
+    if dialect == "sqlite":
+        # SQLite dev fallback: create only core auth tables (no Alembic, no RLS).
+        # PCOS models use PostgreSQL ARRAY types incompatible with SQLite.
+        from .sqlalchemy_models import (
+            Base, TenantModel, UserModel, RoleModel, MembershipModel,
+            AuditLogModel, InviteModel, SessionModel, ReviewItemModel,
+        )
+        _core_tables = [
+            Base.metadata.tables[m.__tablename__]
+            for m in (TenantModel, UserModel, RoleModel, MembershipModel,
+                      AuditLogModel, InviteModel, SessionModel, ReviewItemModel)
+            if m.__tablename__ in Base.metadata.tables
+        ]
+        Base.metadata.create_all(bind=_engine, tables=_core_tables)
+        logger.info("database_tables_initialized", dialect="sqlite", tables=len(_core_tables))
+        return
+
     # Create RLS helper functions in Admin DB (use CREATE OR REPLACE to
     # avoid DROP errors when columns have DEFAULT dependencies on these fns)
     with _engine.connect() as conn:
@@ -128,7 +147,7 @@ def init_db() -> None:
             $$ LANGUAGE plpgsql;
         """))
         conn.commit()
-    logger.info("database_tables_initialized")
+    logger.info("database_tables_initialized", dialect="postgresql")
 
 
 def get_session() -> Iterator[Session]:
@@ -161,12 +180,12 @@ def get_tenant_session(
     tenant_id: str,
 ) -> Iterator[Session]:
     """Provide a tenant-aware SQLAlchemy session (Admin DB).
-    
+
     For PCOS operations with tenant isolation, use get_pcos_tenant_session() instead.
     """
     session = SessionLocal()
     try:
-        if tenant_id:
+        if tenant_id and _engine.dialect.name != "sqlite":
             session.execute(
                 text("SET LOCAL app.tenant_id = :tenant"),
                 {"tenant": tenant_id},
@@ -185,7 +204,7 @@ def get_pcos_tenant_session(
     """
     session = EntertainmentSessionLocal()
     try:
-        if tenant_id:
+        if tenant_id and _entertainment_engine.dialect.name != "sqlite":
             session.execute(
                 text("SET LOCAL app.tenant_id = :tenant"),
                 {"tenant": tenant_id},
