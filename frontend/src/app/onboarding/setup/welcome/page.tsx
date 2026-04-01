@@ -14,8 +14,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAuth } from '@/lib/auth-context';
-import { useTenant } from '@/lib/tenant-context';
-import { useOrganizations } from '@/hooks/use-organizations';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 
 const ROLES = [
@@ -43,10 +41,7 @@ const COMPLIANCE_STATUSES = [
 
 export default function WelcomePage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { tenantId } = useTenant();
-  const { organizations } = useOrganizations();
-  const tenantName = organizations?.find((o) => o.id === tenantId)?.name;
+  const { user, tenantId } = useAuth();
   const updateOnboarding = useUpdateOnboarding(tenantId);
 
   const [role, setRole] = useState('');
@@ -82,7 +77,7 @@ export default function WelcomePage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
-              Welcome to RegEngine{tenantName ? `, ${tenantName}` : ''}
+              Welcome to RegEngine
             </h1>
             <p className="text-sm text-[var(--re-text-muted)]">
               Help us tailor your workspace — this takes about 10 seconds.

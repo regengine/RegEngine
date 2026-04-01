@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useTenant } from '@/lib/tenant-context';
+import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { apiClient } from '@/lib/api-client';
 
@@ -35,7 +35,7 @@ const SUPPLY_CHAIN_ROLES = [
 
 export default function FacilityPage() {
   const router = useRouter();
-  const { tenantId } = useTenant();
+  const { tenantId } = useAuth();
   const updateOnboarding = useUpdateOnboarding(tenantId);
 
   const [name, setName] = useState('');
