@@ -21,7 +21,6 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth-context';
-import { useTenant } from '@/lib/tenant-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { FTL_CATEGORIES, type FTLCategory } from '@/lib/ftl-data';
 
@@ -83,8 +82,7 @@ function CategoryCard({
 
 export default function FTLCheckPage() {
   const router = useRouter();
-  const { completeOnboarding } = useAuth();
-  const { tenantId } = useTenant();
+  const { completeOnboarding, tenantId } = useAuth();
   const updateOnboarding = useUpdateOnboarding(tenantId);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());

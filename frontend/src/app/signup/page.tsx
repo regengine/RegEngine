@@ -41,7 +41,7 @@ function SignupForm() {
 
     try {
       const response = await apiClient.signup(email, password, tenantName);
-      login(response.access_token, response.user, response.tenant_id);
+      await login(response.access_token, response.user, response.tenant_id);
       router.push('/onboarding/setup/welcome');
     } catch (err: unknown) {
       const apiError = err as {
