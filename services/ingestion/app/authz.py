@@ -168,7 +168,13 @@ def _lookup_scoped_key_from_db(raw_api_key: str) -> Optional[IngestionPrincipal]
             tenant_id=str(tenant_id) if tenant_id else None,
             auth_mode="scoped_key_db_fallback",
         )
-    except Exception:
+    except Exception as exc:
+        import structlog
+        structlog.get_logger("authz").warning(
+            "scoped_key_db_lookup_failed",
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
         return None
     finally:
         if db_session is not None:

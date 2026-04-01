@@ -62,13 +62,15 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
             # Let the exception handler deal with it
             raise
         except (ValueError, TypeError, AttributeError, KeyError) as e:
-            # ValueError: UUID parsing or header validation failures
-            # TypeError: unexpected type conversions during extraction
-            # AttributeError: missing request attributes
-            # KeyError: missing JWT claims
+            # Tenant extraction failed due to malformed data — fail closed.
+            # Returning a 401 forces callers to fix their auth context rather
+            # than silently proceeding without tenant isolation.
             logger.error(f"Error extracting tenant context: {e}")
-            # Continue without tenant_id - let route handlers decide if required
-            request.state.tenant_id = None
+            from starlette.responses import JSONResponse
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Could not resolve tenant context from request"},
+            )
         
         response = await call_next(request)
         return response

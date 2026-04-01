@@ -289,10 +289,25 @@ async def ingest_regulation(
 
 
 def _verify_api_key(x_api_key: Optional[str] = Header(None)) -> None:
-    """Verify API key if configured."""
+    """Verify API key — fail-closed.
+
+    Rejects the request when no API key is configured (production safety)
+    or when the provided key does not match.  Uses timing-safe comparison
+    to prevent timing side-channels.
+    """
+    import hmac as _hmac
     settings = get_settings()
-    if settings.api_key is not None:
-        if not x_api_key or x_api_key != settings.api_key:
+    configured_key = getattr(settings, "api_key", None)
+    if configured_key is not None:
+        if not x_api_key or not _hmac.compare_digest(
+            x_api_key.encode("utf-8"),
+            configured_key.encode("utf-8"),
+        ):
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    else:
+        # No API key configured — fail closed in production, allow in dev/test
+        from shared.env import is_production
+        if is_production():
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
