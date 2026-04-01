@@ -133,7 +133,7 @@ async def login(
     session_persisted = True
     try:
         await session_store.create_session(session_data)
-    except (OSError, TimeoutError, ConnectionError, ValueError) as exc:
+    except Exception as exc:  # Redis may raise redis.exceptions.RedisError (not a builtin)
         session_persisted = False
         logger.warning(
             "session_store_unavailable",
@@ -277,7 +277,7 @@ async def signup(
     session_persisted = True
     try:
         await session_store.create_session(session_data)
-    except (OSError, TimeoutError, ConnectionError, ValueError) as exc:
+    except Exception as exc:  # Redis may raise redis.exceptions.RedisError (not a builtin)
         session_persisted = False
         logger.warning(
             "session_store_unavailable_on_signup",
