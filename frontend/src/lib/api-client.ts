@@ -38,6 +38,7 @@ import type {
   DiscoveryQueueItem,
   DiscoveryActionResponse,
   BulkDiscoveryResponse,
+  PortalLink,
 } from '@/types/api';
 import type {
   LabelBatchInitRequest,
@@ -412,13 +413,17 @@ class APIClient {
   }
 
   async approveReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/approve`, {}, {
+    // Route through the Next.js proxy at /api/review/[...path] which maps
+    // /api/review/{id}/approve → /v1/admin/review/flagged-extractions/{id}/approve
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
 
   async rejectReviewItem(adminKey: string, itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/review/${itemId}/reject`, {}, {
+    // Route through the Next.js proxy at /api/review/[...path] which maps
+    // /api/review/{id}/reject → /v1/admin/review/flagged-extractions/{id}/reject
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {}, {
       headers: { 'X-Admin-Key': adminKey }
     });
   }
@@ -493,7 +498,6 @@ class APIClient {
     await this.adminClient.post('/v1/auth/accept-invite', data);
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFTLCategories(): Promise<FTLCategory[]> {
     const { data } = await this.adminClient.get<{ categories: FTLCategory[] }>('/v1/supplier/ftl-categories');
     return data.categories || [];
@@ -509,7 +513,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async setFacilityFTLCategories(
     facilityId: string,
     request: FacilityFTLScopingRequest,
@@ -521,7 +524,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
       `/v1/supplier/facilities/${facilityId}/required-ctes`,
@@ -529,7 +531,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async submitSupplierCTEEvent(
     facilityId: string,
     request: SupplierCTEEventCreateRequest,
@@ -541,7 +542,6 @@ class APIClient {
     return data;
   }
 
-  /** @deprecated Unused — no frontend consumer. Remove after 2026-04-15 if still unused. */
   async createSupplierTLC(request: SupplierTLCUpsertRequest): Promise<SupplierTLC> {
     const { data } = await this.adminClient.post<SupplierTLC>('/v1/supplier/tlcs', request);
     return data;
@@ -654,6 +654,36 @@ class APIClient {
       `/v1/supplier/bulk-upload/status/${sessionId}`,
     );
     return data;
+  }
+
+  // Portal Links — supplier portal link management
+  async listPortalLinks(): Promise<{ links: PortalLink[]; total: number }> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.get('/api/v1/portal/links/list', {
+      params: { tenant_id: tenantId },
+    });
+    return data;
+  }
+
+  async createPortalLink(request: {
+    supplier_name: string;
+    supplier_email?: string;
+    expires_days?: number;
+  }): Promise<PortalLink> {
+    const tenantId = this.currentTenantId;
+    if (!tenantId) throw new Error('No tenant selected');
+    const { data } = await this.ingestionClient.post('/api/v1/portal/links', {
+      tenant_id: tenantId,
+      supplier_name: request.supplier_name,
+      supplier_email: request.supplier_email,
+      expires_days: request.expires_days || 90,
+    });
+    return data;
+  }
+
+  async revokePortalLink(portalId: string): Promise<void> {
+    await this.ingestionClient.patch(`/api/v1/portal/links/${portalId}/revoke`);
   }
 
   async downloadSupplierBulkUploadTemplate(
