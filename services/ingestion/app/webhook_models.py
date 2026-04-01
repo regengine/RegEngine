@@ -250,6 +250,8 @@ class RecentEventsResponse(BaseModel):
     tenant_id: str
     events: List[dict] = Field(default_factory=list)
     total: int = 0
+    limit: int = 100
+    offset: int = 0
 
 
 class ChainVerifyResponse(BaseModel):

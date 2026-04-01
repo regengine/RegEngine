@@ -21,7 +21,7 @@ from typing import Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.authz import require_permission, IngestionPrincipal
 from app.subscription_gate import require_active_subscription
@@ -775,7 +775,8 @@ async def ingest_events(
 
 async def get_recent_events(
     tenant_id: str,
-    limit: int = 10,
+    limit: int = 100,
+    offset: int = 0,
 ):
     """
     Get most recent CTE events for a tenant — powers the scan history
@@ -787,6 +788,16 @@ async def get_recent_events(
         from shared.database import SessionLocal
         from sqlalchemy import text as _text
         db_session = SessionLocal()
+
+        # Total count for pagination metadata
+        total = db_session.execute(
+            _text("""
+                SELECT COUNT(*) FROM fsma.cte_events
+                WHERE tenant_id = :tid
+            """),
+            {"tid": tenant_id},
+        ).scalar() or 0
+
         rows = db_session.execute(
             _text("""
                 SELECT id, event_type, traceability_lot_code, product_description,
@@ -794,9 +805,9 @@ async def get_recent_events(
                 FROM fsma.cte_events
                 WHERE tenant_id = :tid
                 ORDER BY ingested_at DESC
-                LIMIT :lim
+                LIMIT :lim OFFSET :off
             """),
-            {"tid": tenant_id, "lim": min(limit, 50)},
+            {"tid": tenant_id, "lim": limit, "off": offset},
         ).fetchall()
         events = [
             {
@@ -812,10 +823,16 @@ async def get_recent_events(
             }
             for r in rows
         ]
-        return {"tenant_id": tenant_id, "events": events, "total": len(events)}
+        return {
+            "tenant_id": tenant_id,
+            "events": events,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
     except (ImportError, ValueError, RuntimeError) as e:
         logger.warning("recent_events_query_failed: %s", str(e))
-        return {"tenant_id": tenant_id, "events": [], "total": 0}
+        return {"tenant_id": tenant_id, "events": [], "total": 0, "limit": limit, "offset": offset}
     finally:
         if db_session:
             db_session.close()
@@ -829,10 +846,11 @@ async def get_recent_events(
 )
 async def recent_events_endpoint(
     tenant_id: str,
-    limit: int = 10,
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
     _auth: None = Depends(_verify_api_key),
 ):
-    return await get_recent_events(tenant_id, limit)
+    return await get_recent_events(tenant_id, limit, offset)
 
 
 @router.get(
