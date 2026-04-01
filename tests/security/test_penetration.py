@@ -82,7 +82,7 @@ class TestAuthenticationAttacks:
             "tenant_id": "00000000-0000-0000-0000-000000000000"
         }
         # Sign with wrong key
-        malicious_token = jwt.encode(payload, "wrong-secret-key", algorithm="HS256")
+        malicious_token = jwt.encode(payload, "wrong-secret-key", algorithm="HS256")  # nosemgrep: jwt-python-hardcoded-secret
         
         headers = {"Authorization": f"Bearer {malicious_token}"}
         resp = requests.get(f"{ADMIN_URL}/users", headers=headers)

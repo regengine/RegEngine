@@ -17,6 +17,8 @@ spec:
       containers:
       - name: scheduler
         image: regengine/scheduler:$(IMAGE_TAG)
+        securityContext:
+          allowPrivilegeEscalation: false
         envFrom:
         - secretRef:
             name: scheduler-secrets
