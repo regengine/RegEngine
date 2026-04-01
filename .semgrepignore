@@ -13,3 +13,13 @@ scripts/utilities/
 
 # Third-party and generated code
 frontend/src/components/ui/
+
+# Infrastructure config — nginx $host is standard reverse proxy config (request-host-used)
+gateway/nginx.conf
+infra/gateway/nginx.conf
+
+# Dev-only static HTML pages with localhost URLs (plaintext-http-link)
+frontend/public/pcos-documents.html
+frontend/public/pcos-crew-import.html
+frontend/public/pcos-budget-analysis.html
+frontend/public/pcos-assessment.html
