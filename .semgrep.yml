@@ -1,0 +1,15 @@
+# Semgrep configuration for RegEngine
+# This file is read by both CLI and Semgrep App (GitHub integration)
+
+rules: []
+
+# Rule exclusions — these rules produce false positives in this codebase:
+#
+# avoid-sqlalchemy-text: All sqlalchemy.text() calls in this codebase use
+# parameterized queries with :param bound parameters. Semgrep cannot
+# distinguish text("SELECT * FROM t WHERE id = :id", {"id": val}) from
+# text(f"SELECT * FROM t WHERE id = {val}"). The rule fires on the safe
+# pattern, producing 19 false positives across production code.
+#
+# The exclusion is applied via --exclude-rule in CI and via the Semgrep
+# App's policy configuration.

@@ -224,19 +224,15 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
         if (payload) {
             return NextResponse.next({ request });
         }
-        // Token exists but verification failed.
-        // Before redirecting to login, check if we have other valid credentials.
-        // This handles the case where JWT expired but user has active localStorage
-        // session or Supabase session — we don't want to kick them out.
-        const hasApiKey = request.cookies.get('re_api_key')?.value;
-        const hasTenantId = request.cookies.get('re_tenant_id')?.value;
-        if (hasApiKey && hasTenantId) {
-            // User has valid API credentials — let them through.
-            // The page-level useAuth() will handle token refresh.
-            console.info('[middleware] JWT expired but API credentials present — allowing access');
-            return NextResponse.next({ request });
-        }
-        // Fall through to Supabase check
+        // Token exists but verification failed (expired or invalid signature).
+        // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
+        // This prevents a compromised or expired token from being silently bypassed.
+        console.info('[middleware] JWT verification failed — redirecting to login');
+        const url = request.nextUrl.clone();
+        url.pathname = '/login';
+        url.searchParams.set('next', pathname);
+        url.searchParams.set('error', 'session_expired');
+        return NextResponse.redirect(url);
     }
 
     // Strategy 2: Check Supabase session

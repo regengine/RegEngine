@@ -16,7 +16,9 @@ spec:
     spec:
       containers:
       - name: compliance
-        image: regengine/compliance-service:latest
+        image: regengine/compliance-service:$(IMAGE_TAG)
+        securityContext:
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 8000
         envFrom:

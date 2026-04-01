@@ -432,6 +432,17 @@ export interface SupplierBulkUploadStatusResponse {
     error?: string | null;
 }
 
+export interface PortalLink {
+    portal_id: string;
+    portal_url: string;
+    supplier_name: string;
+    tenant_id: string;
+    status: string;
+    created_at: string | null;
+    expires_at: string | null;
+    allowed_cte_types?: string[];
+}
+
 export interface LoginResponse {
     access_token: string;
     token_type: string;

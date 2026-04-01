@@ -9,21 +9,21 @@ class LLMClient:
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            # We allow init without key, but calls will fail or we can mock for dev
-            pass
+            raise ValueError(
+                "LLM client not configured: OPENAI_API_KEY is not set. "
+                "Set the OPENAI_API_KEY environment variable before using LLMClient."
+            )
         self.client = AsyncOpenAI(api_key=self.api_key)
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(), reraise=True)
+    @backoff.on_exception(
+        backoff.expo,
+        (IOError, ConnectionError, TimeoutError, openai.APIConnectionError, openai.RateLimitError),
+        max_tries=3,
+    )
     async def analyze_image_structured(self, image_b64: str, prompt: str) -> Dict[str, Any]:
         """
         Analyze an image using GPT-4o and return structured JSON.
         """
-        if not self.api_key:
-             return {
-                 "error": "Missing OPENAI_API_KEY",
-                 "condition": "UNKNOWN",
-                 "text_content": "[SIMULATED] API Key missing. Please set env var."
-             }
 
         response = await self.client.chat.completions.create(
             model="gpt-4o",

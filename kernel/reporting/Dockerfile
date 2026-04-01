@@ -28,8 +28,15 @@ COPY services/compliance/main.py /app/main.py
 # Ideally COPY entire services/compliance context but sticking to explicit copies for safety
 COPY services/compliance/plugins /app/plugins
 
+# Create non-root user for security
+RUN groupadd --gid 1001 appuser && \
+    useradd --uid 1001 --gid 1001 --no-create-home appuser
+
 # Set PYTHONPATH
 ENV PYTHONPATH=/app
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8500
