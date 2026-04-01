@@ -17,6 +17,8 @@ spec:
       containers:
       - name: nlp
         image: regengine/nlp-service:$(IMAGE_TAG)
+        securityContext:
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 8100
         envFrom:

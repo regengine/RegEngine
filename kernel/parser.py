@@ -65,7 +65,7 @@ class RegulationParser:
 
         for chunk in chunks:
             text = chunk.page_content.strip()
-            content_hash = hashlib.md5(text.encode()).hexdigest()
+            content_hash = hashlib.sha256(text.encode()).hexdigest()
             if content_hash in seen_hashes:
                 continue  # deduplicate
             seen_hashes.add(content_hash)
