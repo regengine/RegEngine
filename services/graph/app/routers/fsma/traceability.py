@@ -15,6 +15,7 @@ from ...fsma_utils import (
     trace_forward,
 )
 from ...neo4j_utils import Neo4jClient
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from shared.auth import require_api_key
 from ...models.fsma_nodes import (
     CTEType,
@@ -101,7 +102,7 @@ async def trace_forward_endpoint(
             "time_violations": result.time_violations,
             "risk_flags": result.risk_flags,
         }
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         duration = time.time() - start_time
         record_trace_query("forward", duration, "error", 0, 0)
         logger.exception("trace_forward_error", tlc=tlc, error=str(e))
@@ -153,7 +154,7 @@ async def trace_backward_endpoint(
             "query_time_ms": result.query_time_ms,
             "hop_count": result.hop_count,
         }
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         duration = time.time() - start_time
         record_trace_query("backward", duration, "error", 0, 0)
         logger.exception("trace_backward_error", tlc=tlc, error=str(e))
@@ -181,7 +182,7 @@ async def lot_timeline_endpoint(
         timeline = await get_lot_timeline(client, tlc, str(tenant_id))
         await client.close()
         return {"lot_id": tlc, "events": timeline}
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         logger.exception("timeline_error", tlc=tlc, error=str(e))
         logger.exception("endpoint_error", error=str(e)); raise HTTPException(status_code=500, detail="Internal server error")
 @router.get("/traceability/regulations")
@@ -203,7 +204,7 @@ async def get_governing_regulations_endpoint(
         regulations = await linker.get_governing_regulations(lot_tlc, str(tenant_id))
         await linker.close()
         return {"lot_tlc": lot_tlc, "regulations": regulations}
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         await linker.close()
         logger.error("get_governing_regulations_failed", lot_tlc=lot_tlc, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -228,7 +229,7 @@ async def get_impacted_lots_endpoint(
         lots = await linker.get_impacted_lots(obligation_id, str(tenant_id))
         await linker.close()
         return {"obligation_id": obligation_id, "impacted_lots": lots}
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         await linker.close()
         logger.error("get_impacted_lots_failed", obligation_id=obligation_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -253,7 +254,7 @@ async def link_obligation_endpoint(
         links = await linker.link_obligation_to_traceability(obligation_id, str(tenant_id))
         await linker.close()
         return {"status": "linked", "links_created": len(links), "links": links}
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         await linker.close()
         logger.error("link_obligation_failed", obligation_id=obligation_id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
@@ -339,7 +340,7 @@ async def search_traceability_events(
                 "cte_type": normalized_cte,
             },
         }
-    except Exception as exc:
+    except Exception as exc:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         logger.exception(
             "traceability_search_error",
             error=str(exc),
@@ -515,15 +516,14 @@ async def log_traceability_event(
                 store = CanonicalEventStore(db, dual_write=True)
                 store.persist_event(canonical_event)
                 db.commit()
-            except Exception:
+            except Exception:  # log and re-raise: rollback on any persistence error
                 db.rollback()
                 raise
             finally:
                 db.close()
 
             logger.info("mobile_event_canonical_bridged", event_id=event_id, tlc=payload.tlc)
-        except Exception as bridge_err:
-            # Non-blocking: Neo4j write already succeeded
+        except Exception as bridge_err:  # broad catch intentional: bridge is best-effort, Neo4j write already succeeded
             logger.warning("mobile_canonical_bridge_failed", event_id=event_id, error=str(bridge_err))
 
         return {
@@ -533,7 +533,7 @@ async def log_traceability_event(
             "message": f"Successfully secured {payload.event_type} event on the immutable ledger.",
         }
 
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: FastAPI endpoint must return clean HTTP error
         await client.close()
         logger.error("mobile_event_logging_failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to persist event: {str(e)}")

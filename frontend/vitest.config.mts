@@ -22,6 +22,12 @@ export default defineConfig({
                 '.next/**',
                 'out/**',
             ],
+            thresholds: {
+                statements: 10,
+                branches: 10,
+                functions: 10,
+                lines: 10,
+            },
         },
         testTimeout: 10000,
     },

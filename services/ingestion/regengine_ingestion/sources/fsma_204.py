@@ -3,7 +3,7 @@
 import time
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
-import requests
+import httpx
 from bs4 import BeautifulSoup
 
 from ..models import SourceMetadata
@@ -23,7 +23,7 @@ class FSMA204Adapter(SourceAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rate_limiter = RateLimiter(requests_per_minute=20) # Conservative for non-API scrape
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update({"User-Agent": self.user_agent})
     
     def get_source_name(self) -> str:
@@ -53,7 +53,7 @@ class FSMA204Adapter(SourceAdapter):
             response.raise_for_status()
             self.rate_limiter.record_success("www.fda.gov")
             self.log_fetch(self.TARGET_URL, "success", response.status_code)
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             self.log_fetch(self.TARGET_URL, "failure", error=str(e))
             return
             

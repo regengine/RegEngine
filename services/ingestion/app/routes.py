@@ -16,12 +16,12 @@ from pathlib import Path
 from typing import Dict, Iterable, Optional, List
 from urllib.parse import urlparse
 
-import requests
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query, Form
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from requests import Response
+from httpx import Response
 import redis
 
 try:
@@ -88,7 +88,7 @@ def get_db_manager() -> Optional[DatabaseManager]:
         manager.connect()
         logger.info("db_connected_successfully")
         return manager
-    except Exception as e:
+    except (ValueError, KeyError, OSError) as e:
         logger.error("db_init_failed", error=str(e), url=db_url)
         return None
 
@@ -206,17 +206,17 @@ async def process_regulation_ingestion(job_id: str, name: str, filename: str, te
                         "sections": count
                     })
                 logger.info("ingestion_webhook_sent", job_id=job_id, webhook=webhook)
-            except Exception as e:
+            except httpx.HTTPError as e:
                 logger.error("ingestion_webhook_failed", job_id=job_id, error=str(e))
 
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: top-level background task must not crash worker
         logger.error("regulation_ingestion_background_failed", job_id=job_id, error=str(e))
         r.setex(f"ingest:status:{job_id}", 7200, f"failed: {str(e)}")
         if webhook:
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(webhook, json={"job_id": job_id, "status": "failed", "error": str(e)})
-            except Exception as e:
+            except httpx.HTTPError as e:
                 logger.warning("webhook_notification_failed", error=str(e))
     finally:
         if os.path.exists(tmp_path):
@@ -272,7 +272,7 @@ async def ingest_regulation(
             "message": "Regulation ingestion started in background",
             "webhook": webhook if webhook else "none"
         }
-    except Exception as e:
+    except redis.RedisError as e:
         logger.error("regulation_ingestion_queue_failed", name=name, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to queue ingestion job")
 
@@ -349,7 +349,7 @@ def _process_and_emit(
                     event.model_dump(mode="json"),
                     key=f"{document_id}:{content_sha256}",
                 )
-            except Exception as e:
+            except (OSError, RuntimeError) as e:
                 logger.warning("kafka_dedup_emit_failed", error=str(e))
                 
             return event
@@ -376,7 +376,7 @@ def _process_and_emit(
         normalized, document_id, _ = normalize_document(
             raw_json, raw_bytes, url_str, content_type
         )
-    except Exception as e:
+    except (ValueError, KeyError, TypeError) as e:  # re-raised after logging
         logger.error("normalization_failed", url=url_str, error=str(e))
         raise HTTPException(status_code=422, detail=f"Document parsing/normalization failed: {str(e)}")
     
@@ -442,7 +442,7 @@ def _process_and_emit(
                 content_length=len(raw_bytes)
             )
             db_manager.insert_document(doc)
-        except Exception as db_exc:
+        except (OSError, RuntimeError) as db_exc:
             logger.warning("document_db_insert_failed", error=str(db_exc))
 
     # 8. Kafka Emission & Claim Check Pattern
@@ -474,7 +474,7 @@ def _process_and_emit(
             event.model_dump(mode="json"),
             key=f"{document_id}:{content_sha256}",
         )
-    except Exception as kafka_exc:
+    except (OSError, RuntimeError, ValueError) as kafka_exc:
         logger.warning("kafka_publish_failed", document_id=document_id, error=str(kafka_exc))
     
     return event
@@ -510,7 +510,7 @@ async def ingest_direct(
         )
         try:
             db_manager.insert_job(job)
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
@@ -538,7 +538,7 @@ async def ingest_direct(
         REQUEST_COUNTER.labels(endpoint=endpoint, status="200").inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         return event
-    except Exception as exc:
+    except Exception as exc:  # broad catch intentional: top-level endpoint handler must return proper HTTP error
         logger.exception("ingest_direct_failed", job_id=job_id, error=str(exc))
         if db_manager:
             job.status = JobStatus.FAILED
@@ -583,7 +583,7 @@ async def ingest_file(
         )
         try:
             db_manager.insert_job(job)
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
@@ -615,7 +615,7 @@ async def ingest_file(
         REQUEST_COUNTER.labels(endpoint=endpoint, status="200").inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         return event
-    except Exception as exc:
+    except Exception as exc:  # broad catch intentional: top-level endpoint handler, preserves HTTPException
         logger.exception("ingest_file_failed", job_id=job_id, error=str(exc))
         if db_manager:
             job.status = JobStatus.FAILED
@@ -666,7 +666,7 @@ async def ingest_url(
         )
         try:
             db_manager.insert_job(job)
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
@@ -708,7 +708,7 @@ async def ingest_url(
         REQUEST_COUNTER.labels(endpoint=endpoint, status=str(exc.status_code)).inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         raise
-    except Exception as exc:
+    except Exception as exc:  # broad catch intentional: top-level endpoint handler, HTTPException caught above
         if audit_logger:
             audit_logger.log_fetch(url_str, "failure", error=str(exc))
         if db_manager:
@@ -748,7 +748,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
         )
         try:
             db_manager.insert_job(job)
-        except Exception as e:
+        except (OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     success_count = 0
@@ -779,7 +779,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
                     skipped_count += 1
                 else:
                     success_count += 1
-            except Exception as e:
+            except Exception as e:  # broad catch intentional: per-document resilience, must not abort batch
                 failed_count += 1
                 if audit_logger:
                     audit_logger.log("ingest", "document", status="failure", error=str(e), details={"url": source_metadata.source_url})
@@ -796,7 +796,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
             job.documents_skipped = skipped_count
             db_manager.update_job(job)
 
-    except Exception as e:
+    except Exception as e:  # broad catch intentional: top-level background task must not crash worker
         logger.error("federal_ingest_job_failed", source=adapter.get_source_name(), error=str(e))
         if db_manager:
             job = IngestionJob(

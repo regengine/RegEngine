@@ -1,5 +1,5 @@
 import os
-import backoff
+from tenacity import retry, stop_after_attempt, wait_exponential
 from typing import Dict, Any, Optional
 import openai
 from openai import AsyncOpenAI
@@ -13,7 +13,7 @@ class LLMClient:
             pass
         self.client = AsyncOpenAI(api_key=self.api_key)
 
-    @backoff.on_exception(backoff.expo, Exception, max_tries=3)
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(), reraise=True)
     async def analyze_image_structured(self, image_b64: str, prompt: str) -> Dict[str, Any]:
         """
         Analyze an image using GPT-4o and return structured JSON.
