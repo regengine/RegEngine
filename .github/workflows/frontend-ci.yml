@@ -136,7 +136,7 @@ jobs:
   ci-status:
     name: CI Status Gate
     if: always()
-    needs: [build, lint, test, security]
+    needs: [build, lint, test, security, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
@@ -150,3 +150,50 @@ jobs:
             exit 1
           fi
           echo "✅ All checks passed"
+
+  # ── E2E Tests (Playwright) ───────────────────────────────
+  e2e:
+    name: E2E Tests (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Install Playwright browsers
+        run: |
+          cd frontend
+          npx playwright install --with-deps
+
+      - name: Run E2E tests
+        env:
+          # Required for Playwright tests — set these in GitHub Secrets
+          # TEST_USER_EMAIL: email of a test user in the staging/CI environment
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Playwright base URL — defaults to localhost for CI
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL || 'http://localhost:3000' }}
+        run: |
+          cd frontend
+          npm run test:e2e
+
+      - name: Upload Playwright test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-results
+          path: frontend/test-results/
+          retention-days: 14

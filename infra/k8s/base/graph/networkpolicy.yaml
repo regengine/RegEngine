@@ -1,0 +1,68 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: graph-service
+  labels:
+    app: graph
+spec:
+  podSelector:
+    matchLabels:
+      app: graph
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Allow ingress only from the NGINX ingress controller and the admin service
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: admin
+        - podSelector:
+            matchLabels:
+              app: ingestion
+      ports:
+        - protocol: TCP
+          port: 8200
+
+  # Allow egress to PostgreSQL, Neo4j, Redis, Kafka, and external HTTPS
+  egress:
+    # PostgreSQL
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Neo4j Bolt
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 7687
+        - protocol: TCP
+          port: 7474  # Neo4j HTTP
+    # Kafka / Redpanda
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 9092  # Kafka
+        - protocol: TCP
+          port: 9644  # Redpanda admin
+    # External HTTPS (webhooks, third-party APIs)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # DNS resolution (required for service discovery)
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

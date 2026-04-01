@@ -310,7 +310,7 @@ class IntegrationConnector(ABC):
     ) -> bool:
         """Verify HMAC signature on inbound webhook payloads."""
         if not self.config.webhook_secret:
-            logger.warning("webhook_no_secret connector=%s", self.connector_id)
+            logger.warning("webhook_no_secret connector=%s", self.connector_id)  # nosemgrep: python-logger-credential-disclosure
             return False
 
         if algorithm == "sha256":

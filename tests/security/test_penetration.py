@@ -82,7 +82,7 @@ class TestAuthenticationAttacks:
             "tenant_id": "00000000-0000-0000-0000-000000000000"
         }
         # Sign with wrong key
-        malicious_token = jwt.encode(payload, "wrong-secret-key", algorithm="HS256")
+        malicious_token = jwt.encode(payload, "wrong-secret-key", algorithm="HS256")  # nosemgrep: jwt-python-hardcoded-secret
         
         headers = {"Authorization": f"Bearer {malicious_token}"}
         resp = requests.get(f"{ADMIN_URL}/users", headers=headers)
@@ -177,12 +177,11 @@ class TestRateLimiting:
                 "email": "admin@example.com",
                 "password": "wrong_password"
             })
-            responses.append(resp.status_code)
-            
-        # Check if any 429 occurred
-        # If strictly implemented, we might see it.
-        # Validating current behavior.
-        print(f"Bruteforce responses: {responses}")
-        # Note: We don't fail the test if 429 is missing unless it's a hard requirement.
-        # Be observant.
+            responses.append(resp)
+
+        response_codes = [r.status_code for r in responses]
+        assert 429 in response_codes, (
+            f"Rate limiting not enforced — all responses: {response_codes}. "
+            "The login endpoint must return 429 after repeated failed attempts."
+        )
 

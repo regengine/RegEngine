@@ -327,16 +327,55 @@ export default function AskPage() {
   const [query, setQuery] = useState<string>('');
   const [result, setResult] = useState<QueryResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLiveResult, setIsLiveResult] = useState<boolean>(false);
+  const [nlpError, setNlpError] = useState<string | null>(null);
 
-  const handleQuery = (q?: string): void => {
+  const handleQuery = async (q?: string): Promise<void> => {
     const finalQuery = q || query;
     if (!finalQuery.trim()) return;
 
     setIsLoading(true);
-    setTimeout(() => {
+    setNlpError(null);
+    setIsLiveResult(false);
+
+    try {
+      // Attempt to call the live NLP service via the server-side proxy.
+      const response = await fetch('/api/nlp/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: finalQuery, limit: 50 }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Map the NLP service response shape to the local QueryResult type.
+        setResult({
+          intent: data.intent ?? 'events_search',
+          confidence: data.confidence ?? 0,
+          filters: data.filters ?? {},
+          results: data.results ?? [],
+          apiEndpoints: (data.evidence ?? []).map((e: { endpoint: string; params?: Record<string, string>; result_count?: number }) => ({
+            path: e.endpoint,
+            params: e.params ?? {},
+            resultType: 'LiveResult',
+          })),
+        });
+        setIsLiveResult(true);
+      } else if (response.status === 503) {
+        // NLP service not configured — fall back to local stub with a notice.
+        setNlpError('NLP service not configured — showing simulated results.');
+        setResult(parseQuery(finalQuery));
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        setNlpError(`NLP service error (${response.status}): ${errData.detail ?? 'unknown error'} — showing simulated results.`);
+        setResult(parseQuery(finalQuery));
+      }
+    } catch (err) {
+      setNlpError(`Could not reach NLP service: ${String(err)} — showing simulated results.`);
       setResult(parseQuery(finalQuery));
+    } finally {
       setIsLoading(false);
-    }, 600);
+    }
   };
 
   const handleExampleClick = (example: string): void => {
@@ -390,7 +429,7 @@ export default function AskPage() {
               rows={3}
             />
             <button
-              onClick={() => handleQuery()}
+              onClick={() => { void handleQuery(); }}
               disabled={!query.trim() || isLoading}
               className="absolute bottom-4 right-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-colors font-medium"
             >
@@ -408,7 +447,7 @@ export default function AskPage() {
                   key={idx}
                   onClick={() => {
                     handleExampleClick(example.label);
-                    setTimeout(() => handleQuery(example.label), 100);
+                    setTimeout(() => { void handleQuery(example.label); }, 100);
                   }}
                   className="px-3 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors border border-slate-200"
                 >
@@ -428,6 +467,20 @@ export default function AskPage() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
+              {/* Live vs simulated notice */}
+              {nlpError && (
+                <div className="flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-yellow-600" />
+                  <span>{nlpError}</span>
+                </div>
+              )}
+              {isLiveResult && (
+                <div className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
+                  <Check size={16} className="shrink-0 text-green-600" />
+                  <span>Live results from your connected supply chain data.</span>
+                </div>
+              )}
+
               {/* Query Analysis */}
               <div className={`rounded-lg border-2 p-6 ${intentColors[result.intent].bg}`}>
                 <div className="space-y-4">
@@ -480,7 +533,9 @@ export default function AskPage() {
 
               {/* Results Display */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-slate-900">Simulated Results</h3>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {isLiveResult ? 'Results' : 'Simulated Results'}
+                </h3>
 
                 {result.intent === 'trace_forward' || result.intent === 'trace_backward' ? (
                   <div className="bg-white border border-slate-300 rounded-lg p-6">

@@ -9,11 +9,31 @@ resources:
   - ../../base/admin/deployment.yaml
   - ../../base/ingestion/deployment.yaml
   - ../../base/scheduler/deployment.yaml
+  - ../../base/graph/deployment.yaml
+  - ../../base/nlp/deployment.yaml
   - ../../base/ingress.yaml
 
+# IMAGE_TAG is set by CI/CD (e.g. the git SHA or semver tag).
+# All base deployments use $(IMAGE_TAG) as a placeholder; kustomize
+# rewrites them to the concrete ghcr.io image + tag at deploy time.
 images:
   - name: regengine/compliance-service
     newName: ghcr.io/regengine/compliance
+    newTag: v1.1.0
+  - name: regengine/admin-service
+    newName: ghcr.io/regengine/admin
+    newTag: v1.1.0
+  - name: regengine/ingestion-service
+    newName: ghcr.io/regengine/ingestion
+    newTag: v1.1.0
+  - name: regengine/scheduler
+    newName: ghcr.io/regengine/scheduler
+    newTag: v1.1.0
+  - name: regengine/graph-service
+    newName: ghcr.io/regengine/graph
+    newTag: v1.1.0
+  - name: regengine/nlp-service
+    newName: ghcr.io/regengine/nlp
     newTag: v1.1.0
 
 patchesStrategicMerge:

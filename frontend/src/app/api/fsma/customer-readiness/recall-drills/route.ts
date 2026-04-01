@@ -1,29 +1,38 @@
 import { NextResponse } from 'next/server';
-import { RECALL_DRILL_RUNS } from '@/lib/customer-readiness';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+    const backendUrl = process.env.INGESTION_SERVICE_URL;
+    if (backendUrl) {
+        try {
+            const res = await fetch(`${backendUrl}/api/v1/fsma/recall/drills`, {
+                headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return NextResponse.json(data);
+            }
+        } catch {
+            // Backend unreachable — fall through to not_connected response
+        }
+    }
+
     return NextResponse.json({
-        drills: RECALL_DRILL_RUNS,
+        items: [],
+        meta: {
+            status: 'not_connected',
+            message: 'Recall drill automation is not yet configured for this account.',
+        },
     });
 }
 
-export async function POST(request: Request) {
-    const body = await request.json().catch(() => ({}));
-
+export async function POST() {
     return NextResponse.json(
         {
-            drill: {
-                id: 'drill_preview_run',
-                scenario: body.scenario ?? 'Customer-triggered drill',
-                lots: body.lots ?? ['LOT-PREVIEW-001'],
-                dateRange: body.dateRange ?? 'Preview range',
-                status: 'in_progress',
-                elapsed: '0m 00s',
-                artifacts: ['live workspace'],
-                warnings: ['Preview route: final artifact generation is simulated in the frontend layer.'],
-            },
+            error: 'Not Implemented',
+            message: 'Recall drill automation is not yet available. Connect your supply chain data to enable this feature.',
         },
-        { status: 202 }
+        { status: 501 }
     );
 }

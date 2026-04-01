@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
+import { requireProxyAuth, validateProxySession, getAdminMasterKey } from '@/lib/api-proxy';
 
 const ADMIN_URL = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
 
@@ -9,21 +10,33 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    // Defense-in-depth: reject requests with no auth credentials before proxying
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
+
+    // Validate Supabase session tokens (expired/revoked sessions get 401)
+    const sessionError = await validateProxySession(request);
+    if (sessionError) return sessionError;
+
+    const adminKey = getAdminMasterKey();
+    if (!adminKey) {
+        console.error('[review/reject] ADMIN_MASTER_KEY is not configured');
+        return NextResponse.json(
+            { error: 'Admin service is not configured — contact your administrator' },
+            { status: 503 }
+        );
+    }
+
+    const { id } = await params;
+
     try {
-        // Guard against static export execution
-        if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-            return NextResponse.json({ message: 'Dynamic action not available during static build' });
-        }
-
-        const { id } = await params;
-
         const response = await fetch(
             `${ADMIN_URL}/v1/admin/review/flagged-extractions/${id}/reject`,
             {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Admin-Key': process.env.ADMIN_MASTER_KEY || 'admin',
+                    'X-Admin-Key': adminKey,
                 },
                 body: JSON.stringify({
                     reviewer_id: 'web-frontend',

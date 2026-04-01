@@ -1,5 +1,6 @@
 """FDA source adapter."""
 
+import json
 import time
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
@@ -50,8 +51,8 @@ class FDAAdapter(SourceAdapter):
         Yields:
             Tuples of (content, metadata, document_metadata)
         """
-        # Fetch Warning Letters as a sample FDA document type
-        url = f"{self.BASE_URL}/drug/warningletter.json"
+        # Fetch food enforcement records (recalls, market withdrawals)
+        url = f"{self.BASE_URL}/food/enforcement.json"
         params = {
             "limit": min(max_documents, 99),  # openFDA limit
             "sort": "posted_date:desc"
@@ -87,8 +88,8 @@ class FDAAdapter(SourceAdapter):
         results = data.get("results", [])
         
         for doc in results:
-            # openFDA returns JSON objects. We'll stringify for the parser registry.
-            content = str(doc).encode("utf-8")
+            # openFDA returns JSON objects. Serialize to valid JSON for the parser registry.
+            content = json.dumps(doc).encode("utf-8")
             
             # Build source metadata
             source_metadata = SourceMetadata(

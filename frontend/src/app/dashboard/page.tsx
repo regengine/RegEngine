@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { PageContainer } from '@/components/layout/page-container';
@@ -31,6 +31,8 @@ import {
     Building2,
     Truck,
     Settings,
+    CheckCircle2,
+    WifiOff,
 } from 'lucide-react';
 import { GettingStartedCard } from '@/components/dashboard/getting-started-card';
 
@@ -176,6 +178,24 @@ export default function DashboardPage() {
     const effectiveUser = user;
     const effectiveTenantId = tenantId;
 
+    // Fetch real service health status
+    const [healthStatus, setHealthStatus] = useState<'loading' | 'operational' | 'degraded' | 'disruption'>('loading');
+    useEffect(() => {
+        fetch('/api/health')
+            .then((res) => {
+                if (!res.ok) { setHealthStatus('disruption'); return; }
+                return res.json();
+            })
+            .then((data: { status?: string; overall_status?: string } | undefined) => {
+                if (!data) return;
+                const s = data.overall_status ?? data.status ?? 'unknown';
+                if (s === 'healthy' || s === 'ok' || s === 'up') setHealthStatus('operational');
+                else if (s === 'degraded') setHealthStatus('degraded');
+                else setHealthStatus('disruption');
+            })
+            .catch(() => setHealthStatus('disruption'));
+    }, []);
+
     useEffect(() => {
         if (isHydrated && !effectiveUser) {
             router.push(`/login?next=${encodeURIComponent('/dashboard')}`);
@@ -266,10 +286,27 @@ export default function DashboardPage() {
                                     {currentOrg.plan.charAt(0).toUpperCase() + currentOrg.plan.slice(1)}
                                 </Badge>
                             )}
-                            <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                <Activity className="w-3 h-3 mr-1" />
-                                All Systems Operational
-                            </Badge>
+                            {healthStatus === 'loading' ? (
+                                <Badge variant="outline" className="bg-gray-100 text-gray-500 dark:bg-gray-900/30 dark:text-gray-400">
+                                    <Activity className="w-3 h-3 mr-1 animate-pulse" />
+                                    Checking...
+                                </Badge>
+                            ) : healthStatus === 'operational' ? (
+                                <Badge variant="outline" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                                    All Systems Operational
+                                </Badge>
+                            ) : healthStatus === 'degraded' ? (
+                                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    Degraded Performance
+                                </Badge>
+                            ) : (
+                                <Badge variant="outline" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                    <WifiOff className="w-3 h-3 mr-1" />
+                                    Service Disruption
+                                </Badge>
+                            )}
                         </div>
                     </div>
 

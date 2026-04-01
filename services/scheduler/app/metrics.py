@@ -132,7 +132,7 @@ class MetricsCollector:
 
         # Hash URL for label (avoid high cardinality)
         import hashlib
-        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        url_hash = hashlib.sha256(url.encode()).hexdigest()[:8]
 
         status = "success" if success else "failure"
         WEBHOOK_COUNTER.labels(url_hash=url_hash, status=status).inc()

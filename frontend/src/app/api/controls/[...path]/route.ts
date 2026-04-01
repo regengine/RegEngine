@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
+import { requireProxyAuth, validateProxySession, getServerApiKey, getAdminMasterKey } from '@/lib/api-proxy';
 import { getServerServiceURL } from '@/lib/api-config';
 
 const ADMIN_URL = (() => {
@@ -56,13 +56,21 @@ async function proxyRequest(
         const url = new URL(request.url);
         const queryString = url.search;
 
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        const adminKey = getAdminMasterKey();
+        if (adminKey) {
+            headers['X-Admin-Key'] = adminKey;
+        }
+        const apiKey = getServerApiKey();
+        if (apiKey) {
+            headers['X-RegEngine-API-Key'] = apiKey;
+        }
+
         const fetchOptions: RequestInit = {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Admin-Key': process.env.ADMIN_MASTER_KEY || 'admin',
-                'X-RegEngine-API-Key': 'admin',
-            },
+            headers,
         };
 
         if (method === 'POST') {
