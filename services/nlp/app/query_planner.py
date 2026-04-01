@@ -44,7 +44,7 @@ class QueryPlan(BaseModel):
 _ORPHAN_KEYWORDS = ("orphan", "unlinked", "disconnected")
 _GAP_KEYWORDS = ("gaps", "missing", "incomplete", "compliance issues")
 _TIMELINE_KEYWORDS = ("timeline", "history of", "events for lot")
-_FORWARD_KEYWORDS = ("trace forward", "downstream", "where did", "recall")
+_FORWARD_KEYWORDS = ("trace forward", "downstream", "where did")
 _BACKWARD_KEYWORDS = (
     "trace back",
     "trace backward",

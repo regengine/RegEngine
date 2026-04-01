@@ -27,8 +27,8 @@ const INTEGRATIONS = [
     { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'available', desc: 'Real-time shipment visibility' },
     { id: 'sap', name: 'SAP S/4HANA', category: 'ERP', status: 'available', desc: 'Enterprise resource planning' },
     { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'available', desc: 'Cloud ERP and financials' },
-    { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'available', desc: 'Global Data Synchronization' },
-    { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'available', desc: 'Retailer data exchange' },
+    { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'coming_soon', desc: 'Global Data Synchronization' },
+    { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'coming_soon', desc: 'Retailer data exchange' },
     { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'available', desc: 'GS1 event format bridge' },
     { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'available', desc: 'Push events to your endpoints' },
 ];
@@ -37,6 +37,7 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }
     pending: { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', label: 'Pending Setup' },
     available: { color: '#6b7280', bg: 'rgba(107,114,128,0.1)', label: 'Available' },
     disconnected: { color: '#6b7280', bg: 'rgba(107,114,128,0.1)', label: 'Available' },
+    coming_soon: { color: '#6b7280', bg: 'rgba(107,114,128,0.08)', label: 'Coming Soon' },
 };
 
 const TABS = [
@@ -449,6 +450,9 @@ export default function SettingsPage() {
                                                 )}
                                                 {int.status === 'pending' && (
                                                     <Badge className="text-[9px] bg-amber-500/10 text-amber-500">Setup in progress</Badge>
+                                                )}
+                                                {int.status === 'coming_soon' && (
+                                                    <Badge className="text-[9px] bg-gray-500/10 text-gray-400">Coming Soon</Badge>
                                                 )}
                                             </div>
                                         </div>

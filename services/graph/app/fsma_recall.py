@@ -296,6 +296,153 @@ class ScheduledDrill:
         }
 
 
+def _get_db_engine():
+    """Return a SQLAlchemy engine for the shared PostgreSQL DB, or None if unconfigured."""
+    import os
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return None
+    try:
+        from sqlalchemy import create_engine
+        url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1) if db_url.startswith("postgresql://") else db_url
+        return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
+    except Exception:
+        return None
+
+
+def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
+    """Insert or update a recall drill row in fsma.task_queue."""
+    import json as _json
+    try:
+        from sqlalchemy import text as _text
+        payload = _json.dumps(drill.to_dict())
+        with engine.connect() as conn:
+            conn.execute(
+                _text("""
+                    INSERT INTO fsma.task_queue
+                        (task_type, payload, status, tenant_id, created_at,
+                         started_at, completed_at)
+                    VALUES
+                        ('recall_drill', :payload::jsonb, :status, :tenant_id,
+                         :created_at, :started_at, :completed_at)
+                    ON CONFLICT DO NOTHING
+                """),
+                {
+                    "payload": payload,
+                    "status": drill.status.value,
+                    "tenant_id": drill.tenant_id,
+                    "created_at": drill.created_at,
+                    "started_at": drill.started_at,
+                    "completed_at": drill.completed_at,
+                },
+            )
+            conn.commit()
+    except Exception as exc:  # pragma: no cover
+        import logging
+        logging.getLogger("fsma_recall").warning("Failed to persist recall drill: %s", exc)
+
+
+def _update_drill_row(engine, drill: "RecallDrill") -> None:
+    """Update an existing recall drill row by drill_id stored in payload."""
+    import json as _json
+    try:
+        from sqlalchemy import text as _text
+        payload = _json.dumps(drill.to_dict())
+        with engine.connect() as conn:
+            conn.execute(
+                _text("""
+                    UPDATE fsma.task_queue
+                    SET payload       = :payload::jsonb,
+                        status        = :status,
+                        started_at    = :started_at,
+                        completed_at  = :completed_at
+                    WHERE task_type = 'recall_drill'
+                      AND tenant_id  = :tenant_id
+                      AND payload->>'drill_id' = :drill_id
+                """),
+                {
+                    "payload": payload,
+                    "status": drill.status.value,
+                    "tenant_id": drill.tenant_id,
+                    "started_at": drill.started_at,
+                    "completed_at": drill.completed_at,
+                    "drill_id": drill.drill_id,
+                },
+            )
+            conn.commit()
+    except Exception as exc:  # pragma: no cover
+        import logging
+        logging.getLogger("fsma_recall").warning("Failed to update recall drill: %s", exc)
+
+
+def _load_drills_from_db(engine, tenant_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    """Query drill rows for a tenant from fsma.task_queue."""
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            rows = conn.execute(
+                _text("""
+                    SELECT payload
+                    FROM fsma.task_queue
+                    WHERE task_type = 'recall_drill'
+                      AND tenant_id  = :tenant_id
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                """),
+                {"tenant_id": tenant_id, "limit": limit},
+            ).fetchall()
+        return [row[0] for row in rows]
+    except Exception as exc:  # pragma: no cover
+        import logging
+        logging.getLogger("fsma_recall").warning("Failed to load recall drills: %s", exc)
+        return []
+
+
+def _load_drill_by_id_from_db(engine, tenant_id: str, drill_id: str) -> Optional[Dict[str, Any]]:
+    """Query a single drill row by drill_id from fsma.task_queue."""
+    try:
+        from sqlalchemy import text as _text
+        with engine.connect() as conn:
+            row = conn.execute(
+                _text("""
+                    SELECT payload
+                    FROM fsma.task_queue
+                    WHERE task_type = 'recall_drill'
+                      AND tenant_id  = :tenant_id
+                      AND payload->>'drill_id' = :drill_id
+                    LIMIT 1
+                """),
+                {"tenant_id": tenant_id, "drill_id": drill_id},
+            ).fetchone()
+        return row[0] if row else None
+    except Exception as exc:  # pragma: no cover
+        import logging
+        logging.getLogger("fsma_recall").warning("Failed to load recall drill by id: %s", exc)
+        return None
+
+
+def _dict_to_recall_drill(d: Dict[str, Any]) -> "RecallDrill":
+    """Reconstruct a RecallDrill from its serialized dict (from DB payload)."""
+    drill = RecallDrill(
+        drill_id=d["drill_id"],
+        tenant_id=d["tenant_id"],
+        created_at=datetime.fromisoformat(d["created_at"]),
+        drill_type=RecallType(d["drill_type"]),
+        severity=RecallSeverity(d["severity"]),
+        target_lot=d.get("target_lot"),
+        target_gtin=d.get("target_gtin"),
+        target_facility_gln=d.get("target_facility_gln"),
+        initiated_by=d.get("initiated_by", "system"),
+        reason=d.get("reason", "manual_drill"),
+        description=d.get("description"),
+        status=RecallStatus(d.get("status", "pending")),
+        started_at=datetime.fromisoformat(d["started_at"]) if d.get("started_at") else None,
+        completed_at=datetime.fromisoformat(d["completed_at"]) if d.get("completed_at") else None,
+    )
+    # Skip checksum recalculation side-effects; result is not reconstructed
+    return drill
+
+
 class MockRecallEngine:
     """
     Mock Recall Automation Engine.
@@ -325,14 +472,23 @@ class MockRecallEngine:
         self._trace_backward = trace_backward_fn
         self._export_fn = export_fn
 
-        # Drill history by tenant
+        # In-memory cache for active drills in the current process lifetime
         self._drills: Dict[str, List[RecallDrill]] = {}
 
-        # Scheduled drills by tenant
+        # Scheduled drills by tenant (not yet persisted — schedules are low-volume)
         self._schedules: Dict[str, List[ScheduledDrill]] = {}
 
-        # SLA metrics cache
+        # SLA metrics cache (rebuilt from DB on demand)
         self._sla_metrics: Dict[str, Dict[str, Any]] = {}
+
+        # Lazy DB engine — initialised on first use
+        self._db_engine = None
+
+    def _get_engine(self):
+        """Return (and cache) the DB engine, or None if DATABASE_URL is not set."""
+        if self._db_engine is None:
+            self._db_engine = _get_db_engine()
+        return self._db_engine
 
     def create_drill(
         self,
@@ -380,6 +536,11 @@ class MockRecallEngine:
         if tenant_id not in self._drills:
             self._drills[tenant_id] = []
         self._drills[tenant_id].append(drill)
+
+        # Persist to PostgreSQL so history survives restarts
+        engine = self._get_engine()
+        if engine is not None:
+            _upsert_drill_row(engine, drill)
 
         return drill
 
@@ -567,6 +728,11 @@ class MockRecallEngine:
         # Update SLA metrics
         self._update_sla_metrics(drill.tenant_id, result)
 
+        # Persist updated drill status to PostgreSQL
+        engine = self._get_engine()
+        if engine is not None:
+            _update_drill_row(engine, drill)
+
         return result
 
     def _extract_facilities(
@@ -637,6 +803,9 @@ class MockRecallEngine:
         """
         Get drill history for a tenant.
 
+        Reads from PostgreSQL when available so history survives restarts.
+        Falls back to the in-process cache when the DB is unreachable.
+
         Args:
             tenant_id: Tenant identifier
             limit: Maximum results to return
@@ -646,7 +815,12 @@ class MockRecallEngine:
         Returns:
             List of RecallDrill instances
         """
-        drills = self._drills.get(tenant_id, [])
+        engine = self._get_engine()
+        if engine is not None:
+            rows = _load_drills_from_db(engine, tenant_id, limit=limit * 2)
+            drills = [_dict_to_recall_drill(r) for r in rows]
+        else:
+            drills = list(self._drills.get(tenant_id, []))
 
         # Apply filters
         if status_filter:
@@ -661,11 +835,25 @@ class MockRecallEngine:
         return drills[:limit]
 
     def get_drill(self, tenant_id: str, drill_id: str) -> Optional[RecallDrill]:
-        """Get a specific drill by ID."""
+        """Get a specific drill by ID.
+
+        Checks the in-process cache first (fast path for drills created in
+        this request), then falls back to PostgreSQL for drills from prior
+        restarts.
+        """
+        # Fast path: check in-memory cache first (covers drills just created)
         drills = self._drills.get(tenant_id, [])
         for drill in drills:
             if drill.drill_id == drill_id:
                 return drill
+
+        # DB path: drill may have been created before this process started
+        engine = self._get_engine()
+        if engine is not None:
+            row = _load_drill_by_id_from_db(engine, tenant_id, drill_id)
+            if row:
+                return _dict_to_recall_drill(row)
+
         return None
 
     def cancel_drill(self, drill: RecallDrill) -> bool:
@@ -673,6 +861,9 @@ class MockRecallEngine:
         if drill.status in (RecallStatus.PENDING, RecallStatus.IN_PROGRESS):
             drill.status = RecallStatus.CANCELLED
             drill.completed_at = datetime.utcnow()
+            engine = self._get_engine()
+            if engine is not None:
+                _update_drill_row(engine, drill)
             return True
         return False
 

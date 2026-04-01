@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: scheduler
-        image: regengine/scheduler:latest
+        image: regengine/scheduler:$(IMAGE_TAG)
         envFrom:
         - secretRef:
             name: scheduler-secrets
@@ -29,8 +29,8 @@ spec:
             memory: "512Mi"
         livenessProbe:
           httpGet:
-            path: /status
-            port: 8000
+            path: /health
+            port: 8600
           initialDelaySeconds: 15
 ---
 apiVersion: v1
@@ -43,4 +43,4 @@ spec:
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 8000
+      targetPort: 8600

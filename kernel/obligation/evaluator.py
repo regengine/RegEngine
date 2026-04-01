@@ -6,6 +6,7 @@ Core logic for evaluating decisions against regulatory obligations.
 
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
+import re
 import uuid
 
 import structlog
@@ -154,13 +155,50 @@ class ObligationEvaluator:
         for key, expected_value in conditions.items():
             if key == "decision_type":
                 continue  # Already checked
-            
-            # Check if key exists in decision_data and matches expected value
+
             actual_value = decision_data.get(key)
-            
-            if actual_value != expected_value:
-                return False
-        
+
+            # Extended condition operators: dict with "op" key triggers structured evaluation.
+            if isinstance(expected_value, dict) and "op" in expected_value:
+                op = expected_value["op"]
+                if op == "range":
+                    # {"op": "range", "min": <number>, "max": <number>}
+                    # Passes when min <= actual_value <= max (inclusive).
+                    try:
+                        numeric = float(actual_value)  # type: ignore[arg-type]
+                    except (TypeError, ValueError):
+                        return False
+                    lo = expected_value.get("min")
+                    hi = expected_value.get("max")
+                    if lo is not None and numeric < float(lo):
+                        return False
+                    if hi is not None and numeric > float(hi):
+                        return False
+                elif op == "regex":
+                    # {"op": "regex", "pattern": "<pattern>"}
+                    # Passes when the string value matches the regex pattern.
+                    pattern = expected_value.get("pattern", "")
+                    if not isinstance(actual_value, str):
+                        return False
+                    try:
+                        if not re.search(pattern, actual_value):
+                            return False
+                    except re.error as exc:
+                        logger.warning(
+                            "triggering_condition_invalid_regex",
+                            key=key,
+                            pattern=pattern,
+                            error=str(exc),
+                        )
+                        return False
+                else:
+                    logger.warning("triggering_condition_unknown_op", key=key, op=op)
+                    return False
+            else:
+                # Plain equality check (original behaviour preserved).
+                if actual_value != expected_value:
+                    return False
+
         return True
     
     def _evaluate_obligation(
@@ -183,15 +221,16 @@ class ObligationEvaluator:
         
         met = len(missing_evidence) == 0
         
-        # Compute risk score based on missing evidence
+        # Compute risk score based on missing evidence.
+        # Score is proportional to the fraction of missing evidence fields,
+        # ranging from 0.0 (all evidence present) to 1.0 (all evidence missing).
+        # LOW risk (score < 0.3) is a valid output when only a small fraction
+        # of evidence is absent; no artificial floor is applied.
         if met:
             risk_score = 0.0
         else:
-            # Risk floor for any violation is 0.5 (medium risk):
-            # Even a single missing field is a compliance gap, not a minor issue.
-            # Full missing evidence maps to 1.0 (critical).
             missing_ratio = len(missing_evidence) / len(obligation.required_evidence)
-            risk_score = min(1.0, 0.5 + (missing_ratio * 0.5))  # Range: [0.5, 1.0] for violations
+            risk_score = min(1.0, missing_ratio)
         
         return ObligationMatch(
             obligation_id=obligation.id,

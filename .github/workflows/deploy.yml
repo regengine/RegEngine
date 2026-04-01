@@ -43,8 +43,8 @@ jobs:
           [ -z "$RAILWAY_SERVICE_ID" ] && missing+=("RAILWAY_SERVICE_ID")
 
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::warning::Railway deploy skipped — missing secrets: ${missing[*]}. Railway deploys via its own git integration."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::error::RAILWAY_SERVICE_ID or RAILWAY_TOKEN not configured. Deployment aborted. Missing: ${missing[*]}"
+            exit 1
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi

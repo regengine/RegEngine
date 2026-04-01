@@ -7,7 +7,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
-    const next = searchParams.get('next') ?? '/developer/portal'
+    // Default to /dashboard for regular users; developer portal flows pass ?next=/developer/portal explicitly
+    const next = searchParams.get('next') ?? '/dashboard'
 
     if (code) {
         const supabase = createServerClient(
@@ -41,5 +42,5 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    return NextResponse.redirect(`${origin}/developer/login?error=auth_failed`)
+    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
 }

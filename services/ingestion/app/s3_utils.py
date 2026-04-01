@@ -26,6 +26,11 @@ RAW_INGEST_BUCKET = "regengine-ingest-raw"
 
 def _client() -> BaseClient:
     settings = get_settings()
+    if not settings.object_storage_access_key_id or not settings.object_storage_secret_access_key:
+        raise NotImplementedError(
+            "S3 storage is not configured — set OBJECT_STORAGE_ACCESS_KEY_ID and "
+            "OBJECT_STORAGE_SECRET_ACCESS_KEY environment variables before using S3 operations."
+        )
     session = boto3.session.Session()
     return session.client(
         "s3",

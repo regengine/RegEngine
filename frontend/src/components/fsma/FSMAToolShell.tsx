@@ -85,12 +85,33 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
         }
     };
 
+    /**
+     * Derive an intent score (0–100) for the lead.
+     * Uses config.scoring when provided; otherwise approximates from answer
+     * coverage (answered questions / total questions * 100), rounded to the
+     * nearest integer. Returns null when no answers have been recorded yet.
+     */
+    const deriveIntentScore = (): number | null => {
+        if (config.scoring) {
+            const result = config.scoring(answers);
+            if (typeof result === 'number' && isFinite(result)) {
+                return Math.max(0, Math.min(100, Math.round(result)));
+            }
+        }
+        const totalQuestions = config.stages.questions.length;
+        if (totalQuestions === 0) return null;
+        const answeredCount = Object.keys(answers).length;
+        if (answeredCount === 0) return null;
+        return Math.round(Math.min(answeredCount / totalQuestions, 1) * 100);
+    };
+
     const submitLead = () => {
         if (onLeadCapture) {
+            const intentScore = deriveIntentScore();
             onLeadCapture({
                 email,
                 toolId: config.id,
-                intentScore: 50, // Placeholder scoring
+                intentScore: intentScore ?? 0,
                 resultsSummary: 'User completed the flow',
                 answers
             });

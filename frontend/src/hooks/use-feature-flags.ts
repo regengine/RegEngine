@@ -9,7 +9,7 @@ interface FeatureFlags {
     disabled: string[];
 }
 
-const CACHE_KEY = 'regengine_feature_flags';
+const CACHE_KEY_PREFIX = 'regengine_feature_flags';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 interface CachedFlags {
@@ -25,15 +25,18 @@ interface CachedFlags {
  * that depend on optional backend routers (H10 from API audit).
  */
 export function useFeatureFlags() {
-    const { apiKey } = useAuth();
+    const { apiKey, tenantId, user } = useAuth();
     const [flags, setFlags] = useState<FeatureFlags | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Scope the cache key to tenant+user so flags are not shared across tenants
+    const cacheKey = `${CACHE_KEY_PREFIX}_${tenantId ?? 'none'}_${user?.id ?? 'none'}`;
+
     useEffect(() => {
         // Try cache first
         try {
-            const cached = localStorage.getItem(CACHE_KEY);
+            const cached = localStorage.getItem(cacheKey);
             if (cached) {
                 const parsed: CachedFlags = JSON.parse(cached);
                 if (Date.now() - parsed.timestamp < CACHE_TTL) {
@@ -60,7 +63,7 @@ export function useFeatureFlags() {
             .then((data: FeatureFlags) => {
                 setFlags(data);
                 try {
-                    localStorage.setItem(CACHE_KEY, JSON.stringify({
+                    localStorage.setItem(cacheKey, JSON.stringify({
                         flags: data,
                         timestamp: Date.now(),
                     }));
@@ -74,7 +77,7 @@ export function useFeatureFlags() {
                 setFlags({ enabled: [], disabled: [] });
             })
             .finally(() => setLoading(false));
-    }, [apiKey]);
+    }, [apiKey, cacheKey]);
 
     const isEnabled = useCallback(
         (routerName: string): boolean => {

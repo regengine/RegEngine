@@ -189,8 +189,11 @@ _CHECKLISTS: list[ComplianceChecklist] = [
 
 _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS}
 
-# Required FSMA 204 KDE fields for validation
-_REQUIRED_FSMA_FIELDS = {"tlc", "cte_type", "event_date", "location"}
+# Required FSMA 204 KDE fields for validation (all CTE types)
+_REQUIRED_FSMA_FIELDS = {"tlc", "cte_type", "event_date", "location", "quantity", "unit_of_measure", "product_description"}
+
+# Additional fields required only for RECEIVING CTEs
+_RECEIVING_REQUIRED_FIELDS = {"prior_source_tlc"}
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +237,16 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
                 message=f"Required FSMA 204 field '{field}' is missing from configuration.",
                 code="MISSING_REQUIRED_FIELD",
             ))
+
+    # For RECEIVING CTEs, prior_source_tlc is additionally required
+    if config.get("cte_type", "").upper() == "RECEIVING":
+        for field in _RECEIVING_REQUIRED_FIELDS:
+            if field not in config:
+                errors.append(ValidationError(
+                    path=field,
+                    message=f"Field '{field}' is required for RECEIVING CTE events under FSMA 204.",
+                    code="MISSING_REQUIRED_FIELD",
+                ))
 
     # Warn on missing optional but recommended fields
     recommended = {"lot_size_unit", "supplier_reference", "product_description"}
