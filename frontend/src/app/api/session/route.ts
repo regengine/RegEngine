@@ -28,12 +28,15 @@ const COOKIE_OPTIONS = {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { access_token, api_key, admin_key, tenant_id, user } = body;
+        const { access_token, refresh_token, api_key, admin_key, tenant_id, user } = body;
 
         const response = NextResponse.json({ ok: true });
 
         if (access_token) {
             response.cookies.set('re_access_token', access_token, COOKIE_OPTIONS);
+        }
+        if (refresh_token) {
+            response.cookies.set('re_refresh_token', refresh_token, COOKIE_OPTIONS);
         }
         if (api_key) {
             response.cookies.set('re_api_key', api_key, COOKIE_OPTIONS);
@@ -101,6 +104,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE() {
     const response = NextResponse.json({ ok: true });
     response.cookies.delete('re_access_token');
+    response.cookies.delete('re_refresh_token');
     response.cookies.delete('re_api_key');
     response.cookies.delete('re_admin_key');
     response.cookies.delete('re_tenant_id');

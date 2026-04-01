@@ -22,7 +22,7 @@ interface AuthContextType {
   setDemoMode: (enabled: boolean) => void;
   completeOnboarding: () => void;
   clearCredentials: () => void;
-  login: (token: string, user: User, tenantId?: string) => Promise<void>;
+  login: (token: string, user: User, tenantId?: string, refreshToken?: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -66,6 +66,7 @@ const STORAGE_KEYS = {
 /** Store sensitive credentials in HTTP-only cookies via /api/session POST. */
 async function setSessionCookies(params: {
   accessToken?: string | null;
+  refreshToken?: string | null;
   apiKey?: string | null;
   adminKey?: string | null;
   tenantId?: string | null;
@@ -74,6 +75,7 @@ async function setSessionCookies(params: {
   if (typeof window === 'undefined') return;
   const body: Record<string, unknown> = {};
   if (params.accessToken) body.access_token = params.accessToken;
+  if (params.refreshToken) body.refresh_token = params.refreshToken;
   if (params.apiKey) body.api_key = params.apiKey;
   if (params.adminKey) body.admin_key = params.adminKey;
   if (params.tenantId) body.tenant_id = params.tenantId;
@@ -343,7 +345,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string) => {
+  const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string, refreshToken?: string) => {
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
     setUserState(loginUser);
     if (loginTenantId) setTenantIdState(loginTenantId);
@@ -361,6 +363,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // MUST await — middleware checks this cookie on the next navigation.
     await setSessionCookies({
       accessToken: token,
+      refreshToken: refreshToken,
       tenantId: loginTenantId,
       user: loginUser,
     });

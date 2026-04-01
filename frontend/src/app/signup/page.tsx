@@ -41,7 +41,7 @@ function SignupForm() {
 
     try {
       const response = await apiClient.signup(email, password, tenantName);
-      login(response.access_token, response.user, response.tenant_id);
+      login(response.access_token, response.user, response.tenant_id, response.refresh_token);
       router.push('/onboarding/supplier-flow');
     } catch (err: unknown) {
       const apiError = err as {

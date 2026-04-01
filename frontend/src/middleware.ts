@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 import { createServerClient } from '@supabase/ssr';
-import { jwtVerify } from 'jose';
+import { jwtVerify, decodeJwt } from 'jose';
 import { getVerificationKeys } from '@/lib/jwt-keys';
 import {
     verifyCsrfToken,
@@ -48,6 +48,108 @@ function setSysadminCached(userId: string, isSysadmin: boolean): void {
         isSysadmin,
         expiresAt: Date.now() + SYSADMIN_CACHE_TTL_MS,
     });
+}
+
+// ---------------------------------------------------------------------------
+// Silent token refresh — proactively refresh access tokens nearing expiry
+// to prevent mid-session logouts during long compliance workflows.
+// ---------------------------------------------------------------------------
+const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60; // Refresh if <5 min until expiry
+
+/**
+ * Resolve the admin service base URL for server-side calls.
+ * Checks env vars in priority order, matching the admin proxy route logic.
+ */
+function getAdminBaseURL(): string {
+    return (
+        process.env.NEXT_PUBLIC_ADMIN_URL ||
+        process.env.ADMIN_SERVICE_URL ||
+        process.env.NEXT_PUBLIC_API_BASE_URL ||
+        'http://localhost:8400'
+    );
+}
+
+/**
+ * Check if the access token is close to expiry (within TOKEN_REFRESH_WINDOW_SECONDS).
+ * Decodes the JWT without verification to read the `exp` claim.
+ * Returns true if the token should be refreshed.
+ */
+function isTokenNearExpiry(token: string): boolean {
+    try {
+        const payload = decodeJwt(token);
+        if (typeof payload.exp !== 'number') return false;
+        const now = Math.floor(Date.now() / 1000);
+        return (payload.exp - now) < TOKEN_REFRESH_WINDOW_SECONDS;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Attempt a silent token refresh using the refresh token cookie.
+ *
+ * Calls POST /auth/refresh on the admin service with the refresh token.
+ * On success, returns the new access and refresh tokens.
+ * On failure, returns null (caller should redirect to login or let the
+ * existing token attempt proceed).
+ */
+async function attemptSilentRefresh(
+    refreshToken: string,
+): Promise<{ access_token: string; refresh_token: string } | null> {
+    const adminUrl = getAdminBaseURL().replace(/\/+$/, '');
+
+    try {
+        const res = await fetch(`${adminUrl}/auth/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        if (!res.ok) {
+            console.warn(
+                `[middleware] Silent refresh failed: ${res.status} ${res.statusText}`,
+            );
+            return null;
+        }
+
+        const data = await res.json();
+        if (!data.access_token) {
+            console.warn('[middleware] Silent refresh response missing access_token');
+            return null;
+        }
+
+        return {
+            access_token: data.access_token,
+            refresh_token: data.refresh_token || '',
+        };
+    } catch (err) {
+        console.warn('[middleware] Silent refresh network error:', err);
+        return null;
+    }
+}
+
+/**
+ * Apply refreshed tokens to the response as HTTP-only cookies.
+ * Mirrors the cookie settings from /api/session (POST handler).
+ */
+function setTokenCookies(
+    response: NextResponse,
+    accessToken: string,
+    refreshToken: string,
+): void {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax' as const,
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+    };
+
+    response.cookies.set('re_access_token', accessToken, cookieOptions);
+    if (refreshToken) {
+        response.cookies.set('re_refresh_token', refreshToken, cookieOptions);
+    }
 }
 
 // Only FSMA verticals are supported — all others redirect to home.
@@ -222,12 +324,43 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
         if (payload) {
+            // Token is valid — check if it's near expiry and proactively refresh.
+            // This prevents mid-session logouts during long compliance workflows.
+            const refreshToken = request.cookies.get('re_refresh_token')?.value;
+            if (refreshToken && isTokenNearExpiry(reToken)) {
+                const refreshed = await attemptSilentRefresh(refreshToken);
+                if (refreshed) {
+                    console.info('[middleware] Silent token refresh succeeded');
+                    const response = NextResponse.next({ request });
+                    setTokenCookies(response, refreshed.access_token, refreshed.refresh_token);
+                    return response;
+                }
+                // Refresh failed but current token is still valid — continue
+                console.info('[middleware] Silent refresh failed, continuing with current token');
+            }
             return NextResponse.next({ request });
         }
-        // Token exists but verification failed (expired or invalid signature).
-        // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
-        // This prevents a compromised or expired token from being silently bypassed.
-        console.info('[middleware] JWT verification failed — redirecting to login');
+
+        // Token verification failed (expired or invalid signature).
+        // Attempt a silent refresh before forcing re-auth — the token may have
+        // just expired and the refresh token is still valid.
+        const refreshToken = request.cookies.get('re_refresh_token')?.value;
+        if (refreshToken) {
+            const refreshed = await attemptSilentRefresh(refreshToken);
+            if (refreshed) {
+                // Verify the new token is actually valid before trusting it
+                const newPayload = await verifyRegEngineToken(refreshed.access_token);
+                if (newPayload) {
+                    console.info('[middleware] Silent refresh recovered expired session');
+                    const response = NextResponse.next({ request });
+                    setTokenCookies(response, refreshed.access_token, refreshed.refresh_token);
+                    return response;
+                }
+            }
+        }
+
+        // Neither the existing token nor refresh succeeded — redirect to login.
+        console.info('[middleware] JWT verification failed and refresh unavailable — redirecting to login');
         const url = request.nextUrl.clone();
         url.pathname = '/login';
         url.searchParams.set('next', pathname);

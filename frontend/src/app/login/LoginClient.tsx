@@ -148,7 +148,8 @@ export default function LoginPage() {
             await login(
                 response.access_token,
                 response.user,
-                response.tenant_id
+                response.tenant_id,
+                response.refresh_token
             );
 
             // Clear any error params (e.g. ?error=session_expired) left by
