@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.webhook_compat import _verify_api_key
 
 logger = logging.getLogger("disaster-recovery")
@@ -26,7 +28,7 @@ def _get_db():
     try:
         from shared.database import SessionLocal
         return SessionLocal()
-    except Exception as exc:  # broad catch intentional: covers ImportError and connection failures
+    except (ImportError, SQLAlchemyError, OSError) as exc:
         logger.warning("db_unavailable error=%s", str(exc))
         return None
 

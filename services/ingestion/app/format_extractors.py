@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import zipfile
 from typing import List, Tuple, Optional
 
 from .models import PositionMapEntry, TextExtractionMetadata
@@ -83,7 +84,7 @@ def extract_from_html(
             ),
             position_map,
         )
-    except (UnicodeDecodeError, ValueError, TypeError) as exc:
+    except (ValueError, TypeError, UnicodeDecodeError) as exc:
         logger.warning("html_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "html")
 
@@ -149,7 +150,7 @@ def extract_from_xml(
             ),
             position_map,
         )
-    except (_etree_utils.LxmlError, UnicodeDecodeError, ValueError, TypeError) as exc:
+    except (_etree_utils.LxmlError, UnicodeDecodeError, ValueError, TypeError, OSError) as exc:
         logger.warning("xml_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "xml")
 
@@ -210,7 +211,7 @@ def extract_from_csv(
                 TextExtractionMetadata(engine="pandas", confidence_mean=0.97, confidence_std=0.03),
                 position_map,
             )
-        except (csv_mod.Error, UnicodeDecodeError, ValueError, TypeError) as exc:
+        except (csv_mod.Error, ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
             logger.warning("csv_stdlib_fallback_failed", exc_info=exc)
             return _fallback_extraction(raw_bytes, "csv")
 
@@ -265,7 +266,7 @@ def extract_from_csv(
             ),
             position_map,
         )
-    except (pd.errors.ParserError, UnicodeDecodeError, ValueError, TypeError) as exc:
+    except (pd.errors.ParserError, ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
         logger.warning("csv_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "csv")
 
@@ -288,7 +289,7 @@ def extract_from_excel(
         # Try xlsx first (more common)
         try:
             excel_file = pd.ExcelFile(io.BytesIO(raw_bytes), engine="openpyxl")
-        except Exception:  # broad catch intentional: openpyxl raises diverse errors for non-xlsx files
+        except (ValueError, OSError, KeyError, zipfile.BadZipFile):
             # Fall back to xlrd for .xls files
             try:
                 excel_file = pd.ExcelFile(io.BytesIO(raw_bytes), engine="xlrd")
@@ -338,7 +339,7 @@ def extract_from_excel(
             ),
             position_map if position_map else [PositionMapEntry(page=1, char_start=0, char_end=len(final_text), source_start=0, source_end=len(raw_bytes))],
         )
-    except (ValueError, TypeError, KeyError, OSError) as exc:
+    except (ValueError, TypeError, OSError, KeyError, zipfile.BadZipFile) as exc:
         logger.warning("excel_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "excel")
 
@@ -403,7 +404,7 @@ def extract_from_docx(
             ),
             position_map,
         )
-    except (ValueError, TypeError, KeyError, OSError) as exc:
+    except (ValueError, TypeError, OSError, KeyError, zipfile.BadZipFile) as exc:
         logger.warning("docx_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "docx")
 
@@ -438,7 +439,7 @@ def extract_from_edi(
                 logger.warning("edi_format_unknown")
                 return _fallback_extraction(raw_bytes, "edi")
                 
-    except (UnicodeDecodeError, ValueError, IndexError) as exc:
+    except (ValueError, UnicodeDecodeError, IndexError) as exc:
         logger.warning("edi_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "edi")
 
@@ -656,7 +657,7 @@ def detect_format(content_type: Optional[str], raw_bytes: Optional[bytes] = None
                 return "edi"
             elif text_sample.startswith("UNA") or text_sample.startswith("UNB"):
                 return "edi"
-        except UnicodeDecodeError as e:
+        except (UnicodeDecodeError, ValueError) as e:
             logger.debug("format_detection_error", error=str(e))
     
     return "unknown"
@@ -673,7 +674,7 @@ def is_edi_content(raw_bytes: bytes) -> bool:
             "ISA*" in sample or
             "UNB+" in sample
         )
-    except UnicodeDecodeError:
+    except (UnicodeDecodeError, ValueError):
         return False
 
 

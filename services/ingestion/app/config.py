@@ -6,12 +6,12 @@ from functools import lru_cache
 from typing import Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.base_config import BaseServiceSettings, ObjectStorageMixin
 
 _logger = logging.getLogger(__name__)
 
 
-class Settings(BaseSettings):
+class Settings(ObjectStorageMixin, BaseServiceSettings):
     """Environment-driven configuration values."""
 
     kafka_topic_dlq: str = "ingest.dlq"
@@ -21,24 +21,9 @@ class Settings(BaseSettings):
     google_cx: Optional[str] = None
     discovery_query: str = "site:gov filetype:pdf FSMA food traceability"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-
     raw_bucket: str = Field(default="reg-engine-raw-data-dev", alias="RAW_DATA_BUCKET")
     processed_bucket: str = Field(
         default="reg-engine-processed-data-dev", alias="PROCESSED_DATA_BUCKET"
-    )
-    object_storage_endpoint_url: Optional[str] = Field(
-        default=None,
-        alias="OBJECT_STORAGE_ENDPOINT_URL",
-    )
-    object_storage_region: str = Field(default="us-east-1", alias="OBJECT_STORAGE_REGION")
-    object_storage_access_key_id: Optional[str] = Field(
-        default=None,
-        alias="OBJECT_STORAGE_ACCESS_KEY_ID",
-    )
-    object_storage_secret_access_key: Optional[str] = Field(
-        default=None,
-        alias="OBJECT_STORAGE_SECRET_ACCESS_KEY",
     )
     kafka_bootstrap_servers: str = Field(
         default="redpanda:9092", alias="KAFKA_BOOTSTRAP_SERVERS"
@@ -46,7 +31,6 @@ class Settings(BaseSettings):
     kafka_topic_normalized: str = Field(
         default="ingest.normalized", alias="KAFKA_TOPIC_NORMALIZED"
     )
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
     api_key: Optional[str] = Field(default=None, alias="API_KEY")
     auth_test_bypass_token: Optional[str] = Field(default=None, alias="AUTH_TEST_BYPASS_TOKEN")
     env: str = Field(default="development", alias="ENV")

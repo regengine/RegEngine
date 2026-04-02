@@ -4,15 +4,11 @@ from functools import lru_cache
 from typing import Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from shared.base_config import BaseServiceSettings
 
 
-class Settings(BaseSettings):
+class Settings(BaseServiceSettings):
     """Environment-driven configuration for the compliance service."""
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
 
     graph_service_url: str = Field(
         default="http://graph-service:8200",
@@ -28,7 +24,6 @@ class Settings(BaseSettings):
         default=None,
         alias="REGENGINE_INTERNAL_SECRET",
     )
-    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
 
 @lru_cache(maxsize=1)
