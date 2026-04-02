@@ -1,50 +1,59 @@
-# Services dependencies (from services/admin/requirements.txt)
+# Root requirements — canonical versions matching pyproject.toml
+# Per-service files inherit these floors; service-specific deps live in services/*/requirements.txt
+
+# Core Framework
 fastapi>=0.115.0
-uvicorn[standard]==0.27.0
-sqlalchemy>=2.0.38
+uvicorn[standard]>=0.27.0
+sqlalchemy>=2.0.25
+pydantic>=2.10.0,<3
+pydantic-settings>=2.7.0
+structlog>=24.1.0
+
+# Database
 psycopg[binary]>=3.2.4
-asyncpg>=0.30.0
-structlog==24.4.0
-pydantic>=2.10.6
-pydantic-core>=2.27.0
-pydantic-settings>=2.7.1
-setuptools<82
-prometheus-client==0.19.0
-httpx==0.26.0
-redis==5.0.1
-slowapi==0.1.9
-prometheus-fastapi-instrumentator==7.0.0
-python-multipart>=0.0.22
-anyio==3.7.1
-kafka-python-ng==2.0.3
-tenacity==8.2.3
+asyncpg>=0.29.0
+redis>=5.0.1
+neo4j>=5.16.0
+
+# Networking
+httpx>=0.26.0
+requests>=2.31.0
+tenacity>=8.2.3
+
+# Observability — all 4 otel packages must share the same version
+prometheus-client>=0.19.0
+prometheus-fastapi-instrumentator>=7.0.0
 opentelemetry-api==1.30.0
 opentelemetry-sdk==1.30.0
 opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-exporter-otlp==1.30.0
 
-# Security dependencies
-passlib[argon2]==1.7.4
-# Pinned to >=2.10.1 to resolve conflict with gotrue (Supabase dependency)
-PyJWT==2.12.0
-argon2-cffi==23.1.0
+# Security
+passlib[argon2]>=1.7.4
+PyJWT>=2.8.0
+argon2-cffi>=23.1.0
+python-multipart>=0.0.9
 defusedxml>=0.7.1
 
-# Cloud/DB
-boto3==1.34.0
-neo4j==5.16.0
-supabase==2.16.0
-gotrue==2.12.4
-resend>=2.4.0,<3
-stripe>=11.6.0,<12
+# Cloud/Storage
+boto3>=1.34.0
 
-# File parsing (bulk upload)
-openpyxl>=3.1.2
+# Kafka
+kafka-python-ng>=2.0.3
 
-# Test dependencies
-pytest==8.4.2
-pytest-asyncio==1.2.0
-pytest-json-report==1.5.0
+# Utilities
+slowapi>=0.1.9
+python-dotenv>=1.0.0
+openpyxl>=3.1.0
 
 # Database migrations
 alembic>=1.13.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+testcontainers[postgresql]>=4.4.0
+testcontainers[redis]>=4.4.0
+testcontainers[neo4j]>=4.4.0

@@ -39,7 +39,7 @@ echo ""
 
 # Step 2: Start monitoring stack
 echo -e "${GREEN}[Step 3/8] Starting monitoring stack (Prometheus/Grafana/Alertmanager)...${NC}"
-docker-compose -f docker-compose.monitoring.yml up -d
+docker compose --profile monitoring up -d
 echo -e "${GREEN}✓ Monitoring stack started${NC}"
 echo -e "  - Prometheus: http://localhost:9090"
 echo -e "  - Grafana: http://localhost:3001 (admin/admin)"
@@ -174,6 +174,5 @@ echo ""
 echo -e "${GREEN}✓ Demo completed successfully!${NC}"
 echo ""
 echo -e "${YELLOW}To stop all services:${NC}"
-echo -e "  docker-compose down"
-echo -e "  docker-compose -f docker-compose.monitoring.yml down"
+echo -e "  docker compose --profile monitoring down"
 echo ""
