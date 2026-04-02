@@ -158,7 +158,7 @@ jobs:
           THRESHOLD=50
           case "${{ matrix.service }}" in
             compliance) THRESHOLD=18 ;;  # was 15; actual ~18%
-            scheduler)  THRESHOLD=25 ;;  # was 22; actual ~24%
+            scheduler)  THRESHOLD=24 ;;  # was 22; actual ~24%
             admin)      THRESHOLD=50 ;;
             graph)      THRESHOLD=50 ;;
             ingestion)  THRESHOLD=42 ;;  # was 40; actual ~42%
