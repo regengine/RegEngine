@@ -90,11 +90,12 @@ async def get_current_user(
         except JWTError:
             raise credentials_exception
         
-    # Set user_id context for RLS so the user can see themselves
-    db.execute(
-        text("SELECT set_config('regengine.user_id', :uid, false)"),
-        {"uid": str(user_id)}
-    )
+    # Set user_id context for RLS so the user can see themselves (PostgreSQL only)
+    if db.bind and db.bind.dialect.name != "sqlite":
+        db.execute(
+            text("SELECT set_config('regengine.user_id', :uid, false)"),
+            {"uid": str(user_id)}
+        )
     
     user = db.get(UserModel, UUID(user_id))
     if user is None:
@@ -106,8 +107,9 @@ async def get_current_user(
     # Store tenant context in request state or handle via DB session context
     if tenant_id:
         try:
-            # Enforce RLS context
-            TenantContext.set_tenant_context(db, UUID(tenant_id))
+            # Enforce RLS context (PostgreSQL only — SQLite has no RLS)
+            if db.bind and db.bind.dialect.name != "sqlite":
+                TenantContext.set_tenant_context(db, UUID(tenant_id))
             # Verify membership exists for this tenant
             membership = db.execute(
                 select(MembershipModel).where(

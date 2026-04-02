@@ -6,7 +6,7 @@ for different jurisdictions without custom code.
 
 from __future__ import annotations
 
-import requests
+import httpx
 import feedparser
 from typing import Iterable, Optional
 
@@ -53,7 +53,7 @@ class GenericRSSScraper(StateRegistryScraper):
         """Fetch content from the source URL."""
         try:
             validate_url(source.url)
-            resp = requests.get(
+            resp = httpx.get(
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
@@ -110,7 +110,7 @@ class GenericListScraper(StateRegistryScraper):
             from urllib.parse import urljoin
 
             validate_url(self.list_url)
-            resp = requests.get(
+            resp = httpx.get(
                 self.list_url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
@@ -139,7 +139,7 @@ class GenericListScraper(StateRegistryScraper):
         """Fetch content from the source URL."""
         try:
             validate_url(source.url)
-            resp = requests.get(
+            resp = httpx.get(
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},

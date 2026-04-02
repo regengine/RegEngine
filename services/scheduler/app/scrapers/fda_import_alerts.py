@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-import requests
+import httpx
 import structlog
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
@@ -40,7 +40,7 @@ class FDAImportAlertsScraper(BaseScraper):
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update(
             {
                 "User-Agent": "RegEngine/1.0 (Regulatory Compliance Platform)",

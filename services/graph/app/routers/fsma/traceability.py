@@ -16,6 +16,7 @@ from ...fsma_utils import (
     trace_forward,
 )
 from ...neo4j_utils import Neo4jClient
+from neo4j.exceptions import Neo4jError, ServiceUnavailable
 from shared.auth import require_api_key
 from ...models.fsma_nodes import (
     CTEType,

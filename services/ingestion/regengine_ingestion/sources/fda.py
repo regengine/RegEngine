@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 
-import requests
+import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 from ..models import SourceMetadata
@@ -27,7 +27,7 @@ class FDAAdapter(SourceAdapter):
         # Without key: 40 requests/min. With key: 240 requests/min.
         rpm = 240 if api_key else 40
         self.rate_limiter = RateLimiter(requests_per_minute=rpm)
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update({"User-Agent": self.user_agent})
         self.api_key = api_key
     
@@ -65,7 +65,7 @@ class FDAAdapter(SourceAdapter):
         @retry(
             wait=wait_exponential(multiplier=1, min=4, max=10),
             stop=stop_after_attempt(3),
-            retry=retry_if_exception_type(requests.RequestException),
+            retry=retry_if_exception_type(httpx.HTTPError),
             reraise=True
         )
         def _get_with_retry(url, params=None):

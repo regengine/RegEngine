@@ -16,13 +16,12 @@ from pathlib import Path
 from typing import Dict, Iterable, Optional, List
 from urllib.parse import urlparse
 
-import requests
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, BackgroundTasks, Body, File, UploadFile, Query, Form
 from fastapi.responses import PlainTextResponse
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from requests import Response
-import httpx
+from httpx import Response
 import psycopg
 import redis
 
@@ -90,7 +89,7 @@ def get_db_manager() -> Optional[DatabaseManager]:
         manager.connect()
         logger.info("db_connected_successfully")
         return manager
-    except (ValueError, KeyError, psycopg.Error, ConnectionError) as e:
+    except (ValueError, KeyError, psycopg.Error, ConnectionError, OSError) as e:
         logger.error("db_init_failed", error=str(e), url=db_url)
         return None
 
@@ -353,7 +352,7 @@ def _process_and_emit(
                     event.model_dump(mode="json"),
                     key=f"{document_id}:{content_sha256}",
                 )
-            except (ConnectionError, OSError) as e:
+            except (ConnectionError, OSError, RuntimeError) as e:
                 logger.warning("kafka_dedup_emit_failed", error=str(e))
                 
             return event
@@ -446,7 +445,7 @@ def _process_and_emit(
                 content_length=len(raw_bytes)
             )
             db_manager.insert_document(doc)
-        except (psycopg.Error, ConnectionError) as db_exc:
+        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as db_exc:
             logger.warning("document_db_insert_failed", error=str(db_exc))
 
     # 8. Kafka Emission & Claim Check Pattern
@@ -478,7 +477,7 @@ def _process_and_emit(
             event.model_dump(mode="json"),
             key=f"{document_id}:{content_sha256}",
         )
-    except (ConnectionError, OSError) as kafka_exc:
+    except (ConnectionError, OSError, RuntimeError, ValueError) as kafka_exc:
         logger.warning("kafka_publish_failed", document_id=document_id, error=str(kafka_exc))
     
     return event
@@ -514,7 +513,7 @@ async def ingest_direct(
         )
         try:
             db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError) as e:
+        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
@@ -587,7 +586,7 @@ async def ingest_file(
         )
         try:
             db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError) as e:
+        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
@@ -670,7 +669,7 @@ async def ingest_url(
         )
         try:
             db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError) as e:
+        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     try:
@@ -752,7 +751,7 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
         )
         try:
             db_manager.insert_job(job)
-        except (psycopg.Error, ConnectionError) as e:
+        except (psycopg.Error, ConnectionError, OSError, RuntimeError) as e:
             logger.error("job_db_init_failed", job_id=job_id, error=str(e))
 
     success_count = 0

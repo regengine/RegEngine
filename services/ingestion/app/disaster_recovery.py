@@ -14,6 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy.exc import SQLAlchemyError
 

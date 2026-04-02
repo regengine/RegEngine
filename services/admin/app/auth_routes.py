@@ -133,7 +133,7 @@ async def login(
     session_persisted = True
     try:
         await session_store.create_session(session_data)
-    except (OSError, TimeoutError, ConnectionError, ValueError) as exc:
+    except Exception as exc:  # Redis may raise redis.exceptions.RedisError (not a builtin)
         session_persisted = False
         logger.warning(
             "session_store_unavailable",
@@ -240,6 +240,16 @@ async def signup(
         name=tenant_name,
         slug=_ensure_unique_tenant_slug(db, tenant_name),
         status="active",
+        settings={
+            "onboarding": {
+                "workspace_setup_completed": False,
+                "facility_created": False,
+                "ftl_check_completed": False,
+                "first_document_imported": False,
+                "team_member_invited": False,
+                "mock_drill_run": False,
+            }
+        },
     )
     db.add(new_tenant)
     db.flush()
@@ -277,7 +287,7 @@ async def signup(
     session_persisted = True
     try:
         await session_store.create_session(session_data)
-    except (OSError, TimeoutError, ConnectionError, ValueError) as exc:
+    except Exception as exc:  # Redis may raise redis.exceptions.RedisError (not a builtin)
         session_persisted = False
         logger.warning(
             "session_store_unavailable_on_signup",
