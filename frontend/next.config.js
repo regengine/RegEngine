@@ -3,9 +3,31 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
-const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost';
-const ingestionUrl = process.env.INGESTION_SERVICE_URL || `${apiGatewayUrl}:8002`;
-const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || `${apiGatewayUrl}:8500`;
+const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+const ingestionUrl = process.env.INGESTION_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8002`);
+const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8500`);
+
+if (!isStatic) {
+    const hasIndividualServiceUrls =
+        process.env.INGESTION_SERVICE_URL &&
+        process.env.COMPLIANCE_SERVICE_URL &&
+        process.env.ADMIN_SERVICE_URL;
+
+    if (!apiGatewayUrl && !hasIndividualServiceUrls) {
+        throw new Error(
+            'No API routing env vars are set — configure NEXT_PUBLIC_API_BASE_URL, ' +
+            'or set INGESTION_SERVICE_URL, COMPLIANCE_SERVICE_URL, and ADMIN_SERVICE_URL individually'
+        );
+    }
+
+    if (!apiGatewayUrl && hasIndividualServiceUrls) {
+        console.warn(
+            'Warning: NEXT_PUBLIC_API_BASE_URL is not set. ' +
+            'Individual service URLs are present so routing will work, ' +
+            'but the /api/v1/health proxy rewrite will be skipped.'
+        );
+    }
+}
 
 const nextConfig = {
     output: isStatic ? 'export' : undefined,
@@ -136,10 +158,11 @@ const nextConfig = {
                 destination: `${ingestionUrl}/v1/webhooks/:path*`,
             },
             // API-03: Proxy admin health endpoint for external monitoring
-            {
+            // Skipped if NEXT_PUBLIC_API_BASE_URL is not set (individual service URLs used instead)
+            ...(apiGatewayUrl ? [{
                 source: '/api/v1/health',
                 destination: `${apiGatewayUrl}/health`,
-            },
+            }] : []),
         ]
     },
 }
