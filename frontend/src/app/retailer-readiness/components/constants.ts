@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { PRICING } from '@/lib/marketing-claims';
 
 /* ─────────────────────────────────────────────────────────────
    DESIGN TOKENS
@@ -54,14 +55,14 @@ export function useScrollReveal(threshold = 0.15) {
 export const PRICING_TIERS = [
     {
         revenue: '1 facility',
-        price: '$425',
+        price: PRICING.starterMonthly,
         period: '/mo',
         note: '$999/mo GA — 50% off for life',
         features: ['Up to 500 CTEs/month', '1 facility', 'FSMA 204 traceability workspace', 'FDA-ready export'],
     },
     {
         revenue: '2–3 facilities',
-        price: '$549',
+        price: PRICING.growthMonthly,
         period: '/mo',
         note: '$1,099/mo GA — 50% off for life',
         features: ['Unlimited CTEs', '2–3 facilities', 'Everything in Base', 'Retailer-specific benchmarks', 'EPCIS 2.0 export'],
@@ -69,7 +70,7 @@ export const PRICING_TIERS = [
     },
     {
         revenue: '4+ facilities',
-        price: '$639',
+        price: PRICING.scaleMonthly,
         period: '/mo',
         note: '$1,275/mo GA — 50% off for life',
         features: ['Unlimited CTEs', '4+ facilities', 'Everything in Standard', 'Dedicated Slack channel', 'Quarterly compliance reviews'],
@@ -100,7 +101,7 @@ export const TRACE_NODES_BACKWARD = [
    ───────────────────────────────────────────────────────────── */
 export const FAQ_ITEMS = [
     { q: 'We already use spreadsheets — why switch?', a: 'Spreadsheets can\'t generate the FDA-sortable export format required by FSMA 204. When a major retailer or the FDA requests a trace, you need results in seconds, not days. RegEngine automates what spreadsheets can\'t: hash-chained CTEs, lot-level KDEs, and one-click FDA exports.' },
-    { q: 'We\'re a small supplier — do we really need this?', a: 'If you sell any FDA Food Traceability List (FTL) categories through major retailers, you\'re subject to the same requirements as large suppliers. Size doesn\'t exempt you from compliance — but RegEngine starts at $425/mo for Founding Design Partners — built specifically for single-facility suppliers getting compliant.' },
+    { q: 'We\'re a small supplier — do we really need this?', a: `If you sell any FDA Food Traceability List (FTL) categories through major retailers, you're subject to the same requirements as large suppliers. Size doesn't exempt you from compliance — but RegEngine starts at ${PRICING.starterMonthly}/mo for Founding Design Partners — built specifically for single-facility suppliers getting compliant.` },
     { q: 'Can\'t we just wait for the FDA\'s July 2028 deadline?', a: 'Retailers are already enforcing. Walmart required food and beverage suppliers to meet ASN and packaging requirements by August 1, 2025. Kroger required EDI 856 compliance by June 30, 2025. Suppliers who can\'t demonstrate traceability readiness risk losing shelf placement during the next category review. By the time the FDA deadline hits, it\'s already too late.' },
     { q: 'How long does integration take?', a: 'Most suppliers are operational within 2–4 weeks. Data flows in via API, CSV/XLSX bulk upload, or SFTP import. If you have existing data in spreadsheets, we bulk-import and auto-clean it during onboarding. ERP and retailer integrations are scoped per delivery mode — native API, webhook, CSV import, or custom mapping.' },
     { q: 'What if we don\'t sell FTL products?', a: 'Use our free FTL Checker tool to verify whether your products fall under the FDA Food Traceability List categories (see 21 CFR 1.1300). Even if your primary products aren\'t on the list, many suppliers are surprised to find that secondary product lines (like pre-cut salads or certain cheeses) are covered.' },
@@ -110,7 +111,7 @@ export const FAQ_ITEMS = [
    COMPETITOR DATA
    ───────────────────────────────────────────────────────────── */
 export const COMPETITORS = [
-    { feature: 'Starting price', regengine: '$425/mo', foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
+    { feature: 'Starting price', regengine: `${PRICING.starterMonthly}/mo`, foodlogiq: '$2,500+/mo', tracelink: 'Enterprise only' },
     { feature: 'Setup time', regengine: '2–4 weeks', foodlogiq: '3–6 months', tracelink: '6–12 months' },
     { feature: 'API-first', regengine: '✓ Full REST API', foodlogiq: 'Limited', tracelink: 'Portal-based' },
     { feature: 'FDA export format', regengine: '✓ One-click', foodlogiq: 'Manual config', tracelink: 'Custom build' },

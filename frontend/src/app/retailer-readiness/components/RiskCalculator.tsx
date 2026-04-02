@@ -1,6 +1,7 @@
 'use client';
 
 import { T } from './constants';
+import { PRICING } from '@/lib/marketing-claims';
 
 export interface RiskCalculatorProps {
     revealRef: React.RefObject<HTMLDivElement>;
@@ -129,11 +130,11 @@ export default function RiskCalculator({
                     }}>💡</div>
                     <div>
                         <p style={{ fontSize: 14, color: T.heading, fontWeight: 600, marginBottom: 2 }}>
-                            RegEngine: {annualRevenue <= 50 ? '$425' : annualRevenue <= 200 ? '$549' : '$639'}/mo (Design Partner)
+                            RegEngine: {annualRevenue <= 50 ? PRICING.starterMonthly : annualRevenue <= 200 ? PRICING.growthMonthly : PRICING.scaleMonthly}/mo (Design Partner)
                         </p>
                         <p style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
                             That&apos;s <strong style={{ color: T.accent, fontSize: 15 }}>
-                                {((monthlyRisk / (annualRevenue <= 50 ? 425 : annualRevenue <= 200 ? 549 : 639))).toLocaleString(undefined, { maximumFractionDigits: 0 })}x less
+                                {((monthlyRisk / (annualRevenue <= 50 ? PRICING.starterMonthlyNum : annualRevenue <= 200 ? PRICING.growthMonthlyNum : PRICING.scaleMonthlyNum))).toLocaleString(undefined, { maximumFractionDigits: 0 })}x less
                             </strong> than what you risk losing every month.
                         </p>
                     </div>

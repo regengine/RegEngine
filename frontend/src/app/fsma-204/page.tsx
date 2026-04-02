@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CheckCircle, Clock, FileSpreadsheet, Shield, Upload, Users, AlertTriangle, Truck, Leaf, Anchor } from "lucide-react";
+import { REGULATORY } from "@/lib/marketing-claims";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Compliance Guide — What Your Farm Needs to Know | RegEngine",
@@ -134,9 +135,9 @@ export default function FSMA204BusinessGuidePage() {
       <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
         <div className="max-w-[960px] mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-6">
           {[
-            { icon: Clock, text: "24 hours to respond to an FDA request" },
+            { icon: Clock, text: `${REGULATORY.fdaResponseWindow} to respond to an FDA request` },
             { icon: Shield, text: "Applies to all foods on the FTL" },
-            { icon: CheckCircle, text: "Enforcement begins July 20, 2028" },
+            { icon: CheckCircle, text: `Enforcement begins ${REGULATORY.fsma204Deadline}` },
           ].map((fact) => (
             <div key={fact.text} className="flex items-center gap-3">
               <fact.icon className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />

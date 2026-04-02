@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SECURITY_EVIDENCE } from '@/lib/marketing-claims';
 
 export const metadata: Metadata = {
     title: 'Security | RegEngine',
@@ -23,28 +24,28 @@ const securityFeatures = [
         Icon: Lock,
         title: "Row-Level Security (RLS)",
         description: "Every database query is scoped to the authenticated tenant. Cross-tenant data access is structurally impossible — enforced at the PostgreSQL policy level, not the application layer.",
-        evidence: "Tested: Tenant A cannot query Tenant B data (0 rows returned). Public access correctly blocked.",
+        evidence: SECURITY_EVIDENCE.rls,
         regulation: "Multi-tenant isolation",
     },
     {
         Icon: Hash,
         title: "Cryptographic Fact Hashing",
         description: "Every extracted regulatory fact is hashed with SHA-256 using a deterministic composition: key|type|value|conditions|provenance. Any mutation produces a completely different hash.",
-        evidence: "Verified: Re-running ingestion produces identical hashes. Independent verification script (verify_chain.py) confirms integrity.",
+        evidence: SECURITY_EVIDENCE.hashing,
         regulation: "Tamper detection",
     },
     {
         Icon: ShieldCheck,
         title: "Immutable Audit Trail",
         description: "Database triggers block all updates and deletes on compliance tables (extracted facts, rule evaluations, audit events). Corrections must create new versioned records with lineage links.",
-        evidence: "Enforced via prevent_mutation trigger (V20). Append-only audit_logs enforced via prevent_audit_modification (V30). Version chain verified from V1 through V16.",
+        evidence: SECURITY_EVIDENCE.immutableAudit,
         regulation: "21 CFR Part 11 alignment",
     },
     {
         Icon: Eye,
         title: "Independent Verification",
         description: "Our open-source verify_chain.py script lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Zero trust required.",
-        evidence: "Output: 430 record hashes verified, 0 failed across 7 Critical Tracking Events (Dairy, Imported Seafood, Produce recall chains).",
+        evidence: SECURITY_EVIDENCE.independentVerification,
         regulation: "Third-party auditability",
     },
 ];
@@ -164,11 +165,11 @@ export default function SecurityPage() {
                             <div className="rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] p-4 mb-4 font-mono text-xs text-re-text-disabled overflow-x-auto"
                                 style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
                             >
-                                <p className="text-[var(--re-brand)]">$ python verify_chain.py --export dairy_recall_2024.json</p>
-                                <p className="mt-1">Verifying 430 record hashes...</p>
-                                <p className="text-emerald-500">✓ 430 verified, 0 failed</p>
+                                <p className="text-[var(--re-brand)]">$ python verify_chain.py --export your_export.json</p>
+                                <p className="mt-1">Verifying record hashes...</p>
+                                <p className="text-emerald-500">✓ All hashes verified, 0 failed</p>
                                 <p className="text-emerald-500">✓ Merkle root matches signed manifest</p>
-                                <p className="mt-1 text-re-text-disabled">7 CTEs verified: Dairy, Imported Seafood, Produce (3 recall chains)</p>
+                                <p className="mt-1 text-re-text-disabled">Chain integrity confirmed across all Critical Tracking Events</p>
                             </div>
                             <div className="flex gap-3 flex-wrap">
                                 <Link href="/verify">

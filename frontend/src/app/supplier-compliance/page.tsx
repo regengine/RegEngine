@@ -5,6 +5,7 @@ import {
     FileCheck, Truck, Package, Zap, Users, Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { RETAILER_ENFORCEMENT, REGULATORY, PRICING } from '@/lib/marketing-claims';
 
 export const metadata: Metadata = {
     title: 'Your Buyer Requires FSMA 204 Compliance | RegEngine',
@@ -41,12 +42,10 @@ const COMPLIANCE_STEPS = [
     },
 ];
 
-const RETAILERS_ENFORCING = [
-    { name: 'Walmart', detail: 'Supplier compliance clauses active since August 2025' },
-    { name: 'Albertsons', detail: 'FSMA 204 requirements in new supplier contracts' },
-    { name: 'Kroger', detail: 'Enhanced traceability requirements for fresh categories' },
-    { name: 'Costco', detail: 'Supplier quality programs incorporating traceability' },
-];
+const RETAILERS_ENFORCING = RETAILER_ENFORCEMENT.map((r) => ({
+    name: r.retailer,
+    detail: r.claim,
+}));
 
 const FAQ = [
     {
@@ -71,7 +70,7 @@ const FAQ = [
     },
     {
         q: 'What does this cost me?',
-        a: 'Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, plans start at $425/month for Founding Design Partners.',
+        a: `Submitting data through a portal link is free. Your buyer pays for RegEngine. If you want your own RegEngine account to manage traceability across all your buyers, plans start at ${PRICING.starterMonthly}/month for Founding Design Partners.`,
     },
 ];
 

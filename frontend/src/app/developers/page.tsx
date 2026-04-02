@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { API_CAPABILITIES } from '@/lib/marketing-claims';
 
 export const metadata: Metadata = {
     title: 'Developers | RegEngine — FSMA 204 Compliance API',
@@ -25,32 +26,32 @@ const capabilities = [
     {
         Icon: Webhook,
         title: 'Webhook Ingestion',
-        description: 'POST events with KDE validation. Every inbound CTE is validated against FSMA 204 Key Data Elements before chain-hashing.',
+        description: API_CAPABILITIES.webhookIngestion,
     },
     {
         Icon: Cog,
         title: 'Rules Engine',
-        description: '25+ FSMA 204 validation rules run automatically on every event. Catch missing fields, invalid TLCs, and schema violations in real time.',
+        description: API_CAPABILITIES.rulesEngine,
     },
     {
         Icon: Users,
         title: 'Identity Resolution',
-        description: 'Fuzzy matching across trading partners with confidence scoring. Deduplicate facilities, carriers, and contacts automatically.',
+        description: API_CAPABILITIES.identityResolution,
     },
     {
         Icon: FileSpreadsheet,
         title: 'FDA Export',
-        description: '21 CFR 1.1455 sortable spreadsheet and EPCIS 2.0 event export. One API call to generate an FDA-ready compliance package.',
+        description: API_CAPABILITIES.fdaExport,
     },
     {
         Icon: BarChart3,
         title: 'Compliance Scoring',
-        description: '6-dimension score with letter grade. Coverage, completeness, timeliness, accuracy, chain integrity, and identity resolution.',
+        description: API_CAPABILITIES.complianceScoring,
     },
     {
         Icon: GitBranch,
         title: 'Request Workflow',
-        description: '10-state machine for FDA response management. Track requests from intake through investigation, response, and closure.',
+        description: API_CAPABILITIES.requestWorkflow,
     },
 ];
 

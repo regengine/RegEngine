@@ -6,6 +6,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
+import { PRICING, REGULATORY } from '@/lib/marketing-claims';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
@@ -133,7 +134,7 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: 'Enterprise pricing', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
+    { feature: 'Starting Price', regengine: `${PRICING.starterMonthly}/mo (partner)`, foodlogiq: 'Enterprise pricing', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
     { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: 'Weeks (implementation)', repositrak: '<1 hour*', tracegains: 'Weeks (implementation)' },
     { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
@@ -299,7 +300,7 @@ export default async function PricingPage() {
                         The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
                     </p>
                     <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
-                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo for Founding Design Partners.
+                        Industry studies estimate the average major food recall costs companies over {REGULATORY.averageRecallCost} in lost product, logistics, and brand damage. RegEngine starts at {PRICING.starterMonthly}/mo for Founding Design Partners.
                     </p>
                     <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
                         <div className="overflow-x-auto">
@@ -360,7 +361,7 @@ export default async function PricingPage() {
                         Lock In 50% Off Before GA Launch
                     </h2>
                     <p className="text-base text-white/90 mb-8">
-                        Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
+                        Founding Design Partners start at {PRICING.starterMonthly}/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">

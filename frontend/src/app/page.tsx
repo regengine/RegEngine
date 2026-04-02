@@ -2,12 +2,13 @@ import Link from "next/link";
 import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer, CheckCircle2, XCircle, Lock, FileCheck, Database, Shield } from "lucide-react";
 import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
 import { SandboxUpload } from "@/components/marketing/SandboxUpload";
+import { CREDIBILITY_CLAIMS, ROADMAP } from "@/lib/marketing-claims";
 
 const CREDIBILITY = [
-  { icon: FileCheck, label: "EPCIS 2.0 native" },
-  { icon: Lock, label: "SHA-256 verified chains" },
-  { icon: Database, label: "Built on Supabase" },
-  { icon: Shield, label: "SOC 2 Type I (in progress — target Q3 2026)" },
+  { icon: FileCheck, label: CREDIBILITY_CLAIMS[0] },
+  { icon: Lock, label: CREDIBILITY_CLAIMS[1] },
+  { icon: Database, label: CREDIBILITY_CLAIMS[2] },
+  { icon: Shield, label: ROADMAP.soc2Type1 },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -15,10 +16,10 @@ const CREDIBILITY = [
 /* ------------------------------------------------------------------ */
 
 const EVIDENCE = [
-  { value: "48hr", label: "Average time to first compliant export" },
-  { value: "100%", label: "of FSMA 204 CTEs covered" },
-  { value: "24hr", label: "Recall response — fully automated" },
   { value: "EPCIS 2.0", label: "FDA-native format, zero conversion" },
+  { value: "SHA-256", label: "Hash-chained Merkle audit trail" },
+  { value: "23", label: "FDA Food Traceability List categories" },
+  { value: "RLS", label: "Row-Level Security, tenant isolation" },
 ];
 
 const FREE_TOOLS = [
@@ -192,17 +193,17 @@ export default function RegEngineLanding() {
         </div>
       </div>
 
-      {/* ── SOCIAL PROOF STRIP ── */}
+      {/* ── CAPABILITY STRIP ── */}
       <div className="border-b border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 text-center">
           <p className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.1em] mb-4">
-            Trusted by founding partners in food manufacturing and distribution
+            Built for FSMA 204 compliance from day one
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
             {[
-              "5+ Founding Partners",
-              "10,000+ CTEs Processed",
-              "Zero FDA Findings",
+              "EPCIS 2.0 Native",
+              "SHA-256 Merkle Audit Trail",
+              "FDA-Sortable Export",
             ].map((metric) => (
               <span
                 key={metric}

@@ -91,8 +91,8 @@ I saw [Firm Name]'s investment in [Portfolio Company] and your thesis around [sp
 **We're building the regulatory intelligence API** that powers compliance automation. RegEngine transforms unstructured regulations (PDFs) into machine-readable obligations via NLP + graph database.
 
 **Traction**:
-- 5 design partners (mid-market fintech companies)
-- $2M ARR projected by end of Year 1
+- Founding design partner program in progress
+- FSMA 204 compliance platform fully built — CTE/KDE validation, Merkle audit trail, FDA export
 - OEM licensing model (think: Plaid for regulatory data)
 
 **The raise**: $1.5M seed, closing in 4 weeks

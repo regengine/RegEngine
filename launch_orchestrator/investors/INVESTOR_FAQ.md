@@ -235,7 +235,7 @@ Sources: Gartner, Forrester, CB Insights
 **A**: Three-pronged approach:
 
 **1. Design Partner Program** (current focus):
-- 5 design partners (8-week eval)
+- Onboarding founding design partners (8-week eval)
 - Goal: Validate product-market fit, gather testimonials
 - Convert 60%+ to paid customers ($25k-$60k ACV)
 
@@ -277,9 +277,9 @@ Sources: Gartner, Forrester, CB Insights
 ### Q: What's your current ARR?
 
 **A**:
-- **Current**: $0 ARR (all design partners are free during eval period)
-- **Pipeline**: $300k ARR (5 design partners converting at $60k avg ACV)
-- **Projection**: $2M ARR by end of Year 1 (based on funnel conversion rates)
+- **Current**: $0 ARR (pre-revenue, design partner program in progress)
+- **Pipeline**: TBD — update with actual design partner count and projected ACV
+- **Projection**: Update with realistic targets based on actual partner pipeline
 
 **Monthly targets**:
 - Month 1-3: Design partner conversions ($25k-$60k each) → $150k ARR
@@ -293,20 +293,12 @@ Sources: Gartner, Forrester, CB Insights
 ### Q: What's your design partner feedback?
 
 **A**:
-- **NPS**: 80 (5 design partners, 4 promoters, 1 passive)
-- **Top feature requests**:
-  1. More jurisdictions (Canada, Singapore, Australia)
-  2. ML-powered NLP (higher accuracy)
-  3. Change alerts (email notifications when regulations update)
+- **NPS**: Not yet measured — update when design partners are onboarded
+- **Top feature requests**: Update with actual partner feedback
 
-**Customer quotes** (anonymized):
-- "RegEngine saved us 18 months of engineering time building NLP in-house."
-- "The cross-jurisdictional arbitrage API is a game-changer for our global expansion."
-- "Provenance tracking gives us audit-ready lineage we never had before."
+**Customer quotes**: Update with actual quotes from design partners (do not fabricate)
 
-**Conversion intent**:
-- 3 partners: "Definitely will convert" (60%)
-- 1 partner: "Likely" (20%)
+**Conversion intent**: Update with actual data from partner conversations
 - 1 partner: "Need more time" (20%)
 
 ---
