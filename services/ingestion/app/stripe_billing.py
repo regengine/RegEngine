@@ -311,7 +311,10 @@ def _find_tenant_id(subscription_id: Optional[str], customer_id: Optional[str]) 
 
 
 async def _create_tenant_via_admin(tenant_name: str) -> str:
-    admin_base_url = os.getenv("ADMIN_SERVICE_URL", "http://localhost:8400").rstrip("/")
+    admin_service_url = os.getenv("ADMIN_SERVICE_URL")
+    if not admin_service_url:
+        raise RuntimeError("ADMIN_SERVICE_URL is required — set it in the service environment")
+    admin_base_url = admin_service_url.rstrip("/")
     admin_master_key = os.getenv("ADMIN_MASTER_KEY")
 
     if not admin_master_key:

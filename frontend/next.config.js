@@ -3,7 +3,10 @@
 const { withSentryConfig } = require("@sentry/nextjs");
 
 const isStatic = process.env.REGENGINE_DEPLOY_MODE === 'static';
-const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost';
+const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+if (!apiGatewayUrl && !isStatic) {
+    throw new Error('NEXT_PUBLIC_API_BASE_URL is not set — configure it in your environment or Vercel project settings');
+}
 const ingestionUrl = process.env.INGESTION_SERVICE_URL || `${apiGatewayUrl}:8002`;
 const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || `${apiGatewayUrl}:8500`;
 
