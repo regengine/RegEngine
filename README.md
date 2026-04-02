@@ -21,31 +21,32 @@ RegEngine gives food safety and compliance teams a single system to manage regul
 
 ## Architecture
 
-RegEngine runs as a **consolidated FastAPI monolith** backed by **PostgreSQL** (via Supabase) and a **Next.js** frontend deployed on **Vercel**.
+RegEngine runs as a set of **FastAPI microservices** backed by **PostgreSQL** (via Supabase), **Neo4j**, and **Redis**, with a **Next.js 15** frontend deployed on **Vercel**. The backend deploys to **Railway**.
 
 ```
-┌──────────────────────────────────────────────┐
-│  Next.js Frontend (Vercel)                   │
-│  Dashboards · Onboarding · API Console       │
-├──────────────────────────────────────────────┤
-│  FastAPI Backend Services                    │
-│  ┌──────────┬──────────┬──────────────────┐  │
-│  │ Admin    │ Graph    │ Compliance       │  │
-│  │ Ingest   │ NLP      │ Scheduler        │  │
-│  └──────────┴──────────┴──────────────────┘  │
-│  Background Workers (pg_notify task queue)    │
-├──────────────────────────────────────────────┤
-│  PostgreSQL (Supabase)                       │
-│  RLS · Row-level tenant isolation            │
-│  Recursive CTE lot tracing                   │
-│  Hash-chained audit log                      │
-└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  Next.js 15 Frontend (Vercel)                    │
+│  Dashboards · Onboarding · API Console           │
+├──────────────────────────────────────────────────┤
+│  FastAPI Backend Services (Railway)              │
+│  ┌──────────┬──────────┬──────────────────────┐  │
+│  │ Admin    │ Graph    │ Compliance            │  │
+│  │ Ingest   │ NLP      │ Scheduler             │  │
+│  └──────────┴──────────┴──────────────────────┘  │
+│  Background Workers · Kafka (Redpanda)           │
+├──────────────────────────────────────────────────┤
+│  PostgreSQL (Supabase)  │  Neo4j  │  Redis       │
+│  RLS · Recursive CTEs   │  Graph  │  Cache /     │
+│  Hash-chained audit log │  Store  │  Rate Limits │
+├──────────────────────────────────────────────────┤
+│  Observability: OpenTelemetry · Sentry · Jaeger  │
+└──────────────────────────────────────────────────┘
 ```
 
 **Key design decisions:**
 
-- **PostgreSQL replaces Kafka** — Async task processing via `task_queue` table with `pg_notify` triggers. Simpler to operate, zero external dependencies.
-- **Recursive CTEs replace Neo4j** — Forward/backward supply chain tracing runs entirely in PostgreSQL. One fewer database to manage.
+- **PostgreSQL as primary store** — Async task processing via `task_queue` table with `pg_notify` triggers for lightweight jobs. Kafka (Redpanda) handles cross-service event streaming for ingestion, NLP, and compliance workflows. The long-term direction is to consolidate more workloads onto PostgreSQL.
+- **Dual graph strategy** — Neo4j powers the knowledge graph and relationship mapping between regulations, obligations, and facilities. Recursive CTEs in PostgreSQL handle forward/backward supply chain lot tracing. Both are in active use.
 - **Row-Level Security everywhere** — Every tenant-scoped table enforces RLS policies. Multi-tenancy is enforced at the database layer, not just application code.
 - **Fail-closed auth** — Rate limiting fails closed when Redis is unavailable. API key validation uses constant-time comparison. Brute-force protection on all auth endpoints.
 - **Tenant settings as JSONB** — Onboarding state, workspace profiles, and feature flags stored in `tenants.settings` column. No migrations needed for new configuration.
@@ -54,12 +55,15 @@ RegEngine runs as a **consolidated FastAPI monolith** backed by **PostgreSQL** (
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS, shadcn/ui, React Query, Framer Motion |
+| Frontend | Next.js 15, TypeScript, Tailwind CSS, shadcn/ui, React Query, Framer Motion |
 | Backend | FastAPI (Python), Pydantic v2, SQLAlchemy 2.0 |
-| Database | PostgreSQL via Supabase (RLS, pg_notify, recursive CTEs) |
+| Database | PostgreSQL via Supabase (RLS, pg_notify, recursive CTEs), Neo4j (knowledge graph), Redis (cache, rate limiting) |
+| Streaming | Kafka (Redpanda), Schema Registry |
 | Auth | HTTP-only cookie JWT + Supabase Auth fallback, API key store with rate limiting |
-| Hosting | Vercel (frontend), Supabase (database + edge functions) |
-| CI/CD | GitHub Actions — 54 checks across lint, test, security, bundle analysis, review gates |
+| Hosting | Vercel (frontend), Railway (backend), Supabase (managed database) |
+| CI/CD | GitHub Actions — 11 workflows covering lint, test, security, bundle analysis, deploy, review gates |
+| Testing | pytest (backend), Vitest (frontend unit), Playwright (E2E) |
+| Observability | OpenTelemetry, Sentry, Jaeger, Prometheus + Grafana |
 | Code Review | CodeRabbit AI, Copilot, Vercel bot |
 
 ## Project Structure
@@ -87,7 +91,7 @@ RegEngine runs as a **consolidated FastAPI monolith** backed by **PostgreSQL** (
 ├── qa/                    # QA pipeline and test fixtures
 ├── security/              # Security policies and audit configs
 └── .github/
-    └── workflows/         # CI/CD pipelines + review gates (54 checks)
+    └── workflows/         # 11 CI/CD workflows (lint, test, security, deploy, review gates)
 ```
 
 ## Onboarding Flow
@@ -116,7 +120,25 @@ RegEngine is built for regulated industries. Security is not an afterthought:
 
 - Node.js 18+
 - Python 3.11+
-- Supabase project (or local Supabase CLI)
+- Docker & Docker Compose (recommended for full local stack)
+- Supabase project (for production; local dev uses docker-compose PostgreSQL)
+
+### Full Local Stack (Recommended)
+
+The fastest way to get everything running locally:
+
+```bash
+cp .env.example .env   # fill in required secrets (see comments)
+docker compose up -d
+```
+
+This starts PostgreSQL, Redis, Neo4j, Redpanda (Kafka), MinIO, the API gateway (nginx), and all backend services. The frontend still runs separately via `npm run dev`.
+
+To enable the optional monitoring stack (Prometheus, Grafana):
+
+```bash
+docker compose --profile monitoring up -d
+```
 
 ### Frontend
 
@@ -148,10 +170,12 @@ supabase db push
 
 RegEngine is in **active development** — shipping weekly. Current focus areas:
 
-- Onboarding experience and first-run value delivery
-- FSMA 204 obligation coverage expansion
-- Developer API documentation and playground
-- Waitlist and early access program
+- Auth hardening and production readiness
+- Tech debt cleanup and CI stabilization
+- WCAG accessibility compliance
+- Infrastructure consolidation (PostgreSQL-first architecture)
+
+Recent milestones: billing audit (v0.5.0), onboarding redesign (v0.6.0), WCAG accessibility pass (v0.7.0).
 
 ## License
 
