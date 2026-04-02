@@ -2,7 +2,7 @@
 RegEngine API Client
 """
 
-import requests
+import httpx
 from typing import Optional, List, Any, Dict
 from datetime import date
 
@@ -55,7 +55,7 @@ class RegEngineClient:
         self.base_url = base_url.rstrip("/")
         self.tenant_id = tenant_id
         self.timeout = timeout
-        self._session = requests.Session()
+        self._session = httpx.Client()
     
     def _headers(self) -> Dict[str, str]:
         """Build request headers."""
@@ -87,9 +87,9 @@ class RegEngineClient:
                 json=json,
                 timeout=self.timeout,
             )
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             raise RegEngineError(f"Request failed: {e}")
-        
+
         # Handle error responses
         if response.status_code == 401:
             raise AuthenticationError("Invalid or expired API key")
@@ -124,7 +124,7 @@ class RegEngineClient:
             )
             response.raise_for_status()
             return response.content
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             raise RegEngineError(f"Request failed: {e}")
     
     # =========================================================================

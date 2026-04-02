@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import Dict, Iterator, List, Optional
 
-import requests
+import httpx
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 
 from ..models import SourceMetadata
@@ -24,7 +24,7 @@ class ECFRAdapter(SourceAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rate_limiter = RateLimiter(requests_per_minute=30)  # Conservative rate limit
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update({"User-Agent": self.user_agent})
     
     def get_source_name(self) -> str:
@@ -63,7 +63,7 @@ class ECFRAdapter(SourceAdapter):
         @retry(
             wait=wait_exponential(multiplier=1, min=4, max=10),
             stop=stop_after_attempt(3),
-            retry=retry_if_exception_type(requests.RequestException),
+            retry=retry_if_exception_type(httpx.HTTPError),
             reraise=True
         )
         def _get_with_retry(url, params=None):

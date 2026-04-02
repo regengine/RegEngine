@@ -9,14 +9,14 @@ from functools import lru_cache
 from typing import List, Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from shared.base_config import BaseServiceSettings
 
 _logger = logging.getLogger(__name__)
 
 _DEV_DATABASE_URL = "postgresql://regengine:regengine@postgres:5432/regengine"
 
 
-class SchedulerSettings(BaseSettings):
+class SchedulerSettings(BaseServiceSettings):
     """Scheduler service configuration."""
 
     # Database
@@ -125,10 +125,6 @@ class SchedulerSettings(BaseSettings):
         if not self.webhook_urls:
             return []
         return [url.strip() for url in self.webhook_urls.split(",") if url.strip()]
-
-    class Config:
-        env_prefix = ""
-        case_sensitive = False
 
 
 @lru_cache(maxsize=1)

@@ -84,12 +84,18 @@ async function proxyRequest(  request: NextRequest,
       return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
     }
 
+<<<<<<< claude/beautiful-sutherland
     // Auth paths (login, signup, refresh) are publicly reachable by design —
     // they are called before any credentials exist.  All other admin routes
     // require at least one valid credential.
     const isAuthPath = UNAUTHENTICATED_AUTH_PATHS.has(path);
 
     if (!isAuthPath) {
+=======
+    // Auth routes must be reachable without credentials (login creates the session)
+    const isAuthRoute = path.startsWith('auth/');
+    if (!isAuthRoute) {
+>>>>>>> main
       // Defense-in-depth: reject requests with no auth credentials before proxying
       const authError = requireProxyAuth(request);
       if (authError) return authError;
@@ -98,7 +104,10 @@ async function proxyRequest(  request: NextRequest,
       const sessionError = await validateProxySession(request);
       if (sessionError) return sessionError;
     }
+<<<<<<< claude/beautiful-sutherland
 
+=======
+>>>>>>> main
     const queryString = new URL(request.url).search;
     const targetBases = getAdminTargets();
 

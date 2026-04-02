@@ -1,46 +1,53 @@
-pydantic>=2.4.0,<3.0.0
-pydantic-settings~=2.0.0
-fastapi>=0.109.1,<0.110.0
-uvicorn~=0.23.0
-neo4j~=5.10.0
-python-multipart~=0.0.22
-sqlalchemy~=2.0.0
-asyncpg~=0.28.0
-psycopg[binary]>=3.2.4
-python-dateutil~=2.8.2
-structlog==23.2.0
-prometheus-client==0.19.0
-httpx==0.25.2
-redis==5.0.1
+# Graph Service Dependencies
+# Core versions aligned with pyproject.toml — see root requirements.txt
 
-# Observability (Sprint 18)
+# Core Framework
+fastapi>=0.115.0
+uvicorn>=0.27.0
+pydantic>=2.10.0,<3
+pydantic-settings>=2.7.0
+structlog>=24.1.0
+python-multipart>=0.0.9
+
+# Database
+sqlalchemy>=2.0.25
+asyncpg>=0.29.0
+psycopg[binary]>=3.2.4
+neo4j>=5.16.0
+redis>=5.0.1
+
+# Networking
+httpx>=0.26.0
+python-dateutil>=2.8.2
+slowapi>=0.1.9
+tenacity>=8.2.3
+
+# Observability — all 4 otel packages must share the same version
+prometheus-client>=0.19.0
 opentelemetry-api==1.30.0
 opentelemetry-sdk==1.30.0
 opentelemetry-instrumentation-fastapi==0.51b0
 opentelemetry-exporter-otlp==1.30.0
-slowapi~=0.1.9
-tenacity~=8.2.0
 
-# Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-testcontainers[neo4j]==4.4.1
-testcontainers[postgresql]==4.4.1
-testcontainers[redis]==4.4.1
-
-# Kafka (existing FSMA functionality)
-aiokafka==0.8.1
-kafka-python-ng==2.0.3
-confluent-kafka~=2.2.0
-authlib~=1.6.6
-cachetools~=5.3.0
-attrs~=23.1.0
-fastavro~=1.8.0
+# Kafka
+kafka-python-ng>=2.0.3
+confluent-kafka>=2.2.0
+authlib>=1.6.6
+cachetools>=5.3.0
+attrs>=23.1.0
+fastavro>=1.8.0
 
 # AI & LLM (for Global Mapping Engine)
-langchain~=0.3.0
-langchain-groq~=0.2.0
+langchain>=0.1.0
+langchain-groq>=0.2.0
 
 # Utilities
-python-dotenv==1.0.0
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+testcontainers[neo4j]>=4.4.0
+testcontainers[postgresql]>=4.4.0
+testcontainers[redis]>=4.4.0
