@@ -81,7 +81,7 @@ frontend/playwright-report/
 *.bak
 
 # Archived verticals (deprecated)
-archive/
+/archive/
 public/sw.js
 public/sw.js.map
 

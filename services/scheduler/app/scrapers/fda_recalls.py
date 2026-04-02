@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-import requests
+import httpx
 import structlog
 
 from ..models import EnforcementItem, EnforcementSeverity, ScrapeResult, SourceType
@@ -43,7 +43,7 @@ class FDARecallsScraper(BaseScraper):
     def __init__(self, timeout: int = 30, limit: int = 100):
         self.timeout = timeout
         self.limit = limit
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update(
             {
                 "User-Agent": "RegEngine/1.0 (Regulatory Compliance Platform)",
@@ -72,7 +72,7 @@ class FDARecallsScraper(BaseScraper):
                 count=len(items),
             )
 
-        except (requests.RequestException, ConnectionError, TimeoutError, ValueError, KeyError) as e:
+        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as e:
             error_message = str(e)
             logger.error(
                 "fda_recalls_failed",
@@ -228,7 +228,7 @@ class FDARecallsScraper(BaseScraper):
                 count=len(items),
             )
 
-        except (requests.RequestException, ConnectionError, TimeoutError, ValueError, KeyError) as e:
+        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as e:
             error_message = str(e)
             logger.error(
                 "fda_recalls_by_class_failed",

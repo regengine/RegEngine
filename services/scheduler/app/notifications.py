@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
-import requests
+import httpx
 import structlog
 
 from .config import get_settings
@@ -55,7 +55,7 @@ class WebhookNotifier:
         self.timeout = timeout or settings.webhook_timeout_seconds
         self.max_retries = max_retries or settings.webhook_max_retries
         self.max_workers = max_workers
-        self.session = requests.Session()
+        self.session = httpx.Client()
         self.session.headers.update(
             {
                 "Content-Type": "application/json",
@@ -180,9 +180,9 @@ class WebhookNotifier:
                         duration_ms=duration_ms,
                     )
 
-            except requests.Timeout:
+            except httpx.TimeoutException:
                 last_error = f"Timeout after {self.timeout}s"
-            except requests.ConnectionError as e:
+            except httpx.ConnectError as e:
                 last_error = f"Connection error: {e}"
             except Exception as e:
                 last_error = str(e)

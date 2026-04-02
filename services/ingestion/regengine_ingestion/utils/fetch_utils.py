@@ -1,5 +1,5 @@
 import logging
-import requests
+import httpx
 import asyncio
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
@@ -32,7 +32,7 @@ def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True
             logger.warning("ssrf_validation_failed", url=url, error=str(e))
             raise ValueError(f"URL validation failed: {str(e)}") from e
 
-        response = requests.get(url, headers=STANDARD_HEADERS, timeout=timeout, allow_redirects=True)
+        response = httpx.get(url, headers=STANDARD_HEADERS, timeout=timeout, follow_redirects=True)
         
         # If blocked or server error, try browser fallback
         if use_browser_fallback and response.status_code in [403, 502, 401]:

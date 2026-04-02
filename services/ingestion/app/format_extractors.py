@@ -150,7 +150,7 @@ def extract_from_xml(
             ),
             position_map,
         )
-    except (ValueError, TypeError, OSError) as exc:
+    except (_etree_utils.LxmlError, UnicodeDecodeError, ValueError, TypeError, OSError) as exc:
         logger.warning("xml_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "xml")
 
@@ -211,7 +211,7 @@ def extract_from_csv(
                 TextExtractionMetadata(engine="pandas", confidence_mean=0.97, confidence_std=0.03),
                 position_map,
             )
-        except (ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
+        except (csv_mod.Error, ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
             logger.warning("csv_stdlib_fallback_failed", exc_info=exc)
             return _fallback_extraction(raw_bytes, "csv")
 
@@ -266,7 +266,7 @@ def extract_from_csv(
             ),
             position_map,
         )
-    except (ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
+    except (pd.errors.ParserError, ValueError, TypeError, UnicodeDecodeError, OSError) as exc:
         logger.warning("csv_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "csv")
 
@@ -404,7 +404,7 @@ def extract_from_docx(
             ),
             position_map,
         )
-    except (ValueError, OSError, KeyError, zipfile.BadZipFile) as exc:
+    except (ValueError, TypeError, OSError, KeyError, zipfile.BadZipFile) as exc:
         logger.warning("docx_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "docx")
 
@@ -439,7 +439,7 @@ def extract_from_edi(
                 logger.warning("edi_format_unknown")
                 return _fallback_extraction(raw_bytes, "edi")
                 
-    except (ValueError, UnicodeDecodeError) as exc:
+    except (ValueError, UnicodeDecodeError, IndexError) as exc:
         logger.warning("edi_extraction_failed", exc_info=exc)
         return _fallback_extraction(raw_bytes, "edi")
 
