@@ -58,6 +58,15 @@ export async function OPTIONS(
   return proxyRequest(request, path, 'OPTIONS');
 }
 
+// Auth endpoints are unauthenticated by design — login, signup, refresh, and
+// the bootstrap register route must be reachable before any credentials exist.
+const UNAUTHENTICATED_AUTH_PATHS = new Set([
+  'auth/login',
+  'auth/signup',
+  'auth/refresh',
+  'auth/register',
+]);
+
 async function proxyRequest(  request: NextRequest,
   pathParts: string[],
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS',
@@ -75,9 +84,18 @@ async function proxyRequest(  request: NextRequest,
       return proxyError('Invalid path', 400, { code: 'INVALID_PATH' });
     }
 
+<<<<<<< claude/beautiful-sutherland
+    // Auth paths (login, signup, refresh) are publicly reachable by design —
+    // they are called before any credentials exist.  All other admin routes
+    // require at least one valid credential.
+    const isAuthPath = UNAUTHENTICATED_AUTH_PATHS.has(path);
+
+    if (!isAuthPath) {
+=======
     // Auth routes must be reachable without credentials (login creates the session)
     const isAuthRoute = path.startsWith('auth/');
     if (!isAuthRoute) {
+>>>>>>> main
       // Defense-in-depth: reject requests with no auth credentials before proxying
       const authError = requireProxyAuth(request);
       if (authError) return authError;
@@ -86,6 +104,10 @@ async function proxyRequest(  request: NextRequest,
       const sessionError = await validateProxySession(request);
       if (sessionError) return sessionError;
     }
+<<<<<<< claude/beautiful-sutherland
+
+=======
+>>>>>>> main
     const queryString = new URL(request.url).search;
     const targetBases = getAdminTargets();
 
@@ -179,8 +201,15 @@ async function proxyRequest(  request: NextRequest,
             outgoingHeaders.set(headerName, headerValue);
           }
         }
+        // Buffer the full response body before returning.  Passing response.body
+        // (a ReadableStream) directly causes Vercel to stream from the upstream
+        // connection.  If that connection drops mid-flight the edge layer
+        // converts the partial stream to a 502, even though the function already
+        // committed status=200.  Buffering ensures a complete response is handed
+        // to Vercel's edge before the function exits.
+        const responseBody = await response.arrayBuffer();
         console.info(`[proxy/admin] ${method} ${path} → ${response.status}`);
-        return new NextResponse(response.body, {
+        return new NextResponse(responseBody, {
           status: response.status,
           headers: outgoingHeaders,
         });
