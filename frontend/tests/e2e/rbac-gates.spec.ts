@@ -2,7 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 
 /**
  * RBAC Gates E2E Tests
- * 
+ *
  * Verifies that role-based access control works correctly at the browser level:
  * - Unauthenticated users are redirected to login
  * - Non-admin users cannot access admin-only sections
@@ -14,6 +14,13 @@ import { test, expect, Page } from '@playwright/test';
 // Set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets for a dedicated sysadmin account.
 const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
+
+// Sysadmin tests require a dedicated account with is_sysadmin=true.
+// The test user created by globalSetup is a regular org owner, NOT a sysadmin.
+const hasDedicatedAdmin = !!(
+    process.env.TEST_ADMIN_EMAIL &&
+    process.env.TEST_ADMIN_EMAIL !== process.env.TEST_USER_EMAIL
+);
 
 test.describe('RBAC Gates', () => {
 
@@ -46,11 +53,16 @@ test.describe('RBAC Gates', () => {
     test('Unauthenticated cannot access user settings', async ({ page }) => {
         await page.goto('/settings/users');
 
-        // Should redirect to login
+        // Should redirect to login (settings/* is auth-gated)
         await expect(page).toHaveURL(/\/login/);
     });
 
     test('Admin can access sysadmin dashboard', async ({ page }) => {
+        // Requires a dedicated sysadmin account.
+        // The test user created by globalSetup is a regular org member — not sysadmin.
+        // The sysadmin page checks user.is_sysadmin client-side and redirects to /login if false.
+        test.skip(!hasDedicatedAdmin, 'Requires a dedicated sysadmin account — set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets pointing to a sysadmin user');
+
         test.setTimeout(60000);
 
         // Login as admin
@@ -68,8 +80,8 @@ test.describe('RBAC Gates', () => {
         // Should stay on sysadmin (not redirected)
         await expect(page).toHaveURL(/\/sysadmin/);
 
-        // Sysadmin content should be visible (use .first() to avoid strict mode violation
-        // when multiple nav links match "Dashboard")
+        // Sysadmin content should be visible — use .first() to avoid strict-mode
+        // violation when multiple nav elements match (e.g. "Admin" nav + page heading)
         await expect(page.getByText(/System|Admin|Dashboard/i).first()).toBeVisible();
     });
 
@@ -84,15 +96,18 @@ test.describe('RBAC Gates', () => {
 
         await expect(page).toHaveURL(/\/(dashboard|sysadmin)/);
 
-        // Navigate to user settings.
-        // next.config.js permanently redirects /settings/:path* → /dashboard/settings
-        await page.goto('/settings/users');
+        // Navigate to the team management page (canonical route).
+        // NOTE: /settings/users permanently redirects (301) to /dashboard/settings which has
+        // different content (API keys, integrations). The team/invite management lives at
+        // /dashboard/team.
+        await page.goto('/dashboard/team');
 
-        // Should land on /dashboard/settings (301 redirect) — not the login page
-        await expect(page).toHaveURL(/\/dashboard\/settings|\/settings\/users/);
+        // Should land on the team page, not be redirected to login
+        await expect(page).not.toHaveURL(/\/login/);
+        await expect(page).toHaveURL(/\/dashboard\/team/);
 
-        // Team management content should be visible
-        await expect(page.getByText(/Team|Users|Management/i)).toBeVisible();
+        // Team management content should be visible (heading or member list)
+        await expect(page.getByText(/Team|Members|Invite/i).first()).toBeVisible();
     });
 
     test('Protected API calls return 401 without auth', async ({ page }) => {
