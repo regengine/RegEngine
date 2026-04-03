@@ -42,7 +42,10 @@ export default defineConfig({
             // Ensure JWT keys reach the dev server for middleware verification
             JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY ?? '',
             JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
-            AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY ?? '',
+            // AUTH_SECRET_KEY is used by the CSRF module as a signing secret.
+            // Fall back to JWT_SIGNING_KEY so CSRF token generation works in CI.
+            AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || process.env.JWT_SIGNING_KEY || '',
+            CSRF_SECRET: process.env.CSRF_SECRET || process.env.JWT_SIGNING_KEY || '',
             // Service URLs for Next.js rewrites / API proxy
             ADMIN_SERVICE_URL: process.env.ADMIN_SERVICE_URL ?? '',
             INGESTION_SERVICE_URL: process.env.INGESTION_SERVICE_URL ?? '',
