@@ -1,9 +1,10 @@
 
 import { test, expect } from '@playwright/test';
 
-// Constants for test
-const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-placeholder';
+// Invite flow requires a sysadmin account that can create invite tokens.
+// Use dedicated admin credentials if available; fall back to the test user.
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('User Invite Flow', () => {
 
