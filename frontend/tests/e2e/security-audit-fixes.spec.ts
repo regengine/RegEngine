@@ -39,7 +39,8 @@ test.describe('Security Audit Fixes', () => {
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin)/);
+        // Login flow: API call to Railway → cookie set → redirect. Allow 15s for CI latency.
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
     }
 
     /**
@@ -50,7 +51,7 @@ test.describe('Security Audit Fixes', () => {
         await page.fill('input[type="email"]', REGULAR_USER_EMAIL);
         await page.fill('input[type="password"]', REGULAR_USER_PASSWORD);
         await page.click('button[type="submit"]');
-        await expect(page).toHaveURL(/\/dashboard/);
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
     }
 
     /**

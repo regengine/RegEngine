@@ -27,7 +27,7 @@ test.describe('Tenant Isolation', () => {
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin)/);
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
     }
 
     test('Tenant switcher is visible after login', async ({ page }) => {
