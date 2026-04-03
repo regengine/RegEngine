@@ -16,9 +16,10 @@ import { test, expect, Page, BrowserContext } from '@playwright/test';
  * 5. Auth guard visibility and error handling
  */
 
-const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-placeholder';
-const REGULAR_USER_EMAIL = 'user@example.com';
+// Use dedicated admin credentials when available; fall back to the general test user.
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
+const REGULAR_USER_EMAIL = process.env.TEST_USER_EMAIL || 'user@example.com';
 const REGULAR_USER_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Security Audit Fixes', () => {
@@ -78,7 +79,8 @@ test.describe('Security Audit Fixes', () => {
     /**
      * Helper: Get all cookies from browser context
      */
-    async function getCookiesWithDetails(context: BrowserContext, url: string = 'http://localhost:3000') {
+    // Use the same base URL as the running test server (PLAYWRIGHT_BASE_URL or localhost:3001)
+    async function getCookiesWithDetails(context: BrowserContext, url: string = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001') {
         const cookies = await context.cookies(url);
         return cookies.map(c => ({
             name: c.name,

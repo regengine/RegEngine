@@ -9,8 +9,9 @@ import { test, expect, Page, Browser } from '@playwright/test';
  * - Cannot access other tenant data via URL manipulation
  */
 
-const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-placeholder';
+// Use dedicated admin credentials when available; fall back to the general test user.
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Tenant Isolation', () => {
 

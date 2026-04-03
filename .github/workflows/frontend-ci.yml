@@ -225,6 +225,10 @@ jobs:
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Optional: dedicated sysadmin account for admin-only test flows.
+          # Falls back to TEST_USER_EMAIL if not set (works when test user has sysadmin role).
+          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
           # Playwright base URL — set in Secrets to target staging; defaults to local dev server
           PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
         run: |
