@@ -16,8 +16,10 @@ const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Login → Dashboard Flow', () => {
     test('successful login redirects to dashboard', async ({ page }) => {
-        // Navigate to login page
-        await page.goto('/login');
+        // Navigate to login page with ?next=/dashboard to bypass the onboarding check
+        // so this test reliably reaches /dashboard regardless of the test user's
+        // onboarding state in the Railway admin service.
+        await page.goto('/login?next=/dashboard');
 
         // Verify login page loaded — the login card heading is h2 ("Welcome back").
         // The page also has a marketing h1 ("API-first regulatory compliance.") so
@@ -33,7 +35,7 @@ test.describe('Login → Dashboard Flow', () => {
         await page.click('button[type="submit"]');
 
         // Wait for navigation to dashboard
-        await page.waitForURL('**/dashboard');
+        await page.waitForURL(/\/dashboard/);
 
         // Verify dashboard loaded — URL check is sufficient; heading varies by layout
         await expect(page).toHaveURL(/\/dashboard/);
@@ -77,22 +79,20 @@ test.describe('Login → Dashboard Flow', () => {
     test('logout from dashboard redirects to login', async ({ page }) => {
         test.setTimeout(60000);
 
-        // Login first
-        await page.goto('/login');
+        // Login first — use ?next=/dashboard to bypass onboarding redirect
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-
-        // Wait for redirect to any authenticated page
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
         // Find and click logout button
         const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
         if (await logoutButton.isVisible({ timeout: 5000 })) {
             await logoutButton.click();
 
-            // Should redirect to login
-            await page.waitForURL('**/login', { timeout: 10000 });
+            // Should redirect to login (may include ?next= query param from middleware)
+            await page.waitForURL(/\/login/, { timeout: 10000 });
             await expect(page).toHaveURL(/\/login/);
         }
     });
@@ -100,12 +100,12 @@ test.describe('Login → Dashboard Flow', () => {
 
 test.describe('Dashboard Features', () => {
     test.beforeEach(async ({ page }) => {
-        // Login before each test
-        await page.goto('/login');
+        // Login before each test — use ?next=/dashboard to bypass onboarding redirect
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
     });
 
     test('dashboard displays user information', async ({ page }) => {

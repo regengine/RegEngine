@@ -23,11 +23,11 @@ test.describe('Tenant Isolation', () => {
     });
 
     async function loginAsAdmin(page: Page) {
-        await page.goto('/login');
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin)/);
+        await page.waitForURL(/\/(dashboard|sysadmin)/);
     }
 
     test('Tenant switcher is visible after login', async ({ page }) => {
