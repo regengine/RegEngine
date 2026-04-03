@@ -19,6 +19,10 @@ import {
     Activity,
     Filter,
     RefreshCw,
+    Siren,
+    ExternalLink,
+    Building2,
+    Hash,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth-context';
@@ -49,7 +53,7 @@ interface AlertsResponse {
     alerts: Alert[];
 }
 
-type SeverityFilter = 'critical' | 'warning' | 'info' | 'all';
+type SeverityFilter = 'critical' | 'warning' | 'info' | 'fda_recall' | 'all';
 
 const SEVERITY_CONFIG: Record<string, { color: string; bg: string; border: string; label: string }> = {
     critical: { color: '#ef4444', bg: 'rgba(239,68,68,0.08)', border: 'rgba(239,68,68,0.2)', label: 'Critical' },
@@ -63,6 +67,14 @@ const CATEGORY_ICONS: Record<string, React.ElementType> = {
     deadline: Link2,
     score: TrendingDown,
     overdue: Clock,
+    fda_recall: Siren,
+};
+
+// Classification badge colours for FDA recalls
+const RECALL_CLASS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
+    'Class I':   { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',  label: 'Class I'   },
+    'Class II':  { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Class II'  },
+    'Class III': { color: '#6b7280', bg: 'rgba(107,114,128,0.12)', label: 'Class III' },
 };
 
 function formatTimeAgo(iso: string): string {
@@ -119,10 +131,15 @@ export default function AlertsDashboardPage() {
         acknowledgeMutation.mutate(alertId);
     };
 
-    const filtered = filter === 'all' ? alerts : alerts.filter(a => a.severity === filter);
+    const filtered = filter === 'all'
+        ? alerts
+        : filter === 'fda_recall'
+            ? alerts.filter(a => a.category === 'fda_recall')
+            : alerts.filter(a => a.severity === filter);
     const criticalCount = alerts.filter(a => a.severity === 'critical' && !a.acknowledged).length;
     const warningCount = alerts.filter(a => a.severity === 'warning' && !a.acknowledged).length;
     const infoCount = alerts.filter(a => a.severity === 'info' && !a.acknowledged).length;
+    const fdaRecallCount = alerts.filter(a => a.category === 'fda_recall' && !a.acknowledged).length;
     const unackCount = alerts.filter(a => !a.acknowledged).length;
 
     return (
@@ -217,6 +234,20 @@ export default function AlertsDashboardPage() {
                                     {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
                                 </button>
                             ))}
+                            {fdaRecallCount > 0 && (
+                                <button
+                                    onClick={() => setFilter(filter === 'fda_recall' ? 'all' : 'fda_recall')}
+                                    className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] flex items-center gap-1.5 ${
+                                        filter === 'fda_recall'
+                                            ? 'bg-[#ef4444] text-white border-[#ef4444]'
+                                            : 'border-[#ef4444]/40 text-[#ef4444] hover:border-[#ef4444]'
+                                    }`}
+                                >
+                                    <Siren className="h-3 w-3" />
+                                    FDA Recalls
+                                    <span className="ml-0.5 bg-white/20 rounded-full px-1">{fdaRecallCount}</span>
+                                </button>
+                            )}
                         </div>
 
                         {/* Alert List */}
@@ -226,6 +257,121 @@ export default function AlertsDashboardPage() {
                                     const config = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.info;
                                     const Icon = CATEGORY_ICONS[alert.category] || AlertTriangle;
 
+                                    // ── FDA Recall card variant ──────────────────────────────────
+                                    if (alert.category === 'fda_recall') {
+                                        const meta = alert.metadata as Record<string, string> ?? {};
+                                        const classification = meta.classification ?? '';
+                                        const recallClass = RECALL_CLASS_CONFIG[classification] ?? RECALL_CLASS_CONFIG['Class I'];
+                                        const recallNumber = meta.recall_number ?? '';
+                                        const recallingFirm = meta.recalling_firm as string ?? '';
+                                        const matchedBy: string[] = (meta.matched_by as unknown as string[]) ?? [];
+                                        const matchTier = matchedBy.find(r => r.startsWith('match_tier:'))?.replace('match_tier:', '') ?? 'profile';
+                                        const fdaUrl = recallNumber
+                                            ? `https://www.accessdata.fda.gov/scripts/ires/index.cfm?event=ires.dspBriefRecallNumber&RecallNumber=${recallNumber}`
+                                            : undefined;
+
+                                        return (
+                                            <motion.div
+                                                key={alert.id}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, height: 0 }}
+                                                className={`relative rounded-xl border-2 p-3 sm:p-4 transition-all ${alert.acknowledged ? 'opacity-50' : ''}`}
+                                                style={{
+                                                    borderColor: alert.acknowledged ? 'var(--re-border-default)' : recallClass.color,
+                                                    background: alert.acknowledged ? 'transparent' : recallClass.bg,
+                                                }}
+                                            >
+                                                <div className="flex items-start gap-2 sm:gap-3">
+                                                    <div className="mt-0.5 flex-shrink-0" style={{ color: recallClass.color }}>
+                                                        <Siren className="h-5 w-5" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        {/* Title row */}
+                                                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                                            <span className="text-xs sm:text-sm font-semibold">{alert.title}</span>
+                                                            <Badge
+                                                                className="text-[9px] px-1.5 py-0 font-bold"
+                                                                style={{ background: recallClass.bg, color: recallClass.color, border: `1px solid ${recallClass.color}` }}
+                                                            >
+                                                                {recallClass.label}
+                                                            </Badge>
+                                                            <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                                                FDA Recall
+                                                            </Badge>
+                                                            {alert.acknowledged && (
+                                                                <Badge variant="outline" className="text-[9px] px-1.5 py-0">
+                                                                    <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" /> Acknowledged
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Reason / summary */}
+                                                        <p className="text-[11px] sm:text-xs text-muted-foreground line-clamp-2 mb-1.5">{alert.message}</p>
+
+                                                        {/* Recall metadata strip */}
+                                                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground/80">
+                                                            {recallingFirm && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Building2 className="h-3 w-3" /> {recallingFirm}
+                                                                </span>
+                                                            )}
+                                                            {recallNumber && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Hash className="h-3 w-3" /> {recallNumber}
+                                                                </span>
+                                                            )}
+                                                            <span className="flex items-center gap-1 capitalize">
+                                                                Match: <strong>{matchTier === 'lot_code' ? 'Lot Code' : matchTier === 'supplier' ? 'Supplier' : 'Product Profile'}</strong>
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Footer row */}
+                                                        <div className="flex items-center justify-between mt-2 gap-2">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[10px] text-muted-foreground/60">
+                                                                    {formatTimeAgo(alert.triggered_at)}
+                                                                </span>
+                                                                {fdaUrl && (
+                                                                    <a
+                                                                        href={fdaUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className="text-[10px] flex items-center gap-0.5 hover:underline"
+                                                                        style={{ color: recallClass.color }}
+                                                                    >
+                                                                        FDA page <ExternalLink className="h-2.5 w-2.5" />
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                            {!alert.acknowledged && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    className="rounded-xl text-xs flex-shrink-0 min-h-[44px] sm:hidden active:scale-[0.97]"
+                                                                    onClick={() => handleAcknowledge(alert.id)}
+                                                                >
+                                                                    Acknowledge
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {!alert.acknowledged && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="rounded-xl text-xs flex-shrink-0 min-h-[44px] hidden sm:flex active:scale-[0.97]"
+                                                            onClick={() => handleAcknowledge(alert.id)}
+                                                        >
+                                                            Acknowledge
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    }
+
+                                    // ── Standard alert card ──────────────────────────────────────
                                     return (
                                         <motion.div
                                             key={alert.id}

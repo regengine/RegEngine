@@ -6,12 +6,13 @@ creating alerts for tenants when recalls match their product profile.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 import structlog
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker, Session
 
 # Standardized path discovery via shared utility
@@ -91,14 +92,57 @@ class ComplianceIntegration:
     def _find_matching_tenants(
         self, session: Session, item: EnforcementItem
     ) -> List[Dict]:
-        """Find tenants whose product profile matches the enforcement item."""
+        """Find tenants whose product profile matches the enforcement item.
+
+        Matching tiers (highest confidence first):
+          Tier 1 — exact lot-code match against fsma.traceability_events
+          Tier 2 — supplier name containment from tenant_product_profile
+          Tier 3 — product category / FTL keyword overlap
+        """
+        # ------------------------------------------------------------------
+        # Tier 1: Exact lot-code match against traceability events
+        # ------------------------------------------------------------------
+        tier1_tenants: Dict[str, List[str]] = {}  # tenant_id str -> reasons
+
+        code_info = (item.raw_data or {}).get("code_info", "")
+        if code_info:
+            raw_tokens = re.split(r"[,;\n]+", code_info)
+            lot_codes = [t.strip() for t in raw_tokens if t.strip()]
+
+            if lot_codes:
+                try:
+                    tlc_rows = session.execute(
+                        text(
+                            """
+                            SELECT DISTINCT tenant_id
+                            FROM fsma.traceability_events
+                            WHERE traceability_lot_code = ANY(:lot_codes)
+                            """
+                        ),
+                        {"lot_codes": lot_codes},
+                    )
+                    for row in tlc_rows:
+                        tid = str(row[0])
+                        tier1_tenants[tid] = ["match_tier:lot_code"]
+                    if tier1_tenants:
+                        logger.info(
+                            "tier1_lot_code_matches",
+                            count=len(tier1_tenants),
+                            lot_codes_checked=len(lot_codes),
+                        )
+                except Exception as e:
+                    logger.warning("tier1_lot_code_query_failed", error=str(e))
+
+        # ------------------------------------------------------------------
+        # Tier 2 / 3: Profile-based matching via tenant_product_profile
+        # ------------------------------------------------------------------
         # Query tenant product profiles
         result = session.execute(
             "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers FROM tenant_product_profile LIMIT 1000"
         )
-        
+
         matching = []
-        
+
         # Build matching keywords from item
         item_text = f"{item.title} {item.summary or ''}"
         item_text_lower = item_text.lower()
@@ -142,12 +186,21 @@ class ComplianceIntegration:
                     if supplier.lower() in company.lower() or company.lower() in supplier.lower():
                         match_reasons.append(f"supplier:{supplier}")
             
+            # Merge with Tier 1 reasons if this tenant already matched on lot code
+            tid_str = str(tenant_id)
+            if tid_str in tier1_tenants:
+                match_reasons = tier1_tenants.pop(tid_str) + match_reasons
+
             if match_reasons:
                 matching.append({
                     "tenant_id": tenant_id,
                     "reasons": match_reasons,
                 })
-        
+
+        # Any Tier 1 tenants not in tenant_product_profile still get an alert
+        for tid_str, reasons in tier1_tenants.items():
+            matching.append({"tenant_id": tid_str, "reasons": reasons})
+
         return matching
     
     def _create_alert(
