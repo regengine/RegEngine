@@ -15,7 +15,7 @@ import {
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
 // In-memory LRU with a 5-minute TTL, keyed by auth_user_id.
 // ---------------------------------------------------------------------------
-const SYSADMIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const SYSADMIN_CACHE_TTL_MS = 60 * 1000; // 60 seconds — short TTL limits the window for delayed privilege revocation
 const SYSADMIN_CACHE_MAX_SIZE = 256;
 
 interface SysadminCacheEntry {
@@ -126,6 +126,12 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
  * with the previous key, a warning is logged so ops knows rotation is
  * still in progress.
  *
+ * NOTE: This check does NOT verify token revocation (e.g. logout-all).
+ * The middleware runs in Edge Runtime and cannot reach Redis. Revoked
+ * tokens remain valid until their JWT `exp` claim (15 min default).
+ * The backend /auth/refresh endpoint DOES check session revocation,
+ * so revoked users cannot obtain new tokens — only ride out existing ones.
+ *
  * Returns the decoded payload if valid, null otherwise.
  */
 async function verifyRegEngineToken(token: string): Promise<Record<string, unknown> | null> {
@@ -222,6 +228,18 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     if (reToken) {
         const payload = await verifyRegEngineToken(reToken);
         if (payload) {
+            // Reject suspended/archived tenants — the tenant_status claim is
+            // set at token creation and checked here to prevent suspended
+            // tenants from accessing the app. Since JWTs are short-lived
+            // (15 min), the worst-case delay is one token lifetime.
+            const tenantStatus = payload.tenant_status as string | undefined;
+            if (tenantStatus && tenantStatus !== 'active' && tenantStatus !== 'trial') {
+                console.warn(`[middleware] Tenant status "${tenantStatus}" — blocking access`);
+                const url = request.nextUrl.clone();
+                url.pathname = '/login';
+                url.searchParams.set('error', 'tenant_suspended');
+                return NextResponse.redirect(url);
+            }
             return NextResponse.next({ request });
         }
         // Token exists but verification failed (expired or invalid signature).

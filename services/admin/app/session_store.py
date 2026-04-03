@@ -240,22 +240,47 @@ class RedisSessionStore:
     
     async def get_session_by_token(self, token_hash: str) -> Optional[SessionData]:
         """Retrieve session by refresh token hash.
-        
+
         Args:
             token_hash: SHA-256 hash of refresh token
-            
+
         Returns:
             SessionData if found, None otherwise
         """
         client = await self._get_client()
-        
+
         # Lookup session_id via token hash
         session_id_str = await client.get(self._token_hash_key(token_hash))
-        
+
         if not session_id_str:
             logger.debug("session_not_found_by_token", token_hash=token_hash[:8])
             return None
-        
+
+        session_id = UUID(session_id_str)
+        return await self.get_session(session_id)
+
+    async def claim_session_by_token(self, token_hash: str) -> Optional[SessionData]:
+        """Atomically claim a session by refresh token hash for rotation.
+
+        Uses GETDEL to atomically read and delete the token_hash → session_id
+        mapping. This prevents concurrent refresh requests from both succeeding:
+        the first caller claims the token, subsequent callers get None (401).
+
+        Args:
+            token_hash: SHA-256 hash of refresh token
+
+        Returns:
+            SessionData if claimed, None if already claimed by another request
+        """
+        client = await self._get_client()
+
+        # Atomic get-and-delete: first caller wins, second gets nil
+        session_id_str = await client.getdel(self._token_hash_key(token_hash))
+
+        if not session_id_str:
+            logger.debug("session_claim_failed", token_hash=token_hash[:8])
+            return None
+
         session_id = UUID(session_id_str)
         return await self.get_session(session_id)
     
