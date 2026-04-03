@@ -9,8 +9,11 @@ import { test, expect, Page } from '@playwright/test';
  * - RBAC permission checks enforce UI restrictions
  */
 
-const ADMIN_EMAIL = 'admin@example.com';
-const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || 'test-placeholder';
+// Use dedicated admin account if available; fall back to the general test user.
+// If your test user has sysadmin role, all admin tests will pass with just TEST_USER_EMAIL.
+// Set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets for a dedicated sysadmin account.
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('RBAC Gates', () => {
 
