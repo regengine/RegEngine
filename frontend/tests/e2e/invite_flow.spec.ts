@@ -44,7 +44,8 @@ test.describe('User Invite Flow', () => {
         console.log('Logged in.');
 
         // Navigate to User Settings
-        await page.goto('/settings/users');
+        // next.config.js redirects /settings/:path* → /dashboard/settings
+        await page.goto('/dashboard/settings');
         await expect(page.getByText('Team Management')).toBeVisible();
 
         // Create Invite
