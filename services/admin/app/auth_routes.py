@@ -20,9 +20,52 @@ from shared.supabase_client import get_supabase
 from shared.funnel_events import emit_funnel_event
 from shared.rate_limit import limiter
 
+import asyncio
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = structlog.get_logger("auth")
+
+
+async def _persist_session(
+    session_store: RedisSessionStore,
+    session_data: SessionData,
+    *,
+    context: str,
+    user_id: UUID,
+) -> None:
+    """Persist session to Redis with one retry. Raises 503 on failure.
+
+    A missing session record means the refresh token can never be validated,
+    creating a zombie session that silently expires and kicks the user out.
+    Failing fast with 503 is better than a half-working login.
+    """
+    last_exc: Optional[Exception] = None
+    for attempt in range(2):
+        try:
+            await session_store.create_session(session_data)
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt == 0:
+                logger.warning(
+                    "session_store_retry",
+                    context=context,
+                    user_id=str(user_id),
+                    error=str(exc),
+                )
+                await asyncio.sleep(0.25)  # brief back-off before retry
+
+    # Both attempts failed
+    logger.error(
+        "session_store_unavailable",
+        context=context,
+        user_id=str(user_id),
+        error=str(last_exc),
+    )
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Session service temporarily unavailable. Please try again.",
+    )
 
 class LoginRequest(BaseModel):
     email: str
@@ -130,17 +173,13 @@ async def login(
         ip_address=request.client.host if request.client else "0.0.0.0"
     )
     
-    session_persisted = True
-    try:
-        await session_store.create_session(session_data)
-    except Exception as exc:  # Redis may raise redis.exceptions.RedisError (not a builtin)
-        session_persisted = False
-        logger.warning(
-            "session_store_unavailable",
-            user_id=str(user.id),
-            error=str(exc),
-            fallback="stateless_session",
-        )
+    # Persist session — retries once, then fails with 503 so the user
+    # gets a clean error instead of a zombie session that can't refresh.
+    await _persist_session(
+        session_store, session_data,
+        context="login",
+        user_id=user.id,
+    )
 
     # 4. Create Access Token
     access_token_data = {
@@ -149,9 +188,9 @@ async def login(
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
         "tid": str(active_tenant_id) if active_tenant_id else None  # Backward compat
     }
-    
+
     access_token = create_access_token(access_token_data)
-    
+
     # Audit Log
     if active_tenant_id:
         AuditLogger.log_event(
@@ -163,21 +202,19 @@ async def login(
             actor_id=user.id,
             resource_type="session",
             resource_id=str(session_data.id),
-            metadata={"session_persisted": session_persisted},
         )
 
     db.commit()
-    
+
     logger.info(
         "login_success",
         user_id=str(user.id),
         session_id=str(session_data.id),
-        session_persisted=session_persisted,
     )
-    
+
     return TokenResponse(
         access_token=access_token,
-        refresh_token=raw_refresh_token if session_persisted else "",
+        refresh_token=raw_refresh_token,
         tenant_id=active_tenant_id,
         user={"id": str(user.id), "email": user.email, "is_sysadmin": user.is_sysadmin},
         available_tenants=available_tenants
@@ -284,17 +321,16 @@ async def signup(
         ip_address=request.client.host if request.client else "0.0.0.0",
     )
 
-    session_persisted = True
-    try:
-        await session_store.create_session(session_data)
-    except Exception as exc:  # Redis may raise redis.exceptions.RedisError (not a builtin)
-        session_persisted = False
-        logger.warning(
-            "session_store_unavailable_on_signup",
-            user_id=str(new_user.id),
-            error=str(exc),
-            fallback="stateless_session",
-        )
+    # Commit the user + tenant + membership rows BEFORE attempting Redis.
+    # If Redis fails (503), the user still exists in the DB and can retry login.
+    db.commit()
+
+    # Persist session — retries once, then fails with 503.
+    await _persist_session(
+        session_store, session_data,
+        context="signup",
+        user_id=new_user.id,
+    )
 
     access_token_data = {
         "sub": str(new_user.id),
@@ -333,12 +369,11 @@ async def signup(
         user_id=str(new_user.id),
         tenant_id=str(new_tenant.id),
         supabase_user_linked=bool(supabase_user_id),
-        session_persisted=session_persisted,
     )
 
     return TokenResponse(
         access_token=access_token,
-        refresh_token=raw_refresh_token if session_persisted else "",
+        refresh_token=raw_refresh_token,
         tenant_id=new_tenant.id,
         user={"id": str(new_user.id), "email": new_user.email, "is_sysadmin": new_user.is_sysadmin},
         available_tenants=[{"id": new_tenant.id, "name": new_tenant.name, "slug": new_tenant.slug}],
