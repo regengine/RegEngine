@@ -21,7 +21,11 @@ test.describe('Energy Snapshot Creation', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
 
         // Navigate to Energy section
         const energyLink = page.locator('a:has-text("Energy")').first();
@@ -113,7 +117,11 @@ test.describe('Snapshot Verification', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
         await page.goto('/energy');
     });
 

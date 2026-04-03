@@ -27,7 +27,11 @@ test.describe('Tenant Isolation', () => {
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
     }
 
     test('Tenant switcher is visible after login', async ({ page }) => {

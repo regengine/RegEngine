@@ -34,11 +34,16 @@ test.describe('Login → Dashboard Flow', () => {
         // Submit form
         await page.click('button[type="submit"]');
 
-        // Wait for navigation to an authenticated page (may land on dashboard, sysadmin, or onboarding)
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        // Wait for navigation to an authenticated page (may land on dashboard, sysadmin, or onboarding).
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
 
-        // Verify we landed on an authenticated page
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/);
+        // Verify we landed on an authenticated page (pathname check)
+        const pathname = new URL(page.url()).pathname;
+        expect(pathname).toMatch(/^\/(dashboard|sysadmin|onboarding)/);
     });
 
     test('invalid credentials show error message', async ({ page }) => {
@@ -85,7 +90,11 @@ test.describe('Login → Dashboard Flow', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
 
         // Find and click logout button
         const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
@@ -106,7 +115,11 @@ test.describe('Dashboard Features', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
     });
 
     test('dashboard displays user information', async ({ page }) => {
