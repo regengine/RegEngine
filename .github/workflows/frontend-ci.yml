@@ -225,6 +225,11 @@ jobs:
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # JWT signing key — MUST match the value set on the admin service (Railway).
+          # The Next.js middleware verifies re_access_token cookies with this key.
+          # Without it, every authenticated route redirects to login?error=session_expired.
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          JWT_PREVIOUS_KEY: ${{ secrets.JWT_PREVIOUS_KEY }}
           # Optional: dedicated sysadmin account for admin-only test flows.
           # Falls back to TEST_USER_EMAIL if not set (works when test user has sysadmin role).
           TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
