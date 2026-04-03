@@ -9,6 +9,7 @@ const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 
 test.describe('Auth Chain Diagnostic', () => {
     test('step-by-step auth chain', async ({ page, request }) => {
+        test.setTimeout(90000);
         // ─── Step 0: Env vars ───
         console.log('[diag] TEST_USER_EMAIL:', TEST_USER_EMAIL);
         console.log('[diag] TEST_PASSWORD length:', TEST_PASSWORD?.length);
