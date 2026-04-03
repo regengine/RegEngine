@@ -34,11 +34,9 @@ test.describe('Login → Dashboard Flow', () => {
         // Submit form
         await page.click('button[type="submit"]');
 
-        // Wait for navigation to an authenticated page (may land on dashboard, sysadmin, or onboarding)
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
-
-        // Verify we landed on an authenticated page
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/);
+        // Wait for navigation to stabilize on an authenticated page.
+        // Use toHaveURL (retries) not waitForURL (resolves on first transient match).
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 30000 });
     });
 
     test('invalid credentials show error message', async ({ page }) => {
@@ -85,16 +83,15 @@ test.describe('Login → Dashboard Flow', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 30000 });
 
         // Find and click logout button
         const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
         if (await logoutButton.isVisible({ timeout: 5000 })) {
             await logoutButton.click();
 
-            // Should redirect to login (regex handles ?next= query params; 15s for Railway latency)
-            await page.waitForURL(/\/login/, { timeout: 15000 });
-            await expect(page).toHaveURL(/\/login/);
+            // Should redirect to login
+            await expect(page).toHaveURL(/\/login/, { timeout: 30000 });
         }
     });
 });
@@ -106,7 +103,7 @@ test.describe('Dashboard Features', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 30000 });
     });
 
     test('dashboard displays user information', async ({ page }) => {
