@@ -1,4 +1,12 @@
-import { test, expect, Page, Browser } from '@playwright/test';
+import { test, expect, type Page, type Browser } from '@playwright/test';
+
+/** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
+async function waitForAuthenticated(page: Page, timeout = 15000) {
+    await page.waitForURL(url => {
+        const pathname = new URL(url).pathname;
+        return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+    }, { timeout });
+}
 
 /**
  * Tenant Isolation E2E Tests
@@ -27,7 +35,7 @@ test.describe('Tenant Isolation', () => {
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await waitForAuthenticated(page);
     }
 
     test('Tenant switcher is visible after login', async ({ page }) => {
