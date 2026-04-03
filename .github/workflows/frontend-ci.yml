@@ -50,6 +50,10 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+          NEXT_PUBLIC_API_BASE_URL: https://regengine.co
+          INGESTION_SERVICE_URL: https://believable-respect-production-2fb3.up.railway.app
+          COMPLIANCE_SERVICE_URL: https://intelligent-essence-production.up.railway.app
+          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
         run: |
           cd frontend
           npm run build
@@ -85,6 +89,11 @@ jobs:
           npm ci
 
       - name: Run ESLint
+        env:
+          NEXT_PUBLIC_API_BASE_URL: https://regengine.co
+          INGESTION_SERVICE_URL: https://believable-respect-production-2fb3.up.railway.app
+          COMPLIANCE_SERVICE_URL: https://intelligent-essence-production.up.railway.app
+          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
         run: |
           cd frontend
           npm run lint
