@@ -17,11 +17,11 @@ const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
 test.describe('Energy Snapshot Creation', () => {
     test.beforeEach(async ({ page }) => {
         // Login
-        await page.goto('/login');
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
         // Navigate to Energy section
         const energyLink = page.locator('a:has-text("Energy")').first();
@@ -109,11 +109,11 @@ test.describe('Energy Snapshot Creation', () => {
 
 test.describe('Snapshot Verification', () => {
     test.beforeEach(async ({ page }) => {
-        await page.goto('/login');
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
         await page.goto('/energy');
     });
 
