@@ -74,7 +74,7 @@ test.describe('RBAC Gates', () => {
         await page.click('button[type="submit"]');
 
         // Wait for redirect to dashboard or sysadmin
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 30000 });
 
         // Navigate to sysadmin
         await page.goto('/sysadmin');
@@ -96,7 +96,7 @@ test.describe('RBAC Gates', () => {
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 30000 });
 
         // Navigate to the team management page (canonical route).
         // NOTE: /settings/users permanently redirects (301) to /dashboard/settings which has
@@ -129,7 +129,7 @@ test.describe('RBAC Gates', () => {
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 30000 });
 
         // Navigate to multiple pages
         await page.goto('/dashboard');

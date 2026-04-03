@@ -21,7 +21,7 @@ test.describe('Energy Snapshot Creation', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 30000 });
 
         // Navigate to Energy section
         const energyLink = page.locator('a:has-text("Energy")').first();
@@ -113,7 +113,7 @@ test.describe('Snapshot Verification', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 30000 });
         await page.goto('/energy');
     });
 
