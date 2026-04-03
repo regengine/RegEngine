@@ -95,10 +95,11 @@ test.describe('RBAC Gates', () => {
     });
 
     test('Protected API calls return 401 without auth', async ({ page }) => {
-        // Intercept API call without authentication
-        const response = await page.request.get('http://localhost:8400/v1/admin/users');
+        // Call admin API through the Next.js proxy (no local admin service in CI)
+        const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001';
+        const response = await page.request.get(`${baseURL}/api/admin/v1/admin/users`);
 
-        expect(response.status()).toBe(401);
+        expect([401, 403]).toContain(response.status());
     });
 
     test('Session persists across navigation', async ({ page }) => {

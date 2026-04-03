@@ -181,12 +181,14 @@ jobs:
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
         run: |
           MISSING=()
           [[ -z "$TEST_USER_EMAIL" ]]          && MISSING+=("TEST_USER_EMAIL")
           [[ -z "$TEST_PASSWORD" ]]             && MISSING+=("TEST_PASSWORD")
           [[ -z "$NEXT_PUBLIC_SUPABASE_URL" ]] && MISSING+=("NEXT_PUBLIC_SUPABASE_URL")
           [[ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && MISSING+=("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+          [[ -z "$JWT_SIGNING_KEY" ]]          && MISSING+=("JWT_SIGNING_KEY")
           if [[ ${#MISSING[@]} -gt 0 ]]; then
             echo "::error::E2E requires GitHub Secrets that are not configured: ${MISSING[*]}"
             echo "::error::Set these in Settings → Secrets → Actions before E2E can pass."

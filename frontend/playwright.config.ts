@@ -27,12 +27,30 @@ export default defineConfig({
         trace: 'on-first-retry',
     },
 
-    /* Start the Next.js dev server before running tests in CI */
+    /* Start the Next.js dev server before running tests in CI.
+     * env: explicitly forward secrets so the Next.js middleware can verify
+     * JWTs signed by the Railway admin service. Without this, the child
+     * process may not inherit CI env vars and every authenticated route
+     * redirects to /login?error=session_expired. */
     webServer: {
         command: 'npm run dev -- -p 3001',
         url: 'http://localhost:3001',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
+        env: {
+            ...process.env,
+            // Ensure JWT keys reach the dev server for middleware verification
+            JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY ?? '',
+            JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
+            AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY ?? '',
+            // Service URLs for Next.js rewrites / API proxy
+            ADMIN_SERVICE_URL: process.env.ADMIN_SERVICE_URL ?? '',
+            INGESTION_SERVICE_URL: process.env.INGESTION_SERVICE_URL ?? '',
+            COMPLIANCE_SERVICE_URL: process.env.COMPLIANCE_SERVICE_URL ?? '',
+            // Supabase config for middleware session checks
+            NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+        },
     },
 
     /* Configure projects for major browsers */

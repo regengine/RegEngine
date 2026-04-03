@@ -74,11 +74,12 @@ test.describe('Tenant Isolation', () => {
 
         await loginAsAdmin(page);
 
-        // Capture network requests
+        // Capture network requests going through the Next.js API proxy
         const apiRequests: string[] = [];
         page.on('request', request => {
-            if (request.url().includes('localhost:8400')) {
-                apiRequests.push(request.url());
+            const url = request.url();
+            if (url.includes('/api/admin') || url.includes('/api/ingestion') || url.includes('/api/compliance')) {
+                apiRequests.push(url);
             }
         });
 
@@ -109,7 +110,7 @@ test.describe('Tenant Isolation', () => {
 
         // Page should not crash (no 500 errors)
         const responsePromise = page.waitForResponse(response =>
-            response.url().includes('localhost:8400') && response.status() >= 500
+            (response.url().includes('/api/admin') || response.url().includes('/api/ingestion')) && response.status() >= 500
             , { timeout: 5000 }).catch(() => null);
 
         // Navigate to trigger API calls
