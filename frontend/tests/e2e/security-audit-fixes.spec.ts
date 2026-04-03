@@ -58,7 +58,11 @@ test.describe('Security Audit Fixes', () => {
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
         // Login flow: API call to Railway → cookie set → redirect. Allow 15s for CI latency.
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
     }
 
     /**
@@ -70,7 +74,11 @@ test.describe('Security Audit Fixes', () => {
         await page.fill('input[type="email"]', REGULAR_USER_EMAIL);
         await page.fill('input[type="password"]', REGULAR_USER_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        // Use pathname-only check to avoid false match on /login?next=/dashboard query string.
+        await page.waitForURL(url => {
+            const pathname = new URL(url).pathname;
+            return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+        }, { timeout: 15000 });
     }
 
     /**
