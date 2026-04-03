@@ -68,8 +68,9 @@ test.describe('RBAC Gates', () => {
         // Should stay on sysadmin (not redirected)
         await expect(page).toHaveURL(/\/sysadmin/);
 
-        // Sysadmin content should be visible
-        await expect(page.getByText(/System|Admin|Dashboard/i)).toBeVisible();
+        // Sysadmin content should be visible (use .first() to avoid strict mode violation
+        // when multiple nav links match "Dashboard")
+        await expect(page.getByText(/System|Admin|Dashboard/i).first()).toBeVisible();
     });
 
     test('Admin can access user management', async ({ page }) => {
