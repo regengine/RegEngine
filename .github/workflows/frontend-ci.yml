@@ -187,14 +187,19 @@ jobs:
 
       - name: Run E2E tests
         env:
+          # API routing — required by next.config.js before dev server starts
+          NEXT_PUBLIC_API_BASE_URL: https://regengine.co
+          INGESTION_SERVICE_URL: https://believable-respect-production-2fb3.up.railway.app
+          COMPLIANCE_SERVICE_URL: https://intelligent-essence-production.up.railway.app
+          ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
           # Required for Playwright tests — set these in GitHub Secrets
           # TEST_USER_EMAIL: email of a test user in the staging/CI environment
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          # Playwright base URL — defaults to localhost for CI
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL || 'http://localhost:3000' }}
+          # Playwright base URL — set in Secrets to target staging; defaults to local dev server
+          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
         run: |
           cd frontend
           npm run test:e2e
