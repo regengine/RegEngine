@@ -50,24 +50,26 @@ test.describe('Security Audit Fixes', () => {
 
     /**
      * Helper: Login as admin
+     * Uses ?next=/dashboard to bypass the onboarding redirect and always land on /dashboard.
      */
     async function loginAsAdmin(page: Page) {
-        await page.goto('/login');
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin)/);
+        await page.waitForURL(/\/(dashboard|sysadmin)/);
     }
 
     /**
      * Helper: Login as regular user
+     * Uses ?next=/dashboard to bypass the onboarding redirect and always land on /dashboard.
      */
     async function loginAsRegularUser(page: Page) {
-        await page.goto('/login');
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', REGULAR_USER_EMAIL);
         await page.fill('input[type="password"]', REGULAR_USER_PASSWORD);
         await page.click('button[type="submit"]');
-        await expect(page).toHaveURL(/\/dashboard/);
+        await page.waitForURL(/\/dashboard/);
     }
 
     /**

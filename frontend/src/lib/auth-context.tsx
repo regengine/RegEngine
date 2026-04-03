@@ -371,10 +371,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (token: string, loginUser: User, loginTenantId?: string) => {
-    setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
-    setUserState(loginUser);
-    if (loginTenantId) setTenantIdState(loginTenantId);
-
+    // Non-React state — these don't trigger re-renders or effects.
     apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
     apiClient.setUser(loginUser);
     if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
@@ -384,13 +381,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
     }
 
-    // Store sensitive credentials in HTTP-only cookies.
-    // MUST await — middleware checks this cookie on the next navigation.
+    // Set the HTTP-only cookie BEFORE updating React state.
+    //
+    // React state updates below trigger a re-render which fires the useEffect
+    // in LoginClient. That effect calls getOnboardingStatus and then navigates
+    // to /dashboard (or the ?next= path). The middleware runs on that navigation
+    // and checks re_access_token — if the cookie isn't in the browser yet,
+    // middleware rejects and redirects back to /login?next=/dashboard.
+    //
+    // Awaiting setSessionCookies first ensures the Set-Cookie response is
+    // processed by the browser before any navigation can occur.
     await setSessionCookies({
       accessToken: token,
       tenantId: loginTenantId,
       user: loginUser,
     });
+
+    // React state updates — triggers re-renders and the navigation useEffect.
+    // Cookie is guaranteed to be stored in the browser at this point.
+    setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
+    setUserState(loginUser);
+    if (loginTenantId) setTenantIdState(loginTenantId);
   }, []);
 
   const clearCredentials = useCallback(() => {
