@@ -466,14 +466,15 @@ test.describe('Security Audit Fixes', () => {
 
             await loginAsAdmin(page);
 
-            // Attempt to make a POST request without CSRF token via API
-            // This should be rejected with 403 Forbidden
-            const response = await context.request.post('http://localhost:8400/api/user/settings', {
+            // Attempt to make a POST request without CSRF token via the Next.js proxy.
+            // In CI there is no local admin service — use the proxy at localhost:3001.
+            const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001';
+            const response = await context.request.post(`${baseURL}/api/admin/user/settings`, {
                 data: { theme: 'dark' },
                 // Deliberately omitting CSRF headers
             });
 
-            // Should get 403 Forbidden or 401 Unauthorized
+            // Should get 403 Forbidden (CSRF) or 401 Unauthorized
             expect([403, 401, 400]).toContain(response.status());
         });
 
@@ -531,8 +532,9 @@ test.describe('Security Audit Fixes', () => {
                 }
             });
 
-            // Try to access protected API without auth
-            const response = await context.request.get('http://localhost:8400/api/user/profile');
+            // Try to access protected API without auth (via Next.js proxy)
+            const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3001';
+            const response = await context.request.get(`${baseURL}/api/admin/user/profile`);
 
             // Verify error response doesn't leak sensitive info
             const responseText = await response.text();

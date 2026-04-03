@@ -35,7 +35,7 @@ test.describe('User Invite Flow', () => {
         console.log('Logging in as Admin...');
         await page.goto('/login');
 
-        await page.fill('input[type="email"]', 'admin@example.com');
+        await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
