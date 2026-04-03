@@ -131,6 +131,13 @@ DEFAULT_RULES: list[AlertRule] = [
         description="Triggered when a mock audit drill approaches the 24-hour response deadline",
         threshold="4 hours",
     ),
+    AlertRule(
+        id="fda-recall",
+        name="FDA Recall Alert",
+        category="fda_recall",
+        severity="critical",
+        description="Triggered when an FDA food recall matches a supplier, lot code, or product category in your supply chain",
+    ),
 ]
 
 
@@ -185,6 +192,144 @@ def _to_iso(value: Any) -> str:
             return value.replace(tzinfo=timezone.utc).isoformat()
         return value.astimezone(timezone.utc).isoformat()
     return str(value)
+
+
+def _severity_for_classification(classification: str) -> str:
+    """Map FDA recall classification to alert severity."""
+    if "Class I" in classification:
+        return "critical"
+    if "Class II" in classification:
+        return "high"
+    return "warning"
+
+
+def _fetch_fda_recall_alerts(db_session, tenant_id: str) -> list[Alert]:
+    """Fetch FDA recall alerts from public.compliance_alerts.
+
+    ComplianceIntegration writes recall-matched alerts to public.compliance_alerts
+    with source_type='FDA_RECALL'. This function reads them and maps to the Alert
+    response model with recall-specific metadata (recall number, classification,
+    countdown timer, match tier, FDA enforcement link).
+    """
+    try:
+        # Check if public.compliance_alerts exists
+        exists = db_session.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'compliance_alerts'
+                """
+            )
+        ).fetchone()
+        if not exists:
+            return []
+
+        rows = db_session.execute(
+            text(
+                """
+                SELECT
+                    id::text,
+                    source_type,
+                    source_id,
+                    title,
+                    summary,
+                    severity,
+                    countdown_start,
+                    countdown_end,
+                    countdown_hours,
+                    required_actions,
+                    status,
+                    match_reason,
+                    raw_data,
+                    created_at,
+                    acknowledged_at,
+                    acknowledged_by,
+                    resolved_at
+                FROM public.compliance_alerts
+                WHERE tenant_id = :tenant_id
+                  AND source_type = 'FDA_RECALL'
+                ORDER BY created_at DESC
+                LIMIT 200
+                """
+            ),
+            {"tenant_id": tenant_id},
+        ).fetchall()
+    except Exception as exc:
+        logger.warning("fda_recall_alerts_query_failed error=%s", str(exc))
+        return []
+
+    alerts: list[Alert] = []
+    for row in rows:
+        raw = row.raw_data if isinstance(row.raw_data, dict) else {}
+        match = row.match_reason if isinstance(row.match_reason, dict) else {}
+
+        # Extract recall-specific fields for metadata
+        classification = raw.get("classification", "")
+        recall_number = raw.get("recall_number", "")
+        recalling_firm = raw.get("recalling_firm", "")
+        if not recalling_firm and row.title:
+            # Title format is "[Class X] FirmName - product..."
+            parts = row.title.split("] ", 1)
+            if len(parts) > 1:
+                firm_part = parts[1].split(" - ", 1)
+                recalling_firm = firm_part[0]
+
+        # Determine match tier from match_reason
+        matched_by = match.get("matched_by", [])
+        match_tier = "category"
+        for reason in matched_by:
+            if "lot_code" in str(reason):
+                match_tier = "lot_code"
+                break
+            if "supplier" in str(reason):
+                match_tier = "supplier"
+
+        # Build FDA enforcement link
+        fda_url = ""
+        if recall_number:
+            fda_url = (
+                f"https://www.accessdata.fda.gov/scripts/ires/index.cfm"
+                f"?event=ires.dspBriefRecallNumber&RecallNumber={recall_number}"
+            )
+
+        metadata = {
+            "source_type": "FDA_RECALL",
+            "recall_number": recall_number,
+            "classification": classification,
+            "recalling_firm": recalling_firm,
+            "match_tier": match_tier,
+            "match_reasons": matched_by,
+            "fda_url": fda_url,
+            "countdown_start": _to_iso(row.countdown_start) if row.countdown_start else None,
+            "countdown_end": _to_iso(row.countdown_end) if row.countdown_end else None,
+            "countdown_hours": row.countdown_hours,
+            "distribution_pattern": raw.get("distribution_pattern", ""),
+            "code_info": raw.get("code_info", ""),
+        }
+
+        # Map severity from uppercase DB values to lowercase API values
+        severity = (row.severity or "MEDIUM").lower()
+
+        is_acknowledged = row.status in ("ACKNOWLEDGED", "RESOLVED") or row.acknowledged_at is not None
+
+        alerts.append(
+            Alert(
+                id=row[0],  # id::text
+                rule_id="fda-recall",
+                rule_name="FDA Recall Alert",
+                severity=severity,
+                category="fda_recall",
+                title=row.title or "FDA Recall",
+                message=row.summary or row.title or "FDA Recall Alert",
+                triggered_at=_to_iso(row.created_at),
+                acknowledged=is_acknowledged,
+                acknowledged_at=_to_iso(row.acknowledged_at) if row.acknowledged_at else None,
+                acknowledged_by=str(row.acknowledged_by) if row.acknowledged_by else None,
+                metadata=metadata,
+            )
+        )
+
+    return alerts
 
 
 def _fetch_alerts_from_db(db_session, tenant_id: str) -> list[Alert]:
@@ -280,7 +425,19 @@ async def get_alerts(
     try:
         db_session = _get_db_session()
         try:
-            alerts = _fetch_alerts_from_db(db_session, tenant_id)
+            # Fetch from both alert tables and merge
+            fsma_alerts = _fetch_alerts_from_db(db_session, tenant_id)
+            fda_recall_alerts = _fetch_fda_recall_alerts(db_session, tenant_id)
+
+            # Merge and deduplicate by id
+            seen_ids: set[str] = set()
+            for alert in fda_recall_alerts + fsma_alerts:
+                if alert.id not in seen_ids:
+                    alerts.append(alert)
+                    seen_ids.add(alert.id)
+
+            # Sort by triggered_at descending (most recent first)
+            alerts.sort(key=lambda a: a.triggered_at, reverse=True)
         finally:
             db_session.close()
     except HTTPException:
@@ -317,6 +474,31 @@ async def acknowledge_alert(
 ):
     db_session = _get_db_session()
     try:
+        # Try public.compliance_alerts first (FDA recall alerts)
+        try:
+            public_row = db_session.execute(
+                text(
+                    """
+                    UPDATE public.compliance_alerts
+                    SET status = 'ACKNOWLEDGED',
+                        acknowledged_at = NOW(),
+                        acknowledged_by = :tenant_id,
+                        updated_at = NOW()
+                    WHERE id = :alert_id
+                      AND tenant_id = :tenant_id
+                      AND status = 'ACTIVE'
+                    RETURNING id
+                    """
+                ),
+                {"alert_id": alert_id, "tenant_id": tenant_id},
+            ).fetchone()
+            if public_row:
+                db_session.commit()
+                return {"acknowledged": True, "alert_id": alert_id}
+        except Exception:
+            db_session.rollback()
+
+        # Fall back to fsma.compliance_alerts
         columns = _load_alert_columns(db_session)
         tenant_col = "tenant_id" if "tenant_id" in columns else ("org_id" if "org_id" in columns else None)
         if tenant_col is None:
@@ -368,7 +550,16 @@ async def get_alert_summary(
 ):
     db_session = _get_db_session()
     try:
-        alerts = _fetch_alerts_from_db(db_session, tenant_id)
+        fsma_alerts = _fetch_alerts_from_db(db_session, tenant_id)
+        fda_recall_alerts = _fetch_fda_recall_alerts(db_session, tenant_id)
+
+        # Merge and deduplicate
+        seen_ids: set[str] = set()
+        alerts: list[Alert] = []
+        for alert in fda_recall_alerts + fsma_alerts:
+            if alert.id not in seen_ids:
+                alerts.append(alert)
+                seen_ids.add(alert.id)
     finally:
         db_session.close()
 
