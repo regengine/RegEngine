@@ -147,14 +147,16 @@ async def login(
         .join(TenantModel, MembershipModel.tenant_id == TenantModel.id)\
         .where(MembershipModel.user_id == user.id)
     results = db.execute(stmt_mem).all()
-    
+
     available_tenants = []
     active_tenant_id = None
-    
+    active_tenant_status = None
+
     for mem, tenant in results:
         available_tenants.append({"id": tenant.id, "name": tenant.name, "slug": tenant.slug})
         if not active_tenant_id:
             active_tenant_id = tenant.id
+            active_tenant_status = tenant.status
     
     # 3. Create Session in Redis (replaces PostgreSQL session)
     raw_refresh_token = create_refresh_token()
@@ -186,7 +188,8 @@ async def login(
         "sub": str(user.id),
         "email": user.email,
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
-        "tid": str(active_tenant_id) if active_tenant_id else None  # Backward compat
+        "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
+        "tenant_status": active_tenant_status,  # Middleware checks this to reject suspended tenants
     }
 
     access_token = create_access_token(access_token_data)
@@ -391,12 +394,14 @@ async def refresh_session(
     session_store: RedisSessionStore = Depends(get_session_store)
 ):
     input_hash = hash_token(payload.refresh_token)
-    
-    # Find session by hash in Redis
-    session = await session_store.get_session_by_token(input_hash)
-    
+
+    # Atomically claim the token — GETDEL ensures only one concurrent
+    # refresh request succeeds. The second request finds the mapping gone
+    # and gets 401, preventing the "last write wins" race condition where
+    # two tabs refresh simultaneously and one gets an invalidated token.
+    session = await session_store.claim_session_by_token(input_hash)
+
     if not session:
-        # Invalid refresh token
         logger.warning("refresh_invalid_token", token_hash=input_hash[:8])
         raise HTTPException(status_code=401, detail="Invalid refresh token")
         
@@ -413,7 +418,8 @@ async def refresh_session(
     new_raw_refresh_token = create_refresh_token()
     new_hash = hash_token(new_raw_refresh_token)
     
-    # Update session with new token hash and timestamps
+    # Update session with new token hash and timestamps.
+    # old_token_hash already deleted by claim_session_by_token (GETDEL).
     await session_store.update_session(
         session.id,
         {
@@ -422,7 +428,6 @@ async def refresh_session(
             "expires_at": (datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)).isoformat()
         },
         new_token_hash=new_hash,
-        old_token_hash=input_hash
     )
     
     # Re-issue Access Token
@@ -453,12 +458,13 @@ async def refresh_session(
         "sub": str(user.id),
         "email": user.email,
         "tenant_id": str(active_tenant_id) if active_tenant_id else None,  # For RLS
-        "tid": str(active_tenant_id) if active_tenant_id else None  # Backward compat
+        "tid": str(active_tenant_id) if active_tenant_id else None,  # Backward compat
+        "tenant_status": "active",  # Only active tenants reach this point (query filters above)
     }
     access_token = create_access_token(access_token_data)
-    
+
     db.commit()
-    
+
     logger.info("token_refreshed", user_id=str(user.id), session_id=str(session.id))
     
     return TokenResponse(

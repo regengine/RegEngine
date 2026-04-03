@@ -414,6 +414,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearCredentials();
+    // Sign out from Supabase too — prevents the dual-auth desync where
+    // custom JWT cookies are cleared but Supabase session persists,
+    // causing the onAuthStateChange listener to silently re-authenticate.
+    try {
+      const supabase = createSupabaseBrowserClient();
+      supabase.auth.signOut().catch(() => {});
+    } catch {
+      // Supabase not configured — skip
+    }
   }, [clearCredentials]);
 
   return (
