@@ -591,7 +591,7 @@ test.describe('Security Audit Fixes', () => {
 
     test.describe('Integration: Full Auth & Security Flow', () => {
 
-        test('Complete login -> navigate -> security settings -> logout flow', async ({ page, context }) => {
+        test('Complete login, navigate, security settings, logout flow', async ({ page, context }) => {
             test.setTimeout(90000);
 
             // 1. Login
