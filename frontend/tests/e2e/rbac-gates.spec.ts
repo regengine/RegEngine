@@ -65,14 +65,16 @@ test.describe('RBAC Gates', () => {
 
         test.setTimeout(60000);
 
-        // Login as admin
-        await page.goto('/login');
+        // Login as admin — ?next=/dashboard bypasses the onboarding check so
+        // the test reliably lands on /dashboard regardless of the test user's
+        // onboarding state.  Sysadmin accounts will still proceed normally.
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         // Wait for redirect to dashboard or sysadmin
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
 
         // Navigate to sysadmin
         await page.goto('/sysadmin');
@@ -88,13 +90,13 @@ test.describe('RBAC Gates', () => {
     test('Admin can access user management', async ({ page }) => {
         test.setTimeout(60000);
 
-        // Login as admin
-        await page.goto('/login');
+        // Login as admin — ?next=/dashboard bypasses the onboarding check
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
 
         // Navigate to the team management page (canonical route).
         // NOTE: /settings/users permanently redirects (301) to /dashboard/settings which has
@@ -121,13 +123,13 @@ test.describe('RBAC Gates', () => {
     test('Session persists across navigation', async ({ page }) => {
         test.setTimeout(60000);
 
-        // Login
-        await page.goto('/login');
+        // Login — ?next=/dashboard bypasses the onboarding check
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
 
         // Navigate to multiple pages
         await page.goto('/dashboard');
