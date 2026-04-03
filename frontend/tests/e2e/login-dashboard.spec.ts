@@ -125,12 +125,8 @@ test.describe('Dashboard Features', () => {
         // Verify the page loaded as an authenticated dashboard (not redirected to login)
         await expect(page).not.toHaveURL(/\/login/);
 
-        // Should show some authenticated UI: user info, sidebar, navigation, or dashboard content
-        const escapedEmail = TEST_USER_EMAIL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const hasUserInfo =
-            await page.locator(`text=/${escapedEmail}|test user/i`).first().count() > 0 ||
-            await page.locator('[data-testid*="user"], [class*="avatar"], [class*="user-menu"], [class*="sidebar"], nav, aside').count() > 0;
-        expect(hasUserInfo).toBe(true);
+        // Dashboard nav landmark is only rendered when auth is hydrated and user is authenticated
+        await expect(page.locator('nav[aria-label="Dashboard navigation"]')).toBeVisible({ timeout: 10000 });
     });
 
     test('dashboard has navigation links', async ({ page }) => {
