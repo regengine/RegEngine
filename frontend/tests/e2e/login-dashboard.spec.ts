@@ -91,8 +91,8 @@ test.describe('Login → Dashboard Flow', () => {
         if (await logoutButton.isVisible({ timeout: 5000 })) {
             await logoutButton.click();
 
-            // Should redirect to login
-            await page.waitForURL('**/login', { timeout: 10000 });
+            // Should redirect to login (use regex — glob **/login misses query strings)
+            await page.waitForURL(/\/login/, { timeout: 10000 });
             await expect(page).toHaveURL(/\/login/);
         }
     });
