@@ -17,6 +17,13 @@ test.describe('User Invite Flow', () => {
     });
 
     test('Admin can invite user and user can accept', async ({ page, browser }) => {
+        // This test requires a dedicated sysadmin account with access to
+        // Team Management / Invite User UI. Skip if no admin credentials.
+        test.skip(
+            !process.env.TEST_ADMIN_EMAIL || !process.env.TEST_ADMIN_PASSWORD,
+            'Requires TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets (sysadmin account)'
+        );
+
         // Increase timeout
         test.setTimeout(90000);
 
