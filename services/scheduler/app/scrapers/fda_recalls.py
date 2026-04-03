@@ -186,6 +186,9 @@ class FDARecallsScraper(BaseScraper):
                 "initial_firm_notification": result.get("initial_firm_notification", ""),
                 "state": result.get("state", ""),
                 "city": result.get("city", ""),
+                # code_info contains lot numbers, UPCs, and expiration dates —
+                # required for Tier 1 lot-code matching in ComplianceIntegration
+                "code_info": result.get("code_info", ""),
             },
         )
 
