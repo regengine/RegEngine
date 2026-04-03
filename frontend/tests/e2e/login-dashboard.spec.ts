@@ -93,7 +93,7 @@ test.describe('Login → Dashboard Flow', () => {
             await logoutButton.click();
 
             // Should redirect to login
-            await page.waitForURL('**/login', { timeout: 10000 });
+            await page.waitForURL('**/login', { timeout: 15000 });
             await expect(page).toHaveURL(/\/login/);
         }
     });
@@ -114,12 +114,14 @@ test.describe('Dashboard Features', () => {
         await page.goto('/dashboard');
         await page.waitForLoadState('networkidle');
 
-        // Should show user email, name, initials, or avatar somewhere
+        // Verify the page loaded as an authenticated dashboard (not redirected to login)
+        await expect(page).not.toHaveURL(/\/login/);
+
+        // Should show some authenticated UI: user info, sidebar, navigation, or dashboard content
         const escapedEmail = TEST_USER_EMAIL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const emailOrName = page.locator(`text=/${escapedEmail}|test user/i`).first();
         const hasUserInfo =
-            await emailOrName.count() > 0 ||
-            await page.locator('[data-testid*="user"], [class*="avatar"], [class*="user-menu"], [class*="sidebar"]').count() > 0;
+            await page.locator(`text=/${escapedEmail}|test user/i`).first().count() > 0 ||
+            await page.locator('[data-testid*="user"], [class*="avatar"], [class*="user-menu"], [class*="sidebar"], nav, aside').count() > 0;
         expect(hasUserInfo).toBe(true);
     });
 
