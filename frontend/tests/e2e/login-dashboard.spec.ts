@@ -125,9 +125,8 @@ test.describe('Dashboard Features', () => {
         // Verify the page loaded as an authenticated dashboard (not redirected to login)
         await expect(page).not.toHaveURL(/\/login/);
 
-        // URL check is the real assertion; any rendered body content confirms the page loaded
-        const hasContent = await page.locator('body > *').count() > 0;
-        expect(hasContent).toBe(true);
+        // Dashboard nav landmark is only rendered when auth is hydrated and user is authenticated
+        await expect(page.locator('nav[aria-label="Dashboard navigation"]')).toBeVisible({ timeout: 10000 });
     });
 
     test('dashboard has navigation links', async ({ page }) => {
