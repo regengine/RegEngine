@@ -175,16 +175,31 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Preflight — verify backend services are reachable
+      - name: Preflight — verify secrets and backend are ready
+        env:
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
+          MISSING=()
+          [[ -z "$TEST_USER_EMAIL" ]]          && MISSING+=("TEST_USER_EMAIL")
+          [[ -z "$TEST_PASSWORD" ]]             && MISSING+=("TEST_PASSWORD")
+          [[ -z "$NEXT_PUBLIC_SUPABASE_URL" ]] && MISSING+=("NEXT_PUBLIC_SUPABASE_URL")
+          [[ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && MISSING+=("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+          if [[ ${#MISSING[@]} -gt 0 ]]; then
+            echo "::error::E2E requires GitHub Secrets that are not configured: ${MISSING[*]}"
+            echo "::error::Set these in Settings → Secrets → Actions before E2E can pass."
+            exit 1
+          fi
           echo "Checking admin service health..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://regengine-production.up.railway.app/health || echo "000")
           if [[ "$STATUS" != "200" ]]; then
-            echo "::error::Admin service is unreachable (HTTP $STATUS). E2E login tests will fail."
-            echo "::error::Fix the admin service on Railway before E2E can pass: https://regengine-production.up.railway.app"
+            echo "::error::Admin service is unreachable (HTTP $STATUS)."
+            echo "::error::Fix the Railway deployment before E2E can pass: https://regengine-production.up.railway.app"
             exit 1
           fi
-          echo "Admin service healthy (HTTP $STATUS). Proceeding with E2E tests."
+          echo "All preflight checks passed. Proceeding with E2E tests."
 
       - name: Install dependencies
         run: |
@@ -198,13 +213,14 @@ jobs:
 
       - name: Run E2E tests
         env:
-          # API routing — required by next.config.js before dev server starts
-          NEXT_PUBLIC_API_BASE_URL: https://regengine.co
+          # NOTE: NEXT_PUBLIC_API_BASE_URL is intentionally NOT set here.
+          # The dev webServer runs on localhost:3001. Setting a production base URL
+          # causes the browser to make cross-origin requests (CORS blocked) instead
+          # of routing through the Next.js proxy rewrites. Individual service URLs
+          # are still set so next.config.js rewrites route correctly server-side.
           INGESTION_SERVICE_URL: https://believable-respect-production-2fb3.up.railway.app
           COMPLIANCE_SERVICE_URL: https://intelligent-essence-production.up.railway.app
           ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
-          # Required for Playwright tests — set these in GitHub Secrets
-          # TEST_USER_EMAIL: email of a test user in the staging/CI environment
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
