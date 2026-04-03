@@ -83,11 +83,12 @@ test.describe('RBAC Gates', () => {
 
         await expect(page).toHaveURL(/\/(dashboard|sysadmin)/);
 
-        // Navigate to user settings
+        // Navigate to user settings.
+        // next.config.js permanently redirects /settings/:path* → /dashboard/settings
         await page.goto('/settings/users');
 
-        // Should stay on settings (not redirected)
-        await expect(page).toHaveURL(/\/settings\/users/);
+        // Should land on /dashboard/settings (301 redirect) — not the login page
+        await expect(page).toHaveURL(/\/dashboard\/settings|\/settings\/users/);
 
         // Team management content should be visible
         await expect(page.getByText(/Team|Users|Management/i)).toBeVisible();
@@ -121,9 +122,9 @@ test.describe('RBAC Gates', () => {
         await page.goto('/ingest');
         await expect(page).not.toHaveURL(/\/login/);
 
-        // Session should still be valid
+        // Session should still be valid (/settings/users redirects → /dashboard/settings)
         await page.goto('/settings/users');
-        await expect(page).toHaveURL(/\/settings\/users/);
+        await expect(page).toHaveURL(/\/dashboard\/settings|\/settings\/users/);
     });
 
 });
