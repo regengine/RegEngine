@@ -1,8 +1,9 @@
 
 import { test, expect } from '@playwright/test';
 
-// Invite flow requires a sysadmin account that can create invite tokens.
-// Use dedicated admin credentials if available; fall back to the test user.
+// Invite flow requires an org admin account that can create invite tokens.
+// Use dedicated admin credentials if available; fall back to the test user
+// (the test user created by globalSetup is the org owner and has invite permission).
 const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
 
@@ -44,8 +45,11 @@ test.describe('User Invite Flow', () => {
         console.log('Logged in.');
 
         // Navigate to User Settings
-        // next.config.js redirects /settings/:path* → /dashboard/settings
-        await page.goto('/dashboard/settings');
+        // The Team Management / Invite UI lives at /settings/users.
+        // NOTE: next.config.js previously had a wildcard redirect that sent /settings/:path*
+        // to /dashboard/settings — that redirect has been removed. /settings/users is now
+        // directly accessible.
+        await page.goto('/settings/users');
         await expect(page.getByText('Team Management')).toBeVisible();
 
         // Create Invite
