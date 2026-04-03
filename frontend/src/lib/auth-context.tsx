@@ -16,9 +16,9 @@ interface AuthContextType {
   isOnboarded: boolean;
   isHydrated: boolean;
   demoMode: boolean;
-  setApiKey: (key: string | null) => void;
-  setAdminKey: (key: string | null) => void;
-  setTenantId: (id: string | null) => void;
+  setApiKey: (key: string | null) => Promise<void>;
+  setAdminKey: (key: string | null) => Promise<void>;
+  setTenantId: (id: string | null) => Promise<void>;
   setDemoMode: (enabled: boolean) => void;
   completeOnboarding: () => void;
   clearCredentials: () => void;
@@ -63,30 +63,37 @@ const STORAGE_KEYS = {
 // Cookie helpers — talk to /api/session (server-side)
 // ---------------------------------------------------------------------------
 
-/** Store sensitive credentials in HTTP-only cookies via /api/session POST. */
+/** Store sensitive credentials in HTTP-only cookies via /api/session POST.
+ *  Returns true if the cookie was set successfully, false on failure. */
 async function setSessionCookies(params: {
   accessToken?: string | null;
   apiKey?: string | null;
   adminKey?: string | null;
   tenantId?: string | null;
   user?: User | null;
-}): Promise<void> {
-  if (typeof window === 'undefined') return;
+}): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
   const body: Record<string, unknown> = {};
   if (params.accessToken) body.access_token = params.accessToken;
   if (params.apiKey) body.api_key = params.apiKey;
   if (params.adminKey) body.admin_key = params.adminKey;
   if (params.tenantId) body.tenant_id = params.tenantId;
   if (params.user) body.user = params.user;
-  if (Object.keys(body).length === 0) return;
+  if (Object.keys(body).length === 0) return true;
   try {
-    await fetch('/api/session', {
+    const res = await fetch('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  } catch {
-    // Best-effort
+    if (!res.ok) {
+      console.error('[auth] Failed to set session cookie:', res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[auth] Failed to set session cookie:', err);
+    return false;
   }
 }
 
@@ -234,7 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Use getUser() instead of getSession() — getUser() validates the JWT
       // against the Supabase auth server, while getSession() only reads the
       // local cookie/storage (which can be spoofed).
-      supabase.auth.getUser().then(({ data: { user: validatedUser } }) => {
+      supabase.auth.getUser().then(async ({ data: { user: validatedUser } }) => {
         if (validatedUser && !accessToken) {
           const appUser: User = {
             id: validatedUser.id,
@@ -243,6 +250,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active',
             role_name: validatedUser.user_metadata?.role || 'member',
           };
+          // Await cookie write before updating state — ensures middleware
+          // sees the cookie before any React re-render triggers navigation.
+          await setSessionCookies({
+            accessToken: COOKIE_MANAGED_PLACEHOLDER,
+            user: appUser,
+            tenantId: validatedUser.user_metadata?.tenant_id || null,
+          });
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           setUserState(appUser);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
@@ -253,15 +267,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem(STORAGE_KEYS.TENANT_ID, validatedUser.user_metadata.tenant_id);
           }
           localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
-          setSessionCookies({
-            accessToken: COOKIE_MANAGED_PLACEHOLDER,
-            user: appUser,
-            tenantId: validatedUser.user_metadata?.tenant_id || null,
-          });
         }
       });
 
-      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.access_token && session.user) {
           const appUser: User = {
             id: session.user.id,
@@ -270,12 +279,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             status: 'active',
             role_name: session.user.user_metadata?.role || 'member',
           };
+          // Await cookie write before updating state — prevents race where
+          // middleware rejects requests because cookie isn't set yet.
+          await setSessionCookies({ accessToken: session.access_token, user: appUser });
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           setUserState(appUser);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setUser(appUser);
           localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(appUser));
-          setSessionCookies({ accessToken: session.access_token, user: appUser });
         }
 
         if (event === 'SIGNED_OUT') {
@@ -299,34 +310,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription?.unsubscribe();
   }, [accessToken]);
 
-  const setApiKey = useCallback((key: string | null) => {
+  const setApiKey = useCallback(async (key: string | null) => {
     if (key) {
-      setSessionCookies({ apiKey: key });
+      // MUST await — middleware checks this cookie on the next request.
+      // Setting state before the cookie is written causes a race condition
+      // where the app appears authenticated but middleware rejects the request.
+      await setSessionCookies({ apiKey: key });
       setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
     } else {
       setApiKeyState(null);
     }
   }, []);
 
-  const setAdminKey = useCallback((key: string | null) => {
+  const setAdminKey = useCallback(async (key: string | null) => {
     if (key) {
-      setSessionCookies({ adminKey: key });
+      // MUST await — see setApiKey comment.
+      await setSessionCookies({ adminKey: key });
       setAdminKeyState(COOKIE_MANAGED_PLACEHOLDER);
     } else {
       setAdminKeyState(null);
     }
   }, []);
 
-  const setTenantId = useCallback((id: string | null) => {
-    setTenantIdState(id);
+  const setTenantId = useCallback(async (id: string | null) => {
     if (typeof window !== 'undefined') {
       if (id) {
+        // Await cookie write before updating state — middleware needs the
+        // tenant cookie in place before any navigation triggers a request.
+        await setSessionCookies({ tenantId: id });
         localStorage.setItem(STORAGE_KEYS.TENANT_ID, id);
-        setSessionCookies({ tenantId: id });
       } else {
         localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
       }
     }
+    setTenantIdState(id);
   }, []);
 
   const setDemoMode = useCallback((enabled: boolean) => {
