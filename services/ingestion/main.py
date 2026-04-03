@@ -62,13 +62,28 @@ app = FastAPI(
     openapi_url=None if _is_prod else "/openapi.json",
 )
 
-allowed_origins = [
-    origin.strip()
-    for origin in settings.allowed_origins.split(",")
-    if origin.strip()
+# CORS configuration — explicit origins only, never wildcard with credentials
+_PROD_ORIGINS = [
+    "https://regengine.co",
+    "https://www.regengine.co",
 ]
-if "*" in allowed_origins:
-    allowed_origins = ["http://localhost:3000", "https://regengine.co", "https://www.regengine.co"]
+_DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+_raw_cors = settings.allowed_origins
+if _raw_cors:
+    allowed_origins = [o.strip() for o in _raw_cors.split(",") if o.strip()]
+    if "*" in allowed_origins:
+        import warnings
+        warnings.warn(
+            "ALLOWED_ORIGINS contains '*' which is insecure with allow_credentials=True. "
+            "Falling back to production origins.",
+            stacklevel=2,
+        )
+        allowed_origins = _PROD_ORIGINS
+else:
+    allowed_origins = _PROD_ORIGINS if _is_prod else _DEV_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,
