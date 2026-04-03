@@ -134,7 +134,9 @@ async function proxyRequest(  request: NextRequest,
     if (!headers.has('x-regengine-api-key')) {
       const cookieApiKey = request.cookies.get('re_api_key')?.value;
       const serverApiKey = cookieApiKey || process.env.REGENGINE_API_KEY || '';
-      headers.set('x-regengine-api-key', serverApiKey);
+      if (serverApiKey) {
+        headers.set('x-regengine-api-key', serverApiKey);
+      }
     }
 
     // Inject admin key from cookie if not already present

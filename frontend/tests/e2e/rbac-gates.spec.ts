@@ -1,8 +1,16 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
+async function waitForAuthenticated(page: Page, timeout = 15000) {
+    await page.waitForURL(url => {
+        const pathname = new URL(url).pathname;
+        return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+    }, { timeout });
+}
 
 /**
  * RBAC Gates E2E Tests
- * 
+ *
  * Verifies that role-based access control works correctly at the browser level:
  * - Unauthenticated users are redirected to login
  * - Non-admin users cannot access admin-only sections
@@ -14,6 +22,13 @@ import { test, expect, Page } from '@playwright/test';
 // Set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets for a dedicated sysadmin account.
 const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL || process.env.TEST_USER_EMAIL || 'admin@example.com';
 const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD || process.env.TEST_PASSWORD || 'test-placeholder';
+
+// Sysadmin tests require a dedicated account with is_sysadmin=true.
+// The test user created by globalSetup is a regular org owner, NOT a sysadmin.
+const hasDedicatedAdmin = !!(
+    process.env.TEST_ADMIN_EMAIL &&
+    process.env.TEST_ADMIN_EMAIL !== process.env.TEST_USER_EMAIL
+);
 
 test.describe('RBAC Gates', () => {
 
@@ -46,21 +61,28 @@ test.describe('RBAC Gates', () => {
     test('Unauthenticated cannot access user settings', async ({ page }) => {
         await page.goto('/settings/users');
 
-        // Should redirect to login
+        // Should redirect to login (settings/* is auth-gated)
         await expect(page).toHaveURL(/\/login/);
     });
 
     test('Admin can access sysadmin dashboard', async ({ page }) => {
+        // Requires a dedicated sysadmin account.
+        // The test user created by globalSetup is a regular org member — not sysadmin.
+        // The sysadmin page checks user.is_sysadmin client-side and redirects to /login if false.
+        test.skip(!hasDedicatedAdmin, 'Requires a dedicated sysadmin account — set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets pointing to a sysadmin user');
+
         test.setTimeout(60000);
 
-        // Login as admin
-        await page.goto('/login');
+        // Login as admin — ?next=/dashboard bypasses the onboarding check so
+        // the test reliably lands on /dashboard regardless of the test user's
+        // onboarding state.  Sysadmin accounts will still proceed normally.
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
         // Wait for redirect to dashboard or sysadmin
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await waitForAuthenticated(page);
 
         // Navigate to sysadmin
         await page.goto('/sysadmin');
@@ -68,31 +90,34 @@ test.describe('RBAC Gates', () => {
         // Should stay on sysadmin (not redirected)
         await expect(page).toHaveURL(/\/sysadmin/);
 
-        // Sysadmin content should be visible (use .first() to avoid strict mode violation
-        // when multiple nav links match "Dashboard")
+        // Sysadmin content should be visible — use .first() to avoid strict-mode
+        // violation when multiple nav elements match (e.g. "Admin" nav + page heading)
         await expect(page.getByText(/System|Admin|Dashboard/i).first()).toBeVisible();
     });
 
     test('Admin can access user management', async ({ page }) => {
         test.setTimeout(60000);
 
-        // Login as admin
-        await page.goto('/login');
+        // Login as admin — ?next=/dashboard bypasses the onboarding check
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await waitForAuthenticated(page);
 
-        // Navigate to user settings.
-        // next.config.js permanently redirects /settings/:path* → /dashboard/settings
-        await page.goto('/settings/users');
+        // Navigate to the team management page (canonical route).
+        // NOTE: /settings/users permanently redirects (301) to /dashboard/settings which has
+        // different content (API keys, integrations). The team/invite management lives at
+        // /dashboard/team.
+        await page.goto('/dashboard/team');
 
-        // Should land on /dashboard/settings (301 redirect) — not the login page
-        await expect(page).toHaveURL(/\/dashboard\/settings|\/settings\/users/);
+        // Should land on the team page, not be redirected to login
+        await expect(page).not.toHaveURL(/\/login/);
+        await expect(page).toHaveURL(/\/dashboard\/team/);
 
-        // Team management content should be visible
-        await expect(page.getByText(/Team|Users|Management/i)).toBeVisible();
+        // Team management content should be visible (heading or member list)
+        await expect(page.getByText(/Team|Members|Invite/i).first()).toBeVisible();
     });
 
     test('Protected API calls return 401 without auth', async ({ page }) => {
@@ -106,13 +131,13 @@ test.describe('RBAC Gates', () => {
     test('Session persists across navigation', async ({ page }) => {
         test.setTimeout(60000);
 
-        // Login
-        await page.goto('/login');
+        // Login — ?next=/dashboard bypasses the onboarding check
+        await page.goto('/login?next=/dashboard');
         await page.fill('input[type="email"]', ADMIN_EMAIL);
         await page.fill('input[type="password"]', ADMIN_PASSWORD);
         await page.click('button[type="submit"]');
 
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await waitForAuthenticated(page);
 
         // Navigate to multiple pages
         await page.goto('/dashboard');
