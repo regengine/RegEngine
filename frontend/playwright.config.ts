@@ -15,7 +15,7 @@ export default defineConfig({
      * are caught by the preflight health check before tests run, not by retrying. */
     retries: process.env.CI ? 1 : 0,
     /* 2 workers in CI — tests are independent, parallelism halves total run time. */
-    workers: process.env.CI ? 2 : undefined,
+    workers: process.env.CI ? 1 : undefined,
     /* Reporter to use. See https://playwright.dev/docs/test-reporters */
     reporter: 'html',
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
