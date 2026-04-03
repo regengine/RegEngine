@@ -9,7 +9,15 @@
  * 5. Verify user is authenticated
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/** Wait for navigation to an authenticated page (pathname-only check to avoid matching query strings like ?next=/dashboard) */
+async function waitForAuthenticated(page: Page, timeout = 15000) {
+    await page.waitForURL(url => {
+        const pathname = new URL(url).pathname;
+        return /^\/(dashboard|sysadmin|onboarding)/.test(pathname);
+    }, { timeout });
+}
 
 const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || 'test@example.com';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'test-placeholder';
@@ -35,10 +43,10 @@ test.describe('Login → Dashboard Flow', () => {
         await page.click('button[type="submit"]');
 
         // Wait for navigation to an authenticated page (may land on dashboard, sysadmin, or onboarding)
-        await page.waitForURL(/\/(dashboard|sysadmin|onboarding)/, { timeout: 15000 });
+        await waitForAuthenticated(page);
 
-        // Verify we landed on an authenticated page
-        await expect(page).toHaveURL(/\/(dashboard|sysadmin|onboarding)/);
+        // Verify we landed on an authenticated page (pathname-only to avoid false match on ?next= query strings)
+        await expect(page).toHaveURL(url => /^\/(dashboard|sysadmin|onboarding)/.test(new URL(url).pathname));
     });
 
     test('invalid credentials show error message', async ({ page }) => {
@@ -85,7 +93,7 @@ test.describe('Login → Dashboard Flow', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await waitForAuthenticated(page);
 
         // Find and click logout button
         const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [data-testid="logout"]').first();
@@ -106,7 +114,7 @@ test.describe('Dashboard Features', () => {
         await page.fill('input[type="email"]', TEST_USER_EMAIL);
         await page.fill('input[type="password"]', TEST_PASSWORD);
         await page.click('button[type="submit"]');
-        await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+        await waitForAuthenticated(page);
     });
 
     test('dashboard displays user information', async ({ page }) => {
