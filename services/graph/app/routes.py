@@ -85,6 +85,7 @@ async def provisions_by_request_id(
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     results = []
+    client = None
     try:
         client = Neo4jClient(database=db_name)
         async with client.session() as session:
@@ -107,11 +108,16 @@ async def provisions_by_request_id(
                         "tenant_id": rec["tenant_id"],
                     }
                 )
-        await client.close()
         logger.info("provisions_by_request", request_id=request_id, count=len(results))
         return {"count": len(results), "items": results}
     except Exception as exc:  # pragma: no cover - infra dependent
         logger.exception(
             "provisions_by_request_error", request_id=request_id, error=str(exc)
         )
-        return {"count": 0, "items": []}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Graph database error while fetching provisions: {exc}",
+        ) from exc
+    finally:
+        if client is not None:
+            await client.close()

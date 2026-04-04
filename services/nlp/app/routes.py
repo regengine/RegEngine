@@ -199,7 +199,19 @@ async def _execute_query_plan(
         )
         return orphans, [QueryEvidence(endpoint=endpoint, params=params, result_count=len(orphans))], answer
 
-    # Default: events_search
+    # Explicit events_search handler — must be listed before the unknown-intent guard
+    if plan.intent == "events_search":
+        pass  # falls through to the search block below
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Unhandled query intent '{plan.intent}'. "
+                "This intent is not supported by the current query planner. "
+                "Please report this error."
+            ),
+        )
+
     endpoint = "/api/v1/fsma/traceability/search/events"
     params = {
         "start_date": plan.start_date,
