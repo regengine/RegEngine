@@ -594,3 +594,117 @@ def register_initial_admin(payload: RegisterRequest, request: Request, db: Sessi
     db.commit()
     
     return {"message": "Admin created", "user_id": str(new_user.id), "tenant_id": str(new_tenant.id)}
+
+
+# ---------------------------------------------------------------------------
+# Password Reset — updates the RegEngine argon2 hash using a Supabase
+# recovery session token.
+#
+# WHY THIS EXISTS:
+# The frontend uses supabase.auth.verifyOtp({ token_hash }) on /auth/verify,
+# which creates a Supabase recovery session. supabase.auth.updateUser() would
+# only update Supabase's internal password store. But the RegEngine login
+# endpoint checks argon2 hashes in our own PostgreSQL users table — a
+# completely separate store. This endpoint updates that store.
+#
+# AUTH FLOW:
+#   1. /auth/verify calls verifyOtp → Supabase issues access_token (recovery)
+#   2. /reset-password page reads session.access_token
+#   3. Frontend POSTs here with { new_password } + Authorization: Bearer <supabase_token>
+#   4. We validate the token via sb.auth.get_user(), get the user's email
+#   5. We update password_hash in the RegEngine DB
+#   6. We also sync Supabase via admin.update_user_by_id() so both stores match
+# ---------------------------------------------------------------------------
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_session),
+):
+    """Reset a user's password using a Supabase recovery session token.
+
+    The caller must include `Authorization: Bearer <supabase_access_token>`.
+    The token is validated via sb.auth.get_user(); the user is looked up by
+    email and their argon2 password hash is updated in the RegEngine DB.
+    """
+    # 1. Extract the Supabase access token from the Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authorization token",
+        )
+    supabase_token = auth_header[7:]
+
+    # 2. Validate the token with Supabase (service-role client)
+    sb = get_supabase()
+    if not sb:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth service temporarily unavailable",
+        )
+
+    try:
+        user_response = sb.auth.get_user(supabase_token)
+        if not user_response or not user_response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired recovery token",
+            )
+        sb_user = user_response.user
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("reset_password_token_validation_failed", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired recovery token",
+        )
+
+    email = getattr(sb_user, "email", None)
+    if not email:
+        raise HTTPException(status_code=400, detail="No email associated with token")
+
+    # 3. Validate the new password against the configured policy
+    try:
+        validate_password(payload.new_password, user_context={"email": email})
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=400, detail=exc.message)
+
+    # 4. Find the user in the RegEngine DB (the authoritative store for login)
+    normalized_email = email.strip().lower()
+    user = db.execute(
+        select(UserModel).where(UserModel.email == normalized_email)
+    ).scalar_one_or_none()
+
+    if not user:
+        logger.warning("reset_password_user_not_found", email=normalized_email)
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.status != "active":
+        raise HTTPException(status_code=403, detail="Account disabled")
+
+    # 5. Update the argon2 hash in the RegEngine DB
+    user.password_hash = get_password_hash(payload.new_password)
+
+    # 6. Keep Supabase in sync so both stores stay aligned
+    try:
+        sb.auth.admin.update_user_by_id(str(sb_user.id), {"password": payload.new_password})
+    except Exception as exc:
+        # Non-fatal — the RegEngine DB is the authoritative login store
+        logger.warning(
+            "reset_password_supabase_sync_failed",
+            user_id=str(sb_user.id),
+            error=str(exc),
+        )
+
+    db.commit()
+
+    logger.info("reset_password_success", user_id=str(user.id))
+    return {"status": "success"}
