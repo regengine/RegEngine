@@ -391,11 +391,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     //
     // Awaiting setSessionCookies first ensures the Set-Cookie response is
     // processed by the browser before any navigation can occur.
-    await setSessionCookies({
+    //
+    // #535: Check the return value — if the /api/session POST fails (network
+    // error, server error) we must throw rather than silently continue.
+    // A false return means the re_access_token cookie was never written, so
+    // the very next middleware check would reject the user and redirect back
+    // to /login, producing a confusing loop. Throwing here surfaces the
+    // problem immediately as an error in the login form instead.
+    const cookiesOk = await setSessionCookies({
       accessToken: token,
       tenantId: loginTenantId,
       user: loginUser,
     });
+
+    if (!cookiesOk) {
+      throw new Error('Session could not be established. Please try again.');
+    }
 
     // React state updates — triggers re-renders and the navigation useEffect.
     // Cookie is guaranteed to be stored in the browser at this point.
