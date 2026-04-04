@@ -50,5 +50,24 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    return NextResponse.redirect(`${origin}/login?error=auth_failed`)
+    // No `?code=` param — this is either an implicit-flow recovery link (old
+    // emails sent before the PKCE migration) or a completely invalid/expired
+    // link.  The hash fragment (#access_token=...&type=recovery) is never sent
+    // to the server, so we can't read it here.  Return a minimal HTML page
+    // whose inline script reads the fragment client-side and either:
+    //   a) forwards an implicit recovery token to /reset-password (old emails), or
+    //   b) sends the user to /forgot-password with an expiry notice.
+    return new Response(
+        `<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+(function(){
+  var h = window.location.hash;
+  if (h.indexOf('type=recovery') !== -1 && h.indexOf('access_token=') !== -1) {
+    window.location.replace('/reset-password' + h);
+  } else {
+    window.location.replace('/forgot-password?error=link_expired');
+  }
+})();
+</script></body></html>`,
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
 }

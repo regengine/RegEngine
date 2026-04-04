@@ -303,6 +303,14 @@ export default function LoginPage() {
                                     Your session has expired. Please sign in again.
                                 </div>
                             )}
+                            {searchParams.get('error') === 'auth_failed' && (
+                                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400">
+                                    Password reset link has expired or is invalid.{' '}
+                                    <Link href="/forgot-password" className="font-medium underline underline-offset-2">
+                                        Request a new one →
+                                    </Link>
+                                </div>
+                            )}
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 {error && (
                                     <div
