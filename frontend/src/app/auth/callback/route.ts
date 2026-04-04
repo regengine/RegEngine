@@ -11,6 +11,20 @@ export async function GET(request: NextRequest) {
     const next = searchParams.get('next') ?? '/dashboard'
 
     if (code) {
+        // Compute the redirect URL before creating the response so we can attach
+        // session cookies to the redirect. Without this, exchangeCodeForSession sets
+        // cookies only on request.cookies (not visible to the browser) and the session
+        // is lost — causing the reset-password page to see no session.
+        const forwardedHost = request.headers.get('x-forwarded-host')
+        const isLocalEnv = process.env.NODE_ENV === 'development'
+        const redirectBase = isLocalEnv
+            ? origin
+            : forwardedHost
+            ? `https://${forwardedHost}`
+            : origin
+
+        const response = NextResponse.redirect(`${redirectBase}${next}`)
+
         const supabase = createServerClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -19,9 +33,11 @@ export async function GET(request: NextRequest) {
                     getAll() {
                         return request.cookies.getAll()
                     },
+                    // Write cookies onto the redirect response so the browser
+                    // receives the Supabase session after the PKCE code exchange.
                     setAll(cookiesToSet) {
-                        cookiesToSet.forEach(({ name, value }) =>
-                            request.cookies.set(name, value)
+                        cookiesToSet.forEach(({ name, value, options }) =>
+                            response.cookies.set(name, value, options)
                         )
                     },
                 },
@@ -30,15 +46,7 @@ export async function GET(request: NextRequest) {
 
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            const forwardedHost = request.headers.get('x-forwarded-host')
-            const isLocalEnv = process.env.NODE_ENV === 'development'
-            if (isLocalEnv) {
-                return NextResponse.redirect(`${origin}${next}`)
-            } else if (forwardedHost) {
-                return NextResponse.redirect(`https://${forwardedHost}${next}`)
-            } else {
-                return NextResponse.redirect(`${origin}${next}`)
-            }
+            return response
         }
     }
 
