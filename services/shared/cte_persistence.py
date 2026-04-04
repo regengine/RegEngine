@@ -333,6 +333,7 @@ class CTEPersistence:
                     :epcis_event_type, :epcis_action, :epcis_biz_step,
                     :validation_status
                 )
+                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
             """),
             {
                 "id": event_id,
@@ -654,6 +655,7 @@ class CTEPersistence:
                         epcis_event_type, epcis_action, epcis_biz_step,
                         validation_status
                     ) VALUES {', '.join(values_clauses)}
+                    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                 """
                 self.session.execute(text(sql), params)
 
