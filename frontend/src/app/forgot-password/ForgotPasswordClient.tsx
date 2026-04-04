@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ export default function ForgotPasswordClient() {
     const [error, setError] = useState<string | null>(null);
     const [submitted, setSubmitted] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const linkExpired = searchParams.get('error') === 'link_expired';
     // Use the SSR-aware browser client (PKCE flow) so the recovery email sends a
     // ?code= query param that /auth/callback can exchange server-side. The plain
     // @supabase/supabase-js client defaults to the legacy implicit flow which puts
@@ -86,6 +88,11 @@ export default function ForgotPasswordClient() {
                     </CardHeader>
 
                     <CardContent>
+                        {linkExpired && !submitted && (
+                            <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/10 dark:text-amber-400">
+                                Your reset link has expired. Enter your email to receive a new one.
+                            </div>
+                        )}
                         {submitted ? (
                             <div className="space-y-5 text-center">
                                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
