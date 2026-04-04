@@ -1216,6 +1216,8 @@ async def trace_transformation_graph(
         from shared.database import SessionLocal
         from shared.cte_persistence import CTEPersistence
 
+        from sqlalchemy import text
+
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
 
