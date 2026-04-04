@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -32,6 +32,8 @@ export default function ResetPasswordClient() {
     const [sessionReady, setSessionReady] = useState(false);
     const [sessionError, setSessionError] = useState(false);
     const router = useRouter();
+    // SSR-aware browser client — matches the PKCE flow used by ForgotPasswordClient.
+    const supabase = createSupabaseBrowserClient();
 
     // When Supabase redirects back after password reset, it passes a recovery
     // session via /auth/callback which sets the session cookies. We verify the
