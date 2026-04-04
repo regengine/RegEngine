@@ -218,6 +218,19 @@ def postgres_engine():
             for stmt in _split_sql_statements(migration_sql):
                 conn.execute(text(stmt))
 
+            # V052: replace single-column unique with composite (tenant_id, idempotency_key).
+            # Execute directly (not via _split_sql_statements) because the migration
+            # uses a dollar-quoted DO block which the semicolon-splitter would truncate.
+            conn.execute(text(
+                "ALTER TABLE fsma.cte_events "
+                "DROP CONSTRAINT IF EXISTS cte_events_idempotency_key_key"
+            ))
+            conn.execute(text(
+                "ALTER TABLE fsma.cte_events "
+                "ADD CONSTRAINT cte_events_tenant_idempotency_key "
+                "UNIQUE (tenant_id, idempotency_key)"
+            ))
+
         yield engine
 
 
