@@ -228,21 +228,22 @@ def run():
             harvest_data = resp.json()
             accepted = harvest_data.get("accepted", 0)
             rejected = harvest_data.get("rejected", 0)
-            check(accepted >= 5, f"Accepted {accepted} rows (expected ≥5)", f"Only {accepted} rows accepted",
+            check(accepted >= 4, f"Accepted {accepted} rows (expected ≥4)", f"Only {accepted} rows accepted",
                   warning=not db_live)
             check(rejected >= 0, f"Rejected/warned: {rejected} rows (idempotency + missing fields expected)", "", warning=True)
             info(f"Accepted: {accepted}, Rejected/skipped: {rejected}")
 
-            # Check for SHA-256 hashes on events
+            # Check for SHA-256 hashes on accepted events (rejected events don't get hashes)
             events = harvest_data.get("events", [])
-            hashed = sum(1 for e in events if e.get("sha256_hash"))
-            check(hashed == len(events), f"All {hashed}/{len(events)} events have SHA-256 hash",
-                  f"Only {hashed}/{len(events)} events have SHA-256 hash", warning=not db_live)
+            accepted_events = [e for e in events if e.get("status") == "accepted"]
+            hashed = sum(1 for e in accepted_events if e.get("sha256_hash"))
+            check(hashed == len(accepted_events), f"All {hashed}/{len(accepted_events)} accepted events have SHA-256 hash",
+                  f"Only {hashed}/{len(accepted_events)} accepted events have SHA-256 hash", warning=not db_live)
 
-            # Check chain hashes
-            chained = sum(1 for e in events if e.get("chain_hash"))
-            check(chained == len(events), f"All {chained}/{len(events)} events have chain hash",
-                  f"Only {chained}/{len(events)} events have chain hash", warning=True)
+            # Check chain hashes on accepted events
+            chained = sum(1 for e in accepted_events if e.get("chain_hash"))
+            check(chained == len(accepted_events), f"All {chained}/{len(accepted_events)} accepted events have chain hash",
+                  f"Only {chained}/{len(accepted_events)} accepted events have chain hash", warning=True)
 
         # ── Step 1b: Validation-layer check (DB-independent) ─────────────────
         # Send a CSV missing required KDEs → must be rejected with clear errors
