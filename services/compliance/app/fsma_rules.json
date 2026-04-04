@@ -1,0 +1,319 @@
+{
+  "industries": [
+    {
+      "id": "fresh-produce",
+      "name": "Fresh Produce",
+      "description": "Leafy greens, herbs, melons, and fresh-cut produce",
+      "checklist_count": 1
+    },
+    {
+      "id": "seafood",
+      "name": "Seafood",
+      "description": "Finfish, shellfish, and aquaculture products",
+      "checklist_count": 1
+    },
+    {
+      "id": "dairy",
+      "name": "Dairy",
+      "description": "Milk, cheese, yogurt, and cultured dairy products",
+      "checklist_count": 1
+    },
+    {
+      "id": "deli-prepared",
+      "name": "Deli & Prepared Foods",
+      "description": "Ready-to-eat and mixed-ingredient products",
+      "checklist_count": 1
+    },
+    {
+      "id": "shell-eggs",
+      "name": "Shell Eggs",
+      "description": "Fresh and processed shell egg products",
+      "checklist_count": 1
+    }
+  ],
+  "checklists": [
+    {
+      "id": "fsma-204-fresh-produce",
+      "name": "FSMA 204 Fresh Produce Traceability",
+      "description": "CTE and KDE compliance checklist for leafy greens, herbs, melons, and fresh-cut produce under FSMA Section 204.",
+      "industry": "Fresh Produce",
+      "framework": "FSMA 204",
+      "version": "1.0",
+      "requirements": [
+        {
+          "id": "fp-1",
+          "title": "Traceability Lot Code (TLC)",
+          "description": "Assign a unique TLC to each lot of fresh produce at the point of receiving or initial packing.",
+          "category": "KDE",
+          "priority": "CRITICAL"
+        },
+        {
+          "id": "fp-2",
+          "title": "Receiving CTE Records",
+          "description": "Capture grower lot ID, harvest date, and cooling location at the RECEIVING CTE.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "fp-3",
+          "title": "Transformation CTE Records",
+          "description": "Link input TLCs to output TLCs when produce is cut, mixed, or repackaged.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "fp-4",
+          "title": "Shipping CTE Records",
+          "description": "Record TLC, quantity, destination, and ship date for every outbound lot.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "fp-5",
+          "title": "24-Hour Recall Response",
+          "description": "Demonstrate ability to produce all required KDE records within 24 hours of an FDA request.",
+          "category": "Readiness",
+          "priority": "CRITICAL"
+        },
+        {
+          "id": "fp-6",
+          "title": "Supplier TLC Linkage",
+          "description": "Maintain upstream TLC references from direct suppliers for at least 2 years.",
+          "category": "Records",
+          "priority": "MEDIUM"
+        }
+      ]
+    },
+    {
+      "id": "fsma-204-seafood",
+      "name": "FSMA 204 Seafood Traceability",
+      "description": "CTE and KDE compliance checklist for finfish and shellfish chain-of-custody under FSMA Section 204.",
+      "industry": "Seafood",
+      "framework": "FSMA 204",
+      "version": "1.0",
+      "requirements": [
+        {
+          "id": "sf-1",
+          "title": "Source Vessel / Harvest Reference",
+          "description": "Record source vessel name or aquaculture site ID as a KDE for all finfish and shellfish.",
+          "category": "KDE",
+          "priority": "CRITICAL"
+        },
+        {
+          "id": "sf-2",
+          "title": "Landing Date KDE",
+          "description": "Capture the date seafood was landed or harvested as part of the HARVESTING CTE.",
+          "category": "KDE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "sf-3",
+          "title": "Temperature Log",
+          "description": "Maintain cold-chain temperature records throughout the supply chain as a supporting KDE.",
+          "category": "KDE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "sf-4",
+          "title": "Receiving CTE Records",
+          "description": "Document TLC, quantity, supplier reference, and receiving date at each receiving point.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "sf-5",
+          "title": "Lot Transformation Linkage",
+          "description": "Link input lots to output lots when fish is processed, portioned, or repackaged.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "sf-6",
+          "title": "Shipping CTE Records",
+          "description": "Record TLC, destination, ship date, and quantity for every outbound seafood lot.",
+          "category": "CTE",
+          "priority": "HIGH"
+        }
+      ]
+    },
+    {
+      "id": "fsma-204-dairy",
+      "name": "FSMA 204 Dairy Traceability",
+      "description": "CTE and KDE compliance checklist for soft cheeses and fluid dairy products under FSMA Section 204.",
+      "industry": "Dairy",
+      "framework": "FSMA 204",
+      "version": "1.0",
+      "requirements": [
+        {
+          "id": "da-1",
+          "title": "Supplier Lot KDE",
+          "description": "Capture the supplier's lot number for all incoming dairy ingredients as a receiving KDE.",
+          "category": "KDE",
+          "priority": "CRITICAL"
+        },
+        {
+          "id": "da-2",
+          "title": "Co-Mingling Event Records",
+          "description": "Document all lots that were combined during processing, preserving individual lot references.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "da-3",
+          "title": "Production Line KDE",
+          "description": "Record the production line identifier for each finished product batch.",
+          "category": "KDE",
+          "priority": "MEDIUM"
+        },
+        {
+          "id": "da-4",
+          "title": "Hold & Release Status",
+          "description": "Track hold and release decisions for every lot and link to the associated TLC.",
+          "category": "KDE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "da-5",
+          "title": "Packing CTE Records",
+          "description": "Record TLC, pack date, package size, and production line at the PACKING CTE.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "da-6",
+          "title": "Shipping CTE Records",
+          "description": "Capture TLC, destination, ship date, and quantity at the SHIPPING CTE.",
+          "category": "CTE",
+          "priority": "HIGH"
+        }
+      ]
+    },
+    {
+      "id": "fsma-204-deli-prepared",
+      "name": "FSMA 204 Deli & Prepared Foods Traceability",
+      "description": "CTE and KDE compliance checklist for ready-to-eat and mixed-ingredient products under FSMA Section 204.",
+      "industry": "Deli & Prepared Foods",
+      "framework": "FSMA 204",
+      "version": "1.0",
+      "requirements": [
+        {
+          "id": "dl-1",
+          "title": "Input Lot Map",
+          "description": "Maintain a complete map of all input lot TLCs that contributed to each finished RTE product lot.",
+          "category": "KDE",
+          "priority": "CRITICAL"
+        },
+        {
+          "id": "dl-2",
+          "title": "Recipe Revision KDE",
+          "description": "Record the recipe or formulation version used for each production batch.",
+          "category": "KDE",
+          "priority": "MEDIUM"
+        },
+        {
+          "id": "dl-3",
+          "title": "Pack Timestamp KDE",
+          "description": "Capture the date and time of packing for each RTE product lot.",
+          "category": "KDE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "dl-4",
+          "title": "Receiving CTE Records",
+          "description": "Document TLC, supplier lot, and receiving date for all incoming ingredients.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "dl-5",
+          "title": "Transformation CTE Records",
+          "description": "Link all input TLCs to output TLCs for every transformation step.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "dl-6",
+          "title": "Shipping CTE Records",
+          "description": "Record TLC, destination, ship date, and quantity for outbound RTE lots.",
+          "category": "CTE",
+          "priority": "HIGH"
+        }
+      ]
+    },
+    {
+      "id": "fsma-204-shell-eggs",
+      "name": "FSMA 204 Shell Egg Traceability",
+      "description": "CTE and KDE compliance checklist for shell eggs under FSMA Section 204.",
+      "industry": "Shell Eggs",
+      "framework": "FSMA 204",
+      "version": "1.0",
+      "requirements": [
+        {
+          "id": "eg-1",
+          "title": "Pack Date KDE",
+          "description": "Record the Julian pack date on every carton and in traceability records.",
+          "category": "KDE",
+          "priority": "CRITICAL"
+        },
+        {
+          "id": "eg-2",
+          "title": "Facility Registration Number",
+          "description": "Capture the FDA facility registration number as a KDE at the packing facility.",
+          "category": "KDE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "eg-3",
+          "title": "Distributor Reference KDE",
+          "description": "Maintain distributor name and reference number linking packed lots to downstream buyers.",
+          "category": "KDE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "eg-4",
+          "title": "Receiving CTE Records",
+          "description": "Document incoming flock source, lay date range, and quantity at receiving.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "eg-5",
+          "title": "Packing CTE Records",
+          "description": "Record pack date, facility registration, lot size, and carton count at packing.",
+          "category": "CTE",
+          "priority": "HIGH"
+        },
+        {
+          "id": "eg-6",
+          "title": "Shipping CTE Records",
+          "description": "Capture TLC, distributor reference, ship date, and quantity at shipping.",
+          "category": "CTE",
+          "priority": "HIGH"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "required_fsma_fields": [
+      "tlc",
+      "cte_type",
+      "event_date",
+      "location",
+      "quantity",
+      "unit_of_measure",
+      "product_description"
+    ],
+    "receiving_required_fields": [
+      "prior_source_tlc"
+    ],
+    "allowed_cte_types": [
+      "RECEIVING",
+      "TRANSFORMATION",
+      "CREATION",
+      "SHIPPING",
+      "HARVESTING",
+      "COOLING",
+      "PACKING"
+    ]
+  }
+}
