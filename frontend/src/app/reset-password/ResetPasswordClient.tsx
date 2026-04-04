@@ -81,14 +81,37 @@ export default function ResetPasswordClient() {
         setError(null);
 
         try {
-            const { error: updateError } = await supabase.auth.updateUser({ password });
-
-            if (updateError) {
-                setError(updateError.message || 'Failed to update password. The reset link may have expired.');
+            // The RegEngine login endpoint checks argon2 hashes in our own PostgreSQL
+            // users table — supabase.auth.updateUser() only updates Supabase's internal
+            // store, which is never read at login. Call the backend directly so it can
+            // update the authoritative store (and keep Supabase in sync as a side-effect).
+            const { data: sessionData } = await supabase.auth.getSession();
+            const accessToken = sessionData?.session?.access_token;
+            if (!accessToken) {
+                setError('Your reset session has expired. Please request a new reset link.');
                 return;
             }
 
-            // Sign out so the user logs in fresh with the new password
+            const adminBase = process.env.NEXT_PUBLIC_API_BASE_URL
+                ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/admin`
+                : '/api/admin';
+
+            const res = await fetch(`${adminBase}/auth/reset-password`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${accessToken}`,
+                },
+                body: JSON.stringify({ new_password: password }),
+            });
+
+            if (!res.ok) {
+                const body = await res.json().catch(() => null);
+                setError(body?.detail || 'Failed to update password. Please try again.');
+                return;
+            }
+
+            // Clear the recovery session — it's been consumed
             await supabase.auth.signOut();
             setSuccess(true);
         } catch {
