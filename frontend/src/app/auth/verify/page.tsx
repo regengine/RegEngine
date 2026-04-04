@@ -6,13 +6,14 @@ export const metadata: Metadata = {
     title: 'Reset your password — RegEngine',
 };
 
-export default function VerifyPage({
+export default async function VerifyPage({
     searchParams,
 }: {
-    searchParams: { token?: string; type?: string };
+    searchParams: Promise<{ token?: string; type?: string }>;
 }) {
-    const tokenHash = searchParams.token ?? '';
-    const type = searchParams.type ?? 'recovery';
+    const params = await searchParams;
+    const tokenHash = params.token ?? '';
+    const type = params.type ?? 'recovery';
 
     return (
         <Suspense>
