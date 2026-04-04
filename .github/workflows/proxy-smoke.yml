@@ -41,12 +41,14 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
         run: cd frontend && npm run build
 
       - name: Start Next.js server
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
         run: |
           cd frontend
           npm start &
