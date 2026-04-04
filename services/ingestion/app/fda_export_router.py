@@ -1186,3 +1186,123 @@ async def get_merkle_proof(
     finally:
         if db_session:
             db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Transformation trace graph
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/trace/{tlc}",
+    summary="Trace transformation graph for a TLC",
+    description=(
+        "Returns all TLCs reachable from the given lot code via "
+        "fsma.transformation_links — both upstream inputs and downstream outputs.  "
+        "Also returns the full CTE event count per linked lot so the UI can "
+        "show the trace tree without fetching the full FDA export."
+    ),
+    tags=["Traceability"],
+)
+async def trace_transformation_graph(
+    tlc: str,
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),
+    _auth=Depends(require_permission("fda.read")),
+    _subscription=Depends(require_active_subscription),
+) -> dict:
+    """Return the transformation graph rooted at a given TLC."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        linked_tlcs = persistence._expand_tlcs_via_transformation_links(
+            tenant_id=tenant_id, seed_tlc=tlc, depth=depth
+        )
+
+        # Fetch event counts per TLC in one query
+        if linked_tlcs:
+            placeholders = ", ".join(f":tlc_{i}" for i in range(len(linked_tlcs)))
+            params: dict = {"tid": tenant_id}
+            for i, t in enumerate(linked_tlcs):
+                params[f"tlc_{i}"] = t
+            count_rows = db_session.execute(
+                text(f"""
+                    SELECT traceability_lot_code, COUNT(*) as event_count,
+                           MIN(event_timestamp) as first_event,
+                           MAX(event_timestamp) as last_event
+                    FROM   fsma.cte_events
+                    WHERE  tenant_id = :tid
+                      AND  traceability_lot_code IN ({placeholders})
+                      AND  validation_status != 'rejected'
+                    GROUP BY traceability_lot_code
+                """),
+                params,
+            ).fetchall()
+            tlc_stats = {
+                row[0]: {
+                    "event_count": row[1],
+                    "first_event": row[2].isoformat() if row[2] else None,
+                    "last_event": row[3].isoformat() if row[3] else None,
+                }
+                for row in count_rows
+            }
+        else:
+            tlc_stats = {}
+
+        # Also fetch direct link edges for the graph visualization
+        link_rows = db_session.execute(
+            text("""
+                SELECT input_tlc, output_tlc, process_type, confidence_score
+                FROM   fsma.transformation_links
+                WHERE  tenant_id = :tid
+                  AND  (input_tlc = ANY(:tlcs) OR output_tlc = ANY(:tlcs))
+            """),
+            {"tid": tenant_id, "tlcs": linked_tlcs},
+        ).fetchall()
+        edges = [
+            {
+                "input_tlc": row[0],
+                "output_tlc": row[1],
+                "process_type": row[2],
+                "confidence_score": float(row[3]) if row[3] is not None else None,
+            }
+            for row in link_rows
+        ]
+
+        nodes = [
+            {
+                "tlc": t,
+                "is_seed": t == tlc,
+                "role": (
+                    "seed" if t == tlc
+                    else "downstream" if any(e["input_tlc"] == tlc and e["output_tlc"] == t for e in edges)
+                    else "upstream"
+                ),
+                **tlc_stats.get(t, {"event_count": 0, "first_event": None, "last_event": None}),
+            }
+            for t in linked_tlcs
+        ]
+
+        return {
+            "seed_tlc": tlc,
+            "tenant_id": tenant_id,
+            "traversal_depth": depth,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "nodes": nodes,
+            "edges": edges,
+            "total_events": sum(n["event_count"] for n in nodes),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("trace_graph_failed", extra={"error": str(e), "tlc": tlc})
+        raise HTTPException(status_code=500, detail="Trace graph query failed.")
+    finally:
+        if db_session:
+            db_session.close()
