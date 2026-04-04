@@ -35,17 +35,32 @@ export default function ResetPasswordClient() {
     // SSR-aware browser client — matches the PKCE flow used by ForgotPasswordClient.
     const supabase = createSupabaseBrowserClient();
 
-    // When Supabase redirects back after password reset, it passes a recovery
-    // session via /auth/callback which sets the session cookies. We verify the
-    // session is active before allowing the user to set a new password.
+    // When Supabase redirects back after password reset it passes a recovery
+    // session in one of two ways:
+    //
+    //  • PKCE flow  — /auth/callback exchanges the ?code= param server-side and
+    //    sets session cookies before redirecting here.  getSession() resolves
+    //    immediately with the session from those cookies.
+    //
+    //  • Implicit flow (legacy emails sent before PKCE migration) — /auth/callback
+    //    serves a small HTML shim that reads the #access_token=...&type=recovery
+    //    hash and redirects to /reset-password keeping the hash.  createBrowserClient
+    //    has detectSessionInUrl: true by default, so it processes the hash on init.
+    //    We wait one tick with setTimeout to let the SDK finish that processing
+    //    before calling getSession().
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-                setSessionReady(true);
-            } else {
-                setSessionError(true);
-            }
-        });
+        const check = () => {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                if (session) {
+                    setSessionReady(true);
+                } else {
+                    setSessionError(true);
+                }
+            });
+        };
+        // Give detectSessionInUrl one event-loop tick to process any hash tokens.
+        const tid = setTimeout(check, 50);
+        return () => clearTimeout(tid);
     }, []);
 
     const strength = getPasswordStrength(password);
