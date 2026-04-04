@@ -736,11 +736,14 @@ class CTEPersistence:
         or is unreachable (graceful degradation).
         """
         try:
+            # Note: use CAST(:tlc AS text) rather than :tlc::text — SQLAlchemy's
+            # text() parameter parser misidentifies :param::cast as a single token,
+            # silently dropping the :tlc binding and producing a SyntaxError.
             rows = self.session.execute(
                 text("""
                     WITH RECURSIVE tlc_graph(tlc, depth) AS (
                         -- Seed
-                        SELECT :tlc::text, 0
+                        SELECT CAST(:tlc AS text), 0
                         UNION
                         -- Forward: seed was an input → walk to outputs
                         SELECT tl.output_tlc, tg.depth + 1
@@ -760,7 +763,14 @@ class CTEPersistence:
             ).fetchall()
             return [r[0] for r in rows] if rows else [seed_tlc]
         except Exception as e:
-            logger.debug("transformation_links_traversal_skipped: %s", e)
+            # Roll back any aborted transaction so the session stays usable.
+            # Without this, a SQL error here poisons all subsequent queries on
+            # the same session with InFailedSqlTransaction.
+            logger.debug("transformation_links_traversal_skipped: %s %s", type(e).__name__, e)
+            try:
+                self.session.rollback()
+            except Exception:
+                pass
             return [seed_tlc]
 
     def query_events_by_tlc(
