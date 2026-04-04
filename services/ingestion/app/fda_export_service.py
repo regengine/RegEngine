@@ -80,10 +80,13 @@ _NAMED_KDE_COLUMNS = {
 }
 
 
-# Extended column spec: original FDA columns + compliance columns
+# Extended column spec: original FDA columns + compliance + traceability graph columns
 FDA_COLUMNS_V2 = FDA_COLUMNS + [
     "Compliance Status",
     "Rule Failures",
+    # Transformation traceability (added Phase 2)
+    "Trace Relationship",   # "queried" | "linked_via_transformation"
+    "Trace Seed TLC",       # The TLC originally queried (useful when this row is a linked lot)
 ]
 
 
@@ -454,6 +457,9 @@ def _event_to_fda_row_v2(event: dict) -> dict:
 
     base_row["Compliance Status"] = compliance_status
     base_row["Rule Failures"] = rule_failures_text
+    # Transformation trace metadata (present when query_events_by_tlc expanded via links)
+    base_row["Trace Relationship"] = event.get("trace_relationship", "queried")
+    base_row["Trace Seed TLC"] = event.get("trace_seed_tlc", event.get("traceability_lot_code", ""))
     return base_row
 
 
