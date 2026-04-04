@@ -62,6 +62,7 @@ pytestmark = [
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _MIGRATION_V002 = _REPO_ROOT / "migrations" / "V002__fsma_cte_persistence.sql"
+_MIGRATION_V052 = _REPO_ROOT / "migrations" / "V052__cte_events_composite_idempotency_key.sql"
 
 # ---------------------------------------------------------------------------
 # Preamble: objects the V002 migration depends on
@@ -217,6 +218,12 @@ def postgres_engine():
             migration_sql = _MIGRATION_V002.read_text()
             for stmt in _split_sql_statements(migration_sql):
                 conn.execute(text(stmt))
+
+            # V052: replace single-column unique with composite (tenant_id, idempotency_key)
+            if _MIGRATION_V052.exists():
+                migration_sql = _MIGRATION_V052.read_text()
+                for stmt in _split_sql_statements(migration_sql):
+                    conn.execute(text(stmt))
 
         yield engine
 
