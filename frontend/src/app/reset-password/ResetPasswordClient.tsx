@@ -102,7 +102,7 @@ export default function ResetPasswordClient() {
         return (
             <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
                 <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95 shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
+                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
                         <CardContent className="pt-8">
                             <div className="space-y-4 text-center">
                                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
@@ -132,7 +132,7 @@ export default function ResetPasswordClient() {
         return (
             <div className="relative overflow-hidden bg-[var(--re-surface-base)]">
                 <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95 shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
+                    <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
                         <CardContent className="pt-8">
                             <div className="space-y-4 text-center">
                                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
@@ -163,7 +163,7 @@ export default function ResetPasswordClient() {
             </div>
 
             <section className="relative z-[1] mx-auto flex min-h-[80vh] max-w-md items-center px-6 py-14">
-                <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95 shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
+                <Card className="w-full border-[var(--re-surface-border)] bg-[var(--re-surface-card)] shadow-[0_16px_70px_rgba(0,0,0,0.25)]">
                     <CardHeader className="space-y-1 pb-4">
                         <div className="mb-3 flex justify-center">
                             <div className="rounded-full border border-[var(--re-brand)]/30 bg-[var(--re-brand)]/10 p-3">
