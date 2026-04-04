@@ -2,11 +2,11 @@ import { Providers } from '@/lib/providers'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
-import { Analytics } from '@vercel/analytics/react'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
+import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
 import type { Metadata, Viewport } from 'next'
 
+// Analytics are mounted by CookieBanner only after the user accepts consent (#552).
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
 
 export const viewport: Viewport = {
@@ -93,8 +93,7 @@ export default function RootLayout({
           <AuthAwareFooter />
         </Providers>
         <AccessibilityWidget />
-        {enableVercelAnalytics ? <Analytics /> : null}
-        {enableVercelAnalytics ? <SpeedInsights /> : null}
+        <CookieBanner enableAnalytics={enableVercelAnalytics} />
       </body>
     </html>
   )

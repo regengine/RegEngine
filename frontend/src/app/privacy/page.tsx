@@ -159,8 +159,12 @@ export default function PrivacyPage() {
           Related documents:{' '}
           <Link href="/terms" className="text-[var(--re-brand)] underline hover:opacity-90">
             Terms of Service
-          </Link>{' '}
-          and{' '}
+          </Link>
+          ,{' '}
+          <Link href="/dpa" className="text-[var(--re-brand)] underline hover:opacity-90">
+            Data Processing Agreement
+          </Link>
+          , and{' '}
           <Link href="/security" className="text-[var(--re-brand)] underline hover:opacity-90">
             Security
           </Link>

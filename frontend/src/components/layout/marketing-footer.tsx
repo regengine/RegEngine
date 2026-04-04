@@ -8,6 +8,7 @@ import {
     MARKETING_FOOTER_PRODUCT_LINKS,
     MARKETING_FREE_TOOLS,
 } from '@/components/layout/marketing-nav';
+import { requestShowCookiePrefs } from '@/lib/cookie-consent';
 
 export function MarketingFooter() {
     const pathname = usePathname();
@@ -110,9 +111,21 @@ export function MarketingFooter() {
                 <span className="text-[0.72rem] text-[#555]">
                     &copy; 2026 RegEngine Inc. All rights reserved.
                 </span>
-                <code className="font-mono text-[0.68rem] text-[#555]">
-                    verify_chain.py — don&apos;t trust, verify
-                </code>
+                <div className="flex flex-wrap items-center gap-4">
+                    <Link href="/dpa" className="text-[0.72rem] text-[#555] hover:text-[#999] transition-colors no-underline">
+                        DPA
+                    </Link>
+                    <button
+                        onClick={requestShowCookiePrefs}
+                        className="text-[0.72rem] text-[#555] hover:text-[#999] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                        aria-label="Manage cookie preferences"
+                    >
+                        Cookie Preferences
+                    </button>
+                    <code className="font-mono text-[0.68rem] text-[#555]">
+                        verify_chain.py — don&apos;t trust, verify
+                    </code>
+                </div>
             </div>
         </footer>
     );
