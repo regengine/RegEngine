@@ -357,8 +357,9 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
                     .select('status')
                     .eq('id', tenantId)
                     .maybeSingle();
-                cached = tenantRow?.status ?? null;
-                setTenantStatusCached(tenantId, cached);
+                const freshStatus: string | null = tenantRow?.status ?? null;
+                setTenantStatusCached(tenantId, freshStatus);
+                cached = freshStatus;
             }
             resolvedTenantStatus = cached ?? undefined;
         }
