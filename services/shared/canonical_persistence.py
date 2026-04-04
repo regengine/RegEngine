@@ -246,6 +246,9 @@ class CanonicalEventStore:
         if self.dual_write:
             legacy_id = self._dual_write_legacy(event)
 
+        # --- Create transformation links if this is a transformation event ---
+        self._create_transformation_links(event)
+
         # --- Publish to graph sync queue ---
         self._publish_graph_sync(event)
 
@@ -380,6 +383,10 @@ class CanonicalEventStore:
             chunk = chain_entries[chunk_start:chunk_start + 100]
             self._batch_insert_chain_entries(chunk)
 
+        # --- Create transformation links ---
+        for evt in new_events:
+            self._create_transformation_links(evt)
+
         # --- Dual-write legacy ---
         if self.dual_write and new_events:
             for evt in new_events:
@@ -446,6 +453,189 @@ class CanonicalEventStore:
             logger.warning("canonical_graph_sync_failed", extra={
                 "event_id": str(event.event_id), "error": str(exc),
             })
+
+    # ------------------------------------------------------------------
+    # Transformation Links
+    # ------------------------------------------------------------------
+
+    def _create_transformation_links(self, event: TraceabilityEvent) -> None:
+        """
+        If this is a transformation event with input_lot_codes in KDEs,
+        create adjacency rows in fsma.transformation_links.
+
+        Each input TLC gets one row linking it to the output TLC
+        (the event's own traceability_lot_code).
+        """
+        if event.event_type.value != "transformation":
+            return
+
+        input_lot_codes = event.kdes.get("input_lot_codes", [])
+        if not input_lot_codes or not isinstance(input_lot_codes, list):
+            return
+
+        tenant_id = str(event.tenant_id)
+        output_tlc = event.traceability_lot_code
+        event_id = str(event.event_id)
+        process_type = event.kdes.get("process_type")
+
+        for input_tlc in input_lot_codes:
+            if not input_tlc or not isinstance(input_tlc, str):
+                continue
+            try:
+                # Resolve input_event_id if the input TLC exists in our DB
+                input_event_row = self.session.execute(
+                    text("""
+                        SELECT event_id FROM fsma.traceability_events
+                        WHERE tenant_id = :tid AND traceability_lot_code = :tlc
+                        ORDER BY event_timestamp DESC LIMIT 1
+                    """),
+                    {"tid": tenant_id, "tlc": input_tlc.strip()},
+                ).fetchone()
+
+                input_event_id = str(input_event_row[0]) if input_event_row else None
+
+                self.session.execute(
+                    text("""
+                        INSERT INTO fsma.transformation_links (
+                            tenant_id, transformation_event_id,
+                            input_tlc, input_event_id,
+                            output_tlc, output_event_id,
+                            output_quantity, output_unit,
+                            process_type, confidence_score, link_source
+                        ) VALUES (
+                            :tenant_id, :transformation_event_id,
+                            :input_tlc, :input_event_id,
+                            :output_tlc, :output_event_id,
+                            :output_quantity, :output_unit,
+                            :process_type, :confidence, :link_source
+                        )
+                        ON CONFLICT (tenant_id, transformation_event_id, input_tlc, output_tlc)
+                        DO NOTHING
+                    """),
+                    {
+                        "tenant_id": tenant_id,
+                        "transformation_event_id": event_id,
+                        "input_tlc": input_tlc.strip(),
+                        "input_event_id": input_event_id,
+                        "output_tlc": output_tlc,
+                        "output_event_id": event_id,
+                        "output_quantity": event.quantity,
+                        "output_unit": event.unit_of_measure,
+                        "process_type": process_type,
+                        "confidence": 1.0,
+                        "link_source": "explicit",
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    "transformation_link_create_failed",
+                    extra={
+                        "event_id": event_id,
+                        "input_tlc": input_tlc,
+                        "output_tlc": output_tlc,
+                        "error": str(exc),
+                    },
+                )
+
+        if input_lot_codes:
+            logger.info(
+                "transformation_links_created",
+                extra={
+                    "event_id": event_id,
+                    "output_tlc": output_tlc,
+                    "input_count": len(input_lot_codes),
+                    "tenant_id": tenant_id,
+                },
+            )
+
+    # ------------------------------------------------------------------
+    # Trace Queries
+    # ------------------------------------------------------------------
+
+    def trace_forward(self, tenant_id: str, tlc: str, max_depth: int = 5) -> List[Dict[str, Any]]:
+        """
+        Forward trace: Given an input TLC, find all output TLCs it contributed to.
+        Recursively follows the adjacency graph up to max_depth hops.
+        Returns list of {output_tlc, transformation_event_id, depth, process_type}.
+        """
+        results = []
+        visited = set()
+        queue = [(tlc, 0)]
+
+        while queue:
+            current_tlc, depth = queue.pop(0)
+            if depth >= max_depth or current_tlc in visited:
+                continue
+            visited.add(current_tlc)
+
+            rows = self.session.execute(
+                text("""
+                    SELECT output_tlc, transformation_event_id, process_type,
+                           output_quantity, output_unit, confidence_score
+                    FROM fsma.transformation_links
+                    WHERE tenant_id = :tid AND input_tlc = :tlc
+                """),
+                {"tid": tenant_id, "tlc": current_tlc},
+            ).fetchall()
+
+            for row in rows:
+                output_tlc = row[0]
+                results.append({
+                    "input_tlc": current_tlc,
+                    "output_tlc": output_tlc,
+                    "transformation_event_id": str(row[1]),
+                    "process_type": row[2],
+                    "output_quantity": float(row[3]) if row[3] else None,
+                    "output_unit": row[4],
+                    "confidence_score": float(row[5]) if row[5] else 1.0,
+                    "depth": depth + 1,
+                })
+                if output_tlc not in visited:
+                    queue.append((output_tlc, depth + 1))
+
+        return results
+
+    def trace_backward(self, tenant_id: str, tlc: str, max_depth: int = 5) -> List[Dict[str, Any]]:
+        """
+        Backward trace: Given an output TLC, find all input TLCs that contributed to it.
+        Recursively follows the adjacency graph up to max_depth hops.
+        """
+        results = []
+        visited = set()
+        queue = [(tlc, 0)]
+
+        while queue:
+            current_tlc, depth = queue.pop(0)
+            if depth >= max_depth or current_tlc in visited:
+                continue
+            visited.add(current_tlc)
+
+            rows = self.session.execute(
+                text("""
+                    SELECT input_tlc, transformation_event_id, process_type,
+                           input_quantity, input_unit, confidence_score
+                    FROM fsma.transformation_links
+                    WHERE tenant_id = :tid AND output_tlc = :tlc
+                """),
+                {"tid": tenant_id, "tlc": current_tlc},
+            ).fetchall()
+
+            for row in rows:
+                input_tlc = row[0]
+                results.append({
+                    "input_tlc": input_tlc,
+                    "output_tlc": current_tlc,
+                    "transformation_event_id": str(row[1]),
+                    "process_type": row[2],
+                    "input_quantity": float(row[3]) if row[3] else None,
+                    "input_unit": row[4],
+                    "confidence_score": float(row[5]) if row[5] else 1.0,
+                    "depth": depth + 1,
+                })
+                if input_tlc not in visited:
+                    queue.append((input_tlc, depth + 1))
+
+        return results
 
     # ------------------------------------------------------------------
     # Read Path
