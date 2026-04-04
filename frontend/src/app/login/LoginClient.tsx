@@ -356,9 +356,9 @@ export default function LoginPage() {
                                     <Link href="/accept-invite" className="transition hover:text-[var(--re-brand)]">
                                         Have an invite?
                                     </Link>
-                                    <a href="mailto:chris@regengine.co?subject=RegEngine%20Login%20Help" className="transition hover:text-[var(--re-brand)]">
-                                        Need login help?
-                                    </a>
+                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-brand)]">
+                                        Forgot password?
+                                    </Link>
                                 </div>
 
                                 <Button className="h-11 w-full" type="submit" disabled={isLoading}>
