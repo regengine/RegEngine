@@ -13,7 +13,7 @@ import {
 
 // ---------------------------------------------------------------------------
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
-// In-memory LRU with a 5-minute TTL, keyed by auth_user_id.
+// In-memory LRU with a 60-second TTL, keyed by auth_user_id.
 // ---------------------------------------------------------------------------
 const SYSADMIN_CACHE_TTL_MS = 60 * 1000; // 60 seconds — short TTL limits the window for delayed privilege revocation
 const SYSADMIN_CACHE_MAX_SIZE = 256;
@@ -24,6 +24,43 @@ interface SysadminCacheEntry {
 }
 
 const sysadminCache = new Map<string, SysadminCacheEntry>();
+
+// ---------------------------------------------------------------------------
+// Tenant status cache — avoids a DB query on every Supabase-path request.
+// In-memory LRU with a 2-minute TTL, keyed by tenant_id.
+// ---------------------------------------------------------------------------
+const TENANT_STATUS_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+const TENANT_STATUS_CACHE_MAX_SIZE = 256;
+
+interface TenantStatusCacheEntry {
+    status: string | null;
+    expiresAt: number;
+}
+
+const tenantStatusCache = new Map<string, TenantStatusCacheEntry>();
+
+function getTenantStatusCached(tenantId: string): string | null | undefined {
+    const entry = tenantStatusCache.get(tenantId);
+    if (!entry) return undefined; // cache miss
+    if (Date.now() > entry.expiresAt) {
+        tenantStatusCache.delete(tenantId);
+        return undefined;
+    }
+    tenantStatusCache.delete(tenantId);
+    tenantStatusCache.set(tenantId, entry);
+    return entry.status;
+}
+
+function setTenantStatusCached(tenantId: string, tenantStatus: string | null): void {
+    if (tenantStatusCache.size >= TENANT_STATUS_CACHE_MAX_SIZE) {
+        const oldestKey = tenantStatusCache.keys().next().value;
+        if (oldestKey) tenantStatusCache.delete(oldestKey);
+    }
+    tenantStatusCache.set(tenantId, {
+        status: tenantStatus,
+        expiresAt: Date.now() + TENANT_STATUS_CACHE_TTL_MS,
+    });
+}
 
 function getSysadminCached(userId: string): boolean | null {
     const entry = sysadminCache.get(userId);
@@ -119,6 +156,23 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
 }
 
 /**
+ * Lightweight local check for Supabase session cookie presence.
+ *
+ * Used for #538 cross-validation: when a custom JWT is valid, we also
+ * require that a Supabase session cookie exists. A missing Supabase cookie
+ * while a custom JWT is present indicates a desync (e.g. logged out on
+ * another tab via Supabase signOut) and triggers re-authentication.
+ *
+ * Uses cookie name pattern inspection — no network call — to keep
+ * middleware fast. Returns true (skip validation) when Supabase is not
+ * configured so non-Supabase deployments are unaffected.
+ */
+function hasSomeSupabaseCookie(request: NextRequest): boolean {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return true; // Supabase not configured
+    return request.cookies.getAll().some(c => c.name.includes('-auth-token'));
+}
+
+/**
  * Verify the custom RegEngine JWT from the re_access_token cookie.
  *
  * Supports key rotation: tries the current signing key first, then falls
@@ -128,7 +182,7 @@ function isAuthenticatedAppRoute(pathname: string): boolean {
  *
  * NOTE: This check does NOT verify token revocation (e.g. logout-all).
  * The middleware runs in Edge Runtime and cannot reach Redis. Revoked
- * tokens remain valid until their JWT `exp` claim (15 min default).
+ * tokens remain valid until their JWT `exp` claim (5 min default).
  * The backend /auth/refresh endpoint DOES check session revocation,
  * so revoked users cannot obtain new tokens — only ride out existing ones.
  *
@@ -231,7 +285,7 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
             // Reject suspended/archived tenants — the tenant_status claim is
             // set at token creation and checked here to prevent suspended
             // tenants from accessing the app. Since JWTs are short-lived
-            // (15 min), the worst-case delay is one token lifetime.
+            // (5 min), the worst-case delay is one token lifetime.
             const tenantStatus = payload.tenant_status as string | undefined;
             if (tenantStatus && tenantStatus !== 'active' && tenantStatus !== 'trial') {
                 console.warn(`[middleware] Tenant status "${tenantStatus}" — blocking access`);
@@ -240,6 +294,23 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
                 url.searchParams.set('error', 'tenant_suspended');
                 return NextResponse.redirect(url);
             }
+
+            // #538 Cross-validate: require Supabase session alongside the custom JWT.
+            // Both auth systems must be live. A missing Supabase cookie while a valid
+            // custom JWT exists indicates a desync — e.g. the user signed out on
+            // another tab via supabase.auth.signOut() which clears Supabase cookies
+            // but leaves the HTTP-only re_access_token in place.
+            // Re-authentication resyncs both systems.
+            // Uses a local cookie name check (no network call) to keep Edge latency low.
+            if (!hasSomeSupabaseCookie(request)) {
+                console.info('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
+                const url = request.nextUrl.clone();
+                url.pathname = '/login';
+                url.searchParams.set('next', pathname);
+                url.searchParams.set('error', 'session_expired');
+                return NextResponse.redirect(url);
+            }
+
             return NextResponse.next({ request });
         }
         // Token exists but verification failed (expired or invalid signature).
@@ -256,9 +327,53 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
     // Strategy 2: Check Supabase session
     const { user, response: supabaseResponse } = await checkSupabaseSession(request);
     if (user) {
+        // #538 Check tenant_status in Supabase path — mirrors the JWT path check.
+        // The JWT embeds tenant_status at mint time; here we read it from user_metadata
+        // (if synced) or fall back to a DB query (cached) via the tenants table.
+        const supabaseUser = user as {
+            id: string;
+            user_metadata?: { tenant_id?: string; tenant_status?: string };
+        };
+        const tenantId = supabaseUser.user_metadata?.tenant_id;
+        let resolvedTenantStatus: string | undefined = supabaseUser.user_metadata?.tenant_status;
+
+        if (tenantId && !resolvedTenantStatus) {
+            // tenant_status not in user_metadata — look it up with a cached DB query
+            let cached = getTenantStatusCached(tenantId);
+            if (cached === undefined) {
+                // Cache miss — query the tenants table
+                const supabase = createServerClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                    {
+                        cookies: {
+                            getAll() { return request.cookies.getAll(); },
+                            setAll() { /* read-only for this check */ },
+                        },
+                    }
+                );
+                const { data: tenantRow } = await supabase
+                    .from('tenants')
+                    .select('status')
+                    .eq('id', tenantId)
+                    .maybeSingle();
+                cached = tenantRow?.status ?? null;
+                setTenantStatusCached(tenantId, cached);
+            }
+            resolvedTenantStatus = cached ?? undefined;
+        }
+
+        if (resolvedTenantStatus && resolvedTenantStatus !== 'active' && resolvedTenantStatus !== 'trial') {
+            console.warn(`[middleware] Supabase path: Tenant status "${resolvedTenantStatus}" — blocking access`);
+            const url = request.nextUrl.clone();
+            url.pathname = '/login';
+            url.searchParams.set('error', 'tenant_suspended');
+            return NextResponse.redirect(url);
+        }
+
         // Sysadmin check for /sysadmin routes (with in-memory LRU cache)
         if (pathname.startsWith('/sysadmin')) {
-            const userId = (user as { id: string }).id;
+            const userId = supabaseUser.id;
             let isSysadmin = getSysadminCached(userId);
 
             if (isSysadmin === null) {
@@ -316,7 +431,15 @@ export async function middleware(request: NextRequest) {
         pathname.startsWith('/api/') &&
         CSRF_PROTECTED_METHODS.has(request.method) &&
         !isCsrfExempt(pathname) &&
-        !request.headers.get('authorization')?.startsWith('Bearer ')
+        // #537 Bearer tokens only bypass CSRF for non-browser API clients (curl, SDKs, server-to-server).
+        // Browser requests ALWAYS include an Origin or Referer header. If either is present alongside
+        // a Bearer token, the request is from a browser — CSRF protection still applies.
+        // This closes the attack vector where stolen Bearer tokens in browser JS bypass CSRF.
+        !(
+            request.headers.get('authorization')?.startsWith('Bearer ') &&
+            !request.headers.get('origin') &&
+            !request.headers.get('referer')
+        )
     ) {
         const headerToken = request.headers.get(CSRF_HEADER);
         const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
