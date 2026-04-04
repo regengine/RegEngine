@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -15,6 +15,12 @@ export default function ForgotPasswordClient() {
     const [error, setError] = useState<string | null>(null);
     const [submitted, setSubmitted] = useState(false);
     const router = useRouter();
+    // Use the SSR-aware browser client (PKCE flow) so the recovery email sends a
+    // ?code= query param that /auth/callback can exchange server-side. The plain
+    // @supabase/supabase-js client defaults to the legacy implicit flow which puts
+    // tokens in the URL hash — invisible to the server and incompatible with our
+    // /auth/callback route handler.
+    const supabase = createSupabaseBrowserClient();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
