@@ -131,16 +131,27 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
     # Query tenant's configured active CTE types for self-normalization.
     # If the tenant has configured which CTE types apply to their operation,
     # use that subset instead of assuming all 7.
-    active_row = db_session.execute(
-        text("""
-            SELECT ARRAY_AGG(DISTINCT cte_type)
-            FROM fsma.obligation_cte_rules ocr
-            JOIN fsma.obligations o ON o.id = ocr.obligation_id
-            WHERE o.tenant_id = CAST(:tid AS uuid)
-        """),
-        {"tid": tenant_id},
-    ).fetchone()
-    result["active_cte_types"] = active_row[0] if active_row and active_row[0] else None
+    # NOTE: obligation tables live in the public schema, not fsma — wrap in
+    # its own try/except so a missing table (not-yet-migrated env) degrades
+    # gracefully instead of aborting the outer transaction and zeroing all scores.
+    try:
+        active_row = db_session.execute(
+            text("""
+                SELECT ARRAY_AGG(DISTINCT cte_type)
+                FROM obligation_cte_rules ocr
+                JOIN obligations o ON o.id = ocr.obligation_id
+                WHERE o.tenant_id = CAST(:tid AS uuid)
+            """),
+            {"tid": tenant_id},
+        ).fetchone()
+        result["active_cte_types"] = active_row[0] if active_row and active_row[0] else None
+    except Exception:
+        # Tables may not exist yet — fall back to "use all 7 CTE types"
+        try:
+            db_session.rollback()
+        except Exception:
+            pass
+        result["active_cte_types"] = None
 
     # 2) KDE completeness — ratio of filled vs required KDE fields
     kde_row = db_session.execute(
