@@ -67,9 +67,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             log.warning("api_key_store_init_failed", error=str(e))
             # Continue - can fall back to static keys
 
+    # Supabase credential check — warn loudly if missing so Railway logs surface the issue.
+    # Missing credentials cause /reset-password and token-validation to return 503.
+    _sb_url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    _sb_key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_SERVICE_KEY")
+        or os.getenv("SUPABASE_ANON_KEY")
+        or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    )
+    if not _sb_url or not _sb_key:
+        log.warning(
+            "supabase_credentials_missing",
+            detail=(
+                "SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and "
+                "SUPABASE_SERVICE_ROLE_KEY are not set. "
+                "Password reset and Supabase token validation will return 503. "
+                "Set these variables in Railway → admin service → Variables."
+            ),
+        )
+    else:
+        log.info("supabase_credentials_present")
+
     # Kafka consumer (optional feature, never blocks startup)
     _start_review_consumer()
-    
+
     log.info("startup_complete")
     yield
     
