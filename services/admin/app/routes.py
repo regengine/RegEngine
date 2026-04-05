@@ -314,7 +314,9 @@ async def create_api_key(
     key_store = get_key_store()
 
     if isinstance(key_store, DatabaseAPIKeyStore):
-        # Async DB store
+        # Async DB store — create_key() SHA-256-hashes the key internally;
+        # only the hash is persisted. raw_key is returned once here and is
+        # never stored or logged (#548).
         new_key = await key_store.create_key(
             name=request.name,
             tenant_id=request.tenant_id,
@@ -322,16 +324,17 @@ async def create_api_key(
             expires_at=request.expires_at,
             scopes=request.scopes,
         )
-        
+
         logger.info(
             "api_key_created_via_admin",
             key_id=new_key.key_id,
+            key_prefix=new_key.key_prefix,  # first 12 chars for identification; raw key never logged
             name=request.name,
             tenant_id=request.tenant_id,
         )
 
         return CreateKeyResponse(
-            api_key=new_key.raw_key,
+            api_key=new_key.raw_key,  # shown ONCE in creation response only (#548)
             key_id=new_key.key_id,
             name=new_key.name,
             tenant_id=new_key.tenant_id,
@@ -341,7 +344,8 @@ async def create_api_key(
             scopes=new_key.scopes,
         )
     else:
-        # Sync in-memory store
+        # Sync in-memory store — create_key() hashes and stores only the hash;
+        # raw_key is returned here once and never re-exposed (#548).
         raw_key, api_key = key_store.create_key(
             name=request.name,
             tenant_id=request.tenant_id,
@@ -349,16 +353,18 @@ async def create_api_key(
             expires_at=request.expires_at,
             scopes=request.scopes,
         )
+        key_prefix = raw_key[:12]  # first 12 chars for identification; raw key never logged
 
         logger.info(
             "api_key_created_via_admin",
             key_id=api_key.key_id,
+            key_prefix=key_prefix,
             name=request.name,
             tenant_id=request.tenant_id,
         )
 
         return CreateKeyResponse(
-            api_key=raw_key,
+            api_key=raw_key,  # shown ONCE in creation response only (#548)
             key_id=api_key.key_id,
             name=api_key.name,
             tenant_id=api_key.tenant_id,
