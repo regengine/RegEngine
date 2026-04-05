@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class CTEType(str, Enum):
     """Critical Tracking Event types per FSMA 204 §1.1310."""
+    GROWING = "growing"
     HARVESTING = "harvesting"
     COOLING = "cooling"
     INITIAL_PACKING = "initial_packing"

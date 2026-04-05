@@ -33,6 +33,18 @@ router = APIRouter(prefix="/api/v1", tags=["CSV Templates & Import"])
 
 # Column definitions per CTE type — each is a tuple of (column_name, example_value, description)
 CTE_COLUMNS: dict[str, list[tuple[str, str, str]]] = {
+    "growing": [
+        ("traceability_lot_code", "ORG-KALE-0401-001", "Unique lot code for this growing batch"),
+        ("product_description", "Organic Kale", "Product name"),
+        ("quantity", "1200", "Numeric quantity"),
+        ("unit_of_measure", "lbs", "Unit: lbs, kg, cases, pallets"),
+        ("growing_area_name", "North Field Block A", "Growing area or field identifier"),
+        ("event_time", "07:00:00", "Time of event HH:MM:SS (optional)"),
+        ("location_name", "Sunrise Organic Farm, Watsonville CA", "Farm or growing facility name"),
+        ("location_gln", "0614141000003", "GS1 GLN (optional, 13 digits)"),
+        ("growing_coordinates", "36.9107,-121.7569", "GPS coordinates of growing area (optional)"),
+        ("grower_name", "Sunrise Organic Farm LLC", "Business name of grower"),
+    ],
     "harvesting": [
         ("traceability_lot_code", "TOM-0226-F3-001", "Unique lot code for this harvest"),
         ("product_description", "Roma Tomatoes", "Product name"),
