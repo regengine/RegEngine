@@ -108,7 +108,7 @@ export default function SecuritySettingsPage() {
                             <CardTitle>Change Password</CardTitle>
                         </div>
                         <CardDescription>
-                            Update your account password. All other sessions will be signed out for security.
+                            Update your account password.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -125,7 +125,7 @@ export default function SecuritySettingsPage() {
                             {success && (
                                 <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-400">
                                     <CheckCircle className="h-4 w-4" />
-                                    Password changed successfully. Other sessions have been signed out.
+                                    Password changed successfully.
                                 </div>
                             )}
 
