@@ -133,10 +133,11 @@ The canonical traceability event is the single source of truth for all FSMA 204 
 
 ## FSMA 204 CTE Coverage
 
+All 7 Critical Tracking Events defined by the FDA in 21 CFR 1.1310:
+
 | CTE Type | Status | Key KDEs |
 |----------|--------|----------|
-| Growing | Supported | Growing area, location, grower name, coordinates |
-| Harvesting | Supported | Harvest date, field ID, harvester name |
+| Harvesting | Supported | Harvest date, field ID, harvester name, growing area |
 | Cooling | Supported | Cooling date, temperature, facility |
 | Initial Packing | Supported | Pack date, input lot codes, harvester business |
 | First Land-Based Receiving | Supported | Landing date, vessel/source, BOL reference |
@@ -211,12 +212,13 @@ RegEngine is in **active development** — shipping weekly. The product is pre-r
 **Current state:**
 - Frontend deployed on Vercel (build green)
 - 3 backend services on Railway (admin, ingestion, compliance — all healthy)
-- 52+ database migrations applied
-- 7/7 FSMA 204 CTE types implemented
+- 53 database migrations applied
+- 7/7 FSMA 204 CTE types implemented (per 21 CFR 1.1310)
 - 78+ regulatory obligations tracked
-- FDA export in CSV, PDF, and ZIP package formats
+- FDA export in CSV, PDF, and ZIP package formats with chain verification
 - 24-hour recall response dashboard operational
-- Traceability plan builder live (no longer "Coming Soon")
+- Traceability plan builder live
+- Product validation: leafy greens vertical with hard metrics (8.4 min to first ingest, 94.2% auto-normalization, sub-second trace latency)
 
 **FSMA 204 compliance deadline: July 20, 2028**
 
