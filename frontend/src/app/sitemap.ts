@@ -51,10 +51,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const contentPages = [
         { url: `${baseUrl}/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.9 },
+        { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
+        { url: `${baseUrl}/case-studies`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/developers`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog/24-hour-rule`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog/fsma-204-traceability-lot-codes`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/blog/fsma-204-compliance-guide`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/blog/food-traceability-software`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/blog/fsma-204-cte-kde-guide`, changeFrequency: 'monthly' as const, priority: 0.8 },
     ];
 
     // Resource pages

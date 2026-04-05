@@ -309,10 +309,11 @@
     "allowed_cte_types": [
       "RECEIVING",
       "TRANSFORMATION",
+      "CREATION",
       "SHIPPING",
       "HARVESTING",
       "COOLING",
-      "INITIAL_PACKING",
+      "PACKING",
       "FIRST_LAND_BASED_RECEIVING",
       "GROWING"
     ]
