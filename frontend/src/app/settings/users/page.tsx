@@ -68,7 +68,9 @@ export default function UserSettingsPage() {
                 setInviteRoleId(rolesData.find(r => r.name === 'Viewer')?.id || rolesData[0].id);
             }
         } catch (error) {
-            console.error('Failed to load data', error);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('Failed to load data', error);
+            }
             toast({
                 title: "Error",
                 description: "Failed to load user management data.",

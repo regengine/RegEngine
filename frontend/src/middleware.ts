@@ -210,16 +210,18 @@ async function verifyRegEngineToken(token: string): Promise<Record<string, unkno
 
             if (i > 0) {
                 // Token verified with the previous (non-current) key — rotation in progress
-                console.warn(
-                    `[middleware] JWT verified with previous key (kid=${key.kid}). ` +
-                    'Key rotation is in progress — token was signed before the latest rotation.'
-                );
+                if (process.env.NODE_ENV !== 'production') {
+                    console.warn(
+                        `[middleware] JWT verified with previous key (kid=${key.kid}). ` +
+                        'Key rotation is in progress — token was signed before the latest rotation.'
+                    );
+                }
             }
 
             return payload as Record<string, unknown>;
         } catch {
             // If this is the last key, fall through to return null below
-            if (i === keys.length - 1) {
+            if (i === keys.length - 1 && process.env.NODE_ENV !== 'production') {
                 console.warn(
                     '[middleware] JWT verification failed with all configured keys. ' +
                     'If "signature verification failed", check that JWT_SIGNING_KEY ' +
@@ -293,7 +295,9 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // (5 min), the worst-case delay is one token lifetime.
             const tenantStatus = payload.tenant_status as string | undefined;
             if (tenantStatus && tenantStatus !== 'active' && tenantStatus !== 'trial') {
-                console.warn(`[middleware] Tenant status "${tenantStatus}" — blocking access`);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.warn(`[middleware] Tenant status "${tenantStatus}" — blocking access`);
+                }
                 const url = request.nextUrl.clone();
                 url.pathname = '/login';
                 url.searchParams.set('error', 'tenant_suspended');
@@ -308,7 +312,9 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // Re-authentication resyncs both systems.
             // Uses a local cookie name check (no network call) to keep Edge latency low.
             if (!hasSomeSupabaseCookie(request)) {
-                console.info('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
+                if (process.env.NODE_ENV !== 'production') {
+                    console.info('[middleware] Custom JWT valid but Supabase session absent — forcing re-auth');
+                }
                 const url = request.nextUrl.clone();
                 url.pathname = '/login';
                 url.searchParams.set('next', pathname);
@@ -322,7 +328,9 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         // Token exists but verification failed (expired or invalid signature).
         // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
         // This prevents a compromised or expired token from being silently bypassed.
-        console.info('[middleware] JWT verification failed — redirecting to login');
+        if (process.env.NODE_ENV !== 'production') {
+            console.info('[middleware] JWT verification failed — redirecting to login');
+        }
         const url = request.nextUrl.clone();
         url.pathname = '/login';
         url.searchParams.set('next', pathname);
@@ -371,7 +379,9 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
         }
 
         if (resolvedTenantStatus && resolvedTenantStatus !== 'active' && resolvedTenantStatus !== 'trial') {
-            console.warn(`[middleware] Supabase path: Tenant status "${resolvedTenantStatus}" — blocking access`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.warn(`[middleware] Supabase path: Tenant status "${resolvedTenantStatus}" — blocking access`);
+            }
             const url = request.nextUrl.clone();
             url.pathname = '/login';
             url.searchParams.set('error', 'tenant_suspended');

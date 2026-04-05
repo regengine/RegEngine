@@ -71,7 +71,9 @@ export function useOrganizations(): UseOrganizationsResult {
 
                 if (queryError) {
                     // Table may not exist yet or RLS blocks access — degrade gracefully
-                    console.warn('Failed to fetch organizations:', queryError.message);
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.warn('Failed to fetch organizations:', queryError.message);
+                    }
                     setError(queryError.message);
                     setOrganizations([]);
                 } else {
@@ -79,7 +81,9 @@ export function useOrganizations(): UseOrganizationsResult {
                 }
             } catch (err) {
                 if (!cancelled) {
-                    console.warn('Organizations fetch failed:', err);
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.warn('Organizations fetch failed:', err);
+                    }
                     setOrganizations([]);
                 }
             } finally {

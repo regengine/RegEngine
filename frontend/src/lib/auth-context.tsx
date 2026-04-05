@@ -87,12 +87,16 @@ async function setSessionCookies(params: {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.error('[auth] Failed to set session cookie:', res.status);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[auth] Failed to set session cookie:', res.status);
+      }
       return false;
     }
     return true;
   } catch (err) {
-    console.error('[auth] Failed to set session cookie:', err);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[auth] Failed to set session cookie:', err);
+    }
     return false;
   }
 }
@@ -135,7 +139,9 @@ async function migrateLocalStorageToCookies(): Promise<void> {
 
   if (!legacyApiKey && !legacyAdminKey && !legacyAccessToken) return;
 
-  console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
+  }
 
   const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
   const userStr = localStorage.getItem(STORAGE_KEYS.USER);
@@ -157,7 +163,9 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   localStorage.removeItem(STORAGE_KEYS._LEGACY_ADMIN_KEY);
   localStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
-  console.info('[auth] Migration complete — localStorage secrets removed.');
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[auth] Migration complete — localStorage secrets removed.');
+  }
 }
 
 // ---------------------------------------------------------------------------

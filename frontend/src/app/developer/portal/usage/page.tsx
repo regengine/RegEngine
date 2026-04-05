@@ -40,7 +40,7 @@ export default function UsagePage() {
             .eq('auth_user_id', authUser.id)
             .maybeSingle();
 
-        if (profileError) {
+        if (profileError && process.env.NODE_ENV !== 'production') {
             console.error('Failed to fetch developer profile:', profileError.message);
         }
         if (!profile) return;
@@ -58,7 +58,7 @@ export default function UsagePage() {
             .order('created_at', { ascending: false })
             .limit(1000);
 
-        if (error) {
+        if (error && process.env.NODE_ENV !== 'production') {
             console.error('Failed to fetch usage data:', error.message);
         }
         setUsage(data || []);
