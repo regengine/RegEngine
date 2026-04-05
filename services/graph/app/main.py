@@ -49,6 +49,7 @@ app = FastAPI(
     description="Knowledge graph construction, regulatory frameworks, and traceability gap analysis for FSMA 204 compliance",
     version="1.0.0",
     lifespan=lifespan,
+    contact={"name": "RegEngine Support", "url": "https://github.com/PetrefiedThunder/RegEngine"},
     docs_url=None if _is_prod else "/docs",
     redoc_url=None if _is_prod else "/redoc",
     openapi_url=None if _is_prod else "/openapi.json",
