@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        console.info('[alpha-signup] Signup accepted for:', email);
+        if (process.env.NODE_ENV !== 'production') { console.info('[alpha-signup] Signup accepted for:', email); }
         return NextResponse.json({ success: true, ...data });
 
     } catch (error: unknown) {

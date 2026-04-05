@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Save, Settings, Leaf, MapPin, Building2, Package, ShoppingCart, AlertCircle, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import { US_STATES } from "@/lib/constants";
 
 interface ProductProfile {
     tenant_id: string;
@@ -42,14 +43,6 @@ const FTL_CATEGORIES = [
     { id: "crustaceans", label: "Crustaceans", icon: Package },
     { id: "mollusks", label: "Molluscan Shellfish (bivalves)", icon: Package },
     { id: "cheese", label: "Cheeses (other than hard cheeses)", icon: Package },
-];
-
-const US_STATES = [
-    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
-    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
-    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
-    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
-    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
 
 const MAJOR_RETAILERS = [

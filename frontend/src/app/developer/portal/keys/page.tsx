@@ -57,7 +57,7 @@ export default function ApiKeysPage() {
             .eq('auth_user_id', authUser.id)
             .maybeSingle();
 
-        if (profileError) {
+        if (profileError && process.env.NODE_ENV !== 'production') {
             console.error('Failed to fetch developer profile:', profileError.message);
         }
         if (!profile) return;
@@ -69,7 +69,7 @@ export default function ApiKeysPage() {
             .eq('developer_id', profile.id)
             .order('created_at', { ascending: false });
 
-        if (error) {
+        if (error && process.env.NODE_ENV !== 'production') {
             console.error('Failed to fetch API keys:', error.message);
         }
         setKeys(data || []);
