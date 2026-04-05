@@ -135,7 +135,8 @@ services:
       # Override DATABASE_URL to use the async driver (required by shared.api_key_store)
       DATABASE_URL: ${INGESTION_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
       # Admin DB connection for cross-service audit log queries
-      ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://regengine:regengine@postgres:5432/regengine_admin}
+      # Uses POSTGRES_PASSWORD (already :? required) — no plaintext default (#545)
+      ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
       # CORS origins for frontend access (comma-separated)
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080}
     depends_on:
@@ -303,9 +304,10 @@ services:
     image: minio/minio:RELEASE.2024-01-16T16-07-38Z
     restart: unless-stopped
     environment:
-      # WARNING: Fallback values are dev-only defaults. Override via .env in production.
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-${OBJECT_STORAGE_ACCESS_KEY_ID:-minioadmin}}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-${OBJECT_STORAGE_SECRET_ACCESS_KEY:-minioadmin123}}
+      # 'minioadmin'/'minioadmin123' are well-known defaults actively exploited in the wild.
+      # Both vars must be set explicitly in .env — no fallback (#545).
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-${OBJECT_STORAGE_ACCESS_KEY_ID:?MINIO_ROOT_USER or OBJECT_STORAGE_ACCESS_KEY_ID must be set}}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-${OBJECT_STORAGE_SECRET_ACCESS_KEY:?MINIO_ROOT_PASSWORD or OBJECT_STORAGE_SECRET_ACCESS_KEY must be set}}
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -445,7 +447,8 @@ services:
       - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      # 'admin' default is a trivially guessable password — require explicit set (#545)
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set - do not use the 'admin' default}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
@@ -483,7 +486,8 @@ services:
     restart: unless-stopped
     profiles: [monitoring]
     environment:
-      - DATA_SOURCE_NAME=postgresql://regengine:${POSTGRES_PASSWORD:-regengine}@postgres:5432/regengine?sslmode=disable
+      # POSTGRES_PASSWORD must be set — no credential fallback (#545)
+      - DATA_SOURCE_NAME=postgresql://regengine:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine?sslmode=disable
     ports:
       - "9187:9187"
     depends_on:

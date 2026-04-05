@@ -21,8 +21,8 @@
     },
     "env": {
         "REGENGINE_DEPLOY_MODE": "cloud",
-        "INGESTION_SERVICE_URL": "https://believable-respect-production-2fb3.up.railway.app",
-        "COMPLIANCE_SERVICE_URL": "https://intelligent-essence-production.up.railway.app",
-        "ADMIN_SERVICE_URL": "https://regengine-production.up.railway.app"
+        "INGESTION_SERVICE_URL": "@ingestion-service-url",
+        "COMPLIANCE_SERVICE_URL": "@compliance-service-url",
+        "ADMIN_SERVICE_URL": "@admin-service-url"
     }
 }
