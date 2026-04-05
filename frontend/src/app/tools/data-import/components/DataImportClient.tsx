@@ -26,9 +26,11 @@ import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { toast } from '@/components/ui/use-toast';
 
 const CTE_TYPES = [
+    { id: 'growing', label: 'Growing', description: 'Cultivation/growing area events' },
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
     { id: 'cooling', label: 'Cooling', description: 'Cold storage/cooling events' },
     { id: 'initial_packing', label: 'Initial Packing', description: 'Packing line events' },
+    { id: 'first_land_based_receiving', label: 'First Land-Based Receiving', description: 'Seafood landing events' },
     { id: 'shipping', label: 'Shipping', description: 'Outbound shipment events' },
     { id: 'receiving', label: 'Receiving', description: 'Inbound receipt events' },
     { id: 'transformation', label: 'Transformation', description: 'Processing/mixing events' },

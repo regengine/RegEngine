@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import {
   Activity,
+  Bell,
   Database,
   TrendingUp,
   CheckCircle,
@@ -293,6 +294,15 @@ export function Header() {
                   <div>
                     <div className="font-medium">FSMA Dashboard</div>
                     <div className="text-xs text-muted-foreground">Traceability & recall drills</div>
+                  </div>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/recall-response" className="cursor-pointer w-full flex items-center gap-3 py-2">
+                  <Bell className="h-4 w-4 text-red-500" />
+                  <div>
+                    <div className="font-medium">Recall Response</div>
+                    <div className="text-xs text-muted-foreground">24-hour FDA SLA tracking</div>
                   </div>
                 </Link>
               </DropdownMenuItem>
