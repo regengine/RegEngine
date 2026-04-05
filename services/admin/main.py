@@ -215,6 +215,9 @@ app.include_router(system_router, prefix="/v1")
 from app.auth_routes import router as auth_router
 app.include_router(auth_router)
 
+from app.password_reset_routes import router as password_reset_router
+app.include_router(password_reset_router)
+
 from app.invite_routes import router as invite_router
 app.include_router(invite_router, prefix="/v1")
 
