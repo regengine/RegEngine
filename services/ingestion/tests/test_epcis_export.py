@@ -17,7 +17,7 @@ from app.epcis_export import _CTE_TO_BIZSTEP, _validate_epcis_document
 
 
 EXPECTED_CTE_TYPES = {
-    "receiving", "shipping", "transformation",
+    "growing", "receiving", "shipping", "transformation",
     "initial_packing", "harvesting", "cooling",
     "first_land_based_receiving",
 }
@@ -27,12 +27,6 @@ class TestCTEToBizStep:
     """Tests for the _CTE_TO_BIZSTEP mapping."""
 
     def test_has_all_cte_types(self):
-        """EPCIS bizstep mapping covers 7 original CTE types.
-
-        Note: 'growing' CTE was added in V053 but does not yet have an
-        EPCIS bizstep URI mapping — it will be added when the GS1
-        standard defines one.
-        """
         assert set(_CTE_TO_BIZSTEP.keys()) == EXPECTED_CTE_TYPES
 
     def test_all_uris_start_with_bizstep_prefix(self):
