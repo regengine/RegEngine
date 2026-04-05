@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log = structlog.get_logger("startup")
     log.info(
         "service_starting",
-        version="0.4.0",
+        version="1.0.0",
         environment=os.getenv("REGENGINE_ENV", "development"),
     )
     
@@ -155,7 +155,7 @@ For API support, consult the documentation at `/docs` (this page) or `/redoc`.
     """,
     contact={
         "name": "RegEngine Support",
-        "url": "https://github.com/regengine/regengine",
+        "url": "https://github.com/PetrefiedThunder/RegEngine",
     },
     license_info={
         "name": "Proprietary",
