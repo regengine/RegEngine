@@ -190,7 +190,9 @@ async def download_template(cte_type: str):
     description="Returns a list of available CTE types and their column definitions.",
 )
 async def list_templates():
-    """List all available CSV templates."""
+    """List available CSV templates (canonical FSMA 204 CTEs only)."""
+    # "growing" template kept for backwards-compat downloads but hidden
+    # from listing — it is not one of the 7 FDA-defined CTEs.
     return {
         "templates": {
             cte_type: {
@@ -198,13 +200,19 @@ async def list_templates():
                 "download_url": f"/api/v1/templates/{cte_type}",
             }
             for cte_type, columns in CTE_COLUMNS.items()
+            if cte_type != "growing"
         }
     }
 
 
-# Aliases for auto-detecting CTE type from a column value
+# Aliases for auto-detecting CTE type from a column value.
+# Canonical FSMA 204 CTEs: harvesting, cooling, initial_packing,
+# first_land_based_receiving, shipping, receiving, transformation.
+# "growing" and "creation" are accepted for backwards compatibility
+# and normalize to "harvesting".
 _CTE_TYPE_ALIASES: dict[str, str] = {
-    "harvesting": "harvesting", "harvest": "harvesting", "creation": "harvesting",
+    "harvesting": "harvesting", "harvest": "harvesting",
+    "creation": "harvesting", "growing": "harvesting",
     "h": "harvesting",
     "cooling": "cooling", "cold_storage": "cooling", "c": "cooling",
     "initial_packing": "initial_packing", "packing": "initial_packing",

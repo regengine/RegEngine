@@ -12,7 +12,7 @@ RegEngine gives food safety and compliance teams a single system to manage FSMA 
 
 ### Traceability
 
-- **All 8 CTE Types** — Growing, Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation — with full KDE capture per FDA requirements
+- **All 7 FSMA 204 CTE Types** — Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation — with full KDE capture per FDA requirements
 - **Supply Chain Tracing** — Forward and backward lot tracing across your supply chain, built on recursive CTEs for sub-second query performance
 - **Multi-Source Ingestion** — Ingest traceability data via webhook API, CSV upload, XLSX upload, EPCIS 2.0, EDI, manual entry, mobile capture, or supplier portal
 - **Cryptographic Audit Trail** — Every record is SHA-256 hashed and chain-verified. Dual payload preservation (raw + normalized) ensures tamper detection and full provenance tracking
@@ -212,7 +212,7 @@ RegEngine is in **active development** — shipping weekly. The product is pre-r
 - Frontend deployed on Vercel (build green)
 - 3 backend services on Railway (admin, ingestion, compliance — all healthy)
 - 52+ database migrations applied
-- 8/8 FSMA 204 CTE types implemented
+- 7/7 FSMA 204 CTE types implemented
 - 78+ regulatory obligations tracked
 - FDA export in CSV, PDF, and ZIP package formats
 - 24-hour recall response dashboard operational

@@ -9,10 +9,10 @@ import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButto
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance from $425/mo. Founding Design Partners lock in 50% off for life.',
+    description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance from $425/mo. Founding Design Partners lock in 50% off for life.',
+        description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
@@ -133,13 +133,13 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: 'Enterprise pricing', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
-    { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: 'Weeks (implementation)', repositrak: '<1 hour*', tracegains: 'Weeks (implementation)' },
-    { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
-    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
+    { feature: 'Time to First FDA-Ready Export', regengine: 'Under 10 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
+    { feature: 'Public API + OpenAPI Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Self-Serve Signup', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Developer Sandbox', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
-    { feature: 'Payment Methods', regengine: 'Card, ACH, wire', foodlogiq: 'Enterprise contract', repositrak: 'Card', tracegains: 'Enterprise contract' },
+    { feature: 'Cryptographic Audit Trail', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
+    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
+    { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
 ];
 
 const FAQ = [
@@ -333,8 +333,8 @@ export default async function PricingPage() {
                             </table>
                         </div>
                     </div>
-                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4 leading-relaxed max-w-[600px] mx-auto">
-                        * ReposiTrak&apos;s $59/mo plan covers supplier-level barcode traceability only (single-facility, no lot-trace, no FDA export, no recall drill). Full compliance platform pricing is not publicly listed. Competitor data from public sources as of April 2026.
+                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
+                        Competitor data from public sources as of April 2026.
                     </p>
                 </div>
             </section>
@@ -361,7 +361,7 @@ export default async function PricingPage() {
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
                 <div className="max-w-[600px] mx-auto text-center">
                     <h2 className="text-[28px] font-bold text-white mb-3">
-                        Lock In 50% Off Before General Availability
+                        Become a Founding Design Partner
                     </h2>
                     <p className="text-base text-white/90 mb-8">
                         Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
