@@ -24,12 +24,14 @@ def test_configure_logging_info_level():
     assert logger is not None
 
 
-def test_configure_logging_debug_level():
+def test_configure_logging_debug_level(monkeypatch):
     """Test configuring logging with DEBUG level."""
     from app.logging_config import configure_logging
-    
+
+    # Clear LOG_LEVEL env override so the passed level takes effect
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
     configure_logging("DEBUG")
-    
+
     # Verify standard logging level is set
     assert logging.root.level == logging.DEBUG
 

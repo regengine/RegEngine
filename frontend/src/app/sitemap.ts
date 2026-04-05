@@ -21,6 +21,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/security`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/developer/register`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/alpha`, changeFrequency: 'monthly' as const, priority: 0.8 },
+        { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/contact`, changeFrequency: 'yearly' as const, priority: 0.5 },
         { url: `${baseUrl}/privacy`, changeFrequency: 'yearly' as const, priority: 0.3 },
         { url: `${baseUrl}/terms`, changeFrequency: 'yearly' as const, priority: 0.3 },

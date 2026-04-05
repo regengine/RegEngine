@@ -59,6 +59,7 @@ app = FastAPI(
     description="Multi-source regulatory document ingestion, parsing, and processing for FSMA 204 compliance",
     version="1.0.0",
     lifespan=lifespan,
+    contact={"name": "RegEngine Support", "url": "https://github.com/PetrefiedThunder/RegEngine"},
     docs_url=None if _is_prod else "/docs",
     redoc_url=None if _is_prod else "/redoc",
     openapi_url=None if _is_prod else "/openapi.json",

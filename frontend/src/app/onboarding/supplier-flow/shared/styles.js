@@ -65,8 +65,8 @@ export const CTE_TYPES = {
       { name: "ref_doc_number", label: "Reference Document Number", type: "text", required: true },
     ],
   },
-  transforming: {
-    label: "Transforming", icon: "🔄",
+  transformation: {
+    label: "Transformation", icon: "🔄",
     fields: [
       { name: "input_tlc", label: "Input TLC(s)", type: "text", required: true },
       { name: "output_tlc", label: "New TLC (output)", type: "text", required: true },
@@ -116,7 +116,7 @@ export const CTE_TYPES = {
       { name: "subsequent_recipient", label: "Immediate Subsequent Recipient", type: "location", required: true },
     ],
   },
-  first_receiver: {
+  first_land_based_receiving: {
     label: "First Land-Based Receiving", icon: "🚢",
     fields: [
       { name: "traceability_lot_code", label: "Traceability Lot Code (TLC)", type: "text", required: true },
@@ -130,19 +130,31 @@ export const CTE_TYPES = {
       { name: "ref_doc_number", label: "Reference Document Number", type: "text", required: true },
     ],
   },
+  growing: {
+    label: "Growing", icon: "🌾",
+    fields: [
+      { name: "traceability_lot_code", label: "Traceability Lot Code (TLC)", type: "text", required: true },
+      { name: "commodity", label: "Commodity", type: "text", required: true },
+      { name: "variety", label: "Variety", type: "text", required: true },
+      { name: "quantity", label: "Quantity", type: "number", required: true },
+      { name: "unit_of_measure", label: "Unit of Measure", type: "select", options: ["lbs", "kg", "acres", "bins"], required: true },
+      { name: "growing_location", label: "Growing Area / Farm", type: "location", required: true },
+      { name: "growing_date", label: "Growing Date", type: "date", required: true },
+    ],
+  },
 };
 
 export const FTL_CATEGORIES = [
-  { id: "1", name: "Fruits (fresh-cut)", ctes: ["receiving", "transforming", "shipping"] },
-  { id: "2", name: "Vegetables (leafy greens)", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "transforming", "shipping"] },
+  { id: "1", name: "Fruits (fresh-cut)", ctes: ["receiving", "transformation", "shipping"] },
+  { id: "2", name: "Vegetables (leafy greens)", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "transformation", "shipping"] },
   { id: "3", name: "Shell eggs", ctes: ["initial_packing", "receiving", "shipping"] },
-  { id: "4", name: "Nut butter", ctes: ["receiving", "transforming", "shipping"] },
+  { id: "4", name: "Nut butter", ctes: ["receiving", "transformation", "shipping"] },
   { id: "5", name: "Fresh herbs", ctes: ["harvesting", "cooling", "initial_packing", "receiving", "shipping"] },
-  { id: "6", name: "Finfish (fresh/frozen)", ctes: ["first_receiver", "receiving", "transforming", "shipping"] },
-  { id: "7", name: "Crustaceans (fresh/frozen)", ctes: ["first_receiver", "receiving", "transforming", "shipping"] },
-  { id: "8", name: "Molluscan shellfish", ctes: ["harvesting", "first_receiver", "receiving", "shipping"] },
-  { id: "9", name: "Ready-to-eat deli salads", ctes: ["receiving", "transforming", "shipping"] },
-  { id: "10", name: "Soft & semi-soft cheeses", ctes: ["receiving", "transforming", "shipping"] },
+  { id: "6", name: "Finfish (fresh/frozen)", ctes: ["first_land_based_receiving", "receiving", "transformation", "shipping"] },
+  { id: "7", name: "Crustaceans (fresh/frozen)", ctes: ["first_land_based_receiving", "receiving", "transformation", "shipping"] },
+  { id: "8", name: "Molluscan shellfish", ctes: ["harvesting", "first_land_based_receiving", "receiving", "shipping"] },
+  { id: "9", name: "Ready-to-eat deli salads", ctes: ["receiving", "transformation", "shipping"] },
+  { id: "10", name: "Soft & semi-soft cheeses", ctes: ["receiving", "transformation", "shipping"] },
 ];
 
 /* ── FDA Export sample data (shown in demo mode) ────────────────── */

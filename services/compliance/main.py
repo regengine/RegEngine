@@ -45,6 +45,7 @@ app = FastAPI(
         "FSMA 204 compliance API providing checklists, industry categories, "
         "and configuration validation for food traceability requirements."
     ),
+    contact={"name": "RegEngine Support", "url": "https://github.com/PetrefiedThunder/RegEngine"},
     docs_url=None if _is_prod else "/docs",
     redoc_url=None if _is_prod else "/redoc",
     openapi_url=None if _is_prod else "/openapi.json",
