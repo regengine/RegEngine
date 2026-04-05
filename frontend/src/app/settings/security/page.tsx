@@ -1,17 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Shield, Lock, Key, Smartphone, ArrowLeft, Clock } from 'lucide-react';
+import { Shield, Lock, Key, Smartphone, ArrowLeft, Clock, Loader2, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { apiClient } from '@/lib/api-client';
+
+const MIN_PASSWORD_LENGTH = 12;
 
 const PLANNED_FEATURES = [
-    {
-        icon: Lock,
-        title: 'Password Management',
-        description:
-            'Change your account password directly from the dashboard. Includes password strength validation and breach detection powered by HaveIBeenPwned.',
-        eta: 'Q2 2026',
-    },
     {
         icon: Smartphone,
         title: 'Two-Factor Authentication (2FA)',
@@ -36,6 +35,51 @@ const PLANNED_FEATURES = [
 ];
 
 export default function SecuritySettingsPage() {
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState(false);
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError(null);
+        setSuccess(false);
+
+        if (newPassword !== confirmPassword) {
+            setError('New passwords do not match.');
+            return;
+        }
+
+        if (newPassword.length < MIN_PASSWORD_LENGTH) {
+            setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            await apiClient.changePassword(currentPassword, newPassword);
+            setSuccess(true);
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (err: unknown) {
+            const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
+            if (axiosError.response?.status === 401) {
+                setError('Current password is incorrect.');
+            } else if (axiosError.response?.data?.detail) {
+                setError(axiosError.response.data.detail);
+            } else if (axiosError.response?.status === 429) {
+                setError('Too many attempts. Please wait a moment and try again.');
+            } else {
+                setError('An unexpected error occurred. Please try again.');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -52,23 +96,102 @@ export default function SecuritySettingsPage() {
                 <div className="mb-8">
                     <h1 className="text-3xl sm:text-4xl font-bold mb-2">Security Settings</h1>
                     <p className="text-muted-foreground">
-                        Advanced security controls for your RegEngine account
+                        Manage your password and security preferences
                     </p>
                 </div>
 
-                {/* Current Security Status */}
-                <Card className="mb-8 border-primary/20">
+                {/* Change Password */}
+                <Card className="mb-8">
                     <CardHeader>
                         <div className="flex items-center gap-2">
-                            <Shield className="h-5 w-5 text-primary" />
-                            <CardTitle>Current Security</CardTitle>
+                            <Lock className="h-5 w-5 text-primary" />
+                            <CardTitle>Change Password</CardTitle>
                         </div>
                         <CardDescription>
-                            Your account is protected by your login credentials and session tokens.
-                            For immediate security concerns such as password resets or account lockouts,
-                            contact <a href="mailto:security@regengine.co" className="text-primary underline underline-offset-2">security@regengine.co</a>.
+                            Update your account password.
                         </CardDescription>
                     </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                            {error && (
+                                <div
+                                    role="alert"
+                                    className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-500 dark:border-red-800 dark:bg-red-900/10"
+                                >
+                                    {error}
+                                </div>
+                            )}
+
+                            {success && (
+                                <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-900/10 dark:text-green-400">
+                                    <CheckCircle className="h-4 w-4" />
+                                    Password changed successfully.
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none" htmlFor="currentPassword">
+                                    Current Password
+                                </label>
+                                <Input
+                                    id="currentPassword"
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    disabled={isLoading}
+                                    required
+                                    autoComplete="current-password"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none" htmlFor="newPassword">
+                                    New Password
+                                </label>
+                                <Input
+                                    id="newPassword"
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    disabled={isLoading}
+                                    required
+                                    minLength={MIN_PASSWORD_LENGTH}
+                                    autoComplete="new-password"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium leading-none" htmlFor="confirmPassword">
+                                    Confirm New Password
+                                </label>
+                                <Input
+                                    id="confirmPassword"
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    disabled={isLoading}
+                                    required
+                                    minLength={MIN_PASSWORD_LENGTH}
+                                    autoComplete="new-password"
+                                />
+                            </div>
+
+                            <p className="text-xs text-muted-foreground">
+                                At least {MIN_PASSWORD_LENGTH} characters with uppercase, lowercase, digit, and special character.
+                            </p>
+
+                            <Button type="submit" disabled={isLoading}>
+                                {isLoading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Changing...
+                                    </>
+                                ) : (
+                                    'Change Password'
+                                )}
+                            </Button>
+                        </form>
+                    </CardContent>
                 </Card>
 
                 {/* Planned Features */}

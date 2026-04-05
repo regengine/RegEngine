@@ -119,7 +119,7 @@ def check_perm(
     return {"message": "Permission granted", "user": user.email}
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def login(
     payload: LoginRequest,
     request: Request,

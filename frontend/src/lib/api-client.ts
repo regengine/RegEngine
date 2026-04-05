@@ -457,6 +457,15 @@ class APIClient {
     return data;
   }
 
+  // --- Password Change ---
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.adminClient.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  }
+
   // --- User Management ---
 
   async getUsers(): Promise<User[]> {
