@@ -11,8 +11,7 @@ from app.sqlalchemy_models import UserModel, MembershipModel
 from app.auth_utils import get_password_hash, verify_password
 from app.audit import AuditLogger
 from app.password_policy import validate_password, PasswordPolicyError
-from app.dependencies import get_current_user, get_session_store
-from app.session_store import RedisSessionStore
+from app.dependencies import get_current_user
 from shared.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -26,14 +25,18 @@ class ChangePasswordRequest(BaseModel):
 
 @router.post("/change-password")
 @limiter.limit("3/minute")
-async def change_password(
+def change_password(
     payload: ChangePasswordRequest,
     request: Request,
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_session),
-    session_store: RedisSessionStore = Depends(get_session_store),
 ):
-    """Change password for the currently authenticated user."""
+    """Change password for the currently authenticated user.
+
+    Does NOT revoke sessions — the user is already authenticated and
+    changing their own password. Use POST /auth/logout-all to sign out
+    all devices separately.
+    """
     if not verify_password(payload.current_password, current_user.password_hash):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
 
@@ -43,10 +46,6 @@ async def change_password(
         raise HTTPException(status_code=400, detail=e.message)
 
     current_user.password_hash = get_password_hash(payload.new_password)
-
-    # Revoke all other sessions (keep current session alive by revoking all
-    # and letting the caller's token remain valid until expiry)
-    await session_store.revoke_all_user_sessions(current_user.id)
 
     # Audit log
     membership = db.execute(
