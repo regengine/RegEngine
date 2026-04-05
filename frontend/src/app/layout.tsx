@@ -1,3 +1,4 @@
+import { headers } from 'next/headers'
 import { Providers } from '@/lib/providers'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
@@ -36,11 +37,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Read the per-request nonce injected by middleware (#543).
+  // The nonce is forwarded via the x-nonce request header so server components
+  // can attach it to inline <script> tags, satisfying the enforced CSP.
+  const nonce = (await headers()).get('x-nonce') ?? ''
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -49,7 +55,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
         {/* OpenDyslexic font is lazy-loaded by AccessibilityWidget when needed */}
+        {/* nonce attr required for enforced CSP (unsafe-inline removed, #543) */}
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
@@ -64,6 +72,7 @@ export default function RootLayout({
           }}
         />
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({

@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import sys
+import time
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 from uuid import uuid4
 
@@ -38,6 +41,38 @@ router = APIRouter()
 v1_router = APIRouter(prefix="/v1", tags=["v1"])
 
 logger = structlog.get_logger("admin")
+
+# ---------------------------------------------------------------------------
+# Admin-key brute-force rate limiter (#534)
+# In-memory sliding-window counter: max 5 failed attempts per IP per 60 s.
+# Keyed by IP address; thread-safe; auto-expires stale entries.
+# ---------------------------------------------------------------------------
+_ADMIN_MAX_FAILURES = 5
+_ADMIN_WINDOW_SECONDS = 60
+_admin_failures: dict[str, list[float]] = defaultdict(list)
+_admin_failures_lock = Lock()
+
+
+def _admin_key_rate_limited(ip: str) -> bool:
+    """Return True if this IP has exceeded the admin-key failure threshold."""
+    now = time.time()
+    with _admin_failures_lock:
+        # Expire attempts outside the sliding window
+        _admin_failures[ip] = [
+            t for t in _admin_failures[ip] if now - t < _ADMIN_WINDOW_SECONDS
+        ]
+        return len(_admin_failures[ip]) >= _ADMIN_MAX_FAILURES
+
+
+def _record_admin_failure(ip: str) -> int:
+    """Record a failed attempt and return the current failure count for this IP."""
+    now = time.time()
+    with _admin_failures_lock:
+        _admin_failures[ip].append(now)
+        # Keep the list bounded to avoid unbounded growth
+        if len(_admin_failures[ip]) > _ADMIN_MAX_FAILURES * 4:
+            _admin_failures[ip] = _admin_failures[ip][-(_ADMIN_MAX_FAILURES * 2):]
+        return len(_admin_failures[ip])
 
 
 class CreateKeyRequest(BaseModel):
@@ -122,19 +157,41 @@ def verify_admin_key(
     request: Request,
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
 ) -> bool:
-    """Verify the admin master key.
-    
-    SECURITY NOTE: The hardcoded 'admin' key bypass has been removed for production safety.
-    For local testing, use ADMIN_MASTER_KEY from .env or shared/auth.py with AUTH_TEST_BYPASS_TOKEN.
+    """Verify the admin master key with brute-force rate limiting (#534).
+
+    Rate limit: max 5 failed attempts per source IP per 60 seconds.
+    Exceeded limit → HTTP 429 with Retry-After header.
+    All failures are logged with IP and key prefix for audit purposes.
     """
+    ip: str = (request.client.host if request.client else "unknown")
+
+    # Check rate limit BEFORE evaluating the key — don't give timing hints
+    if _admin_key_rate_limited(ip):
+        logger.warning(
+            "admin_key_rate_limited",
+            source_ip=ip,
+            path=request.url.path,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Too many failed admin authentication attempts from this IP. "
+                f"Try again in {_ADMIN_WINDOW_SECONDS} seconds."
+            ),
+            headers={"Retry-After": str(_ADMIN_WINDOW_SECONDS)},
+        )
+
     settings = get_settings()
-    
+
     if not x_admin_key or x_admin_key != settings.admin_master_key:
+        count = _record_admin_failure(ip)
         logger.warning(
             "unauthorized_admin_access_attempt",
             key_prefix=x_admin_key[:4] if x_admin_key else "None",
-            source_ip=request.client.host if request.client else "unknown",
+            source_ip=ip,
             path=request.url.path,
+            failure_count=count,
+            failures_until_lockout=max(0, _ADMIN_MAX_FAILURES - count),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
