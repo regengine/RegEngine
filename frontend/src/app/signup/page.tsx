@@ -48,12 +48,36 @@ function SignupForm() {
         response?: { status?: number; data?: { detail?: string } };
         message?: string;
       };
-      if (apiError.response?.status === 409) {
-        setError('An account with this email already exists.');
-      } else if (apiError.response?.status === 400) {
-        setError(apiError.response.data?.detail || 'Please check your signup details.');
+      const status = apiError.response?.status;
+      if (!apiError.response) {
+        // No response — network-level failure
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        setError(
+          offline
+            ? 'You appear to be offline. Check your connection and try again.'
+            : 'Could not reach the server. Check your connection or try again in a moment.',
+        );
+      } else if (status === 409) {
+        setError(
+          'An account with this email already exists. Try signing in instead.',
+        );
+      } else if (status === 400 || status === 422) {
+        setError(
+          apiError.response.data?.detail ||
+            'Please check your details — company name must be at least 2 characters and password at least 12.',
+        );
+      } else if (status === 429) {
+        setError(
+          'Too many signup attempts. Please wait a minute then try again.',
+        );
+      } else if (status !== undefined && status >= 500) {
+        setError(
+          'Our servers ran into a problem. If this keeps happening, email support@regengine.co.',
+        );
       } else {
-        setError('Unable to create account right now. Please try again.');
+        setError(
+          'Unable to create account right now. Try again or email support@regengine.co.',
+        );
       }
     } finally {
       setIsLoading(false);

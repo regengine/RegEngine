@@ -105,8 +105,38 @@ export default function FacilityPage() {
       });
 
       router.push(`/onboarding/setup/ftl-check?facilityId=${facilityId}`);
-    } catch {
-      setError('Could not save facility. Please try again.');
+    } catch (err: unknown) {
+      const apiError = err as {
+        response?: { status?: number; data?: { detail?: string } };
+      };
+      const status = apiError.response?.status;
+      if (!apiError.response) {
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        setError(
+          offline
+            ? 'You appear to be offline. Check your connection and try again.'
+            : 'Could not reach the server. Check your connection and try again.',
+        );
+      } else if (status === 400 || status === 422) {
+        setError(
+          apiError.response.data?.detail ||
+            'Validation failed — check your facility details and try again.',
+        );
+      } else if (status === 409) {
+        setError(
+          'A facility with this name already exists in your account. Use a different name.',
+        );
+      } else if (status === 429) {
+        setError('Too many requests. Please wait a moment and try again.');
+      } else if (status !== undefined && status >= 500) {
+        setError(
+          'Could not save facility — server error. Try again or email support@regengine.co.',
+        );
+      } else {
+        setError(
+          'Could not save facility. Please try again or email support@regengine.co.',
+        );
+      }
     } finally {
       setSaving(false);
     }
