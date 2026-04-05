@@ -9,10 +9,10 @@ import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButto
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance from $425/mo. Published pricing, self-serve signup, 14-day free trial.',
+    description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance from $425/mo. Published pricing, self-serve signup, 14-day free trial.',
+        description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
@@ -299,8 +299,11 @@ export default async function PricingPage() {
                     <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] text-center mb-3">
                         See How We Compare
                     </h2>
-                    <p className="text-center text-[var(--re-text-muted)] max-w-[520px] mx-auto mb-10">
-                        We built RegEngine API-first so your team can go from signup to FDA-ready export in minutes — not weeks of implementation.
+                    <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
+                        The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
+                    </p>
+                    <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
+                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo for Founding Design Partners.
                     </p>
                     <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
                         <div className="overflow-x-auto">
@@ -361,7 +364,7 @@ export default async function PricingPage() {
                         Become a Founding Design Partner
                     </h2>
                     <p className="text-base text-white/90 mb-8">
-                        We&apos;re onboarding a limited number of partners before the FSMA 204 deadline. Your partner rate is locked in for the life of your account — no surprise increases, ever.
+                        Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">
