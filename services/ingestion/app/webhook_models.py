@@ -174,12 +174,23 @@ class IngestEvent(BaseModel):
     @field_validator("unit_of_measure")
     @classmethod
     def validate_unit_of_measure(cls, v: str) -> str:
-        """Validate unit of measure against known FSMA 204 units."""
+        """Validate unit of measure against known FSMA 204 units.
+
+        Warning-only: unknown units are logged but accepted so that
+        abbreviated or misspelled values (e.g. "bx", "ea", "lbs.")
+        don't crash the entire row. The CSV ingest layer normalises
+        common aliases before reaching this validator; this guard exists
+        for direct API callers.
+        """
         normalized = v.strip().lower()
         if normalized not in VALID_UNITS_OF_MEASURE:
-            raise ValueError(
-                f"Unknown unit '{v}'. Valid units: {', '.join(sorted(VALID_UNITS_OF_MEASURE))}"
+            import logging as _logging
+            _logging.getLogger("uom-validation").warning(
+                "unknown_unit value=%s accepted_as_is=true valid=%s",
+                v, ",".join(sorted(VALID_UNITS_OF_MEASURE)),
             )
+            # Accept it — KDE completeness checks will flag it to the user
+            return normalized
         return normalized
 
     @model_validator(mode="after")
