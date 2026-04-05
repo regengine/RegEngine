@@ -187,7 +187,9 @@ export default function LoginPage() {
             // the useEffect redirect fires.
             router.refresh();
         } catch (err: unknown) {
-            console.error('Login error:', err);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('Login error:', err);
+            }
             const apiError = err as {
                 response?: { status?: number; data?: unknown };
                 message?: string;

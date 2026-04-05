@@ -10,14 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
-
-const PLAN_LABELS: Record<string, string> = {
-  base: 'Base',
-  standard: 'Standard',
-  premium: 'Premium',
-  growth: 'Growth',
-  scale: 'Scale',
-};
+import { PLAN_LABELS } from '@/lib/constants';
 
 function SignupForm() {
   const router = useRouter();

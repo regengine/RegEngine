@@ -26,7 +26,7 @@ export function ImageCapture({ onCapture }: ImageCaptureProps) {
             }
             setIsCameraActive(true);
         } catch (err) {
-            console.error('Error accessing camera:', err);
+            if (process.env.NODE_ENV !== 'production') { console.error('Error accessing camera:', err); }
         }
     };
 

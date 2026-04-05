@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+
+# Exclude authenticated app routes and API endpoints from indexing
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /onboarding/
+Disallow: /settings/
+Disallow: /compliance/
+Disallow: /records/
+Disallow: /incidents/
+Disallow: /sysadmin/
+Disallow: /developer/portal/
+
+# Sitemap location
+Sitemap: https://www.regengine.co/sitemap.xml

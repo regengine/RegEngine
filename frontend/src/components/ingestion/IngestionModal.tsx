@@ -77,7 +77,7 @@ export function IngestionModal({ open, onOpenChange, vertical }: IngestionModalP
                     setViewState('results');
                     return; // Don't auto-close
                 } catch (e) {
-                    console.error("Analysis fetch failed", e);
+                    if (process.env.NODE_ENV !== 'production') { console.error("Analysis fetch failed", e); }
                     // Fallback to auto-close if analysis fails
                 }
             }
@@ -92,7 +92,7 @@ export function IngestionModal({ open, onOpenChange, vertical }: IngestionModalP
             }, 2000);
 
         } catch (error: unknown) {
-            console.error(error);
+            if (process.env.NODE_ENV !== 'production') { console.error(error); }
             setStatus('error');
             const message = error instanceof Error ? error.message : 'Ingestion failed';
             setMessage(message);

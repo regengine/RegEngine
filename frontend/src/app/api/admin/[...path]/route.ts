@@ -207,7 +207,7 @@ async function proxyRequest(  request: NextRequest,
         // committed status=200.  Buffering ensures a complete response is handed
         // to Vercel's edge before the function exits.
         const responseBody = await response.arrayBuffer();
-        console.info(`[proxy/admin] ${method} ${path} → ${response.status}`);
+        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/admin] ${method} ${path} → ${response.status}`); }
         return new NextResponse(responseBody, {
           status: response.status,
           headers: outgoingHeaders,

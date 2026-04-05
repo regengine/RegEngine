@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 export default function ErrorBoundary({
@@ -11,7 +12,9 @@ export default function ErrorBoundary({
     reset: () => void;
 }) {
     useEffect(() => {
-        console.error(error);
+        if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+                Sentry.captureException(error);
+            }
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

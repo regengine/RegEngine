@@ -16,7 +16,6 @@ export default function RootError({
         if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
             Sentry.captureException(error);
         }
-        console.error('Root error boundary:', error);
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

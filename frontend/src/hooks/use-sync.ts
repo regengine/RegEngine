@@ -75,7 +75,7 @@ export function useSync() {
                     }
                     if (scan.id) await markScanSynced(scan.id);
                 } catch (e) {
-                    console.error("Failed to sync scan", scan, e);
+                    if (process.env.NODE_ENV !== 'production') { console.error("Failed to sync scan", scan, e); }
                 }
             }
 
@@ -90,7 +90,7 @@ export function useSync() {
                     });
                     if (photo.id) await markPhotoSynced(photo.id);
                 } catch (e) {
-                    console.error("Failed to sync photo", photo, e);
+                    if (process.env.NODE_ENV !== 'production') { console.error("Failed to sync photo", photo, e); }
                 }
             }
 
@@ -108,7 +108,7 @@ export function useSync() {
             }
 
         } catch (err) {
-            console.error("Sync error", err);
+            if (process.env.NODE_ENV !== 'production') { console.error("Sync error", err); }
         } finally {
             setIsSyncing(false);
         }

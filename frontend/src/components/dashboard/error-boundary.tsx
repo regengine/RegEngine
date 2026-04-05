@@ -22,7 +22,9 @@ export class DashboardErrorBoundary extends React.Component<
     }
 
     componentDidCatch(error: Error, info: React.ErrorInfo) {
-        console.error('[DashboardErrorBoundary]', error, info.componentStack);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[DashboardErrorBoundary]', error, info.componentStack);
+        }
     }
 
     render() {
