@@ -34,6 +34,7 @@ from app.fda_export_service import (
     _build_fda_package,
     _generate_csv,
     _generate_csv_v2,
+    _generate_pdf,
     _safe_filename_token,
 )
 from app.subscription_gate import require_active_subscription
@@ -62,8 +63,9 @@ router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
             "content": {
                 "text/csv": {},
                 "application/zip": {},
+                "application/pdf": {},
             },
-            "description": "FDA-compliant CSV or ZIP package",
+            "description": "FDA-compliant CSV, ZIP package, or PDF report",
         },
     },
 )
@@ -71,9 +73,9 @@ async def export_fda_spreadsheet(
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
-    format: Literal["package", "csv"] = Query(
+    format: Literal["package", "csv", "pdf"] = Query(
         default="package",
-        description="Export format: package (zip bundle) or csv",
+        description="Export format: package (zip bundle), csv, or pdf",
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
@@ -177,6 +179,26 @@ async def export_fda_spreadsheet(
                 },
             )
 
+        if format == "pdf":
+            pdf_bytes = _generate_pdf(events, metadata={
+                "tlc": tlc,
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "start_date": start_date,
+                "end_date": end_date,
+            })
+            filename = f"fda_export_{safe_tlc}_{timestamp}.pdf"
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Record-Count": str(len(events)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
         filename = f"fda_export_{safe_tlc}_{timestamp}.csv"
         return StreamingResponse(
             iter([csv_content]),
@@ -209,8 +231,9 @@ async def export_fda_spreadsheet(
             "content": {
                 "text/csv": {},
                 "application/zip": {},
+                "application/pdf": {},
             },
-            "description": "FDA-compliant CSV or ZIP package",
+            "description": "FDA-compliant CSV, ZIP package, or PDF report",
         },
     },
 )
@@ -218,9 +241,9 @@ async def export_all_events(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     event_type: Optional[str] = Query(None, description="Filter by CTE type"),
-    format: Literal["package", "csv"] = Query(
+    format: Literal["package", "csv", "pdf"] = Query(
         default="csv",
-        description="Export format: package (zip bundle) or csv",
+        description="Export format: package (zip bundle), csv, or pdf",
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
@@ -318,6 +341,25 @@ async def export_all_events(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-Export-Hash": export_hash,
                     "X-Package-Hash": package_meta["package_hash"],
+                    "X-Record-Count": str(len(deduped)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
+        if format == "pdf":
+            pdf_bytes = _generate_pdf(deduped, metadata={
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "start_date": start_date,
+                "end_date": end_date,
+            })
+            filename = f"fda_export_all_{timestamp}.pdf"
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
                     "X-Record-Count": str(len(deduped)),
                     "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
                     **compliance_headers,
@@ -1183,6 +1225,128 @@ async def get_merkle_proof(
             status_code=500,
             detail="Merkle proof generation failed. Check server logs.",
         )
+    finally:
+        if db_session:
+            db_session.close()
+
+
+# ---------------------------------------------------------------------------
+# Transformation trace graph
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/trace/{tlc}",
+    summary="Trace transformation graph for a TLC",
+    description=(
+        "Returns all TLCs reachable from the given lot code via "
+        "fsma.transformation_links — both upstream inputs and downstream outputs.  "
+        "Also returns the full CTE event count per linked lot so the UI can "
+        "show the trace tree without fetching the full FDA export."
+    ),
+    tags=["Traceability"],
+)
+async def trace_transformation_graph(
+    tlc: str,
+    tenant_id: str = Query(..., description="Tenant identifier"),
+    depth: int = Query(default=5, ge=1, le=10, description="Max traversal depth"),
+    _auth=Depends(require_permission("fda.read")),
+    _subscription=Depends(require_active_subscription),
+) -> dict:
+    """Return the transformation graph rooted at a given TLC."""
+    db_session = None
+    try:
+        from shared.database import SessionLocal
+        from shared.cte_persistence import CTEPersistence
+
+        from sqlalchemy import text
+
+        db_session = SessionLocal()
+        persistence = CTEPersistence(db_session)
+
+        linked_tlcs = persistence._expand_tlcs_via_transformation_links(
+            tenant_id=tenant_id, seed_tlc=tlc, depth=depth
+        )
+
+        # Fetch event counts per TLC in one query
+        if linked_tlcs:
+            placeholders = ", ".join(f":tlc_{i}" for i in range(len(linked_tlcs)))
+            params: dict = {"tid": tenant_id}
+            for i, t in enumerate(linked_tlcs):
+                params[f"tlc_{i}"] = t
+            count_rows = db_session.execute(
+                text(f"""
+                    SELECT traceability_lot_code, COUNT(*) as event_count,
+                           MIN(event_timestamp) as first_event,
+                           MAX(event_timestamp) as last_event
+                    FROM   fsma.cte_events
+                    WHERE  tenant_id = :tid
+                      AND  traceability_lot_code IN ({placeholders})
+                      AND  validation_status != 'rejected'
+                    GROUP BY traceability_lot_code
+                """),
+                params,
+            ).fetchall()
+            tlc_stats = {
+                row[0]: {
+                    "event_count": row[1],
+                    "first_event": row[2].isoformat() if row[2] else None,
+                    "last_event": row[3].isoformat() if row[3] else None,
+                }
+                for row in count_rows
+            }
+        else:
+            tlc_stats = {}
+
+        # Also fetch direct link edges for the graph visualization
+        link_rows = db_session.execute(
+            text("""
+                SELECT input_tlc, output_tlc, process_type, confidence_score
+                FROM   fsma.transformation_links
+                WHERE  tenant_id = :tid
+                  AND  (input_tlc = ANY(:tlcs) OR output_tlc = ANY(:tlcs))
+            """),
+            {"tid": tenant_id, "tlcs": linked_tlcs},
+        ).fetchall()
+        edges = [
+            {
+                "input_tlc": row[0],
+                "output_tlc": row[1],
+                "process_type": row[2],
+                "confidence_score": float(row[3]) if row[3] is not None else None,
+            }
+            for row in link_rows
+        ]
+
+        nodes = [
+            {
+                "tlc": t,
+                "is_seed": t == tlc,
+                "role": (
+                    "seed" if t == tlc
+                    else "downstream" if any(e["input_tlc"] == tlc and e["output_tlc"] == t for e in edges)
+                    else "upstream"
+                ),
+                **tlc_stats.get(t, {"event_count": 0, "first_event": None, "last_event": None}),
+            }
+            for t in linked_tlcs
+        ]
+
+        return {
+            "seed_tlc": tlc,
+            "tenant_id": tenant_id,
+            "traversal_depth": depth,
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "nodes": nodes,
+            "edges": edges,
+            "total_events": sum(n["event_count"] for n in nodes),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("trace_graph_failed", extra={"error": str(e), "tlc": tlc})
+        raise HTTPException(status_code=500, detail="Trace graph query failed.")
     finally:
         if db_session:
             db_session.close()

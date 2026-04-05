@@ -65,6 +65,9 @@ const UNAUTHENTICATED_AUTH_PATHS = new Set([
   'auth/signup',
   'auth/refresh',
   'auth/register',
+  // Password reset — caller passes a Supabase recovery token, not a RegEngine JWT.
+  // Backend validates it via sb.auth.get_user(); no RegEngine session required.
+  'auth/reset-password',
 ]);
 
 async function proxyRequest(  request: NextRequest,
@@ -124,9 +127,12 @@ async function proxyRequest(  request: NextRequest,
       }
     }
 
-    // Inject access token from HTTP-only cookie as Bearer token
+    // Inject access token from HTTP-only cookie as Bearer token.
+    // Only inject if the client didn't already send an explicit Authorization
+    // header — recovery flows (auth/reset-password) pass a Supabase token that
+    // must not be overwritten by a stale RegEngine cookie.
     const cookieAccessToken = request.cookies.get('re_access_token')?.value;
-    if (cookieAccessToken) {
+    if (cookieAccessToken && !request.headers.get('authorization')) {
       headers.set('authorization', `Bearer ${cookieAccessToken}`);
     }
 
@@ -201,7 +207,7 @@ async function proxyRequest(  request: NextRequest,
         // committed status=200.  Buffering ensures a complete response is handed
         // to Vercel's edge before the function exits.
         const responseBody = await response.arrayBuffer();
-        console.info(`[proxy/admin] ${method} ${path} → ${response.status}`);
+        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/admin] ${method} ${path} → ${response.status}`); }
         return new NextResponse(responseBody, {
           status: response.status,
           headers: outgoingHeaders,

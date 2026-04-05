@@ -1,12 +1,13 @@
+import { headers } from 'next/headers'
 import { Providers } from '@/lib/providers'
 import './globals.css'
 import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
-import { Analytics } from '@vercel/analytics/react'
-import { SpeedInsights } from '@vercel/speed-insights/next'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
+import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
 import type { Metadata, Viewport } from 'next'
 
+// Analytics are mounted by CookieBanner only after the user accepts consent (#552).
 const enableVercelAnalytics = process.env.VERCEL === '1' || Boolean(process.env.NEXT_PUBLIC_VERCEL_ANALYTICS_ID)
 
 export const viewport: Viewport = {
@@ -36,11 +37,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // Read the per-request nonce injected by middleware (#543).
+  // The nonce is forwarded via the x-nonce request header so server components
+  // can attach it to inline <script> tags, satisfying the enforced CSP.
+  const nonce = (await headers()).get('x-nonce') ?? ''
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -48,8 +54,14 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
+        {/* PWA manifest (#568) */}
+        <link rel="manifest" href="/manifest.json" />
         {/* OpenDyslexic font is lazy-loaded by AccessibilityWidget when needed */}
+        {/* nonce attr required for enforced CSP (unsafe-inline removed, #543) */}
+
+        {/* Organization schema */}
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
@@ -63,7 +75,10 @@ export default function RootLayout({
             }),
           }}
         />
+
+        {/* WebSite schema */}
         <script
+          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
@@ -71,6 +86,55 @@ export default function RootLayout({
               '@type': 'WebSite',
               name: 'RegEngine',
               url: 'https://www.regengine.co',
+            }),
+          }}
+        />
+
+        {/* BreadcrumbList schema (#568) — top-level site sections */}
+        <script
+          nonce={nonce}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'BreadcrumbList',
+              itemListElement: [
+                { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.regengine.co' },
+                { '@type': 'ListItem', position: 2, name: 'Pricing', item: 'https://www.regengine.co/pricing' },
+                { '@type': 'ListItem', position: 3, name: 'FSMA 204 Guide', item: 'https://www.regengine.co/fsma-204' },
+                { '@type': 'ListItem', position: 4, name: 'Free Tools', item: 'https://www.regengine.co/tools' },
+              ],
+            }),
+          }}
+        />
+
+        {/* Product schema (#568) */}
+        <script
+          nonce={nonce}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Product',
+              name: 'RegEngine FSMA 204 Compliance Platform',
+              description: 'FSMA 204 food traceability compliance software. Ingest supplier data, verify chain of custody, and produce FDA-ready audit exports in under 48 hours.',
+              url: 'https://www.regengine.co',
+              brand: {
+                '@type': 'Brand',
+                name: 'RegEngine',
+              },
+              offers: {
+                '@type': 'AggregateOffer',
+                priceCurrency: 'USD',
+                lowPrice: '425',
+                highPrice: '1499',
+                offerCount: 3,
+                offers: [
+                  { '@type': 'Offer', name: 'Base Plan', price: '425', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
+                  { '@type': 'Offer', name: 'Standard Plan', price: '549', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
+                  { '@type': 'Offer', name: 'Premium Plan', price: '639', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
+                ],
+              },
             }),
           }}
         />
@@ -93,8 +157,7 @@ export default function RootLayout({
           <AuthAwareFooter />
         </Providers>
         <AccessibilityWidget />
-        {enableVercelAnalytics ? <Analytics /> : null}
-        {enableVercelAnalytics ? <SpeedInsights /> : null}
+        <CookieBanner enableAnalytics={enableVercelAnalytics} />
       </body>
     </html>
   )

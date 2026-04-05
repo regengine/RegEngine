@@ -175,7 +175,9 @@ export default function LoginPage() {
             // the useEffect redirect fires.
             router.refresh();
         } catch (err: unknown) {
-            console.error('Login error:', err);
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('Login error:', err);
+            }
             const apiError = err as {
                 response?: { status?: number; data?: unknown };
                 message?: string;
@@ -289,6 +291,14 @@ export default function LoginPage() {
                             {searchParams.get('error') === 'session_expired' && (
                                 <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/10 dark:text-blue-400">
                                     Your session has expired. Please sign in again.
+                                </div>
+                            )}
+                            {searchParams.get('error') === 'auth_failed' && (
+                                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/10 dark:text-red-400">
+                                    Password reset link has expired or is invalid.{' '}
+                                    <Link href="/forgot-password" className="font-medium underline underline-offset-2">
+                                        Request a new one →
+                                    </Link>
                                 </div>
                             )}
                             <form onSubmit={handleSubmit} className="space-y-4">

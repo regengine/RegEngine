@@ -40,7 +40,8 @@ def validate_gln(gln: str) -> tuple[bool, str | None]:
 
 
 class WebhookCTEType(str, Enum):
-    """CTE types accepted by the webhook endpoint (all 7 per FSMA 204 §1.1310)."""
+    """CTE types accepted by the webhook endpoint (all 8 per FSMA 204 §1.1310)."""
+    GROWING = "growing"
     HARVESTING = "harvesting"
     COOLING = "cooling"
     INITIAL_PACKING = "initial_packing"
@@ -62,6 +63,11 @@ VALID_UNITS_OF_MEASURE = {
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
 REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
+    WebhookCTEType.GROWING: [
+        "traceability_lot_code", "product_description", "quantity",
+        "unit_of_measure", "growing_area_name", "location_name",
+        "reference_document",  # §1.1325(b)
+    ],
     WebhookCTEType.HARVESTING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "harvest_date", "location_name",
@@ -168,12 +174,23 @@ class IngestEvent(BaseModel):
     @field_validator("unit_of_measure")
     @classmethod
     def validate_unit_of_measure(cls, v: str) -> str:
-        """Validate unit of measure against known FSMA 204 units."""
+        """Validate unit of measure against known FSMA 204 units.
+
+        Warning-only: unknown units are logged but accepted so that
+        abbreviated or misspelled values (e.g. "bx", "ea", "lbs.")
+        don't crash the entire row. The CSV ingest layer normalises
+        common aliases before reaching this validator; this guard exists
+        for direct API callers.
+        """
         normalized = v.strip().lower()
         if normalized not in VALID_UNITS_OF_MEASURE:
-            raise ValueError(
-                f"Unknown unit '{v}'. Valid units: {', '.join(sorted(VALID_UNITS_OF_MEASURE))}"
+            import logging as _logging
+            _logging.getLogger("uom-validation").warning(
+                "unknown_unit value=%s accepted_as_is=true valid=%s",
+                v, ",".join(sorted(VALID_UNITS_OF_MEASURE)),
             )
+            # Accept it — KDE completeness checks will flag it to the user
+            return normalized
         return normalized
 
     @model_validator(mode="after")

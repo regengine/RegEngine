@@ -17,21 +17,14 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { apiClient } from '@/lib/api-client';
+import { StepIndicator } from '@/components/onboarding/StepIndicator';
+import { US_STATES, SUPPLY_CHAIN_ROLES } from '@/lib/constants';
 
-const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
-  'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
-  'VA','WA','WV','WI','WY','DC','PR','GU','VI',
-];
+// #539 — US ZIP: 5 digits or 5+4 (e.g. 93901 or 93901-1234)
+const ZIP_RE = /^\d{5}(-\d{4})?$/;
 
-const SUPPLY_CHAIN_ROLES = [
-  'Grower',
-  'Packer',
-  'Processor',
-  'Distributor',
-  'Importer',
-];
+// #540 — UUID v4 format expected from the API
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function FacilityPage() {
   const router = useRouter();
@@ -39,6 +32,7 @@ export default function FacilityPage() {
   const updateOnboarding = useUpdateOnboarding(tenantId);
 
   const [name, setName] = useState('');
+  const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
@@ -53,7 +47,16 @@ export default function FacilityPage() {
     );
   };
 
-  const isValid = name.length >= 2 && city.length >= 2 && state;
+  // #539 — ZIP is required and must match the US ZIP pattern
+  const zipValid = ZIP_RE.test(zip);
+  const zipInvalid = zip.length > 0 && !zipValid;
+
+  const isValid =
+    name.trim().length >= 2 &&
+    street.trim().length >= 2 &&
+    city.trim().length >= 2 &&
+    !!state &&
+    zipValid;
 
   const handleSubmit = async () => {
     if (!isValid || !tenantId) return;
@@ -63,21 +66,63 @@ export default function FacilityPage() {
     try {
       const facility = await apiClient.createSupplierFacility({
         name,
-        street: '--',
+        street,           // #539 — real value, no '--' placeholder
         city,
         state,
-        postal_code: zip || '00000',
-        fda_registration_number: fdaReg || undefined,
+        postal_code: zip, // #539 — required, validated above
+        fda_registration_number: fdaReg.trim() || undefined,
         roles,
       });
+
+      // #540 — Validate the returned facility ID before navigating.
+      // An empty or malformed ID would produce an unusable URL and a broken
+      // next step. Surface the problem here rather than silently navigating.
+      const facilityId = facility?.id;
+      if (!facilityId || !UUID_RE.test(String(facilityId))) {
+        setError(
+          'Facility was saved but returned an invalid ID. ' +
+          'Please refresh the page and try the next step again.',
+        );
+        return;
+      }
 
       await updateOnboarding.mutateAsync({
         onboarding: { facility_created: true },
       });
 
-      router.push(`/onboarding/setup/ftl-check?facilityId=${facility.id}`);
-    } catch {
-      setError('Could not save facility. Please try again.');
+      router.push(`/onboarding/setup/ftl-check?facilityId=${facilityId}`);
+    } catch (err: unknown) {
+      const apiError = err as {
+        response?: { status?: number; data?: { detail?: string } };
+      };
+      const status = apiError.response?.status;
+      if (!apiError.response) {
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        setError(
+          offline
+            ? 'You appear to be offline. Check your connection and try again.'
+            : 'Could not reach the server. Check your connection and try again.',
+        );
+      } else if (status === 400 || status === 422) {
+        setError(
+          apiError.response.data?.detail ||
+            'Validation failed — check your facility details and try again.',
+        );
+      } else if (status === 409) {
+        setError(
+          'A facility with this name already exists in your account. Use a different name.',
+        );
+      } else if (status === 429) {
+        setError('Too many requests. Please wait a moment and try again.');
+      } else if (status !== undefined && status >= 500) {
+        setError(
+          'Could not save facility — server error. Try again or email support@regengine.co.',
+        );
+      } else {
+        setError(
+          'Could not save facility. Please try again or email support@regengine.co.',
+        );
+      }
     } finally {
       setSaving(false);
     }
@@ -91,6 +136,9 @@ export default function FacilityPage() {
             <Factory className="h-5 w-5 text-emerald-500" />
           </div>
           <div>
+            <div className="mb-1">
+              <StepIndicator step={2} />
+            </div>
             <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
               Register Your First Facility
             </h1>
@@ -107,6 +155,7 @@ export default function FacilityPage() {
           </div>
         )}
 
+        {/* Facility name */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-[var(--re-text-secondary)]">
             Facility name <span className="text-red-400">*</span>
@@ -118,6 +167,19 @@ export default function FacilityPage() {
           />
         </div>
 
+        {/* Street address — #539: real field replaces hardcoded '--' */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-[var(--re-text-secondary)]">
+            Street address <span className="text-red-400">*</span>
+          </label>
+          <Input
+            placeholder="e.g. 1234 Harvest Rd"
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+          />
+        </div>
+
+        {/* City / State */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label className="text-sm font-medium text-[var(--re-text-secondary)]">
@@ -148,16 +210,23 @@ export default function FacilityPage() {
           </div>
         </div>
 
+        {/* ZIP / FDA reg — #539: ZIP required with format validation */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <label className="text-sm font-medium text-[var(--re-text-secondary)]">
-              ZIP code
+              ZIP code <span className="text-red-400">*</span>
             </label>
             <Input
               placeholder="e.g. 93901"
               value={zip}
               onChange={(e) => setZip(e.target.value)}
+              aria-invalid={zipInvalid}
             />
+            {zipInvalid && (
+              <p className="text-xs text-red-400">
+                Enter a valid 5-digit ZIP (or ZIP+4 e.g. 93901-1234).
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-[var(--re-text-secondary)]">
@@ -171,6 +240,7 @@ export default function FacilityPage() {
           </div>
         </div>
 
+        {/* Supply chain roles */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-[var(--re-text-secondary)]">
             Supply chain role(s)

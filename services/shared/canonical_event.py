@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class CTEType(str, Enum):
     """Critical Tracking Event types per FSMA 204 §1.1310."""
+    GROWING = "growing"
     HARVESTING = "harvesting"
     COOLING = "cooling"
     INITIAL_PACKING = "initial_packing"
@@ -391,6 +392,12 @@ def normalize_webhook_event(
 
     # Extract facility references from KDEs
     kdes = dict(event.kdes) if event.kdes else {}
+
+    # Promote input_traceability_lot_codes into kdes so _create_transformation_links()
+    # can find them under the expected "input_lot_codes" key.  The webhook model keeps
+    # this as a top-level field; canonical persistence looks inside kdes.
+    if hasattr(event, "input_traceability_lot_codes") and event.input_traceability_lot_codes:
+        kdes.setdefault("input_lot_codes", event.input_traceability_lot_codes)
     from_facility = (
         event.location_gln
         or kdes.get("ship_from_gln")

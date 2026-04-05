@@ -44,6 +44,7 @@ export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "Security", href: "/security" },
     { label: "Trust Center", href: "/trust" },
     { label: "Privacy", href: "/privacy" },
+    { label: "DPA", href: "/dpa" },
     { label: "Terms", href: "/terms" },
     { label: "Log In", href: "/login" },
     { label: "Sign Up", href: "/signup" },

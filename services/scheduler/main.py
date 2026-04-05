@@ -340,6 +340,17 @@ class SchedulerService:
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("webhook_notification_failed", error=str(e))
 
+        # Tenant recall matching — activate ComplianceIntegration for FDA recalls
+        if source_type == SourceType.FDA_RECALL and items:
+            try:
+                from app.compliance_integration import get_compliance_integration
+                integration = get_compliance_integration()
+                for item in items:
+                    integration.process_enforcement_item(item)
+                logger.info("compliance_integration_processed", count=len(items))
+            except Exception as e:
+                logger.error("compliance_integration_failed", error=str(e))
+
         # Log high-priority items
         for item in items:
             if item.severity in [EnforcementSeverity.CRITICAL, EnforcementSeverity.HIGH]:
