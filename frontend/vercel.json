@@ -20,9 +20,6 @@
         }
     },
     "env": {
-        "REGENGINE_DEPLOY_MODE": "cloud",
-        "INGESTION_SERVICE_URL": "@ingestion-service-url",
-        "COMPLIANCE_SERVICE_URL": "@compliance-service-url",
-        "ADMIN_SERVICE_URL": "@admin-service-url"
+        "REGENGINE_DEPLOY_MODE": "cloud"
     }
 }
