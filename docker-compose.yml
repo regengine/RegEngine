@@ -108,6 +108,12 @@ services:
       DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
       # PCOS payroll database (shares regengine_admin schema)
       ENTERTAINMENT_DATABASE_URL: ${ENTERTAINMENT_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
+      # Supabase — required for password reset and auth token validation.
+      # In Railway: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the admin service.
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
     deploy:
       resources:
         limits:
