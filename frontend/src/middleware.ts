@@ -10,6 +10,7 @@ import {
     CSRF_PROTECTED_METHODS,
     isCsrfExempt,
 } from '@/lib/csrf';
+import { buildCsp } from '@/lib/csp';
 
 // ---------------------------------------------------------------------------
 // Sysadmin status cache — avoids a DB query on every /sysadmin/* request.
@@ -273,8 +274,12 @@ async function checkSupabaseSession(request: NextRequest): Promise<{ user: Recor
  *   2. Supabase session cookies (from Supabase Auth)
  *
  * If neither is present, redirect to /login.
+ *
+ * @param requestHeaders  Enriched headers including x-nonce (#543). When provided,
+ *                        NextResponse.next() forwards them to the route handler so
+ *                        server components can read the nonce via headers().get('x-nonce').
  */
-async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
+async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
 
     // Strategy 1: Check custom RegEngine JWT cookie
@@ -311,7 +316,8 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
                 return NextResponse.redirect(url);
             }
 
-            return NextResponse.next({ request });
+            // Forward enriched request headers (including x-nonce) to the route handler
+            return NextResponse.next({ request: { headers: requestHeaders ?? request.headers } });
         }
         // Token exists but verification failed (expired or invalid signature).
         // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
@@ -403,6 +409,10 @@ async function requireAppAuth(request: NextRequest): Promise<NextResponse> {
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
         }
+        // Forward x-nonce via Supabase response cookies (supabaseResponse is a NextResponse.next())
+        if (requestHeaders) {
+            requestHeaders.forEach((value, key) => supabaseResponse.headers.set(key, value));
+        }
         return supabaseResponse;
     }
 
@@ -426,6 +436,27 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // -----------------------------------------------------------------------
+    // Per-request nonce for enforced Content-Security-Policy (#543)
+    // The nonce is injected into request headers so server components can
+    // read it via `headers().get('x-nonce')` and attach it to inline scripts.
+    // CSP is enforced (not report-only); unsafe-inline/unsafe-eval are removed.
+    // -----------------------------------------------------------------------
+    const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+    const csp = buildCsp(nonce);
+
+    // Clone request headers and inject the nonce so server components can use it
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-nonce', nonce);
+
+    // Helper: attach the enforced CSP to any response before returning.
+    // Applied to ALL responses (redirects, 4xx, page responses) so the
+    // browser CSP state is updated regardless of which code path fires.
+    const withCsp = (res: NextResponse): NextResponse => {
+        res.headers.set('Content-Security-Policy', csp);
+        return res;
+    };
+
+    // -----------------------------------------------------------------------
     // CSRF protection for mutating API requests (double-submit cookie check)
     // -----------------------------------------------------------------------
     if (
@@ -446,41 +477,41 @@ export async function middleware(request: NextRequest) {
         const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
 
         if (!headerToken || !sigCookie) {
-            return NextResponse.json(
+            return withCsp(NextResponse.json(
                 { error: 'Missing CSRF token' },
                 { status: 403 },
-            );
+            ));
         }
 
         const valid = await verifyCsrfToken(headerToken, sigCookie);
         if (!valid) {
-            return NextResponse.json(
+            return withCsp(NextResponse.json(
                 { error: 'Invalid CSRF token' },
                 { status: 403 },
-            );
+            ));
         }
     }
 
     // Authenticated app routes — server-side session check
     if (isAuthenticatedAppRoute(pathname)) {
-        return await requireAppAuth(request);
+        return withCsp(await requireAppAuth(request, requestHeaders));
     }
 
     // Developer portal: only gate key generation and playground behind auth.
     // All docs, codegen, and portal pages are public for developer evaluation.
     if (isGatedRoute(pathname) || pathname === '/developer/portal/keys') {
-        return await requireAppAuth(request);
+        return withCsp(await requireAppAuth(request, requestHeaders));
     }
 
     // Block non-FSMA verticals
     const verticalMatch = pathname.match(/^\/verticals\/([^/]+)/);
     if (verticalMatch && !ALLOWED_VERTICALS.includes(verticalMatch[1])) {
-        return NextResponse.redirect(new URL('/', request.url));
+        return withCsp(NextResponse.redirect(new URL('/', request.url)));
     }
 
     // All /docs/* routes are public — no redirect needed.
-
-    return NextResponse.next();
+    // Pass enriched request headers (including x-nonce) to the route handler.
+    return withCsp(NextResponse.next({ request: { headers: requestHeaders } }));
 }
 
 export const config = {
