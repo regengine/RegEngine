@@ -71,7 +71,7 @@ export async function GET(
             }
         }
 
-        console.info(`[proxy/export] GET ${tenantId}/${snapshotId}/export → ${response.status}`);
+        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/export] GET ${tenantId}/${snapshotId}/export → ${response.status}`); }
         return new NextResponse(response.body, {
             status: response.status,
             headers: outgoingHeaders,

@@ -170,7 +170,7 @@ export function ComplianceStatusWidget({ tenantId, onAlertClick }: ComplianceSta
                 setError(null);
             } catch (e) {
                 // Show error - no mock fallback for production FSMA
-                console.error('Compliance API unavailable:', e);
+                if (process.env.NODE_ENV !== 'production') { console.error('Compliance API unavailable:', e); }
                 setError(e instanceof Error ? e.message : "Compliance service unavailable");
             } finally {
                 setLoading(false);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer, CheckCircle2, XCircle, Lock, FileCheck, Database, Shield } from "lucide-react";
 import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
 import { SandboxUpload } from "@/components/marketing/SandboxUpload";
+import { HeroNewsletterSignup } from "@/components/marketing/HeroNewsletterSignup";
 
 const CREDIBILITY = [
   { icon: FileCheck, label: "EPCIS 2.0 native" },
@@ -15,10 +16,10 @@ const CREDIBILITY = [
 /* ------------------------------------------------------------------ */
 
 const EVIDENCE = [
-  { value: "48hr", label: "Average time to first compliant export" },
-  { value: "100%", label: "of FSMA 204 CTEs covered" },
-  { value: "24hr", label: "Recall response — fully automated" },
-  { value: "EPCIS 2.0", label: "FDA-native format, zero conversion" },
+  { value: "48hr", label: "Avg. time to first compliant CTE export†" },
+  { value: "100%", label: "of FSMA 204 CTEs covered by RegEngine†" },
+  { value: "24hr", label: "Automated FDA records response time†" },
+  { value: "EPCIS 2.0", label: "FDA-native format — no conversion layer" },
 ];
 
 const FREE_TOOLS = [
@@ -76,21 +77,27 @@ export default function RegEngineLanding() {
             <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[480px]">
               When the FDA or Walmart demands your traceability records, you have 24&nbsp;hours to respond with a complete chain of custody. RegEngine gets you there in&nbsp;minutes.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <Link
                 href="/retailer-readiness"
                 className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px]"
               >
                 <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Get Your Free Readiness Assessment</span>
+                <span className="relative">Get Your Free Readiness Score — 3 Minutes</span>
                 <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
               </Link>
               <Link
                 href="/walkthrough"
                 className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
               >
-                See How It Works
+                See a 24hr FDA Response Demo
               </Link>
+            </div>
+            <div>
+              <p className="text-[0.75rem] text-[var(--re-text-disabled)] mb-2">
+                Get FSMA 204 updates — no spam, unsubscribe anytime.
+              </p>
+              <HeroNewsletterSignup />
             </div>
           </div>
 
@@ -178,7 +185,7 @@ export default function RegEngineLanding() {
 
       {/* ── EVIDENCE STRIP ── */}
       <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-2 lg:grid-cols-4 items-center gap-4 sm:gap-6">
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-3 sm:pb-4 grid grid-cols-2 lg:grid-cols-4 items-center gap-4 sm:gap-6">
           {EVIDENCE.map((e) => (
             <div key={e.label} className="flex items-baseline gap-2">
               <span className="font-serif text-[clamp(1.25rem,3vw,1.75rem)] font-bold text-[var(--re-brand-dark)] tracking-tight">
@@ -189,6 +196,11 @@ export default function RegEngineLanding() {
               </span>
             </div>
           ))}
+        </div>
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-3 sm:pb-4">
+          <p className="text-[0.68rem] text-[var(--re-text-disabled)]">
+            † Based on RegEngine founding partner onboarding data, Q1 2026. Individual results may vary.
+          </p>
         </div>
       </div>
 
@@ -350,17 +362,13 @@ export default function RegEngineLanding() {
       <section className="bg-[var(--re-text-primary)] text-white py-12 sm:py-20 px-4 sm:px-6">
         <div className="max-w-[1100px] mx-auto text-center">
           <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
-{/* MEDIUM #7: FSMA 204 enforcement date per FY2025 Consolidated Appropriations Act,
-                 Division A, §775 (Pub. L. 118-158, signed Mar 2025). Congress directed FDA
-                 not to enforce the Food Traceability Rule before this date. Verify quarterly
-                 in case of legislative changes. Last verified: 2026-03-19 */}
             FSMA 204 Deadline: July 20, 2028
           </p>
           <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
-            Ready to close the gap?
+            5+ founding partners are already compliant. Are you next?
           </h2>
           <p className="text-[1.05rem] text-[#aaa] max-w-[560px] mx-auto leading-relaxed mb-8">
-            Start with a free assessment. See exactly where you stand before the deadline hits.
+            Get your free readiness score in 3 minutes. See exactly where your gaps are before the July 2028 deadline — and how fast you can close them.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
@@ -368,7 +376,7 @@ export default function RegEngineLanding() {
               className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.95rem] font-semibold transition-all duration-300 ease-out hover:bg-[#0BAE78] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.35)] active:translate-y-0 overflow-hidden min-h-[48px]"
             >
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-              <span className="relative">Free Readiness Assessment</span>
+              <span className="relative">Get My Free Readiness Score</span>
             </Link>
             <Link
               href="/pricing"

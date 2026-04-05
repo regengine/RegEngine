@@ -40,7 +40,7 @@ export default function DeveloperPortalDashboard() {
                 .eq('auth_user_id', authUser.id)
                 .maybeSingle();
 
-            if (profError) {
+            if (profError && process.env.NODE_ENV !== 'production') {
                 console.error('Failed to fetch developer profile:', profError.message);
             }
             if (prof) {
@@ -50,7 +50,7 @@ export default function DeveloperPortalDashboard() {
                     .select('id, enabled, total_requests')
                     .eq('developer_id', prof.id);
 
-                if (keysError) {
+                if (keysError && process.env.NODE_ENV !== 'production') {
                     console.error('Failed to fetch API keys:', keysError.message);
                 }
 

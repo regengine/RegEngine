@@ -96,7 +96,7 @@ async function proxyRequest(
             );
         }
 
-        console.info(`[proxy/controls] ${method} ${path} → ${response.status}`);
+        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/controls] ${method} ${path} → ${response.status}`); }
         return NextResponse.json(data);
 
     } catch (error: unknown) {

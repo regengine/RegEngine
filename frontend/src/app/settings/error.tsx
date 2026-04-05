@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
 
@@ -12,7 +13,9 @@ export default function SettingsError({
     reset: () => void;
 }) {
     useEffect(() => {
-        console.error('Settings error:', error);
+        if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+                Sentry.captureException(error);
+            }
     }, [error]);
 
     const isBackendError = error.message?.includes('fetch') ||

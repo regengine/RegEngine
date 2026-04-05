@@ -41,7 +41,9 @@ export default function OnboardingPage() {
 
       setStatus('success');
     } catch (err) {
-      console.error('Onboarding submission failed:', err);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Onboarding submission failed:', err);
+      }
       setStatus('error');
       setErrorMsg('Something went wrong. Please try again or email us directly at hello@regengine.co.');
     }

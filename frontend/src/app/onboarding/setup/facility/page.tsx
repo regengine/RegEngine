@@ -18,21 +18,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { apiClient } from '@/lib/api-client';
 import { StepIndicator } from '@/components/onboarding/StepIndicator';
-
-const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
-  'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
-  'VA','WA','WV','WI','WY','DC','PR','GU','VI',
-];
-
-const SUPPLY_CHAIN_ROLES = [
-  'Grower',
-  'Packer',
-  'Processor',
-  'Distributor',
-  'Importer',
-];
+import { US_STATES, SUPPLY_CHAIN_ROLES } from '@/lib/constants';
 
 // #539 — US ZIP: 5 digits or 5+4 (e.g. 93901 or 93901-1234)
 const ZIP_RE = /^\d{5}(-\d{4})?$/;
