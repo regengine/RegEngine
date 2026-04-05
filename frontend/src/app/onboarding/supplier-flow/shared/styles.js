@@ -130,18 +130,6 @@ export const CTE_TYPES = {
       { name: "ref_doc_number", label: "Reference Document Number", type: "text", required: true },
     ],
   },
-  growing: {
-    label: "Growing", icon: "🌾",
-    fields: [
-      { name: "traceability_lot_code", label: "Traceability Lot Code (TLC)", type: "text", required: true },
-      { name: "commodity", label: "Commodity", type: "text", required: true },
-      { name: "variety", label: "Variety", type: "text", required: true },
-      { name: "quantity", label: "Quantity", type: "number", required: true },
-      { name: "unit_of_measure", label: "Unit of Measure", type: "select", options: ["lbs", "kg", "acres", "bins"], required: true },
-      { name: "growing_location", label: "Growing Area / Farm", type: "location", required: true },
-      { name: "growing_date", label: "Growing Date", type: "date", required: true },
-    ],
-  },
 };
 
 export const FTL_CATEGORIES = [

@@ -9,10 +9,10 @@ import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButto
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 compliance from $425/mo. Founding Design Partners lock in 50% off for life.',
+    description: 'FSMA 204 compliance from $425/mo. Published pricing, self-serve signup, 14-day free trial.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 compliance from $425/mo. Founding Design Partners lock in 50% off for life.',
+        description: 'FSMA 204 compliance from $425/mo. Published pricing, self-serve signup, 14-day free trial.',
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
@@ -133,13 +133,13 @@ const PRICING_TIERS = [
 ];
 
 const COMPETITOR_COMPARISON = [
-    { feature: 'Starting Price', regengine: '$425/mo (partner)', foodlogiq: 'Enterprise pricing', repositrak: 'From $59/mo*', tracegains: 'Contact Sales' },
-    { feature: 'Time to First CTE', regengine: 'Under 10 minutes', foodlogiq: 'Weeks (implementation)', repositrak: '<1 hour*', tracegains: 'Weeks (implementation)' },
-    { feature: 'Public API Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
-    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
+    { feature: 'Time to First FDA-Ready Export', regengine: 'Under 10 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
+    { feature: 'Public API + OpenAPI Docs', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Self-Serve Signup', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Developer Sandbox', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
-    { feature: 'Payment Methods', regengine: 'Card, ACH, wire', foodlogiq: 'Enterprise contract', repositrak: 'Card', tracegains: 'Enterprise contract' },
+    { feature: 'Cryptographic Audit Trail', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
+    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
+    { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
 ];
 
 const FAQ = [
@@ -299,11 +299,8 @@ export default async function PricingPage() {
                     <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] text-center mb-3">
                         See How We Compare
                     </h2>
-                    <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
-                        The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
-                    </p>
-                    <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
-                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo for Founding Design Partners.
+                    <p className="text-center text-[var(--re-text-muted)] max-w-[520px] mx-auto mb-10">
+                        We built RegEngine API-first so your team can go from signup to FDA-ready export in minutes — not weeks of implementation.
                     </p>
                     <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
                         <div className="overflow-x-auto">
@@ -334,7 +331,7 @@ export default async function PricingPage() {
                         </div>
                     </div>
                     <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
-                        * ReposiTrak publicly lists supplier plans from $59/mo (basic) to $179/mo (unlimited). Competitor data from public sources as of April 2026.
+                        Competitor data from public sources as of April 2026.
                     </p>
                 </div>
             </section>
@@ -361,10 +358,10 @@ export default async function PricingPage() {
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
                 <div className="max-w-[600px] mx-auto text-center">
                     <h2 className="text-[28px] font-bold text-white mb-3">
-                        Lock In 50% Off Before General Availability
+                        Become a Founding Design Partner
                     </h2>
                     <p className="text-base text-white/90 mb-8">
-                        Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
+                        We&apos;re onboarding a limited number of partners before the FSMA 204 deadline. Your partner rate is locked in for the life of your account — no surprise increases, ever.
                     </p>
                     <div className="flex gap-3 justify-center flex-wrap">
                         <Link href="/onboarding">

@@ -75,7 +75,7 @@ The rule requires end-to-end digital traceability for 20+ high-risk food categor
 
 | FSMA 204 Requirement | RegEngine Capability | Status |
 |---|---|---|
-| 8 CTE types (harvest → ship) | All 8 implemented: harvesting, cooling, initial_packing, first_land_based_receiving, receiving, transformation, creation, shipping | Production |
+| 7 CTE types (harvest → ship) | All 7 implemented: harvesting, cooling, initial_packing, first_land_based_receiving, receiving, transformation, shipping | Production |
 | KDE capture at each CTE | Full validation: TLC, product description, quantity, UOM, event date/time, location (GLN), origin/destination, temperature, carrier, prior source TLC | Production |
 | Traceability Lot Codes (TLCs) | Assignment, validation, normalization, lifecycle tracking | Production |
 | 24-hour FDA response | Sortable spreadsheet export (29 columns per 21 CFR 1.155) with date range filtering, instant CSV generation | Production |

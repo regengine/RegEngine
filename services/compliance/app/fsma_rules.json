@@ -313,8 +313,7 @@
       "HARVESTING",
       "COOLING",
       "INITIAL_PACKING",
-      "FIRST_LAND_BASED_RECEIVING",
-      "GROWING"
+      "FIRST_LAND_BASED_RECEIVING"
     ]
   }
 }
