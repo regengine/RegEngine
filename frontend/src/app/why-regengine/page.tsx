@@ -722,7 +722,7 @@ HTTP 201
                             {
                                 emoji: '🚀',
                                 title: 'Founders & SMBs',
-                                detail: 'You need compliance but can't afford enterprise fees. $425/mo gets you live. Scale as you grow.',
+                                detail: 'You need compliance but can\'t afford enterprise fees. $425/mo gets you live. Scale as you grow.',
                             },
                             {
                                 emoji: '⚖️',
