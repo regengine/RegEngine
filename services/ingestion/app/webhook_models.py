@@ -40,7 +40,8 @@ def validate_gln(gln: str) -> tuple[bool, str | None]:
 
 
 class WebhookCTEType(str, Enum):
-    """CTE types accepted by the webhook endpoint (all 7 per FSMA 204 §1.1310)."""
+    """CTE types accepted by the webhook endpoint (all 8 per FSMA 204 §1.1310)."""
+    GROWING = "growing"
     HARVESTING = "harvesting"
     COOLING = "cooling"
     INITIAL_PACKING = "initial_packing"
@@ -62,6 +63,11 @@ VALID_UNITS_OF_MEASURE = {
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
 REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
+    WebhookCTEType.GROWING: [
+        "traceability_lot_code", "product_description", "quantity",
+        "unit_of_measure", "growing_area_name", "location_name",
+        "reference_document",  # §1.1325(b)
+    ],
     WebhookCTEType.HARVESTING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "harvest_date", "location_name",
