@@ -69,12 +69,12 @@ class TestValidateGln:
 class TestWebhookCTEType:
     """Tests for WebhookCTEType enum."""
 
-    def test_has_all_seven_cte_types(self):
-        assert len(WebhookCTEType) == 7
+    def test_has_all_cte_types(self):
+        assert len(WebhookCTEType) == 8
 
     def test_expected_members(self):
         expected = {
-            "harvesting", "cooling", "initial_packing",
+            "growing", "harvesting", "cooling", "initial_packing",
             "first_land_based_receiving", "shipping",
             "receiving", "transformation",
         }
@@ -97,11 +97,10 @@ class TestIngestEvent:
         errors = exc_info.value.errors()
         assert any("future" in str(e["msg"]).lower() for e in errors)
 
-    def test_rejects_invalid_unit_of_measure(self):
-        with pytest.raises(ValidationError) as exc_info:
-            IngestEvent(**_valid_event_kwargs(unit_of_measure="bushels_of_fun"))
-        errors = exc_info.value.errors()
-        assert any("unit" in str(e["msg"]).lower() for e in errors)
+    def test_accepts_unknown_unit_of_measure_with_normalization(self):
+        """Unknown units are accepted (warning-only) and lowercased."""
+        event = IngestEvent(**_valid_event_kwargs(unit_of_measure="bushels_of_fun"))
+        assert event.unit_of_measure == "bushels_of_fun"
 
     def test_accepts_valid_units(self):
         for unit in ["lbs", "kg", "cases", "pallets", "each"]:
