@@ -58,7 +58,7 @@ const DIFFERENTIATORS = [
     icon: Shield,
     title: "Transparent Pricing",
     description:
-      "Published pricing from $425/mo. No hidden fees, no per-record charges, no surprise invoices after you exceed an undisclosed limit.",
+      "Published, per-facility pricing on the website. No hidden fees, no per-record charges, no surprise invoices after you exceed an undisclosed limit.",
     competitors: "Most vendors hide pricing behind sales calls. Some charge per-record fees that scale unpredictably.",
   },
   {
@@ -86,7 +86,7 @@ const COMPARISON: FeatureRow[] = [
   { feature: "Published Pricing", regengine: true, foodlogiq: false, repositrak: true, tracegains: false },
   { feature: "Free Compliance Tools", regengine: "12 tools", foodlogiq: false, repositrak: false, tracegains: false },
   { feature: "CSV + API + Webhook Ingestion", regengine: true, foodlogiq: "Portal only", repositrak: "Portal + CSV", tracegains: "Portal only" },
-  { feature: "Time to First CTE", regengine: "< 15 min", foodlogiq: "Weeks", repositrak: "< 1 hour", tracegains: "Weeks" },
+  { feature: "Time to First FDA-Ready Export", regengine: "< 15 min", foodlogiq: "Weeks", repositrak: "Hours–days", tracegains: "Weeks" },
   { feature: "FDA Export (sortable spreadsheet)", regengine: true, foodlogiq: true, repositrak: true, tracegains: true },
   { feature: "24-Hour Recall Readiness", regengine: true, foodlogiq: true, repositrak: true, tracegains: true },
 ];
@@ -240,7 +240,7 @@ export default function WhyRegenginePage() {
           </table>
         </div>
         <p className="text-xs mt-3" style={{ color: "var(--re-text-muted)" }}>
-          Competitor data from public sources as of April 2026. ReposiTrak pricing from their published supplier plans.
+          Competitor data from public sources as of April 2026.
         </p>
       </section>
 
@@ -292,8 +292,8 @@ export default function WhyRegenginePage() {
             Ready to See the Difference?
           </h2>
           <p className="mb-6 max-w-lg mx-auto" style={{ color: "var(--re-text-secondary)" }}>
-            Join as a Founding Design Partner and lock in 50% off for life.
-            No credit card required to start.
+            Start a 14-day free trial. Go from signup to your first FDA-ready
+            export in under 15 minutes — no implementation required.
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Link
