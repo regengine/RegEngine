@@ -236,8 +236,11 @@ async def health():
                     await conn.execute("SELECT 1")
                 return {"status": "healthy"}
             except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as e:
-                return {"status": "unhealthy", "error": str(e)}
-        
+                # (#562) Log full error server-side; return generic message to clients
+                # to avoid leaking connection strings, hostnames, or credentials.
+                logger.error("health_check_postgres_failed", error=str(e), error_type=type(e).__name__)
+                return {"status": "unhealthy", "error": "database unavailable"}
+
         checker.add_dependency("postgresql", check_postgres)
 
     # Neo4j check
@@ -248,7 +251,8 @@ async def health():
         async def check_neo4j():
             try:
                 if not neo4j_password:
-                    return {"status": "unhealthy", "error": "NEO4J_PASSWORD is not set"}
+                    # Config error — generic message safe to surface
+                    return {"status": "unhealthy", "error": "graph database misconfigured"}
 
                 from neo4j import GraphDatabase
 
@@ -261,7 +265,9 @@ async def health():
                 await asyncio.to_thread(_probe)
                 return {"status": "healthy"}
             except (OSError, TimeoutError, ConnectionError, ValueError, RuntimeError) as e:
-                return {"status": "unhealthy", "error": str(e)}
+                # (#562) Log full error server-side; return generic message to clients.
+                logger.error("health_check_neo4j_failed", error=str(e), error_type=type(e).__name__)
+                return {"status": "unhealthy", "error": "graph database unavailable"}
 
         checker.add_dependency("neo4j", check_neo4j)
 
@@ -275,8 +281,10 @@ async def health():
                 await r.ping()
                 return {"status": "healthy"}
             except (OSError, TimeoutError, ConnectionError, ValueError, ImportError, AttributeError) as e:
-                return {"status": "unhealthy", "error": str(e)}
-        
+                # (#562) Log full error server-side; return generic message to clients.
+                logger.error("health_check_redis_failed", error=str(e), error_type=type(e).__name__)
+                return {"status": "unhealthy", "error": "cache unavailable"}
+
         checker.add_dependency("redis", check_redis)
 
     result = await checker.check()

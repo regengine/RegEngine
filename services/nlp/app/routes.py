@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import time
 from typing import Any, Optional
 from urllib.parse import quote
 from uuid import UUID
@@ -245,6 +248,27 @@ async def _execute_query_plan(
     return events, evidence, answer
 
 
+def _make_service_auth_headers(secret: str, path: str) -> dict[str, str]:
+    """Return HMAC-signed inter-service auth headers (#563).
+
+    Signs ``timestamp.path`` with HMAC-SHA256 so the raw secret is never
+    transmitted over the wire. The receiving service can verify the signature
+    using the same shared secret and reject requests older than a clock skew
+    window (recommended: 60 s).
+
+    Headers added:
+        X-Service-Ts:  Unix timestamp of request (seconds, UTC)
+        X-Service-Sig: HMAC-SHA256(secret, "<ts>.<path>") hex digest
+    """
+    ts = str(int(time.time()))
+    sig = hmac.new(
+        secret.encode("utf-8"),
+        f"{ts}.{path}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return {"X-Service-Ts": ts, "X-Service-Sig": sig}
+
+
 async def _graph_get(
     request: Request,
     tenant_id: str,
@@ -265,9 +289,13 @@ async def _graph_get(
     # Always forward tenant context for downstream isolation
     headers["X-RegEngine-Tenant-ID"] = tenant_id
 
+    # (#563) HMAC-signed inter-service authentication.
+    # The raw secret is never transmitted; a per-request HMAC-SHA256 signature
+    # of (timestamp + path) is sent instead so the secret cannot be replayed
+    # or harvested from logs/proxies.
     internal_secret = settings.internal_service_secret
     if internal_secret:
-        headers["X-RegEngine-Internal-Secret"] = internal_secret
+        headers.update(_make_service_auth_headers(internal_secret, endpoint))
 
     url = f"{settings.graph_service_url.rstrip('/')}{endpoint}"
 
