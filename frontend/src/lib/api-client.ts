@@ -457,6 +457,23 @@ class APIClient {
     return data;
   }
 
+  // --- Password Reset ---
+
+  async forgotPassword(email: string): Promise<void> {
+    await this.adminClient.post('/auth/forgot-password', { email });
+  }
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    await this.adminClient.post('/auth/reset-password', { token, password });
+  }
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.adminClient.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  }
+
   // --- User Management ---
 
   async getUsers(): Promise<User[]> {

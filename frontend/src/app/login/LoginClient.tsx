@@ -9,35 +9,19 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Loader2, Lock, LayoutDashboard, ArrowRight, ShieldCheck, CalendarClock, GitBranch } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import type { LoginPreset } from './QALoginPresets';
 
-const LOGIN_PRESETS = [
-    {
-        id: 'qa' as const,
-        label: 'QA Tester',
-        email: 'test@example.com',
-        access: 'Dashboard and core user flows',
-    },
-    {
-        id: 'admin' as const,
-        label: 'QA Admin',
-        email: 'admin@example.com',
-        access: 'Sysadmin and admin access checks',
-    },
-];
-
-// QA presets are shown only in non-production environments, or when
-// explicitly enabled via a public env var on staging/preview builds.
-// The preset email values are example placeholders only — actual
-// credentials are never stored in client source.
-const showQaPresets =
+// QA presets are code-split into a separate chunk via dynamic import.
+// In production builds without the opt-in env var, the chunk is never
+// loaded — removing preset code from the main bundle entirely.
+const qaPresetsEnabled =
     process.env.NODE_ENV !== 'production' ||
     process.env.NEXT_PUBLIC_ENABLE_QA_LOGIN_PRESETS === '1';
 
-// Hard-block: in production without the explicit opt-in flag, always false.
-const qaPresetsEnabled =
-    showQaPresets && process.env.NEXT_PUBLIC_ENABLE_QA_LOGIN_PRESETS !== '0';
-
-type LoginPreset = (typeof LOGIN_PRESETS)[number]['id'];
+const QALoginPresets = qaPresetsEnabled
+    ? dynamic(() => import('./QALoginPresets'), { ssr: false })
+    : null;
 
 function extractApiErrorMessage(data: unknown): string | null {
     if (typeof data === 'string') {
@@ -93,11 +77,15 @@ export default function LoginPage() {
     const { login, user, isHydrated } = useAuth();
 
     const applyPreset = useCallback((presetId: LoginPreset) => {
-        const preset = LOGIN_PRESETS.find((item) => item.id === presetId);
-        if (!preset) {
-            return;
-        }
-        setEmail(preset.email);
+        // Minimal email map for URL ?preset= param handling.
+        // Full preset UI is code-split into QALoginPresets.
+        const presetEmails: Record<string, string> = {
+            qa: 'test@example.com',
+            admin: 'admin@example.com',
+        };
+        const email = presetEmails[presetId];
+        if (!email) return;
+        setEmail(email);
         setPassword('');
         setError(null);
     }, []);
@@ -356,9 +344,9 @@ export default function LoginPage() {
                                     <Link href="/accept-invite" className="transition hover:text-[var(--re-brand)]">
                                         Have an invite?
                                     </Link>
-                                    <a href="mailto:chris@regengine.co?subject=RegEngine%20Login%20Help" className="transition hover:text-[var(--re-brand)]">
-                                        Need login help?
-                                    </a>
+                                    <Link href="/forgot-password" className="transition hover:text-[var(--re-brand)]">
+                                        Forgot password?
+                                    </Link>
                                 </div>
 
                                 <Button className="h-11 w-full" type="submit" disabled={isLoading}>
@@ -372,30 +360,7 @@ export default function LoginPage() {
                                     )}
                                 </Button>
 
-                                {qaPresetsEnabled && (
-                                    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-100 p-3 dark:border-slate-700 dark:bg-slate-800/50">
-                                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-700 dark:text-slate-300">
-                                            QA Login Presets
-                                        </p>
-                                        {LOGIN_PRESETS.map((preset) => (
-                                            <button
-                                                key={preset.id}
-                                                type="button"
-                                                onClick={() => applyPreset(preset.id)}
-                                                className="w-full rounded border border-slate-200 bg-white p-2 text-left transition-colors hover:border-primary/50 dark:border-slate-700 dark:bg-slate-900"
-                                            >
-                                                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{preset.label}</p>
-                                                <p className="text-xs text-slate-600 dark:text-slate-400">{preset.access}</p>
-                                                <p className="mt-1 text-xs font-mono text-slate-700 dark:text-slate-300">
-                                                    {preset.email}
-                                                </p>
-                                            </button>
-                                        ))}
-                                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                                            Passwords are managed outside client source.
-                                        </p>
-                                    </div>
-                                )}
+                                {QALoginPresets && <QALoginPresets onApplyPreset={applyPreset} />}
 
                                 <div className="pt-2 text-center text-sm text-muted-foreground">
                                     <p className="mb-2">

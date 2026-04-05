@@ -40,6 +40,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
     // Content pages (high SEO value)
     const contentPages = [
+        { url: `${baseUrl}/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/developers`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },

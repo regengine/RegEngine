@@ -234,6 +234,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ---- Supabase auth state listener ----
   useEffect(() => {
+    // If the middleware redirected to /login with an error param, the custom
+    // JWT session is dead. Don't let a surviving Supabase session silently
+    // re-authenticate — that causes stale nav state where the UI flickers
+    // between authenticated and unauthenticated.
+    const isAuthErrorRedirect =
+      typeof window !== 'undefined' &&
+      (window.location.search.includes('error=session_expired') ||
+       window.location.search.includes('error=token_invalid'));
+
     let subscription: { unsubscribe: () => void } | undefined;
     try {
       const supabase = createSupabaseBrowserClient();
@@ -242,6 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // against the Supabase auth server, while getSession() only reads the
       // local cookie/storage (which can be spoofed).
       supabase.auth.getUser().then(async ({ data: { user: validatedUser } }) => {
+        if (isAuthErrorRedirect) return;
         if (validatedUser && !accessToken) {
           const appUser: User = {
             id: validatedUser.id,
@@ -271,6 +281,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (isAuthErrorRedirect && event !== 'SIGNED_OUT') return;
         if (session?.access_token && session.user) {
           const appUser: User = {
             id: session.user.id,

@@ -191,6 +191,22 @@ class InviteModel(Base):
     )
 
 
+class PasswordResetTokenModel(Base):
+    """Time-limited tokens for password reset flow."""
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_password_reset_tokens_user_id", "user_id"),
+    )
+
+
 class SupplierFacilityModel(Base):
     """Supplier-operated facilities for onboarding and FSMA scoping."""
 
