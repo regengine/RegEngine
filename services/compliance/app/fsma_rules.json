@@ -313,7 +313,9 @@
       "SHIPPING",
       "HARVESTING",
       "COOLING",
-      "PACKING"
+      "PACKING",
+      "FIRST_LAND_BASED_RECEIVING",
+      "GROWING"
     ]
   }
 }

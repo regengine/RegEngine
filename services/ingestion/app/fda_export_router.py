@@ -34,6 +34,7 @@ from app.fda_export_service import (
     _build_fda_package,
     _generate_csv,
     _generate_csv_v2,
+    _generate_pdf,
     _safe_filename_token,
 )
 from app.subscription_gate import require_active_subscription
@@ -62,8 +63,9 @@ router = APIRouter(prefix="/api/v1/fda", tags=["FDA Export"])
             "content": {
                 "text/csv": {},
                 "application/zip": {},
+                "application/pdf": {},
             },
-            "description": "FDA-compliant CSV or ZIP package",
+            "description": "FDA-compliant CSV, ZIP package, or PDF report",
         },
     },
 )
@@ -71,9 +73,9 @@ async def export_fda_spreadsheet(
     tlc: str = Query(..., description="Traceability Lot Code to trace"),
     start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)"),
-    format: Literal["package", "csv"] = Query(
+    format: Literal["package", "csv", "pdf"] = Query(
         default="package",
-        description="Export format: package (zip bundle) or csv",
+        description="Export format: package (zip bundle), csv, or pdf",
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
@@ -177,6 +179,26 @@ async def export_fda_spreadsheet(
                 },
             )
 
+        if format == "pdf":
+            pdf_bytes = _generate_pdf(events, metadata={
+                "tlc": tlc,
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "start_date": start_date,
+                "end_date": end_date,
+            })
+            filename = f"fda_export_{safe_tlc}_{timestamp}.pdf"
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
+                    "X-Record-Count": str(len(events)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
         filename = f"fda_export_{safe_tlc}_{timestamp}.csv"
         return StreamingResponse(
             iter([csv_content]),
@@ -209,8 +231,9 @@ async def export_fda_spreadsheet(
             "content": {
                 "text/csv": {},
                 "application/zip": {},
+                "application/pdf": {},
             },
-            "description": "FDA-compliant CSV or ZIP package",
+            "description": "FDA-compliant CSV, ZIP package, or PDF report",
         },
     },
 )
@@ -218,9 +241,9 @@ async def export_all_events(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     event_type: Optional[str] = Query(None, description="Filter by CTE type"),
-    format: Literal["package", "csv"] = Query(
+    format: Literal["package", "csv", "pdf"] = Query(
         default="csv",
-        description="Export format: package (zip bundle) or csv",
+        description="Export format: package (zip bundle), csv, or pdf",
     ),
     tenant_id: str = Query(..., description="Tenant identifier"),
     _auth=Depends(require_permission("fda.export")),
@@ -318,6 +341,25 @@ async def export_all_events(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-Export-Hash": export_hash,
                     "X-Package-Hash": package_meta["package_hash"],
+                    "X-Record-Count": str(len(deduped)),
+                    "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
+                    **compliance_headers,
+                },
+            )
+
+        if format == "pdf":
+            pdf_bytes = _generate_pdf(deduped, metadata={
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "start_date": start_date,
+                "end_date": end_date,
+            })
+            filename = f"fda_export_all_{timestamp}.pdf"
+            return StreamingResponse(
+                io.BytesIO(pdf_bytes),
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}",
+                    "X-Export-Hash": export_hash,
                     "X-Record-Count": str(len(deduped)),
                     "X-Chain-Integrity": "VERIFIED" if chain_verification.valid else "UNVERIFIED",
                     **compliance_headers,
