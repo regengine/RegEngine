@@ -21,6 +21,7 @@ from shared.error_handling import init_sentry
 init_sentry()
 
 # Production Hardening
+from shared.logging_config import configure_logging  # (#556) shared structured JSON logging
 from shared.middleware.security import add_security
 from shared.rate_limit import add_rate_limiting
 from shared.observability import add_observability
@@ -28,6 +29,9 @@ from shared.error_handling import install_exception_handlers
 from shared.health import HealthCheck, install_health_router
 from shared.middleware import RequestIDMiddleware
 from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+
+# Initialize structured JSON logging before app/middleware creation
+configure_logging(service_name="compliance-service")
 
 from app.routes import router as fsma_router
 
