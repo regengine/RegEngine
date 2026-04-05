@@ -11,7 +11,12 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
+from datetime import datetime, timezone
 from typing import Optional
+
+from dateutil import parser as _dateutil_parser
+from dateutil.parser import ParserError as _DateParserError
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -307,6 +312,144 @@ def _validate_kde_completeness(
     return missing
 
 
+# ── UOM normalisation ────────────────────────────────────────────────────────
+# Maps common abbreviations / typos → canonical FSMA 204 unit strings.
+_UOM_ALIASES: dict[str, str] = {
+    "lb": "lbs", "pound": "lbs", "pounds": "lbs", "lb.": "lbs",
+    "kilogram": "kg", "kilograms": "kg", "kgs": "kg",
+    "ounce": "oz", "ounces": "oz",
+    "gram": "g", "grams": "g",
+    "ton": "tons", "tonne": "mt", "tonnes": "mt", "metric_ton": "mt", "metric ton": "mt",
+    "case": "cases", "cs": "cases",
+    "carton": "cartons", "ctn": "cartons", "ctns": "cartons",
+    "box": "boxes", "bx": "boxes", "bxs": "boxes",
+    "crate": "crates", "crt": "crates",
+    "bin": "bins",
+    "pallet": "pallets", "plt": "pallets", "plts": "pallets", "skid": "pallets",
+    "tote": "totes",
+    "bag": "bags", "bg": "bags",
+    "sack": "sacks", "sk": "sacks",
+    "ea": "each", "pc": "pieces", "piece": "pieces",
+    "unit": "units", "un": "units",
+    "ct": "count",
+    "gallon": "gallons", "gal": "gallons", "gals": "gallons",
+    "liter": "liters", "litre": "liters", "litres": "liters",
+    "barrel": "barrels", "bbl": "barrels",
+    "bushel": "bushels", "bu": "bushels",
+}
+
+
+def _normalize_uom(raw: str) -> str:
+    """Map common UOM abbreviations/typos to canonical FSMA 204 units.
+
+    Falls back to the lowercased input so the model validator can still
+    warn about truly unknown values rather than crashing on abbreviations.
+    """
+    normalized = raw.strip().lower().rstrip(".")
+    return _UOM_ALIASES.get(normalized, normalized)
+
+
+# ── Location / string normalisation ─────────────────────────────────────────
+_LOCATION_ABBREV_PATTERNS: list[tuple[str, str]] = [
+    (r"\bwhse\b",   "Warehouse"),
+    (r"\bwhs\b",    "Warehouse"),
+    (r"\bdist\.?\b","Distribution"),
+    (r"\bmfg\.?\b", "Manufacturing"),
+    (r"\bfac\.?\b", "Facility"),
+    (r"\bpkg\.?\b", "Packaging"),
+    (r"\brecv\.?\b","Receiving"),
+    (r"\bshpg\.?\b","Shipping"),
+    (r"\bctr\.?\b", "Center"),
+    (r"\bcntr\.?\b","Center"),
+    (r"\bhdqtrs?\b","Headquarters"),
+    (r"\bblvd\.?\b","Boulevard"),
+    (r"\bave\.?\b", "Avenue"),
+]
+
+
+def _normalize_location(raw: str) -> str:
+    """Strip whitespace, collapse runs, and expand common abbreviations."""
+    val = " ".join(raw.strip().split())
+    for pattern, replacement in _LOCATION_ABBREV_PATTERNS:
+        val = re.sub(pattern, replacement, val, flags=re.IGNORECASE)
+    return val
+
+
+# ── Flexible date parsing ────────────────────────────────────────────────────
+_SENTINEL_TS = "1970-01-01T00:00:00Z"  # placeholder when date is unreadable
+
+
+def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str, str | None]:
+    """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
+
+    Handles YYYY-MM-DD, M/D/YY, April 2nd 2026, 04-01-2026, and more.
+
+    Returns:
+        (iso_ts, warning)  — warning is None on success, or a human-readable
+        message describing why the date could not be parsed.  In that case
+        iso_ts is _SENTINEL_TS so the row can still be ingested and flagged.
+    """
+    if not raw or not raw.strip():
+        return _SENTINEL_TS, "date field was empty"
+
+    raw = raw.strip()
+
+    # Fast-path: already an ISO timestamp
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat().replace("+00:00", "Z"), None
+    except (ValueError, AttributeError):
+        pass
+
+    # Flexible parsing: handles M/D/YY, "April 2nd", "04-01-2026", etc.
+    try:
+        dt = _dateutil_parser.parse(raw, fuzzy=True, dayfirst=False)
+        # Merge in a separate event_time field if provided
+        if event_time:
+            try:
+                t = _dateutil_parser.parse(event_time)
+                dt = dt.replace(hour=t.hour, minute=t.minute, second=t.second)
+            except (_DateParserError, ValueError):
+                pass
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat().replace("+00:00", "Z"), None
+    except (_DateParserError, ValueError, OverflowError):
+        pass
+
+    return _SENTINEL_TS, f"INVALID_FORMAT: could not parse date '{raw}'"
+
+
+# ── Lot-code integrity checks ────────────────────────────────────────────────
+_LOT_DIGIT_ADJACENT = re.compile(r"(?<=[0-9])[OI]|[OI](?=[0-9])", re.IGNORECASE)
+
+
+def _check_lot_code_integrity(lot_code: str) -> list[str]:
+    """Flag likely O↔0 and I↔1 character swaps in a Traceability Lot Code.
+
+    Returns a (possibly empty) list of human-readable integrity warnings.
+    These are advisory — the row is still ingested.
+    """
+    if not lot_code:
+        return []
+    warnings: list[str] = []
+    suspicious = _LOT_DIGIT_ADJACENT.findall(lot_code)
+    if suspicious:
+        chars = ", ".join(f"'{c}'" for c in set(s.upper() for s in suspicious))
+        warnings.append(
+            f"lot_code '{lot_code}': possible character swap ({chars} adjacent to digits — "
+            f"verify O vs 0 or I vs 1)"
+        )
+    # All-alpha codes longer than 3 chars have no digits — flag for review
+    if lot_code.isalpha() and len(lot_code) > 3:
+        warnings.append(
+            f"lot_code '{lot_code}': no digits found — confirm this is not a data entry error"
+        )
+    return warnings
+
+
 @router.post(
     "/ingest/csv",
     response_model=IngestResponse,
@@ -365,53 +508,66 @@ async def ingest_csv(
                 parse_errors.append(f"Row {row_num}: No CTE type — add cte_type column or pass cte_type param")
                 continue
 
-            date_field = None
-            for field_name in _DATE_FIELDS:
-                if field_name in row and row[field_name]:
-                    date_field = row[field_name]
-                    break
-            if not date_field:
-                parse_errors.append(f"Row {row_num}: No date field found")
-                continue
+            # ── Phase 1: Ingestion — flexible, never crashes on bad data ──────
+            # Date: accept any human format; sentinel + warning on total failure
+            raw_date = next(
+                (row[f] for f in _DATE_FIELDS if row.get(f)),
+                ""
+            )
+            event_time_raw = (row.get("event_time") or "").strip()
+            ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
+            if date_warning:
+                kde_warnings.append(f"Row {row_num}: {date_warning}")
 
-            ts = date_field
-            if "T" not in ts and len(ts) <= 10:
-                event_time = (row.get("event_time") or "").strip()
-                if event_time:
-                    ts = f"{ts}T{event_time}" + ("Z" if "+" not in event_time and "Z" not in event_time else "")
-                else:
-                    ts = f"{ts}T00:00:00Z"
-
+            # Location: strip whitespace and expand abbreviations
             loc_gln = (row.get("location_gln") or row.get("ship_from_gln")
                 or row.get("receiving_gln") or row.get("gln") or None)
-            loc_name = (row.get("location_name") or row.get("ship_from_location")
+            _loc_raw = (row.get("location_name") or row.get("ship_from_location")
                 or row.get("receiving_location") or row.get("location_identifier")
-                or row.get("facility_name") or row.get("location") or None)
+                or row.get("facility_name") or row.get("location") or "")
+            loc_name = _normalize_location(_loc_raw) if _loc_raw else None
 
-            kdes = {}
+            # Unit of measure: map abbreviations before Pydantic sees them
+            uom_raw = (row.get("unit_of_measure") or row.get("uom") or "units")
+            uom = _normalize_uom(uom_raw)
+
+            # Lot code: extract and run integrity checks
+            lot_code = (row.get("traceability_lot_code") or row.get("tlc")
+                or row.get("lot_code") or "")
+            for integrity_warn in _check_lot_code_integrity(lot_code):
+                kde_warnings.append(f"Row {row_num}: {integrity_warn}")
+
+            kdes: dict = {}
             skip_fields = {"traceability_lot_code", "product_description",
                 "quantity", "unit_of_measure", "location_gln", "location_name",
-                "cte_type", "event_type", "type", "cte", "input_lot_codes"}
+                "cte_type", "event_type", "type", "cte", "input_lot_codes",
+                "event_time"}
             for key, val in row.items():
                 if key and val and key not in skip_fields:
                     kdes[key] = val
 
+            # Store original date string for audit trail when it was unparseable
+            if date_warning:
+                kdes["_original_date_value"] = raw_date
+                kdes["_date_parse_status"] = "INVALID_FORMAT"
+
             # Parse input_lot_codes (comma-separated) if present
             input_lot_codes_raw = row.get("input_lot_codes")
             if input_lot_codes_raw:
-                input_lot_codes = [code.strip() for code in input_lot_codes_raw.split(",") if code.strip()]
+                input_lot_codes = [c.strip() for c in input_lot_codes_raw.split(",") if c.strip()]
                 if input_lot_codes:
                     kdes["input_lot_codes"] = input_lot_codes
 
             # Auto-inject CTE-specific required KDEs from generic CSV columns
-            _inject_required_kdes(kdes, row_cte, row, loc_name, date_field)
+            _inject_required_kdes(kdes, row_cte, row, loc_name, raw_date)
 
             event = IngestEvent(
                 cte_type=WebhookCTEType(row_cte),
-                traceability_lot_code=row.get("traceability_lot_code") or row.get("tlc") or row.get("lot_code") or "",
-                product_description=row.get("product_description") or row.get("product") or row.get("description") or "",
+                traceability_lot_code=lot_code,
+                product_description=(row.get("product_description") or row.get("product")
+                    or row.get("description") or ""),
                 quantity=float(row.get("quantity") or row.get("qty") or 0),
-                unit_of_measure=row.get("unit_of_measure") or row.get("uom") or "units",
+                unit_of_measure=uom,
                 location_gln=loc_gln,
                 location_name=loc_name,
                 timestamp=ts,
