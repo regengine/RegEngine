@@ -333,8 +333,8 @@ export default async function PricingPage() {
                             </table>
                         </div>
                     </div>
-                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
-                        * ReposiTrak publicly lists supplier plans from $59/mo (basic) to $179/mo (unlimited). Competitor data from public sources as of April 2026.
+                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4 leading-relaxed max-w-[600px] mx-auto">
+                        * ReposiTrak&apos;s $59/mo plan covers supplier-level barcode traceability only (single-facility, no lot-trace, no FDA export, no recall drill). Full compliance platform pricing is not publicly listed. Competitor data from public sources as of April 2026.
                     </p>
                 </div>
             </section>
