@@ -12,6 +12,7 @@ export type MarketingToolLink = {
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
     { label: "Product", href: "/product" },
+    { label: "Why RegEngine", href: "/why-regengine" },
     { label: "Retailer Readiness", href: "/retailer-readiness" },
     { label: "Pricing", href: "/pricing" },
     { label: "FSMA 204 Guide", href: "/fsma-204" },
@@ -26,6 +27,7 @@ export const MARKETING_FREE_TOOLS: MarketingToolLink[] = [
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     ...MARKETING_PRIMARY_NAV,
+    { label: "Case Studies", href: "/case-studies" },
     { label: "Integrations", href: "/integrations" },
     { label: "Get Started", href: "/onboarding" },
 ];
@@ -40,6 +42,7 @@ export const MARKETING_FOOTER_DEVELOPER_LINKS: MarketingNavLink[] = [
 
 export const MARKETING_FOOTER_COMPANY_LINKS: MarketingNavLink[] = [
     { label: "About", href: "/about" },
+    { label: "Blog", href: "/blog" },
     { label: "Contact", href: "/contact" },
     { label: "Security", href: "/security" },
     { label: "Trust Center", href: "/trust" },
