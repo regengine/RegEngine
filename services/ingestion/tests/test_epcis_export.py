@@ -17,7 +17,7 @@ from app.epcis_export import _CTE_TO_BIZSTEP, _validate_epcis_document
 
 
 EXPECTED_CTE_TYPES = {
-    "receiving", "shipping", "transformation",
+    "growing", "receiving", "shipping", "transformation",
     "initial_packing", "harvesting", "cooling",
     "first_land_based_receiving",
 }
@@ -26,7 +26,7 @@ EXPECTED_CTE_TYPES = {
 class TestCTEToBizStep:
     """Tests for the _CTE_TO_BIZSTEP mapping."""
 
-    def test_has_all_seven_cte_types(self):
+    def test_has_all_cte_types(self):
         assert set(_CTE_TO_BIZSTEP.keys()) == EXPECTED_CTE_TYPES
 
     def test_all_uris_start_with_bizstep_prefix(self):

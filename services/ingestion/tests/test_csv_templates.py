@@ -18,7 +18,7 @@ from app.webhook_models import IngestEvent, WebhookCTEType
 
 
 EXPECTED_CTE_TYPES = {
-    "harvesting", "cooling", "initial_packing",
+    "growing", "harvesting", "cooling", "initial_packing",
     "first_land_based_receiving", "shipping",
     "receiving", "transformation",
 }
@@ -27,7 +27,7 @@ EXPECTED_CTE_TYPES = {
 class TestCTEColumns:
     """Tests for the CTE_COLUMNS template definitions."""
 
-    def test_all_seven_cte_types_exist(self):
+    def test_all_cte_types_exist(self):
         assert set(CTE_COLUMNS.keys()) == EXPECTED_CTE_TYPES
 
     def test_flbr_template_has_correct_columns(self):
