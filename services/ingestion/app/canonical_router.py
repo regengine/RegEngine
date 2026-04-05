@@ -24,6 +24,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -31,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.canonical_persistence import CanonicalEventStore
 
 logger = logging.getLogger("canonical-records")
 
@@ -66,6 +68,8 @@ def _get_db_session():
             raise
         finally:
             db.close()
+    except HTTPException:
+        raise  # Must propagate — yielding after throw() is illegal
     except Exception as e:
         logger.warning("database_unavailable: %s", str(e))
         yield None
@@ -437,3 +441,103 @@ def _get_amendment_chain(db_session, tenant_id: str, event_id: str) -> List[Dict
         current_id = str(row[0])
 
     return chain
+
+
+# ---------------------------------------------------------------------------
+# Trace Endpoints — Forward/Backward Lot Traceability
+# ---------------------------------------------------------------------------
+
+class TraceLink(BaseModel):
+    input_tlc: str
+    output_tlc: str
+    transformation_event_id: str
+    process_type: Optional[str] = None
+    depth: int
+    confidence_score: float = 1.0
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class TraceResponse(BaseModel):
+    tlc: str
+    direction: str
+    links: List[TraceLink]
+    total_hops: int
+
+
+@router.get(
+    "/trace/forward/{tlc}",
+    response_model=TraceResponse,
+    summary="Forward trace — what products contain this lot?",
+)
+def trace_forward(
+    tlc: str,
+    max_depth: int = Query(default=5, ge=1, le=20),
+    tenant_id: Optional[str] = Query(default=None),
+    principal: IngestionPrincipal = Depends(require_permission("records.read")),
+    db_session=Depends(_get_db_session),
+):
+    if db_session is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    tid = _resolve_tenant(tenant_id, principal)
+    db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
+
+    store = CanonicalEventStore(db_session, dual_write=False)
+    raw_links = store.trace_forward(tid, tlc, max_depth=max_depth)
+
+    links = [
+        TraceLink(
+            input_tlc=r["input_tlc"],
+            output_tlc=r["output_tlc"],
+            transformation_event_id=r["transformation_event_id"],
+            process_type=r.get("process_type"),
+            depth=r["depth"],
+            confidence_score=r.get("confidence_score", 1.0),
+            quantity=r.get("output_quantity"),
+            unit=r.get("output_unit"),
+        )
+        for r in raw_links
+    ]
+    return TraceResponse(
+        tlc=tlc, direction="forward", links=links,
+        total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
+    )
+
+
+@router.get(
+    "/trace/backward/{tlc}",
+    response_model=TraceResponse,
+    summary="Backward trace — what ingredients went into this product?",
+)
+def trace_backward(
+    tlc: str,
+    max_depth: int = Query(default=5, ge=1, le=20),
+    tenant_id: Optional[str] = Query(default=None),
+    principal: IngestionPrincipal = Depends(require_permission("records.read")),
+    db_session=Depends(_get_db_session),
+):
+    if db_session is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    tid = _resolve_tenant(tenant_id, principal)
+    db_session.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": tid})
+
+    store = CanonicalEventStore(db_session, dual_write=False)
+    raw_links = store.trace_backward(tid, tlc, max_depth=max_depth)
+
+    links = [
+        TraceLink(
+            input_tlc=r["input_tlc"],
+            output_tlc=r["output_tlc"],
+            transformation_event_id=r["transformation_event_id"],
+            process_type=r.get("process_type"),
+            depth=r["depth"],
+            confidence_score=r.get("confidence_score", 1.0),
+            quantity=r.get("input_quantity"),
+            unit=r.get("input_unit"),
+        )
+        for r in raw_links
+    ]
+    return TraceResponse(
+        tlc=tlc, direction="backward", links=links,
+        total_hops=max(r["depth"] for r in raw_links) if raw_links else 0,
+    )

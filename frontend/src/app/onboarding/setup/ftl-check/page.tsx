@@ -23,6 +23,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
 import { FTL_CATEGORIES, type FTLCategory } from '@/lib/ftl-data';
+import { StepIndicator } from '@/components/onboarding/StepIndicator';
 
 const CATEGORY_ICONS: Record<string, typeof Leaf> = {
   Produce: Leaf,
@@ -88,6 +89,7 @@ export default function FTLCheckPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showResults, setShowResults] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -113,16 +115,23 @@ export default function FTLCheckPage() {
   const handleContinue = async () => {
     if (!tenantId) return;
     setSaving(true);
+    setSaveError(null);
 
     try {
       await updateOnboarding.mutateAsync({
         onboarding: { ftl_check_completed: true },
       });
+      // completeOnboarding() only runs after the mutation succeeds so the
+      // onboarding state in localStorage / backend stays consistent.
       completeOnboarding();
       router.push('/dashboard');
     } catch {
-      // best-effort
-      router.push('/dashboard');
+      // #541 — Don't silently redirect on failure. Show an error banner so
+      // the user can retry. Navigating to /dashboard with onboarding marked
+      // incomplete causes a redirect loop back to /onboarding/setup.
+      setSaveError('Could not save your progress. Please check your connection and try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -135,6 +144,9 @@ export default function FTLCheckPage() {
               <ShieldCheck className="h-5 w-5 text-amber-500" />
             </div>
             <div>
+              <div className="mb-1">
+                <StepIndicator step={3} />
+              </div>
               <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
                 Check Your FTL Coverage
               </h1>
@@ -236,6 +248,16 @@ export default function FTLCheckPage() {
                   </p>
                 )}
 
+                {/* #541 — Error banner with retry; no silent redirect on failure */}
+                {saveError && (
+                  <div
+                    role="alert"
+                    className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200"
+                  >
+                    {saveError}
+                  </div>
+                )}
+
                 <Button
                   className="h-11 w-full"
                   disabled={saving}
@@ -248,7 +270,7 @@ export default function FTLCheckPage() {
                     </>
                   ) : (
                     <>
-                      Continue to Dashboard
+                      {saveError ? 'Retry' : 'Continue to Dashboard'}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </>
                   )}

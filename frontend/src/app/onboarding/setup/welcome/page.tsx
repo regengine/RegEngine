@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/lib/auth-context';
 import { useUpdateOnboarding } from '@/hooks/use-onboarding';
+import { StepIndicator } from '@/components/onboarding/StepIndicator';
 
 const ROLES = [
   { value: 'compliance_manager', label: 'Compliance Manager' },
@@ -76,6 +77,9 @@ export default function WelcomePage() {
             <Building2 className="h-5 w-5 text-[var(--re-brand)]" />
           </div>
           <div>
+            <div className="mb-1">
+              <StepIndicator step={1} />
+            </div>
             <h1 className="text-xl font-semibold text-[var(--re-text-primary)]">
               Welcome to RegEngine
             </h1>

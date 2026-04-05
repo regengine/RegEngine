@@ -76,26 +76,62 @@ def metrics():
 async def provisions_by_request_id(
     request: Request,
     request_id: str = Query(..., alias="id"),
+    limit: int = Query(default=50, ge=1, le=200, description="Max items to return (1–200)"),
+    offset: int = Query(default=0, ge=0, description="Number of items to skip"),
     api_key: str = Depends(require_api_key),
-    tenant_id: uuid.UUID = Depends(get_current_tenant_id)
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
-    """Return provisions that have provenance.request_id equal to the given id.
+    """Return provisions whose provenance.request_id matches ``id``.
 
-    Query param: `id` (UUID string)
+    Supports offset-based pagination via ``limit`` and ``offset`` (#564).
+
+    Query params:
+        id      (required) — request UUID to look up
+        limit   (optional, default 50, max 200)
+        offset  (optional, default 0)
+
+    Response:
+        count       — number of items in this page
+        total_count — total matching provisions (for pagination UI)
+        limit / offset — echo of request params
+        items       — paginated provision records
     """
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     results = []
+    total_count = 0
+    client = None
     try:
         client = Neo4jClient(database=db_name)
         async with client.session() as session:
-            cypher_query = (
+            # Count query — runs before the data fetch so callers can build
+            # "page X of Y" UI without a second round-trip.
+            count_query = (
+                "MATCH (p:Provision) "
+                "WHERE p.provenance.request_id = $request_id AND p.tenant_id = $tenant_id "
+                "RETURN count(p) AS total"
+            )
+            count_result = await session.run(
+                count_query, request_id=request_id, tenant_id=str(tenant_id)
+            )
+            count_record = await count_result.single()
+            total_count = count_record["total"] if count_record else 0
+
+            # Data query — SKIP/LIMIT applied server-side in Neo4j
+            data_query = (
                 "MATCH (p:Provision) "
                 "WHERE p.provenance.request_id = $request_id AND p.tenant_id = $tenant_id "
                 "RETURN p.hash AS hash, p.status AS status, p.provenance AS provenance, "
                 "p.extraction AS extraction, p.doc_hash AS doc_hash, p.tenant_id AS tenant_id "
-                "LIMIT 100"
+                "ORDER BY p.hash "
+                "SKIP $offset LIMIT $limit"
             )
-            result = await session.run(cypher_query, request_id=request_id, tenant_id=str(tenant_id))
+            result = await session.run(
+                data_query,
+                request_id=request_id,
+                tenant_id=str(tenant_id),
+                offset=offset,
+                limit=limit,
+            )
             async for rec in result:
                 results.append(
                     {
@@ -107,11 +143,30 @@ async def provisions_by_request_id(
                         "tenant_id": rec["tenant_id"],
                     }
                 )
-        await client.close()
-        logger.info("provisions_by_request", request_id=request_id, count=len(results))
-        return {"count": len(results), "items": results}
+
+        logger.info(
+            "provisions_by_request",
+            request_id=request_id,
+            count=len(results),
+            total_count=total_count,
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "count": len(results),
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset,
+            "items": results,
+        }
     except Exception as exc:  # pragma: no cover - infra dependent
         logger.exception(
             "provisions_by_request_error", request_id=request_id, error=str(exc)
         )
-        return {"count": 0, "items": []}
+        raise HTTPException(
+            status_code=500,
+            detail="Graph database error while fetching provisions.",
+        ) from exc
+    finally:
+        if client is not None:
+            await client.close()

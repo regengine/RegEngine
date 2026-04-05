@@ -62,7 +62,7 @@ export async function GET(
             );
         }
 
-        console.info(`[proxy/verify] GET ${tenantId}/${snapshotId}/verify → ${response.status}`);
+        if (process.env.NODE_ENV !== 'production') { console.info(`[proxy/verify] GET ${tenantId}/${snapshotId}/verify → ${response.status}`); }
         return NextResponse.json(data);
 
     } catch (error: unknown) {

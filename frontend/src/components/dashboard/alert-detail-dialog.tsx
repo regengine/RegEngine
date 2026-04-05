@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, Clock, AlertTriangle, CheckCircle, ExternalLink } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Clock, AlertTriangle, CheckCircle, ExternalLink, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,8 +43,26 @@ export function AlertDetailDialog({
 }: AlertDetailDialogProps) {
     const [resolveNotes, setResolveNotes] = useState("");
     const [loading, setLoading] = useState(false);
+    const router = useRouter();
 
     if (!alert) return null;
+
+    /** Determine an action-specific deep link, or null for generic actions. */
+    const getActionUrl = (actionText: string): string | null => {
+        const lower = actionText.toLowerCase();
+        if (lower.includes("trace")) {
+            // Pre-fill the ask/trace tool with context from the alert
+            const q = encodeURIComponent(`trace lot codes from recall ${alert.source_id ?? alert.title}`);
+            return `/dashboard/tools/ask?q=${q}`;
+        }
+        if (lower.includes("fda") || lower.includes("response")) {
+            return `/dashboard/fda-export`;
+        }
+        if (lower.includes("lot code") || lower.includes("review")) {
+            return `/dashboard/traceability`;
+        }
+        return null;
+    };
 
     const styles = SEVERITY_STYLES[alert.severity] || SEVERITY_STYLES.MEDIUM;
     const isActive = alert.status === "ACTIVE";
@@ -141,24 +160,34 @@ export function AlertDetailDialog({
                         <div>
                             <h4 className="font-semibold text-gray-900 mb-2">Required Actions</h4>
                             <div className="space-y-2">
-                                {alert.required_actions.map((action, i) => (
-                                    <div
-                                        key={i}
-                                        className={`flex items-center gap-3 p-3 rounded-lg border ${action.completed
-                                            ? "bg-green-50 border-green-200"
-                                            : "bg-gray-50 border-gray-200"
-                                            }`}
-                                    >
-                                        {action.completed ? (
-                                            <CheckCircle className="h-5 w-5 text-green-600" />
-                                        ) : (
-                                            <div className="h-5 w-5 rounded-full border-2 border-gray-300" />
-                                        )}
-                                        <span className={action.completed ? "text-green-800" : "text-gray-700"}>
-                                            {action.action}
-                                        </span>
-                                    </div>
-                                ))}
+                                {alert.required_actions.map((action, i) => {
+                                    const actionUrl = !action.completed ? getActionUrl(action.action) : null;
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`flex items-center gap-3 p-3 rounded-lg border ${action.completed
+                                                ? "bg-green-50 border-green-200"
+                                                : actionUrl
+                                                    ? "bg-blue-50 border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors"
+                                                    : "bg-gray-50 border-gray-200"
+                                                }`}
+                                            onClick={actionUrl ? () => { router.push(actionUrl); onClose(); } : undefined}
+                                            role={actionUrl ? "button" : undefined}
+                                        >
+                                            {action.completed ? (
+                                                <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+                                            ) : (
+                                                <div className="h-5 w-5 rounded-full border-2 border-gray-300 shrink-0" />
+                                            )}
+                                            <span className={`flex-1 ${action.completed ? "text-green-800" : actionUrl ? "text-blue-700 font-medium" : "text-gray-700"}`}>
+                                                {action.action}
+                                            </span>
+                                            {actionUrl && (
+                                                <ArrowRight className="h-4 w-4 text-blue-500 shrink-0" />
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

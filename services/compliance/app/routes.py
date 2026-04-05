@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import logging
 import os
 import uuid
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -14,6 +17,8 @@ from shared.resilient_http import resilient_client
 from shared.circuit_breaker import CircuitOpenError
 from .config import settings
 from .fsma_spreadsheet import generate_fda_csv
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["fsma-compliance"])
 
@@ -74,126 +79,55 @@ class ValidationResult(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# FSMA 204 seed data
+# FSMA 204 rules — loaded from fsma_rules.json at startup (#546)
 # ---------------------------------------------------------------------------
 
-_FSMA_204 = "FSMA 204"
-_CTE_RECEIVING = "Receiving CTE Records"
-_CTE_SHIPPING = "Shipping CTE Records"
+_RULES_PATH = Path(__file__).parent / "fsma_rules.json"
 
-_INDUSTRIES: list[Industry] = [
-    Industry(id="fresh-produce", name="Fresh Produce", description="Leafy greens, herbs, melons, and fresh-cut produce", checklist_count=1),
-    Industry(id="seafood", name="Seafood", description="Finfish, shellfish, and aquaculture products", checklist_count=1),
-    Industry(id="dairy", name="Dairy", description="Milk, cheese, yogurt, and cultured dairy products", checklist_count=1),
-    Industry(id="deli-prepared", name="Deli & Prepared Foods", description="Ready-to-eat and mixed-ingredient products", checklist_count=1),
-    Industry(id="shell-eggs", name="Shell Eggs", description="Fresh and processed shell egg products", checklist_count=1),
-]
 
-_PRODUCE_REQS = [
-    ComplianceRequirement(id="fp-1", title="Traceability Lot Code (TLC)", description="Assign a unique TLC to each lot of fresh produce at the point of receiving or initial packing.", category="KDE", priority="CRITICAL"),
-    ComplianceRequirement(id="fp-2", title=_CTE_RECEIVING, description="Capture grower lot ID, harvest date, and cooling location at the RECEIVING CTE.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="fp-3", title="Transformation CTE Records", description="Link input TLCs to output TLCs when produce is cut, mixed, or repackaged.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="fp-4", title=_CTE_SHIPPING, description="Record TLC, quantity, destination, and ship date for every outbound lot.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="fp-5", title="24-Hour Recall Response", description="Demonstrate ability to produce all required KDE records within 24 hours of an FDA request.", category="Readiness", priority="CRITICAL"),
-    ComplianceRequirement(id="fp-6", title="Supplier TLC Linkage", description="Maintain upstream TLC references from direct suppliers for at least 2 years.", category="Records", priority="MEDIUM"),
-]
+def _load_fsma_rules() -> dict:
+    """Load and return the FSMA rules config from JSON.
 
-_SEAFOOD_REQS = [
-    ComplianceRequirement(id="sf-1", title="Source Vessel / Harvest Reference", description="Record source vessel name or aquaculture site ID as a KDE for all finfish and shellfish.", category="KDE", priority="CRITICAL"),
-    ComplianceRequirement(id="sf-2", title="Landing Date KDE", description="Capture the date seafood was landed or harvested as part of the HARVESTING CTE.", category="KDE", priority="HIGH"),
-    ComplianceRequirement(id="sf-3", title="Temperature Log", description="Maintain cold-chain temperature records throughout the supply chain as a supporting KDE.", category="KDE", priority="HIGH"),
-    ComplianceRequirement(id="sf-4", title=_CTE_RECEIVING, description="Document TLC, quantity, supplier reference, and receiving date at each receiving point.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="sf-5", title="Lot Transformation Linkage", description="Link input lots to output lots when fish is processed, portioned, or repackaged.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="sf-6", title=_CTE_SHIPPING, description="Record TLC, destination, ship date, and quantity for every outbound seafood lot.", category="CTE", priority="HIGH"),
-]
+    Raises RuntimeError on missing file or malformed JSON so startup fails
+    loudly rather than serving empty compliance data.
+    """
+    try:
+        with _RULES_PATH.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"FSMA rules config not found at {_RULES_PATH}. "
+            "Ensure fsma_rules.json is present in the compliance app directory."
+        )
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Malformed fsma_rules.json: {exc}") from exc
 
-_DAIRY_REQS = [
-    ComplianceRequirement(id="da-1", title="Supplier Lot KDE", description="Capture the supplier's lot number for all incoming dairy ingredients as a receiving KDE.", category="KDE", priority="CRITICAL"),
-    ComplianceRequirement(id="da-2", title="Co-Mingling Event Records", description="Document all lots that were combined during processing, preserving individual lot references.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="da-3", title="Production Line KDE", description="Record the production line identifier for each finished product batch.", category="KDE", priority="MEDIUM"),
-    ComplianceRequirement(id="da-4", title="Hold & Release Status", description="Track hold and release decisions for every lot and link to the associated TLC.", category="KDE", priority="HIGH"),
-    ComplianceRequirement(id="da-5", title="Packing CTE Records", description="Record TLC, pack date, package size, and production line at the PACKING CTE.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="da-6", title=_CTE_SHIPPING, description="Capture TLC, destination, ship date, and quantity at the SHIPPING CTE.", category="CTE", priority="HIGH"),
-]
+    _logger.info("Loaded FSMA rules from %s", _RULES_PATH)
+    return data
 
-_DELI_REQS = [
-    ComplianceRequirement(id="dl-1", title="Input Lot Map", description="Maintain a complete map of all input lot TLCs that contributed to each finished RTE product lot.", category="KDE", priority="CRITICAL"),
-    ComplianceRequirement(id="dl-2", title="Recipe Revision KDE", description="Record the recipe or formulation version used for each production batch.", category="KDE", priority="MEDIUM"),
-    ComplianceRequirement(id="dl-3", title="Pack Timestamp KDE", description="Capture the date and time of packing for each RTE product lot.", category="KDE", priority="HIGH"),
-    ComplianceRequirement(id="dl-4", title=_CTE_RECEIVING, description="Document TLC, supplier lot, and receiving date for all incoming ingredients.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="dl-5", title="Transformation CTE Records", description="Link all input TLCs to output TLCs for every transformation step.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="dl-6", title=_CTE_SHIPPING, description="Record TLC, destination, ship date, and quantity for outbound RTE lots.", category="CTE", priority="HIGH"),
-]
 
-_EGGS_REQS = [
-    ComplianceRequirement(id="eg-1", title="Pack Date KDE", description="Record the Julian pack date on every carton and in traceability records.", category="KDE", priority="CRITICAL"),
-    ComplianceRequirement(id="eg-2", title="Facility Registration Number", description="Capture the FDA facility registration number as a KDE at the packing facility.", category="KDE", priority="HIGH"),
-    ComplianceRequirement(id="eg-3", title="Distributor Reference KDE", description="Maintain distributor name and reference number linking packed lots to downstream buyers.", category="KDE", priority="HIGH"),
-    ComplianceRequirement(id="eg-4", title=_CTE_RECEIVING, description="Document incoming flock source, lay date range, and quantity at receiving.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="eg-5", title="Packing CTE Records", description="Record pack date, facility registration, lot size, and carton count at packing.", category="CTE", priority="HIGH"),
-    ComplianceRequirement(id="eg-6", title=_CTE_SHIPPING, description="Capture TLC, distributor reference, ship date, and quantity at shipping.", category="CTE", priority="HIGH"),
-]
+_rules = _load_fsma_rules()
 
-_CHECKLISTS: list[ComplianceChecklist] = [
-    ComplianceChecklist(
-        id="fsma-204-fresh-produce",
-        name="FSMA 204 Fresh Produce Traceability",
-        description="CTE and KDE compliance checklist for leafy greens, herbs, melons, and fresh-cut produce under FSMA Section 204.",
-        industry="Fresh Produce",
-        framework=_FSMA_204,
-        version="1.0",
-        requirements=_PRODUCE_REQS,
-        items=_PRODUCE_REQS,
-    ),
-    ComplianceChecklist(
-        id="fsma-204-seafood",
-        name="FSMA 204 Seafood Traceability",
-        description="CTE and KDE compliance checklist for finfish and shellfish chain-of-custody under FSMA Section 204.",
-        industry="Seafood",
-        framework=_FSMA_204,
-        version="1.0",
-        requirements=_SEAFOOD_REQS,
-        items=_SEAFOOD_REQS,
-    ),
-    ComplianceChecklist(
-        id="fsma-204-dairy",
-        name="FSMA 204 Dairy Traceability",
-        description="CTE and KDE compliance checklist for soft cheeses and fluid dairy products under FSMA Section 204.",
-        industry="Dairy",
-        framework=_FSMA_204,
-        version="1.0",
-        requirements=_DAIRY_REQS,
-        items=_DAIRY_REQS,
-    ),
-    ComplianceChecklist(
-        id="fsma-204-deli-prepared",
-        name="FSMA 204 Deli & Prepared Foods Traceability",
-        description="CTE and KDE compliance checklist for ready-to-eat and mixed-ingredient products under FSMA Section 204.",
-        industry="Deli & Prepared Foods",
-        framework=_FSMA_204,
-        version="1.0",
-        requirements=_DELI_REQS,
-        items=_DELI_REQS,
-    ),
-    ComplianceChecklist(
-        id="fsma-204-shell-eggs",
-        name="FSMA 204 Shell Egg Traceability",
-        description="CTE and KDE compliance checklist for shell eggs under FSMA Section 204.",
-        industry="Shell Eggs",
-        framework=_FSMA_204,
-        version="1.0",
-        requirements=_EGGS_REQS,
-        items=_EGGS_REQS,
-    ),
-]
+_INDUSTRIES: list[Industry] = [Industry(**i) for i in _rules["industries"]]
+
+_CHECKLISTS: list[ComplianceChecklist] = []
+for _cl_data in _rules["checklists"]:
+    _reqs = [ComplianceRequirement(**r) for r in _cl_data.get("requirements", [])]
+    _CHECKLISTS.append(
+        ComplianceChecklist(
+            **{k: v for k, v in _cl_data.items() if k != "requirements"},
+            requirements=_reqs,
+            items=_reqs,
+        )
+    )
 
 _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS}
 
-# Required FSMA 204 KDE fields for validation (all CTE types)
-_REQUIRED_FSMA_FIELDS = {"tlc", "cte_type", "event_date", "location", "quantity", "unit_of_measure", "product_description"}
-
-# Additional fields required only for RECEIVING CTEs
-_RECEIVING_REQUIRED_FIELDS = {"prior_source_tlc"}
+# Validation config sourced from JSON (#547)
+_validation_cfg = _rules.get("validation", {})
+_REQUIRED_FSMA_FIELDS: set[str] = set(_validation_cfg.get("required_fsma_fields", []))
+_RECEIVING_REQUIRED_FIELDS: set[str] = set(_validation_cfg.get("receiving_required_fields", []))
+_ALLOWED_CTE_TYPES: set[str] = set(_validation_cfg.get("allowed_cte_types", []))
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +163,7 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
     config = request.config
     strict = request.strict
 
-    # Check for required FSMA 204 top-level fields
+    # Check for required FSMA 204 top-level fields; also reject explicit null values (#547)
     for field in _REQUIRED_FSMA_FIELDS:
         if field not in config:
             errors.append(ValidationError(
@@ -237,15 +171,40 @@ async def validate_config(request: ValidationRequest) -> ValidationResult:
                 message=f"Required FSMA 204 field '{field}' is missing from configuration.",
                 code="MISSING_REQUIRED_FIELD",
             ))
+        elif config[field] is None:
+            errors.append(ValidationError(
+                path=field,
+                message=f"Required FSMA 204 field '{field}' must not be null.",
+                code="NULL_REQUIRED_FIELD",
+            ))
+
+    # Validate cte_type against the allowed enum (guard .upper() against None) (#547)
+    raw_cte_type = config.get("cte_type")
+    cte_type_upper: str | None = raw_cte_type.upper() if isinstance(raw_cte_type, str) else None
+    if cte_type_upper is not None and _ALLOWED_CTE_TYPES and cte_type_upper not in _ALLOWED_CTE_TYPES:
+        errors.append(ValidationError(
+            path="cte_type",
+            message=(
+                f"Invalid cte_type '{raw_cte_type}'. "
+                f"Allowed values: {', '.join(sorted(_ALLOWED_CTE_TYPES))}."
+            ),
+            code="INVALID_CTE_TYPE",
+        ))
 
     # For RECEIVING CTEs, prior_source_tlc is additionally required
-    if config.get("cte_type", "").upper() == "RECEIVING":
+    if cte_type_upper == "RECEIVING":
         for field in _RECEIVING_REQUIRED_FIELDS:
             if field not in config:
                 errors.append(ValidationError(
                     path=field,
                     message=f"Field '{field}' is required for RECEIVING CTE events under FSMA 204.",
                     code="MISSING_REQUIRED_FIELD",
+                ))
+            elif config[field] is None:
+                errors.append(ValidationError(
+                    path=field,
+                    message=f"Field '{field}' is required for RECEIVING CTE events and must not be null.",
+                    code="NULL_REQUIRED_FIELD",
                 ))
 
     # Warn on missing optional but recommended fields

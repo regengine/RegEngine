@@ -25,7 +25,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
         return () => {
             // Cleanup on unmount
             if (scannerRef.current && isScanning) {
-                scannerRef.current.stop().catch(console.error);
+                scannerRef.current.stop().catch(() => {});
             }
         };
     }, [isScanning]);
@@ -81,7 +81,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
                         // Single-scan mode: stop after first read
                         setIsScanning(false);
                         if (scannerRef.current) {
-                            scannerRef.current.stop().catch(console.error);
+                            scannerRef.current.stop().catch(() => {});
                         }
                     } else {
                         // Continuous mode: cooldown to prevent rapid duplicate reads
@@ -100,7 +100,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
             setIsScanning(true);
         } catch (err) {
-            console.error('Failed to start scanner:', err);
+            if (process.env.NODE_ENV !== 'production') { console.error('Failed to start scanner:', err); }
             const message = err instanceof Error ? err.message : 'Failed to start camera';
             setError(message);
             if (onError) onError(message);
@@ -113,7 +113,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
                 await scannerRef.current.stop();
                 setIsScanning(false);
             } catch (err) {
-                console.error('Failed to stop scanner:', err);
+                if (process.env.NODE_ENV !== 'production') { console.error('Failed to stop scanner:', err); }
             }
         }
     };

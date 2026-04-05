@@ -139,6 +139,7 @@ const COMPETITOR_COMPARISON = [
     { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
     { feature: 'Self-Serve Signup', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
     { feature: 'Developer Sandbox', regengine: '\u2713', foodlogiq: '\u2717', repositrak: '\u2717', tracegains: '\u2717' },
+    { feature: 'Payment Methods', regengine: 'Card, ACH, wire', foodlogiq: 'Enterprise contract', repositrak: 'Card', tracegains: 'Enterprise contract' },
 ];
 
 const FAQ = [
@@ -233,10 +234,10 @@ export default async function PricingPage() {
                                         </div>
                                         <p className="text-xs text-[var(--re-text-disabled)] mt-1">
                                             <span className="line-through opacity-60">${tier.gaAnnual}/mo</span>
-                                            {' '}GA price · billed annually
+                                            {' '}General Availability (GA) price · billed annually
                                         </p>
                                         <p className="text-[11px] text-[var(--re-text-disabled)] mt-0.5">
-                                            ${tier.partnerMonthly}/mo if billed monthly
+                                            ${tier.partnerMonthly}/mo if billed monthly · 14-day free trial
                                         </p>
                                     </div>
 
@@ -276,10 +277,13 @@ export default async function PricingPage() {
                         Founding Design Partner Program
                     </p>
                     <p className="text-sm text-[var(--re-text-muted)] leading-[1.7] max-w-[520px] mx-auto mb-2">
-                        50% off GA pricing for the life of your account. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
+                        50% off General Availability (GA) pricing for the life of your account. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
+                    </p>
+                    <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-3">
+                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
                     </p>
                     <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
-                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
+                        Includes a 14-day free trial — no charge until day 15. Cancel anytime during the trial at no cost. We accept Visa, Mastercard, American Express, ACH bank transfer, and wire.
                     </p>
                     <Link href="/onboarding">
                         <Button className="bg-[var(--re-brand)] text-white font-semibold rounded-[10px] px-7 py-3 shadow-[0_4px_16px_rgba(16,185,129,0.25)]">
@@ -330,7 +334,7 @@ export default async function PricingPage() {
                         </div>
                     </div>
                     <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
-                        * ReposiTrak publicly lists supplier plans from $59/mo (basic) to $179/mo (unlimited). Competitor data from public sources as of Jan 2026.
+                        * ReposiTrak publicly lists supplier plans from $59/mo (basic) to $179/mo (unlimited). Competitor data from public sources as of April 2026.
                     </p>
                 </div>
             </section>
@@ -357,7 +361,7 @@ export default async function PricingPage() {
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
                 <div className="max-w-[600px] mx-auto text-center">
                     <h2 className="text-[28px] font-bold text-white mb-3">
-                        Lock In 50% Off Before GA Launch
+                        Lock In 50% Off Before General Availability
                     </h2>
                     <p className="text-base text-white/90 mb-8">
                         Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.

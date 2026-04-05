@@ -98,7 +98,9 @@ export default function FSMADashboardPage() {
         reason: 'Mock drill initiated from dashboard',
       });
     } catch (error) {
-      console.error('Failed to start drill:', error);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('Failed to start drill:', error);
+      }
     }
   };
 

@@ -333,6 +333,7 @@ class CTEPersistence:
                     :epcis_event_type, :epcis_action, :epcis_biz_step,
                     :validation_status
                 )
+                ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
             """),
             {
                 "id": event_id,
@@ -654,6 +655,7 @@ class CTEPersistence:
                         epcis_event_type, epcis_action, epcis_biz_step,
                         validation_status
                     ) VALUES {', '.join(values_clauses)}
+                    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                 """
                 self.session.execute(text(sql), params)
 
@@ -718,23 +720,91 @@ class CTEPersistence:
     # Read Path — FDA Export Queries
     # ------------------------------------------------------------------
 
+    def _expand_tlcs_via_transformation_links(
+        self,
+        tenant_id: str,
+        seed_tlc: str,
+        depth: int = 5,
+    ) -> List[str]:
+        """Return all TLCs reachable from seed_tlc through transformation_links.
+
+        Walks both directions (forward: seed → outputs, backward: seed → inputs)
+        using a breadth-first traversal capped at `depth` hops.  Returns the
+        full set of TLCs including the seed itself.
+
+        Falls back to [seed_tlc] if the transformation_links table does not exist
+        or is unreachable (graceful degradation).
+        """
+        try:
+            # Note: use CAST(:tlc AS text) rather than :tlc::text — SQLAlchemy's
+            # text() parameter parser misidentifies :param::cast as a single token,
+            # silently dropping the :tlc binding and producing a SyntaxError.
+            rows = self.session.execute(
+                text("""
+                    WITH RECURSIVE tlc_graph(tlc, depth) AS (
+                        -- Seed
+                        SELECT CAST(:tlc AS text), 0
+                        UNION
+                        -- Forward: seed was an input → walk to outputs
+                        SELECT tl.output_tlc, tg.depth + 1
+                        FROM   fsma.transformation_links tl
+                        JOIN   tlc_graph tg ON tg.tlc = tl.input_tlc
+                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
+                        UNION
+                        -- Backward: seed is an output → walk to inputs
+                        SELECT tl.input_tlc, tg.depth + 1
+                        FROM   fsma.transformation_links tl
+                        JOIN   tlc_graph tg ON tg.tlc = tl.output_tlc
+                        WHERE  tl.tenant_id = :tid AND tg.depth < :max_depth
+                    )
+                    SELECT DISTINCT tlc FROM tlc_graph
+                """),
+                {"tid": tenant_id, "tlc": seed_tlc, "max_depth": depth},
+            ).fetchall()
+            return [r[0] for r in rows] if rows else [seed_tlc]
+        except Exception as e:
+            # Roll back any aborted transaction so the session stays usable.
+            # Without this, a SQL error here poisons all subsequent queries on
+            # the same session with InFailedSqlTransaction.
+            logger.debug("transformation_links_traversal_skipped: %s %s", type(e).__name__, e)
+            try:
+                self.session.rollback()
+            except Exception:
+                pass
+            return [seed_tlc]
+
     def query_events_by_tlc(
         self,
         tenant_id: str,
         tlc: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        follow_transformations: bool = True,
     ) -> List[Dict[str, Any]]:
-        """
-        Query CTE events for a specific TLC within a date range.
+        """Query CTE events for a TLC within a date range.
 
-        This is the query that backs the FDA export: "Give me all
-        traceability records for lot code X between dates Y and Z."
+        When follow_transformations=True (default), also returns events for all
+        TLCs linked via fsma.transformation_links — both upstream inputs and
+        downstream outputs.  This satisfies FDA §1.1350(c): a 24-hour records
+        request must include the full traceability chain through transformations.
+
+        Set follow_transformations=False for point queries that should not
+        expand the result set (e.g. internal dedup checks).
         """
-        params: Dict[str, Any] = {"tid": tenant_id, "tlc": tlc}
+        # Resolve the full set of TLCs to query
+        if follow_transformations:
+            tlc_set = self._expand_tlcs_via_transformation_links(tenant_id, tlc)
+        else:
+            tlc_set = [tlc]
+
+        params: Dict[str, Any] = {"tid": tenant_id}
+        tlc_placeholders = ", ".join(f":tlc_{i}" for i in range(len(tlc_set)))
+        for i, t in enumerate(tlc_set):
+            params[f"tlc_{i}"] = t
+
         where_clauses = [
             "tenant_id = :tid",
-            "traceability_lot_code = :tlc",
+            f"traceability_lot_code IN ({tlc_placeholders})",
             "validation_status != 'rejected'",
         ]
 
@@ -762,12 +832,15 @@ class CTEPersistence:
             params,
         ).fetchall()
 
+        # Tag each event with whether it's the queried TLC or a linked one
+        seed_tlc = tlc  # original query TLC, before expansion
         events = []
         for row in rows:
+            row_tlc = row[2]
             event = {
                 "id": str(row[0]),
                 "event_type": row[1],
-                "traceability_lot_code": row[2],
+                "traceability_lot_code": row_tlc,
                 "product_description": row[3],
                 "quantity": row[4],
                 "unit_of_measure": row[5],
@@ -780,6 +853,11 @@ class CTEPersistence:
                 "validation_status": row[12],
                 "ingested_at": row[13].isoformat() if row[13] else None,
                 "kdes": {},
+                # Trace relationship metadata (used in FDA export CSV)
+                "trace_seed_tlc": seed_tlc,
+                "trace_relationship": (
+                    "queried" if row_tlc == seed_tlc else "linked_via_transformation"
+                ),
             }
             events.append(event)
 

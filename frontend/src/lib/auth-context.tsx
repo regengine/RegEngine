@@ -87,12 +87,16 @@ async function setSessionCookies(params: {
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.error('[auth] Failed to set session cookie:', res.status);
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[auth] Failed to set session cookie:', res.status);
+      }
       return false;
     }
     return true;
   } catch (err) {
-    console.error('[auth] Failed to set session cookie:', err);
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[auth] Failed to set session cookie:', err);
+    }
     return false;
   }
 }
@@ -135,7 +139,9 @@ async function migrateLocalStorageToCookies(): Promise<void> {
 
   if (!legacyApiKey && !legacyAdminKey && !legacyAccessToken) return;
 
-  console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
+  }
 
   const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
   const userStr = localStorage.getItem(STORAGE_KEYS.USER);
@@ -157,7 +163,9 @@ async function migrateLocalStorageToCookies(): Promise<void> {
   localStorage.removeItem(STORAGE_KEYS._LEGACY_ADMIN_KEY);
   localStorage.removeItem(STORAGE_KEYS._LEGACY_ACCESS_TOKEN);
 
-  console.info('[auth] Migration complete — localStorage secrets removed.');
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[auth] Migration complete — localStorage secrets removed.');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -402,11 +410,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     //
     // Awaiting setSessionCookies first ensures the Set-Cookie response is
     // processed by the browser before any navigation can occur.
-    await setSessionCookies({
+    //
+    // #535: Check the return value — if the /api/session POST fails (network
+    // error, server error) we must throw rather than silently continue.
+    // A false return means the re_access_token cookie was never written, so
+    // the very next middleware check would reject the user and redirect back
+    // to /login, producing a confusing loop. Throwing here surfaces the
+    // problem immediately as an error in the login form instead.
+    const cookiesOk = await setSessionCookies({
       accessToken: token,
       tenantId: loginTenantId,
       user: loginUser,
     });
+
+    if (!cookiesOk) {
+      throw new Error('Session could not be established. Please try again.');
+    }
 
     // React state updates — triggers re-renders and the navigation useEffect.
     // Cookie is guaranteed to be stored in the browser at this point.

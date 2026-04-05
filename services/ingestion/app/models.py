@@ -2,10 +2,70 @@
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
+
+# ---------------------------------------------------------------------------
+# SSRF protection (#549)
+# Block requests to private IP ranges and well-known metadata endpoints.
+# ---------------------------------------------------------------------------
+
+_BLOCKED_HOSTNAMES = frozenset({
+    "metadata.google.internal",
+    "169.254.169.254",          # AWS/GCP/Azure IMDS
+    "fd00:ec2::254",            # AWS IPv6 IMDS
+})
+
+_SSRF_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),   # Link-local / IMDS
+    ipaddress.ip_network("::1/128"),           # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),          # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),         # IPv6 link-local
+]
+
+
+def _reject_private_host(url: HttpUrl) -> None:
+    """Raise ValueError if the URL resolves to a private or metadata IP address."""
+    host = url.host
+    if not host:
+        raise ValueError("URL must include a hostname.")
+
+    # Block known metadata endpoint hostnames directly
+    if host.lower() in _BLOCKED_HOSTNAMES:
+        raise ValueError(f"Requests to '{host}' are not permitted (metadata endpoint).")
+
+    # Resolve the hostname and check all returned addresses
+    try:
+        addrinfos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        # If DNS resolution fails we cannot verify safety — reject
+        raise ValueError(f"Unable to resolve hostname '{host}'.")
+
+    for _family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip_str = sockaddr[0]
+        try:
+            addr = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+            raise ValueError(
+                f"Requests to private or reserved IP addresses are not permitted "
+                f"(resolved '{host}' → {ip_str})."
+            )
+        for network in _SSRF_BLOCKED_NETWORKS:
+            if addr in network:
+                raise ValueError(
+                    f"Requests to private or reserved IP addresses are not permitted "
+                    f"(resolved '{host}' → {ip_str})."
+                )
 
 
 class IngestRequest(BaseModel):
@@ -14,6 +74,12 @@ class IngestRequest(BaseModel):
     url: HttpUrl
     source_system: str = Field(..., min_length=1, max_length=200)
     vertical: Optional[str] = Field(None, description="Regulatory vertical")
+
+    @field_validator("url")
+    @classmethod
+    def url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
+        _reject_private_host(v)
+        return v
 
 
 class DirectIngestRequest(BaseModel):
@@ -57,6 +123,12 @@ class NormalizedDocument(BaseModel):
     text_extraction: Optional[TextExtractionMetadata] = None
     content_sha256: str
     content_type: Optional[str] = None
+
+    @field_validator("source_url")
+    @classmethod
+    def source_url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
+        _reject_private_host(v)
+        return v
 
 
 class NormalizedEvent(BaseModel):
