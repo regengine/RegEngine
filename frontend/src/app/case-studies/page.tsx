@@ -1,10 +1,8 @@
-'use client';
-
-import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2, Clock, AlertCircle, TrendingUp, BarChart3 } from 'lucide-react';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Valley Fresh Produce Case Study | RegEngine',
   description:
     'See how RegEngine transformed a mid-size produce distributor from manual CSV uploads to FDA-ready EPCIS exports in 2.4 hours. Real-world FSMA 204 traceability.',
@@ -12,7 +10,7 @@ export const metadata = {
     'FSMA 204 case study, food traceability, produce traceability, EPCIS export, FDA compliance, RegEngine, case study',
 };
 
-const CaseStudy = () => {
+export default function CaseStudy() {
   return (
     <main className="bg-black text-white">
       {/* Hero Section */}
@@ -734,6 +732,4 @@ const CaseStudy = () => {
       </section>
     </main>
   );
-};
-
-export default CaseStudy;
+}
