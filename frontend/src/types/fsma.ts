@@ -4,7 +4,7 @@
 export type FacilityType = 'FARM' | 'PROCESSOR' | 'DISTRIBUTOR' | 'RETAILER' | 'RESTAURANT';
 
 // Trace event types
-export type TraceEventType = 'CREATION' | 'SHIPPING' | 'RECEIVING' | 'TRANSFORMATION';
+export type TraceEventType = 'HARVESTING' | 'COOLING' | 'INITIAL_PACKING' | 'FIRST_LAND_BASED_RECEIVING' | 'SHIPPING' | 'RECEIVING' | 'TRANSFORMATION';
 
 // Recall status
 export type RecallStatus = 'PENDING' | 'IN_PROGRESS' | 'MET' | 'AT_RISK' | 'BREACHED' | 'COMPLETED' | 'CANCELLED';

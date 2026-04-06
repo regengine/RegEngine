@@ -9,7 +9,7 @@ Hi [Name],
 Quick question: do you know which of your products are on the FDA Food Traceability List?
 
 I built a free tool that checks FTL coverage instantly:
-`https://regengine.com/tools/ftl-checker`
+`https://regengine.co/tools/ftl-checker`
 
 No signup required. Takes about 30 seconds.
 
@@ -32,7 +32,7 @@ Major retailers are requiring FSMA 204 readiness from suppliers ahead of the fed
 I put together a free Retailer Readiness Assessment that scores your current posture
 across six dimensions:
 
-`https://regengine.com/retailer-readiness`
+`https://regengine.co/retailer-readiness`
 
 It takes about 5 minutes. I personally review each submission and send a short gap analysis.
 
@@ -57,7 +57,7 @@ I built RegEngine to close that gap: API-first traceability infrastructure that 
 recall-ready records in 42 minutes with 98% KDE completeness in the same simulation profile.
 
 Here is a recall simulation using realistic supply-chain patterns:
-`https://regengine.com/demo/recall-simulation`
+`https://regengine.co/demo/recall-simulation`
 
 Open to a 15-minute conversation to compare against what you are seeing?
 

@@ -291,6 +291,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (isAuthErrorRedirect && event !== 'SIGNED_OUT') return;
         if (session?.access_token && session.user) {
+          // Guard: if a custom RegEngine JWT session is already established
+          // (accessToken is set), do NOT overwrite re_access_token with the
+          // Supabase access_token. The middleware verifies re_access_token
+          // using the RegEngine signing key (HS256) — writing a Supabase JWT
+          // here would fail verification and trigger a redirect loop.
+          //
+          // This callback should only bootstrap auth state when the user has
+          // a surviving Supabase session but no custom JWT (e.g. page refresh
+          // where Supabase cookie persists but re_access_token expired).
+          if (accessToken) return;
+
           const appUser: User = {
             id: session.user.id,
             email: session.user.email || '',

@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - FDA export: `export_fda()`
 
 - **CTEType Enum**: All 7 FSMA 204 Critical Tracking Events
-  - `GROWING`, `RECEIVING`, `TRANSFORMATION`, `SHIPPING`
-  - `FIRST_LAND_RECEIVING`, `COOLING`, `INITIAL_PACKING`
+  - `HARVESTING`, `COOLING`, `INITIAL_PACKING`, `FIRST_LAND_BASED_RECEIVING`
+  - `SHIPPING`, `RECEIVING`, `TRANSFORMATION`
 
 - **Data Models**: Type-safe dataclasses
   - `Record`, `TraceResult`, `FTLResult`, `RecallDrill`, `ReadinessScore`

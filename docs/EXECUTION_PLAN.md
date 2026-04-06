@@ -114,7 +114,7 @@ Do not use this file as active planning guidance.
 | Alpha signups don't convert to demos              | Medium    | Medium | Iterate messaging; add FTL Checker as lead magnet       |
 | Patent attorney pushback on claim scope            | Low       | Medium | Code evidence is strong; file narrow provisionals first |
 | Acquirer interest without revenue proof             | Medium    | Low    | Revenue is optionality, not requirement for acquisition |
-| FSMA 204 deadline pushed back by FDA               | Low       | High   | Platform is vertical-agnostic; pivot to next mandate    |
+| FSMA 204 deadline pushed back by FDA               | Low       | High   | Expand to adjacent food safety regulations (FSMA 204d, Intentional Adulteration); core traceability engine applies directly |
 
 ---
 
