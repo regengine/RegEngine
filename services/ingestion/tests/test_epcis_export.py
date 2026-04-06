@@ -27,12 +27,7 @@ class TestCTEToBizStep:
     """Tests for the _CTE_TO_BIZSTEP mapping."""
 
     def test_has_all_cte_types(self):
-        """EPCIS bizstep mapping covers 7 original CTE types.
-
-        Note: 'growing' CTE was added in V053 but does not yet have an
-        EPCIS bizstep URI mapping — it will be added when the GS1
-        standard defines one.
-        """
+        """EPCIS bizstep mapping covers all 7 canonical FSMA 204 CTEs."""
         assert set(_CTE_TO_BIZSTEP.keys()) == EXPECTED_CTE_TYPES
 
     def test_all_uris_start_with_bizstep_prefix(self):

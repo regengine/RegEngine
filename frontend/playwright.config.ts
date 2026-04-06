@@ -50,9 +50,14 @@ export default defineConfig({
             ADMIN_SERVICE_URL: process.env.ADMIN_SERVICE_URL ?? '',
             INGESTION_SERVICE_URL: process.env.INGESTION_SERVICE_URL ?? '',
             COMPLIANCE_SERVICE_URL: process.env.COMPLIANCE_SERVICE_URL ?? '',
-            // Supabase config for middleware session checks
-            NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-            NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
+            // Supabase config: intentionally OMITTED for E2E.
+            // The middleware cross-validates custom JWT + Supabase session (#538).
+            // E2E login only uses the admin service JWT — no Supabase signIn occurs,
+            // so no Supabase auth cookies are set. Without these env vars, the
+            // middleware's hasSomeSupabaseCookie() returns true (bypass), allowing
+            // JWT-only auth to work. Production still enforces both auth systems.
+            NEXT_PUBLIC_SUPABASE_URL: '',
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
         },
     },
 
