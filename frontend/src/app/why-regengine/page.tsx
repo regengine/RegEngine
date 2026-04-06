@@ -443,14 +443,14 @@ HTTP 201
                                 Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
                             </p>
                             <p className="text-gray-400 text-sm mb-6">
-                                Design partners lock in 50% off forever. Standard GA customers start at $999/mo. Honest pricing for honest work.
+                                Founding Design Partners get preferred pricing for the life of their account. Standard GA customers start at $999/mo. Honest pricing for honest work.
                             </p>
                             <ul className="space-y-2">
                                 {[
                                     'Month-to-month billing, no long-term contracts',
                                     'Free API access across all plans',
                                     'Volume discounts for 10+ facilities',
-                                    'Founding team pricing locked in for life',
+                                    'Founding Design Partner rate never increases',
                                 ].map((item, idx) => (
                                     <li key={idx} className="flex gap-3 text-sm text-gray-300">
                                         <Check className="h-5 w-5 text-green-400 flex-shrink-0" />
@@ -517,13 +517,13 @@ HTTP 201
                             <h4 className="text-sm font-semibold text-gray-300 mb-6">All 7 FSMA 204 CTE Types</h4>
                             <div className="space-y-3">
                                 {[
-                                    'Produce Traceability Lot Code (TLC)',
-                                    'Product Produce Traceability CTE',
-                                    'Harvester Traceability CTE',
-                                    'Processor Traceability CTE',
-                                    'Transporter Traceability CTE',
-                                    'Receiver Traceability CTE',
-                                    'Commodity Traceability CTE',
+                                    'Harvesting',
+                                    'Cooling',
+                                    'Initial Packing',
+                                    'First Land-Based Receiving',
+                                    'Shipping',
+                                    'Receiving',
+                                    'Transformation',
                                 ].map((item, idx) => (
                                     <div key={idx} className="flex gap-2">
                                         <Check className="h-4 w-4 text-green-400 flex-shrink-0 mt-0.5" />
@@ -540,7 +540,7 @@ HTTP 201
                                 All 7 FSMA 204 CTE types, fully implemented. Every field validated individually (not batch). Missing CTEs are the #1 reason FDA compliance fails.
                             </p>
                             <p className="text-gray-400 text-sm mb-6">
-                                FoodLogiQ and SafetyChain cover 5–6 CTEs. ReposiTrak covers 6. RegEngine covers all 7, plus per-CTE KDE validation that catches errors before FDA submission.
+                                Most competitors cover a subset of CTEs or validate in batch. RegEngine covers all 7, with per-CTE KDE validation that catches errors before FDA submission.
                             </p>
                             <ul className="space-y-2">
                                 {[

@@ -179,15 +179,11 @@ jobs:
         env:
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
         run: |
           MISSING=()
           [[ -z "$TEST_USER_EMAIL" ]]          && MISSING+=("TEST_USER_EMAIL")
           [[ -z "$TEST_PASSWORD" ]]             && MISSING+=("TEST_PASSWORD")
-          [[ -z "$NEXT_PUBLIC_SUPABASE_URL" ]] && MISSING+=("NEXT_PUBLIC_SUPABASE_URL")
-          [[ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]] && MISSING+=("NEXT_PUBLIC_SUPABASE_ANON_KEY")
           [[ -z "$JWT_SIGNING_KEY" ]]          && MISSING+=("JWT_SIGNING_KEY")
           if [[ ${#MISSING[@]} -gt 0 ]]; then
             echo "::error::E2E requires GitHub Secrets that are not configured: ${MISSING[*]}"
@@ -225,8 +221,11 @@ jobs:
           ADMIN_SERVICE_URL: https://regengine-production.up.railway.app
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # Supabase env vars intentionally NOT set here.
+          # E2E tests use admin service JWT auth only. The playwright.config.ts
+          # sets NEXT_PUBLIC_SUPABASE_URL='' so middleware skips Supabase
+          # cross-validation (hasSomeSupabaseCookie returns true when Supabase
+          # is not configured). Production still enforces both auth systems.
           # JWT signing key — MUST match the value set on the admin service (Railway).
           # The Next.js middleware verifies re_access_token cookies with this key.
           # Without it, every authenticated route redirects to login?error=session_expired.

@@ -40,8 +40,14 @@ def validate_gln(gln: str) -> tuple[bool, str | None]:
 
 
 class WebhookCTEType(str, Enum):
-    """CTE types accepted by the webhook endpoint (all 8 per FSMA 204 §1.1310)."""
-    GROWING = "growing"
+    """CTE types accepted by the webhook endpoint.
+
+    The 7 canonical FSMA 204 CTEs (per 21 CFR 1.1310) are: harvesting,
+    cooling, initial_packing, first_land_based_receiving, shipping,
+    receiving, transformation.  GROWING is accepted for ingest
+    backwards-compatibility but normalizes to farm metadata, not a CTE.
+    """
+    GROWING = "growing"  # legacy/internal — not an FDA-defined CTE
     HARVESTING = "harvesting"
     COOLING = "cooling"
     INITIAL_PACKING = "initial_packing"
