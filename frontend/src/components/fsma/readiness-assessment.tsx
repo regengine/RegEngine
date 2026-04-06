@@ -40,16 +40,24 @@ const FTL_CATEGORIES = [
     { id: 'molluscan-shellfish', name: 'Molluscan Shellfish (bivalves)', examples: 'Oysters, clams, mussels, scallops', icon: Package },
     { id: 'nut-butters', name: 'Nut Butters', examples: 'Peanut butter, almond butter', icon: Package },
     { id: 'eggs', name: 'Shell Eggs', examples: 'Chicken eggs, duck eggs', icon: Package },
-    { id: 'cheese', name: 'Cheeses (other than hard cheeses)', examples: 'Brie, Camembert, queso fresco, cottage, ricotta', icon: Package },
+    { id: 'cheese', name: 'Soft and Semi-Soft Cheeses', examples: 'Brie, Camembert, queso fresco, cottage, ricotta', icon: Package },
+    { id: 'specific-vegetables', name: 'Specific Fresh Vegetables', examples: 'Celery, green onions, fresh beans, fresh peas', icon: Package },
+    { id: 'nuts-seeds', name: 'Peanuts, Tree Nuts, and Seeds', examples: 'Raw peanuts, almonds, walnuts, sesame seeds (for further processing)', icon: Package },
+    { id: 'spices', name: 'Spices (dried/dehydrated)', examples: 'Black pepper, cumin, paprika, cinnamon', icon: Package },
+    { id: 'aquatic-farmed', name: 'Fresh Aquatic Farmed Food', examples: 'Farm-raised fish, shrimp, aquaculture products', icon: Package },
+    { id: 'rte-bakery', name: 'Ready-to-Eat Bakery Products', examples: 'Bakery items containing cheese, cut fruit, or cut vegetables', icon: Package },
+    { id: 'concentrated-fruit-veg', name: 'Concentrated Fruit/Vegetable Products', examples: 'Juice not for further processing, fruit/vegetable concentrates', icon: Package },
 ];
 
 // Critical Tracking Events (CTEs)
 const CTES = [
-    { id: 'growing', name: 'Growing', description: 'Harvesting of raw agricultural commodities' },
-    { id: 'receiving', name: 'Receiving', description: 'Receipt of food at a facility' },
-    { id: 'transforming', name: 'Transforming', description: 'Changing a food into a different food' },
-    { id: 'creating', name: 'Creating', description: 'Making a new traceability lot code' },
+    { id: 'harvesting', name: 'Harvesting', description: 'Harvesting of raw agricultural commodities' },
+    { id: 'cooling', name: 'Cooling', description: 'Cooling before initial packing' },
+    { id: 'initial_packing', name: 'Initial Packing', description: 'Initial packing of raw agricultural commodities' },
+    { id: 'first_receiver', name: 'First Land-Based Receiving', description: 'First receipt of food at a US facility from a fishing vessel or import' },
     { id: 'shipping', name: 'Shipping', description: 'Sending food from one location to another' },
+    { id: 'receiving', name: 'Receiving', description: 'Receipt of food at a facility' },
+    { id: 'transformation', name: 'Transformation', description: 'Manufacturing, processing, or changing a food' },
 ];
 
 // Key Data Elements (KDEs)

@@ -233,7 +233,7 @@ GET /opportunities/arbitrage?j1=US&j2=EU&concept=capital
 **Tiers**:
 | Tier | Price | Use Case |
 |------|-------|----------|
-| **Developer** | $0/mo | Prototyping, evaluation |
+| **Free** | $0/mo | Prototyping, evaluation |
 | **Professional** | $499/mo | Mid-market fintech, compliance teams |
 | **Enterprise** | $2,500+/mo | Large banks, RegTech OEM licensing |
 

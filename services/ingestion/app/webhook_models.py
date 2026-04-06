@@ -69,11 +69,6 @@ VALID_UNITS_OF_MEASURE = {
 
 # Required KDEs per CTE type (§1.1325–§1.1350)
 REQUIRED_KDES_BY_CTE: Dict[WebhookCTEType, List[str]] = {
-    WebhookCTEType.GROWING: [
-        "traceability_lot_code", "product_description", "quantity",
-        "unit_of_measure", "growing_area_name", "location_name",
-        "reference_document",  # §1.1325(b)
-    ],
     WebhookCTEType.HARVESTING: [
         "traceability_lot_code", "product_description", "quantity",
         "unit_of_measure", "harvest_date", "location_name",

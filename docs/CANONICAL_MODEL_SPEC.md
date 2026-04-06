@@ -7,7 +7,7 @@ The Canonical Model Specification defines the single, authoritative representati
 This specification ensures that:
 1. **Consistency**: All downstream rules and queries operate on uniform data regardless of source format
 2. **Auditability**: Every ingested CTE can be traced back to its canonical representation and original source
-3. **Compliance**: The canonical model directly implements the Key Data Elements (KDEs) required by 21 CFR § 1.1340–1.1350 for FSMA 204
+3. **Compliance**: The canonical model directly implements the Key Data Elements (KDEs) required by 21 CFR §§ 1.1325–1.1350 for FSMA 204
 4. **Versioning**: The canonical model itself is versioned, allowing migrations when regulatory requirements or business logic change
 5. **Interoperability**: Data exported from RegEngine can be imported into other systems with full fidelity
 
@@ -15,7 +15,7 @@ This specification ensures that:
 
 ## Critical Traceability Events (CTEs)
 
-FSMA 204 § 1.1340 defines seven types of Critical Traceability Events that must be recorded by all food businesses. RegEngine captures and normalizes all seven:
+FSMA 204 Subpart S (21 CFR §§ 1.1325-1.1350) defines seven types of Critical Tracking Events that must be recorded by all food businesses. RegEngine captures and normalizes all seven:
 
 ### 1. Harvesting
 
@@ -33,7 +33,7 @@ A Harvesting event records the initial capture of raw agricultural product.
 - `source_event_id`: The originating system's unique identifier for this event
 - `source_format`: "EPCIS", "EDI", "MANUAL", or other format this event came from
 
-**Regulatory Alignment**: 21 CFR § 1.1340(a)
+**Regulatory Alignment**: 21 CFR § 1.1325(a)
 
 ### 2. Cooling
 
@@ -52,7 +52,7 @@ A Cooling event records when a product is temperature-controlled after harvest.
 - `source_event_id`: As above
 - `source_format`: As above
 
-**Regulatory Alignment**: 21 CFR § 1.1340(b)
+**Regulatory Alignment**: 21 CFR § 1.1325(b)
 
 ### 3. Packing
 
@@ -70,7 +70,7 @@ A Packing event records when a product is packaged for shipment.
 - `source_event_id`: As above
 - `source_format`: As above
 
-**Regulatory Alignment**: 21 CFR § 1.1340(c)
+**Regulatory Alignment**: 21 CFR § 1.1327
 
 ### 4. First Land-Based Receiving
 
@@ -88,7 +88,7 @@ A First Land-Based Receiving event records when an aquaculture or seafood produc
 - `source_event_id`: As above
 - `source_format`: As above
 
-**Regulatory Alignment**: 21 CFR § 1.1340(d)
+**Regulatory Alignment**: 21 CFR § 1.1330
 
 ### 5. Shipping
 
@@ -108,7 +108,7 @@ A Shipping event records when a product leaves a facility.
 - `source_event_id`: As above
 - `source_format`: As above
 
-**Regulatory Alignment**: 21 CFR § 1.1340(e)
+**Regulatory Alignment**: 21 CFR § 1.1335
 
 ### 6. Receiving
 
@@ -125,7 +125,7 @@ A Receiving event records when a product is received at a facility.
 - `source_event_id`: As above
 - `source_format`: As above
 
-**Regulatory Alignment**: 21 CFR § 1.1340(f)
+**Regulatory Alignment**: 21 CFR § 1.1340
 
 ### 7. Transformation
 
@@ -144,7 +144,7 @@ A Transformation event records when a product is converted into a different prod
 - `source_event_id`: As above
 - `source_format`: As above
 
-**Regulatory Alignment**: 21 CFR § 1.1340(g)
+**Regulatory Alignment**: 21 CFR § 1.1345
 
 ---
 
@@ -156,11 +156,11 @@ For each CTE type, the following KDEs must be present in the canonical represent
 
 | KDE | Description | Format | Source Regulation |
 |---|---|---|---|
-| `event_type` | One of the 7 CTE types | String enum | FSMA 204 § 1.1340 |
-| `event_timestamp` | When the event occurred | ISO 8601 UTC | 21 CFR § 1.1340(a)–(g) |
-| `product` | The product involved | Product Entity (see below) | 21 CFR § 1.1340 |
-| `quantity` | How much was involved | Numeric | 21 CFR § 1.1340 |
-| `unit_of_measure` | The unit (KG, LB, CASE, etc.) | String enum | 21 CFR § 1.1340 |
+| `event_type` | One of the 7 CTE types | String enum | FSMA 204 §§ 1.1325–1.1345 |
+| `event_timestamp` | When the event occurred | ISO 8601 UTC | 21 CFR §§ 1.1325–1.1345 |
+| `product` | The product involved | Product Entity (see below) | 21 CFR §§ 1.1325–1.1345 |
+| `quantity` | How much was involved | Numeric | 21 CFR §§ 1.1325–1.1345 |
+| `unit_of_measure` | The unit (KG, LB, CASE, etc.) | String enum | 21 CFR §§ 1.1325–1.1345 |
 | `source_event_id` | Originating system's ID | String UUID or URN | Audit trail requirement |
 | `source_format` | How the event was ingested | String enum | Audit trail requirement |
 
@@ -405,7 +405,7 @@ The canonical model is validated continuously:
 ## References
 
 - GS1 EPCIS 2.0 Specification: https://www.gs1.org/standards/epcis
-- FDA FSMA 204: 21 CFR § 1.1340–1.1350
+- FDA FSMA 204: 21 CFR §§ 1.1325–1.1350
 - GS1 GLN: https://www.gs1.org/standards/gln
 - GS1 GTIN: https://www.gs1.org/standards/gtin
 - GS1 SSCC: https://www.gs1.org/standards/sscc
