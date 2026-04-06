@@ -15,6 +15,7 @@ from app.auth_utils import decode_access_token
 # Supabase Integration
 from shared.supabase_client import get_supabase
 from shared.permissions import has_permission
+from shared.env import is_production
 
 # Redis Session Store
 from app.session_store import RedisSessionStore, redact_connection_url
@@ -66,17 +67,17 @@ async def get_current_user(
                 # user_metadata typically holds the tenant_id or we look it up in our DB map
                 tenant_id = sb_user.user_metadata.get("tenant_id")
                 
-                # Check if this user exists in our local DB (Hybrid approach)
-                # If not, auto-provision? Or fail?
-                # For now, let's assume we map IDs 1:1.
+                # User existence verified at line 101 below (db.get raises if missing)
         except (OSError, TimeoutError, ConnectionError, ValueError, AttributeError) as e:
             logger.warning("supabase_auth_failed", error=str(e))
             # In production, fail closed — do not fall through to local JWT
-            if os.getenv("REQUIRE_SUPABASE_AUTH", "").lower() in ("true", "1", "yes"):
+            # unless explicitly opted out via ALLOW_LOCAL_JWT_FALLBACK=true
+            if is_production() and not os.getenv("ALLOW_LOCAL_JWT_FALLBACK", "").lower() in ("true", "1"):
+                logger.error("supabase_auth_failed_production_fail_closed", error=str(e))
                 raise credentials_exception
 
     # 2. Fallback to Local JWT (Legacy / Dev Path)
-    # Only reached if Supabase returned no user AND REQUIRE_SUPABASE_AUTH is not set
+    # Only reached in dev, or if Supabase is not configured, or explicit opt-in
     if not user_id:       
         try:
             payload = decode_access_token(token)

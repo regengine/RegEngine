@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Production Hardening
 from shared.rate_limit import add_rate_limiting, limiter
+from shared.metrics_auth import require_metrics_key
 
 logger = structlog.get_logger("scheduler-api")
 
@@ -88,7 +89,7 @@ async def status():
     }
 
 
-@app.get("/metrics")
+@app.get("/metrics", dependencies=[Depends(require_metrics_key)])
 @limiter.limit("100/minute")
 async def metrics():
     """Get Prometheus metrics."""
