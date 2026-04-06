@@ -21,7 +21,7 @@ Food safety, compliance, and supplier ops leads preparing for FSMA 204.
 - [ ] Verify FDA export endpoint returns package for sample lot.
 
 ### Five minutes before call
-- [ ] Start on `/product` page.
+- [ ] Start on `/walkthrough` page.
 - [ ] Open tabs: `/fsma/field-capture`, `/tools/knowledge-graph`, `/tools/recall-readiness`.
 - [ ] Have one fallback barcode image ready if camera permissions fail.
 - [ ] Ensure billing/pricing page is open for close.
@@ -32,7 +32,7 @@ Food safety, compliance, and supplier ops leads preparing for FSMA 204.
 "FSMA 204 is an operational response-time problem. Most teams can find data, but not fast enough or complete enough under recall pressure."
 
 ### 1:30-3:00 - Product tour
-- Open `/product`.
+- Open `/walkthrough`.
 - Walk the three pillars: scan, ask, export.
 - Set expectation: "I will run one lot through all three live."
 
