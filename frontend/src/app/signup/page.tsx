@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { PLAN_LABELS } from '@/lib/constants';
 
 function SignupForm() {
@@ -34,7 +35,22 @@ function SignupForm() {
 
     try {
       const response = await apiClient.signup(email, password, tenantName);
+
+      // Set RegEngine JWT session FIRST (sets re_access_token cookie + React state)
       await login(response.access_token, response.user, response.tenant_id);
+
+      // #538 fix: Establish Supabase session alongside custom JWT.
+      // Middleware cross-validates both sessions — without this the user
+      // hits a redirect loop on the next protected route.
+      const supabase = createSupabaseBrowserClient();
+      const { error: sbError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (sbError) {
+        console.error('[signup] Supabase session sync failed:', sbError.message);
+      }
+
       router.push('/onboarding/setup/welcome');
     } catch (err: unknown) {
       const apiError = err as {

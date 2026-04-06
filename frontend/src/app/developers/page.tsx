@@ -201,7 +201,7 @@ export default function DevelopersPage() {
                                 <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </Link>
-                        <Link href="/login?next=/developer/portal">
+                        <Link href="/developer/portal">
                             <Button variant="outline" className="border-[var(--re-surface-border)] text-re-text-secondary hover:border-[var(--re-brand)]/30 px-6">
                                 <LogIn className="mr-2 w-4 h-4" />
                                 Developer Portal
@@ -210,7 +210,7 @@ export default function DevelopersPage() {
                     </div>
                     <p className="text-xs text-re-text-disabled mt-6">
                         Already have an account?{' '}
-                        <Link href="/login?next=/developer/portal" className="text-[var(--re-brand)] underline">
+                        <Link href="/developer/portal" className="text-[var(--re-brand)] underline">
                             Sign in to the portal
                         </Link>
                         {' '}&middot;{' '}

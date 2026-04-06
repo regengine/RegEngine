@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
@@ -154,13 +155,36 @@ export default function LoginPage() {
         try {
             const response = await apiClient.login(email, password);
 
-            // Update auth context — must await so the HTTP-only cookie is set
-            // before router.push triggers middleware that checks for it
+            // Update auth context FIRST — sets re_access_token (RegEngine JWT)
+            // cookie and updates React state. Must complete before Supabase
+            // signIn so the onAuthStateChange guard (accessToken check) prevents
+            // the Supabase callback from overwriting re_access_token with a
+            // Supabase JWT that the middleware can't verify.
             await login(
                 response.access_token,
                 response.user,
                 response.tenant_id
             );
+
+            // #538 fix: Establish Supabase session alongside custom JWT.
+            // The middleware cross-validates both auth systems — a valid
+            // re_access_token JWT without a Supabase cookie triggers a
+            // session_expired redirect. This sets the Supabase cookies that
+            // hasSomeSupabaseCookie() checks for.
+            //
+            // Runs AFTER login() so React state is set, which prevents the
+            // onAuthStateChange callback from clobbering re_access_token.
+            const supabase = createSupabaseBrowserClient();
+            const { error: sbError } = await supabase.auth.signInWithPassword({ email, password });
+            if (sbError) {
+                // Supabase auth failed — this means the user exists in RegEngine
+                // but not in Supabase, or passwords are out of sync. Log it and
+                // surface the issue rather than silently breaking middleware.
+                console.error('[login] Supabase session sync failed:', sbError.message);
+                // Don't throw — the RegEngine JWT is set and the user can still
+                // reach public/free-tool routes. But protected routes will fail
+                // until Supabase session is established.
+            }
 
             // Clear any error params (e.g. ?error=session_expired) left by
             // middleware so the redirect useEffect doesn't block navigation

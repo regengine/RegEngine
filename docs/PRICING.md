@@ -6,13 +6,13 @@ RegEngine uses **transparent, usage-based pricing** aligned with customer value:
 - Pay for what you use
 - No hidden enterprise premiums
 - Scale from prototype to production seamlessly
-- Self-service signup for Developer and Professional tiers
+- Self-service signup for Free and Professional tiers
 
 ---
 
 ## Pricing Tiers
 
-### 🔧 Developer
+### 🔧 Free
 **$0/month**
 
 Perfect for evaluation, prototyping, and small-scale use.
@@ -41,7 +41,7 @@ Perfect for evaluation, prototyping, and small-scale use.
 
 For growing compliance teams and small RegTech vendors.
 
-**Everything in Developer, plus**:
+**Everything in Free, plus**:
 - 50,000 API calls/month
 - 200 documents ingested/month
 - 20 jurisdictions
@@ -118,7 +118,7 @@ For RegTech vendors who want to embed RegEngine as their regulatory data layer.
 
 | Tier | Included Calls | Overage Rate | Effective CPM* |
 |------|----------------|--------------|----------------|
-| Developer | 1,000 | N/A (hard cap) | Free |
+| Free | 1,000 | N/A (hard cap) | Free |
 | Professional | 50,000 | $0.01/call | $10/1k calls |
 | Enterprise | Unlimited | Included | ~$0.005/call |
 
@@ -128,7 +128,7 @@ For RegTech vendors who want to embed RegEngine as their regulatory data layer.
 
 | Tier | Included Docs | Overage Rate | Per-Doc Cost |
 |------|---------------|--------------|--------------|
-| Developer | 10 | N/A (hard cap) | Free |
+| Free | 10 | N/A (hard cap) | Free |
 | Professional | 200 | $2.50/doc | $2.50 |
 | Enterprise | Unlimited | Included | ~$0.25 |
 
@@ -136,7 +136,7 @@ For RegTech vendors who want to embed RegEngine as their regulatory data layer.
 
 | Tier | Jurisdictions | Additional Coverage |
 |------|---------------|---------------------|
-| Developer | 3 (US, EU, UK) | Not available |
+| Free | 3 (US, EU, UK) | Not available |
 | Professional | 20 (major markets) | +$100/month per jurisdiction |
 | Enterprise | 100+ (global) | Custom sources available |
 
@@ -236,7 +236,7 @@ For RegTech vendors who want to embed RegEngine as their regulatory data layer.
 
 ---
 
-## Free Tier (Alternative to Developer)
+## Free Tier (Extended)
 
 If we want to maximize adoption, consider a permanent free tier:
 
@@ -263,7 +263,7 @@ A document is a single regulatory file (PDF, HTML, JSON) ingested via the ingest
 Yes. Upgrades are prorated and take effect immediately. Downgrades take effect at the next billing cycle.
 
 ### What happens if I exceed my limits?
-**Developer**: Hard cap—API returns 429 error.
+**Free**: Hard cap—API returns 429 error.
 **Professional**: Overages are charged at the rates listed above.
 **Enterprise**: No limits.
 
@@ -277,7 +277,7 @@ Yes, but you're responsible for infrastructure costs. We provide Docker Compose 
 Credit card (Stripe), ACH, wire transfer (Enterprise only).
 
 ### Is there a setup fee?
-No setup fee for Developer or Professional. Enterprise may include one-time onboarding fee ($5k–$10k) for custom deployments.
+No setup fee for Free or Professional. Enterprise may include one-time onboarding fee ($5k–$10k) for custom deployments.
 
 ---
 
@@ -316,7 +316,7 @@ No setup fee for Developer or Professional. Enterprise may include one-time onbo
 
 ## Sales Process
 
-### Developer → Self-Service
+### Free → Self-Service
 - Sign up online
 - Credit card required (after free tier)
 - No sales call needed

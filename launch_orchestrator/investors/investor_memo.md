@@ -160,7 +160,7 @@ RegEngine is a **regulatory data supply chain** with four core capabilities:
 
 | Tier | Price | Target Customer | ARR per Customer |
 |------|-------|-----------------|-------------------|
-| **Developer** | $0/mo | Prototyping, evaluation | $0 |
+| **Free** | $0/mo | Prototyping, evaluation | $0 |
 | **Professional** | $499/mo | Mid-market fintech | $6k/year |
 | **Enterprise** | $2,500+/mo | Large banks, RegTech OEM | $30k-$500k/year |
 
