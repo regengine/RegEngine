@@ -269,7 +269,7 @@ export default function TrustCenterPage() {
                         <ul className="mt-2 space-y-1 text-sm text-re-text-muted">
                             <li>FDA Final Rule: Requirements for Additional Traceability Records (21 CFR Part 1, Subpart S)</li>
                             <li>Compliance date: July 20, 2028 (extended from original January 2026)</li>
-                            <li>Food Traceability List (FTL): 23 categories, last updated November 2022</li>
+                            <li>Food Traceability List (FTL): 23 categories, per FDA FTL current as of April 2026</li>
                             <li>FDA Guidance: Key Data Elements — March 2024 draft</li>
                         </ul>
                     </div>

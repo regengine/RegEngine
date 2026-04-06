@@ -36,8 +36,8 @@ RegEngine is API-first FSMA 204 compliance infrastructure that:
 
 ## Get Started
 
-1. Run the free FTL Coverage Checker: `https://regengine.com/tools/ftl-checker`
-2. Complete the Retailer Readiness Assessment: `https://regengine.com/retailer-readiness`
+1. Run the free FTL Coverage Checker: `https://regengine.co/tools/ftl-checker`
+2. Complete the Retailer Readiness Assessment: `https://regengine.co/retailer-readiness`
 3. Book a 30-minute compliance gap review
 
-Contact: `chris@regengine.com`
+Contact: `chris@regengine.co`
