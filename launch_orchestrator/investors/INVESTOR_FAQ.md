@@ -183,7 +183,7 @@ Sources: Gartner, Forrester, CB Insights
 
 **A**: Three tiers:
 
-1. **Developer** ($0/month):
+1. **Free** ($0/month):
    - 1,000 API calls/month
    - 10 documents
    - Community support
