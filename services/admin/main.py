@@ -155,11 +155,11 @@ For API support, consult the documentation at `/docs` (this page) or `/redoc`.
     """,
     contact={
         "name": "RegEngine Support",
-        "url": "https://github.com/PetrefiedThunder/RegEngine",
+        "url": "https://regengine.co/docs",
     },
     license_info={
         "name": "Proprietary",
-        "url": "/terms",
+        "url": "https://regengine.co/terms",
     },
 )
 

@@ -7,7 +7,7 @@ const checklistItems = [
     {
         id: "harvest",
         title: "Harvest CTEs captured",
-        description: "Growing and harvesting events with lot codes assigned at point of harvest",
+        description: "Harvesting events with lot codes assigned at point of harvest",
         regulation: "21 CFR § 1.1325(b)",
         url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1325",
     },
@@ -15,8 +15,8 @@ const checklistItems = [
         id: "shipping",
         title: "Shipping CTEs captured",
         description: "All outbound shipments with Traceability Lot Codes linked to each unit",
-        regulation: "21 CFR § 1.1350(b)",
-        url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1350",
+        regulation: "21 CFR § 1.1340(b)",
+        url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1340",
     },
     {
         id: "receiving",
@@ -29,8 +29,8 @@ const checklistItems = [
         id: "transformation",
         title: "Transformation CTEs captured",
         description: "Processing, packing, and repacking events with new TLCs assigned",
-        regulation: "21 CFR § 1.1335(b)",
-        url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1335",
+        regulation: "21 CFR § 1.1350(b)",
+        url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1350",
     },
     {
         id: "kdes",
@@ -288,7 +288,7 @@ export default function FSMAChecklist() {
                 {showResults && (
                     <div className="animate-in fade-in slide-in-from-bottom-3 duration-400">
                         {allChecked ? (
-                            /* All 8 Checked */
+                            /* All Checked */
                             <div className="bg-[rgba(5,150,105,0.08)] border border-[rgba(5,150,105,0.2)] rounded-xl p-8 text-center">
                                 <div className="text-[#059669] mb-4">
                                     <ShieldIcon />
@@ -297,7 +297,7 @@ export default function FSMAChecklist() {
                                     You're Retailer-Ready
                                 </h3>
                                 <p className="text-sm text-[#64748b] mb-6 leading-relaxed">
-                                    All 8 FSMA 204 requirements met. Want to automate your compliance
+                                    All FSMA 204 readiness checks passed. Want to automate your compliance
                                     monitoring and get alerts when regulations change?
                                 </p>
                                 <Link

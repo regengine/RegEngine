@@ -69,13 +69,13 @@ Every major incumbent (Trustwell, TraceGains, iFoodDS, SafetyChain) is UI-first,
 ## 3. FSMA 204 Hard Deadline (July 2028) with Expanding Scope
 
 ### The Problem
-The rule requires end-to-end digital traceability for 20+ high-risk food categories, with 8 Critical Tracking Events, specific Key Data Elements at each, and the ability to produce records for the FDA within 24 hours in an electronic sortable format. The FTL will likely expand.
+The rule requires end-to-end digital traceability for 20+ high-risk food categories, with 7 Critical Tracking Events, specific Key Data Elements at each, and the ability to produce records for the FDA within 24 hours in an electronic sortable format. The FTL will likely expand.
 
 ### How RegEngine Addresses It
 
 | FSMA 204 Requirement | RegEngine Capability | Status |
 |---|---|---|
-| 7 CTE types (harvest → ship) | All 7 implemented: harvesting, cooling, initial_packing, first_land_based_receiving, receiving, transformation, shipping | Production |
+| 7 CTE types (harvest → ship) | All 7 implemented: harvesting, cooling, initial_packing, first_land_based_receiving, shipping, receiving, transformation | Production |
 | KDE capture at each CTE | Full validation: TLC, product description, quantity, UOM, event date/time, location (GLN), origin/destination, temperature, carrier, prior source TLC | Production |
 | Traceability Lot Codes (TLCs) | Assignment, validation, normalization, lifecycle tracking | Production |
 | 24-hour FDA response | Sortable spreadsheet export (29 columns per 21 CFR 1.155) with date range filtering, instant CSV generation | Production |

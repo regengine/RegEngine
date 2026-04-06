@@ -21,7 +21,7 @@ RegEngine gives food safety and compliance teams a single system to manage FSMA 
 
 - **78+ FDA/FSMA Obligations** — Mapped with automated status monitoring and deadline alerts
 - **6-Dimensional Compliance Scoring** — Real-time scoring across Chain Integrity, KDE Completeness, CTE Completeness, Obligation Coverage, Product Coverage, and Export Readiness
-- **FTL Coverage Analysis** — Instant check of your products against the FDA Food Traceability List (17 categories), with CTE and KDE breakdowns
+- **FTL Coverage Analysis** — Instant check of your products against the FDA Food Traceability List (23 categories), with CTE and KDE breakdowns
 - **Blocking Enforcement** — The compliance control plane blocks defective submissions, not just tracks them. Strict mode converts warnings to errors.
 
 ### Operations
@@ -66,7 +66,7 @@ RegEngine runs as a **consolidated FastAPI monolith** backed by **PostgreSQL** (
 
 **Key design decisions:**
 
-- **PostgreSQL replaces Kafka** — Async task processing via `task_queue` table with `pg_notify` triggers. Simpler to operate, zero external dependencies.
+- **PostgreSQL for task processing** — Primary async task processing via `task_queue` table with `pg_notify` triggers. An optional Kafka consumer handles low-confidence extraction review when Redpanda/Kafka is available.
 - **Recursive CTEs replace Neo4j** — Forward/backward supply chain tracing runs entirely in PostgreSQL. One fewer database to manage.
 - **Row-Level Security everywhere** — Every tenant-scoped table enforces RLS policies. Multi-tenancy is enforced at the database layer, not just application code.
 - **Fail-closed auth** — Rate limiting fails closed when Redis is unavailable. API key validation uses constant-time comparison. Brute-force protection on all auth endpoints.
@@ -135,8 +135,7 @@ The canonical traceability event is the single source of truth for all FSMA 204 
 
 | CTE Type | Status | Key KDEs |
 |----------|--------|----------|
-| Growing | Supported | Growing area, location, grower name, coordinates |
-| Harvesting | Supported | Harvest date, field ID, harvester name |
+| Harvesting | Supported | Harvest date, field ID, harvester name, growing area coordinates |
 | Cooling | Supported | Cooling date, temperature, facility |
 | Initial Packing | Supported | Pack date, input lot codes, harvester business |
 | First Land-Based Receiving | Supported | Landing date, vessel/source, BOL reference |
