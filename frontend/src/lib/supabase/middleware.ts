@@ -3,16 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 // Routes that require an authenticated developer session
 const GATED_PATTERNS = [
-    '/developer/portal',
-    '/developers',
-    '/docs/api',
-    '/docs/authentication',
-    '/docs/quickstart',
-    '/docs/sdks',
-    '/docs/webhooks',
-    '/docs/rate-limits',
-    '/docs/errors',
-    '/docs/changelog',
     '/playground',
     '/api-keys',
 ];
