@@ -15,7 +15,4 @@ for p in (str(_PROJECT_ROOT), str(_SERVICES_DIR)):
 from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 
-# Default env vars for test isolation
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("LOG_LEVEL", "WARNING")
-os.environ.setdefault("INTERNAL_SERVICE_SECRET", "trusted-internal-v1")
+# Env defaults are applied by tests/conftest.py via tests/env_defaults.py

@@ -34,11 +34,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # ---------------------------------------------------------------------------
-# Target metadata — None for now (models are Pydantic, not SQLAlchemy ORM).
-# When/if SQLAlchemy ORM models are introduced, import Base.metadata here
-# to enable autogenerate support.
+# Target metadata — imports the SQLAlchemy ORM Base so `alembic revision
+# --autogenerate` can detect model↔schema drift automatically.
 # ---------------------------------------------------------------------------
-target_metadata = None
+from services.admin.app.sqlalchemy_models import Base  # noqa: E402
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
