@@ -15,19 +15,19 @@ info:
     access tenants they created.
 
     **Rate Limits:** 1,000 requests/minute (partner tier). Contact
-    partnerships@regengine.com for higher limits.
+    partnerships@regengine.co for higher limits.
   version: 1.0.0
   contact:
     name: RegEngine Partnerships
-    email: partnerships@regengine.com
+    email: partnerships@regengine.co
   license:
     name: Proprietary
-    url: https://regengine.ai/terms
+    url: https://regengine.co/terms
 
 servers:
-  - url: https://api.regengine.ai/v1/partner
+  - url: https://api.regengine.co/v1/partner
     description: Production
-  - url: https://sandbox.regengine.ai/v1/partner
+  - url: https://sandbox.regengine.co/v1/partner
     description: Sandbox (synthetic data)
 
 security:
@@ -193,7 +193,7 @@ paths:
           description: Filter by regulatory vertical
           schema:
             type: string
-            enum: [fsma, energy, finance, technology]
+            enum: [fsma]
             default: fsma
       responses:
         '200':
@@ -453,7 +453,7 @@ components:
           enum: [active, suspended, churned, onboarding]
         billing_tier:
           type: string
-          enum: [developer, professional, enterprise]
+          enum: [free, growth, scale, enterprise]
         compliance_score:
           type: number
           format: float
@@ -510,7 +510,7 @@ components:
               type: array
               items:
                 type: string
-                enum: [fsma, energy, finance, technology]
+                enum: [fsma]
             allowed_jurisdictions:
               type: array
               items:
@@ -555,13 +555,13 @@ components:
           example: "Acme Foods Inc."
         billing_tier:
           type: string
-          enum: [developer, professional, enterprise]
+          enum: [free, growth, scale, enterprise]
           description: "Determines API limits and pricing"
         verticals:
           type: array
           items:
             type: string
-            enum: [fsma, energy, finance, technology]
+            enum: [fsma]
           default: [fsma]
         allowed_jurisdictions:
           type: array
@@ -585,7 +585,7 @@ components:
           type: string
         billing_tier:
           type: string
-          enum: [developer, professional, enterprise]
+          enum: [free, growth, scale, enterprise]
         branding:
           $ref: '#/components/schemas/ClientBranding'
         webhook_url:

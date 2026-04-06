@@ -459,7 +459,7 @@ export interface DemoLot {
 export interface DemoTraceEvent {
     id: string;
     tlc: string;
-    eventType: 'GROWING' | 'RECEIVING' | 'TRANSFORMING' | 'CREATING' | 'SHIPPING';
+    eventType: 'HARVESTING' | 'COOLING' | 'INITIAL_PACKING' | 'FIRST_LAND_BASED_RECEIVING' | 'SHIPPING' | 'RECEIVING' | 'TRANSFORMATION';
     facilityGln: string;
     timestamp: string;
     kdes: Record<string, string>;

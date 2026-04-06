@@ -70,11 +70,11 @@ class TestWebhookCTEType:
     """Tests for WebhookCTEType enum."""
 
     def test_has_all_cte_types(self):
-        assert len(WebhookCTEType) == 8
+        assert len(WebhookCTEType) == 7
 
     def test_expected_members(self):
         expected = {
-            "growing", "harvesting", "cooling", "initial_packing",
+            "harvesting", "cooling", "initial_packing",
             "first_land_based_receiving", "shipping",
             "receiving", "transformation",
         }

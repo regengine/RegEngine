@@ -45,11 +45,13 @@ const FTL_CATEGORIES = [
 
 // Critical Tracking Events (CTEs)
 const CTES = [
-    { id: 'growing', name: 'Growing', description: 'Harvesting of raw agricultural commodities' },
-    { id: 'receiving', name: 'Receiving', description: 'Receipt of food at a facility' },
-    { id: 'transforming', name: 'Transforming', description: 'Changing a food into a different food' },
-    { id: 'creating', name: 'Creating', description: 'Making a new traceability lot code' },
+    { id: 'harvesting', name: 'Harvesting', description: 'Harvesting of raw agricultural commodities' },
+    { id: 'cooling', name: 'Cooling', description: 'Cooling before initial packing' },
+    { id: 'initial_packing', name: 'Initial Packing', description: 'Initial packing of raw agricultural commodities' },
+    { id: 'first_receiver', name: 'First Land-Based Receiving', description: 'First receipt of food at a US facility from a fishing vessel or import' },
     { id: 'shipping', name: 'Shipping', description: 'Sending food from one location to another' },
+    { id: 'receiving', name: 'Receiving', description: 'Receipt of food at a facility' },
+    { id: 'transformation', name: 'Transformation', description: 'Manufacturing, processing, or changing a food' },
 ];
 
 // Key Data Elements (KDEs)

@@ -24,7 +24,7 @@ Worth 15 minutes?
 (unchanged — record today)
 
 ## F. Pricing Quick Reference
-(unchanged — Developer $0, Professional $499/mo, etc.)
+(Free tier, Growth $999/mo, Enterprise custom)
 
 ## G. Appendix: External Market Facts
 (unchanged — all verified)
@@ -52,7 +52,7 @@ Subject: Regulatory Intelligence Layer for Trustwell’s FSMA Platform
 
 **Email 3: Kellerman Consulting**  
 Subject: Turn Your FSMA Assessments into Recurring SaaS Revenue  
-(Exact body — $4,900/mo Professional tier + API reference added)
+(Exact body — Growth $999/mo tier + API reference added)
 
 **Follow-Up Cadence** (unchanged — Day 0/2/5/8/12/30)
 
@@ -93,5 +93,5 @@ Exhibit C: Support SLA & Branding Guidelines)
 
 - Use Loom/Riverside  
 - Exact timestamps & talk track from kit (Minute 1: drift, Minute 2: EvidenceEnvelopeV3, Minute 3: 24-hour spreadsheet)  
-- End screen: “Kernel is vertical-agnostic. Your ERP integration is next.”  
+- End screen: “FSMA 204 compliance in minutes, not months. Your ERP integration is next.”  
 - Record branded version for each partner (TAG/Trustwell/Kellerman logo in corner)
