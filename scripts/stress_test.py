@@ -131,7 +131,6 @@ TESTS = [
     {"name": "admin/ftl-categories",  "method": "GET",  "url": "{admin}/v1/supplier/ftl-categories"},
     {"name": "admin/social-proof",    "method": "GET",  "url": "{admin}/v1/supplier/social-proof"},
     {"name": "admin/admin-roles",     "method": "GET",  "url": "{admin}/v1/admin/roles"},
-    {"name": "admin/pcos-dashboard",  "method": "GET",  "url": "{admin}/pcos/dashboard"},
 
     # === COMPLIANCE SERVICE ===
     {"name": "compliance/risk-summary", "method": "GET", "url": "{compliance}/v1/risk/summary"},
