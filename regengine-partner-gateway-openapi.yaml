@@ -193,7 +193,7 @@ paths:
           description: Filter by regulatory vertical
           schema:
             type: string
-            enum: [fsma, nuclear, energy, finance, technology]
+            enum: [fsma, energy, finance, technology]
             default: fsma
       responses:
         '200':
@@ -510,7 +510,7 @@ components:
               type: array
               items:
                 type: string
-                enum: [fsma, nuclear, energy, finance, technology]
+                enum: [fsma, energy, finance, technology]
             allowed_jurisdictions:
               type: array
               items:
@@ -561,7 +561,7 @@ components:
           type: array
           items:
             type: string
-            enum: [fsma, nuclear, energy, finance, technology]
+            enum: [fsma, energy, finance, technology]
           default: [fsma]
         allowed_jurisdictions:
           type: array
