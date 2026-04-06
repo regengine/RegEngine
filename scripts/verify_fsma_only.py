@@ -22,6 +22,7 @@ BANNED_DIRS = [
     "services/admin/app/verticals/healthcare_enterprise",
     "services/admin/app/verticals/nuclear",
     "services/admin/app/verticals/technology",
+    "sdks/nuclear",
 ]
 
 # ── 2. Files that must NOT exist ───────────────────────────────────────────

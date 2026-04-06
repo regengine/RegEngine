@@ -11,7 +11,7 @@ export type MarketingToolLink = {
 };
 
 export const MARKETING_PRIMARY_NAV: MarketingNavLink[] = [
-    { label: "Product", href: "/product" },
+    { label: "Product", href: "/walkthrough" },
     { label: "Why RegEngine", href: "/why-regengine" },
     { label: "Retailer Readiness", href: "/retailer-readiness" },
     { label: "Pricing", href: "/pricing" },

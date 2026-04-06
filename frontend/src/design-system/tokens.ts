@@ -143,7 +143,6 @@ export const verticalColors = {
     gaming: { primary: '#ec4899', gradient: 'from-pink-500 to-rose-400' },
     healthcare: { primary: '#06b6d4', gradient: 'from-cyan-500 to-blue-400' },
     manufacturing: { primary: '#fbbf24', gradient: 'from-amber-400 to-yellow-300' },
-    nuclear: { primary: '#f97316', gradient: 'from-orange-500 to-red-400' },
     technology: { primary: '#3b82f6', gradient: 'from-blue-500 to-indigo-400' },
 } as const
 
