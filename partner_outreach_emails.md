@@ -19,7 +19,7 @@ I'm reaching out because The Acheson Group is one of the most respected names in
 
 RegEngine is a production FSMA 204 compliance kernel that does three things your clients are starting to demand:
 
-1. **Continuous monitoring instead of point-in-time assessments.** Our Neo4j knowledge graph maps every obligation in 21 CFR Parts 1, 11, 117, and 204 to your clients' actual controls and evidence—updated in real-time, not annually.
+1. **Continuous monitoring instead of point-in-time assessments.** Our knowledge graph maps every obligation in 21 CFR Parts 1, 11, 117, and 204 to your clients' actual controls and evidence—updated in real-time, not annually.
 
 2. **Cryptographic proof of compliance.** Every compliance record is sealed in an EvidenceEnvelopeV3 (SHA-256 hash chain + Merkle tree proof). Your clients can hand the FDA a JSON export and a standalone verification script—the auditor can mathematically prove nothing was tampered with. No competitor offers this.
 
@@ -55,7 +55,7 @@ RegEngine is an API-first FSMA 204 compliance kernel. What's relevant for Trustw
 
 **The gap you likely feel:** Retailers like Walmart and Kroger are now enforcing KDE completeness on ASNs ahead of the FDA's July 2028 deadline. Your customers need their traceability data to be not just present but *provably intact*—cryptographic proof that nothing was altered between capture and audit.
 
-**What we provide:** RegEngine wraps every compliance fact in an EvidenceEnvelopeV3 (SHA-256 hash chain + Merkle proofs). Our Neo4j knowledge graph decomposes FSMA obligations into Regulation → Section → Obligation → Control → Evidence relationships, enabling compliance scoring (coverage × effectiveness × freshness) that updates in real-time.
+**What we provide:** RegEngine wraps every compliance fact in an EvidenceEnvelopeV3 (SHA-256 hash chain + Merkle proofs). Our knowledge graph decomposes FSMA obligations into Regulation → Section → Obligation → Control → Evidence relationships, enabling compliance scoring (coverage × effectiveness × freshness) that updates in real-time.
 
 **The integration model:** Our API sits behind yours. Your users never see RegEngine. You call our endpoints for obligation mapping, evidence sealing, and compliance scoring. We provide the regulatory intelligence; Trustwell provides the user experience and supply chain workflow.
 
@@ -91,9 +91,9 @@ RegEngine converts that pattern into continuous monitoring with recurring revenu
 
 1. **Kellerman delivers the initial gap assessment** using our free FSMA applicability wizard and your regulatory expertise. You keep 100% of the consulting fee.
 
-2. **RegEngine provides the ongoing technology** under Kellerman branding—live obligation tracking, cryptographic evidence chains (SHA-256 hash chains that auditors can independently verify), and real-time compliance scoring via our Neo4j knowledge graph.
+2. **RegEngine provides the ongoing technology** under Kellerman branding—live obligation tracking, cryptographic evidence chains (SHA-256 hash chains that auditors can independently verify), and real-time compliance scoring via our knowledge graph.
 
-3. **Your client pays a monthly SaaS license** (starting at $499/mo for Professional tier). Kellerman earns 25–35% of that recurring revenue for the lifetime of the client. With 10 clients, that's $15k–$21k/year in pure recurring revenue on top of your consulting fees.
+3. **Your client pays a monthly SaaS license** (starting at $499/mo for Base tier). Kellerman earns 25–35% of that recurring revenue for the lifetime of the client. With 10 clients, that's $15k–$21k/year in pure recurring revenue on top of your consulting fees.
 
 The multi-tenant architecture ensures every client's data is isolated (Row-Level Security + scoped API keys), and the dashboard carries your branding—not ours.
 

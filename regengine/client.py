@@ -148,7 +148,7 @@ class RegEngineClient:
         Create a traceability record for a Critical Tracking Event.
         
         Args:
-            cte_type: Type of CTE (GROWING, RECEIVING, TRANSFORMATION, SHIPPING)
+            cte_type: Type of CTE (HARVESTING, COOLING, INITIAL_PACKING, FIRST_LAND_BASED_RECEIVING, SHIPPING, RECEIVING, TRANSFORMATION)
             tlc: Traceability Lot Code
             location: GLN of the facility
             quantity: Amount of product

@@ -307,13 +307,13 @@
       "prior_source_tlc"
     ],
     "allowed_cte_types": [
-      "RECEIVING",
-      "TRANSFORMATION",
-      "SHIPPING",
       "HARVESTING",
       "COOLING",
       "INITIAL_PACKING",
-      "FIRST_LAND_BASED_RECEIVING"
+      "FIRST_LAND_BASED_RECEIVING",
+      "SHIPPING",
+      "RECEIVING",
+      "TRANSFORMATION"
     ]
   }
 }

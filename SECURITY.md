@@ -15,7 +15,7 @@ please report it responsibly.
 
 ### How to Report
 
-1. **Email**: Send details to **security@regengine.com**
+1. **Email**: Send details to **security@regengine.co**
 2. **Include**:
    - Description of the vulnerability
    - Steps to reproduce
