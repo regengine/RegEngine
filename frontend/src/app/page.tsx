@@ -1,55 +1,169 @@
 import Link from "next/link";
-import { ArrowRight, Leaf, ShieldCheck, BookOpen, Thermometer, CheckCircle2, XCircle, Lock, FileCheck, Database, Shield } from "lucide-react";
+import type { Metadata } from "next";
+import {
+  ArrowRight,
+  Leaf,
+  ShieldCheck,
+  BookOpen,
+  Thermometer,
+  Calculator,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  FileText,
+  Database,
+  Shield,
+  Zap,
+  Code2,
+  BarChart3,
+} from "lucide-react";
 import { DataTransformDemo } from "@/components/marketing/DataTransformDemo";
 import { SandboxUpload } from "@/components/marketing/SandboxUpload";
-import { HeroNewsletterSignup } from "@/components/marketing/HeroNewsletterSignup";
 
-const CREDIBILITY = [
-  { icon: FileCheck, label: "EPCIS 2.0 native" },
-  { icon: Lock, label: "SHA-256 verified chains" },
-  { icon: Database, label: "Built on Supabase" },
-  { icon: Shield, label: "SOC 2 Type I (in progress — target Q3 2026)" },
-];
+/* ------------------------------------------------------------------ */
+/*  SEO METADATA                                                       */
+/* ------------------------------------------------------------------ */
+export const metadata: Metadata = {
+  title: "RegEngine — FSMA 204 Food Traceability Compliance Infrastructure",
+  description:
+    "API-first FSMA 204 compliance infrastructure. Ingest traceability data, validate against FDA rules, and export audit-ready records in minutes. The Stripe for food traceability.",
+  keywords: [
+    "FSMA 204 compliance software",
+    "food traceability API",
+    "FDA traceability rule",
+    "FSMA 204 compliance platform",
+    "food safety compliance",
+    "FSMA Section 204",
+  ],
+  openGraph: {
+    title: "RegEngine — FSMA 204 Food Traceability Compliance Infrastructure",
+    description:
+      "API-first FSMA 204 compliance infrastructure. Ingest traceability data, validate against FDA rules, and export audit-ready records in minutes.",
+    url: "https://www.regengine.co",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RegEngine — FSMA 204 Food Traceability Compliance",
+    description:
+      "API-first FSMA 204 compliance infrastructure. The Stripe for food traceability.",
+  },
+};
 
 /* ------------------------------------------------------------------ */
 /*  DATA                                                               */
 /* ------------------------------------------------------------------ */
 
-const EVIDENCE = [
-  { value: "48hr", label: "Avg. time to first compliant CTE export†" },
-  { value: "100%", label: "of FSMA 204 CTEs covered by RegEngine†" },
-  { value: "24hr", label: "Automated FDA records response time†" },
-  { value: "EPCIS 2.0", label: "FDA-native format — no conversion layer" },
+const TRUST_SIGNALS = [
+  "Built for FSMA 204",
+  "Walmart-audit ready",
+  "API-first",
+  "24hr FDA response",
+];
+
+const URGENCY_STATS = [
+  {
+    value: "$250K+",
+    label: "Average cost of a failed FDA traceability audit",
+  },
+  {
+    value: "24 hrs",
+    label: "Time the FDA gives you to produce records under § 1.1455",
+  },
+  {
+    value: "Now",
+    label: "When Walmart, Kroger, and Albertsons started requiring traceability",
+  },
 ];
 
 const FREE_TOOLS = [
   {
     title: "FTL Coverage Checker",
-    desc: "Are your products on the FDA Food Traceability List? Find out in seconds.",
+    desc: "Enter a product. Find out if it's on the FDA Food Traceability List in seconds.",
     href: "/tools/ftl-checker",
-    tag: null,
     icon: Leaf,
+    tag: null,
   },
   {
     title: "Retailer Readiness Assessment",
-    desc: "Could you pass a Walmart supplier audit today? Scored automatically.",
+    desc: "Could you pass a Walmart supplier audit today? Auto-scored in 3 minutes.",
     href: "/retailer-readiness",
-    tag: "Popular",
     icon: ShieldCheck,
+    tag: "Most popular",
   },
   {
-    title: "FSMA 204 Compliance Guide",
-    desc: "Plain-English guide to the food traceability rule. No jargon.",
-    href: "/fsma-204",
-    tag: null,
-    icon: BookOpen,
-  },
-  {
-    title: "FDA Recall Drill",
-    desc: "Simulate an FDA records request and test your 24-hour response.",
+    title: "FDA Recall Drill Simulator",
+    desc: "Simulate an FDA 24-hour records request. See how fast you can respond.",
     href: "/tools/drill-simulator",
-    tag: null,
     icon: Thermometer,
+    tag: null,
+  },
+  {
+    title: "ROI Calculator",
+    desc: "Input your company size. See the cost of non-compliance vs. RegEngine pricing.",
+    href: "/tools/roi-calculator",
+    icon: Calculator,
+    tag: null,
+  },
+  {
+    title: "FSMA 204 Plain-English Guide",
+    desc: "The FDA rule, translated into language your team can actually use. No jargon.",
+    href: "/fsma-204",
+    icon: BookOpen,
+    tag: null,
+  },
+  {
+    title: "Live Data Sandbox",
+    desc: "Paste your CSV. RegEngine evaluates it against all 28 FSMA 204 rules. Nothing stored.",
+    href: "#sandbox",
+    icon: Database,
+    tag: "Try now",
+  },
+];
+
+const HOW_IT_WORKS = [
+  {
+    step: "01",
+    title: "Connect your data",
+    desc: "Upload CSVs, connect your ERP, or send records via API. RegEngine accepts any format.",
+    icon: Database,
+  },
+  {
+    step: "02",
+    title: "RegEngine validates & normalizes",
+    desc: "Every record is checked against FSMA 204 rules, mapped to EPCIS 2.0, and cryptographically verified.",
+    icon: Shield,
+  },
+  {
+    step: "03",
+    title: "Export FDA-ready records",
+    desc: "Generate a complete audit package in minutes — not weeks. Ready for FDA, Walmart, or any retailer.",
+    icon: FileText,
+  },
+];
+
+const PRICING_PREVIEW = [
+  {
+    name: "Base",
+    price: "$425",
+    period: "/mo",
+    desc: "1 facility, getting started",
+    features: ["Up to 5,000 CTEs/month", "FTL checker", "Email support"],
+  },
+  {
+    name: "Standard",
+    price: "$549",
+    period: "/mo",
+    desc: "Multi-facility, growing operations",
+    features: ["Up to 25,000 CTEs/month", "API access", "Priority support"],
+    highlighted: true,
+  },
+  {
+    name: "Premium",
+    price: "$639",
+    period: "/mo",
+    desc: "Enterprise-grade compliance",
+    features: ["Unlimited CTEs", "Dedicated account manager", "Custom integrations"],
   },
 ];
 
@@ -62,327 +176,438 @@ export default function RegEngineLanding() {
     <div className="overflow-x-hidden bg-[var(--re-surface-base)]">
 
       {/* ── HERO ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-14 sm:pt-20 pb-12 sm:pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+      <section className="relative max-w-[1200px] mx-auto px-4 sm:px-6 pt-16 sm:pt-24 pb-12 sm:pb-16">
+        {/* Subtle gradient background */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[var(--re-brand)] opacity-[0.03] rounded-full blur-[120px]" />
+        </div>
 
+        <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           {/* Left — copy */}
           <div>
-            <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-5">
-              FSMA 204 Compliance
-            </p>
-            <h1 className="font-serif text-[clamp(1.75rem,4.5vw,2.75rem)] font-bold text-[var(--re-text-primary)] leading-[1.15] tracking-tight mb-6">
-              The FDA gives you 24&nbsp;hours.{" "}
-              <em className="font-medium text-[var(--re-brand-dark)]">Your spreadsheets won&apos;t cut&nbsp;it.</em>
-            </h1>
-            <p className="text-[1.05rem] text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[480px]">
-              When the FDA or Walmart demands your traceability records, you have 24&nbsp;hours to respond with a complete chain of custody. RegEngine gets you there in&nbsp;minutes.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 mb-5">
-              <Link
-                href="/retailer-readiness"
-                className="group relative inline-flex items-center justify-center gap-2.5 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.925rem] font-semibold transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.3)] active:translate-y-0 active:shadow-[0_2px_8px_rgba(16,185,129,0.2)] overflow-hidden min-h-[48px]"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-                <span className="relative">Get Your Free Readiness Score — 3 Minutes</span>
-                <ArrowRight className="relative h-4 w-4 transition-transform duration-300 ease-out group-hover:translate-x-1" />
-              </Link>
-              <Link
-                href="/walkthrough"
-                className="inline-flex items-center justify-center gap-2 border border-[var(--re-surface-border)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-xl text-[0.925rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] hover:-translate-y-[2px] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)] min-h-[48px]"
-              >
-                See a 24hr FDA Response Demo
-              </Link>
-            </div>
-            <div>
-              <p className="text-[0.75rem] text-[var(--re-text-disabled)] mb-2">
-                Get FSMA 204 updates — no spam, unsubscribe anytime.
-              </p>
-              <HeroNewsletterSignup />
-            </div>
-          </div>
-
-          {/* Right — Walmart audit scenario card */}
-          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden shadow-re-md">
-            {/* Card header */}
-            <div className="px-4 sm:px-5 py-3 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full bg-[var(--re-warning)] flex-shrink-0" />
-              <span className="font-mono text-[0.65rem] sm:text-[0.72rem] font-medium text-[var(--re-text-muted)] tracking-wide">
-                INCOMING: SUPPLIER AUDIT REQUEST
+            <div className="inline-flex items-center gap-2 bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 rounded-full px-4 py-1.5 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--re-brand)] animate-pulse" />
+              <span className="font-mono text-xs font-medium text-[var(--re-brand)] tracking-wide">
+                API-first compliance infrastructure
               </span>
             </div>
 
-            {/* Card body */}
-            <div className="p-4 sm:p-5">
-              <p className="font-serif text-[0.95rem] sm:text-[1.05rem] font-medium text-[var(--re-text-primary)] leading-snug mb-5">
+            <h1 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-6">
+              Your traceability data, verified and FDA&#8209;ready before anyone&nbsp;asks.
+            </h1>
+
+            <p className="text-lg text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[520px]">
+              RegEngine is compliance infrastructure for food companies.
+              Ingest your traceability records, validate them against FSMA 204 rules,
+              and export an audit&#8209;ready package in minutes — not months.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 mb-8">
+              <Link
+                href="/retailer-readiness"
+                className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-sm font-semibold transition-all duration-200 hover:bg-[var(--re-brand-dark)] hover:shadow-re-glow active:scale-[0.98] min-h-[48px]"
+              >
+                Check Your Readiness (Free)
+                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                href="/docs"
+                className="inline-flex items-center justify-center gap-2 border border-[var(--re-border-default)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-lg text-sm font-medium transition-all duration-200 hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] min-h-[48px]"
+              >
+                <Code2 className="h-4 w-4" />
+                View API Docs
+              </Link>
+            </div>
+
+            {/* Trust bar */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {TRUST_SIGNALS.map((signal) => (
+                <span
+                  key={signal}
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--re-text-muted)] font-medium"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)]" />
+                  {signal}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Right — Audit response demo card */}
+          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl overflow-hidden shadow-re-lg">
+            <div className="px-5 py-3 border-b border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-[var(--re-warning)]" />
+              <span className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] tracking-wide uppercase">
+                Incoming: Supplier Audit Request
+              </span>
+            </div>
+            <div className="p-5">
+              <p className="font-serif text-[1rem] font-medium text-[var(--re-text-primary)] leading-snug mb-5">
                 &ldquo;Provide complete chain of custody for{" "}
-                <span className="text-[var(--re-brand-dark)]">Romaine Lettuce Lot&nbsp;R&#8209;2026&#8209;0312</span>{" "}
+                <span className="text-[var(--re-brand)]">
+                  Romaine Lettuce Lot&nbsp;R&#8209;2026&#8209;0312
+                </span>{" "}
                 from farm to distribution center. Due by end of business Friday.&rdquo;
               </p>
-
-              <div className="border-t border-[var(--re-surface-border)] pt-4 mt-4">
-                <p className="font-mono text-[0.65rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-3">
+              <div className="border-t border-[var(--re-surface-border)] pt-4">
+                <p className="font-mono text-[0.65rem] font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
                   RegEngine Response — 3 minutes later
                 </p>
                 <div className="space-y-2.5">
                   {[
-                    { label: "CTEs found", value: "12 of 12", badge: "Passed", badgeColor: "emerald" },
-                    { label: "Coverage", value: "100%", badge: "Complete", badgeColor: "emerald" },
-                    { label: "Format", value: "EPCIS 2.0 + PDF", badge: "Export Ready", badgeColor: "blue" },
-                    { label: "Cryptographic verification", value: "SHA-256", badge: "Verified", badgeColor: "emerald" },
+                    { label: "CTEs found", value: "12 of 12", badge: "Complete", color: "emerald" },
+                    { label: "Coverage", value: "100%", badge: "Verified", color: "emerald" },
+                    { label: "Format", value: "EPCIS 2.0 + PDF", badge: "FDA-ready", color: "blue" },
+                    { label: "Chain integrity", value: "SHA-256", badge: "Verified", color: "emerald" },
                   ].map((row) => (
                     <div key={row.label} className="flex items-center justify-between gap-2">
-                      <span className="text-[0.75rem] sm:text-[0.8rem] text-[var(--re-text-secondary)] shrink-0">{row.label}</span>
-                      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                        <span className="font-mono text-[0.75rem] sm:text-[0.8rem] font-medium text-[var(--re-brand-dark)] truncate">{row.value}</span>
-                        <span className={`text-[0.55rem] sm:text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
-                          row.badgeColor === "blue"
+                      <span className="text-xs text-[var(--re-text-secondary)]">{row.label}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-medium text-[var(--re-text-primary)]">
+                          {row.value}
+                        </span>
+                        <span className={`text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full border ${
+                          row.color === "blue"
                             ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
                             : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        }`}>{row.badge}</span>
+                        }`}>
+                          {row.badge}
+                        </span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-
-            {/* Card footer */}
-            <div className="px-4 sm:px-5 py-3 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
-              <span className="text-[0.8rem] text-[var(--re-text-muted)] hidden sm:inline">
-                Export ready to send
+            <div className="px-5 py-3 border-t border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] flex items-center justify-between">
+              <span className="text-xs text-[var(--re-text-muted)]">
+                Audit package assembled and export-ready
               </span>
-              <Link
-                href="/retailer-readiness"
-                className="group font-mono text-[0.72rem] font-semibold bg-[var(--re-brand)] text-white px-4 py-2.5 rounded-md transition-all duration-300 ease-out hover:bg-[var(--re-brand-dark)] hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(16,185,129,0.25)] text-center min-h-[44px] flex items-center justify-center"
+              <Zap className="h-4 w-4 text-[var(--re-brand)]" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PROBLEM / URGENCY SECTION ── */}
+      <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
+          <div className="text-center mb-10">
+            <p className="font-mono text-xs font-medium text-[var(--re-warning)] uppercase tracking-widest mb-3">
+              The compliance gap is real
+            </p>
+            <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight max-w-[700px] mx-auto">
+              Retailers aren&apos;t waiting for the FDA. Your suppliers shouldn&apos;t either.
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {URGENCY_STATS.map((stat) => (
+              <div
+                key={stat.label}
+                className="text-center p-6 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]"
               >
-                Check Your Readiness <span className="inline-block transition-transform duration-300 group-hover:translate-x-0.5 ml-1">→</span>
-              </Link>
-            </div>
+                <p className="font-display text-2xl sm:text-3xl font-bold text-[var(--re-brand)] mb-2">
+                  {stat.value}
+                </p>
+                <p className="text-sm text-[var(--re-text-secondary)] leading-relaxed">
+                  {stat.label}
+                </p>
+              </div>
+            ))}
           </div>
-        </div>
-      </section>
 
-      {/* ── FOUNDER TRUST STRIP ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-8">
-        <div className="flex items-start gap-4 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 sm:p-6">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[var(--re-brand)]/10 border-2 border-[var(--re-brand)]/30 flex items-center justify-center flex-shrink-0">
-            <span className="text-lg sm:text-xl font-serif font-bold text-[var(--re-brand)]">CS</span>
-          </div>
-          <div>
-            <p className="text-[0.95rem] sm:text-[1.05rem] text-[var(--re-text-primary)] leading-relaxed">
-              &ldquo;I&apos;m Chris Sellers, the founder. I work directly with every company in our founding cohort.
-              You&apos;ll get a dedicated Slack channel, same-day responses, and my cell phone number.&rdquo;
-            </p>
-            <p className="text-[0.8rem] text-[var(--re-text-muted)] mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span>Christopher Sellers, Founder &amp; CEO</span>
-              <Link href="/contact" className="text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors font-medium">
-                Book a call →
-              </Link>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* ── EVIDENCE STRIP ── */}
-      <div className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pt-6 sm:pt-8 pb-3 sm:pb-4 grid grid-cols-2 lg:grid-cols-4 items-center gap-4 sm:gap-6">
-          {EVIDENCE.map((e) => (
-            <div key={e.label} className="flex items-baseline gap-2">
-              <span className="font-serif text-[clamp(1.25rem,3vw,1.75rem)] font-bold text-[var(--re-brand-dark)] tracking-tight">
-                {e.value}
-              </span>
-              <span className="text-[0.75rem] sm:text-[0.85rem] text-[var(--re-text-secondary)] max-w-[180px] leading-snug">
-                {e.label}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-3 sm:pb-4">
-          <p className="text-[0.68rem] text-[var(--re-text-disabled)]">
-            † Based on RegEngine founding partner onboarding data, Q1 2026. Individual results may vary.
-          </p>
-        </div>
-      </div>
-
-      {/* ── SOCIAL PROOF STRIP ── */}
-      <div className="border-b border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
-        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6 sm:py-8 text-center">
-          <p className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.1em] mb-4">
-            Trusted by founding partners in food manufacturing and distribution
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              "5+ Founding Partners",
-              "10,000+ CTEs Processed",
-              "Zero FDA Findings",
-            ].map((metric) => (
-              <span
-                key={metric}
-                className="font-mono text-[0.75rem] sm:text-[0.8rem] font-medium text-[var(--re-text-secondary)] border border-[var(--re-surface-border)] rounded-full px-4 py-1.5"
-              >
-                {metric}
-              </span>
+              {
+                icon: AlertTriangle,
+                title: "Spreadsheets can't generate FDA-sortable exports",
+                desc: "21 CFR § 1.1455 requires electronic, sortable records. Excel doesn't qualify.",
+              },
+              {
+                icon: Clock,
+                title: "Current solutions take 12+ months to implement",
+                desc: "Enterprise platforms cost $200K+ and require dedicated IT teams. You don't have that time.",
+              },
+              {
+                icon: BarChart3,
+                title: "Retailers are already auditing suppliers",
+                desc: "Walmart, Kroger, Target, and Albertsons require traceability regardless of the FDA timeline.",
+              },
+            ].map((problem) => (
+              <div key={problem.title} className="flex gap-3 p-4 rounded-lg">
+                <problem.icon className="h-5 w-5 text-[var(--re-warning)] shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                    {problem.title}
+                  </h3>
+                  <p className="text-xs text-[var(--re-text-tertiary)] leading-relaxed">
+                    {problem.desc}
+                  </p>
+                </div>
+              </div>
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── BUILT ON STRIP ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8 sm:py-10">
-        <p className="font-mono text-[0.65rem] font-medium text-[var(--re-text-muted)] uppercase tracking-[0.1em] mb-4 text-center">
-          Built on standards you can audit
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
-          {CREDIBILITY.map((c) => (
-            <div key={c.label} className="flex items-center gap-2 text-[var(--re-text-secondary)]">
-              <c.icon className="h-4 w-4 text-[var(--re-text-muted)]" />
-              <span className="text-[0.8rem] sm:text-[0.85rem] font-medium">{c.label}</span>
-            </div>
+      {/* ── FREE TOOLS SHOWCASE ── */}
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24">
+        <div className="text-center mb-12">
+          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
+            Free tools — no signup required
+          </p>
+          <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4 max-w-[600px] mx-auto">
+            See your compliance gaps before you commit.
+          </h2>
+          <p className="text-[var(--re-text-secondary)] max-w-[480px] mx-auto">
+            Use these tools now. No account needed. Understand your exposure, then decide.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {FREE_TOOLS.map((tool) => (
+            <Link
+              key={tool.title}
+              href={tool.href}
+              className="group flex flex-col p-5 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl transition-all duration-200 hover:border-[var(--re-brand)]/50 hover:shadow-re-glow hover:-translate-y-0.5"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-200">
+                  <tool.icon className="h-5 w-5 text-[var(--re-brand)] group-hover:text-white transition-colors duration-200" />
+                </div>
+                {tool.tag && (
+                  <span className="font-mono text-[0.6rem] font-semibold text-[var(--re-brand)] bg-[var(--re-brand-muted)] px-2 py-0.5 rounded">
+                    {tool.tag}
+                  </span>
+                )}
+              </div>
+              <h3 className="font-display text-[0.95rem] font-semibold text-[var(--re-text-primary)] mb-1.5">
+                {tool.title}
+              </h3>
+              <p className="text-sm text-[var(--re-text-tertiary)] leading-relaxed flex-1">
+                {tool.desc}
+              </p>
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--re-brand)] mt-3 group-hover:gap-2 transition-all duration-200">
+                Try it now <ArrowRight className="h-3 w-3" />
+              </span>
+            </Link>
           ))}
         </div>
       </section>
 
-      {/* ── WHO THIS IS FOR ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-          Is this you?
-        </p>
-        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-8 max-w-[640px]">
-          Built for mid-size food suppliers who can&apos;t afford to fail an audit.
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 sm:p-6">
-            <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-4 flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
-              Good fit
-            </h3>
-            <ul className="space-y-2.5 text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
-              <li>Mid-size food manufacturer or distributor ($5M&ndash;$250M)</li>
-              <li>Tracking traceability in spreadsheets, email, or paper</li>
-              <li>Shipping to Walmart, Kroger, Costco, or similar retailers</li>
-              <li>Need to prove FSMA 204 compliance but don&apos;t have a system yet</li>
-            </ul>
+      {/* ── HOW IT WORKS ── */}
+      <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24">
+          <div className="text-center mb-14">
+            <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
+              How it works
+            </p>
+            <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight max-w-[600px] mx-auto">
+              From messy data to FDA&#8209;ready in three steps.
+            </h2>
           </div>
-          <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5 sm:p-6">
-            <h3 className="font-serif text-[1.05rem] font-medium text-[var(--re-text-primary)] mb-4 flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-[var(--re-text-muted)] flex-shrink-0" />
-              Not for you (yet)
-            </h3>
-            <ul className="space-y-2.5 text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
-              <li>Enterprise with an existing traceability platform (SAP, TraceLink)</li>
-              <li>Pre-revenue startup not yet shipping product</li>
-              <li>Restaurant or food service (FSMA 204 applies to manufacturing/distribution)</li>
-              <li>Already passing retailer audits with your current system</li>
-            </ul>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {HOW_IT_WORKS.map((step, i) => (
+              <div key={step.step} className="relative">
+                {/* Connector line */}
+                {i < HOW_IT_WORKS.length - 1 && (
+                  <div className="hidden md:block absolute top-8 left-[calc(100%)] w-full h-px border-t border-dashed border-[var(--re-border-default)]" aria-hidden="true" />
+                )}
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 flex items-center justify-center mb-5">
+                    <step.icon className="h-7 w-7 text-[var(--re-brand)]" />
+                  </div>
+                  <span className="font-mono text-xs font-semibold text-[var(--re-brand)] mb-2">
+                    Step {step.step}
+                  </span>
+                  <h3 className="font-display text-lg font-semibold text-[var(--re-text-primary)] mb-2">
+                    {step.title}
+                  </h3>
+                  <p className="text-sm text-[var(--re-text-tertiary)] leading-relaxed max-w-[300px]">
+                    {step.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* ── DATA TRANSFORM DEMO ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-          See what happens to bad data
-        </p>
-        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-          Messy CSV in. Defensible FDA package out.
-        </h2>
-        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
-          This is real. Missing fields, duplicate lots, inconsistent supplier names — the kind of data you actually get. Watch RegEngine catch it all.
-        </p>
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24">
+        <div className="mb-10">
+          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
+            See what happens to bad data
+          </p>
+          <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+            Messy CSV in. Defensible FDA package out.
+          </h2>
+          <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
+            Missing fields, duplicate lots, inconsistent supplier names — the kind of data you actually get. Watch RegEngine catch it all.
+          </p>
+        </div>
         <DataTransformDemo />
-        <div className="mt-8 text-center">
+      </section>
+
+      {/* ── LIVE SANDBOX ── */}
+      <section id="sandbox" className="max-w-[1200px] mx-auto px-4 sm:px-6 pb-16 sm:pb-24">
+        <div className="mb-10">
+          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
+            Try it yourself — no signup required
+          </p>
+          <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
+            Paste your data. See what breaks.
+          </h2>
+          <p className="text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed">
+            Drop your CSV and RegEngine evaluates it against all 28 FSMA 204 rules in real time. Nothing is stored.
+          </p>
+        </div>
+        <SandboxUpload />
+      </section>
+
+      {/* ── FOUNDER CREDIBILITY ── */}
+      <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-20">
+          <div className="max-w-[800px] mx-auto">
+            <div className="flex items-start gap-5">
+              <div className="w-14 h-14 rounded-full bg-[var(--re-brand-muted)] border-2 border-[var(--re-brand)]/30 flex items-center justify-center shrink-0">
+                <span className="text-xl font-display font-bold text-[var(--re-brand)]">CS</span>
+              </div>
+              <div>
+                <p className="text-lg text-[var(--re-text-primary)] leading-relaxed mb-4">
+                  &ldquo;I built RegEngine because compliance shouldn&apos;t require a six-figure platform and a 12-month implementation.
+                  I&apos;m Chris Sellers — AmeriCorps alum, former Senate staffer, and the founder.
+                  I work directly with every company in our founding cohort. You&apos;ll get my cell phone number.&rdquo;
+                </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span className="text-sm font-medium text-[var(--re-text-primary)]">
+                    Christopher Sellers, Founder & CEO
+                  </span>
+                  <Link
+                    href="/contact"
+                    className="text-sm font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors"
+                  >
+                    Book a free gap analysis →
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* Regulatory citations as trust signals */}
+            <div className="mt-10 pt-8 border-t border-[var(--re-surface-border)]">
+              <p className="font-mono text-[0.65rem] text-[var(--re-text-muted)] uppercase tracking-widest mb-4">
+                Built on the regulation
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  "21 CFR § 1.1310",
+                  "21 CFR § 1.1455",
+                  "EPCIS 2.0",
+                  "GS1 Standards",
+                  "SHA-256 Verification",
+                ].map((citation) => (
+                  <span
+                    key={citation}
+                    className="font-mono text-xs text-[var(--re-text-tertiary)] border border-[var(--re-surface-border)] rounded-md px-3 py-1.5"
+                  >
+                    {citation}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PRICING PREVIEW ── */}
+      <section className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24">
+        <div className="text-center mb-12">
+          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
+            Transparent pricing
+          </p>
+          <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3">
+            Based on company size. No hidden fees.
+          </h2>
+          <p className="text-[var(--re-text-secondary)]">
+            Cancel anytime. Founding partner pricing locks in 50% off for life.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-[900px] mx-auto mb-8">
+          {PRICING_PREVIEW.map((tier) => (
+            <div
+              key={tier.name}
+              className={`rounded-xl p-6 border ${
+                tier.highlighted
+                  ? "border-[var(--re-brand)] bg-[var(--re-brand-muted)] shadow-re-glow"
+                  : "border-[var(--re-surface-border)] bg-[var(--re-surface-card)]"
+              }`}
+            >
+              {tier.highlighted && (
+                <span className="inline-block font-mono text-[0.6rem] font-semibold text-[var(--re-brand)] bg-[var(--re-brand)]/10 border border-[var(--re-brand)]/20 px-2 py-0.5 rounded mb-3">
+                  Most popular
+                </span>
+              )}
+              <h3 className="font-display text-lg font-semibold text-[var(--re-text-primary)]">
+                {tier.name}
+              </h3>
+              <p className="text-xs text-[var(--re-text-muted)] mb-3">{tier.desc}</p>
+              <p className="mb-4">
+                <span className="font-display text-3xl font-bold text-[var(--re-text-primary)]">
+                  {tier.price}
+                </span>
+                <span className="text-sm text-[var(--re-text-muted)]">{tier.period}</span>
+              </p>
+              <ul className="space-y-2">
+                {tier.features.map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-[var(--re-text-secondary)]">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-[var(--re-brand)] shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center">
           <Link
-            href="/walkthrough"
-            className="inline-flex items-center gap-2 text-[0.85rem] font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors"
+            href="/pricing"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--re-brand)] hover:text-[var(--re-brand-dark)] transition-colors"
           >
-            See the full 24-hour FDA response walkthrough
-            <ArrowRight className="w-4 h-4" />
+            See full pricing details
+            <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
       </section>
 
-      {/* ── LIVE SANDBOX ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 pb-12 sm:pb-20">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-          Try it yourself — no signup required
-        </p>
-        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-          Paste your data. See what breaks.
-        </h2>
-        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-8">
-          Drop your CSV below and RegEngine will evaluate it against all 28 FSMA 204 rules in real time. Nothing is stored.
-        </p>
-        <SandboxUpload />
-      </section>
-
-      {/* ── FREE TOOLS ── */}
-      <section className="max-w-[1100px] mx-auto px-4 sm:px-6 py-12 sm:py-20">
-        <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand)] uppercase tracking-[0.08em] mb-4">
-          Free tools — no signup
-        </p>
-        <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-3 max-w-[640px]">
-          Check your exposure before you commit.
-        </h2>
-        <p className="text-[1.05rem] text-[var(--re-text-secondary)] max-w-[560px] leading-relaxed mb-10">
-          Use these now. Upgrade when you&apos;re ready.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {FREE_TOOLS.map((tool) => (
-            <Link
-              key={tool.title}
-              href={tool.href}
-              className="group flex items-start gap-3 sm:gap-4 bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-4 sm:p-5 shadow-sm transition-all duration-300 hover:border-[var(--re-brand)] hover:shadow-re-md hover:-translate-y-0.5 min-h-[72px]"
-            >
-              <div className="w-11 h-11 sm:w-10 sm:h-10 rounded-lg bg-[var(--re-surface-elevated)] border border-[var(--re-surface-border)] flex items-center justify-center flex-shrink-0 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
-                <tool.icon className="h-5 w-5 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-serif text-[0.95rem] sm:text-[1.05rem] font-medium text-[var(--re-text-primary)]">
-                    {tool.title}
-                  </h3>
-                  {tool.tag && (
-                    <span className="font-mono text-[0.6rem] font-medium text-[var(--re-brand)] bg-[var(--re-brand-muted)] px-2 py-0.5 rounded whitespace-nowrap">
-                      {tool.tag}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[0.8rem] sm:text-[0.85rem] text-[var(--re-text-secondary)] leading-relaxed">
-                  {tool.desc}
-                </p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-[var(--re-text-muted)] mt-1.5 flex-shrink-0 group-hover:translate-x-1 group-hover:text-[var(--re-brand)] transition-all duration-300" />
-            </Link>
-          ))}
-        </div>
-      </section>
-
       {/* ── FINAL CTA ── */}
-      <section className="bg-[var(--re-text-primary)] text-white py-12 sm:py-20 px-4 sm:px-6">
-        <div className="max-w-[1100px] mx-auto text-center">
-          <p className="font-mono text-[0.72rem] font-medium text-[var(--re-brand-light)] uppercase tracking-[0.08em] mb-4">
-            FSMA 204 Deadline: July 20, 2028
+      <section className="bg-[var(--re-surface-elevated)] border-t border-[var(--re-surface-border)]">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
+          <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-4">
+            FSMA 204 compliance deadline: July 20, 2028
           </p>
-          <h2 className="font-serif text-[1.75rem] sm:text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
-            5+ founding partners are already compliant. Are you next?
+          <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4 max-w-[700px] mx-auto">
+            Your data, verified and exportable before anyone asks.
           </h2>
-          <p className="text-[1.05rem] text-[#aaa] max-w-[560px] mx-auto leading-relaxed mb-8">
-            Get your free readiness score in 3 minutes. See exactly where your gaps are before the July 2028 deadline — and how fast you can close them.
+          <p className="text-[var(--re-text-secondary)] max-w-[520px] mx-auto leading-relaxed mb-8">
+            Get your free readiness score in 3 minutes. See exactly where your gaps are — and how fast RegEngine can close them.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/retailer-readiness"
-              className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-xl text-[0.95rem] font-semibold transition-all duration-300 ease-out hover:bg-[#0BAE78] hover:-translate-y-[2px] hover:shadow-[0_8px_30px_rgba(16,185,129,0.35)] active:translate-y-0 overflow-hidden min-h-[48px]"
+              className="group relative inline-flex items-center justify-center gap-2 bg-[var(--re-brand)] text-white px-8 py-4 rounded-lg text-sm font-semibold transition-all duration-200 hover:bg-[var(--re-brand-dark)] hover:shadow-re-glow-strong active:scale-[0.98] min-h-[48px]"
             >
-              <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.08] to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-700 ease-in-out" />
-              <span className="relative">Get My Free Readiness Score</span>
+              Get My Free Readiness Score
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             </Link>
             <Link
               href="/pricing"
-              className="inline-flex items-center justify-center gap-2 border border-[var(--re-brand)]/40 text-[var(--re-brand-light)] px-7 py-3.5 rounded-xl text-[0.95rem] font-medium transition-all duration-300 ease-out hover:border-[var(--re-brand)] hover:text-white hover:bg-[var(--re-brand)]/10 hover:-translate-y-[2px] min-h-[48px]"
+              className="inline-flex items-center justify-center gap-2 border border-[var(--re-border-default)] text-[var(--re-text-primary)] px-8 py-4 rounded-lg text-sm font-medium transition-all duration-200 hover:border-[var(--re-brand)] hover:text-[var(--re-brand)] min-h-[48px]"
             >
-              Join the Founding Cohort — 50% Off for Life
+              View Pricing
             </Link>
           </div>
         </div>
