@@ -20,6 +20,7 @@ const config = {
         extend: {
             fontFamily: {
                 sans: ["'Inter'", "system-ui", "-apple-system", "sans-serif"],
+                display: ["'Outfit'", "system-ui", "-apple-system", "sans-serif"],
                 serif: ["'Fraunces'", "Georgia", "serif"],
                 mono: ["'JetBrains Mono'", "'Fira Code'", "monospace"],
             },

@@ -35,12 +35,28 @@ export default function ContactPage() {
     <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
       <section className="max-w-[900px] mx-auto px-6 py-20">
         <p className="text-xs uppercase tracking-[0.1em] text-[var(--re-brand)] mb-3">Contact</p>
-        <h1 className="text-[clamp(32px,4.5vw,48px)] font-bold text-[var(--re-text-primary)] leading-tight">
+        <h1 className="font-display text-[clamp(32px,4.5vw,48px)] font-bold text-[var(--re-text-primary)] leading-tight tracking-tight">
           Talk with the RegEngine team
         </h1>
         <p className="mt-4 text-[var(--re-text-muted)] max-w-[620px] leading-relaxed">
           Reach out for FSMA 204 implementation support, pilot onboarding, or enterprise pricing.
         </p>
+
+        {/* Gap Analysis Offer */}
+        <div className="mt-6 inline-flex items-center gap-3 rounded-xl border border-[var(--re-brand)]/20 bg-[var(--re-brand-muted)] px-5 py-3">
+          <span className="text-sm text-[var(--re-text-primary)]">
+            <strong className="text-[var(--re-brand)]">Book a free gap analysis call</strong>{' '}
+            — 30 minutes with our founder to assess your FSMA 204 readiness.
+          </span>
+          <a
+            href="https://cal.com/regengine/gap-analysis"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-lg bg-[var(--re-brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--re-brand-dark)] transition-colors"
+          >
+            Book call
+          </a>
+        </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* ── Contact Form Card ── */}
@@ -133,8 +149,18 @@ export default function ContactPage() {
 
             <div className="p-5 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
               <Clock className="h-5 w-5 text-[var(--re-brand)] mb-2" />
-              <p className="text-sm font-semibold text-[var(--re-text-primary)]">Response Window</p>
-              <p className="text-sm text-[var(--re-text-muted)] mt-1">Typical response within one business day.</p>
+              <p className="text-sm font-semibold text-[var(--re-text-primary)]">Talk to the Founder</p>
+              <p className="text-sm text-[var(--re-text-muted)] mt-1">
+                Christopher Sellers, founder and engineer. Typical response within one business day.
+              </p>
+              <a
+                href="https://www.linkedin.com/in/christophersellers"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-[var(--re-brand)] mt-3 inline-block hover:underline"
+              >
+                Connect on LinkedIn
+              </a>
             </div>
           </div>
         </div>

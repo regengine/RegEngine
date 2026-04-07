@@ -1,14 +1,9 @@
 import type { MetadataRoute } from 'next';
 
 /**
- * XML sitemap (#571).
+ * XML sitemap.
  *
- * Changes from audit:
- * - Removed /about — page redirects to /contact (duplicate, causes 301 chain).
- * - Removed duplicate /developer/register — was listed in both marketingPages
- *   and resourcePages; kept the higher-priority marketing entry only.
- * - All 12 tool pages verified functional (53–426 lines each); none are
- *   placeholder-only so no noindex tags are needed.
+ * Includes all public-facing pages: marketing, tools, content, docs, and resources.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
     const baseUrl = 'https://www.regengine.co';
@@ -22,6 +17,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/developer/register`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/alpha`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
+        { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
+        { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/contact`, changeFrequency: 'yearly' as const, priority: 0.5 },
         { url: `${baseUrl}/privacy`, changeFrequency: 'yearly' as const, priority: 0.3 },
         { url: `${baseUrl}/terms`, changeFrequency: 'yearly' as const, priority: 0.3 },
