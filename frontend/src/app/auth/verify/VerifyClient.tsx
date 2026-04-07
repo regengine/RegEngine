@@ -28,7 +28,7 @@ import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Loader2, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 type VerifyClientProps = {
     tokenHash: string;
@@ -68,7 +68,7 @@ export default function VerifyClient({ tokenHash, type }: VerifyClientProps) {
                         <CardHeader className="space-y-1 pb-4">
                             <div className="mb-3 flex justify-center">
                                 <div className="rounded-full border border-red-300/30 bg-red-500/10 p-3">
-                                    <TriangleAlert className="h-7 w-7 text-red-500" />
+                                    <AlertTriangle className="h-7 w-7 text-red-500" />
                                 </div>
                             </div>
                             <h2 className="text-center text-2xl font-semibold text-[var(--re-text-primary)]">
