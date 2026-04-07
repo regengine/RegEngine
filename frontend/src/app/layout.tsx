@@ -50,8 +50,10 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,400&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
         {/* PWA manifest (#568) */}
@@ -101,8 +103,11 @@ export default async function RootLayout({
               itemListElement: [
                 { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.regengine.co' },
                 { '@type': 'ListItem', position: 2, name: 'Pricing', item: 'https://www.regengine.co/pricing' },
-                { '@type': 'ListItem', position: 3, name: 'FSMA 204 Guide', item: 'https://www.regengine.co/fsma-204' },
-                { '@type': 'ListItem', position: 4, name: 'Free Tools', item: 'https://www.regengine.co/tools' },
+                { '@type': 'ListItem', position: 3, name: 'Product', item: 'https://www.regengine.co/product' },
+                { '@type': 'ListItem', position: 4, name: 'Docs', item: 'https://www.regengine.co/docs' },
+                { '@type': 'ListItem', position: 5, name: 'FSMA 204 Guide', item: 'https://www.regengine.co/fsma-204' },
+                { '@type': 'ListItem', position: 6, name: 'About', item: 'https://www.regengine.co/about' },
+                { '@type': 'ListItem', position: 7, name: 'Free Tools', item: 'https://www.regengine.co/tools' },
               ],
             }),
           }}

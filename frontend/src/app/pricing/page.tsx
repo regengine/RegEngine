@@ -149,6 +149,10 @@ const FAQ = [
     { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
     { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
+    { q: 'What if the FDA delays enforcement again?', a: 'Retailers like Walmart and Kroger are already requiring traceability from suppliers, regardless of the FDA timeline. RegEngine keeps you audit-ready for both.' },
+    { q: 'Do I need this if I\u2019m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
+    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or direct ERP connectors. Most customers are up and running within 48 hours.' },
+    { q: 'What happens to my data?', a: 'Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). Each tenant gets row-level security isolation. We never share or sell your data.' },
 ];
 
 export default async function PricingPage() {
@@ -180,14 +184,17 @@ export default async function PricingPage() {
                 <Badge className="bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-surface-border)] mb-5">
                     Founding Design Partners — 50% Off for Life
                 </Badge>
-                <h1 className="text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] mb-4">
+                <h1 className="font-display text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-4">
                     FSMA 204 Compliance,<br />
                     <span className="text-re-brand">Priced for Mid-Market</span>
                 </h1>
                 <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-4 leading-relaxed">
                     Three plans sized by facility count. Founding Design Partners lock in 50% off for the life of their account — white-glove onboarding and direct founder support included.
                 </p>
-                <p className="text-sm text-[var(--re-text-disabled)]">
+                <p className="font-display text-base font-semibold text-[var(--re-text-muted)] tracking-tight">
+                    Based on company size. No hidden fees. Cancel anytime.
+                </p>
+                <p className="text-sm text-[var(--re-text-disabled)] mt-2">
                     Annual billing saves ~15%. Monthly billing also available.
                 </p>
             </section>
@@ -296,7 +303,7 @@ export default async function PricingPage() {
             {/* Competitor Comparison */}
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-surface-card)] border-t border-b border-[var(--re-surface-border)]">
                 <div className="max-w-[1000px] mx-auto">
-                    <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] text-center mb-3">
+                    <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-3">
                         See How We Compare
                     </h2>
                     <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
@@ -341,7 +348,7 @@ export default async function PricingPage() {
 
             {/* FAQ */}
             <section className="relative z-[2] max-w-[700px] mx-auto py-10 sm:py-[60px] px-4 sm:px-6">
-                <h2 className="text-[28px] font-bold text-[var(--re-text-primary)] text-center mb-10">
+                <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-10">
                     Frequently Asked Questions
                 </h2>
                 <div className="flex flex-col gap-4">
@@ -360,7 +367,7 @@ export default async function PricingPage() {
             {/* CTA */}
             <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
                 <div className="max-w-[600px] mx-auto text-center">
-                    <h2 className="text-[28px] font-bold text-white mb-3">
+                    <h2 className="font-display text-[28px] font-bold text-white tracking-tight mb-3">
                         Become a Founding Design Partner
                     </h2>
                     <p className="text-base text-white/90 mb-8">
