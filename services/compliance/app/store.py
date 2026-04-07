@@ -91,6 +91,8 @@ class ComplianceStore:
             self._db_enabled = False
 
     def _run_migration_if_needed(self) -> None:
+        # Legacy fair lending migration removed — no migrations to run.
+        return
         engine = self._engine
         if not engine:
             return

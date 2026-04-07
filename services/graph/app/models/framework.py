@@ -130,8 +130,8 @@ class ComplianceGap(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "control_id": "HIPAA-164.308",
-                "control_name": "Administrative Safeguards",
+                "control_id": "NIST-ID.AM-1",
+                "control_name": "Asset Management",
                 "missing_in": "SOC2",
                 "remediation_effort": "medium",
                 "priority": "high",

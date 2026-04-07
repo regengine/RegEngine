@@ -1,1 +1,1 @@
-"""Fair lending compliance application package."""
+"""Compliance application package."""

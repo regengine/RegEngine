@@ -132,10 +132,8 @@ class RegulationParser:
 
     def _detect_jurisdiction(self, text: str) -> str:
         """Detect jurisdiction based on keywords."""
-        if any(k in text for k in ("FDA", "21 CFR", "Food and Drug Administration")):
+        if any(k in text for k in ("FDA", "21 CFR", "Food and Drug Administration", "FSMA")):
             return "FDA"
-        if any(k in text for k in ("HIPAA", "Health Insurance Portability", "164.")):
-            return "HIPAA"
         if any(k in text for k in ("CFR", "Code of Federal Regulations")):
             return "US-FEDERAL"
         return "UNKNOWN"
