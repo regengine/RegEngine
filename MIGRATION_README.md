@@ -57,11 +57,7 @@ RegEngine uses Flyway-style versioned SQL migrations across four independent dat
 
 ### 4. Compliance Service (`/services/compliance/migrations`)
 **Database:** regengine_compliance (PostgreSQL)
-**Count:** 1 file
-**Migration:**
-- V1__fair_lending_compliance_os.sql (historical fair lending infrastructure)
-
-**Status:** Retained for sequential integrity; fair lending features archived as of Sprint 4
+**Status:** Fair lending migration (V1) removed. FSMA compliance logic lives in ingestion service.
 
 ## Dependency Graph
 
@@ -85,7 +81,7 @@ Ingestion Migrations
 └── V001: Independent ingestion schema
 
 Compliance Migrations
-└── V1: Fair lending schema (archived logic, retained for history)
+└── (cleared — FSMA compliance in ingestion service)
 ```
 
 ## Execution Model
@@ -104,4 +100,4 @@ Currently using Flyway-style manual migrations. For RegEngine V2:
 ## Notes
 - Migrations are **never deleted**, only archived (see `_dead_code/`)
 - Entertainment database (V25 in admin) is archived as of Sprint 4 Clean Architecture
-- Fair lending compliance schema (compliance/V1) retained for audit trail; active code archived
+- Non-FSMA schemas removed; FSMA 204 is the sole compliance vertical

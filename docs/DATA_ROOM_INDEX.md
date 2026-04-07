@@ -35,7 +35,6 @@
 - [Security Policy](../SECURITY.md) -- Vulnerability disclosure and supported versions
 - [SOC 2 Control Matrix](SOC2_CONTROL_MATRIX.md) -- Trust Services Criteria mapping (preparation phase)
 - [SOC 2 Preparation Checklist](soc2_preparation.md) -- Evidence collection checklist for SOC 2 Type I
-- [SOC 2 Fair Lending Mapping](security/SOC2_FAIR_LENDING_CONTROL_MAPPING.md) -- SOC 2 controls mapped to fair lending compliance
 - [Incident Response Plan](security/INCIDENT_RESPONSE.md) -- Identification, containment, and resolution procedures
 - [Vulnerability Disclosure Policy](security/VDP.md) -- External reporting process (security@regengine.co)
 - [Penetration Test Scope](security/PENTEST_SCOPE.md) -- Internal pentest scope template
