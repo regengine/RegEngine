@@ -11,6 +11,7 @@ Supports PNG, PDF, and ZPL (Zebra thermal printer) output.
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -289,20 +290,23 @@ if __name__ == "__main__":
         lot_date=args.date,
     )
 
-    outdir = Path(args.output)
+    outdir = Path(args.output).resolve()
     outdir.mkdir(exist_ok=True)
+
+    # Sanitize TLC for use in filename — reject traversal characters
+    safe_tlc = re.sub(r'[^a-zA-Z0-9_\-.]', '_', args.tlc)
 
     if args.format == "png":
         data = generate_label_png(label)
-        out_file = outdir / f"label_{args.tlc}.png"
+        out_file = outdir / f"label_{safe_tlc}.png"
         out_file.write_bytes(data)
     elif args.format == "zpl":
         data = generate_label_zpl(label)
-        out_file = outdir / f"label_{args.tlc}.zpl"
+        out_file = outdir / f"label_{safe_tlc}.zpl"
         out_file.write_text(data)
     elif args.format == "pdf":
         data = generate_label_pdf(label)
-        out_file = outdir / f"label_{args.tlc}.pdf"
+        out_file = outdir / f"label_{safe_tlc}.pdf"
         out_file.write_bytes(data)
 
     print(f"Label generated: {out_file}")
