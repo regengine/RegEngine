@@ -1,0 +1,11 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#06090f"/>
+  <rect x="0" y="580" width="1200" height="50" fill="#10b981" opacity="0.15"/>
+  <rect x="0" y="0" width="1200" height="4" fill="#10b981"/>
+  <text x="100" y="240" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#f8fafc">RegEngine</text>
+  <text x="100" y="320" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="400" fill="#94a3b8">API-First FSMA 204 Compliance Infrastructure</text>
+  <text x="100" y="380" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="400" fill="#64748b">Ingest traceability data. Validate against FDA rules. Export audit-ready records.</text>
+  <rect x="100" y="430" width="200" height="44" rx="8" fill="#10b981"/>
+  <text x="142" y="458" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="600" fill="#06090f">regengine.co</text>
+  <text x="100" y="600" font-family="monospace" font-size="14" fill="#475569">Built for FSMA 204  ·  Walmart-audit ready  ·  24hr FDA response</text>
+</svg>

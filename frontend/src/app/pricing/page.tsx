@@ -16,6 +16,11 @@ export const metadata: Metadata = {
         url: 'https://www.regengine.co/pricing',
         type: 'website',
     },
+    twitter: {
+        card: 'summary_large_image',
+        title: 'FSMA 204 Pricing | RegEngine',
+        description: 'FSMA 204 compliance from $425/mo. Transparent pricing, self-serve signup, no enterprise contract required.',
+    },
 };
 
 // Cache pricing for 1 hour server-side so the page stays fast even when

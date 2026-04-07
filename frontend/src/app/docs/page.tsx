@@ -31,8 +31,14 @@ export const metadata: Metadata = {
     description:
       'RegEngine API documentation for FSMA 204 food traceability compliance. Ingest CTE/KDE records, evaluate compliance rules, and export FDA-ready audit packages.',
     type: 'website',
-    url: 'https://regengine.co/docs',
+    url: 'https://www.regengine.co/docs',
     siteName: 'RegEngine',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'API Documentation | RegEngine',
+    description:
+      'RegEngine API documentation for FSMA 204 food traceability compliance. Ingest CTE/KDE records and export FDA-ready audit packages.',
   },
 };
 

@@ -30,6 +30,12 @@ export const metadata: Metadata = {
     url: "https://www.regengine.co/product",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "Product | RegEngine — FSMA 204 Compliance Infrastructure",
+    description:
+      "From CSV upload to FDA-ready export: FSMA 204 validation, EPCIS 2.0 normalization, and cryptographic audit trails.",
+  },
 };
 
 /* ── Feature data ── */

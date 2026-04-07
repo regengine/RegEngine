@@ -148,14 +148,14 @@ const PRICING_PREVIEW = [
     price: "$425",
     period: "/mo",
     desc: "1 facility, getting started",
-    features: ["Up to 5,000 CTEs/month", "FTL checker", "Email support"],
+    features: ["Up to 500 CTEs/month", "Supplier onboarding + FTL scoping", "Email support"],
   },
   {
     name: "Standard",
     price: "$549",
     period: "/mo",
     desc: "Multi-facility, growing operations",
-    features: ["Up to 25,000 CTEs/month", "API access", "Priority support"],
+    features: ["Unlimited CTEs", "CSV + API ingestion", "Priority support"],
     highlighted: true,
   },
   {
@@ -554,11 +554,14 @@ export default function RegEngineLanding() {
                 {tier.name}
               </h3>
               <p className="text-xs text-[var(--re-text-muted)] mb-3">{tier.desc}</p>
-              <p className="mb-4">
+              <p className="mb-1">
                 <span className="font-display text-3xl font-bold text-[var(--re-text-primary)]">
                   {tier.price}
                 </span>
                 <span className="text-sm text-[var(--re-text-muted)]">{tier.period}</span>
+              </p>
+              <p className="text-[0.65rem] text-[var(--re-text-muted)] mb-4">
+                Founding partner pricing · Billed annually
               </p>
               <ul className="space-y-2">
                 {tier.features.map((feature) => (

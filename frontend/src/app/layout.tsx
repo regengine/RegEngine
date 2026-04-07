@@ -34,6 +34,20 @@ export const metadata: Metadata = {
     siteName: 'RegEngine',
     url: 'https://www.regengine.co',
     type: 'website',
+    images: [
+      {
+        url: '/og-image.svg',
+        width: 1200,
+        height: 630,
+        alt: 'RegEngine — API-First FSMA 204 Compliance Infrastructure',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'RegEngine — FSMA 204 Food Traceability Compliance',
+    description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
+    images: ['/og-image.svg'],
   },
 }
 

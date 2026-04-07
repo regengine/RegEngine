@@ -24,6 +24,12 @@ export const metadata: Metadata = {
     url: "https://www.regengine.co/about",
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "About RegEngine | FSMA 204 Compliance Infrastructure",
+    description:
+      "RegEngine was built by Christopher Sellers to make FSMA 204 compliance accessible to mid-market food companies.",
+  },
 };
 
 const TIMELINE = [
