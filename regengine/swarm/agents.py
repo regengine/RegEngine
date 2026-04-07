@@ -148,14 +148,18 @@ class CoderAgent(BaseAgent):
             content = file_spec.get("content", "")
             action = file_spec.get("action", "create")
 
-            # Safety: don't write outside the repo
-            if ".." in path or path.startswith("/"):
+            # Safety: resolve path and verify it stays within the working directory
+            if ".." in path or path.startswith("/") or path.startswith("\\") or "\x00" in path:
                 self.log.warning("unsafe_path_skipped", path=path)
                 continue
 
             # Actual file writing
             try:
-                full_path = Path(path)
+                base_dir = Path.cwd().resolve()
+                full_path = (base_dir / path).resolve()
+                if not str(full_path).startswith(str(base_dir)):
+                    self.log.warning("path_traversal_blocked", path=path)
+                    continue
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(full_path, "w", encoding="utf-8") as f:
                     f.write(content)
