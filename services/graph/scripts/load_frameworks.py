@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Load compliance frameworks and controls into Neo4j
-Supports: SOC2, ISO27001, HIPAA, NIST CSF, PCI-DSS, and more
+Supports: SOC2, ISO27001, NIST CSF, PCI-DSS, and more
 """
 
 import asyncio
@@ -89,43 +89,6 @@ FRAMEWORKS = {
                 "id": "A.16.1.1",
                 "requirement": "Responsibilities and procedures",
                 "description": "Management responsibilities and procedures for ensuring a quick...",
-                "effort_hours": 12.0,
-            },
-        ],
-    },
-    "HIPAA": {
-        "version": "2013",
-        "category": "Healthcare Privacy",
-        "description": "Health Insurance Portability and Accountability Act requirements",
-        "controls": [
-            {
-                "id": "164.308(a)(1)(i)",
-                "requirement": "Security Management Process",
-                "description": "Implement policies and procedures to prevent, detect, contain...",
-                "effort_hours": 16.0,
-            },
-            {
-                "id": "164.308(a)(3)(i)",
-                "requirement": "Workforce Security",
-                "description": "Implement policies and procedures to ensure workforce access...",
-                "effort_hours": 8.0,
-            },
-            {
-                "id": "164.308(a)(4)(i)",
-                "requirement": "Information Access Management",
-                "description": "Implement policies and procedures for authorizing access...",
-                "effort_hours": 6.0,
-            },
-            {
-                "id": "164.312(a)(1)",
-                "requirement": "Access Control",
-                "description": "Implement technical policies and procedures for electronic...",
-                "effort_hours": 8.0,
-            },
-            {
-                "id": "164.312(b)",
-                "requirement": "Audit Controls",
-                "description": "Implement hardware, software, and/or procedural mechanisms...",
                 "effort_hours": 12.0,
             },
         ],

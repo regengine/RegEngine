@@ -22,9 +22,9 @@ class ValidationRequest(BaseModel):
         ...,
         description="Customer configuration/answers keyed by requirement ID",
         example={
-            "hipaa_001": True,
-            "hipaa_002": True,
-            "hipaa_003": False,
+            "fsma_204_cte_receiving": True,
+            "fsma_204_cte_shipping": True,
+            "fsma_204_kde_completeness": False,
         }
     )
 

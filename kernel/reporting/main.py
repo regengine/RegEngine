@@ -171,7 +171,7 @@ def get_checklist(
     """
     Get full details of a specific compliance checklist
 
-    - **checklist_id**: Checklist identifier (e.g., "hipaa_compliance", "capital_requirements")
+    - **checklist_id**: Checklist identifier (e.g., "fsma_204_compliance")
 
     Returns full checklist definition including all items and validation rules
     """
@@ -194,11 +194,11 @@ def validate_compliance(
     Request body:
     ```json
     {
-      "checklist_id": "hipaa_compliance",
+      "checklist_id": "fsma_204_compliance",
       "customer_config": {
-        "hipaa_001": true,
-        "hipaa_002": true,
-        "hipaa_003": false
+        "fsma_204_cte_receiving": true,
+        "fsma_204_cte_shipping": true,
+        "fsma_204_kde_completeness": false
       }
     }
     ```
@@ -210,17 +210,17 @@ def validate_compliance(
       "pass_rate": 0.67,
       "items": [
         {
-          "requirement_id": "hipaa_001",
-          "requirement": "Encrypt PHI at rest",
+          "requirement_id": "fsma_204_cte_receiving",
+          "requirement": "CTE Receiving records complete",
           "status": "PASS",
           "evidence": "Requirement met"
         },
         {
-          "requirement_id": "hipaa_003",
-          "requirement": "Role-Based Access Control",
+          "requirement_id": "fsma_204_kde_completeness",
+          "requirement": "KDE completeness for all CTEs",
           "status": "FAIL",
           "evidence": "Requirement not met",
-          "remediation": "Implement RBAC system..."
+          "remediation": "Ensure all KDEs are captured..."
         }
       ],
       "next_steps": [
@@ -466,41 +466,6 @@ def get_drift_health(
 # ============================================================================
 # Example Usage (for documentation)
 # ============================================================================
-
-@app.get("/examples/hipaa")
-def example_hipaa_validation():
-    """
-    Example: HIPAA compliance validation
-
-    Shows sample request/response for healthcare compliance check
-    """
-    return {
-        "description": "Example HIPAA compliance check",
-        "request": {
-            "checklist_id": "hipaa_compliance",
-            "customer_config": {
-                "hipaa_001": True,
-                "hipaa_002": True,
-                "hipaa_003": True,
-                "hipaa_004": False,  # FAIL
-                "hipaa_005": True,
-                "hipaa_006": False,  # FAIL
-                "hipaa_007": True,
-                "hipaa_008": True,
-            }
-        },
-        "expected_response": {
-            "overall_status": "WARNING",
-            "pass_rate": 0.75,
-            "items_failed": 2,
-            "next_steps": [
-                "Address 2 failed requirements",
-                "→ Enable audit logging for PHI access",
-                "→ Document breach notification process for 500+ affected individuals"
-            ]
-        }
-    }
-
 
 @app.get("/examples/finance")
 def example_finance_validation():
