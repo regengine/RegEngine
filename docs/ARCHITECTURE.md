@@ -116,7 +116,7 @@ Railway's native routing is the production source of truth. Each service runs as
 | NLP Service | `services/nlp/main.py` | 8100 | extraction and confidence-gated processing |
 | Scheduler | `services/scheduler/main.py` | 8600 | scheduled FDA/regulatory feed polling and job orchestration |
 
-Note: `services/compliance/main.py` currently exposes fair-lending APIs; FSMA export endpoints are implemented in ingestion routers.
+Note: FSMA export endpoints are implemented in ingestion routers.
 
 ## Shared Bootstrap Pattern
 

@@ -229,10 +229,6 @@ Use:
 - Policy auto-generation: "Draft a policy that complies with these 5 regulations"
 - Continuous compliance: Real-time monitoring that obligations are still met
 
-### Industry Expansion
-- Beyond finance: Healthcare (FDA, EMA), Energy (EPA, FERC), Data Privacy (GDPR, CCPA)
-- Vertical-specific packages: "RegEngine for Banking", "RegEngine for Pharma"
-
 ---
 
 ## Feature Requests & Community Input
