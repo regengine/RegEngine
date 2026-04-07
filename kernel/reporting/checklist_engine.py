@@ -357,22 +357,22 @@ def example_usage():
 
     print("\n" + "=" * 80 + "\n")
 
-    # Example 1: HIPAA Compliance Check
-    print("Example 1: Healthcare - HIPAA Compliance Check")
+    # Example 1: FSMA 204 Compliance Check
+    print("Example 1: Food Safety - FSMA 204 Compliance Check")
     print("-" * 80)
 
-    customer_config_hipaa = {
-        "hipaa_001": True,  # Encrypt PHI at rest
-        "hipaa_002": True,  # Encrypt PHI in transit
-        "hipaa_003": True,  # RBAC
-        "hipaa_004": False,  # Audit logs (FAIL)
-        "hipaa_005": True,  # Breach notification < 500
-        "hipaa_006": False,  # Breach notification >= 500 (FAIL)
-        "hipaa_007": True,  # Business Associate Agreements
-        "hipaa_008": True,  # Annual risk assessment
+    customer_config_fsma = {
+        "fsma_204_cte_receiving": True,
+        "fsma_204_cte_shipping": True,
+        "fsma_204_cte_transformation": True,
+        "fsma_204_kde_completeness": False,  # FAIL
+        "fsma_204_fda_export": True,
+        "fsma_204_24hr_response": False,  # FAIL
+        "fsma_204_lot_tracing": True,
+        "fsma_204_record_retention": True,
     }
 
-    result = engine.validate_checklist("hipaa_compliance", customer_config_hipaa)
+    result = engine.validate_checklist("fsma_204_compliance", customer_config_fsma)
 
     print(f"Checklist: {result.checklist_name}")
     print(f"Industry: {result.industry}")

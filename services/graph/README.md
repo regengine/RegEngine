@@ -7,7 +7,7 @@ Graph analytics service using Neo4j for relationship mapping, opportunity detect
 The Graph service provides graph-based analytics for the RegEngine platform, enabling:
 - **Regulatory arbitrage detection** across compliance frameworks
 - **Compliance gap analysis** using graph traversal
-- **Framework relationship mapping** (SOC2, ISO27001, HIPAA, etc.)
+- **Framework relationship mapping** (SOC2, ISO27001, NIST CSF, etc.)
 - **Control overlap visualization** for certification efficiency
 
 ### Key Features
@@ -66,7 +66,7 @@ Authorization: Bearer <token>
 ### Compliance Gap Analysis
 
 ```http
-GET /graph/gaps?current_framework=SOC2&target_framework=HIPAA
+GET /graph/gaps?current_framework=SOC2&target_framework=NIST_CSF
 Authorization: Bearer <token>
 ```
 
@@ -75,8 +75,8 @@ Authorization: Bearer <token>
 {
   "gaps": [
     {
-      "control_id": "HIPAA-164.308",
-      "control_name": "Administrative Safeguards",
+      "control_id": "NIST-ID.AM-1",
+      "control_name": "Asset Management",
       "missing_in": "SOC2",
       "remediation_effort": "medium",
       "priority": "high"
