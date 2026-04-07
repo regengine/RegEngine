@@ -65,7 +65,7 @@
 - **evidence_logs** - Immutable Evidence Vault with SHA-256 hashing
 
 #### Additional Service Models:
-- **Compliance Service**: Fair lending regulation mapping, model registration, audit exports
+- **Compliance Service**: Compliance scoring, audit exports (fair lending features archived)
 - **Ingestion Service**: Document normalization, text extraction, discovery queues
 - **Scheduler Service**: Enforcement items, scrape results, job executions, webhook payloads
 

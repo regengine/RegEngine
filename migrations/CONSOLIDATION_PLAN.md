@@ -8,7 +8,7 @@ Migrations are scattered across 4 directories with no runner enforcing order:
 |-----------|-------|-------|
 | `migrations/` | V002, V036–V040 + 4 unnumbered | Root-level FSMA migrations |
 | `services/admin/migrations/` | V1–V36 + 5 unnumbered | Admin service migrations |
-| `services/compliance/migrations/` | V1 | Fair lending |
+| `services/compliance/migrations/` | (removed) | Legacy fair lending migration deleted |
 | `services/ingestion/migrations/` | V001 | Ingestion bootstrap |
 
 ### Issues
