@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from collections import defaultdict
@@ -11,6 +12,7 @@ from threading import Lock
 from typing import Optional
 from uuid import uuid4
 
+import redis
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Request, Query
 from shared.pagination import PaginationParams, PaginatedResponse
@@ -44,20 +46,52 @@ logger = structlog.get_logger("admin")
 
 # ---------------------------------------------------------------------------
 # Admin-key brute-force rate limiter (#534)
-# In-memory sliding-window counter: max 5 failed attempts per IP per 60 s.
-# Keyed by IP address; thread-safe; auto-expires stale entries.
+# Redis-backed sliding-window counter: max 5 failed attempts per IP per 60 s.
+# Shared across all service instances. Falls back to in-memory if Redis
+# is unavailable (single-instance safety net).
 # ---------------------------------------------------------------------------
 _ADMIN_MAX_FAILURES = 5
 _ADMIN_WINDOW_SECONDS = 60
+
+# In-memory fallback (used only when Redis is unavailable)
 _admin_failures: dict[str, list[float]] = defaultdict(list)
 _admin_failures_lock = Lock()
+
+_redis_client: redis.Redis | None = None
+
+
+def _get_rate_limit_redis() -> redis.Redis | None:
+    """Lazy-init a Redis client for rate limiting."""
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return None
+    try:
+        _redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+        _redis_client.ping()
+        return _redis_client
+    except (redis.RedisError, OSError):
+        logger.warning("rate_limiter_redis_unavailable_using_in_memory")
+        _redis_client = None
+        return None
 
 
 def _admin_key_rate_limited(ip: str) -> bool:
     """Return True if this IP has exceeded the admin-key failure threshold."""
+    r = _get_rate_limit_redis()
+    if r is not None:
+        try:
+            key = f"admin_fail:{ip}"
+            count = r.get(key)
+            return int(count or 0) >= _ADMIN_MAX_FAILURES
+        except redis.RedisError:
+            pass  # fall through to in-memory
+
+    # In-memory fallback
     now = time.time()
     with _admin_failures_lock:
-        # Expire attempts outside the sliding window
         _admin_failures[ip] = [
             t for t in _admin_failures[ip] if now - t < _ADMIN_WINDOW_SECONDS
         ]
@@ -66,10 +100,22 @@ def _admin_key_rate_limited(ip: str) -> bool:
 
 def _record_admin_failure(ip: str) -> int:
     """Record a failed attempt and return the current failure count for this IP."""
+    r = _get_rate_limit_redis()
+    if r is not None:
+        try:
+            key = f"admin_fail:{ip}"
+            pipe = r.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, _ADMIN_WINDOW_SECONDS)
+            results = pipe.execute()
+            return int(results[0])
+        except redis.RedisError:
+            pass  # fall through to in-memory
+
+    # In-memory fallback
     now = time.time()
     with _admin_failures_lock:
         _admin_failures[ip].append(now)
-        # Keep the list bounded to avoid unbounded growth
         if len(_admin_failures[ip]) > _ADMIN_MAX_FAILURES * 4:
             _admin_failures[ip] = _admin_failures[ip][-(_ADMIN_MAX_FAILURES * 2):]
         return len(_admin_failures[ip])
