@@ -148,14 +148,14 @@ const PRICING_PREVIEW = [
     price: "$425",
     period: "/mo",
     desc: "1 facility, getting started",
-    features: ["Up to 5,000 CTEs/month", "FTL checker", "Email support"],
+    features: ["Up to 500 CTEs/month", "FTL checker", "Email support"],
   },
   {
     name: "Standard",
     price: "$549",
     period: "/mo",
     desc: "Multi-facility, growing operations",
-    features: ["Up to 25,000 CTEs/month", "API access", "Priority support"],
+    features: ["Unlimited CTEs", "API access", "Priority support"],
     highlighted: true,
   },
   {

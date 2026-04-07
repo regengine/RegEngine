@@ -146,12 +146,7 @@ const nextConfig = {
                 destination: '/dashboard/compliance',
                 permanent: true,
             },
-            // /about → /contact (founder info lives on contact page)
-            {
-                source: '/about',
-                destination: '/contact',
-                permanent: true,
-            },
+            // /about page now exists — redirect removed
             // /developer and /developers → /developer/portal (fix 404s)
             {
                 source: '/developer',
