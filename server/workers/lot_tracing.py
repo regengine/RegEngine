@@ -141,9 +141,12 @@ async def trace_forward(
         LIMIT 5000
     """)
 
+    if not tenant_id:
+        raise ValueError("tenant_id is required for RLS-filtered lot tracing")
+
     rows = db.execute(query, {
         "tlc": tlc,
-        "tenant_id": tenant_id or "",
+        "tenant_id": tenant_id,
         "max_depth": max_depth,
     }).fetchall()
 
@@ -242,9 +245,12 @@ async def trace_backward(
         LIMIT 5000
     """)
 
+    if not tenant_id:
+        raise ValueError("tenant_id is required for RLS-filtered lot tracing")
+
     rows = db.execute(query, {
         "tlc": tlc,
-        "tenant_id": tenant_id or "",
+        "tenant_id": tenant_id,
         "max_depth": max_depth,
     }).fetchall()
 

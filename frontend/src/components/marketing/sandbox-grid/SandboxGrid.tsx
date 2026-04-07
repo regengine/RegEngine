@@ -258,10 +258,12 @@ export function SandboxGrid({ initialCsv, initialResult, onBack }: SandboxGridPr
           }
           return next;
         });
+      } else {
+        console.error(`Sandbox evaluation failed: ${res.status} ${res.statusText}`);
       }
     } catch (err: unknown) {
-      // Ignore aborted requests; silently fail on network errors
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      console.error('Sandbox evaluation network error:', err);
     } finally {
       if (gen === evalGenRef.current) {
         setIsEvaluating(false);

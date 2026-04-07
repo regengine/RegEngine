@@ -139,7 +139,8 @@ export function useSync() {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [apiKey]); // Re-run if API key changes (user logs in)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [apiKey, tenantId]); // Re-run if API key or tenant changes
 
     return { isOnline, isSyncing, manualSync: sync };
 }

@@ -27,6 +27,7 @@ logger = structlog.get_logger("task-processor")
 
 _worker_thread: Optional[threading.Thread] = None
 _shutdown_event = threading.Event()
+_worker_lock = threading.Lock()
 
 # How often to poll when pg_notify is unavailable (seconds)
 POLL_INTERVAL = float(os.getenv("TASK_POLL_INTERVAL", "2.0"))
@@ -238,7 +239,7 @@ def _worker_loop() -> None:
                 try:
                     db.close()
                 except Exception:
-                    pass
+                    logger.warning("task_worker_db_close_error", exc_info=True)
 
     logger.info("task_worker_stopped", worker_id=WORKER_ID)
 
@@ -292,14 +293,19 @@ def start_task_worker() -> None:
         logger.info("task_worker_disabled_by_env")
         return
 
-    _shutdown_event.clear()
-    _worker_thread = threading.Thread(target=_worker_loop, daemon=True, name="task-worker")
-    _worker_thread.start()
+    with _worker_lock:
+        if _worker_thread is not None and _worker_thread.is_alive():
+            logger.warning("task_worker_already_running")
+            return
+        _shutdown_event.clear()
+        _worker_thread = threading.Thread(target=_worker_loop, daemon=True, name="task-worker")
+        _worker_thread.start()
 
 
 def stop_task_worker() -> None:
     """Stop the background task worker thread gracefully."""
-    _shutdown_event.set()
-    if _worker_thread is not None:
-        _worker_thread.join(timeout=10)
-        logger.info("task_worker_joined")
+    with _worker_lock:
+        _shutdown_event.set()
+        if _worker_thread is not None:
+            _worker_thread.join(timeout=10)
+            logger.info("task_worker_joined")

@@ -19,8 +19,11 @@ def test_sync():
     try:
         engine = create_engine(SYNC_DSN)
         with engine.connect() as conn:
-            ver = conn.execute(text("SELECT version();")).fetchone()[0]
-            print(f"SYNC SUCCESS: {ver}")
+            row = conn.execute(text("SELECT version();")).fetchone()
+            if row is None:
+                print("SYNC FAILURE: query returned no rows")
+                return
+            print(f"SYNC SUCCESS: {row[0]}")
     except Exception as e:
         print(f"SYNC FAILURE: {e}")
 
@@ -31,8 +34,11 @@ async def test_async():
         engine = create_async_engine(ASYNC_DSN, connect_args={"ssl": "require"})
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT version();"))
-            ver = result.fetchone()[0]
-            print(f"ASYNC SUCCESS: {ver}")
+            row = result.fetchone()
+            if row is None:
+                print("ASYNC FAILURE: query returned no rows")
+                return
+            print(f"ASYNC SUCCESS: {row[0]}")
     except Exception as e:
         print(f"ASYNC FAILURE: {e}")
 

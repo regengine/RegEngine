@@ -27,20 +27,20 @@ from .exceptions import (
 class RegEngineClient:
     """
     Official Python client for RegEngine FSMA 204 Compliance API.
-    
+
     Args:
         api_key: Your RegEngine API key (format: rge_xxx)
         base_url: API base URL (default: https://api.regengine.co)
         tenant_id: Optional tenant ID for multi-tenant isolation
         timeout: Request timeout in seconds (default: 30)
-    
+
     Example:
-        >>> client = RegEngineClient(api_key="rge_your_key")
-        >>> record = client.get_record("LOT-2026-001")
+        >>> with RegEngineClient(api_key="rge_your_key") as client:
+        ...     record = client.get_record("LOT-2026-001")
     """
-    
+
     DEFAULT_BASE_URL = "https://api.regengine.co"
-    
+
     def __init__(
         self,
         api_key: str,
@@ -50,12 +50,23 @@ class RegEngineClient:
     ):
         if not api_key or not api_key.startswith("rge_"):
             raise ValidationError("API key must start with 'rge_'")
-        
+
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.tenant_id = tenant_id
         self.timeout = timeout
         self._session = httpx.Client()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    def close(self) -> None:
+        """Close the underlying HTTP connection pool."""
+        self._session.close()
     
     def _headers(self) -> Dict[str, str]:
         """Build request headers."""

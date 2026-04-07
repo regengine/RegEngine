@@ -301,7 +301,7 @@ class APIClient {
       params: industry ? { industry } : undefined,
     });
     // API returns { checklists: [...], total: X } - extract the array
-    return data.checklists || data || [];
+    return data?.checklists || data || [];
   }
 
   async getChecklist(checklistId: string): Promise<ComplianceChecklist> {
@@ -324,7 +324,7 @@ class APIClient {
   async getIndustries(): Promise<Industry[]> {
     const { data } = await this.complianceClient.get('/industries');
     // API returns { industries: [...], total: X } - extract the array
-    return data.industries || data || [];
+    return data?.industries || data || [];
   }
 
   // Graph API - Labels

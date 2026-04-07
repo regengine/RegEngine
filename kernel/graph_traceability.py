@@ -23,6 +23,13 @@ class TraceabilityLinker:
         """Close the Neo4j driver."""
         await self.driver.close()
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+        return False
+
     async def link_obligation_to_traceability(
         self, 
         obligation_id: str, 
