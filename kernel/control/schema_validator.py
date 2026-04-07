@@ -50,7 +50,7 @@ VERTICAL_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "minItems": 1,
-            "description": "List of regulatory domains (e.g., ECOA, TILA)"
+            "description": "List of regulatory domains (e.g., FSMA)"
         },
         "decision_types": {
             "type": "array",
@@ -149,7 +149,7 @@ OBLIGATION_SCHEMA = {
                     },
                     "domain": {
                         "type": "string",
-                        "description": "Regulatory domain (e.g., ECOA)"
+                        "description": "Regulatory domain (e.g., FSMA)"
                     },
                     "description": {
                         "type": "string",

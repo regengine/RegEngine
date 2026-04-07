@@ -52,9 +52,7 @@ class ModelRecordResponse(BaseModel):
 
 AuditOutputType = Literal[
     "regulator_examination_package",
-    "fair_lending_summary_report",
     "model_validation_dossier",
-    "bias_incident_timeline",
 ]
 
 
@@ -76,9 +74,7 @@ class AuditExportResponse(BaseModel):
 
 
 class RiskSummaryResponse(BaseModel):
-    overall_fair_lending_risk: Literal["Low", "Medium", "High"]
-    dir_status: Literal["Green", "Yellow", "Red"]
-    regression_bias_flag: bool
+    overall_risk: Literal["Low", "Medium", "High"]
     drift_status: Literal["Green", "Yellow", "Red"]
     last_tested: date
     exposure_score: float

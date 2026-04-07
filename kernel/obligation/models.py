@@ -22,12 +22,6 @@ class Regulator(str, Enum):
 
 class RegulatoryDomain(str, Enum):
     """Regulatory domains."""
-    ECOA = "ECOA"
-    TILA = "TILA"
-    FCRA = "FCRA"
-    UDAAP = "UDAAP"
-    SR_11_7 = "SR_11_7"
-    OCC_AI = "OCC_AI"
     FSMA = "FSMA"
 
 
@@ -44,7 +38,7 @@ class ObligationDefinition(BaseModel):
     Regulatory obligation definition.
     Loaded from obligations.yaml.
     """
-    id: str = Field(..., description="Unique obligation ID (e.g., ECOA_ADVERSE_ACTION_NOTICE)")
+    id: str = Field(..., description="Unique obligation ID (e.g., FSMA_204_CTE_RECEIVING)")
     citation: str = Field(..., description="Legal citation (e.g., 12 CFR 1002.9)")
     regulator: Regulator
     domain: RegulatoryDomain
