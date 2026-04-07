@@ -53,7 +53,7 @@ async def health():
     except Exception as exc:
         logger.error("graph_health_neo4j_unavailable", error=str(exc))
         raise HTTPException(
-            status_code=503, detail="Neo4j unavailable or unreachable"
+            status_code=503, detail="Graph database unavailable"
         ) from exc
     finally:
         if client is not None:

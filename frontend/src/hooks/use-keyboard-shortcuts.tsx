@@ -163,9 +163,9 @@ function KeyboardShortcutsDialog({ isOpen, onClose, shortcuts }: KeyboardShortcu
       <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border bg-card p-6 shadow-2xl">
         <h2 className="text-xl font-semibold mb-4">Keyboard Shortcuts</h2>
         <div className="space-y-2">
-          {shortcuts.map((shortcut, index) => (
+          {shortcuts.map((shortcut) => (
             <div
-              key={index}
+              key={shortcut.key}
               className="flex items-center justify-between py-2 border-b last:border-0"
             >
               <span className="text-sm text-muted-foreground">

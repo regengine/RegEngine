@@ -111,7 +111,7 @@ class RegEngineClient:
         elif response.status_code >= 400:
             try:
                 error = response.json().get("detail", response.text)
-            except Exception:
+            except (ValueError, KeyError):
                 error = response.text
             raise RegEngineError(f"API error ({response.status_code}): {error}")
         

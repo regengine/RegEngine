@@ -82,6 +82,10 @@ class OllamaClient(BaseLLMClient):
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
         import requests
+        from urllib.parse import urlparse
+        parsed = urlparse(self.host)
+        if parsed.hostname not in ("localhost", "127.0.0.1", "::1") and not (parsed.hostname or "").endswith(".internal"):
+            logger.warning("ollama_host_not_local", host=self.host)
         try:
             resp = requests.post(
                 f"{self.host}/api/generate",

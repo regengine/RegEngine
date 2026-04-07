@@ -37,7 +37,8 @@ def _create_engine():
             pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
         )
 
-    fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE", "sqlite:///./admin.db")
+    default_sqlite = f"sqlite:///{os.path.join(os.path.dirname(__file__), '..', 'admin.db')}"
+    fallback_url = os.getenv("ADMIN_FALLBACK_SQLITE", default_sqlite)
     logger.warning(
         "database_url_missing_using_fallback",
         fallback=fallback_url,

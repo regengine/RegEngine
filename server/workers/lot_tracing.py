@@ -8,7 +8,7 @@ migrate to Neo4j for graph-native traversal.
 
 Usage:
     from app.workers.lot_tracing import trace_forward, trace_backward
-    result = await trace_forward(db, tlc="LOT-001", tenant_id="...", max_depth=5)
+    result = trace_forward(db, tlc="LOT-001", tenant_id="...", max_depth=5)
 """
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ class TraceResult:
     time_violations: List[Dict[str, Any]] = field(default_factory=list)
 
 
-async def trace_forward(
+def trace_forward(
     db: Session,
     tlc: str,
     max_depth: int = 10,
@@ -153,7 +153,7 @@ async def trace_forward(
     return _build_result(rows, _time.time() - start)
 
 
-async def trace_backward(
+def trace_backward(
     db: Session,
     tlc: str,
     max_depth: int = 10,
