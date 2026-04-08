@@ -2,7 +2,33 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { IngestURLRequest, ValidationRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
+import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
 import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
+
+// Demo fallback data shown when backend services are unreachable.
+// Lets the dashboard render a realistic preview instead of all "—".
+const DEMO_METRICS: SystemMetricsResponse & { _demo: true } = {
+  _demo: true,
+  total_tenants: 1,
+  total_documents: 347,
+  active_jobs: 0,
+  compliance_score: 72,
+  compliance_grade: 'C',
+  events_ingested: 1_284,
+  chain_length: 856,
+  chain_valid: true,
+  open_alerts: 3,
+};
+
+const DEMO_STATUS: SystemStatusResponse & { _demo: true } = {
+  _demo: true,
+  overall_status: 'degraded',
+  services: [
+    { name: 'admin', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
+    { name: 'ingestion', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
+    { name: 'compliance', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
+  ],
+};
 
 // Health Checks
 export const useAdminHealth = () => {
@@ -29,21 +55,31 @@ export const useComplianceHealth = () => {
   });
 };
 
-// System Status & Metrics
+// System Status & Metrics — fall back to demo data when backend is unreachable
 export const useSystemStatus = () => {
-  return useQuery({
+  const query = useQuery({
     queryKey: ['system', 'status'],
     queryFn: () => apiClient.getSystemStatus(),
     refetchInterval: POLL_HEALTH,
+    retry: 1,
   });
+  return {
+    ...query,
+    data: query.data ?? (query.error ? DEMO_STATUS : undefined),
+  };
 };
 
 export const useSystemMetrics = () => {
-  return useQuery({
+  const query = useQuery({
     queryKey: ['system', 'metrics'],
     queryFn: () => apiClient.getSystemMetrics(),
     refetchInterval: POLL_METRICS,
+    retry: 1,
   });
+  return {
+    ...query,
+    data: query.data ?? (query.error ? DEMO_METRICS : undefined),
+  };
 };
 
 export const useAPIKeys = (adminKey: string, enabled = true) => {

@@ -7,16 +7,19 @@ const apiGatewayUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ingestionUrl = process.env.INGESTION_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8002`);
 const complianceUrl = process.env.COMPLIANCE_SERVICE_URL || (apiGatewayUrl && `${apiGatewayUrl}:8500`);
 
-if (!isStatic) {
+// Validate service URLs at dev-server startup, not during build/lint/test.
+const isDevServer = process.env.NODE_ENV === 'development' && !process.env.NEXT_PHASE;
+if (!isStatic && isDevServer) {
     const hasIndividualServiceUrls =
         process.env.INGESTION_SERVICE_URL &&
         process.env.COMPLIANCE_SERVICE_URL &&
         process.env.ADMIN_SERVICE_URL;
 
     if (!apiGatewayUrl && !hasIndividualServiceUrls) {
-        throw new Error(
-            'No API routing env vars are set — configure NEXT_PUBLIC_API_BASE_URL, ' +
-            'or set INGESTION_SERVICE_URL, COMPLIANCE_SERVICE_URL, and ADMIN_SERVICE_URL individually'
+        console.warn(
+            'Warning: No API routing env vars are set — configure NEXT_PUBLIC_API_BASE_URL, ' +
+            'or set INGESTION_SERVICE_URL, COMPLIANCE_SERVICE_URL, and ADMIN_SERVICE_URL individually. ' +
+            'The dashboard will fall back to demo data.'
         );
     }
 
