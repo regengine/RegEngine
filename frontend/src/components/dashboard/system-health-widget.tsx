@@ -75,7 +75,8 @@ export function SystemHealthWidget() {
         );
     }
 
-    if (error) {
+    // When demo fallback data is present, skip the error state and render normally
+    if (error && !systemStatus) {
         return (
             <Card>
                 <CardHeader>
