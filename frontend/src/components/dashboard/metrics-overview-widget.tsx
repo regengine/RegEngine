@@ -25,6 +25,7 @@ export function MetricsOverviewWidget() {
         );
     }
 
+    const isDemo = !!(metrics as unknown as Record<string, unknown>)?._demo;
     const score = metrics?.compliance_score ?? 0;
     const grade = metrics?.compliance_grade ?? '—';
     const events = metrics?.events_ingested ?? 0;
@@ -40,6 +41,13 @@ export function MetricsOverviewWidget() {
             : 'text-red-600';
 
     return (
+        <div className="space-y-3">
+            {isDemo && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>Backend services unreachable — showing demo data. Start services with <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">docker compose up</code></span>
+                </div>
+            )}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2 p-3 sm:p-6 sm:pb-2">
@@ -104,6 +112,7 @@ export function MetricsOverviewWidget() {
                     <p className="text-[11px] sm:text-xs text-muted-foreground">Compliance issues to resolve</p>
                 </CardContent>
             </Card>
+        </div>
         </div>
     );
 }
