@@ -279,6 +279,10 @@ app.include_router(review_router)
 from app.audit_routes import router as audit_router
 app.include_router(audit_router)
 
+# Tool email verification — public lead capture for free tools (no auth required)
+from app.tool_verification_routes import router as tool_verification_router
+app.include_router(tool_verification_router)
+
 
 
 # ---------------------------------------------------------------------------

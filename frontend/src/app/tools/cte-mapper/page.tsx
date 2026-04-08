@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { CTEMapperClient } from "./components/CTEMapperClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "CTE Coverage Mapper | FSMA 204 Supply Chain Mapping | RegEngine",
@@ -82,7 +83,9 @@ export default function CTEMapperPage() {
                     ]}
                 />
                 <Suspense fallback={<CTEMapperFallback />}>
-                    <CTEMapperClient />
+                    <EmailGate toolName="cte-mapper">
+                        <CTEMapperClient />
+                    </EmailGate>
                 </Suspense>
             </div>
         </div>

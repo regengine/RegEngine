@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { KnowledgeGraphClient } from "./components/KnowledgeGraphClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "Supply Chain Knowledge Graph | RegEngine",
@@ -64,7 +65,9 @@ export default function KnowledgeGraphPage() {
     return (
         <Suspense fallback={<KnowledgeGraphFallback />}>
             <JSONLD data={jsonLd} />
-            <KnowledgeGraphClient />
+            <EmailGate toolName="knowledge-graph">
+                <KnowledgeGraphClient />
+            </EmailGate>
         </Suspense>
     );
 }

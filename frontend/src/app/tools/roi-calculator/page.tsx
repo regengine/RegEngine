@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { ROICalculatorClient } from "./components/ROICalculatorClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "Regulatory ROI Calculator | FSMA 204 Automation Savings | RegEngine",
@@ -75,7 +76,9 @@ export default function ROICalculatorPage() {
     return (
         <Suspense fallback={<ROICalculatorFallback />}>
             <JSONLD data={jsonLd} />
-            <ROICalculatorClient />
+            <EmailGate toolName="roi-calculator">
+                <ROICalculatorClient />
+            </EmailGate>
         </Suspense>
     );
 }

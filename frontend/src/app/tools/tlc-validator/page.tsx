@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { TLCValidatorClient } from "./components/TLCValidatorClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "TLC Validator | GS1 Traceability Lot Code Checker | RegEngine",
@@ -45,7 +46,9 @@ export default function TLCValidatorPage() {
                     ]}
                 />
                 <Suspense>
-                    <TLCValidatorClient />
+                    <EmailGate toolName="tlc-validator">
+                        <TLCValidatorClient />
+                    </EmailGate>
                 </Suspense>
             </div>
         </div>

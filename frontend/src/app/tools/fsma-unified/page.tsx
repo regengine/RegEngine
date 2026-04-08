@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { UnifiedDashboardClient } from "./components/UnifiedDashboardClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "Unified FSMA Dashboard | Anomaly Simulation & Knowledge Graph | RegEngine",
@@ -47,7 +48,9 @@ export default function UnifiedDashboardPage() {
             </div>
         }>
             <JSONLD data={jsonLd} />
-            <UnifiedDashboardClient />
+            <EmailGate toolName="fsma-unified">
+                <UnifiedDashboardClient />
+            </EmailGate>
         </Suspense>
     );
 }

@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { RecallReadinessClient } from "./components/RecallReadinessClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "Recall Readiness Score | FDA 24-Hour Records retrieval | RegEngine",
@@ -45,7 +46,9 @@ export default function RecallReadinessPage() {
                     ]}
                 />
                 <Suspense>
-                    <RecallReadinessClient />
+                    <EmailGate toolName="recall-readiness">
+                        <RecallReadinessClient />
+                    </EmailGate>
                 </Suspense>
             </div>
         </div>

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, CheckCircle2, ClipboardPaste, FileWarning, Info, RotateCcw, Shield, XCircle } from 'lucide-react';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
+import { EmailGate } from '@/components/tools/EmailGate';
 
 interface Requirement {
     id: string;
@@ -123,6 +124,7 @@ export default function NoticeValidatorPage() {
     };
 
     return (
+        <EmailGate toolName="notice-validator">
         <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             <section className="max-w-[1100px] mx-auto px-6 py-20">
                 <div className="max-w-[760px]">
@@ -268,5 +270,6 @@ export default function NoticeValidatorPage() {
                 </div>
             </section>
         </main>
+        </EmailGate>
     );
 }

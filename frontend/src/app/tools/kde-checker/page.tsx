@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { KDECheckerClient } from "./components/KDECheckerClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "KDE Completeness Checker | FSMA 204 Data Checklist | RegEngine",
@@ -45,7 +46,9 @@ export default function KDECheckerPage() {
                     ]}
                 />
                 <Suspense>
-                    <KDECheckerClient />
+                    <EmailGate toolName="kde-checker">
+                        <KDECheckerClient />
+                    </EmailGate>
                 </Suspense>
             </div>
         </div>
