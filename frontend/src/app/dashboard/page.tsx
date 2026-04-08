@@ -237,7 +237,7 @@ export default function DashboardPage() {
     });
     const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
 
-    // Use real metrics from backend when available, show honest zeros otherwise
+    // Use real metrics from backend when available, fall back to demo data from hook
     const metrics = useMemo(() => {
         if (systemMetrics) {
             return {
@@ -254,6 +254,7 @@ export default function DashboardPage() {
             pendingReviews,
         };
     }, [systemMetrics, pendingReviews]);
+    const isDemo = !!(systemMetrics as unknown as Record<string, unknown>)?._demo;
 
     if (!isHydrated || !effectiveUser) {
         return null;
@@ -300,6 +301,11 @@ export default function DashboardPage() {
                                 <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                                     <AlertTriangle className="w-3 h-3 mr-1" />
                                     Degraded Performance
+                                </Badge>
+                            ) : isDemo ? (
+                                <Badge variant="outline" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                    <Activity className="w-3 h-3 mr-1" />
+                                    Demo Mode
                                 </Badge>
                             ) : (
                                 <Badge variant="outline" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
