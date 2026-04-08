@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, Shield } from 'lucide-react';
+import { EmailGate } from '@/components/tools/EmailGate';
 
 const OBLIGATIONS = [
     {
@@ -43,6 +44,7 @@ const OBLIGATIONS = [
 
 export default function ObligationScannerPage() {
     return (
+        <EmailGate toolName="obligation-scanner">
         <main className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             <section className="max-w-[1080px] mx-auto px-6 py-20">
                 <div className="max-w-[760px]">
@@ -104,5 +106,6 @@ export default function ObligationScannerPage() {
                 </div>
             </section>
         </main>
+        </EmailGate>
     );
 }

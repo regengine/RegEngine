@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { SOPGeneratorClient } from "./components/SOPGeneratorClient";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "SOP Generator | FSMA 204 Traceability Plan | RegEngine",
@@ -27,7 +28,9 @@ export default function SOPGeneratorPage() {
     return (
         <>
             <JSONLD data={jsonLd} />
-            <SOPGeneratorClient />
+            <EmailGate toolName="sop-generator">
+                <SOPGeneratorClient />
+            </EmailGate>
         </>
     );
 }

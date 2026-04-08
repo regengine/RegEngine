@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { DrillSimulatorClient } from "./components/DrillSimulatorClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "24-Hour Drill Simulator | FSMA 204 Outbreak Quest | RegEngine",
@@ -36,7 +37,9 @@ export default function DrillSimulatorPage() {
     return (
         <>
             <JSONLD data={jsonLd} />
-            <DrillSimulatorClient />
+            <EmailGate toolName="drill-simulator">
+                <DrillSimulatorClient />
+            </EmailGate>
         </>
     );
 }

@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { ReadinessAssessmentClient } from "./components/ReadinessAssessmentClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Readiness Assessment | Free Compliance Score | RegEngine",
@@ -65,7 +66,9 @@ export default function ReadinessAssessmentPage() {
             </div>
         }>
             <JSONLD data={jsonLd} />
-            <ReadinessAssessmentClient />
+            <EmailGate toolName="readiness-assessment">
+                <ReadinessAssessmentClient />
+            </EmailGate>
         </Suspense>
     );
 }

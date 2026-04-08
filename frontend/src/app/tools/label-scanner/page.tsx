@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { EmailGate } from '@/components/tools/EmailGate';
 import {
     ArrowLeft,
     ArrowRight,
@@ -224,6 +225,7 @@ export default function LabelScannerPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imageFile]);
     return (
+        <EmailGate toolName="label-scanner">
         <div className="min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
             {/* Header */}
             <section className="relative z-[2] max-w-[860px] mx-auto pt-14 sm:pt-20 px-4 sm:px-6 pb-8">
@@ -537,5 +539,6 @@ export default function LabelScannerPage() {
                 </div>
             </section>
         </div>
+        </EmailGate>
     );
 }

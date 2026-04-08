@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { FTLCheckerClient } from "./components/FTLCheckerClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "FTL Coverage Checker | FDA FSMA 204 Compliance Tool | RegEngine",
@@ -80,7 +81,9 @@ export default function FTLCheckerPage() {
     return (
         <Suspense fallback={<FTLCheckerSkeleton />}>
             <JSONLD data={jsonLd} />
-            <FTLCheckerClient />
+            <EmailGate toolName="ftl-checker">
+                <FTLCheckerClient />
+            </EmailGate>
         </Suspense>
     );
 }
