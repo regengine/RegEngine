@@ -18,7 +18,7 @@ export default function FoodSafetyVerticalPage() {
                             <span className="text-sm font-medium">FSMA 204 Compliance</span>
                         </div>
 
-                        <h1 className="text-5xl md:text-6xl font-bold mb-6">
+                        <h1 className="font-display text-5xl md:text-6xl font-bold mb-6">
                             Food Safety
                             <br />
                             <span className="text-green-200">Traceability & Compliance</span>
@@ -72,7 +72,7 @@ export default function FoodSafetyVerticalPage() {
             <section className="py-16 px-4">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                        <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
                             FSMA 204 Requirements
                         </h2>
                         <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
@@ -166,7 +166,7 @@ export default function FoodSafetyVerticalPage() {
             <section className="py-16 px-4 bg-muted/30">
                 <div className="max-w-6xl mx-auto">
                     <div className="text-center mb-12">
-                        <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                        <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
                             Food Traceability List Coverage
                         </h2>
                         <p className="text-xl text-muted-foreground">
@@ -204,7 +204,7 @@ export default function FoodSafetyVerticalPage() {
                     <Card className="bg-gradient-to-r from-green-600 to-emerald-600 text-white border-0">
                         <CardContent className="pt-6">
                             <div className="text-center space-y-4">
-                                <h2 className="text-3xl font-bold">Explore FSMA Tools</h2>
+                                <h2 className="font-display text-3xl font-bold">Explore FSMA Tools</h2>
                                 <p className="text-green-100 max-w-2xl mx-auto">
                                     Access the compliance dashboard and run an interactive recall simulation
                                 </p>

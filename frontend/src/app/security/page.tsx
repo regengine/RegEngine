@@ -83,7 +83,7 @@ export default function SecurityPage() {
                 <Badge className="mb-5 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand)]/20">
                     Security
                 </Badge>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
+                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
                     Don&apos;t trust us.<br />
                     <span className="text-re-brand">Verify us.</span>
                 </h1>
@@ -108,7 +108,7 @@ export default function SecurityPage() {
 
             {/* Verified Security Pillars */}
             <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">What&apos;s verified today</h2>
+                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">What&apos;s verified today</h2>
                 <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                     Four pillars, each with concrete production evidence. No roadmap promises.
                 </p>
@@ -126,7 +126,7 @@ export default function SecurityPage() {
                                 <div className="p-2 rounded-lg bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20">
                                     <feature.Icon className="w-5 h-5 text-[var(--re-brand)]" />
                                 </div>
-                                <h3 className="text-base font-semibold text-re-text-primary flex-1">{feature.title}</h3>
+                                <h3 className="font-display text-base font-semibold text-re-text-primary flex-1">{feature.title}</h3>
                                 <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex-shrink-0">
                                     ✓ Verified
                                 </span>
@@ -157,7 +157,7 @@ export default function SecurityPage() {
                             <Terminal className="w-7 h-7 text-[var(--re-brand)]" />
                         </div>
                         <div className="flex-1">
-                            <h3 className="text-lg font-bold text-re-text-primary mb-2">Open-source verification script</h3>
+                            <h3 className="font-display text-lg font-bold text-re-text-primary mb-2">Open-source verification script</h3>
                             <p className="text-sm text-re-text-muted leading-relaxed mb-4">
                                 <code className="text-[var(--re-brand)] font-mono text-xs bg-[var(--re-surface-elevated)] px-1.5 py-0.5 rounded border border-[var(--re-surface-border)]">verify_chain.py</code> lets anyone — auditors, customers, regulators — independently verify data integrity without database access. Download it, point it at an export package, and confirm every hash in the Merkle chain.
                             </p>
@@ -186,7 +186,7 @@ export default function SecurityPage() {
             {/* Infrastructure */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                 <div className="max-w-[900px] mx-auto py-16 px-6">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Infrastructure</h2>
+                    <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Infrastructure</h2>
                     <p className="text-sm text-re-text-muted text-center mb-10 max-w-md mx-auto">
                         Enterprise-grade defaults from day one.
                     </p>
@@ -213,7 +213,7 @@ export default function SecurityPage() {
 
             {/* Security Controls */}
             <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Security controls in production</h2>
+                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Security controls in production</h2>
                 <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                     Controls below are implemented and running in the current platform.
                 </p>
@@ -239,7 +239,7 @@ export default function SecurityPage() {
             {/* Compliance Roadmap */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                 <div className="max-w-[900px] mx-auto py-16 px-6">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Compliance and certifications</h2>
+                    <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Compliance and certifications</h2>
                     <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                         Where we are today and what&apos;s on the roadmap. We won&apos;t claim certifications we don&apos;t have.
                     </p>
@@ -248,7 +248,7 @@ export default function SecurityPage() {
                             <div className="flex items-center gap-3 mb-3">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Today</span>
                             </div>
-                            <h3 className="text-sm font-semibold text-re-text-primary mb-2">Implemented controls</h3>
+                            <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Implemented controls</h3>
                             <ul className="space-y-1.5 text-sm text-re-text-muted">
                                 <li>• Row-Level Security (PostgreSQL RLS) — multi-tenant isolation</li>
                                 <li>• SHA-256 cryptographic audit trail — tamper detection</li>
@@ -263,7 +263,7 @@ export default function SecurityPage() {
                             <div className="flex items-center gap-3 mb-3">
                                 <span className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Roadmap</span>
                             </div>
-                            <h3 className="text-sm font-semibold text-re-text-primary mb-2">Planned certifications</h3>
+                            <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Planned certifications</h3>
                             <ul className="space-y-1.5 text-sm text-re-text-muted">
                                 <li>• SOC 2 Type I — target Q3 2026</li>
                                 <li>• SOC 2 Type II — target Q1 2027</li>
@@ -274,7 +274,7 @@ export default function SecurityPage() {
                             </ul>
                         </div>
                         <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-                            <h3 className="text-sm font-semibold text-re-text-primary mb-2">Access controls</h3>
+                            <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Access controls</h3>
                             <ul className="space-y-1.5 text-sm text-re-text-muted">
                                 <li>• Per-tenant API key scoping with permission levels</li>
                                 <li>• Session management: 30-day JWT with explicit logout</li>
@@ -285,7 +285,7 @@ export default function SecurityPage() {
                             </ul>
                         </div>
                         <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-                            <h3 className="text-sm font-semibold text-re-text-primary mb-2">Data processing</h3>
+                            <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Data processing</h3>
                             <ul className="space-y-1.5 text-sm text-re-text-muted">
                                 <li>• US data residency (all infrastructure US-based)</li>
                                 <li>• No cross-tenant data sharing or commingling</li>
@@ -301,21 +301,21 @@ export default function SecurityPage() {
 
             {/* Incident Response */}
             <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Incident response</h2>
+                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Incident response</h2>
                 <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                     Transparency during incidents matters more than perfect uptime marketing.
                 </p>
                 <div className="grid sm:grid-cols-3 gap-4">
                     <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-                        <h3 className="text-sm font-semibold text-re-text-primary mb-2">Detection</h3>
+                        <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Detection</h3>
                         <p className="text-sm text-re-text-muted">Automated monitoring on all backend services, database health checks, and deployment verification. Alert escalation within 15 minutes of detection.</p>
                     </div>
                     <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-                        <h3 className="text-sm font-semibold text-re-text-primary mb-2">Communication</h3>
+                        <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Communication</h3>
                         <p className="text-sm text-re-text-muted">Affected customers notified within 1 hour of confirmed incidents. Status updates at minimum hourly intervals. Post-incident reports within 72 hours.</p>
                     </div>
                     <div className="rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-                        <h3 className="text-sm font-semibold text-re-text-primary mb-2">Recovery</h3>
+                        <h3 className="font-display text-sm font-semibold text-re-text-primary mb-2">Recovery</h3>
                         <p className="text-sm text-re-text-muted">Immutable audit trail ensures compliance data survives service interruptions. Database backups with point-in-time recovery. No data loss guarantee on committed records.</p>
                     </div>
                 </div>
@@ -324,7 +324,7 @@ export default function SecurityPage() {
             {/* Diligence Artifacts */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                 <div className="max-w-[900px] mx-auto py-16 px-6">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Diligence artifacts</h2>
+                    <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Diligence artifacts</h2>
                     <p className="text-sm text-re-text-muted text-center mb-10 max-w-xl mx-auto">
                         Security copy is only part of the diligence surface. Product status, retention, support posture, and additional materials are surfaced separately.
                     </p>
@@ -339,7 +339,7 @@ export default function SecurityPage() {
                                 <div className="w-9 h-9 rounded-lg bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] flex items-center justify-center mb-3 group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] transition-colors duration-300">
                                     <artifact.Icon className="w-4 h-4 text-[var(--re-brand)] group-hover:text-white transition-colors duration-300" />
                                 </div>
-                                <h3 className="text-sm font-semibold text-re-text-primary mb-1">{artifact.label}</h3>
+                                <h3 className="font-display text-sm font-semibold text-re-text-primary mb-1">{artifact.label}</h3>
                                 <p className="text-xs text-re-text-muted leading-relaxed">{artifact.detail}</p>
                             </Link>
                         ))}
@@ -359,7 +359,7 @@ export default function SecurityPage() {
                     <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
                         Founding Design Partner Program
                     </Badge>
-                    <h3 className="text-xl font-bold text-re-text-primary mb-2">See the full audit trail live</h3>
+                    <h3 className="font-display text-xl font-bold text-re-text-primary mb-2">See the full audit trail live</h3>
                     <p className="text-sm text-re-text-muted max-w-md mx-auto mb-5">
                         Founding Design Partners get full access to the Merkle chain, audit logs, and verification tools inside their dashboard.
                     </p>
@@ -382,7 +382,7 @@ export default function SecurityPage() {
             {/* Vulnerability Disclosure */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                 <div className="max-w-[600px] mx-auto py-12 px-6 text-center">
-                    <h2 className="text-xl font-bold text-re-text-primary mb-2">Found a vulnerability?</h2>
+                    <h2 className="font-display text-xl font-bold text-re-text-primary mb-2">Found a vulnerability?</h2>
                     <p className="text-sm text-re-text-muted mb-6">
                         Responsible disclosure: security@regengine.co
                     </p>

@@ -713,7 +713,7 @@ export default function APIPlayground() {
               )}
 
               {error && !loading && (
-                <div className="bg-red-500/5 border border-red-500/20 rounded-md p-4 text-[#ef4444]">
+                <div className="bg-re-danger-muted border border-re-danger/20 rounded-md p-4 text-re-danger">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle size={16} />
                     <span className="font-semibold text-[13px]">Request Failed</span>
@@ -723,7 +723,7 @@ export default function APIPlayground() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs font-mono m-0 text-[#fca5a5]">
+                  <p className="text-xs font-mono m-0 text-re-danger/70">
                     {error}
                   </p>
                 </div>

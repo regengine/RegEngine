@@ -27,8 +27,8 @@ export default function RootError({
     return (
         <div className="flex items-center justify-center min-h-[60vh] p-6">
             <div className="max-w-md w-full text-center space-y-6">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center">
-                    <AlertTriangle className="h-8 w-8 text-red-400" />
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-re-danger-muted flex items-center justify-center">
+                    <AlertTriangle className="h-8 w-8 text-re-danger" />
                 </div>
 
                 <div>

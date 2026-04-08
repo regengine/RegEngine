@@ -110,7 +110,7 @@ export default function ComplianceVerticalsPage() {
                         <span className="w-1.5 h-1.5 rounded-full bg-[var(--re-brand)] animate-pulse" />
                         FSMA 204 Profiles
                     </div>
-                    <h1 className="text-[clamp(36px,5vw,52px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-4 tracking-[-0.02em]">
+                    <h1 className="font-display text-[clamp(36px,5vw,52px)] font-bold text-[var(--re-text-primary)] leading-[1.08] mb-4 tracking-[-0.02em]">
                         Food-First Compliance
                         <br />
                         Vertical Profiles
@@ -138,7 +138,7 @@ export default function ComplianceVerticalsPage() {
                                             <div className="p-2 bg-[var(--re-brand-muted)] rounded-lg">
                                                 <framework.icon className="h-6 w-6 text-[var(--re-brand)]" />
                                             </div>
-                                            <h2 className="text-2xl font-bold text-[var(--re-text-primary)]">{framework.title}</h2>
+                                            <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)]">{framework.title}</h2>
                                         </div>
 
                                         <Badge className="mb-4 bg-[var(--re-brand-muted)] text-[var(--re-brand)] border-[var(--re-brand-muted)] w-fit">
@@ -179,7 +179,7 @@ export default function ComplianceVerticalsPage() {
 
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] py-[72px] px-6 text-center bg-[var(--re-surface-card)]">
                 <Shield className="h-12 w-12 text-[var(--re-brand)] mx-auto mb-4" />
-                <h3 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Built for FDA and Retailer Readiness</h3>
+                <h3 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Built for FDA and Retailer Readiness</h3>
                 <p className="text-[var(--re-text-muted)] max-w-[720px] mx-auto">
                     Each profile maps to practical CTE and KDE coverage so teams can move from supplier
                     data chaos to auditable FSMA 204 responses.

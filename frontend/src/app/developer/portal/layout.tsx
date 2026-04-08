@@ -149,7 +149,7 @@ export default function DeveloperPortalLayout({ children }: { children: React.Re
                         className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] no-underline transition-colors"
                         style={{ color: 'var(--re-text-disabled)' }}
                     >
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-re-success" />
                         API Status
                         <ExternalLink className="w-3 h-3 ml-auto" />
                     </a>

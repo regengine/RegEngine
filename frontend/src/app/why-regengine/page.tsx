@@ -169,7 +169,7 @@ const DIFFERENTIATORS = [
 
 export default function WhyRegEnginePage() {
     return (
-        <main className="min-h-screen bg-[#0a0a0f]">
+        <main className="min-h-screen bg-re-surface-base">
             {/* Hero Section */}
             <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-5xl mx-auto">
@@ -178,7 +178,7 @@ export default function WhyRegEnginePage() {
                             Built Different
                         </Badge>
                     </div>
-                    <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                    <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
                         FSMA 204 Compliance,{' '}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">
                             Built for You
@@ -207,7 +207,7 @@ export default function WhyRegEnginePage() {
             <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-6xl mx-auto">
                     <div className="mb-16 text-center">
-                        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                             Six Reasons Teams Choose RegEngine
                         </h2>
                         <p className="text-gray-400 text-lg max-w-2xl mx-auto">
@@ -250,7 +250,7 @@ export default function WhyRegEnginePage() {
             <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-7xl mx-auto">
                     <div className="mb-12 text-center">
-                        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                        <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                             Feature-by-Feature Comparison
                         </h2>
                         <p className="text-gray-400 text-lg max-w-2xl mx-auto">
@@ -658,7 +658,7 @@ HTTP 201
             <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-4xl mx-auto">
                     <div className="rounded-lg border border-white/10 bg-white/[0.02] p-8 sm:p-12">
-                        <h2 className="text-3xl font-bold text-white mb-4">
+                        <h2 className="font-display text-3xl font-bold text-white mb-4">
                             What RegEngine Is NOT
                         </h2>
                         <p className="text-gray-300 mb-8">
@@ -701,7 +701,7 @@ HTTP 201
             {/* Social Proof / Industry Fit */}
             <section className="border-b border-white/10 px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                         Who's RegEngine For?
                     </h2>
                     <p className="text-gray-300 text-lg mb-12 max-w-2xl mx-auto">
@@ -748,7 +748,7 @@ HTTP 201
             {/* CTA Section */}
             <section className="px-4 sm:px-6 py-16 sm:py-24">
                 <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+                    <h2 className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">
                         Ready to Get Compliant?
                     </h2>
                     <p className="text-gray-300 text-lg mb-8 max-w-2xl mx-auto">

@@ -149,7 +149,7 @@ export default function PrivacyPage() {
           </span>
         </div>
 
-        <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mb-3 leading-tight tracking-tight">
+        <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mb-3 leading-tight tracking-tight">
           Privacy Policy
         </h1>
         <p className="text-sm text-[var(--re-text-disabled)] font-mono">
@@ -181,7 +181,7 @@ export default function PrivacyPage() {
           <div className="flex items-start gap-3">
             <Shield className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
             <div>
-              <h2 className="text-[15px] font-bold text-[var(--re-text-primary)] mb-1">
+              <h2 className="font-display text-[15px] font-bold text-[var(--re-text-primary)] mb-1">
                 Plain language. No legalese walls.
               </h2>
               <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
@@ -223,7 +223,7 @@ export default function PrivacyPage() {
           <div className="flex-1 min-w-0 max-w-[720px]">
             {/* ── What We Collect ─────────────────────────── */}
             <div id="collect" className="scroll-mt-24 pb-10">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-5">
+              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
                 What We Collect
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -238,7 +238,7 @@ export default function PrivacyPage() {
                     <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
                       <item.Icon className="h-4 w-4" />
                     </div>
-                    <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-1">
                       {item.subtitle}
                     </h3>
                     <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -251,7 +251,7 @@ export default function PrivacyPage() {
 
             {/* ── How We Use It ───────────────────────────── */}
             <div id="use" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-5">
+              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
                 How We Use Your Data
               </h2>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -276,7 +276,7 @@ export default function PrivacyPage() {
               >
                 <div className="flex items-center gap-2.5 mb-4">
                   <Ban className="h-5 w-5 text-red-500" />
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)]">
+                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)]">
                     What We Don&apos;t Do
                   </h2>
                 </div>
@@ -295,7 +295,7 @@ export default function PrivacyPage() {
 
             {/* ── Data Storage & Security ─────────────────── */}
             <div id="storage" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-5">
+              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
                 Data Storage &amp; Security
               </h2>
               <div className="grid gap-4 sm:grid-cols-3">
@@ -311,7 +311,7 @@ export default function PrivacyPage() {
                     <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
                       <item.Icon className="h-4 w-4" />
                     </div>
-                    <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-1">
                       {item.subtitle}
                     </h3>
                     <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -324,7 +324,7 @@ export default function PrivacyPage() {
               <div className="mt-4 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-4 flex items-start gap-3">
                 <LockKeyhole className="h-4 w-4 text-[var(--re-brand)] mt-0.5 shrink-0" />
                 <div>
-                  <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">
+                  <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-0.5">
                     Retention
                   </h3>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -340,7 +340,7 @@ export default function PrivacyPage() {
 
             {/* ── Your Rights ─────────────────────────────── */}
             <div id="rights" className="scroll-mt-24 pb-10 border-t border-[var(--re-surface-border)] pt-8">
-              <h2 className="text-xl font-bold text-[var(--re-text-primary)] mb-5">
+              <h2 className="font-display text-xl font-bold text-[var(--re-text-primary)] mb-5">
                 Your Rights
               </h2>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -355,7 +355,7 @@ export default function PrivacyPage() {
                     <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--re-surface-border)] bg-[var(--re-surface-elevated)] text-[var(--re-text-muted)] group-hover:bg-[var(--re-brand)] group-hover:border-[var(--re-brand)] group-hover:text-white transition-colors duration-300">
                       <item.Icon className="h-4 w-4" />
                     </div>
-                    <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
+                    <h3 className="font-display text-sm font-semibold text-[var(--re-text-primary)] mb-1">
                       {item.subtitle}
                     </h3>
                     <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -371,7 +371,7 @@ export default function PrivacyPage() {
               <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
                 <Cookie className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-1">Cookies</h2>
+                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">Cookies</h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                     We use essential cookies for authentication and session management. We use basic
                     analytics cookies to understand product usage. We do not use third-party
@@ -387,7 +387,7 @@ export default function PrivacyPage() {
               <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
                 <CreditCard className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-1">
+                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">
                     Third-Party Services
                   </h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -405,7 +405,7 @@ export default function PrivacyPage() {
               <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
                 <RefreshCw className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-1">
+                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">
                     Service Availability Notice
                   </h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -422,7 +422,7 @@ export default function PrivacyPage() {
               <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
                 <Bell className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-1">
+                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">
                     Changes to This Policy
                   </h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
@@ -439,7 +439,7 @@ export default function PrivacyPage() {
               <div className="flex items-start gap-3 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-card)] p-5">
                 <Mail className="h-5 w-5 text-[var(--re-brand)] mt-0.5 shrink-0" />
                 <div>
-                  <h2 className="text-lg font-bold text-[var(--re-text-primary)] mb-1">Contact</h2>
+                  <h2 className="font-display text-lg font-bold text-[var(--re-text-primary)] mb-1">Contact</h2>
                   <p className="text-[13px] text-[var(--re-text-muted)] leading-relaxed">
                     Questions about this policy?{' '}
                     <a
@@ -466,7 +466,7 @@ export default function PrivacyPage() {
             boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
           }}
         >
-          <h2 className="text-[22px] font-bold text-[var(--re-text-primary)] mb-2">
+          <h2 className="font-display text-[22px] font-bold text-[var(--re-text-primary)] mb-2">
             Your data belongs to you — always
           </h2>
           <p className="text-[15px] text-[var(--re-text-muted)] mb-6 max-w-[520px] mx-auto leading-relaxed">

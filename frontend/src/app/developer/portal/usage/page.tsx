@@ -137,7 +137,7 @@ export default function UsagePage() {
                 <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <Clock className="w-4 h-4 text-[#60a5fa]" />
+                            <Clock className="w-4 h-4 text-re-info" />
                             <span className="text-xs font-medium text-[var(--re-text-muted)]">Avg Latency</span>
                         </div>
                         <p className="text-2xl font-bold text-[var(--re-text-primary)]">{avgLatency}ms</p>
@@ -146,7 +146,7 @@ export default function UsagePage() {
                 <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <AlertCircle className="w-4 h-4 text-[#f87171]" />
+                            <AlertCircle className="w-4 h-4 text-re-danger" />
                             <span className="text-xs font-medium text-[var(--re-text-muted)]">Error Rate</span>
                         </div>
                         <p className="text-2xl font-bold text-[var(--re-text-primary)]">{errorRate}%</p>
@@ -155,7 +155,7 @@ export default function UsagePage() {
                 <Card className="bg-white/[0.02] border-white/[0.06]">
                     <CardContent className="py-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <TrendingUp className="w-4 h-4 text-[#a78bfa]" />
+                            <TrendingUp className="w-4 h-4 text-[var(--re-linkage)]" />
                             <span className="text-xs font-medium text-[var(--re-text-muted)]">Endpoints Hit</span>
                         </div>
                         <p className="text-2xl font-bold text-[var(--re-text-primary)]">{endpoints.length}</p>

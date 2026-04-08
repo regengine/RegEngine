@@ -27,8 +27,8 @@ export default function SettingsError({
     return (
         <div className="flex items-center justify-center min-h-[60vh] p-6">
             <div className="max-w-md w-full text-center space-y-6">
-                <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-500/10 flex items-center justify-center">
-                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-re-warning-muted flex items-center justify-center">
+                    <AlertTriangle className="h-8 w-8 text-re-warning" />
                 </div>
 
                 <div>
