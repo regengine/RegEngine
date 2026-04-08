@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateSession } from '@/lib/supabase/middleware';
 import { createServerClient } from '@supabase/ssr';
 import { jwtVerify } from 'jose';
 import { getVerificationKeys } from '@/lib/jwt-keys';
@@ -499,6 +498,15 @@ export async function middleware(request: NextRequest) {
                 { status: 403 },
             ));
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // PUBLIC: /developers — API showcase page for prospective customers.
+    // Bypasses all auth checks; CSP headers are still applied.
+    // (next.config.js redirects /developers → /developer/portal)
+    // -----------------------------------------------------------------------
+    if (pathname.startsWith('/developers')) {
+        return withCsp(NextResponse.next({ request: { headers: requestHeaders } }));
     }
 
     // Authenticated app routes — server-side session check
