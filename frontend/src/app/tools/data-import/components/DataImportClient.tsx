@@ -616,7 +616,7 @@ export function DataImportClient() {
                                             )}
                                         </Button>
                                     </div>
-                                    <pre className="p-4 rounded-xl bg-[#0d1117] text-[#c9d1d9] text-xs font-mono overflow-x-auto leading-relaxed">
+                                    <pre className="p-4 rounded-xl bg-re-surface-base text-[var(--re-text-secondary)] text-xs font-mono overflow-x-auto leading-relaxed">
                                         {EXAMPLE_CURL}
                                     </pre>
                                 </div>

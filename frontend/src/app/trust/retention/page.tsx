@@ -94,7 +94,7 @@ export default function RetentionPage() {
                 <span className="block text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
                     Retention &amp; Export
                 </span>
-                <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
+                <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
                     Your data, your archives, your timeline
                 </h1>
                 <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[720px]">
@@ -105,7 +105,7 @@ export default function RetentionPage() {
 
             {/* Retention timeline */}
             <section className={`relative z-[2] ${sectionAlt}`}>
-                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Retention timeline</h2>
+                <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Retention timeline</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                         RegEngine retains your data for the duration of your subscription plus a 90-day post-cancellation window. After that, data is permanently deleted.
                     </p>
@@ -133,7 +133,7 @@ export default function RetentionPage() {
 
             {/* FSMA retention obligation */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-4">Why off-platform archives matter</h2>
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Why off-platform archives matter</h2>
                 <div className="grid gap-4 md:grid-cols-2">                    <div className={`${card} p-5`}>
                         <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-2">FSMA 204 requires 2-year retention</h3>
                         <p className="text-sm text-[var(--re-text-muted)] leading-relaxed">
@@ -167,7 +167,7 @@ export default function RetentionPage() {
             {/* Export formats */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Export formats</h2>
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Export formats</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                         All formats include complete CTE/KDE records and can reconstitute compliance evidence without vendor assistance.
                     </p>
@@ -191,7 +191,7 @@ export default function RetentionPage() {
 
             {/* Export scheduling */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-4">Automated export scheduling</h2>                <div className="grid gap-3 md:grid-cols-3">
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Automated export scheduling</h2>                <div className="grid gap-3 md:grid-cols-3">
                     {[
                         { Icon: Calendar, label: 'Cadence options', value: 'Daily / Weekly / Monthly', detail: 'Set your export frequency per format and destination' },
                         { Icon: FolderArchive, label: 'Destinations', value: 'Download or object storage', detail: 'Archive to S3, GCS, or download bundles on demand' },

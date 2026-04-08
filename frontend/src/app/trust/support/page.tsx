@@ -105,7 +105,7 @@ export default function SupportPage() {
                 <span className="block text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
                     Support &amp; Escalation
                 </span>
-                <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
+                <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
                     Who to call, when, and what to expect
                 </h1>                <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[720px]">
                     Support posture depends on plan tier. This page documents the escalation path from self-serve through
@@ -116,7 +116,7 @@ export default function SupportPage() {
             {/* Escalation path */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Escalation path</h2>
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Escalation path</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                         Four tiers, from self-serve to emergency recall. Each tier has a defined availability window and plan requirement.
                     </p>
@@ -143,7 +143,7 @@ export default function SupportPage() {
 
             {/* Response windows by plan */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Response windows by plan</h2>
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Response windows by plan</h2>
                 <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                     Response windows are target timeframes, not contractual SLAs unless you have an enterprise agreement.
                 </p>
@@ -166,7 +166,7 @@ export default function SupportPage() {
             {/* Recall emergency */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-4">During a live recall</h2>
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">During a live recall</h2>
                     <div className={`${card} p-6 border-red-500/20 bg-red-500/[0.02]`}>
                         <div className="flex items-start gap-4">
                             <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
@@ -203,7 +203,7 @@ export default function SupportPage() {
 
             {/* Support boundaries */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-4">Support scope and boundaries</h2>
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Support scope and boundaries</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                     {SUPPORT_BOUNDARIES.map((group) => (
                         <div key={group.title} className={`${card} p-5`}>

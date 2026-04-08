@@ -128,7 +128,7 @@ export default function ArchitecturePage() {
                 </Link>
                 <span className="block text-[11px] font-mono font-medium text-[var(--re-text-disabled)] tracking-widest uppercase">
                     Architecture
-                </span>                <h1 className="text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
+                </span>                <h1 className="font-display text-4xl font-bold text-[var(--re-text-primary)] mt-4 mb-4 leading-tight">
                     How RegEngine is built
                 </h1>
                 <p className="text-base text-[var(--re-text-muted)] leading-relaxed max-w-[720px]">
@@ -140,7 +140,7 @@ export default function ArchitecturePage() {
             {/* Stack layers */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Service topology</h2>
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Service topology</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                         RegEngine runs as three services with strict separation of concerns. The browser never communicates directly with backend infrastructure.
                     </p>
@@ -167,7 +167,7 @@ export default function ArchitecturePage() {
 
             {/* Data flow */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Data flow: ingest to export</h2>
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Data flow: ingest to export</h2>
                 <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                     Every CTE event follows the same five-stage pipeline. Records are immutable after stage 3 — the hash chain is append-only.
                 </p>
@@ -188,7 +188,7 @@ export default function ArchitecturePage() {
             {/* Tenant isolation */}
             <section className={`relative z-[2] ${sectionAlt}`}>
                 <div className="max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                    <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-2">Tenant isolation model</h2>
+                    <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-2">Tenant isolation model</h2>
                     <p className="text-sm text-[var(--re-text-muted)] mb-6 max-w-[720px]">
                         Isolation is enforced at the database layer, not the application layer. Even if application code has a bug, PostgreSQL RLS policies prevent cross-tenant data access.
                     </p>
@@ -211,7 +211,7 @@ export default function ArchitecturePage() {
 
             {/* Infrastructure */}
             <section className="relative z-[2] max-w-[980px] mx-auto py-10 sm:py-14 px-4 sm:px-6">
-                <h2 className="text-2xl font-bold text-[var(--re-text-primary)] mb-4">Infrastructure controls</h2>
+                <h2 className="font-display text-2xl font-bold text-[var(--re-text-primary)] mb-4">Infrastructure controls</h2>
                 <div className="grid gap-3 md:grid-cols-3">                    {[
                         { label: 'Encryption at rest', value: 'AES-256', detail: 'All database volumes and backups' },
                         { label: 'Encryption in transit', value: 'TLS 1.3', detail: 'All service-to-service and client connections' },

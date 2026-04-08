@@ -165,7 +165,7 @@ export default function FSMA204BusinessGuidePage() {
         {/* Enforcement callout */}
         <div className="mt-8 p-5 rounded-xl border border-[rgba(234,179,8,0.25)] bg-[rgba(234,179,8,0.05)] max-w-[680px]">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-[#D97706] flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-re-warning flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-medium text-[var(--re-text-primary)] mb-1">The deadline moved — the rule didn&apos;t.</p>
               <p className="text-[0.9rem] text-[var(--re-text-secondary)] leading-relaxed">
@@ -365,26 +365,26 @@ export default function FSMA204BusinessGuidePage() {
           <h2 className="font-serif text-[2.25rem] font-bold text-white tracking-tight leading-tight mb-4 max-w-[640px] mx-auto">
             Don&apos;t wait for the deadline.
           </h2>
-          <p className="text-[1.05rem] text-[#aaa] max-w-[500px] mx-auto leading-relaxed mb-8">
+          <p className="text-[1.05rem] text-[var(--re-text-muted)] max-w-[500px] mx-auto leading-relaxed mb-8">
             Start with a free tool. See where you stand. Get compliant on your schedule — not the FDA&apos;s.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link
               href="/tools/ftl-checker"
-              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[#0BAE78] transition-all hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 bg-[var(--re-brand)] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-semibold hover:bg-[var(--re-brand-dark)] transition-all hover:-translate-y-0.5"
             >
               Free FTL Checker
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               href="/retailer-readiness"
-              className="inline-flex items-center gap-2 border border-[#444] text-white px-7 py-3.5 rounded-lg text-[0.95rem] font-medium hover:border-[#888] transition-all"
+              className="inline-flex items-center gap-2 border border-[var(--re-border-subtle)] text-[var(--re-text-primary)] px-7 py-3.5 rounded-lg text-[0.95rem] font-medium hover:border-[var(--re-border-strong)] transition-all"
             >
               Retailer Readiness Assessment
             </Link>
           </div>
 
-          <p className="text-[0.82rem] text-[#666] mt-8">
+          <p className="text-[0.82rem] text-[var(--re-text-disabled)] mt-8">
             Have a developer?{" "}
             <Link href="/docs/fsma-204" className="text-[var(--re-brand)] hover:underline">
               Read the integration guide →

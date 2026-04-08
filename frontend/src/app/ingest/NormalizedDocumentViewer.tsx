@@ -122,7 +122,7 @@ export function NormalizedDocumentViewer({ documentId }: ViewerProps) {
                         ID: {documentId.substring(0, 8)}
                     </Badge>
                 </div>
-                <ScrollArea className="flex-1 p-6 bg-white dark:bg-[#0f1115]">
+                <ScrollArea className="flex-1 p-6 bg-white dark:bg-re-surface-card">
                     <div className="font-serif leading-loose text-slate-800 dark:text-slate-300 text-[15px] max-w-prose">
                         {renderHighlightedText()}
                     </div>

@@ -81,7 +81,7 @@ export default function DevelopersPage() {
                     <Terminal className="w-3.5 h-3.5 mr-1.5" />
                     Developer Platform
                 </Badge>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
+                <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-re-text-primary leading-tight mb-5">
                     Build on{' '}
                     <span className="text-re-brand">RegEngine</span>
                 </h1>
@@ -108,7 +108,7 @@ export default function DevelopersPage() {
 
             {/* ═══ QUICK START CURL ═══ */}
             <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Quick start</h2>
+                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Quick start</h2>
                 <p className="text-sm text-re-text-muted text-center mb-8 max-w-lg mx-auto">
                     Record your first critical tracking event in one request.
                 </p>
@@ -128,7 +128,7 @@ export default function DevelopersPage() {
 
             {/* ═══ API CAPABILITIES GRID ═══ */}
             <section className="relative z-[2] max-w-[900px] mx-auto px-4 sm:px-6 pb-12 sm:pb-16">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">API capabilities</h2>
+                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">API capabilities</h2>
                 <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
                     Six core services, one unified API. Everything you need for end-to-end FSMA 204 compliance.
                 </p>
@@ -157,7 +157,7 @@ export default function DevelopersPage() {
             {/* ═══ SDKs Coming Soon ═══ */}
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                 <div className="max-w-[900px] mx-auto py-16 px-6 text-center">
-                    <h2 className="text-2xl font-bold text-re-text-primary mb-3">SDKs Coming Soon</h2>
+                    <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3">SDKs Coming Soon</h2>
                     <p className="text-sm text-re-text-muted mb-6 max-w-md mx-auto">
                         Official client libraries for Python, Node.js, and Go are planned.
                         In the meantime, use our REST API directly &mdash; all endpoints accept and return JSON.
@@ -172,7 +172,7 @@ export default function DevelopersPage() {
 
             {/* ═══ RATE LIMITS ═══ */}
             <section className="relative z-[2] max-w-[900px] mx-auto py-16 px-6">
-                <h2 className="text-2xl font-bold text-re-text-primary mb-3 text-center">Rate limits</h2>
+                <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Rate limits</h2>
                 <p className="text-sm text-re-text-muted text-center mb-6 max-w-lg mx-auto">
                     All API requests are rate limited per API key.
                     If you hit a limit, the API returns a <code className="text-re-text-secondary">429</code> with a <code className="text-re-text-secondary">Retry-After</code> header.
@@ -189,7 +189,7 @@ export default function DevelopersPage() {
                     <Badge className="mb-4 bg-[var(--re-brand)]/10 text-[var(--re-brand)] border-[var(--re-brand)]/20">
                         Ready to integrate?
                     </Badge>
-                    <h2 className="text-xl font-bold text-re-text-primary mb-2">Start building on RegEngine</h2>
+                    <h2 className="font-display text-xl font-bold text-re-text-primary mb-2">Start building on RegEngine</h2>
                     <p className="text-sm text-re-text-muted max-w-md mx-auto mb-6">
                         Get your API key and record your first critical tracking event in under 5 minutes.
                         Full REST API with EPCIS 2.0 support.

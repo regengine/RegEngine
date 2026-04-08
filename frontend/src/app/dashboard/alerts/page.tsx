@@ -239,8 +239,8 @@ export default function AlertsDashboardPage() {
                                     onClick={() => setFilter(filter === 'fda_recall' ? 'all' : 'fda_recall')}
                                     className={`px-3 min-h-[44px] rounded-full text-xs font-medium border transition-all whitespace-nowrap active:scale-[0.96] flex items-center gap-1.5 ${
                                         filter === 'fda_recall'
-                                            ? 'bg-[#ef4444] text-white border-[#ef4444]'
-                                            : 'border-[#ef4444]/40 text-[#ef4444] hover:border-[#ef4444]'
+                                            ? 'bg-re-danger text-white border-re-danger'
+                                            : 'border-re-danger/40 text-re-danger hover:border-re-danger'
                                     }`}
                                 >
                                     <Siren className="h-3 w-3" />
