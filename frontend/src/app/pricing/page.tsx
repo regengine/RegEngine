@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-    Check, X, Zap, Rocket, Crown, ArrowRight, HelpCircle,
+    Check, X, Zap, Rocket, Crown, ArrowRight, HelpCircle, Lock, ShieldCheck, KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -297,6 +297,28 @@ export default async function PricingPage() {
                             Apply as Founding Design Partner <ArrowRight className="ml-2 w-4 h-4" />
                         </Button>
                     </Link>
+                </div>
+            </section>
+
+            {/* Security trust strip */}
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-7">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
+                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
+                            <Lock className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                            <span>AES-256 encryption at rest · TLS 1.3 in transit</span>
+                        </div>
+                        <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
+                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
+                            <ShieldCheck className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                            <span>SOC 2 Type II certified infrastructure (Supabase, Vercel)</span>
+                        </div>
+                        <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
+                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
+                            <KeyRound className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                            <span>Tenant isolation by design · <Link href="/security" className="text-[var(--re-brand)] hover:underline">Security details →</Link></span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
