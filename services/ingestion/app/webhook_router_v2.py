@@ -347,8 +347,8 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     db_session.execute(
                         text("""
                             INSERT INTO fsma.compliance_alerts
-                            (org_id, event_id, severity, alert_type, message, details)
-                            VALUES (CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
+                            (tenant_id, org_id, event_id, severity, alert_type, message, details)
+                            VALUES (CAST(:tid AS uuid), CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
                         """),
                         {
                             "tid": tenant_id,

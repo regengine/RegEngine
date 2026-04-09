@@ -231,6 +231,22 @@ class CanonicalEventStore:
         # --- Insert canonical event ---
         self._insert_canonical_event(event)
 
+        # --- Mark superseded event ---
+        if event.supersedes_event_id:
+            self.session.execute(
+                text("""
+                    UPDATE fsma.traceability_events
+                    SET status = 'superseded', amended_at = NOW()
+                    WHERE event_id = :superseded_id
+                      AND tenant_id = :tid
+                      AND status = 'active'
+                """),
+                {
+                    "superseded_id": str(event.supersedes_event_id),
+                    "tid": tenant_id,
+                },
+            )
+
         # --- Insert hash chain entry ---
         self._insert_chain_entry(
             tenant_id=tenant_id,
@@ -935,7 +951,7 @@ class CanonicalEventStore:
                         :epcis_event_type, :epcis_action, :epcis_biz_step,
                         :validation_status
                     )
-                    ON CONFLICT (idempotency_key) DO NOTHING
+                    ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
                 """),
                 {
                     "id": legacy_id,

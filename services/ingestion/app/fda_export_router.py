@@ -380,6 +380,8 @@ async def export_all_events(
             },
         )
 
+    except HTTPException:
+        raise
     except (ImportError, ValueError, RuntimeError, OSError) as e:
         logger.error("fda_export_all_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Export failed. Check server logs for details.")
@@ -611,8 +613,8 @@ async def export_recall_filtered(
                 },
             )
             db_session.commit()
-        except (ValueError, RuntimeError, OSError):
-            pass  # Don't fail the export if audit logging fails
+        except Exception:
+            db_session.rollback()  # Clean session state for subsequent operations
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         if format == "package":
