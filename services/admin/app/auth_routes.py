@@ -25,6 +25,40 @@ import asyncio
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = structlog.get_logger("auth")
 
+# Per-email login attempt tracking (credential stuffing prevention)
+_EMAIL_ATTEMPT_LIMIT = 5
+_EMAIL_ATTEMPT_WINDOW = 900  # 15 minutes
+
+
+def _email_attempt_key(email: str) -> str:
+    return f"login_attempts:{email}"
+
+
+async def _check_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
+    """Raise 429 if this email has exceeded the failed login attempt limit."""
+    client = await session_store._get_client()
+    count_str = await client.get(_email_attempt_key(email))
+    if count_str and int(count_str) >= _EMAIL_ATTEMPT_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts for this account. Please try again in 15 minutes.",
+            headers={"Retry-After": str(_EMAIL_ATTEMPT_WINDOW)},
+        )
+
+
+async def _record_failed_login_attempt(session_store: RedisSessionStore, email: str) -> None:
+    client = await session_store._get_client()
+    key = _email_attempt_key(email)
+    async with client.pipeline(transaction=False) as pipe:
+        pipe.incr(key)
+        pipe.expire(key, _EMAIL_ATTEMPT_WINDOW)
+        await pipe.execute()
+
+
+async def _clear_email_rate_limit(session_store: RedisSessionStore, email: str) -> None:
+    client = await session_store._get_client()
+    await client.delete(_email_attempt_key(email))
+
 
 async def _persist_session(
     session_store: RedisSessionStore,
@@ -128,11 +162,16 @@ async def login(
 ):
     # 1. Verify User (normalize email to lowercase for case-insensitive match)
     normalized_login_email = payload.email.strip().lower()
+
+    # Per-email rate limit — check before any DB work to prevent enumeration
+    await _check_email_rate_limit(session_store, normalized_login_email)
+
     stmt = select(UserModel).where(UserModel.email == normalized_login_email)
     user = db.execute(stmt).scalar_one_or_none()
-    
+
     if not user or not verify_password(payload.password, user.password_hash):
         logger.warning("login_failed", reason="invalid_credentials")
+        await _record_failed_login_attempt(session_store, normalized_login_email)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -158,6 +197,9 @@ async def login(
             active_tenant_id = tenant.id
             active_tenant_status = tenant.status
     
+    # Clear failed-attempt counter on successful credential verification
+    await _clear_email_rate_limit(session_store, normalized_login_email)
+
     # 3. Create Session in Redis (replaces PostgreSQL session)
     raw_refresh_token = create_refresh_token()
     token_hash = hash_token(raw_refresh_token)
@@ -615,6 +657,57 @@ def register_initial_admin(payload: RegisterRequest, request: Request, db: Sessi
 #   5. We update password_hash in the RegEngine DB
 #   6. We also sync Supabase via admin.update_user_by_id() so both stores match
 # ---------------------------------------------------------------------------
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/change-password")
+@limiter.limit("5/minute")
+async def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    db: Session = Depends(get_session),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Change an authenticated user's password.
+
+    Verifies the current password, validates the new password against policy,
+    updates the argon2 hash in the RegEngine DB, and syncs to Supabase so both
+    stores stay aligned (matching the pattern used in reset-password).
+    """
+    # Re-fetch the user within this session to get the current password_hash
+    user = db.get(UserModel, current_user.id)
+    if not user or user.status != "active":
+        raise HTTPException(status_code=403, detail="Account disabled")
+
+    if not verify_password(payload.current_password, user.password_hash):
+        logger.warning("change_password_wrong_current", user_id=str(user.id))
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    try:
+        validate_password(payload.new_password, user_context={"email": user.email})
+    except PasswordPolicyError as exc:
+        raise HTTPException(status_code=400, detail=exc.message)
+
+    user.password_hash = get_password_hash(payload.new_password)
+
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.auth.admin.update_user_by_id(str(user.id), {"password": payload.new_password})
+        except Exception as exc:
+            logger.warning(
+                "change_password_supabase_sync_failed",
+                user_id=str(user.id),
+                error=str(exc),
+            )
+
+    db.commit()
+    logger.info("change_password_success", user_id=str(user.id))
+    return {"status": "success"}
+
 
 class ResetPasswordRequest(BaseModel):
     new_password: str
