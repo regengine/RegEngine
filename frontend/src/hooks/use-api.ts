@@ -7,8 +7,10 @@ import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '
 
 // Demo fallback data shown when backend services are unreachable.
 // Lets the dashboard render a realistic preview instead of all "—".
-const DEMO_METRICS: SystemMetricsResponse & { _demo: true } = {
-  _demo: true,
+// `_demo` marks data as synthetic; `_reason` tells the UI *why* we fell back.
+type DemoReason = 'auth' | 'unreachable';
+
+const DEMO_METRICS_BASE: SystemMetricsResponse = {
   total_tenants: 1,
   total_documents: 347,
   active_jobs: 0,
@@ -20,15 +22,38 @@ const DEMO_METRICS: SystemMetricsResponse & { _demo: true } = {
   open_alerts: 3,
 };
 
-const DEMO_STATUS: SystemStatusResponse & { _demo: true } = {
-  _demo: true,
-  overall_status: 'degraded',
-  services: [
-    { name: 'admin', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
-    { name: 'ingestion', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
-    { name: 'compliance', status: 'unhealthy', details: { error: 'Backend not running — showing demo data' } },
-  ],
-};
+function makeDemoMetrics(reason: DemoReason): SystemMetricsResponse & { _demo: true; _reason: DemoReason } {
+  return { ...DEMO_METRICS_BASE, _demo: true, _reason: reason };
+}
+
+function makeDemoStatus(reason: DemoReason): SystemStatusResponse & { _demo: true; _reason: DemoReason } {
+  const msg = reason === 'auth'
+    ? 'Log in to see live data'
+    : 'Backend not running — showing demo data';
+  return {
+    _demo: true,
+    _reason: reason,
+    overall_status: 'degraded',
+    services: [
+      { name: 'admin', status: 'unhealthy', details: { error: msg } },
+      { name: 'ingestion', status: 'unhealthy', details: { error: msg } },
+      { name: 'compliance', status: 'unhealthy', details: { error: msg } },
+    ],
+  };
+}
+
+/** Check if an error is a 401/403 auth failure vs a network/server error */
+function isAuthError(error: unknown): boolean {
+  if (!error) return false;
+  // Axios errors have response.status
+  const axiosStatus = (error as { response?: { status?: number } }).response?.status;
+  if (axiosStatus === 401 || axiosStatus === 403) return true;
+  // Fallback: check error message
+  if (error instanceof Error) {
+    return error.message.includes('401') || error.message.includes('403');
+  }
+  return false;
+}
 
 // Health Checks
 export const useAdminHealth = () => {
@@ -55,7 +80,9 @@ export const useComplianceHealth = () => {
   });
 };
 
-// System Status & Metrics — fall back to demo data when backend is unreachable
+// System Status & Metrics — fall back to demo data when backend is unreachable.
+// Distinguishes "not logged in" (401) from "backend down" (network/503) so the
+// UI can show the right message.
 export const useSystemStatus = () => {
   const query = useQuery({
     queryKey: ['system', 'status'],
@@ -63,9 +90,10 @@ export const useSystemStatus = () => {
     refetchInterval: POLL_HEALTH,
     retry: 1,
   });
+  const reason: DemoReason = isAuthError(query.error) ? 'auth' : 'unreachable';
   return {
     ...query,
-    data: query.data ?? (query.error ? DEMO_STATUS : undefined),
+    data: query.data ?? (query.error ? makeDemoStatus(reason) : undefined),
   };
 };
 
@@ -76,9 +104,10 @@ export const useSystemMetrics = () => {
     refetchInterval: POLL_METRICS,
     retry: 1,
   });
+  const reason: DemoReason = isAuthError(query.error) ? 'auth' : 'unreachable';
   return {
     ...query,
-    data: query.data ?? (query.error ? DEMO_METRICS : undefined),
+    data: query.data ?? (query.error ? makeDemoMetrics(reason) : undefined),
   };
 };
 

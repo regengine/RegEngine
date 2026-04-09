@@ -1,12 +1,40 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
-import { useSystemStatus } from "@/hooks/use-api";
+import { useQuery } from "@tanstack/react-query";
+import { POLL_HEALTH_MS } from "@/lib/polling-config";
 import { Skeleton } from "@/components/ui/skeleton";
+
+interface ServiceCheck {
+    name: string;
+    status: 'healthy' | 'unhealthy' | 'unreachable' | 'not_configured';
+    code?: number;
+    latencyMs?: number;
+}
+
+interface HealthResponse {
+    status: 'healthy' | 'degraded';
+    services: ServiceCheck[];
+    summary: { healthy: number; total: number };
+}
+
+/** Fetch from /api/health — unauthenticated, server-side health checks */
+function useHealthCheck() {
+    return useQuery<HealthResponse>({
+        queryKey: ['health-check'],
+        queryFn: async () => {
+            const res = await fetch('/api/health');
+            if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
+            return res.json();
+        },
+        refetchInterval: POLL_HEALTH_MS,
+        retry: 1,
+    });
+}
 
 interface ServiceStatusProps {
     name: string;
-    status: 'healthy' | 'unhealthy' | 'degraded';
+    status: 'healthy' | 'unhealthy' | 'degraded' | 'unreachable' | 'not_configured';
     details?: Record<string, unknown>;
 }
 
@@ -18,7 +46,10 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
             case 'degraded':
                 return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
             case 'unhealthy':
+            case 'unreachable':
                 return <XCircle className="h-5 w-5 text-red-500" />;
+            case 'not_configured':
+                return <Activity className="h-5 w-5 text-muted-foreground" />;
             default:
                 return <Activity className="h-5 w-5 text-muted-foreground" />;
         }
@@ -29,8 +60,9 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
             case 'healthy':
                 return 'default';
             case 'degraded':
-                return 'secondary'; // fallback since warning isn't standard
+                return 'secondary';
             case 'unhealthy':
+            case 'unreachable':
                 return 'destructive';
             default:
                 return 'outline';
@@ -58,7 +90,7 @@ const ServiceStatus = ({ name, status, details }: ServiceStatusProps) => {
 };
 
 export function SystemHealthWidget() {
-    const { data: systemStatus, isLoading, error } = useSystemStatus();
+    const { data: health, isLoading, error } = useHealthCheck();
 
     if (isLoading) {
         return (
@@ -75,8 +107,7 @@ export function SystemHealthWidget() {
         );
     }
 
-    // When demo fallback data is present, skip the error state and render normally
-    if (error && !systemStatus) {
+    if (error && !health) {
         return (
             <Card>
                 <CardHeader>
@@ -92,8 +123,8 @@ export function SystemHealthWidget() {
         );
     }
 
-    const services = systemStatus?.services || [];
-    const overallStatus = systemStatus?.overall_status || 'unknown';
+    const services = health?.services || [];
+    const overallStatus = health?.status || 'unknown';
 
     return (
         <Card>
@@ -110,12 +141,11 @@ export function SystemHealthWidget() {
                 {services.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No services monitored.</p>
                 ) : (
-                    services.map((service: ServiceStatusProps) => (
+                    services.map((service) => (
                         <ServiceStatus
                             key={service.name}
                             name={service.name}
                             status={service.status}
-                            details={service.details}
                         />
                     ))
                 )}
