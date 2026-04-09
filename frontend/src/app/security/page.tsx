@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
   ArrowRight, CheckCircle2, Code2, Database, Eye, FileCode, Globe,
-  Hash, KeyRound, Lock, LockKeyhole, Shield, ShieldCheck, Terminal,
+  Hash, KeyRound, Lock, LockKeyhole, Server, Shield, ShieldCheck, Terminal,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -51,7 +51,11 @@ const securityFeatures = [
 
 const securityControls = [
     { item: "Data encryption at rest (AES-256)", Icon: LockKeyhole },
-    { item: "TLS 1.3 in transit", Icon: Globe },
+    { item: "TLS 1.3 in transit — all API and web traffic", Icon: Globe },
+    { item: "CSRF protection on all state-changing endpoints", Icon: Shield },
+    { item: "Rate limiting on authentication and API endpoints", Icon: ShieldCheck },
+    { item: "HTTP-only, Secure session cookies (no JS access)", Icon: LockKeyhole },
+    { item: "JWT key rotation with configurable expiry windows", Icon: KeyRound },
     { item: "Branch protection (required reviews, no force-push)", Icon: Code2 },
     { item: "CI security scanning (SAST, secrets, deps, DAST)", Icon: Terminal },
     { item: "Vulnerability Disclosure Policy + security.txt", Icon: FileCode },
@@ -67,11 +71,12 @@ const diligenceArtifacts = [
 ];
 
 const infrastructure = [
-    { label: "Database", value: "PostgreSQL (Supabase)", detail: "Row-Level Security enforced", Icon: Database },
-    { label: "Hosting", value: "Cloud infrastructure", detail: "US data residency", Icon: Globe },
+    { label: "Database", value: "Supabase (PostgreSQL)", detail: "SOC 2 Type II certified · Row-Level Security enforced", Icon: Database },
+    { label: "Hosting & CI/CD", value: "Vercel", detail: "SOC 2 Type II certified · US data residency", Icon: Globe },
+    { label: "Background services", value: "Railway", detail: "US-based infrastructure", Icon: Server },
     { label: "Encryption at rest", value: "AES-256", detail: "All stored data", Icon: LockKeyhole },
-    { label: "Encryption in transit", value: "TLS 1.3", detail: "All API traffic", Icon: Globe },
-    { label: "Authentication", value: "JWT + API keys", detail: "Per-tenant scoping", Icon: KeyRound },
+    { label: "Encryption in transit", value: "TLS 1.3", detail: "All API and web traffic", Icon: Globe },
+    { label: "Authentication", value: "JWT + API keys", detail: "Per-tenant scoping with rotation", Icon: KeyRound },
     { label: "Hashing", value: "SHA-256", detail: "Deterministic, auditable", Icon: Hash },
 ];
 
@@ -187,8 +192,8 @@ export default function SecurityPage() {
             <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
                 <div className="max-w-[900px] mx-auto py-16 px-6">
                     <h2 className="font-display text-2xl font-bold text-re-text-primary mb-3 text-center">Infrastructure</h2>
-                    <p className="text-sm text-re-text-muted text-center mb-10 max-w-md mx-auto">
-                        Enterprise-grade defaults from day one.
+                    <p className="text-sm text-re-text-muted text-center mb-10 max-w-lg mx-auto">
+                        Enterprise-grade defaults from day one. Our infrastructure providers hold independent SOC 2 Type II certifications.
                     </p>
                     <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
                         {infrastructure.map((item) => (
@@ -208,6 +213,11 @@ export default function SecurityPage() {
                             </div>
                         ))}
                     </div>
+                    <p className="text-[11px] text-re-text-disabled text-center mt-6 max-w-lg mx-auto leading-relaxed">
+                        Supabase and Vercel independently hold SOC 2 Type II certifications.
+                        RegEngine itself is working toward SOC 2 Type I (target Q3 2026) — see roadmap below.
+                        Provider compliance reports are available on request.
+                    </p>
                 </div>
             </section>
 
