@@ -3,13 +3,17 @@ import { ROICalculatorClient } from "./components/ROICalculatorClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "Regulatory ROI Calculator | FSMA 204 Automation Savings | RegEngine",
-    description: "Quantify the financial impact of manual compliance vs. the RegEngine platform with our personalized ROI engine. Calculate labor savings and risk reduction.",
+    title: "FSMA 204 ROI Calculator | Compliance Automation Savings | RegEngine",
+    description: "Calculate the ROI of automating FSMA 204 compliance. Estimate labor savings, recall cost reduction, and efficiency gains vs. manual traceability. Free tool.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/roi-calculator",
+    },
     openGraph: {
-        title: "Regulatory ROI Calculator — RegEngine",
-        description: "Calculate your FSMA 204 automation savings.",
+        title: "FSMA 204 ROI Calculator — RegEngine",
+        description: "Calculate your labor savings and recall cost reduction from automating FSMA 204 traceability. Free ROI tool.",
         type: "website",
         url: "https://www.regengine.co/tools/roi-calculator",
     },
@@ -74,11 +78,18 @@ function ROICalculatorFallback() {
 
 export default function ROICalculatorPage() {
     return (
-        <Suspense fallback={<ROICalculatorFallback />}>
-            <JSONLD data={jsonLd} />
-            <EmailGate toolName="roi-calculator">
-                <ROICalculatorClient />
-            </EmailGate>
-        </Suspense>
+        <>
+            <Suspense fallback={<ROICalculatorFallback />}>
+                <JSONLD data={jsonLd} />
+                <EmailGate toolName="roi-calculator">
+                    <ROICalculatorClient />
+                </EmailGate>
+            </Suspense>
+            <RelatedTools tools={[
+                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your FSMA 204 compliance posture and find where to focus automation efforts." },
+                { href: "/tools/sop-generator", title: "SOP Generator", description: "Auto-generate your FSMA 204 Traceability Plan and Standard Operating Procedures." },
+                { href: "/tools/ftl-checker", title: "FTL Checker", description: "Confirm which products are covered by FSMA 204 before estimating compliance costs." },
+            ]} />
+        </>
     );
 }
