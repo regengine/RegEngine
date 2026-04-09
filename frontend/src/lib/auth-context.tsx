@@ -187,6 +187,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return;
 
     const hydrate = async () => {
+      // If middleware redirected here with an auth error the JWT is expired or
+      // invalid. Clear stale client state so the nav doesn't render an
+      // authenticated shell on the login page while Supabase session still
+      // exists. Without this, the Supabase onAuthStateChange guard
+      // (if (accessToken) return) sees the stale COOKIE_MANAGED_PLACEHOLDER
+      // and skips re-authentication, leaving the UI in a broken half-logged-in
+      // state until the user hard-refreshes.
+      const isAuthError =
+        window.location.search.includes('error=session_expired') ||
+        window.location.search.includes('error=token_invalid');
+
+      if (isAuthError) {
+        Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+        clearSessionCookies();
+        setIsHydrated(true);
+        return;
+      }
+
       // Step 1: If localStorage still has secrets, migrate them to cookies
       await migrateLocalStorageToCookies();
 
