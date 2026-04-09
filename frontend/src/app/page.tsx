@@ -531,7 +531,7 @@ export default function RegEngineLanding() {
             Based on company size. No hidden fees.
           </h2>
           <p className="text-[var(--re-text-secondary)]">
-            Cancel anytime. Founding partner pricing locks in 50% off for life.
+            Founding partner rates, billed annually. Monthly billing available at checkout. Cancel anytime.
           </p>
           <p className="text-xs text-[var(--re-text-muted)] mt-1">
             Prices shown billed annually. Monthly billing also available.
@@ -562,6 +562,7 @@ export default function RegEngineLanding() {
                   {tier.price}
                 </span>
                 <span className="text-sm text-[var(--re-text-muted)]">{tier.period}</span>
+                <span className="block text-xs text-[var(--re-text-disabled)] mt-0.5">billed annually</span>
               </p>
               <ul className="space-y-2">
                 {tier.features.map((feature) => (
