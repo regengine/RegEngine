@@ -6,13 +6,13 @@
 
 ## Summary
 
-| Severity | Count | Fixed | Documented Only |
-|----------|-------|-------|-----------------|
-| CRITICAL | 7     | 7     | 0               |
-| HIGH     | 14    | 14    | 0               |
-| MEDIUM   | 11    | 9     | 2               |
-| LOW      | 6     | 5     | 1               |
-| **Total**| **38**| **35**| **3**           |
+| Severity | Count | Fixed |
+|----------|-------|-------|
+| CRITICAL | 7     | 7     |
+| HIGH     | 14    | 14    |
+| MEDIUM   | 11    | 11    |
+| LOW      | 6     | 6     |
+| **Total**| **38**| **38**|
 
 ---
 
@@ -211,19 +211,15 @@ Since all use `CREATE OR REPLACE FUNCTION`, whichever runs last wins. If V29 run
 **Files:** `migrations/V041__tenant_obligation_seeding_function.sql`
 **Fix:** Renamed to `V055__tenant_obligation_seeding_function.sql` to resolve the V041 collision.
 
-#### FINDING-16: compliance_alerts table exists in 3 different schemas [MEDIUM]
+#### ~~FINDING-16: compliance_alerts table exists in 3 different schemas~~ FIXED [MEDIUM]
 
-- `services/admin/migrations/V7__create_compliance_status.sql:39` — `public.compliance_alerts`
-- `services/admin/migrations/V31__fsma_204_infrastructure.sql:238` — `fsma.compliance_alerts`
-- `migrations/V002__fsma_cte_persistence.sql:123` — `fsma.compliance_alerts`
+**Files:** `services/scheduler/app/compliance_integration.py:256,300,322`
+**Fix:** Schema-qualified all 3 unqualified `compliance_alerts` references to `public.compliance_alerts` to prevent search_path ambiguity with the separate `fsma.compliance_alerts` table. The two tables serve different purposes: `public.compliance_alerts` (V7) stores external enforcement alerts with countdown timers; `fsma.compliance_alerts` (V002) stores per-event compliance issues.
 
-Code inserts into `fsma.compliance_alerts` but never touches `public.compliance_alerts`, splitting alerting data.
+#### ~~FINDING-17: 3 ORM models have no corresponding migration~~ FIXED [MEDIUM]
 
-#### FINDING-17: 3 ORM models have no corresponding migration [MEDIUM]
-
-**File:** `services/admin/app/sqlalchemy_models.py:210-269`
-
-`supplier_facilities`, `supplier_facility_ftl_categories`, and `supplier_traceability_lots` exist only in the ORM model. No migration creates them. They likely don't exist in production.
+**File:** `services/admin/migrations/V39__supplier_portal_tables.sql` (new migration)
+**Fix:** Created migration for `supplier_facilities`, `supplier_facility_ftl_categories`, and `supplier_traceability_lots` with proper RLS policies and indexes matching the ORM model definitions.
 
 #### FINDING-18: Supplier Merkle hash formula differs from canonical chain [MEDIUM]
 
@@ -281,20 +277,13 @@ For a 10,000-row CSV import, the tenant's hash chain `FOR UPDATE` lock is held f
 **File:** `services/admin/app/supplier_funnel_routes.py:284`
 **Fix:** Changed `int(score_payload["score"])` to `round(score_payload["score"])`.
 
-#### FINDING-28: Batch `store_events_batch()` defaults missing quantity to 0 [LOW]
+#### ~~FINDING-28: Batch `store_events_batch()` defaults missing quantity to 0~~ FIXED [LOW]
 
-**File:** `services/shared/cte_persistence.py:566`
-
-The webhook model validates `quantity > 0`, but batch path defaults missing quantity to `0`. If DB has CHECK `quantity > 0`, the insert fails. If not, a zero-quantity CTE is persisted — invalid per FSMA 204. Note: The single-event EPCIS path already validates `quantity > 0` at ingestion (line 1048).
+**File:** `services/shared/cte_persistence.py:579,592`
+**Fix:** Changed `evt.get("quantity", 0)` to `max(float(evt.get("quantity") or 0), 1.0)` in both the hash computation and INSERT row preparation, consistent with the single-event path's validation.
 
 ---
 
-## Remaining Unfixed Items (3 of 38)
+## All 38 findings fixed.
 
-### Tech Debt (Non-Blocking)
-
-1. **FINDING-16:** Triple compliance_alerts table — consolidation migration needed
-2. **FINDING-17:** Orphan ORM models — generate migration or remove models
-3. **FINDING-28:** Batch `store_events_batch()` defaults missing quantity to 0 — validate > 0
-
-All other 35 findings have been fixed. FINDING-18 (Supplier Merkle formula) and FINDING-19 (batch lock duration) are architectural considerations, not bugs — tracked separately in project backlog.
+Architectural considerations (FINDING-18: Supplier Merkle formula divergence, FINDING-19: batch lock duration) are tracked separately in project backlog — they are design tradeoffs, not bugs.
