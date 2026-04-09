@@ -347,8 +347,8 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                     db_session.execute(
                         text("""
                             INSERT INTO fsma.compliance_alerts
-                            (org_id, event_id, severity, alert_type, message, details)
-                            VALUES (CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
+                            (tenant_id, org_id, event_id, severity, alert_type, message, details)
+                            VALUES (CAST(:tid AS uuid), CAST(:tid AS uuid), :eid::uuid, :sev, :atype, :msg, :details::jsonb)
                         """),
                         {
                             "tid": tenant_id,
@@ -607,7 +607,7 @@ async def ingest_events(
                     try:
                         from shared.canonical_persistence import CanonicalEventStore
                         canonical = normalize_webhook_event(event, tenant_id)
-                        canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                        canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
                         canonical_store.persist_event(canonical)
                         # Auto-evaluate rules
                         from shared.rules_engine import RulesEngine
@@ -688,7 +688,7 @@ async def ingest_events(
                         try:
                             from shared.canonical_persistence import CanonicalEventStore
                             canonical = normalize_webhook_event(event, tenant_id)
-                            canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                            canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
                             canonical_store.persist_event(canonical)
                             from shared.rules_engine import RulesEngine
                             engine = RulesEngine(db_session)

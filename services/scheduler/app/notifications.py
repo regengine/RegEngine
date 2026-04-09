@@ -231,6 +231,10 @@ class WebhookNotifier:
         self._dead_letter.clear()
         return count
 
+    def close(self) -> None:
+        """Close the underlying HTTP client to release connections."""
+        self.session.close()
+
     def retry_dead_letters(self) -> List[DeliveryResult]:
         """Retry all failed deliveries."""
         results = []

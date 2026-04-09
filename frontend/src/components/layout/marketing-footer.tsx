@@ -25,7 +25,8 @@ export function MarketingFooter() {
 
     return (
         <footer
-            aria-label="Site footer"            className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-text-primary)] text-[var(--re-surface-base)]"
+            aria-label="Site footer"
+            className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[#0f172a] text-white"
         >
             <div className="max-w-[1100px] mx-auto px-6 pt-12 pb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-10">
                 <div>

@@ -215,4 +215,4 @@ async def analyze_label(
         raise HTTPException(status_code=502, detail="Vision model returned unparseable response")
     except (ImportError, AttributeError, TypeError, ValueError, KeyError, OSError, IOError) as exc:
         logger.error("Vision analysis failed: %s", exc, exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Vision analysis failed: {str(exc)}")
+        raise HTTPException(status_code=502, detail="Vision analysis failed. Check server logs for details.")
