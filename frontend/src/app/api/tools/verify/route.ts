@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
 
-const BACKEND_URL = getServerServiceURL('admin');
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_BASE_URL || getServerServiceURL('admin');
 
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
 
