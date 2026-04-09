@@ -11,7 +11,6 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { Loader2, Lock, LayoutDashboard, ArrowRight, ShieldCheck, CalendarClock, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import type { LoginPreset } from './QALoginPresets';
 
 // QA presets are code-split into a separate chunk via dynamic import.
 // In production builds without the opt-in env var, the chunk is never
@@ -73,29 +72,17 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const presetParam = searchParams.get('preset');
     const nextParam = searchParams.get('next');
     const { login, user, isHydrated } = useAuth();
 
-    const applyPreset = useCallback((presetId: LoginPreset) => {
-        // Minimal email map for URL ?preset= param handling.
-        // Full preset UI is code-split into QALoginPresets.
-        const presetEmails: Record<string, string> = {
-            qa: 'test@example.com',
-            admin: 'admin@example.com',
-        };
-        const email = presetEmails[presetId];
-        if (!email) return;
+    // Receives an email string from QALoginPresets (dynamically loaded chunk).
+    // The email→preset mapping lives exclusively in that chunk so test addresses
+    // are absent from the production bundle.
+    const applyPreset = useCallback((email: string) => {
         setEmail(email);
         setPassword('');
         setError(null);
     }, []);
-
-    useEffect(() => {
-        if (presetParam === 'qa' || presetParam === 'admin') {
-            applyPreset(presetParam);
-        }
-    }, [presetParam, applyPreset]);
 
     useEffect(() => {
         if (!isHydrated || !user) {
