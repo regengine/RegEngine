@@ -151,7 +151,7 @@ const FAQ = [
     { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
     { q: 'What if the FDA delays enforcement again?', a: 'Retailers like Walmart and Kroger are already requiring traceability from suppliers, regardless of the FDA timeline. RegEngine keeps you audit-ready for both.' },
-    { q: 'Do I need this if I'm a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
+    { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
     { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or direct ERP connectors. Most customers are up and running within 48 hours.' },
     { q: 'What happens to my data?', a: 'Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). Each tenant gets row-level security isolation. We never share or sell your data.' },
 ];
