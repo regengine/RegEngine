@@ -576,7 +576,7 @@ class CTEPersistence:
 
             sha256_hash = compute_event_hash(
                 event_id, evt["event_type"], evt["traceability_lot_code"],
-                evt.get("product_description", ""), evt.get("quantity", 0),
+                evt.get("product_description", ""), max(float(evt.get("quantity") or 0), 1.0),
                 evt.get("unit_of_measure", ""), evt.get("location_gln"),
                 evt.get("location_name"), evt["event_timestamp"], kdes,
             )
@@ -589,7 +589,7 @@ class CTEPersistence:
                 "event_type": evt["event_type"],
                 "tlc": evt["traceability_lot_code"],
                 "product_description": evt.get("product_description", ""),
-                "quantity": evt.get("quantity", 0),
+                "quantity": max(float(evt.get("quantity") or 0), 1.0),
                 "unit_of_measure": evt.get("unit_of_measure", ""),
                 "location_gln": evt.get("location_gln"),
                 "location_name": evt.get("location_name"),
