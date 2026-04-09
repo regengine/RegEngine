@@ -3,13 +3,17 @@ import { FTLCheckerClient } from "./components/FTLCheckerClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "FTL Coverage Checker | FDA FSMA 204 Compliance Tool | RegEngine",
-    description: "Free FDA Food Traceability List checker. Verify FSMA 204 coverage for your products.",
+    title: "FTL Checker | Is Your Food on the FDA Traceability List? | RegEngine",
+    description: "Free tool to check if your food products are covered by FDA FSMA 204. Search the Food Traceability List by product name or category. No signup needed.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/ftl-checker",
+    },
     openGraph: {
-        title: "FTL Coverage Checker — RegEngine",
-        description: "Free FDA Food Traceability List checker. Verify FSMA 204 coverage for your products.",
+        title: "FTL Checker — RegEngine",
+        description: "Free tool to check if your food products are covered by FDA FSMA 204. Search the Food Traceability List by product name or category.",
         type: "website",
         url: "https://www.regengine.co/tools/ftl-checker",
     },
@@ -79,11 +83,18 @@ function FTLCheckerSkeleton() {
 
 export default function FTLCheckerPage() {
     return (
-        <Suspense fallback={<FTLCheckerSkeleton />}>
-            <JSONLD data={jsonLd} />
-            <EmailGate toolName="ftl-checker">
-                <FTLCheckerClient />
-            </EmailGate>
-        </Suspense>
+        <>
+            <Suspense fallback={<FTLCheckerSkeleton />}>
+                <JSONLD data={jsonLd} />
+                <EmailGate toolName="ftl-checker">
+                    <FTLCheckerClient />
+                </EmailGate>
+            </Suspense>
+            <RelatedTools tools={[
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Events your supply chain must document under FSMA 204." },
+                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate your customized Key Data Element checklist for each FTL product and CTE type." },
+                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your facility's overall FSMA 204 compliance readiness across all requirement areas." },
+            ]} />
+        </>
     );
 }
