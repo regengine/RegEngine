@@ -4,13 +4,17 @@ import { CTEMapperClient } from "./components/CTEMapperClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "CTE Coverage Mapper | FSMA 204 Supply Chain Mapping | RegEngine",
-    description: "Visualize your supply chain nodes to see exactly who owes whom data for every transaction under FSMA 204. Map your Critical Tracking Events (CTEs) today.",
+    title: "CTE Mapper | FSMA 204 Critical Tracking Event Supply Chain Tool | RegEngine",
+    description: "Visualize your supply chain nodes and see exactly who owes whom data under FSMA 204. Map all 7 Critical Tracking Events across your supply chain. Free tool.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/cte-mapper",
+    },
     openGraph: {
-        title: "CTE Coverage Mapper — RegEngine",
-        description: "Map your FSMA 204 supply chain data flow.",
+        title: "CTE Mapper — RegEngine",
+        description: "Visualize your supply chain nodes and map all 7 FSMA 204 Critical Tracking Events. Free tool.",
         type: "website",
         url: "https://www.regengine.co/tools/cte-mapper",
     },
@@ -73,21 +77,28 @@ function CTEMapperFallback() {
 
 export default function CTEMapperPage() {
     return (
-        <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
-            <JSONLD data={jsonLd} />
-            <div className="max-w-7xl mx-auto">
-                <Breadcrumbs
-                    items={[
-                        { label: "Free Tools", href: "/tools" },
-                        { label: "CTE Coverage Mapper" }
-                    ]}
-                />
-                <Suspense fallback={<CTEMapperFallback />}>
-                    <EmailGate toolName="cte-mapper">
-                        <CTEMapperClient />
-                    </EmailGate>
-                </Suspense>
+        <>
+            <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+                <JSONLD data={jsonLd} />
+                <div className="max-w-7xl mx-auto">
+                    <Breadcrumbs
+                        items={[
+                            { label: "Free Tools", href: "/tools" },
+                            { label: "CTE Coverage Mapper" }
+                        ]}
+                    />
+                    <Suspense fallback={<CTEMapperFallback />}>
+                        <EmailGate toolName="cte-mapper">
+                            <CTEMapperClient />
+                        </EmailGate>
+                    </Suspense>
+                </div>
             </div>
-        </div>
+            <RelatedTools tools={[
+                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate a customized Key Data Element checklist for each CTE and FTL product type." },
+                { href: "/tools/ftl-checker", title: "FTL Checker", description: "Verify which of your food products are covered by FDA FSMA 204 requirements." },
+                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Test if your supply chain can meet the FDA 24-hour records retrieval mandate." },
+            ]} />
+        </>
     );
 }
