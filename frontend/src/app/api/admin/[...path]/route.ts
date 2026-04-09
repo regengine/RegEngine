@@ -105,6 +105,13 @@ async function proxyRequest(  request: NextRequest,
     const queryString = new URL(request.url).search;
     const targetBases = getAdminTargets();
 
+    if (targetBases.length === 0) {
+      return proxyError(
+        'Admin backend not configured — set NEXT_PUBLIC_ADMIN_URL, NEXT_PUBLIC_API_BASE_URL, or ADMIN_SERVICE_URL',
+        503,
+      );
+    }
+
     const headers = new Headers();
     const hasRequestBody = !['GET', 'OPTIONS'].includes(method);
     const contentType = request.headers.get('content-type');
@@ -252,7 +259,13 @@ function getAdminTargets(): string[] {
   }
 
   if (candidates.length === 0) {
-    candidates.push(DEFAULT_ADMIN_URL);
+    if (runningOnVercel) {
+      console.error(
+        '[proxy/admin] No admin backend URL configured — set NEXT_PUBLIC_ADMIN_URL, NEXT_PUBLIC_API_BASE_URL, or ADMIN_SERVICE_URL',
+      );
+    } else {
+      candidates.push(DEFAULT_ADMIN_URL);
+    }
   }
 
   return Array.from(new Set(candidates.map((candidate) => stripTrailingSlash(candidate))));

@@ -944,7 +944,7 @@ class RulesEngine:
                     rule_version=rule.rule_version,
                     rule_title=rule.title,
                     severity=rule.severity,
-                    result="skip",
+                    result="error",
                     why_failed=f"Evaluation error: {str(e)}",
                     category=rule.category,
                 )
@@ -974,7 +974,7 @@ class RulesEngine:
                     rule_version=rule.rule_version,
                     rule_title=rule.title,
                     severity=rule.severity,
-                    result="skip",
+                    result="error",
                     why_failed=f"Evaluation error: {str(e)}",
                     category=rule.category,
                 )
@@ -1025,10 +1025,11 @@ class RulesEngine:
                     },
                 )
             except Exception as e:
-                logger.warning(
+                logger.error(
                     "evaluation_persist_failed",
                     extra={"rule_id": r.rule_id, "error": str(e)},
                 )
+                raise
 
     def _batch_persist_evaluations(
         self,
@@ -1068,7 +1069,8 @@ class RulesEngine:
                 try:
                     self.session.execute(text(sql), params)
                 except Exception as e:
-                    logger.warning("batch_eval_persist_failed: %s", str(e))
+                    logger.error("batch_eval_persist_failed: %s", str(e))
+                    raise
 
 
 # ---------------------------------------------------------------------------

@@ -384,6 +384,7 @@ class AssemblyMixin:
                     :id, :tenant_id, :case_id,
                     :signoff_type, :signed_by, :now, :notes
                 )
+                ON CONFLICT (tenant_id, request_case_id, signoff_type) DO NOTHING
             """),
             {
                 "id": signoff_id,

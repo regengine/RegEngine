@@ -19,7 +19,8 @@ import type {
 
 const GRAPH_API_BASE = typeof window !== 'undefined'
   ? '/api/fsma'  // Browser: use Next.js API proxy
-  : (process.env.NEXT_PUBLIC_GRAPH_API_URL || 'http://localhost:8200/v1/fsma');
+  : (process.env.NEXT_PUBLIC_GRAPH_API_URL
+      || (process.env.VERCEL ? '' : 'http://localhost:8200/v1/fsma'));
 
 // Helper to make authenticated API calls.
 // Credentials are in HTTP-only cookies — the proxy injects them server-side.
