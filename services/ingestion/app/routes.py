@@ -491,7 +491,9 @@ async def ingest_direct(
     """Ingest a single document directly from text/bytes."""
     endpoint = "ingest_direct"
     start_time = time.perf_counter()
-    tenant_id = api_key.tenant_id or "00000000-0000-0000-0000-000000000000"
+    tenant_id = api_key.tenant_id
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="API key has no associated tenant")
     job_id = str(uuid.uuid4())
     url_str = payload.source_url or "manual://direct"
 
@@ -565,9 +567,11 @@ async def ingest_file(
     """Ingest a single document from a file upload (v2)."""
     endpoint = "ingest_file"
     start_time = time.perf_counter()
-    tenant_id = api_key.tenant_id or "00000000-0000-0000-0000-000000000000"
+    tenant_id = api_key.tenant_id
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="API key has no associated tenant")
     job_id = str(uuid.uuid4())
-    
+
     logger.info("ingest_file_request", filename=file.filename, tenant_id=tenant_id, job_id=job_id)
     
     db_manager = get_db_manager()
@@ -642,9 +646,11 @@ async def ingest_url(
     url_str = str(payload.url)
     endpoint = "ingest_url"
     start_time = time.perf_counter()
-    tenant_id = api_key.tenant_id or "00000000-0000-0000-0000-000000000000"
+    tenant_id = api_key.tenant_id
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="API key has no associated tenant")
     job_id = str(uuid.uuid4())
-    
+
     # Check entitlement
     allowed_jurisdictions = api_key.allowed_jurisdictions or []
     # Simple check: if it's a gov URL, check entitlement
@@ -736,7 +742,9 @@ async def _run_adapter_ingest(adapter, vertical, tenant_id, source_system, job_i
     db_manager = get_db_manager()
     audit_logger = None
 
-    tenant_id = tenant_id or "00000000-0000-0000-0000-000000000000"
+    if not tenant_id:
+        logger.error("adapter_ingest_no_tenant", job_id=job_id)
+        return
 
     if db_manager:
         audit_logger = AuditLogger(job_id, db_connection=db_manager)
