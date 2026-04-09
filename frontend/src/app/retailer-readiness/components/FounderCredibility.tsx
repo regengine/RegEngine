@@ -48,7 +48,7 @@ export default function FounderCredibility({ revealRef, visible }: FounderCredib
                     <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                         {[
                             { value: '10+', label: 'Years across compliance & policy' },
-                            { value: 'All', label: 'FTL categories covered' },
+                            { value: '23', label: 'FDA categories covered' },
                             { value: '< 24hr', label: 'Assessment turnaround' },
                         ].map((stat, i) => (
                             <div key={i}>
