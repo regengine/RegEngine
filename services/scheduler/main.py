@@ -22,6 +22,7 @@ from typing import Dict, List, Optional
 
 import structlog
 from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.base import SchedulerNotRunningError
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.interval import IntervalTrigger
@@ -481,6 +482,10 @@ class SchedulerService:
                 total_critical = 0
 
                 for tid in tenant_ids:
+                    # Set tenant context for RLS before per-tenant queries
+                    db.execute(__import__("sqlalchemy").text(
+                        "SET LOCAL app.tenant_id = :tid"
+                    ), {"tid": tid})
                     cases = workflow.check_deadline_status(tid)
                     overdue = [c for c in cases if c["urgency"] == "overdue"]
                     critical = [c for c in cases if c["urgency"] == "critical"]
@@ -580,6 +585,11 @@ class SchedulerService:
     def shutdown(self) -> None:
         """Gracefully shutdown the scheduler."""
         logger.info("scheduler_shutting_down")
+
+        try:
+            self.scheduler.shutdown(wait=True)
+        except (RuntimeError, SchedulerNotRunningError) as e:
+            logger.warning("scheduler_shutdown_skipped", error=str(e))
 
         try:
             self.kafka_producer.close()

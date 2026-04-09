@@ -159,12 +159,19 @@ def compute_idempotency_key(
     location_name: Optional[str] = None,
 ) -> str:
     """
-    Compute a deduplication key from event content.
+    Compute a deduplication key from event content (LEGACY path).
 
     Two identical events from the same source AND location produce the same key,
     preventing double-ingestion. Location is included because FSMA 204 treats
     location as critical to event identity — the same product shipped from two
     different warehouses at the same time are distinct events.
+
+    NOTE: This formula differs from TraceabilityEvent.compute_idempotency_key()
+    in canonical_event.py. The canonical version uses from_facility/to_facility
+    instead of location_gln/location_name, producing different keys for the same
+    real-world event. During dual-write, each table deduplicates independently
+    with its own formula — this is intentional and safe because idempotency keys
+    are scoped per-table (cte_events vs traceability_events).
     """
     canonical = json.dumps(
         {
@@ -380,15 +387,21 @@ class CTEPersistence:
                 },
             )
 
-        # --- Insert hash chain entry ---
+        # --- Insert hash chain entry (only if the event was actually inserted) ---
+        # ON CONFLICT DO NOTHING can silently skip the event INSERT if a
+        # concurrent writer won the idempotency race. The WHERE EXISTS
+        # guard prevents orphan chain entries pointing to non-existent events.
         self.session.execute(
             text("""
                 INSERT INTO fsma.hash_chain (
                     tenant_id, cte_event_id, sequence_num,
                     event_hash, previous_chain_hash, chain_hash
-                ) VALUES (
-                    :tenant_id, :cte_event_id, :sequence_num,
-                    :event_hash, :previous_chain_hash, :chain_hash
+                )
+                SELECT :tenant_id, :cte_event_id, :sequence_num,
+                       :event_hash, :previous_chain_hash, :chain_hash
+                WHERE EXISTS (
+                    SELECT 1 FROM fsma.cte_events
+                    WHERE id = :cte_event_id AND tenant_id = :tenant_id
                 )
             """),
             {

@@ -84,14 +84,18 @@ class CanonicalEventStore:
     dual-writes to fsma.cte_events (legacy) during migration.
     """
 
-    def __init__(self, session: Session, dual_write: bool = True):
+    def __init__(self, session: Session, dual_write: bool = True, skip_chain_write: bool = False):
         """
         Args:
             session: SQLAlchemy session with tenant context.
             dual_write: If True, also writes to legacy cte_events table.
+            skip_chain_write: If True, skips hash chain insertion. Use when
+                the caller (e.g., EPCIS/webhook dual-write path) has already
+                written the chain entry via the legacy CTEPersistence path.
         """
         self.session = session
         self.dual_write = dual_write
+        self.skip_chain_write = skip_chain_write
 
     def set_tenant_context(self, tenant_id: str) -> None:
         """Set the RLS tenant context for this session."""
@@ -233,6 +237,21 @@ class CanonicalEventStore:
 
         # --- Mark superseded event ---
         if event.supersedes_event_id:
+            # Guard: reject self-referencing amendments
+            if event.supersedes_event_id == event.event_id:
+                raise ValueError("Event cannot supersede itself")
+            # Guard: reject superseding an already-superseded event
+            target_status = self.session.execute(
+                text("""
+                    SELECT status FROM fsma.traceability_events
+                    WHERE event_id = :superseded_id AND tenant_id = :tid
+                """),
+                {"superseded_id": str(event.supersedes_event_id), "tid": tenant_id},
+            ).scalar()
+            if target_status == "superseded":
+                raise ValueError(
+                    f"Cannot supersede event {event.supersedes_event_id}: already superseded"
+                )
             self.session.execute(
                 text("""
                     UPDATE fsma.traceability_events
@@ -248,14 +267,17 @@ class CanonicalEventStore:
             )
 
         # --- Insert hash chain entry ---
-        self._insert_chain_entry(
-            tenant_id=tenant_id,
-            event_id=str(event.event_id),
-            sequence_num=next_sequence,
-            event_hash=event.sha256_hash,
-            previous_chain_hash=previous_chain_hash,
-            chain_hash=chain_hash,
-        )
+        # Skip if the caller already wrote the chain entry (e.g., EPCIS/webhook
+        # dual-write paths that go through CTEPersistence.store_event() first).
+        if not self.skip_chain_write:
+            self._insert_chain_entry(
+                tenant_id=tenant_id,
+                event_id=str(event.event_id),
+                sequence_num=next_sequence,
+                event_hash=event.sha256_hash,
+                previous_chain_hash=previous_chain_hash,
+                chain_hash=chain_hash,
+            )
 
         # --- Dual-write to legacy table ---
         legacy_id = None

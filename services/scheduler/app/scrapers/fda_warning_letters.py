@@ -235,6 +235,10 @@ class FDAWarningLettersScraper(BaseScraper):
 
         return items
 
+    def close(self) -> None:
+        """Close the underlying HTTP client to release connections."""
+        self.session.close()
+
     def _parse_rss_date(self, date_str: str) -> datetime:
         """Parse RFC 822 date format used in RSS."""
         if not date_str:
