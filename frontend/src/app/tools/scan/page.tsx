@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
+import { EmailGate } from '@/components/tools/EmailGate';
 import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
 import type { GS1ParsedData } from '@/lib/gs1-parser';
 import styles from './scan.module.css';
@@ -101,11 +102,12 @@ export default function ScanPage() {
   };
 
   return (
-    <FreeToolPageShell
-      title="Scan & Ingest"
-      subtitle="Scan a GS1 barcode with your camera or paste a barcode string to extract FSMA-compatible traceability data"
-      relatedToolIds={['cte-mapper', 'kde-checker', 'ftl-checker']}
-    >
+    <EmailGate toolName="scan">
+      <FreeToolPageShell
+        title="Scan & Ingest"
+        subtitle="Scan a GS1 barcode with your camera or paste a barcode string to extract FSMA-compatible traceability data"
+        relatedToolIds={['cte-mapper', 'kde-checker', 'ftl-checker']}
+      >
       <div className={styles.container}>
         {/* LEFT COLUMN: Scanner */}
         <div className={styles.leftColumn}>
@@ -396,6 +398,7 @@ export default function ScanPage() {
           explicitly ingest.
         </p>
       </div>
-    </FreeToolPageShell>
+      </FreeToolPageShell>
+    </EmailGate>
   );
 }
