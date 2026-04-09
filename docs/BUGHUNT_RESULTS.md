@@ -8,11 +8,11 @@
 
 | Severity | Count | Fixed | Documented Only |
 |----------|-------|-------|-----------------|
-| CRITICAL | 7     | 3     | 4               |
-| HIGH     | 14    | 6     | 8               |
+| CRITICAL | 7     | 5     | 2               |
+| HIGH     | 14    | 7     | 7               |
 | MEDIUM   | 11    | 3     | 8               |
 | LOW      | 6     | 3     | 3               |
-| **Total**| **38**| **15**| **23**          |
+| **Total**| **38**| **18**| **20**          |
 
 ---
 
@@ -77,6 +77,35 @@
 **File:** `services/ingestion/app/fda_export_service.py:122-128`
 **Bug:** `kdes.get("ship_from_gln", "")` returns `None` (not `""`) when the key exists with value `None`. The CSV writer writes literal "None". Lines 120-121 had the correct `or ""` pattern; lines 122-128 did not.
 **Fix:** Added `or ""` coalescing to all 7 KDE field lookups.
+
+---
+
+## Documented Findings (Not Safe to Fix Without Design Review)
+
+### FIX-11: RLS variable standardization — 4 PCOS tables + stale memberships policy [CRITICAL]
+
+**File:** `migrations/V054__rls_variable_standardization.sql` (new migration)
+**Bug:** 4 PCOS tables (V19, V20) used `app.current_tenant_id` which is never set — their RLS was non-functional. The stale `tenant_isolation_memberships` policy from `rls_migration_v1.sql` used `regengine.tenant_id` (also never set).
+**Fix:** New migration V054 that:
+- Drops and recreates all 4 PCOS RLS policies to use `get_tenant_context()`
+- Drops the stale `tenant_isolation_memberships` policy
+- Adds `FORCE ROW LEVEL SECURITY` on all 4 PCOS tables
+- Also fixes `production_bundle/developer_resources/SQL_Policy_Builder.sql` reference
+
+### FIX-12: `get_tenant_context()` consolidated to fail-hard (no default UUID fallback) [CRITICAL]
+
+**File:** `migrations/V054__rls_variable_standardization.sql` (same migration)
+**Bug:** V3 and V29 definitions of `get_tenant_context()` used COALESCE with fallback to `'00000000-0000-0000-0000-000000000001'`. If `app.tenant_id` was unset, queries silently returned the default tenant's data instead of failing.
+**Fix:** V054 replaces `get_tenant_context()` with the fail-hard version (RAISE EXCEPTION when unset), matching the `database.py:init_db()` version. Now authoritative in the migration chain.
+
+### FIX-13: `create_amendment()` stuck 'assembling' state recovery [HIGH]
+
+**File:** `services/shared/request_workflow/submission.py:194-247`
+**Bug:** `create_amendment()` committed intermediate 'assembling' status, then called `assemble_response_package()`. If assembly failed, the case was stuck permanently — no recovery path since the method only accepted 'submitted' or 'amended'.
+**Fix:**
+- Added 'assembling' as an accepted source status (allows retry after crash)
+- Wrapped assembly in try/except that reverts to prior status on failure
+- If the prior status was already 'assembling' (double-crash), reverts to 'amended'
 
 ---
 
@@ -161,7 +190,7 @@ The global `_unhandled_exception_handler` in `error_handling.py` already sanitiz
 
 ### Multi-Tenancy
 
-#### FINDING-9: 4+ different RLS session variable names [CRITICAL]
+#### ~~FINDING-9: 4+ different RLS session variable names~~ FIXED in FIX-11 [CRITICAL]
 
 | Variable | Used By |
 |----------|---------|
@@ -177,7 +206,7 @@ The global `_unhandled_exception_handler` in `error_handling.py` already sanitiz
 
 **Why not fixed:** Requires coordinated migration across 4+ SQL files to standardize all policies to `get_tenant_context()` reading `app.tenant_id`. Must be tested with RLS enforcement enabled.
 
-#### FINDING-10: `get_tenant_context()` has 3 conflicting definitions [CRITICAL]
+#### ~~FINDING-10: `get_tenant_context()` has 3 conflicting definitions~~ FIXED in FIX-12 [CRITICAL]
 
 **Files:**
 - `services/admin/migrations/V3__tenant_isolation.sql:246` — COALESCE fallback to `'00000000-0000-0000-0000-000000000001'`
@@ -266,7 +295,7 @@ The `SQL_` prefix may prevent auto-application, but creates confusion.
 
 ### Reliability & Pipeline
 
-#### FINDING-21: `create_amendment()` commits intermediate 'assembling' state; failure leaves case stuck [HIGH]
+#### ~~FINDING-21: `create_amendment()` commits intermediate 'assembling' state~~ FIXED in FIX-13 [HIGH]
 
 **File:** `services/shared/request_workflow/submission.py:201-217`
 
@@ -341,9 +370,9 @@ The webhook model validates `quantity > 0`, but batch path defaults missing quan
 
 1. **FINDING-2 + FINDING-3:** Dual-write double hash chain entries (EPCIS + webhook paths) — choose one chain write per event
 2. **FINDING-1:** Hash chain orphan on ON CONFLICT race — check rowcount before chain INSERT
-3. **FINDING-9 + FINDING-10:** RLS variable standardization + get_tenant_context() definition conflict — single coordinated migration
+3. ~~**FINDING-9 + FINDING-10:** RLS variable standardization~~ **FIXED in FIX-11 + FIX-12** (V054 migration)
 4. **FINDING-12:** Scheduler tenant context — add SET LOCAL before per-tenant queries
-5. **FINDING-21:** create_amendment() stuck 'assembling' state — single transaction or recovery path
+5. ~~**FINDING-21:** create_amendment() stuck state~~ **FIXED in FIX-13** (recovery path + revert on failure)
 6. **FINDING-22:** add_signoff() duplicate prevention — FOR UPDATE + UNIQUE constraint
 
 ### Should Fix Before Production
