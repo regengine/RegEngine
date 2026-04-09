@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ArrowRight, BookOpen, Leaf, Database } from 'lucide-react';
+import { ArrowRight, BookOpen, Leaf, Database, CheckSquare, Users, FileText, BarChart3 } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
@@ -18,6 +18,38 @@ const BLOG_POSTS = [
     title: 'FSMA 204 Compliance: The Complete Guide for Food Businesses (2026)',
     excerpt: 'What is FSMA 204? Requirements, deadlines, Critical Tracking Events, and what your food business needs to do to comply.',
     icon: BookOpen,
+    date: 'April 2026',
+    readTime: '8 min read',
+  },
+  {
+    slug: 'fsma-204-mid-market-guide',
+    title: 'FSMA 204 for Mid-Market: Compliance Strategies for Growing Food Companies',
+    excerpt: 'How mid-market companies (10-500 employees) navigate FSMA 204 without disrupting operations or breaking the budget.',
+    icon: Users,
+    date: 'April 2026',
+    readTime: '10 min read',
+  },
+  {
+    slug: 'fda-food-traceability-requirements',
+    title: 'FDA Food Traceability Requirements: Complete Guide to FSMA 204 Rules',
+    excerpt: 'Understand FDA requirements, FTL products, CTEs, KDEs, and the 24-hour response requirement in detail.',
+    icon: FileText,
+    date: 'April 2026',
+    readTime: '11 min read',
+  },
+  {
+    slug: 'fsma-204-compliance-checklist-2026',
+    title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
+    excerpt: 'A step-by-step checklist to prepare for FSMA 204. What to do now before the July 2028 deadline.',
+    icon: CheckSquare,
+    date: 'April 2026',
+    readTime: '9 min read',
+  },
+  {
+    slug: 'regengine-vs-spreadsheets-traceability',
+    title: 'RegEngine vs Spreadsheets: Why Food Companies Outgrow Excel for Traceability',
+    excerpt: 'Why spreadsheets fail at FSMA 204 compliance and how RegEngine solves the audit trail, scale, and 24-hour response problems.',
+    icon: BarChart3,
     date: 'April 2026',
     readTime: '8 min read',
   },
