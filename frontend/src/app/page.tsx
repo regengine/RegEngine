@@ -8,8 +8,6 @@ import {
   Thermometer,
   Calculator,
   CheckCircle2,
-  AlertTriangle,
-  Clock,
   FileText,
   Database,
   Shield,
@@ -24,29 +22,30 @@ import { SandboxUpload } from "@/components/marketing/SandboxUpload";
 /*  SEO METADATA                                                       */
 /* ------------------------------------------------------------------ */
 export const metadata: Metadata = {
-  title: "RegEngine — FSMA 204 Food Traceability Compliance Infrastructure",
+  title: "RegEngine — Food Traceability That Protects Your Brand",
   description:
-    "API-first FSMA 204 compliance infrastructure. Ingest traceability data, validate against FDA rules, and export audit-ready records in minutes. The Stripe for food traceability.",
+    "Supply chain traceability infrastructure for food companies. Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements, and build the visibility your brand depends on.",
   keywords: [
+    "food traceability software",
+    "supply chain traceability",
     "FSMA 204 compliance software",
     "food traceability API",
+    "retailer supplier traceability",
     "FDA traceability rule",
-    "FSMA 204 compliance platform",
     "food safety compliance",
-    "FSMA Section 204",
   ],
   openGraph: {
-    title: "RegEngine — FSMA 204 Food Traceability Compliance Infrastructure",
+    title: "RegEngine — Food Traceability That Protects Your Brand",
     description:
-      "API-first FSMA 204 compliance infrastructure. Ingest traceability data, validate against FDA rules, and export audit-ready records in minutes.",
+      "Respond to recall requests in minutes. Satisfy Walmart, Kroger, and Costco supplier requirements. Build supply chain visibility that protects your brand.",
     url: "https://www.regengine.co",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "RegEngine — FSMA 204 Food Traceability Compliance",
+    title: "RegEngine — Food Traceability That Protects Your Brand",
     description:
-      "API-first FSMA 204 compliance infrastructure. The Stripe for food traceability.",
+      "Supply chain traceability infrastructure for food companies. Recall response in minutes, not days.",
   },
 };
 
@@ -55,24 +54,24 @@ export const metadata: Metadata = {
 /* ------------------------------------------------------------------ */
 
 const TRUST_SIGNALS = [
-  "Built for FSMA 204",
-  "Walmart-audit ready",
+  "Retailer-ready in 30 days",
+  "1hr 40min recall response",
   "API-first",
-  "24hr FDA response",
+  "Built for FSMA 204",
 ];
 
-const URGENCY_STATS = [
+const VALUE_STATS = [
   {
-    value: "$250K+",
-    label: "Average cost of a failed FDA traceability audit",
+    value: "1hr 40min",
+    label: "Average recall response time with RegEngine — vs. days with manual processes",
   },
   {
-    value: "24 hrs",
-    label: "Time the FDA gives you to produce records under § 1.1455",
+    value: "8–12 hrs/week",
+    label: "Traceability labor saved per facility on average",
   },
   {
-    value: "Now",
-    label: "When Walmart, Kroger, and Albertsons started requiring traceability",
+    value: "Walmart · Costco · Kroger",
+    label: "Major retailers actively requiring supplier traceability documentation",
   },
 ];
 
@@ -188,18 +187,18 @@ export default function RegEngineLanding() {
             <div className="inline-flex items-center gap-2 bg-[var(--re-brand-muted)] border border-[var(--re-brand)]/20 rounded-full px-4 py-1.5 mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--re-brand)] animate-pulse" />
               <span className="font-mono text-xs font-medium text-[var(--re-brand)] tracking-wide">
-                API-first compliance infrastructure
+                Supply chain traceability infrastructure
               </span>
             </div>
 
             <h1 className="font-display text-[clamp(2rem,5vw,3.25rem)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-6">
-              Your traceability data, verified and FDA&#8209;ready before anyone&nbsp;asks.
+              Supply chain traceability that protects your&nbsp;brand.
             </h1>
 
             <p className="text-lg text-[var(--re-text-secondary)] leading-relaxed mb-8 max-w-[520px]">
-              RegEngine is compliance infrastructure for food companies.
-              Ingest your traceability records, validate them against FSMA 204 rules,
-              and export an audit&#8209;ready package in minutes — not months.
+              RegEngine gives food companies the visibility to respond to recalls in minutes,
+              satisfy Walmart and Kroger supplier requirements, and turn traceability into a
+              competitive advantage — not a weekend fire drill.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 mb-8">
@@ -289,20 +288,20 @@ export default function RegEngineLanding() {
         </div>
       </section>
 
-      {/* ── PROBLEM / URGENCY SECTION ── */}
+      {/* ── VALUE PROPOSITION SECTION ── */}
       <section className="border-y border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
           <div className="text-center mb-10">
-            <p className="font-mono text-xs font-medium text-[var(--re-warning)] uppercase tracking-widest mb-3">
-              The compliance gap is real
+            <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-3">
+              Operational value, not just compliance
             </p>
             <h2 className="font-display text-[clamp(1.5rem,3.5vw,2.25rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight max-w-[700px] mx-auto">
-              Retailers aren&apos;t waiting for the FDA. Your suppliers shouldn&apos;t either.
+              Traceability that pays for itself in the first recall drill.
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            {URGENCY_STATS.map((stat) => (
+            {VALUE_STATS.map((stat) => (
               <div
                 key={stat.label}
                 className="text-center p-6 rounded-xl border border-[var(--re-surface-border)] bg-[var(--re-surface-base)]"
@@ -320,29 +319,29 @@ export default function RegEngineLanding() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
               {
-                icon: AlertTriangle,
-                title: "Spreadsheets can't generate FDA-sortable exports",
-                desc: "21 CFR § 1.1455 requires electronic, sortable records. Excel doesn't qualify.",
-              },
-              {
-                icon: Clock,
-                title: "Current solutions take 12+ months to implement",
-                desc: "Enterprise platforms cost $200K+ and require dedicated IT teams. You don't have that time.",
+                icon: Zap,
+                title: "Recall response in minutes, not days",
+                desc: "The FDA gives you 24 hours. Manual spreadsheet processes average 3–5 days. RegEngine gets you there in under 2.",
               },
               {
                 icon: BarChart3,
-                title: "Retailers are already auditing suppliers",
-                desc: "Walmart, Kroger, Target, and Albertsons require traceability regardless of the FDA timeline.",
+                title: "Retailer requirements are here now",
+                desc: "Walmart, Kroger, Costco, and Target require traceability from suppliers. One failed audit means shelf removal.",
               },
-            ].map((problem) => (
-              <div key={problem.title} className="flex gap-3 p-4 rounded-lg">
-                <problem.icon className="h-5 w-5 text-[var(--re-warning)] shrink-0 mt-0.5" />
+              {
+                icon: Shield,
+                title: "One contamination incident costs millions",
+                desc: "Brand damage from a slow recall response dwarfs the cost of prevention. Traceability is brand insurance.",
+              },
+            ].map((point) => (
+              <div key={point.title} className="flex gap-3 p-4 rounded-lg">
+                <point.icon className="h-5 w-5 text-[var(--re-brand)] shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--re-text-primary)] mb-1">
-                    {problem.title}
+                    {point.title}
                   </h3>
                   <p className="text-xs text-[var(--re-text-tertiary)] leading-relaxed">
-                    {problem.desc}
+                    {point.desc}
                   </p>
                 </div>
               </div>
@@ -587,13 +586,13 @@ export default function RegEngineLanding() {
       <section className="bg-[var(--re-surface-elevated)] border-t border-[var(--re-surface-border)]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
           <p className="font-mono text-xs font-medium text-[var(--re-brand)] uppercase tracking-widest mb-4">
-            FSMA 204 compliance deadline: July 20, 2028
+            Protect your brand. Satisfy your retailers.
           </p>
           <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[var(--re-text-primary)] tracking-tight leading-tight mb-4 max-w-[700px] mx-auto">
-            Your data, verified and exportable before anyone asks.
+            Know exactly where every lot has been — before anyone asks.
           </h2>
           <p className="text-[var(--re-text-secondary)] max-w-[520px] mx-auto leading-relaxed mb-8">
-            Get your free readiness score in 3 minutes. See exactly where your gaps are — and how fast RegEngine can close them.
+            Get your free readiness score in 3 minutes. See where your traceability gaps are and how fast RegEngine can close them — including FSMA 204 compliance.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link

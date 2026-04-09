@@ -160,7 +160,7 @@ export default function RetailerSuppliersPage() {
         <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'Instrument Sans', -apple-system, sans-serif" }}>
             <ScrollProgressBar scrollProgress={scrollProgress} />
 
-            <StickyCTA showSticky={showSticky} daysCount={daysCount} trackEvent={trackEvent} />
+            <StickyCTA showSticky={showSticky} trackEvent={trackEvent} />
 
             <ExitIntentPopup
                 showExitIntent={showExitIntent}
@@ -176,7 +176,7 @@ export default function RetailerSuppliersPage() {
 
             <UrgencyBanner />
 
-            <HeroSection heroRef={heroRef} daysCount={daysCount} />
+            <HeroSection heroRef={heroRef} />
 
             <ComplianceTimeline revealRef={timeline.ref} visible={timeline.visible} />
 
