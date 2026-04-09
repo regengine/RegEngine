@@ -12,7 +12,7 @@ export default function TrustBadges() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 'clamp(16px, 4vw, 32px)' }}>
                     {[
                         { icon: '📋', label: 'FSMA 204 Compliant' },
-                        { icon: '🛡️', label: 'Full FTL Coverage' },
+                        { icon: '🛡️', label: '23 FDA Categories' },
                         { icon: '🔐', label: 'SHA-256 Audit Trail' },
                         { icon: '⚡', label: '24-Hour FDA Response' },
                     ].map((item, i) => (
