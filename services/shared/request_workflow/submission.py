@@ -192,13 +192,17 @@ class SubmissionMixin:
         Returns the new package record including diff_from_previous.
         """
         case = self._get_case(tenant_id, request_case_id)
-        if case["package_status"] not in ("submitted", "amended"):
+        # Allow 'assembling' as a recovery path: if a prior attempt crashed
+        # mid-assembly, the case is stuck in 'assembling' with no other way
+        # to retry. Accepting it here lets the caller retry the amendment.
+        if case["package_status"] not in ("submitted", "amended", "assembling"):
             raise ValueError(
                 f"Cannot amend in status '{case['package_status']}'. "
-                "Case must be in 'submitted' or 'amended'."
+                "Case must be in 'submitted', 'amended', or 'assembling'."
             )
 
-        # Assemble a new package version (reuses assemble logic)
+        prior_status = case["package_status"]
+
         # Temporarily set status to allow assembly
         self.db.execute(
             text("""
@@ -216,9 +220,29 @@ class SubmissionMixin:
         )
         self._safe_commit()
 
-        package = self.assemble_response_package(
-            tenant_id, request_case_id, generated_by=generated_by
-        )
+        try:
+            package = self.assemble_response_package(
+                tenant_id, request_case_id, generated_by=generated_by
+            )
+        except Exception:
+            # Revert to prior status so the case isn't stuck in 'assembling'
+            self.db.execute(
+                text("""
+                    UPDATE fsma.request_cases
+                    SET package_status = :prior_status,
+                        updated_at = :now
+                    WHERE request_case_id = :case_id
+                      AND tenant_id = :tenant_id
+                """),
+                {
+                    "prior_status": prior_status if prior_status != "assembling" else "amended",
+                    "now": datetime.now(timezone.utc),
+                    "case_id": request_case_id,
+                    "tenant_id": tenant_id,
+                },
+            )
+            self._safe_commit()
+            raise
 
         # Set status to amended
         now = datetime.now(timezone.utc)

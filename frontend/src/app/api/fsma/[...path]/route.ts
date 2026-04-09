@@ -6,13 +6,20 @@ import { sanitizePath, proxyError, requireProxyAuth, validateProxySession } from
 export const dynamic = 'force-dynamic';
 
 function guardUrl(envVar: string, fallback: string): string {
-    const url = process.env[envVar] || fallback;
+    const url = process.env[envVar] || process.env.NEXT_PUBLIC_API_BASE_URL;
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
-    if (onVercel && url.includes('.railway.internal')) {
-        console.warn(`[proxy/fsma] ${envVar} points to internal Railway URL — unreachable from Vercel.`);
-        return fallback;
+    if (url) {
+        if (onVercel && url.includes('.railway.internal')) {
+            console.warn(`[proxy/fsma] ${envVar} points to internal Railway URL — unreachable from Vercel.`);
+            return '';
+        }
+        return url;
     }
-    return url;
+    if (onVercel) {
+        console.error(`[proxy/fsma] ${envVar} not configured — localhost is unreachable from Vercel`);
+        return '';
+    }
+    return fallback;
 }
 const COMPLIANCE_URL = guardUrl('COMPLIANCE_SERVICE_URL', 'http://localhost:8500');
 const GRAPH_SERVICE_URL = guardUrl('GRAPH_SERVICE_URL', 'http://localhost:8200');
@@ -77,8 +84,14 @@ async function proxyRequest(
             path.startsWith('gaps') ||
             path.startsWith('export/')
         ) {
+            if (!GRAPH_SERVICE_URL) {
+                return proxyError('GRAPH_SERVICE_URL not configured', 503);
+            }
             targetUrl = `${GRAPH_SERVICE_URL}/api/v1/fsma/${path}${queryString}`;
         } else {
+            if (!COMPLIANCE_URL) {
+                return proxyError('COMPLIANCE_SERVICE_URL not configured', 503);
+            }
             // Wizard / applicability / exemptions — handled by Compliance Service
             targetUrl = `${COMPLIANCE_URL}/fsma-204/${path}${queryString}`;
         }
