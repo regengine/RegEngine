@@ -84,6 +84,13 @@ async function proxyRequest(
     const queryString = new URL(request.url).search;
     const targetBases = getIngestionTargets();
 
+    if (targetBases.length === 0) {
+      return proxyError(
+        'Ingestion backend not configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
+        503,
+      );
+    }
+
     const headers = new Headers();
     const hasRequestBody = !['GET', 'OPTIONS'].includes(method);
     const contentType = request.headers.get('content-type');
@@ -217,12 +224,15 @@ function getIngestionTargets(): string[] {
     candidates.push(internalIngestionUrl);
   }
 
-  // Require INGESTION_PRODUCTION_URL env var on Vercel; fall back to localhost locally
   if (candidates.length === 0) {
     const productionUrl = process.env.INGESTION_PRODUCTION_URL;
-    if (runningOnVercel && productionUrl) {
+    if (productionUrl) {
       candidates.push(productionUrl);
-    } else if (!runningOnVercel) {
+    } else if (runningOnVercel) {
+      console.error(
+        '[proxy/ingestion] No ingestion backend URL configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
+      );
+    } else {
       candidates.push(DEFAULT_INGESTION_URL);
     }
   }

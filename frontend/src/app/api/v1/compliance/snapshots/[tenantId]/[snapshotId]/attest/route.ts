@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const COMPLIANCE_URL = process.env.COMPLIANCE_SERVICE_URL || 'http://localhost:8500';
+function getComplianceUrl(): string {
+    const url = process.env.COMPLIANCE_SERVICE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (url) return url;
+    if (process.env.VERCEL) {
+        console.error('[api/attest] COMPLIANCE_SERVICE_URL not configured — localhost is unreachable from Vercel');
+        return '';
+    }
+    return 'http://localhost:8500';
+}
+
+const COMPLIANCE_URL = getComplianceUrl();
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +22,13 @@ export async function POST(
     request: NextRequest,
     { params }: Props
 ) {
+    if (!COMPLIANCE_URL) {
+        return NextResponse.json(
+            { error: 'COMPLIANCE_SERVICE_URL not configured' },
+            { status: 503 },
+        );
+    }
+
     const { tenantId, snapshotId } = await params;
     const body = await request.json();
 
