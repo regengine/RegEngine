@@ -533,6 +533,9 @@ export default function RegEngineLanding() {
           <p className="text-[var(--re-text-secondary)]">
             Founding partner rates, billed annually. Monthly billing available at checkout. Cancel anytime.
           </p>
+          <p className="text-xs text-[var(--re-text-muted)] mt-1">
+            Prices shown billed annually. Monthly billing also available.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-[900px] mx-auto mb-8">
