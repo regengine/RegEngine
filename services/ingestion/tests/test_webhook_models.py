@@ -70,10 +70,12 @@ class TestWebhookCTEType:
     """Tests for WebhookCTEType enum."""
 
     def test_has_all_cte_types(self):
-        assert len(WebhookCTEType) == 7
+        # 7 canonical FSMA 204 CTEs + "growing" (legacy/internal, not an FDA CTE)
+        assert len(WebhookCTEType) == 8
 
     def test_expected_members(self):
         expected = {
+            "growing",  # legacy/internal — normalizes to farm metadata
             "harvesting", "cooling", "initial_packing",
             "first_land_based_receiving", "shipping",
             "receiving", "transformation",
