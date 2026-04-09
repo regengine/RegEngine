@@ -58,7 +58,7 @@ const PRINCIPLES = [
     Icon: Target,
     title: "Accessible by default",
     description:
-      "Mid-market food companies deserve the same compliance tooling as Fortune 500 operators. RegEngine starts at $425/mo, not $50K/year.",
+      "Mid-market food companies deserve the same compliance tooling as Fortune 500 operators. RegEngine starts at $425/mo (billed annually), not $50K/year.",
   },
   {
     Icon: Shield,

@@ -310,7 +310,7 @@ export default async function PricingPage() {
                         The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
                     </p>
                     <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
-                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo for Founding Design Partners.
+                        Industry studies estimate the average major food recall costs companies over $10&nbsp;million in lost product, logistics, and brand damage. RegEngine starts at $425/mo (billed annually) for Founding Design Partners.
                     </p>
                     <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
                         <div className="overflow-x-auto">
