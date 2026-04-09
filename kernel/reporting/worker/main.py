@@ -97,7 +97,7 @@ def process_event(event_data, db):
 
     try:
         # Set tenant context for RLS (parameterized to prevent SQL injection)
-        db.execute(text("SET app.current_tenant_id = :tid"), {"tid": str(tenant_id)})
+        db.execute(text("SET LOCAL app.tenant_id = :tid"), {"tid": str(tenant_id)})
     except Exception as e:
         logger.warning(f"Could not set tenant context (might be superuser): {e}")
         db.rollback()

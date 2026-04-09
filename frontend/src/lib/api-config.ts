@@ -20,7 +20,16 @@ export function getServerServiceURL(service: ServiceName): string {
         admin: process.env.ADMIN_SERVICE_URL,
         nlp: process.env.NLP_SERVICE_URL,
     };
-    return envMap[service] || `http://localhost:${SERVICE_PORTS[service]}`;
+    const url = envMap[service] || process.env.NEXT_PUBLIC_API_BASE_URL;
+    if (url) return url;
+
+    if (process.env.VERCEL) {
+        console.error(
+            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured — localhost is unreachable from Vercel`,
+        );
+        return '';
+    }
+    return `http://localhost:${SERVICE_PORTS[service]}`;
 }
 
 export function isStaticExport(): boolean {
