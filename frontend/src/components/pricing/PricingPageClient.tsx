@@ -1,0 +1,282 @@
+'use client';
+
+import { useEffect } from 'react';
+import Link from 'next/link';
+import {
+    Check, Zap, Rocket, Crown, ArrowRight, HelpCircle, Lock, ShieldCheck, KeyRound,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
+import { analytics } from '@/lib/analytics';
+
+interface PricingTier {
+    id: string;
+    name: string;
+    Icon: any;
+    description: string;
+    gaMonthly: number;
+    gaAnnual: number;
+    partnerMonthly: number;
+    partnerAnnual: number;
+    highlighted: boolean;
+    cta: string;
+    features: string[];
+}
+
+const COMPETITOR_COMPARISON = [
+    { feature: 'Time to First FDA-Ready Export', regengine: 'Under 10 minutes', foodlogiq: 'Weeks', repositrak: 'Hours–days', tracegains: 'Weeks' },
+    { feature: 'Public API + OpenAPI Docs', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
+    { feature: 'Self-Serve Signup', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
+    { feature: 'Developer Sandbox', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
+    { feature: 'Cryptographic Audit Trail', regengine: '✓', foodlogiq: '✗', repositrak: '✗', tracegains: '✗' },
+    { feature: 'Free Trial', regengine: '14 days', foodlogiq: 'Demo only', repositrak: 'Demo only', tracegains: 'Demo only' },
+    { feature: 'Pricing Model', regengine: 'Published, per-facility', foodlogiq: 'Enterprise contract', repositrak: 'Per-supplier tiers', tracegains: 'Enterprise contract' },
+];
+
+const FAQ = [
+    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2–3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
+    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partners lock in 50% off GA pricing for the life of their account. You also get white-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel. Your partner rate never increases.' },
+    { q: 'Can I switch plans anytime?', a: "Yes! Upgrade anytime and we'll prorate. Downgrade at the end of your billing cycle." },
+    { q: 'Do you offer annual billing?', a: 'Yes. Annual billing saves ~15% compared to monthly. Both options are available on all plans.' },
+    { q: 'Does my partner pricing ever change?', a: 'No. Founding Design Partners lock in 50% off for the life of their account. Your rate never increases. This is our commitment to the partners who helped shape the product.' },
+    { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
+    { q: 'What if the FDA delays enforcement again?', a: 'Retailers like Walmart and Kroger are already requiring traceability from suppliers, regardless of the FDA timeline. RegEngine keeps you audit-ready for both.' },
+    { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
+    { q: 'Can I integrate with my existing ERP?', a: 'Yes. RegEngine accepts data via API, CSV upload, or direct ERP connectors. Most customers are up and running within 48 hours.' },
+    { q: 'What happens to my data?', a: 'Your data is encrypted at rest (AES-256) and in transit (TLS 1.3). Each tenant gets row-level security isolation. We never share or sell your data.' },
+];
+
+export function PricingPageClient({ pricingTiers }: { pricingTiers: PricingTier[] }) {
+    useEffect(() => {
+        analytics.pricingPageView();
+    }, []);
+
+    return (
+        <div className="re-page min-h-screen bg-[var(--re-surface-base)] text-[var(--re-text-secondary)]">
+            <section className="relative z-[2] max-w-[900px] mx-auto pt-14 sm:pt-20 pb-10 sm:pb-[60px] px-4 sm:px-6 text-center">
+                <Badge className="bg-[var(--re-brand-muted)] text-[var(--re-brand)] border border-[var(--re-surface-border)] mb-5">
+                    Founding Design Partners — 50% Off for Life
+                </Badge>
+                <h1 className="font-display text-[clamp(32px,5vw,48px)] font-bold text-[var(--re-text-primary)] leading-[1.1] tracking-tight mb-4">
+                    FSMA 204 Compliance,<br />
+                    <span className="text-re-brand">Priced for Mid-Market</span>
+                </h1>
+                <p className="text-lg text-[var(--re-text-muted)] max-w-[600px] mx-auto mb-4 leading-relaxed">
+                    Three plans sized by facility count. Founding Design Partners lock in 50% off for the life of their account — white-glove onboarding and direct founder support included.
+                </p>
+                <p className="font-display text-base font-semibold text-[var(--re-text-muted)] tracking-tight">
+                    Based on company size. No hidden fees. Cancel anytime.
+                </p>
+                <p className="text-sm text-[var(--re-text-disabled)] mt-2">
+                    Annual billing saves ~15%. Monthly billing also available.
+                </p>
+            </section>
+
+            <section className="relative z-[2] max-w-[1280px] mx-auto px-4 sm:px-6 pb-10 sm:pb-[60px]">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-5">
+                    {pricingTiers.map((tier) => {
+                        const Icon = tier.Icon;
+                        return (
+                            <div
+                                key={tier.id}
+                                className={`bg-[var(--re-surface-card)] rounded-2xl overflow-hidden flex flex-col transition-all duration-300 ${
+                                    tier.highlighted
+                                        ? 'border-2 border-[var(--re-brand)] shadow-[0_8px_32px_rgba(16,185,129,0.12),0_0_0_1px_var(--re-surface-border)]'
+                                        : 'border border-[var(--re-surface-border)] shadow-[0_2px_12px_rgba(0,0,0,0.06)]'
+                                }`}
+                            >
+                                {tier.highlighted && (
+                                    <div className="bg-[var(--re-brand)] text-white text-center p-2 text-xs font-bold tracking-[0.03em]">
+                                        Most Popular
+                                    </div>
+                                )}
+                                <div className="p-6 flex-1 flex flex-col">
+                                    <div className="flex items-center gap-2.5 mb-2">
+                                        <div className={`border border-[var(--re-surface-border)] rounded-[10px] p-2 ${
+                                            tier.highlighted ? 'bg-[var(--re-brand-muted)]' : 'bg-[var(--re-surface-elevated)]'
+                                        }`}>
+                                            <Icon className={`w-[18px] h-[18px] ${
+                                                tier.highlighted ? 'text-[var(--re-brand)]' : 'text-[var(--re-text-muted)]'
+                                            }`} />
+                                        </div>
+                                        <span className="text-lg font-semibold text-[var(--re-text-primary)]">{tier.name}</span>
+                                    </div>
+                                    <p className="text-[13px] text-[var(--re-text-disabled)] mb-3">{tier.description}</p>
+                                    <span className="inline-block text-[11px] font-semibold bg-[rgba(16,185,129,0.1)] text-[var(--re-brand)] px-2 py-[3px] rounded-md mb-4">
+                                        50% Off — Founding Design Partner
+                                    </span>
+
+                                    <div className="mb-5">
+                                        <div className="flex items-baseline gap-1.5">
+                                            <span className="text-4xl font-bold text-[var(--re-text-primary)]">${tier.partnerAnnual}</span>
+                                            <span className="text-[var(--re-text-muted)] text-sm">/mo</span>
+                                        </div>
+                                        <p className="text-xs text-[var(--re-text-disabled)] mt-1">
+                                            <span className="line-through opacity-60">${tier.gaAnnual}/mo</span>
+                                            {' '}General Availability (GA) price · billed annually
+                                        </p>
+                                        <p className="text-[11px] text-[var(--re-text-disabled)] mt-0.5">
+                                            ${tier.partnerMonthly}/mo if billed monthly · 14-day free trial
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2.5 flex-1">
+                                        {tier.features.map((f, i) => (
+                                            <div key={i} className="flex items-start gap-2">
+                                                <Check className="w-3.5 h-3.5 text-[var(--re-brand)] mt-[3px] shrink-0" />
+                                                <span className="text-[13px] text-[var(--re-text-secondary)]">{f}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <PricingCheckoutButton
+                                        tierId={tier.id}
+                                        label={tier.cta}
+                                        highlighted={tier.highlighted}
+                                        style={{
+                                            background: tier.highlighted ? 'var(--re-brand)' : 'var(--re-surface-elevated)',
+                                            color: tier.highlighted ? '#fff' : 'var(--re-text-primary)',
+                                            border: tier.highlighted ? 'none' : '1px solid var(--re-surface-border)',
+                                            boxShadow: tier.highlighted ? '0 4px 16px rgba(16,185,129,0.25)' : 'none',
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+                <p className="text-center text-xs text-[var(--re-text-disabled)] mt-5">
+                    Base plan includes 500 CTEs/month. Standard and Premium are unlimited. Need more on Base? Add CTEs at $0.002 each.{' '}
+                    <Link href="/terms" className="text-[var(--re-brand)] underline">See Terms</Link> for full details.
+                </p>
+
+                <div className="max-w-[680px] mx-auto mt-10 rounded-2xl border-2 border-[var(--re-brand-muted)] bg-[var(--re-brand-muted)] px-8 py-7 text-center">
+                    <p className="text-base font-bold text-[var(--re-brand)] mb-2">
+                        Founding Design Partner Program
+                    </p>
+                    <p className="text-sm text-[var(--re-text-muted)] leading-[1.7] max-w-[520px] mx-auto mb-2">
+                        50% off General Availability (GA) pricing for the life of your account. White-glove onboarding, custom integration scoping, direct founder support, and a dedicated Slack channel.
+                    </p>
+                    <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-3">
+                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 deadline. Your Founding Design Partner rate is locked in permanently — no surprise increases, ever.
+                    </p>
+                    <p className="text-[13px] text-[var(--re-text-disabled)] leading-relaxed max-w-[480px] mx-auto mb-5">
+                        Includes a 14-day free trial — no charge until day 15. Cancel anytime during the trial at no cost. We accept Visa, Mastercard, American Express, ACH bank transfer, and wire.
+                    </p>
+                    <Link href="/onboarding">
+                        <Button className="bg-[var(--re-brand)] text-white font-semibold rounded-[10px] px-7 py-3 shadow-[0_4px_16px_rgba(16,185,129,0.25)]">
+                            Apply as Founding Design Partner <ArrowRight className="ml-2 w-4 h-4" />
+                        </Button>
+                    </Link>
+                </div>
+            </section>
+
+            <section className="relative z-[2] border-t border-[var(--re-surface-border)] bg-[var(--re-surface-card)]">
+                <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-7">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10">
+                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
+                            <Lock className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                            <span>AES-256 encryption at rest · TLS 1.3 in transit</span>
+                        </div>
+                        <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
+                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
+                            <ShieldCheck className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                            <span>SOC 2 Type II certified infrastructure (Supabase, Vercel)</span>
+                        </div>
+                        <div className="hidden sm:block w-px h-4 bg-[var(--re-surface-border)]" />
+                        <div className="flex items-center gap-2.5 text-sm text-[var(--re-text-muted)]">
+                            <KeyRound className="w-4 h-4 text-[var(--re-brand)] shrink-0" />
+                            <span>Tenant isolation by design · <Link href="/security" className="text-[var(--re-brand)] hover:underline">Security details →</Link></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[var(--re-surface-card)] border-t border-b border-[var(--re-surface-border)]">
+                <div className="max-w-[1000px] mx-auto">
+                    <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-3">
+                        See How We Compare
+                    </h2>
+                    <p className="text-center text-[var(--re-text-muted)] max-w-[500px] mx-auto mb-4">
+                        The competition charges enterprise prices for basic traceability. We believe compliance should be accessible.
+                    </p>
+                    <p className="text-center text-sm text-[var(--re-text-disabled)] max-w-[520px] mx-auto mb-10 leading-relaxed">
+                        Industry studies estimate the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine starts at $425/mo (billed annually) for Founding Design Partners.
+                    </p>
+                    <div className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-2xl overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="border-b border-[var(--re-surface-border)]">
+                                        <th className="text-left p-4 text-xs text-[var(--re-text-primary)] font-semibold uppercase tracking-[0.04em]">Feature</th>
+                                        <th className="text-center p-4 text-xs bg-[var(--re-brand-muted)]">
+                                            <span className="text-[var(--re-brand)] font-bold">RegEngine</span>
+                                        </th>
+                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">FoodLogiQ</th>
+                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">ReposiTrak</th>
+                                        <th className="text-center p-4 text-xs text-[var(--re-text-disabled)] font-semibold">TraceGains</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {COMPETITOR_COMPARISON.map((row, i) => (
+                                        <tr key={i} className={`border-b border-[var(--re-surface-border)] ${i % 2 === 1 ? 'bg-[var(--re-surface-elevated)]' : 'bg-transparent'}`}>
+                                            <td className="px-4 py-3.5 text-[13px] text-[var(--re-text-secondary)] font-medium">{row.feature}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] bg-[var(--re-brand-muted)] text-[var(--re-brand)] font-semibold">{row.regengine}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.foodlogiq}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.repositrak}</td>
+                                            <td className="text-center px-4 py-3.5 text-[13px] text-[var(--re-text-disabled)]">{row.tracegains}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-[var(--re-text-disabled)] text-center mt-4">
+                        Competitor data from public sources as of April 2026.
+                    </p>
+                </div>
+            </section>
+
+            <section className="relative z-[2] max-w-[700px] mx-auto py-10 sm:py-[60px] px-4 sm:px-6">
+                <h2 className="font-display text-[28px] font-bold text-[var(--re-text-primary)] text-center tracking-tight mb-10">
+                    Frequently Asked Questions
+                </h2>
+                <div className="flex flex-col gap-4">
+                    {FAQ.map((item, i) => (
+                        <div key={i} className="bg-[var(--re-surface-card)] border border-[var(--re-surface-border)] rounded-xl p-5">
+                            <div className="flex items-start gap-3 mb-3">
+                                <HelpCircle className="w-[18px] h-[18px] text-[var(--re-brand)] mt-0.5 shrink-0" />
+                                <span className="text-[15px] font-semibold text-[var(--re-text-primary)]">{item.q}</span>
+                            </div>
+                            <p className="text-sm text-[var(--re-text-muted)] pl-[30px] leading-relaxed">{item.a}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            <section className="relative z-[2] py-10 sm:py-[60px] px-4 sm:px-6 bg-[linear-gradient(135deg,var(--re-brand)_0%,#0ea5e9_100%)]">
+                <div className="max-w-[600px] mx-auto text-center">
+                    <h2 className="font-display text-[28px] font-bold text-white tracking-tight mb-3">
+                        Become a Founding Design Partner
+                    </h2>
+                    <p className="text-base text-white/90 mb-8">
+                        Founding Design Partners start at $425/mo (billed annually). Apply now and get white-glove onboarding before the FSMA 204 deadline.
+                    </p>
+                    <div className="flex gap-3 justify-center flex-wrap">
+                        <Link href="/onboarding">
+                            <Button className="bg-white text-[var(--re-brand)] font-semibold px-6 py-3.5">
+                                Apply Now <ArrowRight className="ml-2 w-4 h-4" />
+                            </Button>
+                        </Link>
+                        <Link href="/trust">
+                            <Button variant="outline" className="bg-transparent text-white border border-white/30 px-6 py-3.5">
+                                Review Trust Center
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+}
