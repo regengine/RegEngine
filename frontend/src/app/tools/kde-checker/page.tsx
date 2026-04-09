@@ -4,13 +4,17 @@ import { KDECheckerClient } from "./components/KDECheckerClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "KDE Completeness Checker | FSMA 204 Data Checklist | RegEngine",
-    description: "Generate your customized Key Data Element (KDE) checklist based on your specific FTL product and trading role. Ensure compliance with FDA Subpart S.",
+    title: "KDE Checker | FSMA 204 Key Data Element Completeness Tool | RegEngine",
+    description: "Generate a customized Key Data Element (KDE) checklist based on your FTL product and trading role. Ensure full FDA Subpart S compliance. Free FSMA 204 tool.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/kde-checker",
+    },
     openGraph: {
-        title: "KDE Completeness Checker — RegEngine",
-        description: "Generate your custom FSMA 204 KDE checklist.",
+        title: "KDE Checker — RegEngine",
+        description: "Generate a customized FSMA 204 Key Data Element checklist for your product and trading role. Free.",
         type: "website",
         url: "https://www.regengine.co/tools/kde-checker",
     },
@@ -36,21 +40,28 @@ const jsonLd = {
 
 export default function KDECheckerPage() {
     return (
-        <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
-            <JSONLD data={jsonLd} />
-            <div className="max-w-7xl mx-auto">
-                <Breadcrumbs
-                    items={[
-                        { label: "Free Tools", href: "/tools" },
-                        { label: "KDE Checker" }
-                    ]}
-                />
-                <Suspense>
-                    <EmailGate toolName="kde-checker">
-                        <KDECheckerClient />
-                    </EmailGate>
-                </Suspense>
+        <>
+            <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+                <JSONLD data={jsonLd} />
+                <div className="max-w-7xl mx-auto">
+                    <Breadcrumbs
+                        items={[
+                            { label: "Free Tools", href: "/tools" },
+                            { label: "KDE Checker" }
+                        ]}
+                    />
+                    <Suspense>
+                        <EmailGate toolName="kde-checker">
+                            <KDECheckerClient />
+                        </EmailGate>
+                    </Suspense>
+                </div>
             </div>
-        </div>
+            <RelatedTools tools={[
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Visualize all 7 Critical Tracking Events across your supply chain nodes." },
+                { href: "/tools/tlc-validator", title: "TLC Validator", description: "Validate your Traceability Lot Code format against GS1 and FDA standards." },
+                { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check if your food products are on the FDA Food Traceability List." },
+            ]} />
+        </>
     );
 }
