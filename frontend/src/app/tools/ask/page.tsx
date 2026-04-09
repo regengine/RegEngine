@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Zap, ArrowRight, AlertTriangle, Check, Clock, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
+import { EmailGate } from '@/components/tools/EmailGate';
 
 // Types
 interface QueryResult {
@@ -383,11 +384,12 @@ export default function AskPage() {
   };
 
   return (
-    <FreeToolPageShell
-      title="Traceability Query Engine"
-      subtitle="Ask questions about your supply chain in plain English. No SQL required."
-      relatedToolIds={['cte-mapper', 'kde-checker', 'ftl-checker']}
-    >
+    <EmailGate toolName="ask">
+      <FreeToolPageShell
+        title="Traceability Query Engine"
+        subtitle="Ask questions about your supply chain in plain English. No SQL required."
+        relatedToolIds={['cte-mapper', 'kde-checker', 'ftl-checker']}
+      >
       <div className="max-w-4xl mx-auto space-y-8">
         {/* How It Works Section */}
         <div className="grid grid-cols-3 gap-4 mb-8">
@@ -714,6 +716,7 @@ export default function AskPage() {
           </motion.div>
         )}
       </div>
-    </FreeToolPageShell>
+      </FreeToolPageShell>
+    </EmailGate>
   );
 }

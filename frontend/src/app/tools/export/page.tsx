@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Shield, FileCheck, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
+import { EmailGate } from '@/components/tools/EmailGate';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -268,11 +269,12 @@ export default function ExportPage() {
   }, [generatedPackage]);
 
   return (
-    <FreeToolPageShell
-      title="FDA Export Package Generator"
-      subtitle="Generate a verifiable 21 CFR 1.1455 compliance package with SHA-256 chain verification."
-      relatedToolIds={['drill-simulator', 'cte-mapper', 'kde-checker']}
-    >
+    <EmailGate toolName="export">
+      <FreeToolPageShell
+        title="FDA Export Package Generator"
+        subtitle="Generate a verifiable 21 CFR 1.1455 compliance package with SHA-256 chain verification."
+        relatedToolIds={['drill-simulator', 'cte-mapper', 'kde-checker']}
+      >
       {/* Section 1: Package Overview */}
       <div className="mb-12">
         <h2 className="text-2xl font-semibold mb-6">What's in Your Package</h2>
@@ -626,6 +628,7 @@ export default function ExportPage() {
           </motion.div>
         </div>
       </div>
-    </FreeToolPageShell>
+      </FreeToolPageShell>
+    </EmailGate>
   );
 }

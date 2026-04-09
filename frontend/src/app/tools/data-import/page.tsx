@@ -3,6 +3,7 @@ import { DataImportClient } from "./components/DataImportClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { RelatedTools } from "@/components/tools/RelatedTools";
+import { EmailGate } from "@/components/tools/EmailGate";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Data Import Hub | Upload CSV, IoT & Webhook Traceability Data | RegEngine",
@@ -34,8 +35,9 @@ const jsonLd = {
 
 export default function DataImportPage() {
     return (
-        <>
-            <Suspense fallback={
+        <EmailGate toolName="data-import">
+            <>
+                <Suspense fallback={
                 <div className="min-h-screen bg-[var(--re-surface-base)] px-6 py-16">
                     <div className="max-w-2xl mx-auto text-center">
                         <h1 className="text-2xl font-bold text-[var(--re-text-primary)] mb-3">Data Import Hub</h1>
@@ -55,6 +57,7 @@ export default function DataImportPage() {
                 { href: "/tools/label-scanner", title: "AI Label Scanner", description: "Upload a food label and AI extracts lot code, GTIN, and FSMA 204 KDEs automatically." },
                 { href: "/tools/export", title: "FDA Export Generator", description: "Generate a verifiable SHA-256 compliance package from your traceability records." },
             ]} />
-        </>
+            </>
+        </EmailGate>
     );
 }
