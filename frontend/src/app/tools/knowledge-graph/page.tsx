@@ -3,13 +3,17 @@ import { KnowledgeGraphClient } from "./components/KnowledgeGraphClient";
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "Supply Chain Knowledge Graph | RegEngine",
-    description: "Visually map and trace your high-integrity FSMA 204 supply chain using our interactive graphing builder.",
+    title: "Supply Chain Knowledge Graph | FSMA 204 Network Mapper | RegEngine",
+    description: "Build an interactive visual map of your FSMA 204 supply chain. Connect growers, coolers, packhouses, and distributors to identify CTE and KDE coverage gaps. Free.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/knowledge-graph",
+    },
     openGraph: {
         title: "Supply Chain Knowledge Graph — RegEngine",
-        description: "Interactive mapping tool for FSMA 204 supply chains.",
+        description: "Interactively map your FSMA 204 supply chain nodes and identify CTE and KDE coverage gaps. Free tool.",
         type: "website",
         url: "https://www.regengine.co/tools/knowledge-graph",
     },
@@ -63,11 +67,18 @@ function KnowledgeGraphFallback() {
 
 export default function KnowledgeGraphPage() {
     return (
-        <Suspense fallback={<KnowledgeGraphFallback />}>
-            <JSONLD data={jsonLd} />
-            <EmailGate toolName="knowledge-graph">
-                <KnowledgeGraphClient />
-            </EmailGate>
-        </Suspense>
+        <>
+            <Suspense fallback={<KnowledgeGraphFallback />}>
+                <JSONLD data={jsonLd} />
+                <EmailGate toolName="knowledge-graph">
+                    <KnowledgeGraphClient />
+                </EmailGate>
+            </Suspense>
+            <RelatedTools tools={[
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map Critical Tracking Events across your supply chain nodes for FSMA 204 compliance." },
+                { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check which food products in your network are on the FDA Traceability List." },
+                { href: "/tools/fsma-unified", title: "Unified Dashboard", description: "Combine anomaly detection and knowledge graph views in one compliance dashboard." },
+            ]} />
+        </>
     );
 }

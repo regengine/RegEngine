@@ -3,15 +3,19 @@ import { ReadinessAssessmentClient } from "./components/ReadinessAssessmentClien
 import { Suspense } from "react";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "FSMA 204 Readiness Assessment | Free Compliance Score | RegEngine",
-    description: "Score your facility's FSMA 204 compliance readiness in minutes. Covers product coverage, Critical Tracking Events, Key Data Elements, and system capabilities.",
+    title: "FSMA 204 Readiness Assessment | Free Compliance Score Tool | RegEngine",
+    description: "Score your facility's FSMA 204 compliance readiness in minutes. Covers FTL product coverage, Critical Tracking Events, Key Data Elements, and system capabilities.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/readiness-assessment",
+    },
     openGraph: {
         title: "FSMA 204 Readiness Assessment — RegEngine",
-        description: "Free compliance readiness scoring for FSMA 204.",
+        description: "Score your facility's FSMA 204 compliance readiness across FTL coverage, CTEs, KDEs, and system capabilities. Free.",
         type: "website",
-        url: "https://regengine.co/tools/readiness-assessment",
+        url: "https://www.regengine.co/tools/readiness-assessment",
     },
 };
 
@@ -32,6 +36,12 @@ const jsonLd = {
         "name": "RegEngine"
     }
 };
+
+const relatedTools = [
+    { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Run a live FDA outbreak drill to test your record retrieval speed and accuracy." },
+    { href: "/tools/recall-readiness", title: "Recall Readiness Score", description: "Get an A–F grade on your ability to meet the FDA 24-hour retrieval mandate." },
+    { href: "/tools/sop-generator", title: "SOP Generator", description: "Auto-generate your FSMA 204 Traceability Plan and Standard Operating Procedures." },
+];
 
 export default function ReadinessAssessmentPage() {
     return (
@@ -69,6 +79,7 @@ export default function ReadinessAssessmentPage() {
             <EmailGate toolName="readiness-assessment">
                 <ReadinessAssessmentClient />
             </EmailGate>
+            <RelatedTools tools={relatedTools} />
         </Suspense>
     );
 }
