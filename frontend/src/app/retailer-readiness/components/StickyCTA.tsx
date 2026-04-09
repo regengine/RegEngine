@@ -5,11 +5,10 @@ import { T } from './constants';
 
 export interface StickyCTAProps {
     showSticky: boolean;
-    daysCount: number;
     trackEvent: (event: string, data?: Record<string, unknown>) => void;
 }
 
-export default function StickyCTA({ showSticky, daysCount, trackEvent }: StickyCTAProps) {
+export default function StickyCTA({ showSticky, trackEvent }: StickyCTAProps) {
     return (
         <div style={{
             position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9998,
@@ -28,12 +27,12 @@ export default function StickyCTA({ showSticky, daysCount, trackEvent }: StickyC
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <span style={{
-                        fontSize: 'clamp(18px, 4vw, 24px)', fontWeight: 700, color: daysCount > 600 ? T.warning : T.danger,
-                        fontFamily: "'JetBrains Mono', monospace", flexShrink: 0,
+                        fontSize: 'clamp(14px, 3vw, 16px)', fontWeight: 600, color: T.accent,
+                        flexShrink: 0,
                     }}>
-                        {daysCount.toLocaleString()}
+                        Recall response in minutes, not days
                     </span>
-                    <span className="text-[12px] sm:text-[13px] text-re-text-muted" style={{ lineHeight: 1.3 }}>days until FDA deadline</span>
+                    <span className="hidden sm:inline text-[12px] text-re-text-muted" style={{ lineHeight: 1.3 }}>— FSMA 204 ready</span>
                 </div>
                 <Link href="/tools/recall-readiness">
                     <button
