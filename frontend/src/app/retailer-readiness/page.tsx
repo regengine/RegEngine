@@ -156,7 +156,6 @@ export default function RetailerSuppliersPage() {
     const monthlyRisk = Math.round(atRisk / 12);
 
     return (
-        <EmailGate toolName="retailer-readiness">
         <div style={{ minHeight: '100vh', background: T.bg, color: T.text, fontFamily: "'Instrument Sans', -apple-system, sans-serif" }}>
             <ScrollProgressBar scrollProgress={scrollProgress} />
 
@@ -215,14 +214,16 @@ export default function RetailerSuppliersPage() {
 
             <FounderCredibility revealRef={founder.ref} visible={founder.visible} />
 
-            <AssessmentForm
-                email={email}
-                setEmail={setEmail}
-                companyName={companyName}
-                setCompanyName={setCompanyName}
-                submitted={submitted}
-                handleAssessment={handleAssessment}
-            />
+            <EmailGate toolName="retailer-readiness">
+                <AssessmentForm
+                    email={email}
+                    setEmail={setEmail}
+                    companyName={companyName}
+                    setCompanyName={setCompanyName}
+                    submitted={submitted}
+                    handleAssessment={handleAssessment}
+                />
+            </EmailGate>
 
             <CompetitorComparison revealRef={competitorReveal.ref} visible={competitorReveal.visible} />
 
@@ -243,6 +244,5 @@ export default function RetailerSuppliersPage() {
             {/* Bottom spacer for sticky CTA */}
             <div style={{ height: 80 }} />
         </div>
-        </EmailGate>
     );
 }
