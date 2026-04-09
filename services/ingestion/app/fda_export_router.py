@@ -258,12 +258,13 @@ async def export_all_events(
         db_session = SessionLocal()
         persistence = CTEPersistence(db_session)
 
+        _EXPORT_LIMIT = 10000
         events, total = persistence.query_all_events(
             tenant_id=tenant_id,
             start_date=start_date,
             end_date=end_date,
             event_type=event_type,
-            limit=10000,
+            limit=_EXPORT_LIMIT,
         )
 
         # Batch-fetch by distinct TLCs to avoid O(N×M) query amplification
@@ -309,7 +310,13 @@ async def export_all_events(
         compliance_headers: dict[str, str] = {
             "X-KDE-Coverage": str(kde_coverage),
             "X-KDE-Warnings": str(kde_warnings),
+            "X-Total-Count": str(total),
         }
+        if total > _EXPORT_LIMIT:
+            compliance_headers["X-Truncated"] = (
+                f"Result set truncated to {_EXPORT_LIMIT} events out of {total}. "
+                "Use date filters to narrow the query."
+            )
         if kde_coverage < 0.80:
             compliance_headers["X-Compliance-Warning"] = "KDE coverage below 80% threshold"
 

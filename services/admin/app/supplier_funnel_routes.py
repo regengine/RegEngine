@@ -281,7 +281,7 @@ async def reset_supplier_demo(
         seeded_tlc_codes=seeded_tlc_codes,
         seeded_events=len(seeded_records),
         seeded_cte_types=seeded_cte_types,
-        dashboard_score=int(score_payload["score"]),
+        dashboard_score=round(score_payload["score"]),
         open_gap_count=len(gap_payloads),
     )
 

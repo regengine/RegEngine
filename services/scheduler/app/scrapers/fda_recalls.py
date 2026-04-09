@@ -192,6 +192,10 @@ class FDARecallsScraper(BaseScraper):
             },
         )
 
+    def close(self) -> None:
+        """Close the underlying HTTP client to release connections."""
+        self.session.close()
+
     def get_by_classification(self, classification: str = "Class I") -> ScrapeResult:
         """Fetch recalls of a specific classification.
 

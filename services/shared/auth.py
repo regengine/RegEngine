@@ -311,11 +311,14 @@ async def require_api_key(
             x_regengine_api_key.encode("utf-8"),
             _configured_key.encode("utf-8"),
         ):
+            # Derive tenant from X-Tenant-ID header so RLS is still enforced.
+            # Without this, tenant_id=None would bypass row-level security.
+            _master_tenant = request.headers.get("x-tenant-id")
             return APIKey(
                 key_id="preshared-master",
                 key_hash="",
                 name="Preshared Master Key",
-                tenant_id=None,
+                tenant_id=_master_tenant,
                 created_at=datetime.now(timezone.utc),
                 rate_limit_per_minute=1000,
                 enabled=True,
@@ -434,7 +437,7 @@ def init_demo_keys():
         allowed_jurisdictions=["US", "US-CA", "US-NY", "US-TX", "US-FL"],
     )
 
-    logger.info("demo_keys_initialized", demo_key=demo_key[:20] + "...", admin_key=admin_key[:20] + "...")
+    logger.info("demo_keys_initialized", demo_key=demo_key[:8] + "...", admin_key=admin_key[:8] + "...")
 
     return {
         "demo_key": demo_key,
@@ -463,5 +466,14 @@ def get_tenant_id(
         raise HTTPException(
             status_code=400,
             detail="Missing X-Tenant-ID header. Tenant context is required.",
+        )
+    # Validate UUID format to prevent runtime cast errors in RLS policies
+    import uuid as _uuid
+    try:
+        _uuid.UUID(x_tenant_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid X-Tenant-ID: must be a valid UUID.",
         )
     return x_tenant_id

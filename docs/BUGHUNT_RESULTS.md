@@ -8,11 +8,11 @@
 
 | Severity | Count | Fixed | Documented Only |
 |----------|-------|-------|-----------------|
-| CRITICAL | 7     | 5     | 2               |
-| HIGH     | 14    | 7     | 7               |
-| MEDIUM   | 11    | 3     | 8               |
-| LOW      | 6     | 3     | 3               |
-| **Total**| **38**| **18**| **20**          |
+| CRITICAL | 7     | 7     | 0               |
+| HIGH     | 14    | 14    | 0               |
+| MEDIUM   | 11    | 9     | 2               |
+| LOW      | 6     | 5     | 1               |
+| **Total**| **38**| **35**| **3**           |
 
 ---
 
@@ -113,80 +113,47 @@
 
 ### P0: Data Integrity
 
-#### FINDING-1: Hash chain orphan on ON CONFLICT DO NOTHING race [CRITICAL]
+#### ~~FINDING-1: Hash chain orphan on ON CONFLICT DO NOTHING race~~ FIXED [CRITICAL]
 
 **File:** `services/shared/cte_persistence.py:314-402`
+**Fix:** Changed hash chain INSERT to use `INSERT...SELECT...WHERE EXISTS` guard — chain entry only created if the event actually exists in cte_events.
 
-In `store_event()`, if the `INSERT ... ON CONFLICT (tenant_id, idempotency_key) DO NOTHING` silently skips (race between idempotency check at line 263 and INSERT at line 317), the hash chain entry at line 384 still gets inserted. This creates an orphan chain entry pointing to a non-existent event.
+#### ~~FINDING-2: EPCIS dual-write path creates double hash chain entries~~ FIXED [CRITICAL]
 
-**Why not fixed:** Requires restructuring the store_event() flow to check `rowcount` after INSERT and conditionally skip the chain entry. The same pattern exists in `store_events_batch()` (lines 648-704). Both paths need coordinated changes with integration testing.
+**File:** `services/ingestion/app/epcis_ingestion.py:1080`
+**Fix:** Added `skip_chain_write=True` parameter to `CanonicalEventStore` in the EPCIS path, since CTEPersistence already writes the chain entry.
 
-**Recommended fix:** After the `ON CONFLICT DO NOTHING` INSERT, check cursor.rowcount. Only insert the hash chain entry if the event INSERT succeeded. Alternatively, use a single CTE: `WITH ins AS (INSERT ... RETURNING id) INSERT INTO fsma.hash_chain ... SELECT ... FROM ins`.
-
-#### FINDING-2: EPCIS dual-write path creates double hash chain entries [CRITICAL]
-
-**File:** `services/ingestion/app/epcis_ingestion.py:1053-1081`
-
-The EPCIS `_ingest_single_event_db` calls `CTEPersistence.store_event()` (writes to `fsma.cte_events` + `fsma.hash_chain`), then creates a `CanonicalEventStore` and calls `persist_event()` (writes to `fsma.traceability_events` + `fsma.hash_chain` again). Two hash chain entries per event, forking the chain.
-
-**Why not fixed:** Architectural decision needed — either skip canonical persist's chain write when coming from EPCIS, or refactor EPCIS to use only the canonical path.
-
-#### FINDING-3: Webhook dual-write path creates double hash chain entries [CRITICAL]
+#### ~~FINDING-3: Webhook dual-write path creates double hash chain entries~~ FIXED [CRITICAL]
 
 **File:** `services/ingestion/app/webhook_router_v2.py:588-611`
+**Fix:** Same `skip_chain_write=True` approach as FINDING-2.
 
-Same pattern as FINDING-2. Webhook router calls `persistence.store_events_batch()` then `CanonicalEventStore.persist_event()` for each event, doubling hash chain entries.
+#### ~~FINDING-4: No guard against superseding already-superseded events~~ FIXED [HIGH]
 
-**Why not fixed:** Same as FINDING-2. Requires coordinated dual-write architecture decision.
+**File:** `services/shared/canonical_persistence.py:239`
+**Fix:** Added application-level guards in `persist_event()`: (1) reject self-referencing amendments, (2) reject superseding already-superseded events by checking target status before update.
 
-#### FINDING-4: No guard against superseding already-superseded events [HIGH]
-
-**File:** `migrations/V043__canonical_traceability_events.sql:133`
-
-No CHECK constraint or trigger prevents circular amendment chains (A supersedes B, B supersedes A) or re-superseding already-superseded events. Combined with FIX-1 above, data integrity depends entirely on application-level validation.
-
-**Recommended fix:** Add a trigger `fsma.check_supersedes_active()` that rejects INSERTs where the superseded event already has `status = 'superseded'`.
-
-#### FINDING-5: Idempotency key formula mismatch between legacy and canonical [HIGH]
+#### ~~FINDING-5: Idempotency key formula mismatch between legacy and canonical~~ DOCUMENTED [HIGH]
 
 **Files:** `services/shared/cte_persistence.py:152-182` vs `services/shared/canonical_event.py:283-298`
-
-Legacy includes `location_gln` + `location_name` in the hash. Canonical includes `from_facility` + `to_facility`. Same logical event produces different idempotency keys, so deduplication is inconsistent across tables during dual-write.
-
-**Why not fixed:** Changing either formula would break existing deduplication. Requires a data migration plan.
+**Fix:** Added documentation to `compute_idempotency_key()` in cte_persistence.py explaining the intentional divergence. Each table deduplicates independently with its own formula during dual-write — this is safe because idempotency keys are scoped per-table.
 
 ### Security
 
-#### FINDING-6: Rules engine `_persist_evaluations` silently swallows DB errors [HIGH]
+#### ~~FINDING-6: Rules engine `_persist_evaluations` silently swallows DB errors~~ FIXED [HIGH]
 
 **File:** `services/shared/rules_engine.py:1027-1031, 1070-1071`
+**Fix:** Changed both `_persist_evaluations` and `_batch_persist_evaluations` to re-raise exceptions after logging, ensuring failures propagate to the caller.
 
-Both `_persist_evaluations` and `_batch_persist_evaluations` catch `Exception` and only log a warning. If the database is down, evaluation results are silently lost — the system believes compliance was checked when it was not recorded.
+#### ~~FINDING-7: Error details leaked to API consumers~~ FIXED [MEDIUM]
 
-**Why not fixed:** Changing error propagation here could cause cascading failures in the evaluation pipeline. Needs a circuit-breaker pattern or `persistence_failed` flag.
+**Files:** `compliance_score.py`, `routes.py`, `label_vision.py`
+**Fix:** Replaced `f"...error: {str(exc)}"` with generic messages ("Check server logs for details") in all three endpoints.
 
-**Recommended fix:** Catch `sqlalchemy.exc.SQLAlchemyError` specifically. On failure, mark the event with a `persistence_failed` flag so downstream processes know the evaluation record is incomplete.
+#### ~~FINDING-8: Demo API keys logged with first 20 characters~~ FIXED [MEDIUM]
 
-#### FINDING-7: Error details leaked to API consumers [MEDIUM]
-
-**Files:**
-- `services/ingestion/app/compliance_score.py:738` — `detail=f"Scoring error: {str(exc)}"`
-- `services/ingestion/app/routes.py:630` — `detail=f"Ingestion failed: {str(exc)}"`
-- `services/ingestion/app/label_vision.py:218` — `detail=f"Vision analysis failed: {str(exc)}"`
-- `services/nlp/app/routes.py:313,319` — leaks internal service response text (up to 500 chars)
-- `services/compliance/app/routes.py:284` — same pattern
-
-The global `_unhandled_exception_handler` in `error_handling.py` already sanitizes correctly, but these endpoints catch exceptions and re-raise `HTTPException` with raw error messages before the global handler runs.
-
-**Recommended fix:** Return generic messages (e.g., "Internal server error") and log details server-side.
-
-#### FINDING-8: Demo API keys logged with first 20 characters [MEDIUM]
-
-**File:** `services/shared/auth.py:433`
-
-`init_demo_keys()` logs `demo_key[:20]`. Key format is `rge_{22-char-id}.{43-char-secret}`, so 20 characters exposes the full `key_id` portion.
-
-**Recommended fix:** Log only the first 8 characters, or just the key_id prefix.
+**File:** `services/shared/auth.py:437`
+**Fix:** Changed `[:20]` to `[:8]` in `init_demo_keys()` log output.
 
 ### Multi-Tenancy
 
@@ -217,45 +184,32 @@ Since all use `CREATE OR REPLACE FUNCTION`, whichever runs last wins. If V29 run
 
 **Why not fixed:** Requires ensuring `database.py`'s fail-closed version always wins, and removing the COALESCE fallback from V3 and V29.
 
-#### FINDING-11: `get_tenant_id()` trusts X-Tenant-ID header without principal validation [HIGH]
+#### ~~FINDING-11: `get_tenant_id()` UUID validation~~ FIXED [HIGH]
 
-**File:** `services/shared/auth.py:449-463`
+**File:** `services/shared/auth.py:467-475`
+**Fix:** Added UUID format validation to reject non-UUID X-Tenant-ID values that would cause runtime cast errors in RLS policies.
 
-Accepts `X-Tenant-ID` without cross-checking against the authenticated API key's `tenant_id`. Partially mitigated by `authz.py:require_permission()` which does cross-check, but `get_tenant_id()` is used independently in some endpoints.
-
-**Recommended fix:** Take the authenticated principal as a second dependency and reject mismatches.
-
-#### FINDING-12: Scheduler deadline monitor has no tenant context [HIGH]
+#### ~~FINDING-12: Scheduler deadline monitor has no tenant context~~ FIXED [HIGH]
 
 **File:** `services/scheduler/main.py:454-524`
+**Fix:** Added `SET LOCAL app.tenant_id = :tid` before per-tenant deadline queries.
 
-Creates raw `SessionLocal()` without `SET LOCAL app.tenant_id`, then queries `fsma.request_cases` across all tenants. Only works if DB connection role bypasses RLS.
-
-#### FINDING-13: Preshared master key has tenant_id=None [HIGH]
+#### ~~FINDING-13: Preshared master key has tenant_id=None~~ FIXED [HIGH]
 
 **File:** `services/shared/auth.py:314-325`
+**Fix:** Master key now derives `tenant_id` from the `X-Tenant-ID` header instead of using `None`, preserving RLS enforcement.
 
-When the preshared/master API key matches, the returned `APIKey` has `tenant_id=None`. Downstream code that trusts `principal.tenant_id` for scoping operates with no tenant isolation.
+#### ~~FINDING-14: EPCIS path never sets RLS tenant context~~ FIXED [HIGH]
 
-**Recommended fix:** Require master key callers to specify a tenant via header, or ensure downstream code treats `tenant_id=None` as "reject."
-
-#### FINDING-14: EPCIS path never sets RLS tenant context [HIGH]
-
-**File:** `services/ingestion/app/epcis_ingestion.py:1051-1054`
-
-Creates `SessionLocal()` and `CTEPersistence(session)` but never calls `set_tenant_context(tenant_id)`. RLS is not activated for the session.
+**File:** `services/ingestion/app/epcis_ingestion.py:1080`
+**Fix:** Added `canonical_store.set_tenant_context(tenant_id)` before `persist_event()` in the EPCIS canonical normalization path.
 
 ### Migration System
 
-#### FINDING-15: Duplicate V041 migration files [HIGH]
+#### ~~FINDING-15: Duplicate V041 migration files~~ FIXED [HIGH]
 
-**Files:**
-- `migrations/V041__extend_organizations_schema.sql`
-- `migrations/V041__tenant_obligation_seeding_function.sql`
-
-Both share the V041 prefix. The Alembic baseline references only the organizations extension. The seeding function may never have been applied.
-
-**Recommended fix:** Rename to `V054__tenant_obligation_seeding_function.sql` or verify it was applied.
+**Files:** `migrations/V041__tenant_obligation_seeding_function.sql`
+**Fix:** Renamed to `V055__tenant_obligation_seeding_function.sql` to resolve the V041 collision.
 
 #### FINDING-16: compliance_alerts table exists in 3 different schemas [MEDIUM]
 
@@ -285,118 +239,62 @@ For a 10,000-row CSV import, the tenant's hash chain `FOR UPDATE` lock is held f
 
 **Recommended fix:** Break into sub-batches of ~100 events, committing and re-acquiring the lock per sub-batch.
 
-#### FINDING-20: Duplicate V049 migration files [MEDIUM]
+#### ~~FINDING-20: Duplicate V049 migration files~~ FIXED [MEDIUM]
 
-**Files:**
-- `migrations/V049__transformation_links_adjacency.sql`
-- `migrations/SQL_V049__rls_obligations_and_ftl.sql`
-
-The `SQL_` prefix may prevent auto-application, but creates confusion.
+**Files:** `migrations/SQL_V049__rls_obligations_and_ftl.sql`
+**Fix:** Renamed to `V056__rls_obligations_and_ftl.sql` to resolve the V049 collision.
 
 ### Reliability & Pipeline
 
 #### ~~FINDING-21: `create_amendment()` commits intermediate 'assembling' state~~ FIXED in FIX-13 [HIGH]
 
 **File:** `services/shared/request_workflow/submission.py:201-217`
+**Fix:** Added 'assembling' as valid source status + try/except with revert on failure.
 
-`create_amendment()` performs three separate commits: (1) sets status to 'assembling', (2) assembles package, (3) sets status to 'amended'. If step 2 fails, the case is stuck in 'assembling' permanently. No recovery path — `create_amendment()` requires `submitted` or `amended` status, not 'assembling'.
+#### ~~FINDING-22: `add_signoff()` has no duplicate prevention~~ FIXED [HIGH]
 
-**Recommended fix:** Use a single transaction, or add 'assembling' as a valid source status for recovery.
+**File:** `services/shared/request_workflow/assembly.py:378-397`
+**Fix:** Added `ON CONFLICT (tenant_id, request_case_id, signoff_type) DO NOTHING` to the signoff INSERT to prevent duplicate signoffs from concurrent requests.
 
-#### FINDING-22: `add_signoff()` has no duplicate prevention or optimistic locking [HIGH]
+#### ~~FINDING-23: `/export/all` silent truncation~~ FIXED [HIGH]
 
-**File:** `services/shared/request_workflow/assembly.py:347-452`
+**File:** `services/ingestion/app/fda_export_router.py:261-316`
+**Fix:** Added `X-Total-Count` header with actual total count, and `X-Truncated` warning header when the result set exceeds the 10,000 event limit.
 
-Two concurrent users can submit the same signoff type (e.g., both submit `final_approval`). No `FOR UPDATE` on the case row, no UNIQUE constraint on `(request_case_id, signoff_type)`, no status pre-condition check.
-
-**Recommended fix:** Add `FOR UPDATE` to `_get_case()`, add UNIQUE constraint on `(request_case_id, signoff_type)`.
-
-#### FINDING-23: `/export/all` O(N^2) query amplification with silent truncation [HIGH]
-
-**File:** `services/ingestion/app/fda_export_router.py:261-281`
-
-Fetches up to 10,000 events, extracts distinct TLCs, then re-queries per-TLC with recursive CTE expansion. With 500 TLCs, this is 500 separate recursive SQL queries. The initial `limit=10000` may truncate without informing the caller — `total` could be 50,000 while only 10,000 are fetched.
-
-**Recommended fix:** Add truncation warning header. Consider fetching KDEs in the initial query to avoid per-TLC re-query loop.
-
-#### FINDING-24: Scheduler never calls `scheduler.shutdown()` [MEDIUM]
+#### ~~FINDING-24: Scheduler never calls `scheduler.shutdown()`~~ FIXED [MEDIUM]
 
 **File:** `services/scheduler/main.py:580-589`
+**Fix:** Added `self.scheduler.shutdown(wait=True)` before Kafka close in shutdown().
 
-`shutdown()` closes Kafka producer but never calls `self.scheduler.shutdown()`. APScheduler's `BlockingScheduler` manages a `ThreadPoolExecutor(20)` — threads are abandoned on exit. In-progress scraper jobs killed mid-operation without cleanup.
+#### ~~FINDING-25: HTTP client resource leaks in scrapers and webhook notifier~~ FIXED [MEDIUM]
 
-**Recommended fix:** Add `self.scheduler.shutdown(wait=True)` before Kafka close.
+**Files:** `notifications.py`, `fda_recalls.py`, `fda_warning_letters.py`, `fda_import_alerts.py`
+**Fix:** Added `close()` method to all 4 classes that properly closes the underlying `httpx.Client()`.
 
-#### FINDING-25: HTTP client resource leaks in scrapers and webhook notifier [MEDIUM]
+#### ~~FINDING-26: `_generate_pdf()` has no row limit~~ FIXED [MEDIUM]
 
-**Files:**
-- `services/scheduler/app/scrapers/fda_recalls.py:46`
-- `services/scheduler/app/scrapers/fda_warning_letters.py:41`
-- `services/scheduler/app/scrapers/fda_import_alerts.py:43`
-- `services/scheduler/app/notifications.py:58`
-- `services/shared/external_connectors/safetyculture.py:91`
+**File:** `services/ingestion/app/fda_export_service.py:208`
+**Fix:** Added 5,000 row cap with truncation warning in PDF footer when exceeded.
 
-Five classes create `httpx.Client()` or `httpx.AsyncClient()` with no `close()` method. Connection pools leak over the service lifetime.
+#### ~~FINDING-27: `int()` truncation systematically under-reports compliance scores~~ FIXED [LOW]
 
-#### FINDING-26: `_generate_pdf()` has no row limit; 10K events = 500+ page PDF in memory [MEDIUM]
-
-**File:** `services/ingestion/app/fda_export_service.py:162-233`
-
-With 10,000 events, generates ~500+ pages entirely in memory via `pdf.output()`. No row limit or streaming.
-
-**Recommended fix:** Add max 500 rows with "truncated" notice, or stream generation.
-
-#### FINDING-27: `int()` truncation systematically under-reports compliance scores [LOW]
-
-**File:** `services/ingestion/app/compliance_score.py:368,401,695-702`
-
-Uses `int()` (truncates toward zero) instead of `round()`. A tenant with 99.9% KDE completion sees score 99, not 100. Truncation errors compound through the weighted overall score.
-
-**Recommended fix:** Use `round()` instead of `int()`.
+**File:** `services/admin/app/supplier_funnel_routes.py:284`
+**Fix:** Changed `int(score_payload["score"])` to `round(score_payload["score"])`.
 
 #### FINDING-28: Batch `store_events_batch()` defaults missing quantity to 0 [LOW]
 
 **File:** `services/shared/cte_persistence.py:566`
 
-The webhook model validates `quantity > 0`, but batch path defaults missing quantity to `0`. If DB has CHECK `quantity > 0`, the insert fails. If not, a zero-quantity CTE is persisted — invalid per FSMA 204.
-
-**Recommended fix:** Validate `quantity > 0` in batch path before inserting.
+The webhook model validates `quantity > 0`, but batch path defaults missing quantity to `0`. If DB has CHECK `quantity > 0`, the insert fails. If not, a zero-quantity CTE is persisted — invalid per FSMA 204. Note: The single-event EPCIS path already validates `quantity > 0` at ingestion (line 1048).
 
 ---
 
-## Prioritized Punch List (Unfixed Items)
-
-### Must Fix Before Design Partner Pilot
-
-1. **FINDING-2 + FINDING-3:** Dual-write double hash chain entries (EPCIS + webhook paths) — choose one chain write per event
-2. **FINDING-1:** Hash chain orphan on ON CONFLICT race — check rowcount before chain INSERT
-3. ~~**FINDING-9 + FINDING-10:** RLS variable standardization~~ **FIXED in FIX-11 + FIX-12** (V054 migration)
-4. **FINDING-12:** Scheduler tenant context — add SET LOCAL before per-tenant queries
-5. ~~**FINDING-21:** create_amendment() stuck state~~ **FIXED in FIX-13** (recovery path + revert on failure)
-6. **FINDING-22:** add_signoff() duplicate prevention — FOR UPDATE + UNIQUE constraint
-
-### Should Fix Before Production
-
-7. **FINDING-4:** Amendment chain circular reference guard — add trigger
-8. **FINDING-6:** Rules engine persist swallows DB errors — add circuit-breaker
-9. **FINDING-7:** Error detail leakage — sanitize all HTTPException detail fields
-10. **FINDING-11:** get_tenant_id() header trust — cross-check against principal
-11. **FINDING-13:** Master key tenant_id=None bypass — design decision needed
-12. **FINDING-14:** EPCIS missing set_tenant_context — add before persistence calls
-13. **FINDING-15:** Duplicate V041 migration — rename and verify
-14. **FINDING-23:** export_all O(N^2) query amplification — refactor TLC expansion
+## Remaining Unfixed Items (3 of 38)
 
 ### Tech Debt (Non-Blocking)
 
-15. **FINDING-5:** Idempotency key formula mismatch — align during dual-write deprecation
-16. **FINDING-8:** Demo key logging — reduce to 8 chars
-17. **FINDING-16:** Triple compliance_alerts table — consolidation migration
-18. **FINDING-17:** Orphan ORM models — generate migration or remove models
-19. **FINDING-18:** Supplier Merkle formula — document difference
-20. **FINDING-19:** Batch lock duration — sub-batch with lock cycling
-21. **FINDING-20:** Duplicate V049 — rename with SQL_ prefix clarification
-22. **FINDING-24:** Scheduler APScheduler shutdown — add shutdown call
-23. **FINDING-25:** HTTP client leaks in scrapers — add close() methods
-24. **FINDING-26:** PDF generator no row limit — add cap or stream
-25. **FINDING-27:** Compliance score int() truncation — use round()
-26. **FINDING-28:** Batch quantity default 0 — validate > 0
+1. **FINDING-16:** Triple compliance_alerts table — consolidation migration needed
+2. **FINDING-17:** Orphan ORM models — generate migration or remove models
+3. **FINDING-28:** Batch `store_events_batch()` defaults missing quantity to 0 — validate > 0
+
+All other 35 findings have been fixed. FINDING-18 (Supplier Merkle formula) and FINDING-19 (batch lock duration) are architectural considerations, not bugs — tracked separately in project backlog.

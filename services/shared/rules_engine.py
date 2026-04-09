@@ -1025,10 +1025,11 @@ class RulesEngine:
                     },
                 )
             except Exception as e:
-                logger.warning(
+                logger.error(
                     "evaluation_persist_failed",
                     extra={"rule_id": r.rule_id, "error": str(e)},
                 )
+                raise
 
     def _batch_persist_evaluations(
         self,
@@ -1068,7 +1069,8 @@ class RulesEngine:
                 try:
                     self.session.execute(text(sql), params)
                 except Exception as e:
-                    logger.warning("batch_eval_persist_failed: %s", str(e))
+                    logger.error("batch_eval_persist_failed: %s", str(e))
+                    raise
 
 
 # ---------------------------------------------------------------------------

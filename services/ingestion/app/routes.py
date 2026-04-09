@@ -627,7 +627,7 @@ async def ingest_file(
             db_manager.update_job(job)
         if isinstance(exc, HTTPException):
             raise
-        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Ingestion failed. Check server logs for details.")
     finally:
         if db_manager:
             db_manager.close()
