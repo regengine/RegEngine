@@ -1077,7 +1077,8 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
                 from shared.canonical_event import normalize_epcis_event
                 from shared.canonical_persistence import CanonicalEventStore
                 canonical = normalize_epcis_event(event, tenant_id)
-                canonical_store = CanonicalEventStore(db_session, dual_write=False)
+                canonical_store = CanonicalEventStore(db_session, dual_write=False, skip_chain_write=True)
+                canonical_store.set_tenant_context(tenant_id)
                 canonical_store.persist_event(canonical)
                 # Auto-evaluate rules
                 from shared.rules_engine import RulesEngine
