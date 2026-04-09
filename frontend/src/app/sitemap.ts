@@ -38,10 +38,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'data-import',
         'readiness-assessment',
         'fsma-unified',
+        // Authenticated-UX tools with standalone public landing pages
+        'label-scanner',
+        'scan',
+        'ask',
+        'export',
+        'notice-validator',
+        'obligation-scanner',
     ].map((tool) => ({
         url: `${baseUrl}/tools/${tool}`,
         changeFrequency: 'monthly' as const,
-        priority: 0.7,
+        priority: 0.8,
     }));
 
     // Content pages (high SEO value)

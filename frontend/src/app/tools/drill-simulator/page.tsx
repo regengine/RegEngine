@@ -3,13 +3,17 @@ import { DrillSimulatorClient } from "./components/DrillSimulatorClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "24-Hour Drill Simulator | FSMA 204 Outbreak Quest | RegEngine",
-    description: "A scenario-based quest to see if your manual processes can survive a real FDA outbreak investigation. Test your record retrieval speed and compliance accuracy.",
+    title: "24-Hour Drill Simulator | Practice FSMA 204 FDA Outbreak Response | RegEngine",
+    description: "Run a scenario-based FDA outbreak drill to test if your manual processes can meet the 24-hour records retrieval mandate. Free FSMA 204 compliance simulation.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/drill-simulator",
+    },
     openGraph: {
         title: "24-Hour Drill Simulator — RegEngine",
-        description: "Test your FDA outbreak response speed.",
+        description: "Simulate an FDA outbreak investigation to test your FSMA 204 record retrieval speed and compliance accuracy. Free.",
         type: "website",
         url: "https://www.regengine.co/tools/drill-simulator",
     },
@@ -40,6 +44,11 @@ export default function DrillSimulatorPage() {
             <EmailGate toolName="drill-simulator">
                 <DrillSimulatorClient />
             </EmailGate>
+            <RelatedTools tools={[
+                { href: "/tools/recall-readiness", title: "Recall Readiness Score", description: "Get an A–F grade on your FDA 24-hour records retrieval readiness." },
+                { href: "/tools/notice-validator", title: "FDA Request Validator", description: "Validate a draft FDA response against FSMA 204 record requirements." },
+                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your full FSMA 204 compliance posture across all requirement areas." },
+            ]} />
         </>
     );
 }
