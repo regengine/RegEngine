@@ -134,7 +134,7 @@ const DIFFERENTIATORS = [
         icon: DollarSign,
         title: 'Transparent Pricing',
         description:
-            'No hidden sales calls. $425/mo for Design Partners. $999/mo for standard GA customers. You know the cost before you sign up.',
+            'No hidden sales calls. Plans from $425/mo (billed annually) for Design Partners. Pricing is published — no "contact sales" required.',
         detail: 'Compare directly to competitors who make you "contact sales." We believe pricing transparency builds trust and moves faster.',
     },
     {
@@ -421,17 +421,17 @@ HTTP 201
                                 <div className="rounded-lg bg-blue-600/20 p-4 border border-blue-500/30">
                                     <p className="text-sm text-gray-400 mb-1">Base Plan</p>
                                     <p className="text-3xl font-bold text-white">$425/mo</p>
-                                    <p className="text-xs text-gray-400 mt-2">For design partners • 1 facility • 500 CTEs/mo</p>
+                                    <p className="text-xs text-gray-400 mt-2">Billed annually ($499/mo monthly) • 1 facility • 500 CTEs/mo</p>
                                 </div>
                                 <div className="rounded-lg bg-white/5 p-4 border border-white/10">
                                     <p className="text-sm text-gray-400 mb-1">Standard Plan</p>
-                                    <p className="text-3xl font-bold text-white">$999/mo</p>
-                                    <p className="text-xs text-gray-400 mt-2">General availability • 2–3 facilities • Unlimited CTEs</p>
+                                    <p className="text-3xl font-bold text-white">$549/mo</p>
+                                    <p className="text-xs text-gray-400 mt-2">Billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
                                 </div>
                                 <div className="rounded-lg bg-white/5 p-4 border border-white/10">
-                                    <p className="text-sm text-gray-400 mb-1">Enterprise</p>
-                                    <p className="text-xl font-bold text-white">Custom pricing</p>
-                                    <p className="text-xs text-gray-400 mt-2">10+ facilities • Dedicated support</p>
+                                    <p className="text-sm text-gray-400 mb-1">Premium Plan</p>
+                                    <p className="text-3xl font-bold text-white">$639/mo</p>
+                                    <p className="text-xs text-gray-400 mt-2">Billed annually ($749/mo monthly) • 4+ facilities • Dedicated support</p>
                                 </div>
                             </div>
                         </div>
@@ -443,7 +443,7 @@ HTTP 201
                                 Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
                             </p>
                             <p className="text-gray-400 text-sm mb-6">
-                                Founding Design Partners get preferred pricing for the life of their account. Standard GA customers start at $999/mo. Honest pricing for honest work.
+                                Founding Design Partners get preferred pricing for the life of their account. Plans start at $425/mo (billed annually) or $499/mo monthly. Honest pricing for honest work.
                             </p>
                             <ul className="space-y-2">
                                 {[
@@ -722,7 +722,7 @@ HTTP 201
                             {
                                 emoji: '🚀',
                                 title: 'Founders & SMBs',
-                                detail: 'You need compliance but can\'t afford enterprise fees. $425/mo gets you live. Scale as you grow.',
+                                detail: 'You need compliance but can\'t afford enterprise fees. $425/mo (billed annually) gets you live. Scale as you grow.',
                             },
                             {
                                 emoji: '⚖️',
