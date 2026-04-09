@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import FSMAChecklist from '@/components/fsma-checklist';
 import { FSMA_204_DEADLINE_ISO, daysUntilFSMA204 } from '@/lib/fsma-tools-data';
-import { EmailGate } from '@/components/tools/EmailGate';
-
 import { T, useScrollReveal, useTrackEvent, TRACE_NODES_FORWARD, TRACE_NODES_BACKWARD } from './components/constants';
 import ScrollProgressBar from './components/ScrollProgressBar';
 import StickyCTA from './components/StickyCTA';
@@ -214,16 +212,14 @@ export default function RetailerSuppliersPage() {
 
             <FounderCredibility revealRef={founder.ref} visible={founder.visible} />
 
-            <EmailGate toolName="retailer-readiness">
-                <AssessmentForm
-                    email={email}
-                    setEmail={setEmail}
-                    companyName={companyName}
-                    setCompanyName={setCompanyName}
-                    submitted={submitted}
-                    handleAssessment={handleAssessment}
-                />
-            </EmailGate>
+            <AssessmentForm
+                email={email}
+                setEmail={setEmail}
+                companyName={companyName}
+                setCompanyName={setCompanyName}
+                submitted={submitted}
+                handleAssessment={handleAssessment}
+            />
 
             <CompetitorComparison revealRef={competitorReveal.ref} visible={competitorReveal.visible} />
 
