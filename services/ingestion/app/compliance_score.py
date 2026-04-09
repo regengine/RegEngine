@@ -735,7 +735,7 @@ async def get_compliance_score(
 
     except Exception as exc:
         logger.error("compliance_score: scoring failed: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Scoring error: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Scoring error. Check server logs for details.")
     finally:
         if db_session:
             db_session.close()
