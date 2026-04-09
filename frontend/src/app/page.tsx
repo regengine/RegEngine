@@ -533,6 +533,9 @@ export default function RegEngineLanding() {
           <p className="text-[var(--re-text-secondary)]">
             Cancel anytime. Founding partner pricing locks in 50% off for life.
           </p>
+          <p className="text-xs text-[var(--re-text-muted)] mt-1">
+            Prices shown billed annually. Monthly billing also available.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-[900px] mx-auto mb-8">
