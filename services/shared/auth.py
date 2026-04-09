@@ -378,14 +378,18 @@ async def optional_api_key(
     request: Request,
     x_regengine_api_key: Optional[str] = Header(None, alias="X-RegEngine-API-Key"),
 ) -> Optional[Union[APIKey, APIKeyResponse]]:
-    """FastAPI dependency for optional API key authentication."""
+    """FastAPI dependency for optional API key authentication.
+
+    When no key is provided, returns None (unauthenticated path).
+    When a key IS provided but fails validation (expired, revoked,
+    rate-limited), the HTTPException is re-raised so the caller
+    receives a proper 401/429 instead of being silently downgraded
+    to the unauthenticated path.
+    """
     if not x_regengine_api_key:
         return None
 
-    try:
-        return await require_api_key(request, x_regengine_api_key)
-    except HTTPException:
-        return None
+    return await require_api_key(request, x_regengine_api_key)
 
 
 def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested_jurisdiction: str) -> None:

@@ -944,7 +944,7 @@ class RulesEngine:
                     rule_version=rule.rule_version,
                     rule_title=rule.title,
                     severity=rule.severity,
-                    result="skip",
+                    result="error",
                     why_failed=f"Evaluation error: {str(e)}",
                     category=rule.category,
                 )
@@ -974,7 +974,7 @@ class RulesEngine:
                     rule_version=rule.rule_version,
                     rule_title=rule.title,
                     severity=rule.severity,
-                    result="skip",
+                    result="error",
                     why_failed=f"Evaluation error: {str(e)}",
                     category=rule.category,
                 )

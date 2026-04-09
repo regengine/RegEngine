@@ -142,19 +142,21 @@ class TestRLSIntegration:
             
             # Set context to tenant A
             await session.execute(
-                text(f"SELECT set_config('app.tenant_id', '{tenant_a}', FALSE)")
+                text("SELECT set_config('app.tenant_id', :tid, FALSE)"),
+                {"tid": str(tenant_a)},
             )
-            
+
             # Query should only return tenant A projects
             result = await session.execute(
                 text("SELECT COUNT(*) FROM pcos_projects WHERE name = 'Tenant A Project'")
             )
             count_a = result.scalar()
             assert count_a == 1, "Tenant A should see their project"
-            
+
             # Switch to tenant B
             await session.execute(
-                text(f"SELECT set_config('app.tenant_id', '{tenant_b}', FALSE)")
+                text("SELECT set_config('app.tenant_id', :tid, FALSE)"),
+                {"tid": str(tenant_b)},
             )
             
             # Query should NOT return tenant A projects
