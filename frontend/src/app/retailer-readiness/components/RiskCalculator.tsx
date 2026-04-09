@@ -129,7 +129,7 @@ export default function RiskCalculator({
                     }}>💡</div>
                     <div>
                         <p style={{ fontSize: 14, color: T.heading, fontWeight: 600, marginBottom: 2 }}>
-                            RegEngine: {annualRevenue <= 50 ? '$425' : annualRevenue <= 200 ? '$549' : '$639'}/mo (Design Partner)
+                            RegEngine: {annualRevenue <= 50 ? '$425' : annualRevenue <= 200 ? '$549' : '$639'}/mo (Design Partner, billed annually)
                         </p>
                         <p style={{ fontSize: 13, color: T.text, lineHeight: 1.5 }}>
                             That&apos;s <strong style={{ color: T.accent, fontSize: 15 }}>
