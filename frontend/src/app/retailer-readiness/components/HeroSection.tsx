@@ -6,10 +6,9 @@ import { T } from './constants';
 
 export interface HeroSectionProps {
     heroRef: RefObject<HTMLDivElement>;
-    daysCount: number;
 }
 
-export default function HeroSection({ heroRef, daysCount }: HeroSectionProps) {
+export default function HeroSection({ heroRef }: HeroSectionProps) {
     return (
         <section ref={heroRef} style={{
             position: 'relative', zIndex: 2,
@@ -38,37 +37,20 @@ export default function HeroSection({ heroRef, daysCount }: HeroSectionProps) {
                 color: T.heading, lineHeight: 1.08, margin: '0 0 20px',
                 letterSpacing: '-0.02em',
             }}>
-                Retailer-Ready<br />
+                Traceability That Keeps<br />
                 <span style={{
                     background: `linear-gradient(135deg, ${T.accent}, #34d399)`,
                     WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                }}>In 30 Days or Less</span>
+                }}>You on the Shelf</span>
             </h1>
 
             <p style={{
                 fontSize: 18, color: T.textMuted,
-                maxWidth: 540, margin: '0 auto 16px', lineHeight: 1.7,
+                maxWidth: 540, margin: '0 auto 32px', lineHeight: 1.7,
             }}>
-                Meet major retailer traceability requirements before you lose your spot on the shelf.
-                API and CSV ingest. FDA-ready export. No portal logins.
+                Walmart, Kroger, and Costco require supplier traceability — and audit suppliers regularly.
+                RegEngine gets you retailer-ready in 30 days with API and CSV ingest, no portal logins required.
             </p>
-
-            {/* Countdown */}
-            <div style={{
-                display: 'inline-flex', alignItems: 'baseline', gap: 10,
-                background: T.surface, border: `2px solid ${daysCount > 600 ? T.warningBorder : 'rgba(239,68,68,0.2)'}`,
-                borderRadius: 14, padding: 'clamp(12px, 3vw, 16px) clamp(16px, 5vw, 32px)', marginBottom: 32,
-                boxShadow: `0 0 30px ${daysCount > 600 ? 'rgba(245,158,11,0.08)' : 'rgba(239,68,68,0.08)'}`,
-            }}>
-                <span style={{
-                    fontSize: 'clamp(1.75rem, 5vw, 40px)', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace",
-                    color: daysCount > 600 ? T.warning : T.danger,
-                    letterSpacing: '-0.02em',
-                }}>
-                    {daysCount.toLocaleString()}
-                </span>
-                <span className="text-sm text-re-text-muted">days until FDA&apos;s July 2028 deadline</span>
-            </div>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
                 <Link href="/tools/recall-readiness" className="w-full sm:w-auto">

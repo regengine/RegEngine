@@ -16,7 +16,7 @@ export default function UrgencyBanner() {
             }}>
                 <span style={{ fontSize: 16 }}>⚠️</span>
                 <span style={{ fontSize: 'clamp(12px, 2.5vw, 14px)', color: T.warning, fontWeight: 500, lineHeight: 1.4 }}>
-                    Major retailers are evaluating suppliers <strong>now</strong>. Their internal deadlines are earlier than FDA&apos;s July 2028.
+                    Walmart, Kroger, and Costco require supplier traceability documentation — and conduct ongoing supplier audits.
                 </span>
             </div>
         </div>
