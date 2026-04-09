@@ -253,7 +253,7 @@ class ComplianceIntegration:
         # Insert alert
         session.execute(
             """
-            INSERT INTO compliance_alerts 
+            INSERT INTO public.compliance_alerts 
             (id, tenant_id, source_type, source_id, title, summary, severity,
              countdown_start, countdown_end, countdown_hours, required_actions,
              status, match_reason, raw_data, created_at, updated_at)
@@ -297,7 +297,7 @@ class ComplianceIntegration:
                 COUNT(*) FILTER (WHERE severity = 'CRITICAL' AND status = 'ACTIVE') as critical,
                 COUNT(*) FILTER (WHERE severity = 'HIGH' AND status = 'ACTIVE') as high,
                 COUNT(*) FILTER (WHERE status = 'ACTIVE') as total
-            FROM compliance_alerts
+            FROM public.compliance_alerts
             WHERE tenant_id = :tenant_id
             """,
             {"tenant_id": str(tenant_id)}
@@ -319,7 +319,7 @@ class ComplianceIntegration:
         deadline_result = session.execute(
             """
             SELECT countdown_end, title
-            FROM compliance_alerts
+            FROM public.compliance_alerts
             WHERE tenant_id = :tenant_id AND status = 'ACTIVE'
             ORDER BY countdown_end ASC
             LIMIT 1

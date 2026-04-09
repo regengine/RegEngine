@@ -89,6 +89,10 @@ class FDAImportAlertsScraper(BaseScraper):
             duration_ms=duration_ms,
         )
 
+    def close(self) -> None:
+        """Close the underlying HTTP client to release connections."""
+        self.session.close()
+
     def _scrape_alerts_page(self) -> List[EnforcementItem]:
         """Parse FDA Import Alerts HTML page."""
         response = self.session.get(FDA_IMPORT_ALERTS_URL, timeout=self.timeout)
