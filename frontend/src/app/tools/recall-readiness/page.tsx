@@ -4,13 +4,17 @@ import { RecallReadinessClient } from "./components/RecallReadinessClient";
 import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { JSONLD } from "@/components/seo/json-ld";
 import { EmailGate } from "@/components/tools/EmailGate";
+import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "Recall Readiness Score | FDA 24-Hour Records retrieval | RegEngine",
-    description: "Get an A-F grade on your ability to meet the FDA 24-hour records retrieval mandate for FSMA 204. Identify compliance gaps and operational risks.",
+    title: "Recall Readiness Score | FSMA 204 24-Hour Records Retrieval Test | RegEngine",
+    description: "Get an A–F grade on your readiness to meet the FDA 24-hour records retrieval mandate for FSMA 204. Identify compliance gaps before an outbreak investigation.",
+    alternates: {
+        canonical: "https://www.regengine.co/tools/recall-readiness",
+    },
     openGraph: {
         title: "Recall Readiness Score — RegEngine",
-        description: "Benchmark your 24-hour record retrieval speed.",
+        description: "Grade your readiness to meet the FDA 24-hour records retrieval mandate. Identify FSMA 204 gaps. Free.",
         type: "website",
         url: "https://www.regengine.co/tools/recall-readiness",
     },
@@ -36,21 +40,28 @@ const jsonLd = {
 
 export default function RecallReadinessPage() {
     return (
-        <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
-            <JSONLD data={jsonLd} />
-            <div className="max-w-7xl mx-auto">
-                <Breadcrumbs
-                    items={[
-                        { label: "Free Tools", href: "/tools" },
-                        { label: "Recall Readiness Score" }
-                    ]}
-                />
-                <Suspense>
-                    <EmailGate toolName="recall-readiness">
-                        <RecallReadinessClient />
-                    </EmailGate>
-                </Suspense>
+        <>
+            <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 bg-[var(--re-surface-base)]">
+                <JSONLD data={jsonLd} />
+                <div className="max-w-7xl mx-auto">
+                    <Breadcrumbs
+                        items={[
+                            { label: "Free Tools", href: "/tools" },
+                            { label: "Recall Readiness Score" }
+                        ]}
+                    />
+                    <Suspense>
+                        <EmailGate toolName="recall-readiness">
+                            <RecallReadinessClient />
+                        </EmailGate>
+                    </Suspense>
+                </div>
             </div>
-        </div>
+            <RelatedTools tools={[
+                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Practice an FDA outbreak response drill before a real investigation hits." },
+                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your full FSMA 204 compliance posture across all requirement areas." },
+                { href: "/tools/notice-validator", title: "FDA Request Validator", description: "Check whether your draft FDA response covers all required FSMA 204 elements." },
+            ]} />
+        </>
     );
 }
