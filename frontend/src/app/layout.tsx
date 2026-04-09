@@ -5,6 +5,7 @@ import { MarketingHeader } from '@/components/layout/marketing-header'
 import { AuthAwareFooter } from '@/components/layout/auth-aware-footer'
 import { AccessibilityWidget } from '@/components/accessibility/AccessibilityWidget'
 import { CookieBanner } from '@/components/cookie-consent/CookieBanner'
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics'
 import type { Metadata, Viewport } from 'next'
 
 // Analytics are mounted by CookieBanner only after the user accepts consent (#552).
@@ -163,6 +164,7 @@ export default async function RootLayout({
         </Providers>
         <AccessibilityWidget />
         <CookieBanner enableAnalytics={enableVercelAnalytics} />
+        <GoogleAnalytics />
       </body>
     </html>
   )
