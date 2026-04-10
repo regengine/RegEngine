@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 # Add shared module to path
 from shared.auth import APIKey, require_api_key
+from shared.pagination import PaginationParams
 from shared.tenant_models import (
     ControlMapping,
     CustomerProduct,
@@ -156,23 +157,32 @@ async def create_control(
 @router.get("/controls")
 async def list_controls(
     framework: Optional[str] = None,
+    pagination: PaginationParams = Depends(),
     api_key: APIKey = Depends(require_api_key),
 ):
     """List all tenant controls, optionally filtered by framework.
 
     Args:
         framework: Optional framework filter
+        pagination: Pagination parameters (skip, limit)
         api_key: Validated API key with tenant_id
 
     Returns:
-        List of controls
+        Paginated list of controls
     """
     tenant_id = get_tenant_id_from_api_key(api_key)
 
     try:
         writer = OverlayWriter(tenant_id)
-        controls = writer.list_controls(framework=framework)
-        return {"controls": controls, "count": len(controls)}
+        controls, total = await writer.list_controls(
+            framework=framework, skip=pagination.skip, limit=pagination.limit,
+        )
+        return {
+            "controls": controls,
+            "total": total,
+            "skip": pagination.skip,
+            "limit": pagination.limit,
+        }
     except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("list_controls_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(
@@ -357,23 +367,32 @@ async def create_product(
 @router.get("/products")
 async def list_products(
     product_type: Optional[str] = None,
+    pagination: PaginationParams = Depends(),
     api_key: APIKey = Depends(require_api_key),
 ):
     """List all customer products, optionally filtered by type.
 
     Args:
         product_type: Optional product type filter
+        pagination: Pagination parameters (skip, limit)
         api_key: Validated API key with tenant_id
 
     Returns:
-        List of products
+        Paginated list of products
     """
     tenant_id = get_tenant_id_from_api_key(api_key)
 
     try:
         writer = OverlayWriter(tenant_id)
-        products = writer.list_products(product_type=product_type)
-        return {"products": products, "count": len(products)}
+        products, total = await writer.list_products(
+            product_type=product_type, skip=pagination.skip, limit=pagination.limit,
+        )
+        return {
+            "products": products,
+            "total": total,
+            "skip": pagination.skip,
+            "limit": pagination.limit,
+        }
     except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as exc:
         logger.exception("list_products_failed", tenant_id=str(tenant_id), error=str(exc))
         raise HTTPException(

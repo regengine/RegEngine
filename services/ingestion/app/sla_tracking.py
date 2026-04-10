@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.webhook_compat import _verify_api_key
+from shared.pagination import PaginationParams
 
 logger = logging.getLogger("sla-tracking")
 
@@ -295,6 +296,7 @@ async def create_request(
 async def list_requests(
     tenant_id: str,
     status_filter: Optional[RequestStatus] = Query(None, alias="status"),
+    pagination: PaginationParams = Depends(),
     _auth: None = Depends(_verify_api_key),
 ):
     """List all FDA records requests for a tenant with current status."""
@@ -310,9 +312,14 @@ async def list_requests(
     if status_filter:
         requests = [r for r in requests if r.status == status_filter]
 
+    total = len(requests)
+    requests = requests[pagination.skip : pagination.skip + pagination.limit]
+
     return {
         "tenant_id": tenant_id,
-        "count": len(requests),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
         "requests": [_request_to_dict(r) for r in requests],
     }
 
@@ -404,6 +411,7 @@ async def sla_dashboard(
 async def list_alerts(
     tenant_id: str,
     include_acknowledged: bool = Query(False),
+    pagination: PaginationParams = Depends(),
     _auth: None = Depends(_verify_api_key),
 ):
     """List active SLA alerts, generating real-time deadline alerts."""
@@ -421,9 +429,13 @@ async def list_alerts(
         stored = [a for a in stored if not a.acknowledged]
 
     all_alerts = live_alerts + stored
+    total = len(all_alerts)
+    all_alerts = all_alerts[pagination.skip : pagination.skip + pagination.limit]
 
     return {
         "tenant_id": tenant_id,
-        "count": len(all_alerts),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
         "alerts": [a.model_dump() for a in all_alerts],
     }

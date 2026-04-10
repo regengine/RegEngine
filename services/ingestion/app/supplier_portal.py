@@ -24,6 +24,7 @@ from sqlalchemy import text
 
 from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 from app.webhook_compat import _verify_api_key, ingest_events
+from shared.pagination import PaginationParams
 
 logger = logging.getLogger("supplier-portal")
 
@@ -264,6 +265,7 @@ async def create_portal_link(
 )
 async def list_portal_links(
     tenant_id: str,
+    pagination: PaginationParams = Depends(),
     _: None = Depends(_verify_api_key),
 ):
     """List all portal links for a tenant."""
@@ -326,7 +328,9 @@ async def list_portal_links(
                 "expires_at": expires_at_raw,
             })
 
-    return {"links": links, "total": len(links)}
+    total = len(links)
+    links = links[pagination.skip : pagination.skip + pagination.limit]
+    return {"links": links, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 
 @router.patch(
