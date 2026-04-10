@@ -864,7 +864,7 @@ class RulesEngine:
                     summary.critical_failures.append(result)
             elif result.result == "warn":
                 summary.warned += 1
-            elif result.result == "skip":
+            elif result.result in ("skip", "error"):
                 summary.skipped += 1
 
         # Persist results

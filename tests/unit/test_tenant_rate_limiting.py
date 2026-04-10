@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from starlette.testclient import TestClient
 from fastapi import FastAPI
-from services.shared.tenant_rate_limiting import (
+from shared.tenant_rate_limiting import (
     TenantRateLimitMiddleware,
     _InMemoryBucket,
 )

@@ -32,6 +32,7 @@ vi.mock('@/lib/auth-context', () => ({
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         login: vi.fn(),
+        getOnboardingStatus: vi.fn().mockResolvedValue({ is_complete: true }),
     },
 }));
 
@@ -52,6 +53,15 @@ describe('LoginPage', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        // Mock localStorage for onboarding check in LoginClient useEffect
+        vi.stubGlobal('localStorage', {
+            getItem: vi.fn().mockReturnValue(null),
+            setItem: vi.fn(),
+            removeItem: vi.fn(),
+            clear: vi.fn(),
+            length: 0,
+            key: vi.fn(),
+        });
         (useRouter as any).mockReturnValue({
             push: mockPush,
             replace: mockReplace,
