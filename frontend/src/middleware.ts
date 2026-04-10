@@ -181,7 +181,7 @@ function hasSomeSupabaseCookie(request: NextRequest): boolean {
  *
  * NOTE: This check does NOT verify token revocation (e.g. logout-all).
  * The middleware runs in Edge Runtime and cannot reach Redis. Revoked
- * tokens remain valid until their JWT `exp` claim (5 min default).
+ * tokens remain valid until their JWT `exp` claim (60 min default).
  * The backend /auth/refresh endpoint DOES check session revocation,
  * so revoked users cannot obtain new tokens — only ride out existing ones.
  *
@@ -290,7 +290,7 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             // Reject suspended/archived tenants — the tenant_status claim is
             // set at token creation and checked here to prevent suspended
             // tenants from accessing the app. Since JWTs are short-lived
-            // (5 min), the worst-case delay is one token lifetime.
+            // (60 min default), the worst-case delay is one token lifetime.
             const tenantStatus = payload.tenant_status as string | undefined;
             if (tenantStatus && tenantStatus !== 'active' && tenantStatus !== 'trial') {
                 if (process.env.NODE_ENV !== 'production') {
