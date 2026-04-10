@@ -19,6 +19,7 @@ from app.session_store import RedisSessionStore, SessionData
 from shared.supabase_client import get_supabase
 from shared.funnel_events import emit_funnel_event
 from shared.rate_limit import limiter
+from shared.pagination import PaginationParams
 
 import asyncio
 
@@ -522,22 +523,30 @@ async def refresh_session(
 
 @router.get("/sessions", dependencies=[Depends(get_current_user)])
 async def list_sessions(
+    pagination: PaginationParams = Depends(),
     current_user: UserModel = Depends(get_current_user),
-    session_store: RedisSessionStore = Depends(get_session_store)
+    session_store: RedisSessionStore = Depends(get_session_store),
 ):
     # Get all active sessions for user from Redis
     sessions = await session_store.list_user_sessions(current_user.id, active_only=True)
-    
-    return [
-        {
-            "id": str(s.id),
-            "created_at": s.created_at.isoformat(),
-            "last_used_at": s.last_used_at.isoformat(),
-            "user_agent": s.user_agent,
-            "ip_address": s.ip_address
-        }
-        for s in sessions
-    ]
+    total = len(sessions)
+    sessions = sessions[pagination.skip : pagination.skip + pagination.limit]
+
+    return {
+        "items": [
+            {
+                "id": str(s.id),
+                "created_at": s.created_at.isoformat(),
+                "last_used_at": s.last_used_at.isoformat(),
+                "user_agent": s.user_agent,
+                "ip_address": s.ip_address,
+            }
+            for s in sessions
+        ],
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
+    }
 
 @router.post("/sessions/{session_id}/revoke", dependencies=[Depends(get_current_user)])
 async def revoke_session(

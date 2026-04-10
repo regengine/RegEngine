@@ -304,67 +304,79 @@ class OverlayWriter:
         finally:
             await client.close()
 
-    async def list_controls(self, framework: Optional[str] = None) -> list[dict]:
-        """List all tenant controls, optionally filtered by framework.
+    async def list_controls(
+        self,
+        framework: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[dict], int]:
+        """List tenant controls with pagination, optionally filtered by framework.
 
         Args:
             framework: Optional framework filter (e.g., "NIST CSF", "SOC2")
+            skip: Number of records to skip
+            limit: Maximum records to return
 
         Returns:
-            List of control data as dicts
+            Tuple of (list of control dicts, total count)
         """
+        match_clause = "MATCH (c:TenantControl {tenant_id: $tenant_id})"
+        params: dict = {"tenant_id": str(self.tenant_id), "skip": skip, "limit": limit}
         if framework:
-            query = """
-            MATCH (c:TenantControl {tenant_id: $tenant_id, framework: $framework})
-            RETURN c
-            ORDER BY c.control_id
-            """
-            params = {"tenant_id": str(self.tenant_id), "framework": framework}
-        else:
-            query = """
-            MATCH (c:TenantControl {tenant_id: $tenant_id})
-            RETURN c
-            ORDER BY c.control_id
-            """
-            params = {"tenant_id": str(self.tenant_id)}
+            match_clause = "MATCH (c:TenantControl {tenant_id: $tenant_id, framework: $framework})"
+            params["framework"] = framework
+
+        count_query = f"{match_clause} RETURN count(c) AS total"
+        data_query = f"{match_clause} RETURN c ORDER BY c.control_id SKIP $skip LIMIT $limit"
 
         client = Neo4jClient(database=self.db_name)
         try:
             async with client.session() as session:
-                result = await session.run(query, params)
-                return [dict(record["c"]) async for record in result]
+                count_result = await session.run(count_query, params)
+                count_record = await count_result.single()
+                total = count_record["total"] if count_record else 0
+
+                result = await session.run(data_query, params)
+                items = [dict(record["c"]) async for record in result]
+                return items, total
         finally:
             await client.close()
 
-    async def list_products(self, product_type: Optional[str] = None) -> list[dict]:
-        """List all customer products, optionally filtered by type.
+    async def list_products(
+        self,
+        product_type: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[dict], int]:
+        """List customer products with pagination, optionally filtered by type.
 
         Args:
             product_type: Optional product type filter (e.g., "TRADING", "LENDING")
+            skip: Number of records to skip
+            limit: Maximum records to return
 
         Returns:
-            List of product data as dicts
+            Tuple of (list of product dicts, total count)
         """
+        match_clause = "MATCH (p:CustomerProduct {tenant_id: $tenant_id})"
+        params: dict = {"tenant_id": str(self.tenant_id), "skip": skip, "limit": limit}
         if product_type:
-            query = """
-            MATCH (p:CustomerProduct {tenant_id: $tenant_id, product_type: $product_type})
-            RETURN p
-            ORDER BY p.product_name
-            """
-            params = {"tenant_id": str(self.tenant_id), "product_type": product_type}
-        else:
-            query = """
-            MATCH (p:CustomerProduct {tenant_id: $tenant_id})
-            RETURN p
-            ORDER BY p.product_name
-            """
-            params = {"tenant_id": str(self.tenant_id)}
+            match_clause = "MATCH (p:CustomerProduct {tenant_id: $tenant_id, product_type: $product_type})"
+            params["product_type"] = product_type
+
+        count_query = f"{match_clause} RETURN count(p) AS total"
+        data_query = f"{match_clause} RETURN p ORDER BY p.product_name SKIP $skip LIMIT $limit"
 
         client = Neo4jClient(database=self.db_name)
         try:
             async with client.session() as session:
-                result = await session.run(query, params)
-                return [dict(record["p"]) async for record in result]
+                count_result = await session.run(count_query, params)
+                count_record = await count_result.single()
+                total = count_record["total"] if count_record else 0
+
+                result = await session.run(data_query, params)
+                items = [dict(record["p"]) async for record in result]
+                return items, total
         finally:
             await client.close()
 
