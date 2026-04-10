@@ -137,6 +137,52 @@ class APIClient {
       return config;
     });
 
+    // Response interceptor: on 401, attempt a silent token refresh via
+    // Supabase session and retry the original request once. This catches
+    // the edge case where the custom JWT expires between proactive refresh
+    // timer runs (e.g. laptop sleep/wake).
+    client.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+        if (
+          error.response?.status === 401 &&
+          !originalRequest._retried &&
+          typeof window !== 'undefined'
+        ) {
+          originalRequest._retried = true;
+          try {
+            // Dynamically import to avoid circular deps
+            const { createSupabaseBrowserClient } = await import('@/lib/supabase/client');
+            const supabase = createSupabaseBrowserClient();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.access_token) {
+              // Refresh the HTTP-only cookie with the current Supabase token
+              await fetch('/api/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  access_token: session.access_token,
+                  user: session.user ? {
+                    id: session.user.id,
+                    email: session.user.email || '',
+                    is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+                    status: 'active',
+                    role_name: session.user.user_metadata?.role || 'member',
+                  } : undefined,
+                }),
+              });
+              // Retry the original request — cookie is now refreshed
+              return client(originalRequest);
+            }
+          } catch {
+            // Refresh failed — fall through to original error
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+
     return client;
   }
 
