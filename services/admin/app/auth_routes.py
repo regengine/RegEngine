@@ -434,8 +434,9 @@ class RefreshRequest(BaseModel):
 @limiter.limit("10/minute")
 async def refresh_session(
     payload: RefreshRequest,
+    request: Request,
     db: Session = Depends(get_session),
-    session_store: RedisSessionStore = Depends(get_session_store)
+    session_store: RedisSessionStore = Depends(get_session_store),
 ):
     input_hash = hash_token(payload.refresh_token)
 
