@@ -358,56 +358,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription?.unsubscribe();
   }, [accessToken]);
 
-  // ---- Proactive token refresh timer ----
+  // ---- Proactive session keepalive ----
   // The custom JWT (re_access_token) expires after ACCESS_TOKEN_EXPIRE_MINUTES
-  // (default 60 min). Supabase sessions persist longer. This timer refreshes
-  // the custom JWT cookie from the Supabase session before expiration so the
-  // user isn't bounced to /login mid-session.
+  // (default 60 min). Before it expires, we clear the cookie so the middleware
+  // falls through to Supabase session validation (Strategy 2) instead of
+  // rejecting the expired JWT. The Supabase session persists much longer.
+  //
+  // NOTE: We do NOT write Supabase access tokens to re_access_token — the
+  // middleware verifies that cookie with the RegEngine HS256 signing key,
+  // not the Supabase RS256 key. Writing a Supabase JWT there would fail
+  // verification and trigger a redirect loop.
   const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    // Only run when authenticated
     if (!accessToken || !isHydrated) return;
 
-    const REFRESH_INTERVAL_MS = 45 * 60 * 1000; // Refresh every 45 min (before 60 min expiry)
+    // Clear the custom JWT cookie 5 min before it expires so the middleware
+    // falls through to Supabase session check on the next navigation.
+    const CLEAR_BEFORE_EXPIRY_MS = 55 * 60 * 1000; // 55 min (before 60 min expiry)
 
-    const refreshSession = async () => {
+    const clearExpiredCookie = async () => {
       try {
-        const supabase = createSupabaseBrowserClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token && session.user) {
-          // Re-write the session cookie with the current Supabase token
-          // This resets the re_access_token cookie to a fresh value that
-          // middleware will accept for another 60 minutes.
-          await setSessionCookies({
-            accessToken: session.access_token,
-            user: {
-              id: session.user.id,
-              email: session.user.email || '',
-              is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
-              status: 'active',
-              role_name: session.user.user_metadata?.role || 'member',
-            },
-          });
-          if (process.env.NODE_ENV !== 'production') {
-            console.info('[auth] Proactive token refresh succeeded');
-          }
+        // Delete only the re_access_token cookie — keep everything else
+        await fetch('/api/session/refresh', { method: 'POST', credentials: 'include' });
+        if (process.env.NODE_ENV !== 'production') {
+          console.info('[auth] Cleared expired re_access_token — Supabase session will take over');
         }
       } catch {
-        if (process.env.NODE_ENV !== 'production') {
-          console.warn('[auth] Proactive token refresh failed — session may expire');
-        }
+        // Best effort — if this fails, middleware will redirect to login on next navigation
       }
     };
 
-    // Run immediately on mount (covers the case where page was open but idle)
-    // then set up the recurring timer.
-    refreshSession();
-    refreshTimerRef.current = setInterval(refreshSession, REFRESH_INTERVAL_MS);
+    refreshTimerRef.current = setTimeout(clearExpiredCookie, CLEAR_BEFORE_EXPIRY_MS);
 
     return () => {
       if (refreshTimerRef.current) {
-        clearInterval(refreshTimerRef.current);
+        clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
       }
     };

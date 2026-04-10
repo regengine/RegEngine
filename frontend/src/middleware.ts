@@ -324,16 +324,15 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             return NextResponse.next({ request: { headers: requestHeaders ?? request.headers } });
         }
         // Token exists but verification failed (expired or invalid signature).
-        // Do NOT fall back to cookie presence — an expired JWT must trigger re-auth.
-        // This prevents a compromised or expired token from being silently bypassed.
+        // Instead of immediately redirecting, clear the stale cookie and fall
+        // through to Strategy 2 (Supabase session). The Supabase session often
+        // outlives the short-lived custom JWT, so this keeps users logged in
+        // across page refreshes without requiring a full re-login.
         if (process.env.NODE_ENV !== 'production') {
-            console.info('[middleware] JWT verification failed — redirecting to login');
+            console.info('[middleware] JWT verification failed — clearing stale cookie, trying Supabase');
         }
-        const url = request.nextUrl.clone();
-        url.pathname = '/login';
-        url.searchParams.set('next', pathname);
-        url.searchParams.set('error', 'session_expired');
-        return NextResponse.redirect(url);
+        // Fall through to Strategy 2 below (do NOT return/redirect here).
+        // The stale cookie will be cleared in the response if Supabase succeeds.
     }
 
     // Strategy 2: Check Supabase session
@@ -416,6 +415,11 @@ async function requireAppAuth(request: NextRequest, requestHeaders?: Headers): P
             if (!isSysadmin) {
                 return NextResponse.redirect(new URL('/dashboard', request.url));
             }
+        }
+        // If we fell through from a failed/expired custom JWT, clear the stale
+        // re_access_token cookie so subsequent requests don't retry the bad token.
+        if (reToken) {
+            supabaseResponse.cookies.delete('re_access_token');
         }
         // Forward x-nonce via Supabase response cookies (supabaseResponse is a NextResponse.next())
         if (requestHeaders) {
