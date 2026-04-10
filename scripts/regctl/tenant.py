@@ -23,6 +23,7 @@ Usage:
 """
 
 import click
+import re
 import sys
 import os
 from pathlib import Path
@@ -38,6 +39,17 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from services.graph.app.neo4j_utils import Neo4jClient
+
+# Allowlist: only alphanumeric + underscore allowed in schema/database names.
+# Prevents SQL/Cypher injection when names are interpolated into DDL statements.
+_SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z0-9_]+$')
+
+
+def _validate_identifier(name: str, label: str = "identifier") -> str:
+    """Validate that a schema or database name contains only safe characters."""
+    if not _SAFE_IDENTIFIER_RE.match(name):
+        raise ValueError(f"Invalid {label}: {name!r} — only alphanumeric and underscore allowed")
+    return name
 
 
 class TenantManager:
@@ -224,7 +236,9 @@ class TenantManager:
 
         try:
             engine = create_engine(database_url, pool_pre_ping=True)
-            schema_name = f"tenant_{str(tenant_id).replace('-', '_')}"
+            schema_name = _validate_identifier(
+                f"tenant_{str(tenant_id).replace('-', '_')}", "schema name"
+            )
 
             with engine.connect() as conn:
                 # Create schema
@@ -243,7 +257,9 @@ class TenantManager:
     def _create_neo4j_database(self, tenant_id: UUID):
         """Create Neo4j database for tenant."""
         try:
-            db_name = f"reg_tenant_{tenant_id}".replace('-', '_')
+            db_name = _validate_identifier(
+                f"reg_tenant_{tenant_id}".replace('-', '_'), "Neo4j database name"
+            )
 
             # Note: This requires Neo4j Enterprise and admin access
             # In demo mode, this may fail - that's okay
@@ -310,7 +326,9 @@ class TenantManager:
     def _delete_neo4j_database(self, tenant_id: UUID):
         """Delete Neo4j database for tenant."""
         try:
-            db_name = f"reg_tenant_{tenant_id}".replace('-', '_')
+            db_name = _validate_identifier(
+                f"reg_tenant_{tenant_id}".replace('-', '_'), "Neo4j database name"
+            )
 
             # Note: This requires Neo4j Enterprise
             try:
@@ -330,7 +348,9 @@ class TenantManager:
 
         try:
             engine = create_engine(database_url, pool_pre_ping=True)
-            schema_name = f"tenant_{str(tenant_id).replace('-', '_')}"
+            schema_name = _validate_identifier(
+                f"tenant_{str(tenant_id).replace('-', '_')}", "schema name"
+            )
 
             with engine.connect() as conn:
                 # Drop schema and all objects in it

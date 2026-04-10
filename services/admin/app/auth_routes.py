@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from datetime import timedelta, datetime, timezone
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from uuid import UUID
 import uuid
@@ -102,8 +102,8 @@ async def _persist_session(
     )
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: str = Field(max_length=255)
+    password: str = Field(max_length=128)
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -114,9 +114,9 @@ class TokenResponse(BaseModel):
     available_tenants: List[Dict]
 
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    tenant_name: str
+    email: str = Field(max_length=255)
+    password: str = Field(max_length=128)
+    tenant_name: str = Field(max_length=100)
 
 class UserResponse(BaseModel):
     id: UUID
@@ -267,6 +267,7 @@ async def login(
 
 
 @router.post("/signup", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def signup(
     payload: RegisterRequest,
     request: Request,
@@ -430,6 +431,7 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def refresh_session(
     payload: RefreshRequest,
     db: Session = Depends(get_session),
