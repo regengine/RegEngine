@@ -30,7 +30,6 @@ from services.shared.request_workflow import (
     VALID_SUBMISSION_TYPES,
     WORKFLOW_STAGES,
     RequestWorkflow,
-    _format_countdown,
 )
 
 
@@ -297,7 +296,8 @@ class TestCheckBlockingDefects:
             # 3. unevaluated events
             # 4. signoff types
             # 5. identity review
-            # 6. non-critical warnings
+            # 6. stale evaluations
+            # 7. non-critical warnings
             idx = call_count[0]
 
             if idx == 1:
@@ -314,6 +314,9 @@ class TestCheckBlockingDefects:
                 # identity review queue
                 mock_result.mappings.return_value.fetchall.return_value = []
             elif idx == 6:
+                # stale evaluations
+                mock_result.mappings.return_value.fetchall.return_value = []
+            elif idx == 7:
                 # non-critical count
                 mock_result.scalar.return_value = 0
             return mock_result
@@ -383,7 +386,7 @@ class TestCheckDeadlineStatus:
         db.execute.return_value = mock_result
         return wf
 
-    @patch("services.shared.request_workflow.logger")
+    @patch("services.shared.request_workflow.assembly.logger")
     def test_overdue_classification(self, _mock_logger):
         rows = [{
             "request_case_id": "c1",
@@ -401,7 +404,7 @@ class TestCheckDeadlineStatus:
         assert len(cases) == 1
         assert cases[0]["urgency"] == "overdue"
 
-    @patch("services.shared.request_workflow.logger")
+    @patch("services.shared.request_workflow.assembly.logger")
     def test_critical_classification(self, _mock_logger):
         rows = [{
             "request_case_id": "c1",
@@ -450,7 +453,7 @@ class TestCheckDeadlineStatus:
         cases = wf.check_deadline_status(TENANT)
         assert cases[0]["urgency"] == "normal"
 
-    @patch("services.shared.request_workflow.logger")
+    @patch("services.shared.request_workflow.assembly.logger")
     def test_boundary_2_hours_is_critical(self, _mock_logger):
         """<2 hours = critical, so 1.99 hours should be critical."""
         rows = [{
@@ -564,36 +567,7 @@ class TestSubmitPackage:
 
 
 # ---------------------------------------------------------------------------
-# 10. _format_countdown helper
-# ---------------------------------------------------------------------------
-
-class TestFormatCountdown:
-    def test_overdue_format(self):
-        result = _format_countdown(-2.5)
-        assert "OVERDUE" in result
-        assert "2h" in result
-
-    def test_hours_and_minutes(self):
-        result = _format_countdown(3.5)
-        assert "3h 30m remaining" == result
-
-    def test_days_format(self):
-        result = _format_countdown(50.0)
-        assert "2d" in result
-        assert "remaining" in result
-
-    def test_zero_hours_overdue(self):
-        result = _format_countdown(0)
-        assert "OVERDUE" in result
-
-    def test_just_under_one_day(self):
-        result = _format_countdown(23.5)
-        assert "23h" in result
-        assert "remaining" in result
-
-
-# ---------------------------------------------------------------------------
-# 11. Amendment — state enforcement
+# 10. Amendment — state enforcement
 # ---------------------------------------------------------------------------
 
 class TestCreateAmendment:
