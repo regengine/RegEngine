@@ -106,8 +106,6 @@ services:
       REGENGINE_ENV: ${REGENGINE_ENV:-development}
       # Override DATABASE_URL to use the async admin database
       DATABASE_URL: ${ADMIN_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
-      # PCOS payroll database (shares regengine_admin schema)
-      ENTERTAINMENT_DATABASE_URL: ${ENTERTAINMENT_DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-regengine}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/regengine_admin}
       # Supabase — required for password reset and auth token validation.
       # In Railway: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the admin service.
       SUPABASE_URL: ${SUPABASE_URL:-}

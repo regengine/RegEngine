@@ -15,8 +15,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -110,60 +109,6 @@ class ProductProfileRequest(BaseModel):
     retailer_relationships: Optional[List[str]] = None
 
 
-class CreateSnapshotRequest(BaseModel):
-    """Request to create a compliance snapshot."""
-
-    snapshot_name: str = Field(..., description="Name for this snapshot (e.g., 'Pre-Audit Q1 2026')")
-    snapshot_reason: Optional[str] = Field(None, description="Reason for creating snapshot")
-    created_by: str = Field(..., description="User ID creating the snapshot")
-
-
-class SnapshotResponse(BaseModel):
-    """Response for snapshot endpoints."""
-
-    id: str
-    tenant_id: str
-    snapshot_name: str
-    snapshot_reason: Optional[str]
-    created_by: str
-    compliance_status: str
-    compliance_status_emoji: str
-    active_alert_count: int
-    critical_alert_count: int
-    completeness_score: Optional[float]
-    content_hash: str
-    hash_algorithm: str
-    integrity_verified: bool
-    is_verified: bool
-    verified_at: Optional[str]
-    verified_by: Optional[str]
-    captured_at: str
-    created_at: str
-
-
-class SnapshotSummaryResponse(BaseModel):
-    """Summary response for snapshot list."""
-
-    id: str
-    tenant_id: str
-    snapshot_name: str
-    compliance_status: str
-    compliance_status_emoji: str
-    active_alert_count: int
-    critical_alert_count: int
-    content_hash: str
-    integrity_verified: bool
-    captured_at: str
-    created_by: str
-
-
-class AttestSnapshotRequest(BaseModel):
-    """Request to attest to a compliance snapshot."""
-
-    attested_by: str = Field(..., description="Full name of the person attesting (e.g., 'Jane Smith')")
-    attestation_title: str = Field(..., description="Title/role of the attesting person (e.g., 'VP Operations')")
-
-
 # ===========================================================================
 # Endpoints
 # ===========================================================================
@@ -177,13 +122,10 @@ def get_compliance_status(
     """Get current compliance status for a tenant.
 
     This is the "big status widget" that shows:
-    - ✅ COMPLIANT / ⚠️ AT_RISK / 🚨 NON_COMPLIANT
+    - COMPLIANT / AT_RISK / NON_COMPLIANT
     - Active alert count
     - Countdown to next deadline
     - List of active alerts
-
-    This is what an executive looks at to answer:
-    "Are we safe right now?"
     """
     try:
         service = ComplianceServiceSync(session)
@@ -202,11 +144,7 @@ def list_alerts(
     offset: int = Query(default=0, ge=0, description="Number of alerts to skip"),
     session=Depends(get_session),
 ) -> List[AlertResponse]:
-    """List alerts for a tenant with pagination.
-
-    Returns alerts ordered by creation date (newest first).
-    Filter by status to see only active alerts.
-    """
+    """List alerts for a tenant with pagination."""
     try:
         service = ComplianceServiceSync(session)
         alerts = service.get_alerts(
@@ -250,11 +188,7 @@ def acknowledge_alert(
     request: AlertActionRequest,
     session=Depends(get_session),
 ) -> AlertResponse:
-    """Mark an alert as acknowledged.
-
-    This indicates the user has seen the alert but hasn't completed
-    the required action yet. The countdown continues.
-    """
+    """Mark an alert as acknowledged."""
     try:
         service = ComplianceServiceSync(session)
         alert = service.acknowledge_alert(UUID(alert_id), request.user_id)
@@ -275,11 +209,7 @@ def resolve_alert(
     request: AlertActionRequest,
     session=Depends(get_session),
 ) -> AlertResponse:
-    """Resolve an alert.
-
-    This indicates the required action has been completed.
-    The alert is marked as resolved and the tenant's status is recalculated.
-    """
+    """Resolve an alert."""
     try:
         service = ComplianceServiceSync(session)
         alert = service.resolve_alert(
@@ -302,14 +232,8 @@ def create_alert(
     request: CreateAlertRequest,
     session=Depends(get_session),
 ) -> AlertResponse:
-    """Manually create a compliance alert.
-
-    Typically alerts are created automatically by the scheduler
-    when external events are detected. This endpoint allows manual
-    alert creation for testing or ad-hoc situations.
-    """
+    """Manually create a compliance alert."""
     try:
-        # Map string to enum
         source_type = AlertSourceType[request.source_type]
         severity = AlertSeverity[request.severity]
 
@@ -337,11 +261,7 @@ def get_product_profile(
     tenant_id: str,
     session=Depends(get_session),
 ) -> Dict[str, Any]:
-    """Get tenant's product profile for alert matching.
-
-    The product profile determines which external events
-    (recalls, warnings, etc.) apply to this tenant.
-    """
+    """Get tenant's product profile for alert matching."""
     try:
         service = ComplianceServiceSync(session)
         profile = service.get_product_profile(UUID(tenant_id))
@@ -366,20 +286,7 @@ def update_product_profile(
     request: ProductProfileRequest,
     session=Depends(get_session),
 ) -> Dict[str, Any]:
-    """Update tenant's product profile.
-
-    Set the product categories, supply regions, and other
-    attributes used to match external alerts to this tenant.
-
-    Example:
-    ```json
-    {
-        "product_categories": ["leafy_greens", "romaine_lettuce"],
-        "supply_regions": ["CA", "AZ"],
-        "retailer_relationships": ["walmart", "costco"]
-    }
-    ```
-    """
+    """Update tenant's product profile."""
     try:
         service = ComplianceServiceSync(session)
         profile = service.update_product_profile(
@@ -393,289 +300,4 @@ def update_product_profile(
         return profile.to_dict()
     except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
         logger.exception("update_profile_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-# ===========================================================================
-# SNAPSHOT ENDPOINTS - Proof-of-Compliance for Audit Defense
-# ===========================================================================
-
-
-@router.post("/snapshots/{tenant_id}", dependencies=[Depends(PermissionChecker("audit.create"))])
-def create_snapshot(
-    tenant_id: str,
-    request: CreateSnapshotRequest,
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Create a point-in-time compliance snapshot.
-
-    Captures the current compliance state with cryptographic hash.
-    Use before audits to freeze what was true at a specific moment.
-
-    The content_hash ensures the snapshot cannot be tampered with.
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        snapshot = service.create_snapshot(
-            tenant_id=UUID(tenant_id),
-            snapshot_name=request.snapshot_name,
-            snapshot_reason=request.snapshot_reason,
-            created_by=request.created_by,
-        )
-        return snapshot.to_dict()
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
-        logger.exception("create_snapshot_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/snapshots/{tenant_id}", dependencies=[Depends(PermissionChecker("audit.read"))])
-def list_snapshots(
-    tenant_id: str,
-    limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of snapshots to return"),
-    offset: int = Query(default=0, ge=0, description="Number of snapshots to skip"),
-    session=Depends(get_session),
-) -> List[Dict[str, Any]]:
-    """List compliance snapshots for a tenant with pagination.
-
-    Returns snapshots in reverse chronological order (newest first).
-    Use to view snapshot history and select one for verification/export.
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        snapshots = service.list_snapshots(UUID(tenant_id), limit=limit, offset=offset)
-        return [s.to_summary_dict() for s in snapshots]
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
-        logger.exception("list_snapshots_failed", tenant_id=tenant_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/snapshots/{tenant_id}/diff", dependencies=[Depends(PermissionChecker("audit.read"))])
-def diff_snapshots(
-    tenant_id: str,
-    snapshot_a: str = Query(..., description="ID of first (older) snapshot"),
-    snapshot_b: str = Query(..., description="ID of second (newer) snapshot"),
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Compare two snapshots and return the differences.
-
-    Shows what changed between two compliance states:
-    - Status changes (COMPLIANT → NON_COMPLIANT)
-    - Alert count changes
-    - New alerts added
-    - Alerts resolved
-
-    Useful for audit reporting and timeline reconstruction.
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        result = service.diff_snapshots(UUID(snapshot_a), UUID(snapshot_b))
-        if "error" in result:
-            raise HTTPException(status_code=404, detail=result["error"])
-        return result
-    except HTTPException:
-        raise
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
-        logger.exception("diff_snapshots_failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/snapshots/{tenant_id}/{snapshot_id}", dependencies=[Depends(PermissionChecker("audit.read"))])
-def get_snapshot(
-    tenant_id: str,
-    snapshot_id: str,
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Get a single snapshot with full details.
-
-    Includes all captured data: status, alerts, profile.
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        snapshot = service.get_snapshot(UUID(snapshot_id))
-        if not snapshot:
-            raise HTTPException(status_code=404, detail="Snapshot not found")
-        if str(snapshot.tenant_id) != tenant_id:
-            raise HTTPException(status_code=403, detail="Snapshot belongs to different tenant")
-        return snapshot.to_dict()
-    except HTTPException:
-        raise
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError) as e:
-        logger.exception("get_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/snapshots/{tenant_id}/{snapshot_id}/verify", dependencies=[Depends(PermissionChecker("audit.read"))])
-def verify_snapshot(
-    tenant_id: str,
-    snapshot_id: str,
-    verified_by: str = Query(..., description="User ID performing verification"),
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Verify snapshot integrity.
-
-    Recomputes the SHA-256 hash and compares to stored hash.
-    If valid, marks the snapshot as verified with timestamp.
-
-    Returns:
-    - is_valid: whether the hash matches
-    - stored_hash: the original hash
-    - computed_hash: the recomputed hash
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        result = service.verify_snapshot_integrity(UUID(snapshot_id), verified_by)
-        if "error" in result:
-            raise HTTPException(status_code=404, detail=result["error"])
-        return result
-    except HTTPException:
-        raise
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
-        logger.exception("verify_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@router.get("/snapshots/{tenant_id}/{snapshot_id}/export", dependencies=[Depends(PermissionChecker("audit.export"))])
-def export_snapshot(
-    tenant_id: str,
-    snapshot_id: str,
-    format: str = Query("json", description="Export format: json"),
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Export snapshot in audit-ready format.
-
-    Returns a complete export package with:
-    - Snapshot metadata
-    - Compliance state at time of capture
-    - All captured data (status, alerts, profile)
-    - Integrity verification with hash
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        result = service.export_snapshot(UUID(snapshot_id), format)
-        if "error" in result:
-            raise HTTPException(status_code=404, detail=result["error"])
-        return result
-    except HTTPException:
-        raise
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
-        logger.exception("export_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/snapshots/{tenant_id}/{snapshot_id}/audit-pack", dependencies=[Depends(PermissionChecker("audit.read"))])
-def get_audit_pack(
-    tenant_id: str,
-    snapshot_id: str,
-    session=Depends(get_session),
-) -> Response:
-    """Generate and return a Zero-Trust Audit Pack ZIP."""
-    service = ComplianceServiceSync(session)
-    try:
-        content, filename = service.generate_audit_pack(UUID(snapshot_id))
-        return Response(
-            content=content,
-            media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename={filename}"},
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except (AttributeError, TypeError, RuntimeError, OSError) as e:
-        logger.exception("audit_pack_generation_failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.post("/snapshots/{tenant_id}/{snapshot_id}/attest", dependencies=[Depends(PermissionChecker("audit.create"))])
-def attest_snapshot(
-    tenant_id: str,
-    snapshot_id: str,
-    request: AttestSnapshotRequest,
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Attest to a snapshot, taking owner accountability.
-
-    This creates a legal binding between the person and the compliance state.
-    Once attested:
-    - The snapshot becomes a commitment
-    - The user's name is permanently attached
-    - Alerts bound to this snapshot can be resolved
-
-    Use this ONLY when ready to take personal responsibility for the
-    compliance state at the time of capture.
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        result = service.attest_snapshot(
-            snapshot_id=UUID(snapshot_id),
-            attested_by=request.attested_by,
-            attestation_title=request.attestation_title,
-        )
-        if "error" in result:
-            raise HTTPException(status_code=400, detail=result["error"])
-        return result
-    except HTTPException:
-        raise
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
-        logger.exception("attest_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-class RefreezeRequest(BaseModel):
-    """Request to re-freeze a stale/invalid snapshot."""
-    created_by: str = Field(..., description="User email performing the re-freeze")
-
-
-@router.post("/snapshots/{tenant_id}/{snapshot_id}/refreeze", dependencies=[Depends(PermissionChecker("audit.create"))])
-def refreeze_snapshot(
-    tenant_id: str,
-    snapshot_id: str,
-    request: RefreezeRequest,
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Re-freeze a stale or invalid snapshot.
-
-    Creates a fresh snapshot with current compliance state,
-    inheriting the original's trigger alert and regulatory citation.
-    Use when a snapshot has degraded but you need fresh evidence.
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        snapshot = service.refreeze_snapshot(
-            original_snapshot_id=UUID(snapshot_id),
-            created_by=request.created_by,
-        )
-        return snapshot.to_dict()
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except (AttributeError, TypeError, RuntimeError, OSError) as e:
-        logger.exception("refreeze_snapshot_failed", snapshot_id=snapshot_id, error=str(e))
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/snapshots/{tenant_id}/{snapshot_id}/fda-response", dependencies=[Depends(PermissionChecker("audit.export"))])
-def get_fda_response(
-    tenant_id: str,
-    snapshot_id: str,
-    session=Depends(get_session),
-) -> Dict[str, Any]:
-    """Generate a regulator-grade explanation for FDA response.
-
-    Returns pre-formatted text that can be directly copied
-    into a regulatory response document.
-
-    Includes:
-    - Formal header with snapshot ID and hash
-    - Compliance status at time of capture
-    - Alert details
-    - Attestation information (if attested)
-    - Cryptographic verification statement
-    """
-    try:
-        service = ComplianceServiceSync(session)
-        result = service.generate_fda_response(UUID(snapshot_id))
-        if "error" in result:
-            raise HTTPException(status_code=404, detail=result["error"])
-        return result
-    except HTTPException:
-        raise
-    except (AttributeError, TypeError, ValueError, RuntimeError, OSError, KeyError) as e:
-        logger.exception("generate_fda_response_failed", snapshot_id=snapshot_id, error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")

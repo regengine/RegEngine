@@ -424,10 +424,6 @@ if _router_enabled("admin"):
     from services.admin.app.audit_routes import router as admin_audit_router
     app.include_router(admin_audit_router, tags=["Admin Audit"])
 
-    if os.getenv("ENABLE_PCOS", "false").lower() == "true":
-        from services.admin.app.pcos import router as pcos_router
-        app.include_router(pcos_router, tags=["PCOS"])
-
 
 # =====================================================================
 # DOMAIN: GRAPH — knowledge graph, traceability, lot tracing

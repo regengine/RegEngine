@@ -264,12 +264,7 @@ app.include_router(tenant_settings_router, prefix="/v1")
 from app.bulk_upload.routes import router as bulk_upload_router
 app.include_router(bulk_upload_router, prefix="/v1/supplier/bulk-upload", tags=["Supplier Onboarding Bulk"])
 
-# Production Compliance OS (CA/LA) — gated behind ENABLE_PCOS to keep FSMA 204 focused
-if os.getenv("ENABLE_PCOS", "false").lower() == "true":
-    from app.pcos import router as pcos_router
-    app.include_router(pcos_router)
-
-# Legacy verticals router removed — non-FSMA verticals pruned
+# PCOS (film/TV) vertical removed — FSMA 204 only
 
 # Review Queue for curator workflow
 from app.review_routes import router as review_router

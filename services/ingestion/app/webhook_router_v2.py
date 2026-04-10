@@ -280,19 +280,16 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 # Shipping events should NOT create new TLCs — the TLC must already
                 # exist in prior events (harvesting, packing, etc.)
                 if event.cte_type.value in ("shipping", "transformation"):
-                    try:
-                        prior = db_session.execute(
-                            text("""
-                                SELECT COUNT(*) FROM fsma.cte_events
-                                WHERE tenant_id = :tid
-                                  AND traceability_lot_code = :tlc
-                                  AND event_type NOT IN ('shipping', 'transformation')
-                            """),
-                            {"tid": tenant_id, "tlc": event.traceability_lot_code},
-                        ).scalar()
-                        passed = (prior or 0) > 0
-                    except (SQLAlchemyError, ValueError, RuntimeError) as _db_err:
-                        passed = True  # Don't block ingest on query failure
+                    prior = db_session.execute(
+                        text("""
+                            SELECT COUNT(*) FROM fsma.cte_events
+                            WHERE tenant_id = :tid
+                              AND traceability_lot_code = :tlc
+                              AND event_type NOT IN ('shipping', 'transformation')
+                        """),
+                        {"tid": tenant_id, "tlc": event.traceability_lot_code},
+                    ).scalar()
+                    passed = (prior or 0) > 0
                 else:
                     passed = True
             elif validation_rule == "downstream_transmitted":
@@ -314,22 +311,19 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
             elif validation_rule == "record_exists":
                 # Verify that records exist in the chain for this TLC
                 # (i.e., this isn't an orphan event with no audit trail)
-                try:
-                    chain_count = db_session.execute(
-                        text("""
-                            SELECT COUNT(*) FROM fsma.hash_chain h
-                            JOIN fsma.cte_events e ON e.id = h.cte_event_id
-                            WHERE e.tenant_id = :tid
-                              AND e.traceability_lot_code = :tlc
-                        """),
-                        {"tid": tenant_id, "tlc": event.traceability_lot_code},
-                    ).scalar()
-                    # For first event of a TLC, chain_count will be 0 (just ingested,
-                    # chain entry may not exist yet). Allow it.
-                    # For subsequent events, at least 1 prior chain entry should exist.
-                    passed = True  # Chain is verified at scoring time; here we just check existence
-                except (SQLAlchemyError, ValueError, RuntimeError) as _db_err:
-                    passed = True  # Don't block ingest on query failure
+                chain_count = db_session.execute(
+                    text("""
+                        SELECT COUNT(*) FROM fsma.hash_chain h
+                        JOIN fsma.cte_events e ON e.id = h.cte_event_id
+                        WHERE e.tenant_id = :tid
+                          AND e.traceability_lot_code = :tlc
+                    """),
+                    {"tid": tenant_id, "tlc": event.traceability_lot_code},
+                ).scalar()
+                # For first event of a TLC, chain_count will be 0 (just ingested,
+                # chain entry may not exist yet). Allow it.
+                # For subsequent events, at least 1 prior chain entry should exist.
+                passed = True  # Chain is verified at scoring time; here we just check existence
 
             if not passed:
                 severity = "critical" if risk == "CRITICAL" else "warning"
