@@ -15,9 +15,6 @@ class Settings(ObjectStorageMixin, BaseServiceSettings):
     admin_master_key: str
     kafka_bootstrap: str = "redpanda:9092"
 
-    # Object storage bucket
-    pcos_bucket: str = Field(default="reg-engine-pcos-data-dev", alias="PCOS_DATA_BUCKET")
-
     # File upload limits
     max_upload_size_mb: int = Field(default=512, alias="MAX_UPLOAD_SIZE_MB")
 

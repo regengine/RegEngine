@@ -1,0 +1,30 @@
+-- V40: PCOS vertical removed from codebase
+--
+-- The PCOS (Production Compliance OS) film/TV vertical was removed from the
+-- application codebase in PR #XXX. All Python code, models, routes, tests,
+-- and configuration have been deleted.
+--
+-- The 38 pcos_* database tables are RETAINED in PostgreSQL for data archival.
+-- Do NOT drop these tables until confirming no data recovery is needed.
+--
+-- Related migrations (kept for history):
+--   V12: production_compliance_init
+--   V13: budget_intelligence_tables
+--   V14: tax_credit_tables
+--   V15: form_autofill_tables
+--   V16: classification_tables
+--   V17: paperwork_visa_tables
+--   V18: audit_provenance_tables
+--   V19: authority_lineage_tables
+--   V20: schema_governance
+--   V21: vertical_expansion
+--   V22: immutable_evidence_log
+--   V25: migrate_pcos_to_entertainment_db
+--   V27.5: add_tenant_id_to_pcos_tables
+--   V28: rls_pcos_vertical_tables
+--
+-- Future migration: DROP TABLE pcos_* after confirming tables are empty
+-- or data has been exported.
+
+-- No-op: this migration exists solely as documentation.
+SELECT 1;
