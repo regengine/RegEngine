@@ -11,7 +11,7 @@ def add_security(app: FastAPI):
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_origin_regex=r"https://.*\.(up\.railway\.app|vercel\.app)",
+        allow_origin_regex=r"https://regengine[a-z0-9-]*\.(up\.railway\.app|vercel\.app)",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[

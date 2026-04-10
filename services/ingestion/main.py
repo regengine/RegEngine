@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+
 # --- Standardized Bootstrap ---
 import sys
 from pathlib import Path
@@ -65,44 +65,7 @@ app = FastAPI(
     openapi_url=None if _is_prod else "/openapi.json",
 )
 
-# CORS configuration — explicit origins only, never wildcard with credentials
-_PROD_ORIGINS = [
-    "https://regengine.co",
-    "https://www.regengine.co",
-]
-_DEV_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-]
-_raw_cors = settings.allowed_origins
-if _raw_cors:
-    allowed_origins = [o.strip() for o in _raw_cors.split(",") if o.strip()]
-    if "*" in allowed_origins:
-        import warnings
-        warnings.warn(
-            "ALLOWED_ORIGINS contains '*' which is insecure with allow_credentials=True. "
-            "Falling back to production origins.",
-            stacklevel=2,
-        )
-        allowed_origins = _PROD_ORIGINS
-else:
-    allowed_origins = _PROD_ORIGINS if _is_prod else _DEV_ORIGINS
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=[
-        "Authorization",
-        "Content-Type",
-        "X-RegEngine-API-Key",
-        "X-Requested-With",
-        "X-Request-ID",
-    ],
-)
-
-# Production Hardening Middleware (Phase 18)
+# CORS is handled by add_security() via shared middleware (single source of truth).
 add_security(app)
 add_rate_limiting(app)
 add_observability(app, service_name="ingestion-service")
