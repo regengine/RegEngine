@@ -154,34 +154,33 @@ class AssemblyMixin:
         except Exception:
             logger.debug("rule_versions_snapshot_skipped", exc_info=True)
 
-        # Snapshot identity state at assembly time
+        # Snapshot identity state at assembly time (single query with LEFT JOIN
+        # to avoid N+1 — previously fired one alias query per entity).
         identity_state = {}
         try:
             ent_result = self.db.execute(
                 text("""
-                    SELECT entity_id, canonical_name, entity_type, confidence_score
-                    FROM fsma.canonical_entities
-                    WHERE tenant_id = :tenant_id
+                    SELECT e.entity_id, e.canonical_name, e.entity_type,
+                           e.confidence_score, a.alias_value, a.alias_type
+                    FROM fsma.canonical_entities e
+                    LEFT JOIN fsma.entity_aliases a ON a.entity_id = e.entity_id
+                    WHERE e.tenant_id = :tenant_id
                 """),
                 {"tenant_id": tenant_id},
             )
-            for ent in ent_result.mappings().fetchall():
-                eid = str(ent["entity_id"])
-                aliases = []
-                try:
-                    al_result = self.db.execute(
-                        text("SELECT alias_value, alias_type FROM fsma.entity_aliases WHERE entity_id = :eid"),
-                        {"eid": eid},
+            for row in ent_result.mappings().fetchall():
+                eid = str(row["entity_id"])
+                if eid not in identity_state:
+                    identity_state[eid] = {
+                        "name": row.get("canonical_name"),
+                        "type": row.get("entity_type"),
+                        "confidence": float(row["confidence_score"]) if row.get("confidence_score") else None,
+                        "aliases": [],
+                    }
+                if row.get("alias_value"):
+                    identity_state[eid]["aliases"].append(
+                        {"value": row["alias_value"], "type": row["alias_type"]}
                     )
-                    aliases = [{"value": a["alias_value"], "type": a["alias_type"]} for a in al_result.mappings().fetchall()]
-                except Exception:
-                    logger.debug("entity_aliases_snapshot_skipped", exc_info=True)
-                identity_state[eid] = {
-                    "name": ent.get("canonical_name"),
-                    "type": ent.get("entity_type"),
-                    "confidence": float(ent["confidence_score"]) if ent.get("confidence_score") else None,
-                    "aliases": aliases,
-                }
         except Exception:
             logger.debug("identity_state_snapshot_skipped", exc_info=True)
 
