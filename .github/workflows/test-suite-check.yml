@@ -6,6 +6,8 @@ on:
       - 'services/**'
       - 'shared/**'
       - 'kernel/**'
+      - 'tests/**'
+      - 'pyproject.toml'
       - 'requirements.txt'
       - '.github/workflows/test-suite-check.yml'
   push:
@@ -14,6 +16,8 @@ on:
       - 'services/**'
       - 'shared/**'
       - 'kernel/**'
+      - 'tests/**'
+      - 'pyproject.toml'
       - 'requirements.txt'
       - '.github/workflows/test-suite-check.yml'
 
@@ -22,12 +26,45 @@ permissions:
   checks: write
 
 jobs:
+  # ── Root test suite collection guard ────────────────────
+  # Catches broken imports / missing modules before they silently zero-out the suite.
+  root-test-collection:
+    name: Root tests collect (min 500)
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services:${{ github.workspace }}/services/ingestion:${{ github.workspace }}/services/nlp:${{ github.workspace }}/services/admin
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install pytest pytest-asyncio
+
+      - name: Collect root tests and enforce minimum count
+        run: |
+          COLLECTED=$(python3 -m pytest tests/ --collect-only -q 2>&1 | tail -1)
+          echo "Collection result: $COLLECTED"
+          # Extract the count of collected tests (e.g. "598 tests collected")
+          COUNT=$(echo "$COLLECTED" | grep -oP '^\d+' || echo "0")
+          echo "Collected $COUNT tests"
+          if [ "$COUNT" -lt 500 ]; then
+            echo "::error::Root test collection fell below 500 (got $COUNT). This likely means a broken import or missing module."
+            python3 -m pytest tests/ --collect-only -q 2>&1 | grep "ERROR" || true
+            exit 1
+          fi
+          echo "✓ $COUNT root tests collected (minimum: 500)"
+
+  # ── Per-service collection checks ───────────────────────
   test-environment-check:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         service: [admin, compliance, graph, ingestion, nlp, scheduler]
-    
+
     env:
       PYTHONPATH: ${{ github.workspace }}
     steps:
