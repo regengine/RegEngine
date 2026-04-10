@@ -5,7 +5,7 @@ description = "RegEngine: The Regulatory Intelligence Platform"
 authors = ["RegEngine Engineering <admin@regengine.io>"]
 readme = "README.md"
 packages = [
-    { include = "shared", from = "." },
+    { include = "shared", from = "services" },
     { include = "kernel", from = "." },
     { include = "plugins", from = "." }
 ]
@@ -111,6 +111,7 @@ line_length = 120
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = "-ra -q --asyncio-mode=auto"
+pythonpath = [".", "services", "services/ingestion", "services/nlp", "services/admin"]
 testpaths = [
     "tests",
     "kernel/obligation/tests",
