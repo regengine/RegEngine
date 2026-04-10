@@ -20,6 +20,7 @@ from pydantic import BaseModel, EmailStr
 import redis.asyncio as aioredis
 
 from shared.blocked_email_domains import is_personal_email, extract_domain
+from shared.rate_limit import limiter
 
 logger = structlog.get_logger("tool_verification")
 
@@ -158,6 +159,7 @@ EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
 @router.post("/verify-email", response_model=VerifyEmailResponse)
+@limiter.limit("3/minute")
 async def verify_email(payload: VerifyEmailRequest, request: Request):
     """Step 1 — submit work email, receive a 6-digit code."""
     email = payload.email.strip().lower()
