@@ -277,8 +277,8 @@ def test_create_and_list_tlcs_with_event_counts(client: TestClient):
     list_response_before = client.get(f"/v1/supplier/tlcs?facility_id={facility_id}")
     assert list_response_before.status_code == 200
     list_payload_before = list_response_before.json()
-    assert len(list_payload_before) == 1
-    assert list_payload_before[0]["event_count"] == 0
+    assert list_payload_before["total"] == 1
+    assert list_payload_before["items"][0]["event_count"] == 0
 
     submit_response = client.post(
         f"/v1/supplier/facilities/{facility_id}/cte-events",
@@ -293,9 +293,9 @@ def test_create_and_list_tlcs_with_event_counts(client: TestClient):
     list_response_after = client.get(f"/v1/supplier/tlcs?facility_id={facility_id}")
     assert list_response_after.status_code == 200
     list_payload_after = list_response_after.json()
-    assert len(list_payload_after) == 1
-    assert list_payload_after[0]["tlc_code"] == "TLC-2026-SAL-1234"
-    assert list_payload_after[0]["event_count"] == 1
+    assert list_payload_after["total"] == 1
+    assert list_payload_after["items"][0]["tlc_code"] == "TLC-2026-SAL-1234"
+    assert list_payload_after["items"][0]["event_count"] == 1
 
 
 def test_compliance_score_increases_after_missing_required_cte_submission(client: TestClient):
