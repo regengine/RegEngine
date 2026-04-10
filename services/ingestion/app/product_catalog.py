@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.webhook_compat import _verify_api_key
+from shared.pagination import PaginationParams
 
 logger = logging.getLogger("product-catalog")
 
@@ -421,6 +422,7 @@ def _memory_learn(tenant_id: str, gtin: str, name: str, facility: str, now: str)
 async def get_catalog(
     tenant_id: str,
     category: str | None = None,
+    pagination: PaginationParams = Depends(),
     _: None = Depends(_verify_api_key),
 ) -> ProductCatalogResponse:
     """Get product catalog for a tenant. Uses Supabase, falls back to memory."""
@@ -430,9 +432,11 @@ async def get_catalog(
         all_products = _db_get_catalog(tenant_id) if category else products
         categories = sorted(set(p.category for p in (all_products or []) if p.category))
         ftl_count = sum(1 for p in (all_products or []) if p.ftl_covered)
+        total = len(products)
+        products = products[pagination.skip : pagination.skip + pagination.limit]
         return ProductCatalogResponse(
             tenant_id=tenant_id,
-            total=len(products),
+            total=total,
             ftl_covered=ftl_count,
             categories=categories,
             products=products,
@@ -446,9 +450,11 @@ async def get_catalog(
         mem_products = [p for p in mem_products if p.category == category]
     categories = sorted(set(p.category for p in _catalog_store[tenant_id]))
     ftl_count = sum(1 for p in _catalog_store[tenant_id] if p.ftl_covered)
+    total = len(mem_products)
+    mem_products = mem_products[pagination.skip : pagination.skip + pagination.limit]
     return ProductCatalogResponse(
         tenant_id=tenant_id,
-        total=len(mem_products),
+        total=total,
         ftl_covered=ftl_count,
         categories=categories,
         products=mem_products,

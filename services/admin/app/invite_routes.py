@@ -11,7 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 import structlog
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import func, select
+
+from shared.pagination import PaginationParams
 
 from app.database import get_session
 from app.sqlalchemy_models import InviteModel, RoleModel, UserModel, MembershipModel
@@ -217,21 +219,31 @@ async def create_invite(
 
 @router.get("/admin/invites", dependencies=[Depends(PermissionChecker("users.read"))])
 async def list_invites(
-    db: Session = Depends(get_session)
+    pagination: PaginationParams = Depends(),
+    db: Session = Depends(get_session),
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    stmt = select(InviteModel).where(
+
+    base_filter = [
         InviteModel.tenant_id == tenant_id,
         InviteModel.accepted_at.is_(None),
         InviteModel.revoked_at.is_(None),
-        InviteModel.expires_at > datetime.now(timezone.utc)
-    ).order_by(InviteModel.created_at.desc())
-    
+        InviteModel.expires_at > datetime.now(timezone.utc),
+    ]
+
+    # Count total
+    total = db.execute(
+        select(func.count()).select_from(InviteModel).where(*base_filter)
+    ).scalar()
+
+    stmt = select(InviteModel).where(
+        *base_filter
+    ).order_by(InviteModel.created_at.desc()).offset(pagination.skip).limit(pagination.limit)
+
     invites = db.execute(stmt).scalars().all()
-    
+
     # Simple serialization
     results = []
     for inv in invites:
@@ -243,7 +255,7 @@ async def list_invites(
             "created_at": inv.created_at,
             "expires_at": inv.expires_at
         })
-    return results
+    return {"items": results, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 @router.post("/admin/invites/{invite_id}/revoke", dependencies=[Depends(PermissionChecker("users.invite"))])
 async def revoke_invite(
