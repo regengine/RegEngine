@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 from app.tenant_validation import validate_tenant_id
+from shared.pagination import PaginationParams
 
 logger = logging.getLogger("alerts")
 
@@ -418,6 +419,7 @@ async def get_alerts(
     severity: Optional[str] = None,
     category: Optional[str] = None,
     acknowledged: Optional[bool] = None,
+    pagination: PaginationParams = Depends(),
     _: None = Depends(_verify_api_key),
 ) -> AlertsResponse:
     validate_tenant_id(tenant_id)
@@ -454,10 +456,12 @@ async def get_alerts(
         alerts = [alert for alert in alerts if alert.acknowledged == acknowledged]
 
     unack = sum(1 for alert in alerts if not alert.acknowledged)
+    total = len(alerts)
+    alerts = alerts[pagination.skip : pagination.skip + pagination.limit]
 
     return AlertsResponse(
         tenant_id=tenant_id,
-        total=len(alerts),
+        total=total,
         unacknowledged=unack,
         alerts=alerts,
     )

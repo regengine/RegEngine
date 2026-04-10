@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.pagination import PaginationParams
 
 logger = logging.getLogger("rules-router")
 
@@ -120,6 +121,7 @@ async def list_rules(
     category: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     cte_type: Optional[str] = Query(None),
+    pagination: PaginationParams = Depends(),
     principal: IngestionPrincipal = Depends(require_permission("rules.read")),
     db_session=Depends(_get_db_session),
 ):
@@ -136,6 +138,9 @@ async def list_rules(
         rules = [r for r in rules if r.severity == severity]
     if cte_type:
         rules = engine.get_applicable_rules(cte_type, rules)
+
+    total = len(rules)
+    rules = rules[pagination.skip : pagination.skip + pagination.limit]
 
     return {
         "rules": [
@@ -154,7 +159,9 @@ async def list_rules(
             }
             for r in rules
         ],
-        "total": len(rules),
+        "total": total,
+        "skip": pagination.skip,
+        "limit": pagination.limit,
     }
 
 

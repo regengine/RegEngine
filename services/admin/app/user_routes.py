@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from typing import List, Optional
 from uuid import UUID
 from datetime import datetime
@@ -13,6 +13,7 @@ from app.sqlalchemy_models import UserModel, MembershipModel, RoleModel
 from app.dependencies import get_current_user, PermissionChecker
 from app.audit import AuditLogger
 from app.models import TenantContext
+from shared.pagination import PaginationParams, PaginatedResponse
 
 router = APIRouter()
 logger = structlog.get_logger("user_routes")
@@ -38,24 +39,36 @@ class RoleResponse(BaseModel):
 
 # --- Endpoints ---
 
-@router.get("/admin/users", response_model=List[UserResponse], dependencies=[Depends(PermissionChecker("users.read"))])
+@router.get("/admin/users", response_model=PaginatedResponse[UserResponse], dependencies=[Depends(PermissionChecker("users.read"))])
 async def list_users(
-    db: Session = Depends(get_session)
+    pagination: PaginationParams = Depends(),
+    db: Session = Depends(get_session),
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
+
+    # Count total
+    count_stmt = (
+        select(func.count())
+        .select_from(UserModel)
+        .join(MembershipModel, UserModel.id == MembershipModel.user_id)
+        .where(MembershipModel.tenant_id == tenant_id)
+    )
+    total = db.execute(count_stmt).scalar()
+
     # helper for explicit join
     stmt = (
         select(UserModel, MembershipModel, RoleModel)
         .join(MembershipModel, UserModel.id == MembershipModel.user_id)
         .join(RoleModel, MembershipModel.role_id == RoleModel.id)
         .where(MembershipModel.tenant_id == tenant_id)
+        .offset(pagination.skip)
+        .limit(pagination.limit)
     )
-    
+
     rows = db.execute(stmt).all()
-    
+
     results = []
     for user, membership, role in rows:
         results.append(UserResponse(
@@ -67,8 +80,8 @@ async def list_users(
             role_name=role.name,
             created_at=user.created_at
         ))
-        
-    return results
+
+    return PaginatedResponse(items=results, total=total, skip=pagination.skip, limit=pagination.limit)
 
 @router.patch("/admin/users/{user_id}/role", dependencies=[Depends(PermissionChecker("users.manage_roles"))])
 async def update_user_role(
@@ -247,22 +260,28 @@ async def reactivate_user(
     db.commit()
     return {"status": "reactivated"}
 
-@router.get("/admin/roles", response_model=List[RoleResponse], dependencies=[Depends(PermissionChecker("users.read"))])
+@router.get("/admin/roles", response_model=PaginatedResponse[RoleResponse], dependencies=[Depends(PermissionChecker("users.read"))])
 async def list_roles(
-    db: Session = Depends(get_session)
+    pagination: PaginationParams = Depends(),
+    db: Session = Depends(get_session),
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    # Return System roles (tenant_id is NULL) AND Custom roles (tenant_id matches)
-    # Actually, simplistic RBAC: just show all roles visible to tenant?
-    stmt = select(RoleModel).where(
+
+    # Count total
+    count_stmt = select(func.count()).select_from(RoleModel).where(
         (RoleModel.tenant_id == tenant_id) | (RoleModel.tenant_id.is_(None))
     )
+    total = db.execute(count_stmt).scalar()
+
+    # Return System roles (tenant_id is NULL) AND Custom roles (tenant_id matches)
+    stmt = select(RoleModel).where(
+        (RoleModel.tenant_id == tenant_id) | (RoleModel.tenant_id.is_(None))
+    ).offset(pagination.skip).limit(pagination.limit)
     roles = db.execute(stmt).scalars().all()
-    
+
     results = []
     for r in roles:
         results.append(RoleResponse(id=r.id, name=r.name, is_system=r.tenant_id is None))
-    return results
+    return PaginatedResponse(items=results, total=total, skip=pagination.skip, limit=pagination.limit)

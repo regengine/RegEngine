@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from shared.pagination import PaginationParams
+
 from app.database import get_session
 from app.dependencies import get_current_user
 from app.models import TenantContext
@@ -51,26 +53,35 @@ async def get_ftl_categories(
     return {"categories": FTL_CATEGORY_CATALOG}
 
 
-@router.get("/facilities", response_model=list[SupplierFacilityResponse])
+@router.get("/facilities")
 async def list_supplier_facilities(
+    pagination: PaginationParams = Depends(),
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_session),
-) -> list[SupplierFacilityResponse]:
+):
     """List all facilities belonging to the current supplier user."""
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
+    base_filter = [
+        SupplierFacilityModel.tenant_id == tenant_id,
+        SupplierFacilityModel.supplier_user_id == current_user.id,
+    ]
+
+    total = db.execute(
+        select(func.count()).select_from(SupplierFacilityModel).where(*base_filter)
+    ).scalar()
+
     rows = db.scalars(
         select(SupplierFacilityModel)
-        .where(
-            SupplierFacilityModel.tenant_id == tenant_id,
-            SupplierFacilityModel.supplier_user_id == current_user.id,
-        )
+        .where(*base_filter)
         .order_by(SupplierFacilityModel.created_at.desc())
+        .offset(pagination.skip)
+        .limit(pagination.limit)
     ).all()
 
-    return [
+    items = [
         SupplierFacilityResponse(
             id=str(f.id),
             name=f.name,
@@ -83,6 +94,7 @@ async def list_supplier_facilities(
         )
         for f in rows
     ]
+    return {"items": items, "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
 
 @router.post("/facilities", response_model=SupplierFacilityResponse)
@@ -373,20 +385,21 @@ async def create_tlc(
     )
 
 
-@router.get("/tlcs", response_model=list[SupplierTLCResponse])
+@router.get("/tlcs")
 async def list_tlcs(
     facility_id: str | None = None,
+    pagination: PaginationParams = Depends(),
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_session),
-) -> list[SupplierTLCResponse]:
+):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
-    lot_query = select(SupplierTraceabilityLotModel).where(
+    base_filters = [
         SupplierTraceabilityLotModel.tenant_id == tenant_id,
         SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
-    )
+    ]
 
     if facility_id:
         try:
@@ -399,11 +412,22 @@ async def list_tlcs(
             supplier_user_id=current_user.id,
             facility_id=facility_uuid,
         )
-        lot_query = lot_query.where(SupplierTraceabilityLotModel.facility_id == facility_uuid)
+        base_filters.append(SupplierTraceabilityLotModel.facility_id == facility_uuid)
 
-    lots = db.execute(lot_query.order_by(SupplierTraceabilityLotModel.created_at.desc())).scalars().all()
+    total = db.execute(
+        select(func.count()).select_from(SupplierTraceabilityLotModel).where(*base_filters)
+    ).scalar()
+
+    lot_query = (
+        select(SupplierTraceabilityLotModel)
+        .where(*base_filters)
+        .order_by(SupplierTraceabilityLotModel.created_at.desc())
+        .offset(pagination.skip)
+        .limit(pagination.limit)
+    )
+    lots = db.execute(lot_query).scalars().all()
     if not lots:
-        return []
+        return {"items": [], "total": total, "skip": pagination.skip, "limit": pagination.limit}
 
     lot_ids = [lot.id for lot in lots]
     counts = db.execute(
@@ -419,7 +443,7 @@ async def list_tlcs(
     ).all()
     count_map = {lot_id: int(count) for lot_id, count in counts}
 
-    return [
+    items = [
         SupplierTLCResponse(
             id=str(lot.id),
             facility_id=str(lot.facility_id),
@@ -431,3 +455,4 @@ async def list_tlcs(
         )
         for lot in lots
     ]
+    return {"items": items, "total": total, "skip": pagination.skip, "limit": pagination.limit}
