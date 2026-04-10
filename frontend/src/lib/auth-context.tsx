@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { User } from '@/types/api';
 import { apiClient } from './api-client';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -357,6 +357,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     return () => subscription?.unsubscribe();
   }, [accessToken]);
+
+  // ---- Proactive token refresh timer ----
+  // The custom JWT (re_access_token) expires after ACCESS_TOKEN_EXPIRE_MINUTES
+  // (default 60 min). Supabase sessions persist longer. This timer refreshes
+  // the custom JWT cookie from the Supabase session before expiration so the
+  // user isn't bounced to /login mid-session.
+  const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Only run when authenticated
+    if (!accessToken || !isHydrated) return;
+
+    const REFRESH_INTERVAL_MS = 45 * 60 * 1000; // Refresh every 45 min (before 60 min expiry)
+
+    const refreshSession = async () => {
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token && session.user) {
+          // Re-write the session cookie with the current Supabase token
+          // This resets the re_access_token cookie to a fresh value that
+          // middleware will accept for another 60 minutes.
+          await setSessionCookies({
+            accessToken: session.access_token,
+            user: {
+              id: session.user.id,
+              email: session.user.email || '',
+              is_sysadmin: session.user.user_metadata?.is_sysadmin || false,
+              status: 'active',
+              role_name: session.user.user_metadata?.role || 'member',
+            },
+          });
+          if (process.env.NODE_ENV !== 'production') {
+            console.info('[auth] Proactive token refresh succeeded');
+          }
+        }
+      } catch {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('[auth] Proactive token refresh failed — session may expire');
+        }
+      }
+    };
+
+    // Run immediately on mount (covers the case where page was open but idle)
+    // then set up the recurring timer.
+    refreshSession();
+    refreshTimerRef.current = setInterval(refreshSession, REFRESH_INTERVAL_MS);
+
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+    };
+  }, [accessToken, isHydrated]);
 
   const setApiKey = useCallback(async (key: string | null) => {
     if (key) {
