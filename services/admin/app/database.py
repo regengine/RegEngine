@@ -9,10 +9,6 @@ import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
-# PCOS models are registered with Base.metadata at import time.
-# Keep this import so Alembic --autogenerate can see them.
-from . import pcos_models  # noqa: F401
-
 logger = structlog.get_logger("admin-db")
 
 
@@ -57,32 +53,6 @@ SessionLocal = sessionmaker(
     future=True,
 )
 
-# PCOS tables: Entertainment DB was planned but not yet provisioned.
-# Fall back to admin DB engine until ENTERTAINMENT_DATABASE_URL is configured.
-_entertainment_url = os.getenv("ENTERTAINMENT_DATABASE_URL")
-if _entertainment_url:
-    _entertainment_engine = create_engine(
-        _sqlalchemy_url(_entertainment_url),
-        pool_pre_ping=True,
-        future=True,
-        pool_size=int(os.getenv("ENTERTAINMENT_DB_POOL_SIZE", "10")),
-        max_overflow=int(os.getenv("ENTERTAINMENT_DB_MAX_OVERFLOW", "20")),
-        pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "300")),
-    )
-    logger.info("entertainment_database_configured", url=_entertainment_url.split("@")[-1])
-else:
-    _entertainment_engine = _engine
-    logger.warning("entertainment_database_not_configured_using_admin_db")
-
-EntertainmentSessionLocal = sessionmaker(
-    bind=_entertainment_engine,
-    autoflush=False,
-    autocommit=False,
-    expire_on_commit=False,
-    future=True,
-)
-
-
 def init_db() -> None:
     """Create RLS helper functions on startup. Schema is managed by Alembic.
 
@@ -94,7 +64,7 @@ def init_db() -> None:
 
     if dialect == "sqlite":
         # SQLite dev fallback: create only core auth tables (no Alembic, no RLS).
-        # PCOS models use PostgreSQL ARRAY types incompatible with SQLite.
+        # SQLite dev fallback doesn't support PostgreSQL ARRAY types.
         from .sqlalchemy_models import (
             Base, TenantModel, UserModel, RoleModel, MembershipModel,
             AuditLogModel, InviteModel, SessionModel, ReviewItemModel,
@@ -154,22 +124,8 @@ def get_session() -> Iterator[Session]:
     """Provide a SQLAlchemy session for FastAPI dependencies.
     
     This returns a session connected to the Admin DB for core tables.
-    For PCOS operations, use get_pcos_session() instead.
     """
     session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-
-def get_pcos_session() -> Iterator[Session]:
-    """Provide a SQLAlchemy session for PCOS operations (Entertainment DB).
-    
-    All PCOS models (38 tables prefixed with pcos_*) are in the Entertainment database
-    as of the V002 migration on Jan 31, 2026. Use this session for all PCOS routes.
-    """
-    session = EntertainmentSessionLocal()
     try:
         yield session
     finally:
@@ -180,31 +136,10 @@ def get_tenant_session(
     tenant_id: str,
 ) -> Iterator[Session]:
     """Provide a tenant-aware SQLAlchemy session (Admin DB).
-
-    For PCOS operations with tenant isolation, use get_pcos_tenant_session() instead.
     """
     session = SessionLocal()
     try:
         if tenant_id and _engine.dialect.name != "sqlite":
-            session.execute(
-                text("SET LOCAL app.tenant_id = :tenant"),
-                {"tenant": tenant_id},
-            )
-        yield session
-    finally:
-        session.close()
-
-
-def get_pcos_tenant_session(
-    tenant_id: str,
-) -> Iterator[Session]:
-    """Provide a tenant-aware SQLAlchemy session for PCOS operations (Entertainment DB).
-
-    Use this for PCOS routes that need tenant isolation (most PCOS operations).
-    """
-    session = EntertainmentSessionLocal()
-    try:
-        if tenant_id and _entertainment_engine.dialect.name != "sqlite":
             session.execute(
                 text("SET LOCAL app.tenant_id = :tenant"),
                 {"tenant": tenant_id},
@@ -228,14 +163,3 @@ async def get_async_session() -> AsyncIterator[Session]:
         session.close()
 
 
-async def get_async_pcos_session() -> AsyncIterator[Session]:
-    """Provide an async-compatible SQLAlchemy session for PCOS operations (Entertainment DB).
-    
-    Note: This wraps the synchronous session. For true async,
-    use asyncpg with SQLAlchemy 2.0 async engine.
-    """
-    session = EntertainmentSessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()

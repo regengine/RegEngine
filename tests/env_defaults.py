@@ -18,7 +18,6 @@ _DEFAULTS = {
     # Database
     "DATABASE_URL": "postgresql://regengine:regengine@localhost:5432/regengine_admin",
     "ADMIN_DATABASE_URL": "postgresql+psycopg://regengine:regengine@localhost:5432/regengine_admin",
-    "ENTERTAINMENT_DATABASE_URL": "postgresql+psycopg://regengine:regengine@localhost:5432/entertainment",
     # Auth
     "AUTH_SECRET_KEY": "dev_secret_key_change_me",
     "ADMIN_MASTER_KEY": "admin-master-key-dev",
