@@ -3,7 +3,7 @@
 Supports standard Phase 17/18 HealthCheck class and legacy health functions.
 """
 
-from typing import Dict, Any, List, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 from fastapi import FastAPI, APIRouter
 import inspect
 import time

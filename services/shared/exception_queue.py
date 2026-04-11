@@ -15,8 +15,6 @@ Usage:
     svc.resolve_exception(tenant_id, case_id, resolution_summary)
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from collections import defaultdict

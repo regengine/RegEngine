@@ -33,7 +33,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 

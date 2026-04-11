@@ -4,8 +4,6 @@ This module provides the single source of truth for all data contracts
 across NLP, Review, and Graph services, preventing schema drift.
 """
 
-from __future__ import annotations
-
 import re
 from datetime import datetime, timezone
 from enum import Enum
