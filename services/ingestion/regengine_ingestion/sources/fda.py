@@ -2,7 +2,7 @@
 
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional
 
 import httpx
@@ -27,7 +27,7 @@ class FDAAdapter(SourceAdapter):
         # Without key: 40 requests/min. With key: 240 requests/min.
         rpm = 240 if api_key else 40
         self.rate_limiter = RateLimiter(requests_per_minute=rpm)
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=30.0)
         self.session.headers.update({"User-Agent": self.user_agent})
         self.api_key = api_key
     
@@ -94,7 +94,7 @@ class FDAAdapter(SourceAdapter):
             # Build source metadata
             source_metadata = SourceMetadata(
                 source_url=url, # openFDA search URL
-                fetch_timestamp=datetime.utcnow(),
+                fetch_timestamp=datetime.now(timezone.utc),
                 http_status=response.status_code,
                 http_headers=dict(response.headers)
             )

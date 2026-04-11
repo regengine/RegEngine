@@ -10,7 +10,7 @@ Supports layout-aware table extraction to correctly associate line items
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -352,7 +352,7 @@ class FSMAExtractor:
             document_id=document_id,
             document_type=doc_type,
             ctes=ctes,
-            extraction_timestamp=datetime.utcnow().isoformat() + "Z",
+            extraction_timestamp=datetime.now(timezone.utc).isoformat(),
             raw_text=text[:1000] if text else None,  # Store first 1000 chars
             warnings=warnings,
             line_items=line_items,
@@ -406,7 +406,7 @@ class FSMAExtractor:
         return {
             "topic": topic,
             "payload": self.to_graph_event(result),
-            "routed_at": datetime.utcnow().isoformat() + "Z",
+            "routed_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def _classify_document(self, text: str) -> DocumentType:

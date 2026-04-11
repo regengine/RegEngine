@@ -1,7 +1,7 @@
 """eCFR source adapter."""
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional
 
 import httpx
@@ -24,7 +24,7 @@ class ECFRAdapter(SourceAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rate_limiter = RateLimiter(requests_per_minute=30)  # Conservative rate limit
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=30.0)
         self.session.headers.update({"User-Agent": self.user_agent})
     
     def get_source_name(self) -> str:
@@ -54,7 +54,7 @@ class ECFRAdapter(SourceAdapter):
             
         # eCFR API endpoint for a specific part
         # URL pattern: /content/v1/full/{date}/title-{title}.xml?part={part}
-        date_str = datetime.utcnow().strftime("%Y-%m-%d")
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         url = f"{self.BASE_URL}/content/v1/full/{date_str}/title-{cfr_title}.xml"
         params = {"part": str(cfr_part)}
         
@@ -86,7 +86,7 @@ class ECFRAdapter(SourceAdapter):
         # Build source metadata
         source_metadata = SourceMetadata(
             source_url=f"{url}?part={cfr_part}",
-            fetch_timestamp=datetime.utcnow(),
+            fetch_timestamp=datetime.now(timezone.utc),
             http_status=response.status_code,
             http_headers=dict(response.headers),
             etag=response.headers.get("ETag")

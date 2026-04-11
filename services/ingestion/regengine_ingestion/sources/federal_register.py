@@ -1,7 +1,7 @@
 """Federal Register source adapter."""
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional
 from urllib.parse import urlencode
 
@@ -25,7 +25,7 @@ class FederalRegisterAdapter(SourceAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rate_limiter = RateLimiter(requests_per_minute=60)
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=30.0)
         self.session.headers.update({"User-Agent": self.user_agent})
     
     def get_source_name(self) -> str:
@@ -132,7 +132,7 @@ class FederalRegisterAdapter(SourceAdapter):
             # Build source metadata
             source_metadata = SourceMetadata(
                 source_url=full_text_url,
-                fetch_timestamp=datetime.utcnow(),
+                fetch_timestamp=datetime.now(timezone.utc),
                 http_status=doc_response.status_code,
                 http_headers=dict(doc_response.headers),
                 etag=doc_response.headers.get("ETag"),

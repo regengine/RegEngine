@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 import structlog
@@ -63,7 +63,7 @@ async def get_coverage_card(
         "check_interval": "24 hours",
         "enforcement_status": "FDA not enforcing before July 20, 2028 (Congressional directive)",
         # last_request_at reflects the time of this API call, not an actual verification event
-        "last_request_at": datetime.utcnow().isoformat(),
+        "last_request_at": datetime.now(timezone.utc).isoformat(),
         "compliance_deadline": "2028-07-20"
     }
 
@@ -135,7 +135,7 @@ async def export_fda_request_sheet(
             ])
             
         csv_content = csv_buffer.getvalue()
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"fda_sortable_spreadsheet_{start_date}_{end_date}_{timestamp}.csv"
         
         logger.info("fda_request_export_completed", count=len(events))
@@ -271,7 +271,7 @@ async def export_epcis(
             ],
             "type": "EPCISDocument",
             "schemaVersion": "2.0",
-            "creationDate": datetime.utcnow().isoformat() + "Z",
+            "creationDate": datetime.now(timezone.utc).isoformat(),
             "epcisBody": {
                 "eventList": epcis_events
             },
@@ -285,7 +285,7 @@ async def export_epcis(
             }
         }
         
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         
         if format == "xml":
             # Convert to XML format
@@ -468,7 +468,7 @@ async def export_trace_csv(
         csv_content = csv_buffer.getvalue()
 
         # Generate filename
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"fsma_trace_{direction}_{tlc}_{timestamp}.csv"
 
         logger.info(
@@ -547,7 +547,7 @@ async def export_recall_contacts(
             )
 
         csv_content = csv_buffer.getvalue()
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"recall_contacts_{tlc}_{timestamp}.csv"
 
         logger.info(
@@ -712,7 +712,7 @@ async def export_gaps_csv(
             )
 
         csv_content = csv_buffer.getvalue()
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         filename = f"fsma_compliance_gaps_{timestamp}.csv"
 
         return StreamingResponse(
@@ -920,7 +920,7 @@ async def get_compliance_score(
 
     Falls back to a plausible demo payload when the tenant has no graph data.
     """
-    generated_at = datetime.utcnow().isoformat() + "Z"
+    generated_at = datetime.now(timezone.utc).isoformat()
 
     try:
         async with Neo4jClient() as client:

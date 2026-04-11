@@ -3,7 +3,7 @@
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 
@@ -42,7 +42,7 @@ class RateLimiter:
                 time.sleep(sleep_time)
         
         self._buckets[domain] = time.time()
-        self._last_request[domain] = datetime.utcnow()
+        self._last_request[domain] = datetime.now(timezone.utc)
     
     def record_error(self, domain: str) -> Optional[float]:
         """
@@ -92,7 +92,7 @@ class RateLimiter:
             # Try as HTTP date
             try:
                 retry_time = datetime.strptime(retry_after, "%a, %d %b %Y %H:%M:%S GMT")
-                wait_seconds = (retry_time - datetime.utcnow()).total_seconds()
+                wait_seconds = (retry_time - datetime.now(timezone.utc)).total_seconds()
                 if wait_seconds > 0:
                     time.sleep(wait_seconds)
             except ValueError:

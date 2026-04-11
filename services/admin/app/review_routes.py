@@ -12,7 +12,7 @@ as a convenience alias for the frontend review UI.
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 from shared.auth import APIKey, require_api_key
 
@@ -75,7 +75,7 @@ async def get_review_queue(
                 confidence_score=item.get("confidence_score", 0.0),
                 source_text=item.get("text_raw", ""),
                 extracted_data=item.get("extraction", {}),
-                created_at=item.get("created_at", datetime.utcnow()),
+                created_at=item.get("created_at", datetime.now(timezone.utc)),
                 status=item.get("status", "PENDING"),
             )
             for item in result.get("items", [])

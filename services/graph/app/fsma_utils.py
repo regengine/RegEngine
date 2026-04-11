@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -1135,7 +1135,7 @@ async def find_orphaned_lots(
     start_time = time.time()
 
     # Calculate cutoff date
-    cutoff_date = (datetime.utcnow() - timedelta(days=days_stagnant)).strftime(
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=days_stagnant)).strftime(
         "%Y-%m-%d"
     )
 
@@ -1194,7 +1194,7 @@ async def find_orphaned_lots(
             if last_date:
                 try:
                     last_dt = datetime.strptime(str(last_date)[:10], "%Y-%m-%d")
-                    stagnant = (datetime.utcnow() - last_dt).days
+                    stagnant = (datetime.now(timezone.utc) - last_dt).days
                 except (ValueError, TypeError):
                     stagnant = days_stagnant  # Default if date parsing fails
             else:

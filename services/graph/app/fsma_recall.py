@@ -22,7 +22,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 import inspect
@@ -120,7 +120,7 @@ class RecallDrill:
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()
         elif self.started_at:
-            return (datetime.utcnow() - self.started_at).total_seconds()
+            return (datetime.now(timezone.utc) - self.started_at).total_seconds()
         return None
 
     @property
@@ -129,7 +129,7 @@ class RecallDrill:
         if not self.started_at:
             return SLAStatus.MET
 
-        elapsed = (datetime.utcnow() - self.started_at).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.started_at).total_seconds()
         sla_limit = 24 * 3600  # 24 hours in seconds
 
         if self.status == RecallStatus.COMPLETED:
@@ -524,7 +524,7 @@ class MockRecallEngine:
         drill = RecallDrill(
             drill_id=f"drill_{uuid.uuid4().hex[:12]}",
             tenant_id=tenant_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             drill_type=drill_type,
             severity=severity,
             target_lot=target_lot,
@@ -561,7 +561,7 @@ class MockRecallEngine:
         import time
 
         drill.status = RecallStatus.IN_PROGRESS
-        drill.started_at = datetime.utcnow()
+        drill.started_at = datetime.now(timezone.utc)
 
         start_time = time.time()
         errors: List[str] = []
@@ -712,7 +712,7 @@ class MockRecallEngine:
             )
 
             drill.status = RecallStatus.COMPLETED
-            drill.completed_at = datetime.utcnow()
+            drill.completed_at = datetime.now(timezone.utc)
             drill.result = result
 
         except Exception as e:
@@ -728,7 +728,7 @@ class MockRecallEngine:
                 errors=errors,
             )
             drill.status = RecallStatus.FAILED
-            drill.completed_at = datetime.utcnow()
+            drill.completed_at = datetime.now(timezone.utc)
             drill.result = result
 
         # Update SLA metrics
@@ -790,7 +790,7 @@ class MockRecallEngine:
         metrics["avg_trace_time"] = (
             metrics["total_trace_time"] / metrics["total_drills"]
         )
-        metrics["last_drill_at"] = datetime.utcnow().isoformat()
+        metrics["last_drill_at"] = datetime.now(timezone.utc).isoformat()
 
         # Calculate compliance rate
         metrics["sla_compliance_rate"] = (
@@ -866,7 +866,7 @@ class MockRecallEngine:
         """Cancel a pending or in-progress drill."""
         if drill.status in (RecallStatus.PENDING, RecallStatus.IN_PROGRESS):
             drill.status = RecallStatus.CANCELLED
-            drill.completed_at = datetime.utcnow()
+            drill.completed_at = datetime.now(timezone.utc)
             engine = self._get_engine()
             if engine is not None:
                 _update_drill_row(engine, drill)
@@ -916,7 +916,7 @@ class MockRecallEngine:
             drill_type=drill_type,
             severity=severity,
             frequency_days=frequency_days,
-            next_run=datetime.utcnow() + timedelta(days=frequency_days),
+            next_run=datetime.now(timezone.utc) + timedelta(days=frequency_days),
             target_strategy=target_strategy,
             specific_targets=specific_targets,
         )
@@ -956,7 +956,7 @@ class MockRecallEngine:
         if frequency_days is not None:
             schedule.frequency_days = frequency_days
             # Recalculate next run
-            base = schedule.last_run or datetime.utcnow()
+            base = schedule.last_run or datetime.now(timezone.utc)
             schedule.next_run = base + timedelta(days=frequency_days)
 
         return schedule
@@ -972,7 +972,7 @@ class MockRecallEngine:
 
     def check_due_schedules(self, tenant_id: str) -> List[ScheduledDrill]:
         """Get schedules that are due for execution."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         schedules = self._schedules.get(tenant_id, [])
         return [s for s in schedules if s.enabled and s.next_run <= now]
 
@@ -1007,9 +1007,9 @@ class MockRecallEngine:
         await self.execute_drill(drill)
 
         # Update schedule
-        schedule.last_run = datetime.utcnow()
+        schedule.last_run = datetime.now(timezone.utc)
         schedule.last_result = drill.drill_id
-        schedule.next_run = datetime.utcnow() + timedelta(days=schedule.frequency_days)
+        schedule.next_run = datetime.now(timezone.utc) + timedelta(days=schedule.frequency_days)
 
         return drill
 
@@ -1029,7 +1029,7 @@ class MockRecallEngine:
             d
             for d in completed_drills
             if d.completed_at
-            and d.completed_at > datetime.utcnow() - timedelta(days=365)
+            and d.completed_at > datetime.now(timezone.utc) - timedelta(days=365)
         ]
 
         # Drill frequency analysis
@@ -1038,7 +1038,7 @@ class MockRecallEngine:
                 d
                 for d in recent_drills
                 if d.completed_at
-                and d.completed_at > datetime.utcnow() - timedelta(days=90)
+                and d.completed_at > datetime.now(timezone.utc) - timedelta(days=90)
             ]
         )
 
@@ -1056,7 +1056,7 @@ class MockRecallEngine:
 
         return {
             "tenant_id": tenant_id,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "overall_readiness": (
                 "ready"
                 if sla_metrics.get("sla_compliance_rate", 0) >= 95

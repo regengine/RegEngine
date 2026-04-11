@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -79,7 +79,7 @@ class IngestionEngine:
         
         # Start job
         job.status = JobStatus.RUNNING
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         
         documents = []
         errors = []
@@ -173,8 +173,8 @@ class IngestionEngine:
             job.error_details = {"exception": type(e).__name__}
         
         finally:
-            job.completed_at = datetime.utcnow()
-            job.updated_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
+            job.updated_at = datetime.now(timezone.utc)
         
         return IngestionResult(
             job=job,

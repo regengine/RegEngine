@@ -1,7 +1,7 @@
 """FSMA 204 source adapter."""
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Iterator, List, Optional
 import httpx
 from bs4 import BeautifulSoup
@@ -23,7 +23,7 @@ class FSMA204Adapter(SourceAdapter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.rate_limiter = RateLimiter(requests_per_minute=20) # Conservative for non-API scrape
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=30.0)
         self.session.headers.update({"User-Agent": self.user_agent})
     
     def get_source_name(self) -> str:
@@ -65,7 +65,7 @@ class FSMA204Adapter(SourceAdapter):
         
         source_metadata = SourceMetadata(
             source_url=self.TARGET_URL,
-            fetch_timestamp=datetime.utcnow(),
+            fetch_timestamp=datetime.now(timezone.utc),
             http_status=response.status_code,
             http_headers=dict(response.headers)
         )
@@ -95,7 +95,7 @@ class FSMA204Adapter(SourceAdapter):
                 ftl_response.raise_for_status()
                 yield ftl_response.content, SourceMetadata(
                     source_url=ftl_url,
-                    fetch_timestamp=datetime.utcnow(),
+                    fetch_timestamp=datetime.now(timezone.utc),
                     http_status=ftl_response.status_code,
                     http_headers=dict(ftl_response.headers)
                 ), {

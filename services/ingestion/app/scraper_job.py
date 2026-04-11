@@ -67,7 +67,7 @@ async def run_state_scrape_job(
             settings = get_settings()
             r = redis.from_url(settings.redis_url)
             import json
-            from datetime import datetime
+            from datetime import datetime, timezone
             r.setex(
                 f"scrape_job:failed:{url}",
                 3600,  # 1 hour TTL
@@ -75,7 +75,7 @@ async def run_state_scrape_job(
                     "adaptor": adaptor_name,
                     "url": url,
                     "error": str(exc),
-                    "failed_at": datetime.utcnow().isoformat()
+                    "failed_at": datetime.now(timezone.utc).isoformat()
                 })
             )
         except (OSError, IOError, AttributeError, TypeError, ValueError) as redis_exc:

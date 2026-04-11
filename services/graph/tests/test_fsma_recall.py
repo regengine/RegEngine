@@ -4,7 +4,7 @@ Tests for FSMA 204 Mock Recall Automation Engine.
 Sprint 8: Validates recall drill execution, SLA tracking, and scheduling.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,7 +39,7 @@ class TestRecallDrill:
         drill = RecallDrill(
             drill_id="drill_test123",
             tenant_id="tenant_1",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             drill_type=RecallType.FORWARD_TRACE,
             severity=RecallSeverity.CLASS_II,
         )
@@ -55,7 +55,7 @@ class TestRecallDrill:
         drill = RecallDrill(
             drill_id="",
             tenant_id="tenant_1",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             drill_type=RecallType.FULL_TRACE,
             severity=RecallSeverity.CLASS_I,
         )
@@ -65,7 +65,7 @@ class TestRecallDrill:
 
     def test_drill_duration_calculation(self):
         """Test duration calculation for completed drill."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         drill = RecallDrill(
             drill_id="drill_test123",
             tenant_id="tenant_1",
@@ -81,7 +81,7 @@ class TestRecallDrill:
 
     def test_sla_status_met(self):
         """Test SLA status when completed within 24 hours."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         drill = RecallDrill(
             drill_id="drill_test123",
             tenant_id="tenant_1",
@@ -97,7 +97,7 @@ class TestRecallDrill:
 
     def test_sla_status_breached(self):
         """Test SLA status when exceeds 24 hours."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         drill = RecallDrill(
             drill_id="drill_test123",
             tenant_id="tenant_1",
@@ -527,7 +527,7 @@ class TestRecallScheduling:
             frequency_days=30,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expected_next = now + timedelta(days=30)
 
         # Allow 1 second tolerance
@@ -607,7 +607,7 @@ class TestRecallScheduling:
             frequency_days=1,
         )
         # Manually set next_run to past
-        schedule.next_run = datetime.utcnow() - timedelta(hours=1)
+        schedule.next_run = datetime.now(timezone.utc) - timedelta(hours=1)
 
         due = self.engine.check_due_schedules("tenant_1")
 
@@ -810,7 +810,7 @@ class TestScheduledDrill:
             drill_type=RecallType.FULL_TRACE,
             severity=RecallSeverity.CLASS_II,
             frequency_days=90,
-            next_run=datetime.utcnow() + timedelta(days=90),
+            next_run=datetime.now(timezone.utc) + timedelta(days=90),
         )
 
         assert schedule.schedule_id == "sched_test123"

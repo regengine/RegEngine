@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -63,7 +63,7 @@ class AuditLogger:
             error: Error message if status is "failure"
         """
         entry = AuditEntry(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             job_id=self.job_id,
             action=action,
             resource_type=resource_type,
