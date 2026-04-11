@@ -37,8 +37,36 @@ The long-term plan is to consolidate the 6 services into a single monolith, repl
 
 ## Dependency Management
 
-Dependencies use `>=` pins for flexibility during active development.
-Before production freeze or Series A, run `pip-compile` to generate
-locked `requirements.txt` files for reproducible builds.
+### Backend (Python)
 
-Frontend dependencies are locked via `package-lock.json`.
+Dependencies use `>=` pins for flexibility during active development.
+Before production freeze, generate locked requirements with `pip-compile`:
+
+```bash
+pip install pip-tools
+for svc in admin compliance graph ingestion nlp scheduler; do
+  pip-compile services/$svc/requirements.txt \
+    --output-file services/$svc/requirements.lock \
+    --strip-extras --no-header
+done
+```
+
+Current state by service:
+
+| Service | Deps | Pinned | Notes |
+|---------|------|--------|-------|
+| admin | 39 | 4 (OpenTelemetry) | Largest surface after ingestion |
+| ingestion | 57 | 4 (OpenTelemetry) | Most deps — webhook/EPCIS/connector breadth |
+| graph | 35 | 4 (OpenTelemetry) | Neo4j driver, networkx |
+| nlp | 22 | 4 (OpenTelemetry) | Document parsing, spaCy |
+| compliance | 15 | 4 (OpenTelemetry) | Lean — scoring + export only |
+| scheduler | 14 | 0 | Cron jobs — no OTel yet |
+
+All services share common `>=` pins for FastAPI, SQLAlchemy, Pydantic, and Alembic.
+Only OpenTelemetry packages are exact-pinned (`==`) due to cross-package version sensitivity.
+
+### Frontend (Node.js)
+
+Dependencies are locked via `package-lock.json` (npm).
+`next`, `@sentry/nextjs`, and `@supabase/supabase-js` are pinned to exact versions
+(no `^` or `~`) — bumped manually after testing due to prior production incidents.
