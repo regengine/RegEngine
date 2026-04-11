@@ -52,7 +52,7 @@ export default function SettingsPage() {
     const { tenantId } = useTenant();
     const { organizations } = useOrganizations();
     const currentOrg = organizations.find(o => o.id === tenantId);
-    const { data: subscriptionData, isLoading: subLoading } = useCurrentSubscription();
+    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription();
 
     const [saved, setSaved] = useState(false);
     const [showKey, setShowKey] = useState(false);
@@ -108,9 +108,12 @@ export default function SettingsPage() {
     const integrations = integrationsData ?? INTEGRATIONS;
 
     // Derive plan display from subscription data
-    const planName = subscriptionData?.subscription?.tier_id
-        ? subscriptionData.subscription.tier_id.charAt(0).toUpperCase() + subscriptionData.subscription.tier_id.slice(1) + ' Plan'
-        : 'No Plan Selected';
+    // Distinguish between: API error (unavailable), API success with no plan, API success with plan
+    const planName = subError
+        ? 'Billing information unavailable'
+        : subscriptionData?.subscription?.tier_id
+            ? subscriptionData.subscription.tier_id.charAt(0).toUpperCase() + subscriptionData.subscription.tier_id.slice(1) + ' Plan'
+            : 'No Plan Selected';
     const billingCycle = subscriptionData?.subscription?.billing_cycle || '';
 
     const saveProfileMutation = useMutation({
@@ -180,17 +183,22 @@ export default function SettingsPage() {
                 )}
 
                 {/* Plan Card */}
-                <Card className="border-[var(--re-brand)] overflow-hidden">
-                    <div className="h-1 bg-gradient-to-r from-[var(--re-brand)] to-blue-500" />
+                <Card className={`overflow-hidden ${subError ? 'border-[var(--re-border-default)]' : 'border-[var(--re-brand)]'}`}>
+                    <div className={`h-1 ${subError ? 'bg-muted-foreground/30' : 'bg-gradient-to-r from-[var(--re-brand)] to-blue-500'}`} />
                     <CardContent className="py-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div className="flex items-center gap-3">
-                                <CreditCard className="h-5 w-5 text-[var(--re-brand)] flex-shrink-0" />
+                                <CreditCard className={`h-5 w-5 flex-shrink-0 ${subError ? 'text-muted-foreground' : 'text-[var(--re-brand)]'}`} />
                                 <div>
                                     {subLoading ? (
                                         <span className="flex items-center gap-2 text-sm text-muted-foreground">
                                             <Loader2 className="h-3 w-3 animate-spin" /> Loading plan...
                                         </span>
+                                    ) : subError ? (
+                                        <div>
+                                            <span className="font-medium text-sm text-muted-foreground">{planName}</span>
+                                            <p className="text-xs text-muted-foreground mt-0.5">Unable to reach the billing service. Your plan is not affected.</p>
+                                        </div>
                                     ) : (
                                         <>
                                             <span className="font-medium text-sm">{planName}</span>
