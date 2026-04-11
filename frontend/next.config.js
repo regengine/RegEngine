@@ -34,9 +34,6 @@ if (!isStatic && isDevServer) {
 
 const nextConfig = {
     output: isStatic ? 'export' : undefined,
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
     // (#558) Always enable Next.js image optimization.
     // sharp is installed (package.json) and handles build-time optimization for
     // both server-rendered and static-export builds — do not disable for static.
