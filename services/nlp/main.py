@@ -16,6 +16,9 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+from shared.env_validation import require_env
+require_env("DATABASE_URL")
+
 # Sentry error tracking (must be before app creation)
 from shared.error_handling import init_sentry
 init_sentry()

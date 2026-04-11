@@ -42,6 +42,9 @@ from shared.paths import ensure_shared_importable
 ensure_shared_importable()
 # ------------------------------
 
+from shared.env_validation import require_env
+require_env("DATABASE_URL", "REDIS_URL")
+
 # Sentry error tracking (must be before service initialization)
 from shared.error_handling import init_sentry
 init_sentry()
