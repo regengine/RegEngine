@@ -163,8 +163,11 @@ const nextConfig = {
     async rewrites() {
         if (isStatic) return []; // Rewrites not supported in static export
 
+        // Filter out rewrites with undefined destinations — Vercel build may not
+        // have INGESTION_SERVICE_URL / COMPLIANCE_SERVICE_URL env vars set, and
+        // Next.js 16 treats "undefined/:path*" as a fatal error.
         return [
-            {
+            ingestionUrl && {
                 source: '/api/v1/ingestion/:path*',
                 destination: `${ingestionUrl}/v1/ingestion/:path*`,
             },
@@ -172,22 +175,22 @@ const nextConfig = {
                 source: '/api/auth/:path*',
                 destination: '/api/admin/auth/:path*',
             },
-            {
+            complianceUrl && {
                 source: '/api/compliance/:path*',
                 destination: `${complianceUrl}/:path*`,
             },
             // Proxy webhook ingestion to backend (bypasses Next.js CSRF)
-            {
+            ingestionUrl && {
                 source: '/api/v1/webhooks/:path*',
                 destination: `${ingestionUrl}/v1/webhooks/:path*`,
             },
             // API-03: Proxy admin health endpoint for external monitoring
             // Skipped if NEXT_PUBLIC_API_BASE_URL is not set (individual service URLs used instead)
-            ...(apiGatewayUrl ? [{
+            apiGatewayUrl && {
                 source: '/api/v1/health',
                 destination: `${apiGatewayUrl}/health`,
-            }] : []),
-        ]
+            },
+        ].filter(Boolean);
     },
 }
 
