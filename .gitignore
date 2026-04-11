@@ -114,3 +114,15 @@ test-write
 
 # Development sample data
 sample_data/
+
+# Working docs and drafts (auto-generated / ephemeral)
+briefings/
+daily-briefs/
+sprints/
+
+# Cross-repo maintenance reports
+*PREPCHEF*
+*prepchef*
+
+# Mobile experiments
+frontend/android/
