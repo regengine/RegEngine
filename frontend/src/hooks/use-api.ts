@@ -56,11 +56,49 @@ export const useComplianceHealth = () => {
   });
 };
 
-// System Status & Metrics — fall back to zero-value stubs when backend is unreachable
+// System Status — aggregate individual /health endpoints (no auth required).
+// Previously this called /v1/system/status which requires auth and returned
+// 401 for expired sessions, causing the dashboard to show all services as
+// unhealthy even though Railway backends were running fine.
+async function fetchAggregatedStatus(): Promise<SystemStatusResponse> {
+  const serviceNames = ['admin', 'ingestion', 'compliance'] as const;
+
+  const results = await Promise.allSettled(
+    serviceNames.map(async (name) => {
+      const res = await fetch(`/api/${name}/health`, {
+        credentials: 'include',
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return { name, ok: true };
+    }),
+  );
+
+  const services = results.map((result, i) => {
+    const name = serviceNames[i];
+    if (result.status === 'fulfilled') {
+      return { name, status: 'healthy' as const, details: {} };
+    }
+    const error =
+      result.reason instanceof Error ? result.reason.message : 'Service unreachable';
+    return { name, status: 'unhealthy' as const, details: { error } };
+  });
+
+  const healthyCount = services.filter((s) => s.status === 'healthy').length;
+  const overall_status: SystemStatusResponse['overall_status'] =
+    healthyCount === services.length
+      ? 'healthy'
+      : healthyCount > 0
+        ? 'degraded'
+        : 'unhealthy';
+
+  return { overall_status, services };
+}
+
 export const useSystemStatus = () => {
   const query = useQuery({
     queryKey: ['system', 'status'],
-    queryFn: () => apiClient.getSystemStatus(),
+    queryFn: fetchAggregatedStatus,
     refetchInterval: POLL_HEALTH,
     retry: 1,
   });
