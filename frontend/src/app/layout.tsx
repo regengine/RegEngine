@@ -73,6 +73,11 @@ export const metadata: Metadata = {
     url: 'https://regengine.co',
     type: 'website',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'RegEngine — FSMA 204 Food Traceability Compliance',
+    description: 'Meet FDA and retailer traceability deadlines. Ingest supplier data, verify chain of custody, and export audit-ready records in minutes.',
+  },
 }
 
 export default async function RootLayout({
