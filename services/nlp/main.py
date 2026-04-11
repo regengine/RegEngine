@@ -89,6 +89,10 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
+from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
 # Global exception handlers (Sprint 18)
 from shared.error_handling import install_exception_handlers
 install_exception_handlers(app)

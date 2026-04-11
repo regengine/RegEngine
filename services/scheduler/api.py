@@ -48,7 +48,16 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# Rate limiting
+# Middleware stack
+from shared.middleware.request_id import RequestIDMiddleware
+from shared.tenant_rate_limiting import TenantRateLimitMiddleware
+from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(TenantRateLimitMiddleware, default_rpm=60)
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
 add_rate_limiting(app)
 
 # Global exception handlers

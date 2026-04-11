@@ -62,6 +62,10 @@ add_observability(app, service_name="compliance-service")
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(TenantRateLimitMiddleware, default_rpm=100)
 
+from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+
 install_exception_handlers(app)
 
 from shared.auth import validate_auth_config
