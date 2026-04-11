@@ -175,17 +175,7 @@ async def run_consumer() -> None:
         'group.id': "graph-service",
         'auto.offset.reset': "earliest",
         'enable.auto.commit': False,
-        # We can't easily mix serializers on one consumer in confluent-kafka without custom logic?
-        # Actually deserializer is per-topic or global.
-        # Strict AvroDeserializer will fail on JSON.
-        # Correct approach: Use Byte consumer and manual decode based on magic byte (0x00) or topic.
         'value.deserializer': avro_deserializer
-        # Wait - we have mixed topics! JSON legacy and Avro.
-        # We cannot use value.deserializer on the main config if topics differ.
-        # But for this sprint, we assume moving to Avro.
-        # If legacy topic sends JSON, AvroDeserializer fails.
-        # For simplicity, let's assume 'graph.update' IS the topic we want.
-        # Or implement a hybrid deserializer.
     }
     
     # Hybrid Deserializer workaround

@@ -95,11 +95,6 @@ async def update_user_role(
         raise HTTPException(status_code=400, detail="Tenant context required")
     
     # Invariant: Cannot remove last Owner
-    # Check if target user has Owner role currently
-    # Note: We need to know which role is "Owner". For now assuming by Name or specific ID property?
-    # User plan said: "ensure at least one Owner per tenant".
-    # Implementation: If target user is Owner, check if there are other Owners.
-    
     membership = db.execute(
         select(MembershipModel).where(
             MembershipModel.user_id == user_id,
@@ -174,21 +169,8 @@ async def deactivate_user(
     if not membership:
         raise HTTPException(status_code=404, detail="User not found")
         
-    # Do we deactivate the USER (global) or the Membership?
-    # Context implies removing from tenant. 
-    # Plan says: "Remove user from tenant (deactivate membership)"
-    # But `membership` model doesn't have `status` col. `users` table has `status`.
-    # If we change `users.status`, it locks them globally.
-    # If we want tenant-specific deactivation, we should probably delete the membership OR add status to membership.
-    # Plan Section 1B: "Remove user from tenant (deactivate membership)".
-    # Plan Section 2: Membership invariants "valid membership".
-    # Implementation: Delete membership? Or is there a status pending?
-    # Re-reading Plan Data Model Additions: No status on membership.
-    # Re-reading Plan Section 3: `POST .../deactivate` `perm: users.disable`
-    
-    # Decide: I will DELETE the membership for now, effectively removing them.
-    # Wait, check "Last Owner" invariant again.
-    
+    # Deactivate = delete membership (tenant-scoped, not global user disable).
+    # Check "Last Owner" invariant before removing.
     current_role = db.get(RoleModel, membership.role_id)
     if current_role.name == "Owner":
          owner_subquery = (

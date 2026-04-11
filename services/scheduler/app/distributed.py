@@ -68,20 +68,6 @@ class DistributedContext:
                             self._is_leader = True
                         
                         yield True
-                        
-                        # If we return control to usage loop, we need a way to keep checking.
-                        # But wait, logic above yields once.
-                        # The pattern should be:
-                        # with dist_ctx.leadership_claim() as is_leader:
-                        #    if is_leader:
-                        #        start_scheduler()
-                        #    else:
-                        #        standby_mode()
-                        
-                        # Actually, better pattern for APScheduler which is blocking:
-                        # We need to block here? No.
-                        # We return True, but we MUST keep the connection open.
-                        # If the context manager exits, we release the lock.
                         return
 
                     else:

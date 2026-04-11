@@ -428,13 +428,9 @@ if _router_enabled("disaster_recovery"):
     app.include_router(disaster_recovery_router)
 
 
-# Standardized Health & Readiness (Phase 17)
-# NOTE: Custom /health endpoint already registered via routes_health_metrics.py
-# which includes Kafka status. Do NOT install the Phase 17 generic health router
-# here — it overwrites the custom endpoint and crashes without configured deps.
-# from shared.health import HealthCheck, install_health_router
-# health = HealthCheck(service_name="ingestion-service")
-# install_health_router(app, service_name="ingestion-service", health_check=health)
+# NOTE: Do NOT install the Phase 17 generic health router here — a custom
+# /health endpoint (routes_health_metrics.py) already covers Kafka status.
+# The generic router would overwrite it and crash without configured deps.
 
 @app.get("/")
 async def root():
