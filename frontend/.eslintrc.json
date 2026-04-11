@@ -3,10 +3,10 @@
     "rules": {
         "react/no-unescaped-entities": "off",
         "react/display-name": "off",
-        "react/jsx-no-comment-textnodes": "off",
-        "react-hooks/exhaustive-deps": "off",
+        "react/jsx-no-comment-textnodes": "warn",
+        "react-hooks/exhaustive-deps": "warn",
         "@next/next/no-img-element": "off",
-        "@next/next/no-page-custom-font": "off",
+        "@next/next/no-page-custom-font": "warn",
         "no-console": ["warn", { "allow": ["warn", "error"] }]
     }
 }
