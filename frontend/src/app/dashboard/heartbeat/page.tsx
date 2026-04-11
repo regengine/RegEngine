@@ -363,24 +363,36 @@ export default function HeartbeatPage() {
 
             let compliance: ComplianceData | null = null;
             let alerts: Alert[] = [];
+            const errors: string[] = [];
 
             if (scoreData.status === 'fulfilled') {
                 compliance = scoreData.value as ComplianceData;
+            } else {
+                errors.push(`Compliance score: ${scoreData.reason?.message || 'Failed to load'}`);
             }
             if (alertsData.status === 'fulfilled') {
                 const raw = alertsData.value as Alert[] | { alerts: Alert[] };
                 alerts = Array.isArray(raw) ? raw : raw?.alerts ?? [];
+            } else {
+                errors.push(`Alerts: ${alertsData.reason?.message || 'Failed to load'}`);
             }
 
-            return { compliance, alerts };
+            // If both calls failed, throw so react-query surfaces the error
+            if (scoreData.status === 'rejected' && alertsData.status === 'rejected') {
+                throw new Error(errors.join('; '));
+            }
+
+            return { compliance, alerts, partialError: errors.length > 0 ? errors.join('; ') : null };
         },
         enabled: !!effectiveTenantId,
         refetchInterval: POLL_MS,
+        retry: 2,
     });
 
     const compliance = heartbeatData?.compliance ?? null;
     const alerts = heartbeatData?.alerts ?? [];
-    const error = heartbeatError?.message ?? null;
+    const partialError = heartbeatData?.partialError ?? null;
+    const error = heartbeatError?.message ?? partialError;
     const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt) : new Date();
 
     const criticalAlerts = useMemo(() =>
@@ -390,10 +402,34 @@ export default function HeartbeatPage() {
 
     const recentAlerts = useMemo(() => alerts.slice(0, 6), [alerts]);
 
-    if (!isHydrated || !effectiveUser) return null;
+    // Show skeleton while auth is hydrating (never render blank)
+    if (!isHydrated) {
+        return (
+            <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/10">
+                <PageContainer>
+                    <HeartbeatSkeleton />
+                </PageContainer>
+            </div>
+        );
+    }
+
+    // Redirect handled by useEffect above; show skeleton while redirecting
+    if (!effectiveUser) {
+        return (
+            <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/10">
+                <PageContainer>
+                    <HeartbeatSkeleton />
+                </PageContainer>
+            </div>
+        );
+    }
 
     const now = new Date();
     const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
+
+    // When the query is disabled (no tenantId) and not loading, show an explicit empty state
+    const queryDisabled = !effectiveTenantId;
+    const showEmptyState = queryDisabled && !loading && !compliance;
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/10">
@@ -470,7 +506,64 @@ export default function HeartbeatPage() {
                                 )}
                             </AnimatePresence>
 
+                            {/* ── Full-page empty / error state ── */}
+                            {showEmptyState && (
+                                <Card className="border-dashed border-[var(--re-border-default)]">
+                                    <CardContent className="py-16">
+                                        <div className="flex flex-col items-center text-center text-muted-foreground">
+                                            <div className="w-16 h-16 rounded-2xl bg-muted/20 flex items-center justify-center mb-4">
+                                                <Activity className="h-8 w-8 opacity-30" />
+                                            </div>
+                                            <p className="text-base font-medium mb-1">No heartbeat data available</p>
+                                            <p className="text-sm text-muted-foreground/60 max-w-md">
+                                                Your organization needs to be set up before compliance data can be displayed.
+                                                Import traceability events or contact support if this is unexpected.
+                                            </p>
+                                            <div className="flex gap-3 mt-5">
+                                                <Link href="/tools/data-import">
+                                                    <Button size="sm" className="gap-1.5 bg-[var(--re-brand)] hover:bg-[var(--re-brand-dark)] text-white">
+                                                        <Upload className="h-3.5 w-3.5" /> Import Data
+                                                    </Button>
+                                                </Link>
+                                                <Link href="/dashboard">
+                                                    <Button variant="outline" size="sm" className="gap-1.5">
+                                                        <ArrowRight className="h-3.5 w-3.5" /> Dashboard
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
+                            {heartbeatError && !compliance && !showEmptyState && (
+                                <Card className="border-re-danger/30 bg-re-danger-muted0/5">
+                                    <CardContent className="py-16">
+                                        <div className="flex flex-col items-center text-center">
+                                            <div className="w-16 h-16 rounded-2xl bg-re-danger-muted0/10 flex items-center justify-center mb-4">
+                                                <XCircle className="h-8 w-8 text-re-danger opacity-60" />
+                                            </div>
+                                            <p className="text-base font-medium text-re-danger mb-1">Unable to load heartbeat data</p>
+                                            <p className="text-sm text-muted-foreground max-w-md mb-4">
+                                                {heartbeatError.message || 'An unexpected error occurred while fetching compliance data.'}
+                                            </p>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => loadData()}
+                                                disabled={isRefreshing}
+                                                className="gap-1.5"
+                                            >
+                                                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                                                Retry
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             {/* ── Top Row: Score + Breakdown + Status ── */}
+                            {!showEmptyState && !(heartbeatError && !compliance) && (<>
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                                 {/* Compliance Score Gauge */}
                                 <Card className="overflow-hidden border-[var(--re-border-default)] hover:border-[var(--re-border-subtle)] transition-colors">
@@ -618,7 +711,7 @@ export default function HeartbeatPage() {
 
                             {/* ── Bottom Row: Alerts + Actions ── */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                                {/* Recent Alerts */}
+                                {/* Recent Alerts -- continued inside conditional */}
                                 <Card className="overflow-hidden border-[var(--re-border-default)] hover:border-[var(--re-border-subtle)] transition-colors">
                                     <CardHeader className="pb-2">
                                         <div className="flex items-center justify-between">
@@ -722,6 +815,7 @@ export default function HeartbeatPage() {
                                     </CardContent>
                                 </Card>
                             </div>
+                            </>)}
 
                             {/* ── Quick Links ── */}
                             <motion.div
