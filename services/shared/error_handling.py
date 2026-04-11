@@ -12,8 +12,6 @@ Usage:
 from __future__ import annotations
 
 import os
-import traceback
-from typing import Optional
 
 import structlog
 from fastapi import FastAPI, Request
@@ -63,88 +61,40 @@ def init_sentry() -> None:
     logger.info("sentry_initialized", environment=get_environment())
 
 
-def _get_request_id(request: Request) -> Optional[str]:
-    """Extract request ID from request state if available."""
-    return getattr(request.state, "request_id", None)
-
-
 async def _http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     """Handle HTTP exceptions with structured JSON response."""
-    request_id = _get_request_id(request)
+    detail = exc.detail
+    if isinstance(detail, dict):
+        return JSONResponse(status_code=exc.status_code, content={"error": detail})
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": "http_error",
-            "status_code": exc.status_code,
-            "detail": exc.detail,
-            "request_id": request_id,
-        },
+        content={"error": {"type": f"http_{exc.status_code}", "message": str(detail)}},
     )
 
 
 async def _validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """Handle request validation errors with structured JSON response."""
-    request_id = _get_request_id(request)
-    # Pydantic v2 errors() can contain non-serializable objects (ValueError, etc.)
-    # Convert to safe serializable form
-    try:
-        import json as _json
-        safe_errors = _json.loads(_json.dumps(exc.errors(), default=str))
-    except Exception:
-        safe_errors = [{"msg": str(e)} for e in exc.errors()] if exc.errors() else [{"msg": str(exc)}]
-    logger.warning(
-        "validation_error",
-        request_id=request_id,
-        errors=safe_errors,
-        path=str(request.url.path),
-    )
     return JSONResponse(
         status_code=422,
-        content={
-            "error": "validation_error",
-            "detail": safe_errors,
-            "request_id": request_id,
-        },
+        content={"error": {"type": "validation_error", "message": "Request validation failed", "details": exc.errors()}},
     )
 
 
 async def _value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
     """Handle ValueError as a 400 Bad Request."""
-    request_id = _get_request_id(request)
-    logger.warning(
-        "value_error",
-        request_id=request_id,
-        detail=str(exc),
-        path=str(request.url.path),
-    )
+    logger.warning("value_error", detail=str(exc), path=str(request.url.path))
     return JSONResponse(
         status_code=400,
-        content={
-            "error": "bad_request",
-            "detail": str(exc),
-            "request_id": request_id,
-        },
+        content={"error": {"type": "bad_request", "message": str(exc)}},
     )
 
 
 async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all handler for unhandled exceptions."""
-    request_id = _get_request_id(request)
-    logger.error(
-        "unhandled_exception",
-        request_id=request_id,
-        exc_type=type(exc).__name__,
-        exc_message=str(exc),
-        path=str(request.url.path),
-        traceback=traceback.format_exc(),
-    )
+    logger.exception("Unhandled exception")
     return JSONResponse(
         status_code=500,
-        content={
-            "error": "internal_server_error",
-            "detail": "An unexpected error occurred. Please try again or contact support.",
-            "request_id": request_id,
-        },
+        content={"error": {"type": "internal_error", "message": "An internal error occurred"}},
     )
 
 
@@ -153,10 +103,10 @@ def install_exception_handlers(app: FastAPI) -> None:
     Install global exception handlers on a FastAPI application.
 
     Registers handlers for:
-    - StarletteHTTPException → structured JSON with status code
-    - RequestValidationError → 422 with field-level details
-    - ValueError → 400 Bad Request
-    - Exception (catch-all) → 500 with request_id for correlation
+    - StarletteHTTPException → structured JSON with {error: {type, message}}
+    - RequestValidationError → 422 with {error: {type, message, details}}
+    - ValueError → 400 with {error: {type, message}}
+    - Exception (catch-all) → 500 with {error: {type, message}}
 
     Args:
         app: The FastAPI application instance.

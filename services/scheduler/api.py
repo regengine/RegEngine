@@ -51,6 +51,10 @@ app.add_middleware(
 # Rate limiting
 add_rate_limiting(app)
 
+# Global exception handlers
+from shared.error_handling import install_exception_handlers
+install_exception_handlers(app)
+
 
 @app.get("/health")
 @limiter.limit("100/minute")
