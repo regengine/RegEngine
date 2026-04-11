@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from app.shared.tenant_resolution import resolve_tenant_id
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 
 logger = logging.getLogger("epcis-ingestion")
 
@@ -433,11 +434,6 @@ def _allow_in_memory_fallback() -> bool:
     return not _is_production()
 
 
-def _get_db_session():
-    from shared.database import SessionLocal
-
-    return SessionLocal()
-
 
 _resolve_tenant_id = resolve_tenant_id
 
@@ -782,7 +778,7 @@ def _parse_epcis_document(kdes: dict[str, Any], normalized: dict[str, Any]) -> d
 
 
 def _fetch_event_from_db(tenant_id: str, event_id: str) -> Optional[dict]:
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         row = db_session.execute(
             text(
@@ -869,7 +865,7 @@ def _list_events_from_db(
     end_date: Optional[str],
     product_id: Optional[str],
 ) -> list[dict]:
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         where = ["tenant_id = :tenant_id"]
         params: dict[str, Any] = {"tenant_id": tenant_id}
@@ -1048,7 +1044,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     if quantity_value <= 0:
         quantity_value = 1.0
 
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         persistence = CTEPersistence(db_session)
         result = persistence.store_event(

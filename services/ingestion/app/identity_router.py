@@ -22,38 +22,16 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_session
 
 logger = logging.getLogger("identity-resolution")
 
 router = APIRouter(prefix="/api/v1/identity", tags=["Identity Resolution"])
-
-
-# ---------------------------------------------------------------------------
-# DB Session
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _get_service(db_session):
@@ -131,7 +109,7 @@ async def list_entities(
     entity_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -164,7 +142,7 @@ async def register_entity(
     body: RegisterEntityRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -196,7 +174,7 @@ async def get_entity(
     entity_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -216,7 +194,7 @@ async def add_alias(
     body: AddAliasRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -240,7 +218,7 @@ async def lookup_by_alias(
     alias_type: Optional[str] = Query(None),
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -258,7 +236,7 @@ async def find_matches(
     min_confidence: float = Query(0.7),
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -276,7 +254,7 @@ async def merge_entities(
     body: MergeRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -298,7 +276,7 @@ async def split_entities(
     body: SplitRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -313,7 +291,7 @@ async def split_entities(
 async def list_reviews(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -330,7 +308,7 @@ async def resolve_review(
     body: ResolveReviewRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("identity.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)

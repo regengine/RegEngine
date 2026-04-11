@@ -142,3 +142,38 @@ async def get_db_async():
             yield db
         finally:
             db.close()
+
+# ── Convenience helpers for ingestion modules ──────────────────────────
+
+
+def get_db_safe():
+    """Get a plain SQLAlchemy session, returning None if unavailable.
+
+    Use this for modules that manage their own commit/rollback/close lifecycle.
+    The caller is responsible for calling db.close() when done.
+    """
+    try:
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("db_session_unavailable", error=str(exc))
+        return None
+
+
+def get_db_session():
+    """FastAPI dependency that yields a session with commit/rollback/close.
+
+    Usage: db = Depends(get_db_session)
+    """
+    try:
+        db = SessionLocal()
+    except Exception:
+        yield None
+        return
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

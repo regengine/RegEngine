@@ -20,18 +20,15 @@ from sqlalchemy import text
 
 from app.disclaimers import SAMPLE_EXPORT_DISCLAIMER
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 
 logger = logging.getLogger("epcis-export")
 
 
-def _get_db_session():
-    from shared.database import SessionLocal
-    return SessionLocal()
-
 
 def _query_tenant_events(tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None) -> list[dict]:
     """Query real CTE events from fsma.cte_events for export."""
-    db = _get_db_session()
+    db = get_db_safe()
     try:
         where = ["e.tenant_id = :tenant_id"]
         params: dict = {"tenant_id": tenant_id}

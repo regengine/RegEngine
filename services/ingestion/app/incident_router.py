@@ -38,11 +38,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 
 from shared.pagination import PaginationParams
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_session
 
 logger = logging.getLogger("incident-command")
 
@@ -55,23 +55,6 @@ _ALLOWED_WHERE_FRAGMENTS = frozenset({
     "tenant_id = :tid",
     "data->>'status' = :status",
 })
-
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
@@ -134,7 +117,7 @@ async def list_incidents(
     status: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     principal: IngestionPrincipal = Depends(require_permission("incidents.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -198,7 +181,7 @@ async def open_incident(
     body: OpenIncidentRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -252,7 +235,7 @@ async def get_incident(
     incident_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -285,7 +268,7 @@ async def update_status(
     body: UpdateStatusRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -316,7 +299,7 @@ async def add_action(
     body: AddActionRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -362,7 +345,7 @@ async def update_action(
     body: UpdateActionRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -396,7 +379,7 @@ async def post_update(
     body: PostUpdateRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -426,7 +409,7 @@ async def impact_assessment(
     incident_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -498,7 +481,7 @@ async def close_incident(
     closed_by: str = Query("system"),
     closure_notes: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("incidents.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")

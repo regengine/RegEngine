@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 
 logger = logging.getLogger("product-catalog")
@@ -79,14 +80,6 @@ FTL_CATEGORIES = [
 # ---------------------------------------------------------------------------
 # Database helpers
 # ---------------------------------------------------------------------------
-
-def _get_db_session():
-    """Get a DB session from shared module, or None."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except (ImportError, OSError, SQLAlchemyError):
-        return None
 
 
 def _row_to_product(row) -> Product:
@@ -188,7 +181,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
     products table is empty for this tenant.
     """
     from sqlalchemy import text
-    db = _get_db_session()
+    db = get_db_safe()
     if db is None:
         return None
     try:
@@ -229,7 +222,7 @@ def _db_get_catalog(tenant_id: str, category: str | None = None) -> list[Product
 def _db_add_product(tenant_id: str, product: Product) -> bool:
     """Insert a product into fsma.products. Returns True on success."""
     from sqlalchemy import text
-    db = _get_db_session()
+    db = get_db_safe()
     if db is None:
         return False
     try:
@@ -272,7 +265,7 @@ def _db_add_product(tenant_id: str, product: Product) -> bool:
 def _db_lookup_by_gtin(tenant_id: str, gtin: str) -> Product | None:
     """Look up a single product by GTIN from Supabase."""
     from sqlalchemy import text
-    db = _get_db_session()
+    db = get_db_safe()
     if db is None:
         return None
     try:
@@ -302,7 +295,7 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     from sqlalchemy import text
-    db = _get_db_session()
+    db = get_db_safe()
     if db is None:
         # Fallback: update in-memory store
         _memory_learn(tenant_id, gtin, name, facility, now)

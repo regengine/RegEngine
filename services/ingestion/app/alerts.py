@@ -16,6 +16,7 @@ from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 
 logger = logging.getLogger("alerts")
@@ -141,16 +142,6 @@ DEFAULT_RULES: list[AlertRule] = [
     ),
 ]
 
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-
-        db = SessionLocal()
-    except (ImportError, RuntimeError, OSError) as exc:
-        logger.error("alerts_db_session_init_failed error=%s", str(exc))
-        raise HTTPException(status_code=503, detail="Database unavailable")
-    return db
 
 
 def _load_alert_columns(db_session) -> set[str]:
@@ -425,7 +416,7 @@ async def get_alerts(
     validate_tenant_id(tenant_id)
     alerts: list[Alert] = []
     try:
-        db_session = _get_db_session()
+        db_session = get_db_safe()
         try:
             # Fetch from both alert tables and merge
             fsma_alerts = _fetch_alerts_from_db(db_session, tenant_id)
@@ -476,7 +467,7 @@ async def acknowledge_alert(
     alert_id: str,
     _: None = Depends(_verify_api_key),
 ):
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         # Try public.compliance_alerts first (FDA recall alerts)
         try:
@@ -553,7 +544,7 @@ async def get_alert_summary(
     tenant_id: str,
     _: None = Depends(_verify_api_key),
 ):
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         fsma_alerts = _fetch_alerts_from_db(db_session, tenant_id)
         fda_recall_alerts = _fetch_fda_recall_alerts(db_session, tenant_id)

@@ -25,11 +25,11 @@ from app.webhook_models import EventResult, IngestResponse, WebhookPayload
 from app.webhook_router_v2 import (
     _check_rate_limit,
     _generate_alerts,
-    _get_db_session,
     _publish_graph_sync,
     _validate_event_kdes,
     _verify_api_key as _verify_api_key_sync,
 )
+from shared.database import get_db_session as _get_db_session
 from shared.auth import require_api_key
 
 logger = logging.getLogger("webhook-compat")

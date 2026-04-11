@@ -25,7 +25,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -33,6 +32,7 @@ from pydantic import BaseModel, Field
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
 from shared.canonical_persistence import CanonicalEventStore
+from shared.database import get_db_session
 
 logger = logging.getLogger("canonical-records")
 
@@ -50,29 +50,6 @@ _ALLOWED_WHERE_FRAGMENTS = frozenset({
     "event_timestamp >= :start_date",
     "event_timestamp <= :end_date",
 })
-
-
-# ---------------------------------------------------------------------------
-# DB Session
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except HTTPException:
-        raise  # Must propagate — yielding after throw() is illegal
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
@@ -103,7 +80,7 @@ async def list_records(
     limit: int = Query(50, le=500),
     offset: int = Query(0),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -191,7 +168,7 @@ async def list_ingestion_runs(
     status: Optional[str] = Query(None),
     limit: int = Query(20, le=100),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -250,7 +227,7 @@ async def get_ingestion_run(
     run_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -304,7 +281,7 @@ async def get_record(
     event_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -381,7 +358,7 @@ async def get_record_history(
     event_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -475,7 +452,7 @@ def trace_forward(
     max_depth: int = Query(default=5, ge=1, le=20),
     tenant_id: Optional[str] = Query(default=None),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -514,7 +491,7 @@ def trace_backward(
     max_depth: int = Query(default=5, ge=1, le=20),
     tenant_id: Optional[str] = Query(default=None),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")

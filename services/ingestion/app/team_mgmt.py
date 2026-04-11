@@ -17,18 +17,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 
 logger = logging.getLogger("team")
 
-
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except Exception as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 router = APIRouter(prefix="/api/v1/team", tags=["Team Management"])
 
@@ -96,7 +88,7 @@ _team_store: dict[str, list[TeamMember]] = {}
 
 def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
     """Query team members from database."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return None
     try:
@@ -129,7 +121,7 @@ def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
 
 def _db_add_team_member(tenant_id: str, member: TeamMember) -> bool:
     """Insert team member into database."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return False
     try:

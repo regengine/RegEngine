@@ -24,6 +24,7 @@ from sqlalchemy import text
 
 from app.webhook_models import IngestEvent, WebhookCTEType, WebhookPayload
 from app.webhook_compat import _verify_api_key, ingest_events
+from shared.database import get_db_safe
 from shared.pagination import PaginationParams
 
 logger = logging.getLogger("supplier-portal")
@@ -34,19 +35,10 @@ router = APIRouter(prefix="/api/v1/portal", tags=["Supplier Portal"])
 _portal_links: dict[str, dict] = {}
 
 
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except Exception as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
-
 
 def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
     """Insert a portal link into the database. Returns True on success."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return False
     try:
@@ -82,7 +74,7 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
 
 def _db_get_portal_link(portal_id: str) -> Optional[dict]:
     """Fetch a portal link from the database by link_token. Returns dict or None."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return None
     try:
@@ -114,7 +106,7 @@ def _db_get_portal_link(portal_id: str) -> Optional[dict]:
 
 def _db_update_portal_link_status(portal_id: str, status: str) -> bool:
     """Update the status of a portal link in the database."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return False
     try:
@@ -272,7 +264,7 @@ async def list_portal_links(
     links: list[dict] = []
 
     # Try DB first
-    db = _get_db()
+    db = get_db_safe()
     if db:
         try:
             rows = db.execute(

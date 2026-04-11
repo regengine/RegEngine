@@ -24,6 +24,7 @@ from sqlalchemy import text
 
 from app.authz import require_permission
 from app.shared.tenant_resolution import resolve_tenant_id
+from shared.database import get_db_safe
 
 logger = logging.getLogger("b2b-exchange")
 
@@ -58,15 +59,6 @@ def _allow_in_memory_fallback() -> bool:
         return explicit.lower() in {"1", "true", "yes"}
     return not _is_production()
 
-
-def _get_db_session():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except Exception as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 
 # Tenant resolution is now imported from app.shared.tenant_resolution
@@ -273,7 +265,7 @@ def _store_package_db(
     package_hash: str,
     package: dict[str, Any],
 ) -> None:
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         _ensure_exchange_table(db_session)
         db_session.execute(
@@ -345,7 +337,7 @@ def _load_packages_db(
     include_payload: bool,
     mark_received: bool,
 ) -> list[dict[str, Any]]:
-    db_session = _get_db_session()
+    db_session = get_db_safe()
     try:
         _ensure_exchange_table(db_session)
 
@@ -515,7 +507,7 @@ async def send_exchange_package(
         raise HTTPException(status_code=400, detail="Sender tenant context required")
 
     try:
-        db_session = _get_db_session()
+        db_session = get_db_safe()
         try:
             rows = _query_shipping_rows(db_session, sender_tenant_id, request)
         finally:

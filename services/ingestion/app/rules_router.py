@@ -19,39 +19,17 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
 from shared.pagination import PaginationParams
+from shared.database import get_db_session
 
 logger = logging.getLogger("rules-router")
 
 router = APIRouter(prefix="/api/v1/rules", tags=["Rules Engine"])
-
-
-# ---------------------------------------------------------------------------
-# DB Session
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _db_unavailable():
@@ -123,7 +101,7 @@ async def list_rules(
     cte_type: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     principal: IngestionPrincipal = Depends(require_permission("rules.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     try:
         engine = _get_engine(db_session)
@@ -172,7 +150,7 @@ async def list_rules(
 async def get_rule(
     rule_id: str,
     principal: IngestionPrincipal = Depends(require_permission("rules.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     engine = _get_engine(db_session)
     rules = engine.load_active_rules()
@@ -209,7 +187,7 @@ async def evaluate_event(
     tenant_id: Optional[str] = Query(None),
     persist: bool = Query(True, description="Persist evaluation results to database"),
     principal: IngestionPrincipal = Depends(require_permission("rules.evaluate")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     try:
@@ -264,7 +242,7 @@ async def evaluate_batch(
     tenant_id: Optional[str] = Query(None),
     persist: bool = Query(True),
     principal: IngestionPrincipal = Depends(require_permission("rules.evaluate")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     engine = _get_engine(db_session)
@@ -299,7 +277,7 @@ async def get_event_evaluations(
     tenant_id: Optional[str] = Query(None),
     result_filter: Optional[str] = Query(None, alias="result"),
     principal: IngestionPrincipal = Depends(require_permission("rules.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     if db_session is None:
@@ -350,7 +328,7 @@ async def get_event_evaluations(
 )
 async def seed_rules(
     principal: IngestionPrincipal = Depends(require_permission("rules.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         _db_unavailable()

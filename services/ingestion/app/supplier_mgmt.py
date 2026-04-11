@@ -18,18 +18,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 
 logger = logging.getLogger("supplier-mgmt")
 
-
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except (ImportError, RuntimeError, OSError) as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 router = APIRouter(prefix="/api/v1/suppliers", tags=["Supplier Management"])
 
@@ -77,7 +69,7 @@ _suppliers_lock = threading.Lock()
 
 def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
     """Query suppliers from database."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return None
     try:
@@ -110,7 +102,7 @@ def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
 
 def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
     """Insert supplier into database."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return False
     try:

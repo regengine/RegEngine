@@ -11,13 +11,10 @@ from typing import Optional
 
 from sqlalchemy import text
 
+from shared.database import get_db_safe
+
 logger = logging.getLogger(__name__)
 
-
-def _get_db_session():
-    from shared.database import SessionLocal
-
-    return SessionLocal()
 
 
 def resolve_tenant_id(
@@ -36,7 +33,7 @@ def resolve_tenant_id(
     if not x_regengine_api_key:
         return None
 
-    db = _get_db_session()
+    db = get_db_safe()
     try:
         row = db.execute(
             text(

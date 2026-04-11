@@ -34,23 +34,11 @@ from sqlalchemy import text
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_session
 
 logger = logging.getLogger("compliance-metrics")
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["Compliance Metrics"])
-
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> str:
@@ -69,7 +57,7 @@ def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> 
 async def compliance_metrics(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("metrics.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     if db_session is None:
         raise HTTPException(status_code=503, detail="Database unavailable")

@@ -18,19 +18,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 from shared.tenant_settings import get_tenant_data, set_tenant_data
 
 logger = logging.getLogger("supplier-validation")
-
-
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except Exception as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 
 router = APIRouter(
@@ -98,7 +89,7 @@ _REQUIRED_CTE_TYPES: dict[str, list[str]] = {
 
 def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
     """Fetch supplier rows from DB. Returns None if DB unavailable."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return None
     try:
@@ -135,7 +126,7 @@ def _fetch_suppliers(tenant_id: str) -> Optional[list[dict]]:
 
 def _fetch_supplier_submissions(tenant_id: str, supplier_id: str) -> Optional[list[dict]]:
     """Fetch recent submissions for a supplier. Returns None if DB unavailable."""
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return None
     try:

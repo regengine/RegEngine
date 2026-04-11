@@ -23,39 +23,17 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from shared.pagination import PaginationParams
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_session
 
 logger = logging.getLogger("exception-queue")
 
 router = APIRouter(prefix="/api/v1/exceptions", tags=["Exception Queue"])
-
-
-# ---------------------------------------------------------------------------
-# DB Session
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _get_service(db_session):
@@ -130,7 +108,7 @@ async def list_exceptions(
     rule_category: Optional[str] = Query(None),
     pagination: PaginationParams = Depends(),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -156,7 +134,7 @@ async def list_exceptions(
 async def blocking_count(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -172,7 +150,7 @@ async def get_exception(
     case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -191,7 +169,7 @@ async def create_exception(
     body: CreateExceptionRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -218,7 +196,7 @@ async def assign_owner(
     body: AssignRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -235,7 +213,7 @@ async def resolve_exception(
     body: ResolveRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -252,7 +230,7 @@ async def waive_exception(
     body: WaiveRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -268,7 +246,7 @@ async def list_comments(
     case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -286,7 +264,7 @@ async def add_comment(
     body: AddCommentRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("exceptions.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)

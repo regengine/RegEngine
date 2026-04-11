@@ -22,6 +22,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.webhook_compat import _verify_api_key
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_safe
 
 logger = logging.getLogger("audit-log")
 
@@ -48,17 +49,6 @@ class AuditLogResponse(BaseModel):
     page_size: int
     entries: list[AuditEntry]
 
-
-def _get_db_session():
-    """Return a session connected to the ingestion/shared database (CTE, exports, alerts)."""
-    try:
-        from shared.database import SessionLocal
-
-        db = SessionLocal()
-    except Exception as exc:
-        logger.error("audit_log_db_session_init_failed error=%s", str(exc))
-        raise
-    return db
 
 
 # Lazy-init admin DB session factory — only created when first needed.
@@ -363,7 +353,7 @@ async def get_audit_log(
 
     # Query CTE events, exports, and alerts from the ingestion database
     try:
-        db_session = _get_db_session()
+        db_session = get_db_safe()
         try:
             entries.extend(_query_cte_events(db_session, tenant_id, limit=200))
             entries.extend(_query_exports(db_session, tenant_id, limit=100))

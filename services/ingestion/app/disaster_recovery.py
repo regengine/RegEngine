@@ -19,18 +19,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.webhook_compat import _verify_api_key
+from shared.database import get_db_safe
 
 logger = logging.getLogger("disaster-recovery")
 
-
-def _get_db():
-    """Get database session. Returns None if unavailable."""
-    try:
-        from shared.database import SessionLocal
-        return SessionLocal()
-    except (ImportError, SQLAlchemyError, OSError) as exc:
-        logger.warning("db_unavailable error=%s", str(exc))
-        return None
 
 
 router = APIRouter(
@@ -71,7 +63,7 @@ class DRReport(BaseModel):
 def _check_db_connectivity() -> DRCheck:
     """Verify database connectivity and basic replication health."""
     now = datetime.now(timezone.utc).isoformat()
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return DRCheck(
             name="database_connectivity",
@@ -122,7 +114,7 @@ def _check_db_connectivity() -> DRCheck:
 def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
     """Verify that the SHA-256 hash chain has no gaps."""
     now = datetime.now(timezone.utc).isoformat()
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return DRCheck(
             name="hash_chain_integrity",
@@ -177,7 +169,7 @@ def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
 def _check_export_completeness(tenant_id: str) -> DRCheck:
     """Check that recent FDA exports exist."""
     now = datetime.now(timezone.utc).isoformat()
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return DRCheck(
             name="export_completeness",
@@ -223,7 +215,7 @@ def _check_data_volume(tenant_id: str) -> tuple[DRCheck, dict]:
     """Assess data volume for recovery time estimation."""
     now = datetime.now(timezone.utc).isoformat()
     volume_info: dict = {"total_events": 0, "total_tlcs": 0, "date_range_days": 0}
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return (
             DRCheck(
@@ -288,7 +280,7 @@ def _check_data_volume(tenant_id: str) -> tuple[DRCheck, dict]:
 def _check_supplier_health(tenant_id: str) -> DRCheck:
     """Check active supplier percentage."""
     now = datetime.now(timezone.utc).isoformat()
-    db = _get_db()
+    db = get_db_safe()
     if not db:
         return DRCheck(
             name="supplier_network_health",
@@ -499,7 +491,7 @@ async def test_recovery(
     ))
 
     # 3. KDE completeness for recovery
-    db = _get_db()
+    db = get_db_safe()
     kde_status = "warn"
     kde_details = "Cannot verify KDE completeness — database unavailable"
     if db:

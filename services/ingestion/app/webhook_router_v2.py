@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 
 from app.authz import require_permission, IngestionPrincipal
 from app.subscription_gate import require_active_subscription
+from shared.database import get_db_session
 from app.config import get_settings
 from app.tenant_validation import validate_tenant_id
 from shared.funnel_events import emit_funnel_event
@@ -43,33 +44,6 @@ from shared.canonical_event import normalize_webhook_event
 logger = logging.getLogger("webhook-ingestion")
 
 router = APIRouter(prefix="/api/v1/webhooks", tags=["Webhook Ingestion"])
-
-
-# ---------------------------------------------------------------------------
-# Database Session
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    """
-    Get a database session for CTE persistence.
-
-    Uses the shared database module's session factory. Falls back to
-    in-memory mode if DATABASE_URL is not configured (dev/test).
-    """
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except (ImportError, RuntimeError, ConnectionError, OSError, SQLAlchemyError) as e:
-        logger.warning("database_unavailable, falling back to in-memory: %s", str(e))
-        yield None
 
 
 def _get_persistence(db_session=None):
@@ -473,7 +447,7 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _auth: None = Depends(_verify_api_key),
     _subscription: None = Depends(require_active_subscription),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ) -> IngestResponse:
     """Process incoming webhook events with persistent storage."""
     # Resolve tenant: payload > API-key lookup > RBAC principal
@@ -510,7 +484,7 @@ async def ingest_events(
     # Batch deduplication — detect identical events within the same payload
     seen_in_batch: set[str] = set()
 
-    # Get persistence layer from injected db_session (Depends(_get_db_session))
+    # Get persistence layer from injected db_session (Depends(get_db_session))
     persistence = None
     if db_session is None:
         raise HTTPException(

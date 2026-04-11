@@ -73,24 +73,6 @@ def _compute_grade(score: int) -> str:
         return "F"
 
 
-# ---------------------------------------------------------------------------
-# Database helpers
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    """Get a database session. Returns None if DB unavailable."""
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-    except (ImportError, OSError, OperationalError) as exc:
-        logger.warning("compliance_score: DB unavailable (%s), using fallback", exc)
-        yield None
-
-
 def _query_scoring_data(db_session, tenant_id: str) -> dict:
     """
     Query all scoring signals from the database in a single round-trip.

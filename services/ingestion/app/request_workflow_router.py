@@ -26,38 +26,16 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.exc import SQLAlchemyError
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_session
 
 logger = logging.getLogger("request-workflow")
 
 router = APIRouter(prefix="/api/v1/requests", tags=["Request-Response Workflow"])
-
-
-# ---------------------------------------------------------------------------
-# DB Session
-# ---------------------------------------------------------------------------
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-            db.commit()
-        except SQLAlchemyError:
-            db.rollback()
-            raise
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
 
 
 def _get_service(db_session):
@@ -131,7 +109,7 @@ class AmendRequest(BaseModel):
 async def list_requests(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -149,7 +127,7 @@ async def create_request(
     body: CreateRequestCase,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -180,7 +158,7 @@ async def create_request(
 async def check_deadlines(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -205,7 +183,7 @@ async def get_request(
     request_case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -225,7 +203,7 @@ async def update_scope(
     body: UpdateScope,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -248,7 +226,7 @@ async def collect_records(
     request_case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -268,7 +246,7 @@ async def run_gap_analysis(
     request_case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -290,7 +268,7 @@ async def assemble_package(
     generated_by: str = Query("system"),
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -313,7 +291,7 @@ async def add_signoff(
     body: SignoffRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -337,7 +315,7 @@ async def submit_package(
     body: SubmitRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -372,7 +350,7 @@ async def create_amendment(
     body: AmendRequest,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.write")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -394,7 +372,7 @@ async def package_history(
     request_case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)
@@ -424,7 +402,7 @@ async def check_blockers(
     request_case_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("requests.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     tid = _resolve_tenant(tenant_id, principal)
     svc = _get_service(db_session)

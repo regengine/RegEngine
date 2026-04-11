@@ -30,6 +30,7 @@ from sqlalchemy import text
 
 from app.authz import require_permission, IngestionPrincipal
 from app.tenant_validation import validate_tenant_id
+from shared.database import get_db_session
 
 logger = logging.getLogger("auditor-review")
 
@@ -39,19 +40,6 @@ router = APIRouter(prefix="/api/v1/audit", tags=["Auditor Review (Read-Only)"])
 # ---------------------------------------------------------------------------
 # DB Session
 # ---------------------------------------------------------------------------
-
-def _get_db_session():
-    try:
-        from shared.database import SessionLocal
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-    except Exception as e:
-        logger.warning("database_unavailable: %s", str(e))
-        yield None
-
 
 def _require_db(db_session):
     if db_session is None:
@@ -82,7 +70,7 @@ def _resolve_tenant(tenant_id: Optional[str], principal: IngestionPrincipal) -> 
 async def audit_summary(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -197,7 +185,7 @@ async def audit_events(
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -284,7 +272,7 @@ async def audit_event_detail(
     event_id: str,
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -382,7 +370,7 @@ async def audit_event_detail(
 async def audit_rules(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -434,7 +422,7 @@ async def audit_exceptions(
     tenant_id: Optional[str] = Query(None),
     limit: int = Query(100, le=500),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -483,7 +471,7 @@ async def audit_exceptions(
 async def audit_requests(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -535,7 +523,7 @@ async def audit_requests(
 async def audit_chain(
     tenant_id: Optional[str] = Query(None),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
@@ -563,7 +551,7 @@ async def audit_export_log(
     tenant_id: Optional[str] = Query(None),
     limit: int = Query(50, le=200),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
-    db_session=Depends(_get_db_session),
+    db_session=Depends(get_db_session),
 ):
     db = _require_db(db_session)
     tid = _resolve_tenant(tenant_id, principal)
