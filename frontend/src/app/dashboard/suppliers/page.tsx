@@ -49,6 +49,21 @@ interface FacilityRow extends SupplierFacility {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+/** Sanitise API / network errors into a user-friendly string. */
+function friendlyError(err: unknown, fallback: string): string {
+    if (!(err instanceof Error)) return fallback;
+    const msg = err.message || '';
+    // Suppress raw Axios / fetch messages that leak status codes or internals
+    if (/status code \d{3}/i.test(msg) || /network error/i.test(msg) || /timeout/i.test(msg)) {
+        return fallback;
+    }
+    return fallback;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Config                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -160,8 +175,7 @@ export default function SupplierDashboardPage() {
                 }));
             }
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to load supplier data';
-            setError(message);
+            setError(friendlyError(err, 'Unable to load supplier data. Please try again.'));
             setLoading(false);
         }
     }, [isLoggedIn]);
@@ -193,8 +207,7 @@ export default function SupplierDashboardPage() {
             setShowAddForm(false);
             await loadData();
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to create facility';
-            setError(message);
+            setError(friendlyError(err, 'Unable to create facility. Please try again.'));
         } finally {
             setAdding(false);
         }
@@ -219,8 +232,7 @@ export default function SupplierDashboardPage() {
             setCopiedLinkId(newLink.portal_id);
             setTimeout(() => setCopiedLinkId(null), 3000);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to create portal link';
-            setError(message);
+            setError(friendlyError(err, 'Unable to create portal link. Please try again.'));
         } finally {
             setCreatingLink(false);
         }
@@ -314,8 +326,19 @@ export default function SupplierDashboardPage() {
 
                 {/* Error Banner */}
                 {error && (
-                    <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger">
-                        {error}
+                    <div className="p-3 bg-re-danger-muted dark:bg-re-danger border border-re-danger dark:border-re-danger rounded-xl text-sm text-re-danger dark:text-re-danger flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                            <span>{error}</span>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-shrink-0 rounded-lg text-xs min-h-[32px] border-re-danger text-re-danger hover:bg-re-danger/10"
+                            onClick={() => { setError(null); loadData(); }}
+                        >
+                            <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                        </Button>
                     </div>
                 )}
 
