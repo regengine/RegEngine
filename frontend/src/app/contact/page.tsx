@@ -77,38 +77,58 @@ export default function ContactPage() {
             ) : (
               <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="contact-name" className="sr-only">Name</label>
+                    <input
+                      id="contact-name"
+                      name="name"
+                      type="text"
+                      placeholder="Name"
+                      required
+                      value={form.name}
+                      onChange={update('name')}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="contact-email" className="sr-only">Email</label>
+                    <input
+                      id="contact-email"
+                      name="email"
+                      type="email"
+                      placeholder="Email"
+                      required
+                      value={form.email}
+                      onChange={update('email')}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="contact-company" className="sr-only">Company</label>
                   <input
+                    id="contact-company"
+                    name="company"
                     type="text"
-                    placeholder="Name"
-                    required
-                    value={form.name}
-                    onChange={update('name')}
-                    className={inputClass}
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    required
-                    value={form.email}
-                    onChange={update('email')}
+                    placeholder="Company"
+                    value={form.company}
+                    onChange={update('company')}
                     className={inputClass}
                   />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Company"
-                  value={form.company}
-                  onChange={update('company')}
-                  className={inputClass}
-                />
-                <textarea
-                  placeholder="How can we help?"
-                  required
-                  rows={4}
-                  value={form.message}
-                  onChange={update('message')}
-                  className={inputClass + " resize-none"}
-                />
+                <div>
+                  <label htmlFor="contact-message" className="sr-only">Message</label>
+                  <textarea
+                    id="contact-message"
+                    name="message"
+                    placeholder="How can we help?"
+                    required
+                    rows={4}
+                    value={form.message}
+                    onChange={update('message')}
+                    className={inputClass + " resize-none"}
+                  />
+                </div>
 
                 {status === 'error' && (
                   <div className="flex items-center gap-2 text-sm text-re-danger">
