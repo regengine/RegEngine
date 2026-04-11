@@ -51,9 +51,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
           NEXT_PUBLIC_API_BASE_URL: https://regengine.co
-          INGESTION_SERVICE_URL: ${INGESTION_SERVICE_URL:-http://localhost:8002}
-          COMPLIANCE_SERVICE_URL: ${COMPLIANCE_SERVICE_URL:-http://localhost:8003}
-          ADMIN_SERVICE_URL: ${ADMIN_SERVICE_URL:-http://localhost:8001}
+          INGESTION_SERVICE_URL: http://localhost:8002
+          COMPLIANCE_SERVICE_URL: http://localhost:8003
+          ADMIN_SERVICE_URL: http://localhost:8001
         run: |
           cd frontend
           npm run build
@@ -91,9 +91,9 @@ jobs:
       - name: Run ESLint
         env:
           NEXT_PUBLIC_API_BASE_URL: https://regengine.co
-          INGESTION_SERVICE_URL: ${INGESTION_SERVICE_URL:-http://localhost:8002}
-          COMPLIANCE_SERVICE_URL: ${COMPLIANCE_SERVICE_URL:-http://localhost:8003}
-          ADMIN_SERVICE_URL: ${ADMIN_SERVICE_URL:-http://localhost:8001}
+          INGESTION_SERVICE_URL: http://localhost:8002
+          COMPLIANCE_SERVICE_URL: http://localhost:8003
+          ADMIN_SERVICE_URL: http://localhost:8001
         run: |
           cd frontend
           npm run lint
@@ -216,9 +216,9 @@ jobs:
           # causes the browser to make cross-origin requests (CORS blocked) instead
           # of routing through the Next.js proxy rewrites. Individual service URLs
           # are still set so next.config.js rewrites route correctly server-side.
-          INGESTION_SERVICE_URL: ${INGESTION_SERVICE_URL:-http://localhost:8002}
-          COMPLIANCE_SERVICE_URL: ${COMPLIANCE_SERVICE_URL:-http://localhost:8003}
-          ADMIN_SERVICE_URL: ${ADMIN_SERVICE_URL:-http://localhost:8001}
+          INGESTION_SERVICE_URL: http://localhost:8002
+          COMPLIANCE_SERVICE_URL: http://localhost:8003
+          ADMIN_SERVICE_URL: http://localhost:8001
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           # Supabase env vars intentionally NOT set here.
