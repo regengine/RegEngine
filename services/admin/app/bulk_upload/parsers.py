@@ -3,11 +3,14 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import os
 import re
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
+
+logger = logging.getLogger("bulk_upload.parsers")
 
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".json", ".pdf"}
@@ -645,6 +648,7 @@ def _parse_pdf_bytes(
                     _parse_json_bytes(blob.encode("utf-8"), parsed, warnings)
                     extracted_rows = 1
                 except Exception:
+                    logger.debug("PDF JSON-like text parsing failed", exc_info=True)
                     warnings.append("PDF contained JSON-like text but parsing failed")
 
     if extracted_rows == 0:

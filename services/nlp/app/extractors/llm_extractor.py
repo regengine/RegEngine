@@ -122,6 +122,8 @@ class LLMClientFactory:
 
         # Default fallback
         host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        if os.getenv("REGENGINE_ENV") == "production" and "localhost" in host:
+            logger.warning("OLLAMA_HOST points to localhost in production — set to a remote endpoint")
         return OllamaClient(model, host, timeout)
 
 

@@ -236,6 +236,7 @@ class KafkaEventProducer:
             # Check if connected to at least one broker
             return bool(producer.bootstrap_connected())
         except Exception:
+            logger.debug("Kafka health check failed", exc_info=True)
             return False
 
 

@@ -327,6 +327,7 @@ class HallucinationTracker:
                     session.add(db_item)
                     results.append({"status": "pending", "doc_hash": db_item.doc_hash})
                 except Exception as exc:
+                    logger.warning(f"Metric insert failed: {exc}", exc_info=True)
                     results.append({"status": "error", "error": str(exc), "input": item_data})
                     failed += 1
             
@@ -356,6 +357,7 @@ class HallucinationTracker:
                 results.append({"status": "success", "data": result})
                 successful += 1
             except Exception as exc:
+                logger.warning(f"Metric insert failed: {exc}", exc_info=True)
                 results.append({"status": "error", "error": str(exc)})
                 failed += 1
         return {"successful": successful, "failed": failed, "results": results}

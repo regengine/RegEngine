@@ -307,6 +307,8 @@ def _get_db_engine():
         url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1) if db_url.startswith("postgresql://") else db_url
         return create_engine(url, pool_pre_ping=True, pool_size=2, max_overflow=4)
     except Exception:
+        import logging
+        logging.getLogger("fsma_recall").warning("Recall DB engine creation failed", exc_info=True)
         return None
 
 
@@ -667,6 +669,8 @@ class MockRecallEngine:
                     csv_path = export_result.get("csv_path")
                     contact_path = export_result.get("contact_path")
                 except Exception as e:
+                    import logging
+                    logging.getLogger("fsma_recall").warning(f"Export warning during recall drill: {e}", exc_info=True)
                     warnings.append(f"Export warning: {str(e)}")
                 export_time = time.time() - export_start
 
@@ -713,6 +717,8 @@ class MockRecallEngine:
 
         except Exception as e:
             # Handle execution failure
+            import logging
+            logging.getLogger("fsma_recall").error(f"Recall drill execution failed: {e}", exc_info=True)
             errors.append(str(e))
             result = RecallResult(
                 drill_id=drill.drill_id,

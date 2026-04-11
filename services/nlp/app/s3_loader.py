@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 import re
 import sys
@@ -6,6 +7,8 @@ from pathlib import Path
 from typing import Tuple
 
 import boto3
+
+logger = logging.getLogger("s3_loader")
 
 # Import shared utilities
 from shared.url_validation import PathTraversalError, validate_s3_uri
@@ -42,6 +45,7 @@ def load_s3_artifact(s3_uri: str) -> str:
         )
         return load_artifact(url)
     except Exception:
+        logger.debug("Presigned URL generation failed, falling back to raw download", exc_info=True)
         # Fallback: download bytes and simple decode
         params = {"Bucket": bucket, "Key": key}
         owner = os.getenv("OBJECT_STORAGE_EXPECTED_BUCKET_OWNER")

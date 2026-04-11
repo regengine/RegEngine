@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Production Hardening
 from shared.rate_limit import add_rate_limiting, limiter
 from shared.metrics_auth import require_metrics_key
+from shared.cors import get_cors_origins
 
 logger = structlog.get_logger("scheduler-api")
 
@@ -41,7 +42,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8080"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
