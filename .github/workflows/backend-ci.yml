@@ -113,7 +113,6 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -c "CREATE DATABASE regengine_admin;"
-          psql -h localhost -U postgres -c "CREATE DATABASE energy;"
           psql -h localhost -U postgres -c "CREATE DATABASE test_db;"
 
       - name: Cache pip packages
@@ -136,7 +135,6 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           COMPLIANCE_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/regengine_admin
-          ENERGY_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/energy
           REDIS_URL: redis://localhost:6379/0
           JWT_SECRET: test-secret-key-for-ci
           SUPABASE_URL: http://localhost:54321
