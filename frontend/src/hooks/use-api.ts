@@ -56,7 +56,7 @@ export const useComplianceHealth = () => {
   });
 };
 
-// System Status & Metrics — fall back to demo data when backend is unreachable
+// System Status & Metrics — fall back to zero-value stubs when backend is unreachable
 export const useSystemStatus = () => {
   const query = useQuery({
     queryKey: ['system', 'status'],

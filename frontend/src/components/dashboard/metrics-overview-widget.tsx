@@ -45,7 +45,7 @@ export function MetricsOverviewWidget() {
             {isDemo && (
                 <div className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-re-warning-muted text-re-warning dark:bg-re-warning/20 dark:text-re-warning border border-amber-200 dark:border-amber-800">
                     <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span>Backend services unreachable — showing demo data. Start services with <code className="font-mono bg-re-warning-muted dark:bg-re-warning/40 px-1 rounded">docker compose up</code></span>
+                    <span>Backend services unreachable — data will appear once services are connected.</span>
                 </div>
             )}
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">

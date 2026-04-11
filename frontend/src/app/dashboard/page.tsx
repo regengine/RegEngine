@@ -233,7 +233,7 @@ export default function DashboardPage() {
     });
     const pendingReviews = pendingReviewsData?.pending_reviews ?? 0;
 
-    // Use real metrics from backend when available, fall back to demo data from hook
+    // Use real metrics from backend when available, fall back to zeros from hook
     const metrics = useMemo(() => {
         if (systemMetrics) {
             return {
