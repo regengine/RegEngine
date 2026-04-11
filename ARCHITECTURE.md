@@ -34,3 +34,11 @@ Next.js App Router deployed to Vercel. Proxies API calls to backend services via
 ## Target Architecture
 
 The long-term plan is to consolidate the 6 services into a single monolith, replacing Kafka/Redis with PostgreSQL-native patterns. This consolidation has not started — all services are currently independently deployed and tested.
+
+## Dependency Management
+
+Dependencies use `>=` pins for flexibility during active development.
+Before production freeze or Series A, run `pip-compile` to generate
+locked `requirements.txt` files for reproducible builds.
+
+Frontend dependencies are locked via `package-lock.json`.
