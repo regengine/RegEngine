@@ -475,12 +475,10 @@ class APIClient {
   }
 
   // Auth API
-  async signup(email: string, password: string, tenantName: string): Promise<LoginResponse> {
-    const { data } = await this.adminClient.post('/auth/signup', {
-      email,
-      password,
-      tenant_name: tenantName,
-    });
+  async signup(email: string, password: string, tenantName: string, partnerTier?: string): Promise<LoginResponse> {
+    const body: Record<string, string> = { email, password, tenant_name: tenantName };
+    if (partnerTier) body.partner_tier = partnerTier;
+    const { data } = await this.adminClient.post('/auth/signup', body);
     if (data.access_token) {
       this.setAccessToken(data.access_token);
       this.setUser(data.user);
@@ -771,6 +769,7 @@ class APIClient {
     workspace_profile: Record<string, string>;
     onboarding: Record<string, boolean | string | null>;
     is_complete: boolean;
+    partner_tier?: string | null;
   }> {
     const { data } = await this.adminClient.get(`/v1/tenants/${tenantId}/onboarding`);
     return data;

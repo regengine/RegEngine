@@ -118,6 +118,7 @@ class RegisterRequest(BaseModel):
     email: str = Field(max_length=255)
     password: str = Field(max_length=128)
     tenant_name: str = Field(max_length=100)
+    partner_tier: Optional[str] = Field(None, pattern=r"^(founding|standard)$")
 
 class UserResponse(BaseModel):
     id: UUID
@@ -320,20 +321,25 @@ async def signup(
     db.add(new_user)
     db.flush()
 
+    tenant_settings: dict = {
+        "onboarding": {
+            "workspace_setup_completed": False,
+            "facility_created": False,
+            "ftl_check_completed": False,
+            "first_document_imported": False,
+            "team_member_invited": False,
+            "mock_drill_run": False,
+        },
+    }
+    if payload.partner_tier:
+        tenant_settings["partner_tier"] = payload.partner_tier
+        logger.info("design_partner_signup", email=normalized_email, tier=payload.partner_tier)
+
     new_tenant = TenantModel(
         name=tenant_name,
         slug=_ensure_unique_tenant_slug(db, tenant_name),
         status="active",
-        settings={
-            "onboarding": {
-                "workspace_setup_completed": False,
-                "facility_created": False,
-                "ftl_check_completed": False,
-                "first_document_imported": False,
-                "team_member_invited": False,
-                "mock_drill_run": False,
-            }
-        },
+        settings=tenant_settings,
     )
     db.add(new_tenant)
     db.flush()

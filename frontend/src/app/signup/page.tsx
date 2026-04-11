@@ -21,6 +21,7 @@ function SignupForm() {
   const checkoutSuccess = searchParams.get('checkout') === 'success';
   const selectedPlan = searchParams.get('plan');
   const planLabel = selectedPlan ? PLAN_LABELS[selectedPlan] || selectedPlan : null;
+  const partnerTier = searchParams.get('partner'); // ?partner=founding
 
   const [tenantName, setTenantName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ function SignupForm() {
     setIsLoading(true);
 
     try {
-      const response = await apiClient.signup(email, password, tenantName);
+      const response = await apiClient.signup(email, password, tenantName, partnerTier || undefined);
 
       // Set RegEngine JWT session FIRST (sets re_access_token cookie + React state)
       await login(response.access_token, response.user, response.tenant_id);
@@ -123,11 +124,30 @@ function SignupForm() {
           </div>
         )}
 
+        {/* Design partner welcome banner */}
+        {partnerTier === 'founding' && !checkoutSuccess && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-re-brand/30 bg-re-brand-muted p-4">
+            <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-re-brand" />
+            <div>
+              <p className="text-sm font-semibold text-re-brand-light">
+                Founding Design Partner
+              </p>
+              <p className="text-xs text-re-brand-light/80">
+                Welcome to the founding cohort. You&apos;ll get 50% off for life, white-glove onboarding, and direct founder support.
+              </p>
+            </div>
+          </div>
+        )}
+
         <Card className="border-[var(--re-surface-border)] bg-[var(--re-surface-card)]/95">
           <CardHeader className="space-y-1">
-            <h1 className="text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">Create Your Workspace</h1>
+            <h1 className="text-2xl font-semibold leading-none tracking-tight text-[var(--re-text-primary)]">
+              {partnerTier === 'founding' ? 'Create Your Partner Workspace' : 'Create Your Workspace'}
+            </h1>
             <CardDescription className="text-[var(--re-text-muted)]">
-              14-day free trial. No credit card required.
+              {partnerTier === 'founding'
+                ? 'Founding partner access. No credit card required.'
+                : '14-day free trial. No credit card required.'}
             </CardDescription>
           </CardHeader>
           <CardContent>

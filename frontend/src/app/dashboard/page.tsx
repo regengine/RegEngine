@@ -35,6 +35,7 @@ import {
     WifiOff,
 } from 'lucide-react';
 import { GettingStartedCard } from '@/components/dashboard/getting-started-card';
+import { useOnboardingStatus } from '@/hooks/use-onboarding';
 
 // Base quick actions (overridden by tenant type)
 const getQuickActions = (tenantType: 'retailer' | 'supplier' | 'system') => {
@@ -205,6 +206,10 @@ export default function DashboardPage() {
     // Fetch real system metrics from backend
     const { data: systemMetrics } = useSystemMetrics();
 
+    // Check design partner status from tenant settings
+    const { data: onboardingData } = useOnboardingStatus(effectiveTenantId);
+    const partnerTier = onboardingData?.partner_tier as string | undefined;
+
     // Derive tenant type from org plan or default to 'retailer'
     // Organization type is not in the schema yet, so use plan as a heuristic
     const tenantType = useMemo((): 'retailer' | 'supplier' | 'system' => {
@@ -277,6 +282,11 @@ export default function DashboardPage() {
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
+                            {partnerTier === 'founding' && (
+                                <Badge variant="secondary" className="bg-gradient-to-r from-emerald-100 to-teal-100 text-re-brand dark:from-emerald-900/30 dark:to-teal-900/30 dark:text-re-brand">
+                                    Founding Partner
+                                </Badge>
+                            )}
                             {currentOrg?.plan && currentOrg.plan !== 'free' && (
                                 <Badge variant="secondary" className="bg-gradient-to-r from-amber-100 to-orange-100 text-re-warning dark:from-amber-900/30 dark:to-orange-900/30 dark:text-re-warning">
                                     {currentOrg.plan.charAt(0).toUpperCase() + currentOrg.plan.slice(1)}

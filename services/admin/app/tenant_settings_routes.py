@@ -38,6 +38,9 @@ def _get_tenant_for_user(
     return tenant
 
 
+VALID_PARTNER_TIERS = {"founding", "standard"}
+
+
 class SettingsUpdate(BaseModel):
     """Partial settings update — merged into existing settings."""
 
@@ -45,10 +48,17 @@ class SettingsUpdate(BaseModel):
     onboarding: dict | None = None
 
 
+class PartnerStatusUpdate(BaseModel):
+    """Set or clear a tenant's design partner tier."""
+
+    tier: str | None = None  # "founding", "standard", or null to clear
+
+
 class OnboardingResponse(BaseModel):
     workspace_profile: dict
     onboarding: dict
     is_complete: bool
+    partner_tier: str | None = None
 
 
 @router.patch("/{tenant_id}/settings")
@@ -106,4 +116,45 @@ async def get_onboarding_status(
         workspace_profile=workspace_profile,
         onboarding=onboarding,
         is_complete=is_complete,
+        partner_tier=settings.get("partner_tier"),
     )
+
+
+@router.patch("/{tenant_id}/partner-status")
+async def update_partner_status(
+    tenant_id: UUID,
+    payload: PartnerStatusUpdate,
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
+    """Set or clear a tenant's design partner tier. Requires sysadmin."""
+    if not user.is_sysadmin:
+        raise HTTPException(status_code=403, detail="Sysadmin access required")
+
+    if payload.tier and payload.tier not in VALID_PARTNER_TIERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid tier. Must be one of: {', '.join(sorted(VALID_PARTNER_TIERS))}",
+        )
+
+    tenant = db.get(TenantModel, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    current = tenant.settings or {}
+    if payload.tier:
+        current["partner_tier"] = payload.tier
+    else:
+        current.pop("partner_tier", None)
+
+    tenant.settings = current
+    flag_modified(tenant, "settings")
+    db.commit()
+
+    logger.info(
+        "partner_status_updated",
+        tenant_id=str(tenant_id),
+        tier=payload.tier,
+        admin_user=str(user.id),
+    )
+    return {"status": "ok", "partner_tier": payload.tier}
