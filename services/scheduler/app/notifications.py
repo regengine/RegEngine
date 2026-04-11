@@ -55,7 +55,7 @@ class WebhookNotifier:
         self.timeout = timeout or settings.webhook_timeout_seconds
         self.max_retries = max_retries or settings.webhook_max_retries
         self.max_workers = max_workers
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=30.0)
         self.session.headers.update(
             {
                 "Content-Type": "application/json",

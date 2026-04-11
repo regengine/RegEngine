@@ -38,7 +38,7 @@ class FDAWarningLettersScraper(BaseScraper):
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.session = httpx.Client()
+        self.session = httpx.Client(timeout=30.0)
         self.session.headers.update(
             {
                 "User-Agent": "RegEngine/1.0 (Regulatory Compliance Platform)",
