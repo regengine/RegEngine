@@ -74,4 +74,4 @@ def _fetch_with_browser_sync(url: str) -> Dict[str, Any]:
         return run_browser_fetch(url)
     except ImportError:
         logger.error("browser_utils_not_found_cannot_fallback")
-        raise Exception("Browser fallback requested but browser_utils not available")
+        raise RuntimeError("Browser fallback requested but browser_utils not available")

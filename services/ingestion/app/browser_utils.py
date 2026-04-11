@@ -37,7 +37,7 @@ async def fetch_with_browser(url: str, timeout: int = 30000) -> Dict[str, Any]:
             response = await page.goto(url, wait_until="networkidle", timeout=timeout)
             
             if not response:
-                raise Exception("No response from browser")
+                raise TimeoutError("No response from browser")
                 
             # Get content and metadata
             content = await page.content()

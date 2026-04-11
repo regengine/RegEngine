@@ -217,7 +217,7 @@ async def initialize_label_batch(
             record = await result.single()
 
             if not record:
-                raise Exception("Transaction returned no result")
+                raise RuntimeError("Transaction returned no result")
 
             start_serial = record["start"]
             end_serial = record["end"]

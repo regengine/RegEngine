@@ -48,7 +48,7 @@ class CircuitBreaker:
                 db_circuit_breaker_state.set(2)
             else:
                 db_circuit_breaker_state.set(1)
-                raise Exception(f"Circuit breaker OPEN (cooling for {int(recovery - elapsed)}s)")
+                raise ConnectionError(f"Circuit breaker OPEN (cooling for {int(recovery - elapsed)}s)")
         try:
             result = func(*args, **kwargs) if callable(func) else func
             if self.state == "HALF_OPEN":
