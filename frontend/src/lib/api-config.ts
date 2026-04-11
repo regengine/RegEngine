@@ -58,6 +58,14 @@ export function getServiceURL(service: ServiceName): string {
         return '/api/ingestion';
     }
 
+    if (service === 'compliance') {
+        return '/api/compliance';
+    }
+
+    if (service === 'graph') {
+        return '/api/graph';
+    }
+
     if (gatewayUrl) {
         return `${gatewayUrl}/${service}`;
     }
