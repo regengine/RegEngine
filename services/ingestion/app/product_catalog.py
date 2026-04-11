@@ -344,55 +344,10 @@ def learn_from_event(tenant_id: str, event: dict) -> None:
 _catalog_store: dict[str, list[Product]] = {}
 
 
-def _generate_sample_products(tenant_id: str) -> list[Product]:
-    now = datetime.now(timezone.utc)
-    records = [
-        Product(
-            id=f"{tenant_id}-prod-001", name="Romaine Lettuce", category="Leafy Greens",
-            ftl_covered=True, sku="ROM-001", gtin="00612345678901",
-            description="Whole head romaine lettuce, California grown",
-            suppliers=["Valley Fresh Farms"], facilities=["Salinas Packing Co."],
-            cte_count=47, last_cte=now.isoformat(), created_at=now.isoformat(),
-        ),
-        Product(
-            id=f"{tenant_id}-prod-002", name="Roma Tomatoes", category="Fresh Tomatoes",
-            ftl_covered=True, sku="TOM-002", gtin="00612345678902",
-            description="Vine-ripened Roma tomatoes",
-            suppliers=["Valley Fresh Farms", "Sunrise Produce Co."],
-            facilities=["Salinas Packing Co."],
-            cte_count=32, last_cte=now.isoformat(), created_at=now.isoformat(),
-        ),
-        Product(
-            id=f"{tenant_id}-prod-003", name="Atlantic Salmon Fillets", category="Finfish",
-            ftl_covered=True, sku="SAL-003", gtin="00612345678903",
-            description="Fresh Atlantic salmon fillets",
-            suppliers=["Pacific Seafood Inc."], facilities=["Seattle Cold Storage"],
-            cte_count=28, last_cte=now.isoformat(), created_at=now.isoformat(),
-        ),
-        Product(
-            id=f"{tenant_id}-prod-004", name="English Cucumbers", category="Fresh Cucumbers",
-            ftl_covered=True, sku="CUC-004", gtin="00612345678904",
-            description="Greenhouse English cucumbers",
-            suppliers=["Sunrise Produce Co."], facilities=["Portland Distribution"],
-            cte_count=11, last_cte=now.isoformat(), created_at=now.isoformat(),
-        ),
-        Product(
-            id=f"{tenant_id}-prod-005", name="Mixed Salad Greens", category="Leafy Greens",
-            ftl_covered=True, sku="SAL-005", gtin="00612345678905",
-            description="Spring mix salad blend",
-            suppliers=["Green Valley Organics"], facilities=["Salinas Packing Co."],
-            cte_count=5, last_cte=now.isoformat(), created_at=now.isoformat(),
-        ),
-    ]
-    for r in records:
-        r.is_sample = True
-    return records
-
-
 def _memory_learn(tenant_id: str, gtin: str, name: str, facility: str, now: str):
     """In-memory fallback for learn_from_event."""
     if tenant_id not in _catalog_store:
-        _catalog_store[tenant_id] = _generate_sample_products(tenant_id)
+        _catalog_store[tenant_id] = []
     for p in _catalog_store[tenant_id]:
         if p.gtin == gtin:
             p.cte_count += 1
@@ -444,7 +399,7 @@ async def get_catalog(
 
     # Fallback: in-memory
     if tenant_id not in _catalog_store:
-        _catalog_store[tenant_id] = _generate_sample_products(tenant_id)
+        _catalog_store[tenant_id] = []
     mem_products = _catalog_store[tenant_id]
     if category:
         mem_products = [p for p in mem_products if p.category == category]
@@ -493,7 +448,7 @@ async def add_product(
 
     # Fallback: in-memory
     if tenant_id not in _catalog_store:
-        _catalog_store[tenant_id] = _generate_sample_products(tenant_id)
+        _catalog_store[tenant_id] = []
     _catalog_store[tenant_id].append(product)
     return {"created": True, "product": product.model_dump(), "ftl_covered": is_ftl}
 
